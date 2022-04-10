@@ -7,22 +7,22 @@ use crate::{definitions::Colour, lookups::{PIECE_KEYS, SIDE_KEY, CASTLE_KEYS}};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Board {
-    pub(crate) pieces: [u8; BOARD_N_SQUARES],
-    pub(crate) pawns: [u64; 3],
-    pub(crate) king_sq: [u8; 2],
-    pub(crate) side: u8,
-    pub(crate) ep_sq: u8,
-    pub(crate) fifty_move_counter: u8,
-    pub(crate) ply: usize,
-    pub(crate) hist_ply: usize,
-    pub(crate) key: u64,
-    pub(crate) piece_counts: [u8; 13],
-    pub(crate) big_piece_counts: [u8; 3],
-    pub(crate) major_piece_counts: [u8; 3],
-    pub(crate) minor_piece_counts: [u8; 3],
-    pub(crate) castle_perm: u8,
-    pub(crate) history: [Undo; MAX_GAME_MOVES],
-    pub(crate) p_list: [[u8; 10]; 13], // p_list[piece][N]
+    pieces: [u8; BOARD_N_SQUARES],
+    pawns: [u64; 3],
+    king_sq: [u8; 2],
+    side: u8,
+    ep_sq: u8,
+    fifty_move_counter: u8,
+    ply: usize,
+    hist_ply: usize,
+    key: u64,
+    piece_counts: [u8; 13],
+    big_piece_counts: [u8; 3],
+    major_piece_counts: [u8; 3],
+    minor_piece_counts: [u8; 3],
+    castle_perm: u8,
+    history: [Undo; MAX_GAME_MOVES],
+    p_list: [[u8; 10]; 13], // p_list[piece][N]
 }
 
 impl Board {
