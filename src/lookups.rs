@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{File, Rank, BOARD_N_SQUARES};
+use crate::definitions::{File, Rank, BOARD_N_SQUARES, Colour, Square120};
 use const_random::const_random;
 
 macro_rules! cfor {
@@ -17,7 +17,7 @@ macro_rules! cfor {
 }
 
 pub const fn filerank_to_square(f: u8, r: u8) -> u8 {
-    21 + (f as u8) + ((r as u8) * 10)
+    21 + f + (r * 10)
 }
 
 const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
@@ -76,6 +76,23 @@ const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
     (piece_keys, castle_keys, side_key)
 }
 
+const fn files_ranks() -> ([usize; BOARD_N_SQUARES], [usize; BOARD_N_SQUARES]) {
+    let mut files = [0; BOARD_N_SQUARES];
+    let mut ranks = [0; BOARD_N_SQUARES];
+    cfor!(let mut index = 0; index < BOARD_N_SQUARES; index += 1; {
+        files[index] = Square120::OffBoard as usize;
+        ranks[index] = Square120::OffBoard as usize;
+    });
+    cfor!(let mut rank = Rank::Rank1 as usize; rank <= Rank::Rank8 as usize; rank += 1; {
+        cfor!(let mut file = File::FileA as usize; file <= File::FileH as usize; file += 1; {
+            let sq = filerank_to_square(file as u8, rank as u8);
+            files[sq as usize] = file;
+            ranks[sq as usize] = rank;
+        });
+    });
+    (files, ranks)
+}
+
 pub static SQ120_TO_SQ64: [u8; BOARD_N_SQUARES] = init_sq120_to_sq64().0;
 pub static SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
 
@@ -85,3 +102,15 @@ pub static CLEAR_MASK: [u64; 64] = init_bit_masks().1;
 pub static PIECE_KEYS: [[u64; 120]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
+
+pub static PIECE_BIG: [bool; 13] = [false, false, true, true, true, true, true, false, true, true, true, true, true];
+pub static PIECE_MAJ: [bool; 13] = [false, false, false, false, true, true, true, false, false, false, true, true, true];
+pub static PIECE_MIN: [bool; 13] = [false, false, true, true, false, false, false, false, true, true, false, false, false];
+pub static PIECE_VAL: [i32; 13] = [0, 100, 325, 325, 550, 1000, 50000, 100, 325, 325, 550, 1000, 50000];
+
+pub static PIECE_COL: [Colour; 13] = [
+    Colour::Both, Colour::White, Colour::White, Colour::White, Colour::White, Colour::White, Colour::White, Colour::Black, Colour::Black, Colour::Black, Colour::Black, Colour::Black, Colour::Black,
+];
+
+pub static FILES_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().0;
+pub static RANKS_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().1;

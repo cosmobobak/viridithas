@@ -1,18 +1,14 @@
 use crate::lookups::{filerank_to_square, SQ120_TO_SQ64};
 
-
-
 pub const BOARD_N_SQUARES: usize = 120;
 pub const MAX_GAME_MOVES: usize = 2048;
-pub const OFF_BOARD: u8 = 120;
-pub const NO_SQUARE: u8 = 121;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Piece {
     Empty = 0,
-    WP = 0b0001, WN = 0b0010, WB = 0b0011, WR = 0b0100, WQ = 0b0101, WK = 0b0110,
-    BP = 0b1001, BN = 0b1010, BB = 0b1011, BR = 0b1100, BQ = 0b1101, BK = 0b1110,
+    WP, WN, WB, WR, WQ, WK,
+    BP, BN, BB, BR, BQ, BK,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -44,7 +40,7 @@ pub enum Square120 {
     A6 = 71, B6, C6, D6, E6, F6, G6, H6,
     A7 = 81, B7, C7, D7, E7, F7, G7, H7,
     A8 = 91, B8, C8, D8, E8, F8, G8, H8,
-    None
+    NoSquare, OffBoard
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,7 +58,7 @@ pub enum Square64 {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum Castling {
+pub enum Castling {
     WK = 0b0001, WQ = 0b0010, BK = 0b0100, BQ = 0b1000,
 }
 
@@ -73,6 +69,18 @@ pub struct Undo {
     pub ep_square: u8,
     pub fifty_move_counter: u8,
     pub position_key: u64,
+}
+
+impl Undo {
+    pub fn new() -> Self {
+        Self {
+            m: 0,
+            castle_perm: 0,
+            ep_square: 0,
+            fifty_move_counter: 0,
+            position_key: 0,
+        }
+    }
 }
 
 #[inline]
