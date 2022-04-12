@@ -6,24 +6,20 @@ use rand::Rng;
 /// 
 /// 
 
-use crate::definitions::{print_bb, Square64};
+use crate::{definitions::Square64, lookups::PIECE_KEYS};
 use crate::lookups::SIDE_KEY;
 // #[macro_use]
 // extern crate lazy_static;
 
+mod bitboard;
 mod definitions;
 mod board;
 mod lookups;
 
 fn main() {
     let mut board = board::Board::new();
-    println!("{}", board);
-    board.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    println!("{}", board);
-    board.set_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
-    println!("{}", board);
-    board.set_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2");
-    println!("{}", board);
-    board.set_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
-    println!("{}", board);
+    board.set_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    println!("{:?}", board);
+    board.check_validity();
+    println!("test passed");
 }

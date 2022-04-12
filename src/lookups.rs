@@ -1,7 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::definitions::{File, Rank, BOARD_N_SQUARES, Colour, Square120};
-use const_random::const_random;
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -61,18 +60,38 @@ const fn init_bit_masks() -> ([u64; 64], [u64; 64]) {
     (setmask, clearmask)
 }
 
+struct XorShiftState {
+    pub state: u128
+}
+
+const fn rand_u64(mut xs: XorShiftState) -> (u64, XorShiftState) {
+    let mut x = xs.state;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    xs.state = x;
+    (x as u64, xs)
+}
+
 const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
+    let mut state = XorShiftState { state: const_random::const_random!(u128) };
     let mut piece_keys = [[0; 120]; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
         cfor!(let mut sq = 0; sq < 120; sq += 1; {
-            piece_keys[index][sq] = const_random!(u64);
+            let key;
+            (key, state) = rand_u64(state);
+            piece_keys[index][sq] = key;
         });
     });
     let mut castle_keys = [0; 16];
     cfor!(let mut index = 0; index < 16; index += 1; {
-        castle_keys[index] = const_random!(u64);
+        let key;
+        (key, state) = rand_u64(state);
+        castle_keys[index] = key;
     });
-    let side_key = const_random!(u64);
+    let key;
+    (key, _) = rand_u64(state);
+    let side_key = key;
     (piece_keys, castle_keys, side_key)
 }
 
@@ -114,3 +133,27 @@ pub static PIECE_COL: [Colour; 13] = [
 
 pub static FILES_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().0;
 pub static RANKS_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().1;
+
+mod tests {
+    use crate::lookups::{PIECE_KEYS, CASTLE_KEYS};
+
+    #[test]
+    fn all_piece_keys_different() {
+        let mut hashkeys = PIECE_KEYS.iter().flat_map(|&k| k).collect::<Vec<u64>>();
+        hashkeys.sort_unstable();
+        let len_before = hashkeys.len();
+        hashkeys.dedup();
+        let len_after = hashkeys.len();
+        assert_eq!(len_before, len_after);
+    }
+
+    #[test]
+    fn all_castle_keys_different() {
+        let mut hashkeys = CASTLE_KEYS.to_vec();
+        hashkeys.sort_unstable();
+        let len_before = hashkeys.len();
+        hashkeys.dedup();
+        let len_after = hashkeys.len();
+        assert_eq!(len_before, len_after);
+    }
+}

@@ -6,17 +6,19 @@ use std::{
 };
 
 use crate::{
+    bitboard::{pop_lsb, write_bb},
     definitions::{Colour, Square120},
-    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY, PIECE_COL, PIECE_BIG, PIECE_MIN, PIECE_MAJ, PIECE_VAL},
+    lookups::{
+        CASTLE_KEYS, PIECE_BIG, PIECE_COL, PIECE_KEYS, PIECE_MAJ, PIECE_MIN, PIECE_VAL, SIDE_KEY,
+        SQ120_TO_SQ64, RANKS_BOARD,
+    },
 };
 use crate::{
-    definitions::{
-        Castling, File, Piece, Rank, Undo, BOARD_N_SQUARES, MAX_GAME_MOVES,
-    },
+    definitions::{Castling, File, Piece, Rank, Undo, BOARD_N_SQUARES, MAX_GAME_MOVES},
     lookups::{filerank_to_square, SQ64_TO_SQ120},
 };
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Board {
     pieces: [u8; BOARD_N_SQUARES],
     pawns: [u64; 3],
@@ -27,11 +29,11 @@ pub struct Board {
     ply: usize,
     hist_ply: usize,
     key: u64,
-    piece_counts: [u8; 13],
+    piece_num: [u8; 13],
     big_piece_counts: [u8; 2],
     major_piece_counts: [u8; 2],
     minor_piece_counts: [u8; 2],
-    material: [u16; 2],
+    material: [i32; 2],
     castle_perm: u8,
     history: [Undo; MAX_GAME_MOVES],
     p_list: [[u8; 10]; 13], // p_list[piece][N]
@@ -49,7 +51,7 @@ impl Board {
             ply: 0,
             hist_ply: 0,
             key: 0,
-            piece_counts: [0; 13],
+            piece_num: [0; 13],
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
@@ -66,9 +68,10 @@ impl Board {
         let mut key = 0;
         for sq in 0..BOARD_N_SQUARES {
             let piece = self.pieces[sq];
-            if piece != Piece::Empty as u8 
-            && piece != Square120::OffBoard as u8 
-            && piece != Square120::NoSquare as u8 {
+            if piece != Piece::Empty as u8
+                && piece != Square120::OffBoard as u8
+                && piece != Square120::NoSquare as u8
+            {
                 debug_assert!(piece >= Piece::WP as u8 && piece <= Piece::BK as u8);
                 key ^= PIECE_KEYS[piece as usize][sq];
             }
@@ -99,7 +102,7 @@ impl Board {
         self.major_piece_counts.fill(0);
         self.minor_piece_counts.fill(0);
         self.pawns.fill(0);
-        self.piece_counts.fill(0);
+        self.piece_num.fill(0);
         self.king_sq.fill(Square120::NoSquare as u8);
         self.side = Colour::Both as u8;
         self.ep_sq = Square120::NoSquare as u8;
@@ -178,6 +181,8 @@ impl Board {
         self.parse_fullmove(info_parts.next());
 
         self.key = self.generate_pos_key();
+
+        self.update_list_material();
     }
 
     fn parse_side(&mut self, side_part: Option<&[u8]>) {
@@ -272,17 +277,126 @@ impl Board {
                     self.major_piece_counts[colour as usize] += 1;
                 }
 
-                let pval: u16 = PIECE_VAL[piece as usize].try_into().unwrap();
-                self.material[colour as usize] += pval;
+                self.material[colour as usize] += PIECE_VAL[piece as usize];
 
-                self.p_list[piece as usize][self.piece_counts[piece as usize] as usize] = sq.try_into().unwrap();
-                self.piece_counts[piece as usize] += 1;
+                self.p_list[piece as usize][self.piece_num[piece as usize] as usize] =
+                    sq.try_into().unwrap();
+                self.piece_num[piece as usize] += 1;
 
                 if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
                     self.king_sq[colour as usize] = sq.try_into().unwrap();
                 }
+
+                if piece == Piece::WP as u8 || piece == Piece::BP as u8 {
+                    self.pawns[colour as usize] |= 1 << SQ120_TO_SQ64[sq as usize];
+                    self.pawns[Colour::Both as usize] |= 1 << SQ120_TO_SQ64[sq as usize];
+                }
             }
         }
+    }
+
+    #[allow(clippy::cognitive_complexity)]
+    pub fn check_validity(&self) {
+        use Colour::{Black, White, Both};
+        let mut piece_num = [0; 13];
+        let mut big_pce = [0, 0];
+        let mut maj_pce = [0, 0];
+        let mut min_pce = [0, 0];
+        let mut material = [0, 0];
+
+        let mut pawns = self.pawns;
+
+        // check piece lists
+        for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
+            for p_num in 0..self.piece_num[piece as usize] {
+                let sq120 = self.p_list[piece as usize][p_num as usize];
+                assert_eq!(self.pieces[sq120 as usize], piece);
+            }
+        }
+
+        // check piece count and other counters
+        for &sq120 in &SQ64_TO_SQ120 {
+            let piece = self.pieces[sq120 as usize];
+            piece_num[piece as usize] += 1;
+            let colour = PIECE_COL[piece as usize];
+            if PIECE_BIG[piece as usize] {
+                big_pce[colour as usize] += 1;
+            }
+            if PIECE_MAJ[piece as usize] {
+                maj_pce[colour as usize] += 1;
+            }
+            if PIECE_MIN[piece as usize] {
+                min_pce[colour as usize] += 1;
+            }
+            if colour != Both {
+                material[colour as usize] += PIECE_VAL[piece as usize];
+            }
+        }
+
+        for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
+            assert_eq!(piece_num[piece as usize], self.piece_num[piece as usize]);
+        }
+
+        // check bitboards count
+        assert_eq!(
+            pawns[White as usize].count_ones(),
+            u32::from(self.piece_num[Piece::WP as usize])
+        );
+        assert_eq!(
+            pawns[Black as usize].count_ones(),
+            u32::from(self.piece_num[Piece::BP as usize])
+        );
+        assert_eq!(
+            pawns[Both as usize].count_ones(),
+            u32::from(self.piece_num[Piece::WP as usize])
+                + u32::from(self.piece_num[Piece::BP as usize])
+        );
+
+        // check bitboards' squares
+        while pawns[White as usize] > 0 {
+            let sq64 = pop_lsb(&mut pawns[White as usize]);
+            assert_eq!(
+                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize],
+                Piece::WP as u8
+            );
+        }
+
+        while pawns[Black as usize] > 0 {
+            let sq64 = pop_lsb(&mut pawns[Black as usize]);
+            assert_eq!(
+                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize],
+                Piece::BP as u8
+            );
+        }
+
+        while pawns[Both as usize] > 0 {
+            let sq64 = pop_lsb(&mut pawns[Both as usize]);
+            assert!(
+                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::WP as u8
+                    || self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::BP as u8
+            );
+        }
+
+        assert_eq!(material[White as usize], self.material[White as usize]);
+        assert_eq!(material[Black as usize], self.material[Black as usize]);
+        assert_eq!(min_pce[White as usize], self.minor_piece_counts[White as usize]);
+        assert_eq!(min_pce[Black as usize], self.minor_piece_counts[Black as usize]);
+        assert_eq!(maj_pce[White as usize], self.major_piece_counts[White as usize]);
+        assert_eq!(maj_pce[Black as usize], self.major_piece_counts[Black as usize]);
+        assert_eq!(big_pce[White as usize], self.big_piece_counts[White as usize]);
+        assert_eq!(big_pce[Black as usize], self.big_piece_counts[Black as usize]);
+
+        assert!(self.side == White as u8 || self.side == Black as u8);
+        assert_eq!(self.generate_pos_key(), self.key);
+
+        assert!(self.ep_sq == Square120::NoSquare as u8 || 
+            (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as usize && self.side == White as u8) 
+            || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as usize && self.side == Black as u8));
+
+        assert!(self.fifty_move_counter < 100);
+
+        assert_eq!(self.pieces[self.king_sq[White as usize] as usize], Piece::WK as u8);
+        assert_eq!(self.pieces[self.king_sq[Black as usize] as usize], Piece::BK as u8);
     }
 }
 
@@ -320,6 +434,11 @@ impl Debug for Board {
         writeln!(f, "fifty-move-counter: {}", self.fifty_move_counter)?;
         writeln!(f, "ply: {}", self.ply)?;
         writeln!(f, "hash: {:x}", self.key)?;
+        write_bb(self.pawns[Colour::White as usize], f)?;
+        writeln!(f)?;
+        write_bb(self.pawns[Colour::Black as usize], f)?;
+        writeln!(f)?;
+        write_bb(self.pawns[Colour::Both as usize], f)?;
         Ok(())
     }
 }
