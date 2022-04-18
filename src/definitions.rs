@@ -1,7 +1,7 @@
-use crate::lookups::{filerank_to_square, SQ120_TO_SQ64};
+use crate::lookups::{filerank_to_square, SQ120_TO_SQ64, SQUARE_NAMES};
 
 pub const BOARD_N_SQUARES: usize = 120;
-pub const MAX_GAME_MOVES: usize = 2048;
+pub const MAX_GAME_MOVES: usize = 1024;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -28,6 +28,9 @@ pub enum Rank {
 pub enum Colour {
     White = 0, Black, Both
 }
+
+pub const WHITE: u8 = Colour::White as u8;
+pub const BLACK: u8 = Colour::Black as u8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -71,14 +74,11 @@ pub struct Undo {
     pub position_key: u64,
 }
 
-impl Undo {
-    pub fn new() -> Self {
-        Self {
-            m: 0,
-            castle_perm: 0,
-            ep_square: 0,
-            fifty_move_counter: 0,
-            position_key: 0,
-        }
-    }
+pub fn square120_name(sq: u8) -> Option<&'static str> {
+    let sq64 = SQ120_TO_SQ64[sq as usize];
+    square64_name(sq64)
+}
+
+pub fn square64_name(sq: u8) -> Option<&'static str> {
+    SQUARE_NAMES.get(sq as usize).copied()
 }

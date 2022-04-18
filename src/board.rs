@@ -1,4 +1,9 @@
 #![allow(dead_code)]
+#![allow(
+    clippy::collapsible_else_if,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
 use std::{
     fmt::{Debug, Display, Formatter},
@@ -6,11 +11,12 @@ use std::{
 };
 
 use crate::{
+    attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIR, N_DIR, R_DIR},
     bitboard::{pop_lsb, write_bb},
-    definitions::{Colour, Square120},
+    definitions::{Colour, Square120, WHITE},
     lookups::{
-        CASTLE_KEYS, PIECE_BIG, PIECE_COL, PIECE_KEYS, PIECE_MAJ, PIECE_MIN, PIECE_VAL, SIDE_KEY,
-        SQ120_TO_SQ64, RANKS_BOARD,
+        CASTLE_KEYS, PIECE_BIG, PIECE_COL, PIECE_KEYS, PIECE_MAJ, PIECE_MIN, PIECE_VAL,
+        RANKS_BOARD, SIDE_KEY, SQ120_TO_SQ64,
     },
 };
 use crate::{
@@ -35,7 +41,7 @@ pub struct Board {
     minor_piece_counts: [u8; 2],
     material: [i32; 2],
     castle_perm: u8,
-    history: [Undo; MAX_GAME_MOVES],
+    history: Vec<Undo>,
     p_list: [[u8; 10]; 13], // p_list[piece][N]
 }
 
@@ -57,7 +63,7 @@ impl Board {
             minor_piece_counts: [0; 2],
             material: [0; 2],
             castle_perm: 0,
-            history: [Undo::new(); MAX_GAME_MOVES],
+            history: Vec::with_capacity(MAX_GAME_MOVES),
             p_list: [[0; 10]; 13],
         };
         out.reset();
@@ -170,22 +176,22 @@ impl Board {
 
         let mut info_parts = info_part[1..].split(|&c| c == b' ');
 
-        self.parse_side(info_parts.next());
+        self.set_side(info_parts.next());
 
-        self.parse_castling(info_parts.next());
+        self.set_castling(info_parts.next());
 
-        self.parse_ep(info_parts.next());
+        self.set_ep(info_parts.next());
 
-        self.parse_halfmove(info_parts.next());
+        self.set_halfmove(info_parts.next());
 
-        self.parse_fullmove(info_parts.next());
+        self.set_fullmove(info_parts.next());
 
         self.key = self.generate_pos_key();
 
         self.update_list_material();
     }
 
-    fn parse_side(&mut self, side_part: Option<&[u8]>) {
+    fn set_side(&mut self, side_part: Option<&[u8]>) {
         self.side = match side_part {
             None => panic!("FEN string is invalid, expected side part."),
             Some([b'w']) => Colour::White as u8,
@@ -197,7 +203,7 @@ impl Board {
         };
     }
 
-    fn parse_castling(&mut self, castling_part: Option<&[u8]>) {
+    fn set_castling(&mut self, castling_part: Option<&[u8]>) {
         match castling_part {
             None => panic!("FEN string is invalid, expected castling part."),
             Some([b'-']) => self.castle_perm = 0,
@@ -215,7 +221,7 @@ impl Board {
         }
     }
 
-    fn parse_ep(&mut self, ep_part: Option<&[u8]>) {
+    fn set_ep(&mut self, ep_part: Option<&[u8]>) {
         match ep_part {
             None => panic!("FEN string is invalid, expected en passant part."),
             Some([b'-']) => self.ep_sq = Square120::NoSquare as u8,
@@ -230,7 +236,7 @@ impl Board {
         }
     }
 
-    fn parse_halfmove(&mut self, halfmove_part: Option<&[u8]>) {
+    fn set_halfmove(&mut self, halfmove_part: Option<&[u8]>) {
         match halfmove_part {
             None => panic!("FEN string is invalid, expected halfmove clock part."),
             Some(halfmove_clock) => {
@@ -242,7 +248,7 @@ impl Board {
         }
     }
 
-    fn parse_fullmove(&mut self, fullmove_part: Option<&[u8]>) {
+    fn set_fullmove(&mut self, fullmove_part: Option<&[u8]>) {
         match fullmove_part {
             None => panic!("FEN string is invalid, expected fullmove number part."),
             Some(fullmove_number) => {
@@ -295,9 +301,9 @@ impl Board {
         }
     }
 
-    #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub fn check_validity(&self) {
-        use Colour::{Black, White, Both};
+        use Colour::{Black, Both, White};
         let mut piece_num = [0; 13];
         let mut big_pce = [0, 0];
         let mut maj_pce = [0, 0];
@@ -379,33 +385,128 @@ impl Board {
 
         assert_eq!(material[White as usize], self.material[White as usize]);
         assert_eq!(material[Black as usize], self.material[Black as usize]);
-        assert_eq!(min_pce[White as usize], self.minor_piece_counts[White as usize]);
-        assert_eq!(min_pce[Black as usize], self.minor_piece_counts[Black as usize]);
-        assert_eq!(maj_pce[White as usize], self.major_piece_counts[White as usize]);
-        assert_eq!(maj_pce[Black as usize], self.major_piece_counts[Black as usize]);
-        assert_eq!(big_pce[White as usize], self.big_piece_counts[White as usize]);
-        assert_eq!(big_pce[Black as usize], self.big_piece_counts[Black as usize]);
+        assert_eq!(
+            min_pce[White as usize],
+            self.minor_piece_counts[White as usize]
+        );
+        assert_eq!(
+            min_pce[Black as usize],
+            self.minor_piece_counts[Black as usize]
+        );
+        assert_eq!(
+            maj_pce[White as usize],
+            self.major_piece_counts[White as usize]
+        );
+        assert_eq!(
+            maj_pce[Black as usize],
+            self.major_piece_counts[Black as usize]
+        );
+        assert_eq!(
+            big_pce[White as usize],
+            self.big_piece_counts[White as usize]
+        );
+        assert_eq!(
+            big_pce[Black as usize],
+            self.big_piece_counts[Black as usize]
+        );
 
         assert!(self.side == White as u8 || self.side == Black as u8);
         assert_eq!(self.generate_pos_key(), self.key);
 
-        assert!(self.ep_sq == Square120::NoSquare as u8 || 
-            (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as usize && self.side == White as u8) 
-            || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as usize && self.side == Black as u8));
+        assert!(
+            self.ep_sq == Square120::NoSquare as u8
+                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as usize
+                    && self.side == White as u8)
+                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as usize
+                    && self.side == Black as u8)
+        );
 
         assert!(self.fifty_move_counter < 100);
 
-        assert_eq!(self.pieces[self.king_sq[White as usize] as usize], Piece::WK as u8);
-        assert_eq!(self.pieces[self.king_sq[Black as usize] as usize], Piece::BK as u8);
+        assert_eq!(
+            self.pieces[self.king_sq[White as usize] as usize],
+            Piece::WK as u8
+        );
+        assert_eq!(
+            self.pieces[self.king_sq[Black as usize] as usize],
+            Piece::BK as u8
+        );
+    }
+
+    /// Determines if `sq` is attacked by `side`
+    pub fn sq_attacked(&self, sq: usize, side: u8) -> bool {
+        use Piece::{Empty, BP, WP};
+        assert!(side < 2, "side must be 0 or 1");
+
+        // pawns
+        if side == WHITE {
+            if self.pieces[sq - 11] == WP as u8 || self.pieces[sq - 9] == WP as u8 {
+                return true;
+            }
+        } else {
+            if self.pieces[sq + 11] == BP as u8 || self.pieces[sq + 9] == BP as u8 {
+                return true;
+            }
+        }
+
+        // knights
+        for &dir in &N_DIR {
+            let p = self.pieces[(sq as isize + dir) as usize];
+            if p != Square120::OffBoard as u8 && IS_KNIGHT[p as usize] && PIECE_COL[p as usize] as u8 == side {
+                return true;
+            }
+        }
+
+        // rooks, queens
+        for &dir in &R_DIR {
+            let mut t_sq = sq as isize + dir;
+            let mut piece = self.pieces[t_sq as usize];
+            while piece != Square120::OffBoard as u8 {
+                if piece != Empty as u8 {
+                    if IS_ROOKQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
+                        return true;
+                    }
+                    break;
+                }
+                t_sq += dir;
+                piece = self.pieces[t_sq as usize];
+            }
+        }
+
+        // bishops, queens
+        for &dir in &B_DIR {
+            let mut t_sq = sq as isize + dir;
+            let mut piece = self.pieces[t_sq as usize];
+            while piece != Square120::OffBoard as u8 {
+                if piece != Empty as u8 {
+                    if IS_BISHOPQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
+                        return true;
+                    }
+                    break;
+                }
+                t_sq += dir;
+                piece = self.pieces[t_sq as usize];
+            }
+        }
+
+        // king
+        for &dir in &K_DIR {
+            let p = self.pieces[(sq as isize + dir) as usize];
+            if p != Square120::OffBoard as u8 && IS_KING[p as usize] && PIECE_COL[p as usize] as u8 == side {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        const PIECE_CHAR: [u8; 13] = *b".PNBRQKpnbrqk";
-        const SIDE_CHAR: [u8; 3] = *b"wb-";
-        const RANK_CHAR: [u8; 8] = *b"12345678";
-        const FILE_CHAR: [u8; 8] = *b"abcdefgh";
+        static PIECE_CHAR: [u8; 13] = *b".PNBRQKpnbrqk";
+        static SIDE_CHAR: [u8; 3] = *b"wb-";
+        static RANK_CHAR: [u8; 8] = *b"12345678";
+        static FILE_CHAR: [u8; 8] = *b"abcdefgh";
 
         writeln!(f, "Game Board:")?;
 
@@ -440,5 +541,15 @@ impl Debug for Board {
         writeln!(f)?;
         write_bb(self.pawns[Colour::Both as usize], f)?;
         Ok(())
+    }
+}
+
+mod tests {
+    #[test]
+    fn read_fen_validity() {
+        use super::*;
+        let mut b = Board::new();
+        b.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        b.check_validity();
     }
 }
