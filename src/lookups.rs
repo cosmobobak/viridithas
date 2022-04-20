@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{File, Rank, BOARD_N_SQUARES, Colour, Square120};
+use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -61,7 +61,7 @@ const fn init_bit_masks() -> ([u64; 64], [u64; 64]) {
 }
 
 struct XorShiftState {
-    pub state: u128
+    pub state: u128,
 }
 
 const fn rand_u64(mut xs: XorShiftState) -> (u64, XorShiftState) {
@@ -74,7 +74,9 @@ const fn rand_u64(mut xs: XorShiftState) -> (u64, XorShiftState) {
 }
 
 const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
-    let mut state = XorShiftState { state: const_random::const_random!(u128) };
+    let mut state = XorShiftState {
+        state: const_random::const_random!(u128),
+    };
     let mut piece_keys = [[0; 120]; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
         cfor!(let mut sq = 0; sq < 120; sq += 1; {
@@ -122,13 +124,33 @@ pub static PIECE_KEYS: [[u64; 120]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
 
-pub static PIECE_BIG: [bool; 13] = [false, false, true, true, true, true, true, false, true, true, true, true, true];
-pub static PIECE_MAJ: [bool; 13] = [false, false, false, false, true, true, true, false, false, false, true, true, true];
-pub static PIECE_MIN: [bool; 13] = [false, false, true, true, false, false, false, false, true, true, false, false, false];
-pub static PIECE_VAL: [i32; 13] = [0, 100, 325, 325, 550, 1000, 50000, 100, 325, 325, 550, 1000, 50000];
+pub static PIECE_BIG: [bool; 13] = [
+    false, false, true, true, true, true, true, false, true, true, true, true, true,
+];
+pub static PIECE_MAJ: [bool; 13] = [
+    false, false, false, false, true, true, true, false, false, false, true, true, true,
+];
+pub static PIECE_MIN: [bool; 13] = [
+    false, false, true, true, false, false, false, false, true, true, false, false, false,
+];
+pub static PIECE_VAL: [i32; 13] = [
+    0, 100, 325, 325, 550, 1000, 50000, 100, 325, 325, 550, 1000, 50000,
+];
 
 pub static PIECE_COL: [Colour; 13] = [
-    Colour::Both, Colour::White, Colour::White, Colour::White, Colour::White, Colour::White, Colour::White, Colour::Black, Colour::Black, Colour::Black, Colour::Black, Colour::Black, Colour::Black,
+    Colour::Both,
+    Colour::White,
+    Colour::White,
+    Colour::White,
+    Colour::White,
+    Colour::White,
+    Colour::White,
+    Colour::Black,
+    Colour::Black,
+    Colour::Black,
+    Colour::Black,
+    Colour::Black,
+    Colour::Black,
 ];
 
 pub static FILES_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().0;
@@ -142,7 +164,7 @@ pub static SQUARE_NAMES: [&str; 64] = [
 ];
 
 mod tests {
-    use crate::lookups::{PIECE_KEYS, CASTLE_KEYS};
+    use crate::lookups::{CASTLE_KEYS, PIECE_KEYS};
 
     #[test]
     fn all_piece_keys_different() {

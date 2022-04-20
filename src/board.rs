@@ -11,13 +11,16 @@ use std::{
 };
 
 use crate::{
-    attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIR, N_DIR, R_DIR},
+    attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIR, N_DIR, R_DIR, WHITE_SLIDERS, BLACK_SLIDERS, WHITE_JUMPERS, BLACK_JUMPERS},
     bitboard::{pop_lsb, write_bb},
-    definitions::{Colour, Square120, WHITE},
+    chessmove::Move,
+    definitions::{Colour, Square120, BLACK, WHITE},
     lookups::{
         CASTLE_KEYS, PIECE_BIG, PIECE_COL, PIECE_KEYS, PIECE_MAJ, PIECE_MIN, PIECE_VAL,
         RANKS_BOARD, SIDE_KEY, SQ120_TO_SQ64,
     },
+    movegen::MoveList,
+    validate::{side_valid, square_on_board, piece_valid_empty, piece_valid},
 };
 use crate::{
     definitions::{Castling, File, Piece, Rank, Undo, BOARD_N_SQUARES, MAX_GAME_MOVES},
@@ -83,7 +86,7 @@ impl Board {
             }
         }
 
-        if self.side == Colour::White as u8 {
+        if self.side == WHITE {
             key ^= SIDE_KEY;
         }
 
@@ -107,6 +110,7 @@ impl Board {
         self.big_piece_counts.fill(0);
         self.major_piece_counts.fill(0);
         self.minor_piece_counts.fill(0);
+        self.material.fill(0);
         self.pawns.fill(0);
         self.piece_num.fill(0);
         self.king_sq.fill(Square120::NoSquare as u8);
@@ -194,8 +198,8 @@ impl Board {
     fn set_side(&mut self, side_part: Option<&[u8]>) {
         self.side = match side_part {
             None => panic!("FEN string is invalid, expected side part."),
-            Some([b'w']) => Colour::White as u8,
-            Some([b'b']) => Colour::Black as u8,
+            Some([b'w']) => WHITE,
+            Some([b'b']) => BLACK,
             Some(other) => panic!(
                 "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
                 std::str::from_utf8(other).unwrap()
@@ -259,7 +263,7 @@ impl Board {
                     .parse::<usize>()
                     .expect("FEN string is invalid, expected fullmove number part to be a number")
                     * 2;
-                if self.side == Colour::Black as u8 {
+                if self.side == BLACK {
                     self.ply += 1;
                 }
             }
@@ -410,15 +414,13 @@ impl Board {
             self.big_piece_counts[Black as usize]
         );
 
-        assert!(self.side == White as u8 || self.side == Black as u8);
+        assert!(self.side == WHITE || self.side == BLACK);
         assert_eq!(self.generate_pos_key(), self.key);
 
         assert!(
             self.ep_sq == Square120::NoSquare as u8
-                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as usize
-                    && self.side == White as u8)
-                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as usize
-                    && self.side == Black as u8)
+                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as usize && self.side == WHITE)
+                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as usize && self.side == BLACK)
         );
 
         assert!(self.fifty_move_counter < 100);
@@ -436,7 +438,13 @@ impl Board {
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: usize, side: u8) -> bool {
         use Piece::{Empty, BP, WP};
-        assert!(side < 2, "side must be 0 or 1");
+
+        debug_assert!(side_valid(side));
+        debug_assert!(square_on_board(sq.try_into().unwrap()));
+        debug_assert!({
+            self.check_validity();
+            true
+        });
 
         // pawns
         if side == WHITE {
@@ -452,7 +460,10 @@ impl Board {
         // knights
         for &dir in &N_DIR {
             let p = self.pieces[(sq as isize + dir) as usize];
-            if p != Square120::OffBoard as u8 && IS_KNIGHT[p as usize] && PIECE_COL[p as usize] as u8 == side {
+            if p != Square120::OffBoard as u8
+                && IS_KNIGHT[p as usize]
+                && PIECE_COL[p as usize] as u8 == side
+            {
                 return true;
             }
         }
@@ -492,12 +503,227 @@ impl Board {
         // king
         for &dir in &K_DIR {
             let p = self.pieces[(sq as isize + dir) as usize];
-            if p != Square120::OffBoard as u8 && IS_KING[p as usize] && PIECE_COL[p as usize] as u8 == side {
+            if p != Square120::OffBoard as u8
+                && IS_KING[p as usize]
+                && PIECE_COL[p as usize] as u8 == side
+            {
                 return true;
             }
         }
 
         false
+    }
+
+    fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
+        move_list.push(m, 0);
+    }
+
+    fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
+        move_list.push(m, 0);
+    }
+
+    fn add_ep_move(&self, m: Move, move_list: &mut MoveList) {
+        move_list.push(m, 0);
+    }
+
+    fn add_pawn_cap_move<const SIDE: u8>(
+        &self,
+        from: u8,
+        to: u8,
+        cap: u8,
+        move_list: &mut MoveList,
+    ) {
+        debug_assert!(piece_valid_empty(cap));
+        debug_assert!(square_on_board(from));
+        debug_assert!(square_on_board(to));
+        let promo_rank = if SIDE == WHITE {
+            Rank::Rank7 as usize
+        } else {
+            Rank::Rank2 as usize
+        };
+        if RANKS_BOARD[from as usize] == promo_rank {
+            if SIDE == WHITE {
+                for &promo in &[
+                    Piece::WQ as u8,
+                    Piece::WN as u8,
+                    Piece::WR as u8,
+                    Piece::WB as u8,
+                ] {
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
+                }
+            } else {
+                for &promo in &[
+                    Piece::BQ as u8,
+                    Piece::BN as u8,
+                    Piece::BR as u8,
+                    Piece::BB as u8,
+                ] {
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
+                }
+            };
+        } else {
+            self.add_capture_move(Move::new(from, to, cap, Piece::Empty as u8, 0), move_list);
+        }
+    }
+
+    fn add_pawn_move<const SIDE: u8>(&self, from: u8, to: u8, move_list: &mut MoveList) {
+        debug_assert!(square_on_board(from));
+        debug_assert!(square_on_board(to));
+        let promo_rank = if SIDE == WHITE {
+            Rank::Rank7 as usize
+        } else {
+            Rank::Rank2 as usize
+        };
+        if RANKS_BOARD[from as usize] == promo_rank {
+            if SIDE == WHITE {
+                for &promo in &[
+                    Piece::WQ as u8,
+                    Piece::WN as u8,
+                    Piece::WR as u8,
+                    Piece::WB as u8,
+                ] {
+                    self.add_quiet_move(
+                        Move::new(from, to, Piece::Empty as u8, promo, 0),
+                        move_list,
+                    );
+                }
+            } else {
+                for &promo in &[
+                    Piece::BQ as u8,
+                    Piece::BN as u8,
+                    Piece::BR as u8,
+                    Piece::BB as u8,
+                ] {
+                    self.add_quiet_move(
+                        Move::new(from, to, Piece::Empty as u8, promo, 0),
+                        move_list,
+                    );
+                }
+            };
+        } else {
+            self.add_quiet_move(
+                Move::new(from, to, Piece::Empty as u8, Piece::Empty as u8, 0),
+                move_list,
+            );
+        }
+    }
+
+    fn generate_pawn_caps<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+        let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
+        let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
+        if square_on_board(left_sq)
+            && PIECE_COL[self.pieces[left_sq as usize] as usize] == Colour::Black
+        {
+            self.add_pawn_cap_move::<SIDE>(sq, left_sq, self.pieces[left_sq as usize], move_list);
+        }
+        if square_on_board(right_sq)
+            && PIECE_COL[self.pieces[right_sq as usize] as usize] == Colour::Black
+        {
+            self.add_pawn_cap_move::<SIDE>(sq, right_sq, self.pieces[right_sq as usize], move_list);
+        }
+    }
+
+    fn generate_ep<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+        // this has a bug because epsq can be 99 as a default.
+        let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
+        let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
+        if left_sq == self.ep_sq {
+            self.add_capture_move(
+                Move::new(
+                    sq,
+                    left_sq,
+                    Piece::Empty as u8,
+                    Piece::Empty as u8,
+                    Move::EP_MASK,
+                ),
+                move_list,
+            );
+        }
+        if right_sq == self.ep_sq {
+            self.add_capture_move(
+                Move::new(
+                    sq,
+                    right_sq,
+                    Piece::Empty as u8,
+                    Piece::Empty as u8,
+                    Move::EP_MASK,
+                ),
+                move_list,
+            );
+        }
+    }
+
+    fn generate_pawn_forward<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+        let start_rank: usize = if SIDE == WHITE {
+            Rank::Rank2 as usize
+        } else {
+            Rank::Rank7 as usize
+        };
+        let offset_sq = if SIDE == WHITE { sq + 10 } else { sq - 10 };
+        if self.pieces[sq as usize + 10] == Piece::Empty as u8 {
+            self.add_pawn_move::<SIDE>(sq, offset_sq, move_list);
+            let double_sq = if SIDE == WHITE { sq + 20 } else { sq - 20 };
+            if RANKS_BOARD[sq as usize] == start_rank
+                && self.pieces[double_sq as usize] == Piece::Empty as u8
+            {
+                self.add_quiet_move(
+                    Move::new(
+                        sq,
+                        double_sq,
+                        Piece::Empty as u8,
+                        Piece::Empty as u8,
+                        Move::PAWN_START_MASK,
+                    ),
+                    move_list,
+                );
+            }
+        }
+    }
+
+    pub fn generate_all_moves(&self, move_list: &mut MoveList) {
+        debug_assert!({
+            self.check_validity();
+            true
+        });
+
+        // white pawn moves
+        if self.side == WHITE {
+            for piece_num in 0..self.piece_num[Piece::WP as usize] {
+                let sq = self.p_list[Piece::WP as usize][piece_num as usize];
+                debug_assert!(square_on_board(sq));
+                self.generate_pawn_forward::<{ WHITE }>(sq, move_list);
+                self.generate_pawn_caps::<{ WHITE }>(sq, move_list);
+                self.generate_ep::<{ WHITE }>(sq, move_list);
+            }
+        } else {
+            for piece_num in 0..self.piece_num[Piece::BP as usize] {
+                let sq = self.p_list[Piece::BP as usize][piece_num as usize];
+                debug_assert!(square_on_board(sq));
+                self.generate_pawn_forward::<{ BLACK }>(sq, move_list);
+                self.generate_pawn_caps::<{ BLACK }>(sq, move_list);
+                self.generate_ep::<{ BLACK }>(sq, move_list);
+            }
+        }
+
+        let sliders = if self.side == WHITE {
+            &WHITE_SLIDERS
+        } else {
+            &BLACK_SLIDERS
+        };
+        for &piece in sliders {
+            debug_assert!(piece_valid(piece));
+            println!("pce: {}", piece);
+        }
+
+        let jumpers = if self.side == WHITE {
+            &WHITE_JUMPERS
+        } else {
+            &BLACK_JUMPERS
+        };
+        for &piece in jumpers {
+            debug_assert!(piece_valid(piece));
+            println!("pce: {}", piece);
+        }
     }
 }
 
