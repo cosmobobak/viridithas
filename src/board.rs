@@ -11,15 +11,15 @@ use std::{
 };
 
 use crate::{
-    attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIR, N_DIR, R_DIR, WHITE_SLIDERS, BLACK_SLIDERS, WHITE_JUMPERS, BLACK_JUMPERS},
+    attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIR, N_DIR, R_DIR, WHITE_SLIDERS, BLACK_SLIDERS, WHITE_JUMPERS, BLACK_JUMPERS, Q_DIR},
     bitboard::{pop_lsb, write_bb},
     chessmove::Move,
-    definitions::{Colour, Square120, BLACK, WHITE},
+    definitions::{Colour, Square120, BLACK, WHITE, square120_name, WB, BB, BR, WR, WQ, BQ},
     lookups::{
         CASTLE_KEYS, PIECE_BIG, PIECE_COL, PIECE_KEYS, PIECE_MAJ, PIECE_MIN, PIECE_VAL,
-        RANKS_BOARD, SIDE_KEY, SQ120_TO_SQ64,
+        RANKS_BOARD, SIDE_KEY, SQ120_TO_SQ64, PIECE_NAMES,
     },
-    movegen::MoveList,
+    movegen::{MoveList, offset_square_offboard},
     validate::{side_valid, square_on_board, piece_valid_empty, piece_valid},
 };
 use crate::{
@@ -680,6 +680,7 @@ impl Board {
         }
     }
 
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn generate_all_moves(&self, move_list: &mut MoveList) {
         debug_assert!({
             self.check_validity();
@@ -705,6 +706,60 @@ impl Board {
             }
         }
 
+        let jumpers = if self.side == WHITE {
+            &WHITE_JUMPERS
+        } else {
+            &BLACK_JUMPERS
+        };
+        for &piece in jumpers {
+            let dirs = if piece == Piece::WN as u8 || piece == Piece::BN as u8 {
+                &N_DIR
+            } else {
+                &K_DIR
+            };
+            for piece_num in 0..self.piece_num[piece as usize] {
+                let sq = self.p_list[piece as usize][piece_num as usize];
+                debug_assert!(square_on_board(sq));
+                println!("Piece: {} on {}", PIECE_NAMES[piece as usize], square120_name(sq).unwrap());
+                for &offset in dirs {
+                    let t_sq = sq as isize + offset;
+                    if offset_square_offboard(t_sq) {
+                        continue;
+                    }
+
+                    // now safe to convert to u8
+                    // as offset_square_offboard() is false
+                    let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
+
+                    if self.pieces[t_sq as usize] != Piece::Empty as u8 {
+                        if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1 {
+                            self.add_capture_move(
+                                Move::new(
+                                    sq,
+                                    t_sq,
+                                    self.pieces[t_sq as usize],
+                                    Piece::Empty as u8,
+                                    0,
+                                ),
+                                move_list,
+                            );
+                        }
+                    } else {
+                        self.add_quiet_move(
+                            Move::new(
+                                sq,
+                                t_sq,
+                                Piece::Empty as u8,
+                                Piece::Empty as u8,
+                                0,
+                            ),
+                            move_list,
+                        );
+                    }
+                }
+            }
+        }
+
         let sliders = if self.side == WHITE {
             &WHITE_SLIDERS
         } else {
@@ -712,17 +767,129 @@ impl Board {
         };
         for &piece in sliders {
             debug_assert!(piece_valid(piece));
-            println!("pce: {}", piece);
+            let dirs: &[isize] = match piece {
+                WB | BB => &B_DIR,
+                WR | BR => &R_DIR,
+                WQ | BQ => &Q_DIR,
+                _ => unreachable!(),
+            };
+            for piece_num in 0..self.piece_num[piece as usize] {
+                let sq = self.p_list[piece as usize][piece_num as usize];
+                debug_assert!(square_on_board(sq));
+                
+                for &dir in dirs {
+                    let mut slider = sq as isize + dir;
+                    while !offset_square_offboard(slider) {
+                        // now safe to convert to u8
+                        // as offset_square_offboard() is false
+                        let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
+
+                        if self.pieces[t_sq as usize] != Piece::Empty as u8 {
+                            if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1 {
+                                self.add_capture_move(
+                                    Move::new(
+                                        sq,
+                                        t_sq,
+                                        self.pieces[t_sq as usize],
+                                        Piece::Empty as u8,
+                                        0,
+                                    ),
+                                    move_list,
+                                );
+                            }
+                            break;
+                        }
+                        self.add_quiet_move(
+                            Move::new(
+                                sq,
+                                t_sq,
+                                Piece::Empty as u8,
+                                Piece::Empty as u8,
+                                0,
+                            ),
+                            move_list,
+                        );
+                        slider += dir;
+                    }
+                }
+            }
         }
 
-        let jumpers = if self.side == WHITE {
-            &WHITE_JUMPERS
+        // castling
+        self.generate_castling_moves(move_list);
+    }
+
+    fn generate_castling_moves(&self, move_list: &mut MoveList) {
+        if self.side == WHITE {
+            if (self.castle_perm & Castling::WK as u8) != 0
+            && self.pieces[Square120::F1 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::G1 as usize] == Piece::Empty as u8 
+            && !self.sq_attacked(Square120::E1 as usize, BLACK)
+            && !self.sq_attacked(Square120::F1 as usize, BLACK) {
+                self.add_quiet_move(
+                    Move::new(
+                        Square120::E1 as u8,
+                        Square120::G1 as u8,
+                        Piece::Empty as u8,
+                        Piece::Empty as u8,
+                        Move::CASTLE_MASK,
+                    ),
+                    move_list,
+                );
+            }
+
+            if (self.castle_perm & Castling::WQ as u8) != 0
+            && self.pieces[Square120::D1 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::C1 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::B1 as usize] == Piece::Empty as u8
+            && !self.sq_attacked(Square120::E1 as usize, BLACK)
+            && !self.sq_attacked(Square120::D1 as usize, BLACK) {
+                self.add_quiet_move(
+                    Move::new(
+                        Square120::E1 as u8,
+                        Square120::C1 as u8,
+                        Piece::Empty as u8,
+                        Piece::Empty as u8,
+                        Move::CASTLE_MASK,
+                    ),
+                    move_list,
+                );
+            }
         } else {
-            &BLACK_JUMPERS
-        };
-        for &piece in jumpers {
-            debug_assert!(piece_valid(piece));
-            println!("pce: {}", piece);
+            if (self.castle_perm & Castling::BK as u8) != 0
+            && self.pieces[Square120::F8 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::G8 as usize] == Piece::Empty as u8
+            && !self.sq_attacked(Square120::E8 as usize, WHITE)
+            && !self.sq_attacked(Square120::F8 as usize, WHITE) {
+                self.add_quiet_move(
+                    Move::new(
+                        Square120::E8 as u8,
+                        Square120::G8 as u8,
+                        Piece::Empty as u8,
+                        Piece::Empty as u8,
+                        Move::CASTLE_MASK,
+                    ),
+                    move_list,
+                );
+            }
+
+            if (self.castle_perm & Castling::BQ as u8) != 0
+            && self.pieces[Square120::D8 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::C8 as usize] == Piece::Empty as u8
+            && self.pieces[Square120::B8 as usize] == Piece::Empty as u8
+            && !self.sq_attacked(Square120::E8 as usize, WHITE)
+            && !self.sq_attacked(Square120::D8 as usize, WHITE) {
+                self.add_quiet_move(
+                    Move::new(
+                        Square120::E8 as u8,
+                        Square120::C8 as u8,
+                        Piece::Empty as u8,
+                        Piece::Empty as u8,
+                        Move::CASTLE_MASK,
+                    ),
+                    move_list,
+                );
+            }
         }
     }
 }

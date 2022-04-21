@@ -1,5 +1,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(dead_code, unused_imports, clippy::missing_const_for_fn)]
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::missing_const_for_fn,
+    clippy::if_not_else
+)]
 use board::Board;
 use chessmove::Move;
 use definitions::Piece;
@@ -42,10 +47,13 @@ fn sq_attack_by_side(side: u8, board: &Board) {
     println!();
 }
 
+const LEGALMOVES48: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+
 fn main() {
     let mut b = Board::new();
-    b.set_from_fen("rnbqkbnr/p1p1p3/3p3p/1p1p4/2P1Pp2/8/PP1P1PpP/RNBQKB1R b KQkq - 0 1");
+    b.set_from_fen(LEGALMOVES48);
 
     let mut move_list = MoveList::new();
     b.generate_all_moves(&mut move_list);
+    println!("{}", move_list);
 }

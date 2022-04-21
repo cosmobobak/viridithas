@@ -163,6 +163,10 @@ pub static SQUARE_NAMES: [&str; 64] = [
     "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
 
+pub static PIECE_NAMES: [&str; 13] = [
+    "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop", "rook", "queen", "king"
+];
+
 mod tests {
     use crate::lookups::{CASTLE_KEYS, PIECE_KEYS};
 

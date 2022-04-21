@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter};
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{Colour, Piece},
-    lookups::RANKS_BOARD,
+    definitions::{Colour, Piece, Square120},
+    lookups::{RANKS_BOARD, FILES_BOARD}, validate::square_on_board,
 };
 
 const MAX_POSITION_MOVES: usize = 256;
@@ -87,4 +87,12 @@ impl Display for MoveList {
         )?;
         write!(f, "]")
     }
+}
+
+#[inline]
+pub fn offset_square_offboard(offset_sq: isize) -> bool {
+    debug_assert!((0..120).contains(&offset_sq));
+    let idx: usize = unsafe { offset_sq.try_into().unwrap_unchecked() };
+    let value = unsafe { *FILES_BOARD.get_unchecked(idx) };
+    value == Square120::OffBoard as usize
 }

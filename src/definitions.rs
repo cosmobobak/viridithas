@@ -21,6 +21,19 @@ pub enum Piece {
     BK,
 }
 
+pub const WP: u8 = Piece::WP as u8;
+pub const WN: u8 = Piece::WN as u8;
+pub const WB: u8 = Piece::WB as u8;
+pub const WR: u8 = Piece::WR as u8;
+pub const WQ: u8 = Piece::WQ as u8;
+pub const WK: u8 = Piece::WK as u8;
+pub const BP: u8 = Piece::BP as u8;
+pub const BN: u8 = Piece::BN as u8;
+pub const BB: u8 = Piece::BB as u8;
+pub const BR: u8 = Piece::BR as u8;
+pub const BQ: u8 = Piece::BQ as u8;
+pub const BK: u8 = Piece::BK as u8;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum File {
