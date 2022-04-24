@@ -4,7 +4,8 @@ use crate::{
     board::Board,
     chessmove::Move,
     definitions::{Colour, Piece, Square120},
-    lookups::{RANKS_BOARD, FILES_BOARD}, validate::square_on_board,
+    lookups::{FILES_BOARD, RANKS_BOARD},
+    validate::square_on_board,
 };
 
 const MAX_POSITION_MOVES: usize = 256;
@@ -17,6 +18,10 @@ struct MoveListEntry {
 
 // Consider using MaybeUninit when you're confident
 // that you know how to not break everything.
+// Alternatively, add a field to Board so we can save
+// on allocating MoveLists.
+// Third, struct-of-arrays is supposedly faster than
+// array-of-structs. We should try that.
 pub struct MoveList {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
@@ -51,10 +56,14 @@ impl MoveList {
         self.count == 0
     }
 
+    pub fn clear(&mut self) {
+        self.count = 0;
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Move> {
         unsafe {
             self.moves
-                .get_unchecked(0..self.count)
+                .get_unchecked(..self.count)
                 .iter()
                 .map(|e| &e.entry)
         }
@@ -64,7 +73,7 @@ impl MoveList {
         // reversed, as we want to sort from highest to lowest
         unsafe {
             self.moves
-                .get_unchecked_mut(0..self.count)
+                .get_unchecked_mut(..self.count)
                 .sort_unstable_by(|a, b| b.score.cmp(&a.score));
         }
     }
@@ -94,5 +103,5 @@ pub fn offset_square_offboard(offset_sq: isize) -> bool {
     debug_assert!((0..120).contains(&offset_sq));
     let idx: usize = unsafe { offset_sq.try_into().unwrap_unchecked() };
     let value = unsafe { *FILES_BOARD.get_unchecked(idx) };
-    value == Square120::OffBoard as usize
+    value == Square120::OffBoard as u8
 }

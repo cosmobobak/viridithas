@@ -97,16 +97,16 @@ const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
     (piece_keys, castle_keys, side_key)
 }
 
-const fn files_ranks() -> ([usize; BOARD_N_SQUARES], [usize; BOARD_N_SQUARES]) {
+const fn files_ranks() -> ([u8; BOARD_N_SQUARES], [u8; BOARD_N_SQUARES]) {
     let mut files = [0; BOARD_N_SQUARES];
     let mut ranks = [0; BOARD_N_SQUARES];
     cfor!(let mut index = 0; index < BOARD_N_SQUARES; index += 1; {
-        files[index] = Square120::OffBoard as usize;
-        ranks[index] = Square120::OffBoard as usize;
+        files[index] = Square120::OffBoard as u8;
+        ranks[index] = Square120::OffBoard as u8;
     });
-    cfor!(let mut rank = Rank::Rank1 as usize; rank <= Rank::Rank8 as usize; rank += 1; {
-        cfor!(let mut file = File::FileA as usize; file <= File::FileH as usize; file += 1; {
-            let sq = filerank_to_square(file as u8, rank as u8);
+    cfor!(let mut rank = Rank::Rank1 as u8; rank <= Rank::Rank8 as u8; rank += 1; {
+        cfor!(let mut file = File::FileA as u8; file <= File::FileH as u8; file += 1; {
+            let sq = filerank_to_square(file, rank);
             files[sq as usize] = file;
             ranks[sq as usize] = rank;
         });
@@ -153,8 +153,8 @@ pub static PIECE_COL: [Colour; 13] = [
     Colour::Black,
 ];
 
-pub static FILES_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().0;
-pub static RANKS_BOARD: [usize; BOARD_N_SQUARES] = files_ranks().1;
+pub static FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
+pub static RANKS_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().1;
 
 pub static SQUARE_NAMES: [&str; 64] = [
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",

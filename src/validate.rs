@@ -5,7 +5,7 @@ use crate::{
 
 #[inline]
 pub fn square_on_board(sq: u8) -> bool {
-    FILES_BOARD[sq as usize] != Square120::OffBoard as usize
+    FILES_BOARD[sq as usize] != Square120::OffBoard as u8
 }
 
 pub fn side_valid(side: u8) -> bool {
