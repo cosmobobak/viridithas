@@ -22,24 +22,10 @@ pub static IS_SLIDER: [bool; 13] = [
     false, false, false, true, true, true, false, false, false, true, true, true, false,
 ];
 
-pub static WHITE_SLIDERS: [u8; 3] = [
-    Piece::WB as u8,
-    Piece::WR as u8,
-    Piece::WQ as u8,
-];
+pub static WHITE_SLIDERS: [u8; 3] = [Piece::WB as u8, Piece::WR as u8, Piece::WQ as u8];
 
-pub static BLACK_SLIDERS: [u8; 3] = [
-    Piece::BB as u8,
-    Piece::BR as u8,
-    Piece::BQ as u8,
-];
+pub static BLACK_SLIDERS: [u8; 3] = [Piece::BB as u8, Piece::BR as u8, Piece::BQ as u8];
 
-pub static WHITE_JUMPERS: [u8; 2] = [
-    Piece::WN as u8,
-    Piece::WK as u8,
-];
+pub static WHITE_JUMPERS: [u8; 2] = [Piece::WN as u8, Piece::WK as u8];
 
-pub static BLACK_JUMPERS: [u8; 2] = [
-    Piece::BN as u8,
-    Piece::BK as u8,
-];
+pub static BLACK_JUMPERS: [u8; 2] = [Piece::BN as u8, Piece::BK as u8];

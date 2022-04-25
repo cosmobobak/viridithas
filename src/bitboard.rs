@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use crate::lookups::{filerank_to_square, SQ120_TO_SQ64};
 
 #[inline]

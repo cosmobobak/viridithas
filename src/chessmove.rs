@@ -14,9 +14,9 @@ impl Move {
     const FROM_MASK: u32 = 0b0111_1111;
     const TO_MASK: u32 = 0b0011_1111_1000_0000;
     const CAPTURE_MASK: u32 = 0b0011_1100_0000_0000_0000;
+    const PROMO_MASK: u32 = 0b1111_0000_0000_0000_0000_0000;
     pub const EP_MASK: u32 = 0b0100_0000_0000_0000_0000;
     pub const PAWN_START_MASK: u32 = 0b1000_0000_0000_0000_0000;
-    const PROMO_MASK: u32 = 0b1111_0000_0000_0000_0000_0000;
     pub const CASTLE_MASK: u32 = 0b0001_0000_0000_0000_0000_0000_0000;
 
     #[inline]
@@ -33,35 +33,43 @@ impl Move {
         }
     }
 
-    pub fn from(self) -> u8 {
+    #[inline]
+    pub const fn from(self) -> u8 {
         (self.data & Self::FROM_MASK) as u8
     }
 
-    pub fn to(self) -> u8 {
+    #[inline]
+    pub const fn to(self) -> u8 {
         (((self.data & Self::TO_MASK) >> 7) & 0x7F) as u8
     }
 
-    pub fn capture(self) -> u8 {
+    #[inline]
+    pub const fn capture(self) -> u8 {
         (((self.data & Self::CAPTURE_MASK) >> 14) & 0xF) as u8
     }
 
-    pub fn promotion(self) -> u8 {
+    #[inline]
+    pub const fn promotion(self) -> u8 {
         (((self.data & Self::PROMO_MASK) >> 20) & 0xF) as u8
     }
 
-    pub fn is_promo(self) -> bool {
+    #[inline]
+    pub const fn is_promo(self) -> bool {
         ((self.data & Self::PROMO_MASK) != 0) as bool
     }
 
-    pub fn is_ep(self) -> bool {
+    #[inline]
+    pub const fn is_ep(self) -> bool {
         (self.data & Self::EP_MASK) != 0
     }
 
-    pub fn is_pawn_start(self) -> bool {
+    #[inline]
+    pub const fn is_pawn_start(self) -> bool {
         (self.data & Self::PAWN_START_MASK) != 0
     }
 
-    pub fn is_castle(self) -> bool {
+    #[inline]
+    pub const fn is_castle(self) -> bool {
         (self.data & Self::CASTLE_MASK) != 0
     }
 }

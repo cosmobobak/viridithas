@@ -1,11 +1,9 @@
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    board::Board,
     chessmove::Move,
-    definitions::{Colour, Piece, Square120},
-    lookups::{FILES_BOARD, RANKS_BOARD},
-    validate::square_on_board,
+    definitions::Square120,
+    lookups::FILES_BOARD,
 };
 
 const MAX_POSITION_MOVES: usize = 256;
@@ -28,7 +26,7 @@ pub struct MoveList {
 }
 
 impl MoveList {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         const DEFAULT: MoveListEntry = MoveListEntry {
             entry: Move { data: 0 },
             score: 0,
@@ -48,11 +46,11 @@ impl MoveList {
         self.count += 1;
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.count
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.count == 0
     }
 

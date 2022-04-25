@@ -133,9 +133,6 @@ pub static PIECE_MAJ: [bool; 13] = [
 pub static PIECE_MIN: [bool; 13] = [
     false, false, true, true, false, false, false, false, true, true, false, false, false,
 ];
-pub static PIECE_VAL: [i32; 13] = [
-    0, 100, 325, 325, 550, 1000, 50000, 100, 325, 325, 550, 1000, 50000,
-];
 
 pub static PIECE_COL: [Colour; 13] = [
     Colour::Both,
@@ -164,14 +161,15 @@ pub static SQUARE_NAMES: [&str; 64] = [
 ];
 
 pub static PIECE_NAMES: [&str; 13] = [
-    "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop", "rook", "queen", "king"
+    "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
+    "rook", "queen", "king",
 ];
 
 mod tests {
-    use crate::lookups::{CASTLE_KEYS, PIECE_KEYS};
 
     #[test]
     fn all_piece_keys_different() {
+        use crate::lookups::PIECE_KEYS;
         let mut hashkeys = PIECE_KEYS.iter().flat_map(|&k| k).collect::<Vec<u64>>();
         hashkeys.sort_unstable();
         let len_before = hashkeys.len();
@@ -182,6 +180,7 @@ mod tests {
 
     #[test]
     fn all_castle_keys_different() {
+        use crate::lookups::CASTLE_KEYS;
         let mut hashkeys = CASTLE_KEYS.to_vec();
         hashkeys.sort_unstable();
         let len_before = hashkeys.len();
