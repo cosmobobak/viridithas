@@ -4,6 +4,8 @@
     clippy::if_not_else
 )]
 
+mod errors;
+mod pvtable;
 mod attack;
 mod bitboard;
 mod board;
@@ -15,10 +17,11 @@ mod makemove;
 mod movegen;
 mod perft;
 mod validate;
+mod searchinfo;
+mod search;
+mod piecesquaretable;
+mod uci;
 
 fn main() {
-    perft::run_test(
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-        6,
-    );
+    uci::main_loop();
 }

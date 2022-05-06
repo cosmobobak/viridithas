@@ -8,14 +8,14 @@ use crate::{board::Board, movegen::MoveList};
 
 fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    pos.check_validity();
+    pos.check_validity().unwrap();
 
     if depth == 0 {
         return 1;
     }
 
     let mut ml = MoveList::new();
-    pos.generate_all_moves(&mut ml);
+    pos.generate_moves(&mut ml);
 
     let mut count = 0;
     for &m in ml.iter() {
@@ -30,16 +30,16 @@ fn perft(pos: &mut Board, depth: usize) -> u64 {
 }
 
 pub fn run_test(fen: &str, depth: usize) {
-    let mut pos = Board::from_fen(fen);
+    let mut pos = Board::from_fen(fen).unwrap();
     #[cfg(debug_assertions)]
-    pos.check_validity();
+    pos.check_validity().unwrap();
 
     println!("{}", pos);
     println!("Starting perft test to depth {}", depth);
     let mut leafnodes = 0;
 
     let mut ml = MoveList::new();
-    pos.generate_all_moves(&mut ml);
+    pos.generate_moves(&mut ml);
     let start_time = Instant::now();
     for (i, &m) in ml.iter().enumerate() {
         if !pos.make_move(m) {
@@ -56,7 +56,7 @@ pub fn run_test(fen: &str, depth: usize) {
     println!("Time taken: {}ms", elapsed.as_millis());
     #[allow(clippy::cast_precision_loss)]
     let nodesf64 = leafnodes as f64;
-    println!("kNPS: {:.0}", nodesf64 / elapsed.as_secs_f64() / 1000.0);
+    println!("Mnps: {:.2}", nodesf64 / elapsed.as_secs_f64() / 1_000_000.0);
 }
 
 pub fn gamut() {
@@ -67,7 +67,7 @@ pub fn gamut() {
         let line = line.unwrap();
         let mut parts = line.split(';');
         let fen = parts.next().unwrap().trim();
-        pos.set_from_fen(fen);
+        pos.set_from_fen(fen).unwrap();
         for depth_part in parts {
             let depth_part = depth_part.trim();
             let (d, nodes) = depth_part.split_once(' ').unwrap();
@@ -89,7 +89,7 @@ pub fn gamut() {
 }
 
 fn perft_to_depth(fen: &str, depth: usize) -> u64 {
-    let mut pos = Board::from_fen(fen);
+    let mut pos = Board::from_fen(fen).unwrap();
     perft(&mut pos, depth)
 }
 
@@ -100,12 +100,12 @@ mod tests {
         use crate::definitions::STARTING_FEN;
         const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         let mut pos = Board::new();
-        pos.set_from_fen(STARTING_FEN);
+        pos.set_from_fen(STARTING_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 20);
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
         assert_eq!(perft(&mut pos, 4), 197_281);
-        pos.set_from_fen(TEST_FEN);
+        pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48);
         assert_eq!(perft(&mut pos, 2), 2_039);
         assert_eq!(perft(&mut pos, 3), 97_862);

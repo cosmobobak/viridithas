@@ -1,25 +1,18 @@
-use std::fmt::{Display, Formatter};
-
-use crate::{
-    chessmove::Move,
-    definitions::Square120,
-    lookups::FILES_BOARD,
+use std::{
+    fmt::{Display, Formatter},
+    ops::Index,
 };
+
+use crate::{chessmove::Move, definitions::Square120, lookups::FILES_BOARD};
 
 const MAX_POSITION_MOVES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct MoveListEntry {
+pub struct MoveListEntry {
     pub entry: Move,
     pub score: i32,
 }
 
-// Consider using MaybeUninit when you're confident
-// that you know how to not break everything.
-// Alternatively, add a field to Board so we can save
-// on allocating MoveLists.
-// Third, struct-of-arrays is supposedly faster than
-// array-of-structs. We should try that.
 pub struct MoveList {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
@@ -37,8 +30,11 @@ impl MoveList {
         }
     }
 
+    #[inline]
     pub fn push(&mut self, m: Move, score: i32) {
-        // woohoohoohoo this is bad
+        // it's quite dangerous to do this,
+        // but this function is very much in the
+        // hot path.
         debug_assert!(self.count < MAX_POSITION_MOVES);
         unsafe {
             *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
@@ -58,6 +54,7 @@ impl MoveList {
         self.count = 0;
     }
 
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Move> {
         unsafe {
             self.moves
@@ -67,6 +64,12 @@ impl MoveList {
         }
     }
 
+    #[inline]
+    pub fn iter_with_scores(&self) -> impl Iterator<Item = &MoveListEntry> {
+        unsafe { self.moves.get_unchecked(..self.count).iter() }
+    }
+
+    #[inline]
     pub fn sort(&mut self) {
         // reversed, as we want to sort from highest to lowest
         unsafe {
@@ -74,6 +77,23 @@ impl MoveList {
                 .get_unchecked_mut(..self.count)
                 .sort_unstable_by(|a, b| b.score.cmp(&a.score));
         }
+    }
+
+    pub fn lookup_by_move(&mut self, m: Move) -> Option<&mut MoveListEntry> {
+        unsafe {
+            self.moves
+                .get_unchecked_mut(..self.count)
+                .iter_mut()
+                .find(|e| e.entry == m)
+        }
+    }
+}
+
+impl Index<usize> for MoveList {
+    type Output = Move;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.moves[..self.count][index].entry
     }
 }
 

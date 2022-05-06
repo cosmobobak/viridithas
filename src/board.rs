@@ -10,18 +10,29 @@ use std::fmt::{Debug, Display, Formatter};
 use crate::{
     attack::{
         BLACK_JUMPERS, BLACK_SLIDERS, B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN,
-        K_DIR, N_DIR, Q_DIR, R_DIR, WHITE_JUMPERS, WHITE_SLIDERS,
+        K_DIRS, N_DIRS, Q_DIR, R_DIR, WHITE_JUMPERS, WHITE_SLIDERS,
     },
     bitboard::pop_lsb,
     chessmove::Move,
     definitions::{
-        Colour, Square120, A1, A8, BB, BLACK, BQ, BR, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8,
-        RANK_3, RANK_6, WB, WHITE, WQ, WR,
+        Colour, Square120, A1, A8, BB, BK, BLACK, BN, BP, BQ, BR, C1, C8, D1, D8, F1, F8,
+        FIRST_ORDER_KILLER_SCORE, G1, G8, H1, H8, INFINITY, MAX_DEPTH, RANK_3, RANK_6,
+        SECOND_ORDER_KILLER_SCORE, WB, WHITE, WK, WN, WP, WQ, WR, BOTH,
     },
-    evaluation::PIECE_VALUES,
-    lookups::{PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, RANKS_BOARD, SQ120_TO_SQ64},
+    errors::{FenParseError, MoveParseError, PositionValidityError},
+    evaluation::{
+        BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS, MOBILITY_MULTIPLIER,
+        PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, PIECE_VALUES, self,
+    },
+    lookups::{
+        FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
+        RANKS_BOARD, SQ120_TO_SQ64,
+    },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     movegen::{offset_square_offboard, MoveList},
+    pvtable::PVTable,
+    search::alpha_beta,
+    searchinfo::SearchInfo,
     validate::{piece_valid, piece_valid_empty, side_valid, square_on_board},
 };
 use crate::{
@@ -29,7 +40,7 @@ use crate::{
     lookups::{filerank_to_square, SQ64_TO_SQ120},
 };
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Board {
     pieces: [u8; BOARD_N_SQUARES],
     pawns: [u64; 3],
@@ -51,10 +62,19 @@ pub struct Board {
     // type, or even just use [Vec<u8>; 13], if we're willing to sacrifice
     // memory fragmentation.
     piece_num: [u8; 13],
-    p_list: [[u8; 10]; 13], // p_list[piece][N]
+    piece_list: [[u8; 10]; 13], // p_list[piece][N]
+
+    principal_variation: Vec<Move>,
+
+    pv_table: PVTable,
+    history_table: [[i32; BOARD_N_SQUARES]; 13],
+    killer_move_table: [[Move; 2]; MAX_DEPTH],
 }
 
 impl Board {
+    pub const STARTING_FEN: &'static str =
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
     pub fn new() -> Self {
         let mut out = Self {
             pieces: [Square120::NoSquare as u8; BOARD_N_SQUARES],
@@ -66,17 +86,108 @@ impl Board {
             ply: 0,
             hist_ply: 0,
             key: 0,
-            piece_num: [0; 13],
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
             material: [0; 2],
             castle_perm: 0,
             history: Vec::with_capacity(MAX_GAME_MOVES),
-            p_list: [[0; 10]; 13],
+            piece_num: [0; 13],
+            piece_list: [[0; 10]; 13],
+            pv_table: PVTable::new(),
+            principal_variation: Vec::with_capacity(MAX_DEPTH),
+            history_table: [[0; BOARD_N_SQUARES]; 13],
+            killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
         };
         out.reset();
         out
+    }
+
+    pub fn insert_killer(&mut self, m: Move) {
+        debug_assert!(self.ply < MAX_DEPTH);
+        let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.ply) };
+        entry[1] = entry[0];
+        entry[0] = m;
+    }
+
+    pub fn insert_history(&mut self, m: Move, score: i32) {
+        let from = m.from() as usize;
+        let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
+        let history_board = unsafe { self.history_table.get_unchecked_mut(piece_moved) };
+        let to = m.to() as usize;
+        unsafe {
+            *history_board.get_unchecked_mut(to) += score;
+        }
+    }
+
+    pub fn is_check(&self) -> bool {
+        let king_sq = unsafe { *self.king_sq.get_unchecked(self.side as usize) as usize };
+        self.sq_attacked(king_sq, self.side ^ 1)
+    }
+
+    pub fn zero_ply(&mut self) {
+        self.ply = 0;
+    }
+
+    pub const fn ply(&self) -> usize {
+        self.ply
+    }
+
+    pub const fn turn(&self) -> u8 {
+        self.side
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_terminal(&mut self) -> bool {
+        self.is_checkmate() || self.is_stalemate() || self.is_draw()
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_checkmate(&mut self) -> bool {
+        if !self.is_check() {
+            return false;
+        }
+
+        let mut moves = MoveList::new();
+        self.generate_moves(&mut moves);
+
+        for &m in moves.iter() {
+            if !self.make_move(m) {
+                continue;
+            }
+            self.unmake_move();
+            return false;
+        }
+
+        true
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_stalemate(&mut self) -> bool {
+        if self.is_check() {
+            return false;
+        }
+
+        let mut moves = MoveList::new();
+        self.generate_moves(&mut moves);
+
+        for &m in moves.iter() {
+            if !self.make_move(m) {
+                continue;
+            }
+            self.unmake_move();
+            return false;
+        }
+
+        true
+    }
+
+    pub fn store_pv_move(&mut self, best_move: Move) {
+        self.pv_table.store_pv_move(self.key, best_move);
+    }
+
+    pub fn probe_pv_move(&self) -> Option<&Move> {
+        self.pv_table.probe_pv_move(self.key)
     }
 
     pub fn generate_pos_key(&self) -> u64 {
@@ -129,8 +240,10 @@ impl Board {
         self.key = 0;
     }
 
-    pub fn set_from_fen(&mut self, fen: &str) {
-        assert!(fen.is_ascii());
+    pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
+        if !fen.is_ascii() {
+            return Err(format!("FEN string is not ASCII: {}", fen));
+        }
 
         let mut rank = Rank::Rank8 as u8;
         let mut file = File::FileA as u8;
@@ -167,10 +280,10 @@ impl Board {
                     continue;
                 }
                 c => {
-                    panic!(
+                    return Err(format!(
                         "FEN string is invalid, got unexpected character: \"{}\"",
                         c as char
-                    );
+                    ));
                 }
             }
 
@@ -186,42 +299,52 @@ impl Board {
 
         let mut info_parts = info_part[1..].split(|&c| c == b' ');
 
-        self.set_side(info_parts.next());
+        self.set_side(info_parts.next())?;
 
-        self.set_castling(info_parts.next());
+        self.set_castling(info_parts.next())?;
 
-        self.set_ep(info_parts.next());
+        self.set_ep(info_parts.next())?;
 
-        self.set_halfmove(info_parts.next());
+        self.set_halfmove(info_parts.next())?;
 
-        self.set_fullmove(info_parts.next());
+        self.set_fullmove(info_parts.next())?;
 
         self.key = self.generate_pos_key();
 
         self.set_up_material_list();
+
+        Ok(())
     }
 
-    pub fn from_fen(fen: &str) -> Self {
+    pub fn set_startpos(&mut self) {
+        self.set_from_fen(Self::STARTING_FEN)
+            .expect("for some reason, STARTING_FEN is now broken.");
+    }
+
+    pub fn from_fen(fen: &str) -> Result<Self, FenParseError> {
         let mut out = Self::new();
-        out.set_from_fen(fen);
-        out
+        out.set_from_fen(fen)?;
+        Ok(out)
     }
 
-    fn set_side(&mut self, side_part: Option<&[u8]>) {
+    fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
-            None => panic!("FEN string is invalid, expected side part."),
+            None => return Err("FEN string is invalid, expected side part.".to_string()),
             Some([b'w']) => WHITE,
             Some([b'b']) => BLACK,
-            Some(other) => panic!(
-                "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
-                std::str::from_utf8(other).unwrap()
-            ),
+            Some(other) => {
+                return Err(format!(
+                    "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
+                    std::str::from_utf8(other).unwrap()
+                ))
+            }
         };
+        Ok(())
     }
 
-    fn set_castling(&mut self, castling_part: Option<&[u8]>) {
+    fn set_castling(&mut self, castling_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match castling_part {
-            None => panic!("FEN string is invalid, expected castling part."),
+            None => return Err("FEN string is invalid, expected castling part.".to_string()),
             Some([b'-']) => self.castle_perm = 0,
             Some(castling) => {
                 for &c in castling {
@@ -230,56 +353,77 @@ impl Board {
                         b'Q' => self.castle_perm |= Castling::WQ as u8,
                         b'k' => self.castle_perm |= Castling::BK as u8,
                         b'q' => self.castle_perm |= Castling::BQ as u8,
-                        _ => panic!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", castling.iter().map(|&c| c as char).collect::<String>()),
+                        _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", castling.iter().map(|&c| c as char).collect::<String>())),
                     }
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn set_ep(&mut self, ep_part: Option<&[u8]>) {
+    fn set_ep(&mut self, ep_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match ep_part {
-            None => panic!("FEN string is invalid, expected en passant part."),
+            None => return Err("FEN string is invalid, expected en passant part.".to_string()),
             Some([b'-']) => self.ep_sq = Square120::NoSquare as u8,
             Some(ep_sq) => {
-                assert!(ep_sq.len() == 2, "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>());
+                if ep_sq.len() != 2 {
+                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>()));
+                }
                 let file = ep_sq[0] as u8 - b'a';
                 let rank = ep_sq[1] as u8 - b'1';
-                assert!(file >= File::FileA as u8 && file <= File::FileH as u8);
-                assert!(rank >= Rank::Rank1 as u8 && rank <= Rank::Rank8 as u8);
+                if !(file >= File::FileA as u8
+                    && file <= File::FileH as u8
+                    && rank >= Rank::Rank1 as u8
+                    && rank <= Rank::Rank8 as u8)
+                {
+                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>()));
+                }
                 self.ep_sq = filerank_to_square(file, rank);
             }
         }
+
+        Ok(())
     }
 
-    fn set_halfmove(&mut self, halfmove_part: Option<&[u8]>) {
+    fn set_halfmove(&mut self, halfmove_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match halfmove_part {
-            None => panic!("FEN string is invalid, expected halfmove clock part."),
+            None => return Err("FEN string is invalid, expected halfmove clock part.".to_string()),
             Some(halfmove_clock) => {
                 self.fifty_move_counter = std::str::from_utf8(halfmove_clock)
-                    .expect("FEN string is invalid, expected halfmove clock part to be valid UTF-8")
+                    .map_err(|_| {
+                        "FEN string is invalid, expected halfmove clock part to be valid UTF-8"
+                    })?
                     .parse::<u8>()
-                    .expect("FEN string is invalid, expected halfmove clock part to be a number");
+                    .map_err(|_| {
+                        "FEN string is invalid, expected halfmove clock part to be a number"
+                    })?;
             }
         }
+
+        Ok(())
     }
 
-    fn set_fullmove(&mut self, fullmove_part: Option<&[u8]>) {
+    fn set_fullmove(&mut self, fullmove_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match fullmove_part {
-            None => panic!("FEN string is invalid, expected fullmove number part."),
+            None => return Err("FEN string is invalid, expected fullmove number part.".to_string()),
             Some(fullmove_number) => {
                 self.ply = std::str::from_utf8(fullmove_number)
-                    .expect(
-                        "FEN string is invalid, expected fullmove number part to be valid UTF-8",
-                    )
+                    .map_err(|_| {
+                        "FEN string is invalid, expected fullmove number part to be valid UTF-8"
+                    })?
                     .parse::<usize>()
-                    .expect("FEN string is invalid, expected fullmove number part to be a number")
+                    .map_err(|_| {
+                        "FEN string is invalid, expected fullmove number part to be a number"
+                    })?
                     * 2;
                 if self.side == BLACK {
                     self.ply += 1;
                 }
             }
         }
+
+        Ok(())
     }
 
     fn set_up_material_list(&mut self) {
@@ -301,7 +445,7 @@ impl Board {
 
                 self.material[colour as usize] += PIECE_VALUES[piece as usize];
 
-                self.p_list[piece as usize][self.piece_num[piece as usize] as usize] =
+                self.piece_list[piece as usize][self.piece_num[piece as usize] as usize] =
                     sq.try_into().unwrap();
                 self.piece_num[piece as usize] += 1;
 
@@ -318,7 +462,7 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn check_validity(&self) {
+    pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         use Colour::{Black, Both, White};
         let mut piece_num = [0; 13];
         let mut big_pce = [0, 0];
@@ -330,9 +474,14 @@ impl Board {
 
         // check piece lists
         for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
-            for p_num in 0..self.piece_num[piece as usize] {
-                let sq120 = self.p_list[piece as usize][p_num as usize];
-                assert_eq!(self.pieces[sq120 as usize], piece);
+            let count = self.piece_num[piece as usize] as usize;
+            for &sq120 in &self.piece_list[piece as usize][..count] {
+                if self.pieces[sq120 as usize] != piece {
+                    return Err(format!(
+                        "piece list corrupt: expected slot {} to be {} but was {}",
+                        sq120, piece, self.pieces[sq120 as usize]
+                    ));
+                }
             }
         }
 
@@ -355,118 +504,188 @@ impl Board {
             }
         }
 
-        assert_eq!(piece_num[1..], self.piece_num[1..]);
+        if piece_num[1..] != self.piece_num[1..] {
+            return Err(format!(
+                "piece counts are corrupt: expected {:?}, got {:?}",
+                &piece_num[1..],
+                &self.piece_num[1..]
+            ));
+        }
 
         // check bitboards count
-        assert_eq!(
-            pawns[White as usize].count_ones(),
-            u32::from(self.piece_num[Piece::WP as usize])
-        );
-        assert_eq!(
-            pawns[Black as usize].count_ones(),
-            u32::from(self.piece_num[Piece::BP as usize])
-        );
-        assert_eq!(
-            pawns[Both as usize].count_ones(),
-            u32::from(self.piece_num[Piece::WP as usize])
+        if pawns[White as usize].count_ones() != u32::from(self.piece_num[Piece::WP as usize]) {
+            return Err(format!(
+                "white pawn bitboard is corrupt: expected {:?}, got {:?}",
+                self.piece_num[Piece::WP as usize],
+                pawns[White as usize].count_ones()
+            ));
+        }
+        if pawns[Black as usize].count_ones() != u32::from(self.piece_num[Piece::BP as usize]) {
+            return Err(format!(
+                "black pawn bitboard is corrupt: expected {:?}, got {:?}",
+                self.piece_num[Piece::BP as usize],
+                pawns[Black as usize].count_ones()
+            ));
+        }
+        if pawns[Both as usize].count_ones()
+            != u32::from(self.piece_num[Piece::WP as usize])
                 + u32::from(self.piece_num[Piece::BP as usize])
-        );
+        {
+            return Err(format!(
+                "both pawns bitboard is corrupt: expected {:?}, got {:?}",
+                self.piece_num[Piece::WP as usize] + self.piece_num[Piece::BP as usize],
+                pawns[Both as usize].count_ones()
+            ));
+        }
 
         // check bitboards' squares
         while pawns[White as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[White as usize]);
-            assert_eq!(
-                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize],
-                Piece::WP as u8
-            );
+            if self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] != Piece::WP as u8 {
+                return Err(format!(
+                    "white pawn bitboard is corrupt: expected white pawn, got {:?}",
+                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                ));
+            }
         }
 
         while pawns[Black as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[Black as usize]);
-            assert_eq!(
-                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize],
-                Piece::BP as u8
-            );
+            if self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] != Piece::BP as u8 {
+                return Err(format!(
+                    "black pawn bitboard is corrupt: expected black pawn, got {:?}",
+                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                ));
+            }
         }
 
         while pawns[Both as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[Both as usize]);
-            assert!(
-                self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::WP as u8
-                    || self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::BP as u8
-            );
+            if !(self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::WP as u8
+                || self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::BP as u8)
+            {
+                return Err(format!(
+                    "both pawns bitboard is corrupt: expected white or black pawn, got {:?}",
+                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                ));
+            }
         }
 
-        assert_eq!(material[White as usize], self.material[White as usize]);
-        assert_eq!(material[Black as usize], self.material[Black as usize]);
-        assert_eq!(
-            min_pce[White as usize],
-            self.minor_piece_counts[White as usize]
-        );
-        assert_eq!(
-            min_pce[Black as usize],
-            self.minor_piece_counts[Black as usize]
-        );
-        assert_eq!(
-            maj_pce[White as usize],
-            self.major_piece_counts[White as usize]
-        );
-        assert_eq!(
-            maj_pce[Black as usize],
-            self.major_piece_counts[Black as usize]
-        );
-        assert_eq!(
-            big_pce[White as usize],
-            self.big_piece_counts[White as usize]
-        );
-        assert_eq!(
-            big_pce[Black as usize],
-            self.big_piece_counts[Black as usize]
-        );
+        if material[White as usize] != self.material[White as usize] {
+            return Err(format!(
+                "white material is corrupt: expected {:?}, got {:?}",
+                material[White as usize], self.material[White as usize]
+            ));
+        }
+        if material[Black as usize] != self.material[Black as usize] {
+            return Err(format!(
+                "black material is corrupt: expected {:?}, got {:?}",
+                material[Black as usize], self.material[Black as usize]
+            ));
+        }
+        if min_pce[White as usize] != self.minor_piece_counts[White as usize] {
+            return Err(format!(
+                "white minor piece count is corrupt: expected {:?}, got {:?}",
+                min_pce[White as usize], self.minor_piece_counts[White as usize]
+            ));
+        }
+        if min_pce[Black as usize] != self.minor_piece_counts[Black as usize] {
+            return Err(format!(
+                "black minor piece count is corrupt: expected {:?}, got {:?}",
+                min_pce[Black as usize], self.minor_piece_counts[Black as usize]
+            ));
+        }
+        if maj_pce[White as usize] != self.major_piece_counts[White as usize] {
+            return Err(format!(
+                "white major piece count is corrupt: expected {:?}, got {:?}",
+                maj_pce[White as usize], self.major_piece_counts[White as usize]
+            ));
+        }
+        if maj_pce[Black as usize] != self.major_piece_counts[Black as usize] {
+            return Err(format!(
+                "black major piece count is corrupt: expected {:?}, got {:?}",
+                maj_pce[Black as usize], self.major_piece_counts[Black as usize]
+            ));
+        }
+        if big_pce[White as usize] != self.big_piece_counts[White as usize] {
+            return Err(format!(
+                "white big piece count is corrupt: expected {:?}, got {:?}",
+                big_pce[White as usize], self.big_piece_counts[White as usize]
+            ));
+        }
+        if big_pce[Black as usize] != self.big_piece_counts[Black as usize] {
+            return Err(format!(
+                "black big piece count is corrupt: expected {:?}, got {:?}",
+                big_pce[Black as usize], self.big_piece_counts[Black as usize]
+            ));
+        }
 
-        assert!(self.side == WHITE || self.side == BLACK);
-        assert_eq!(self.generate_pos_key(), self.key);
+        if !(self.side == WHITE || self.side == BLACK) {
+            return Err(format!(
+                "side is corrupt: expected WHITE or BLACK, got {:?}",
+                self.side
+            ));
+        }
+        if self.generate_pos_key() != self.key {
+            return Err(format!(
+                "key is corrupt: expected {:?}, got {:?}",
+                self.generate_pos_key(),
+                self.key
+            ));
+        }
 
-        assert!(
-            self.ep_sq == Square120::NoSquare as u8
-                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as u8 && self.side == WHITE)
-                || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as u8 && self.side == BLACK)
-        );
+        if !(self.ep_sq == Square120::NoSquare as u8
+            || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as u8 && self.side == WHITE)
+            || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as u8 && self.side == BLACK))
+        {
+            return Err(format!("en passant square is corrupt: expected square to be {} (NoSquare) or to be on ranks 6 or 3, got {} (Rank {})", Square120::NoSquare as u8, self.ep_sq, RANKS_BOARD[self.ep_sq as usize]));
+        }
 
-        assert!(self.fifty_move_counter < 100);
+        if self.fifty_move_counter >= 100 {
+            return Err(format!(
+                "fifty move counter is corrupt: expected 0-99, got {}",
+                self.fifty_move_counter
+            ));
+        }
 
-        assert_eq!(
-            self.pieces[self.king_sq[White as usize] as usize],
-            Piece::WK as u8
-        );
-        assert_eq!(
-            self.pieces[self.king_sq[Black as usize] as usize],
-            Piece::BK as u8
-        );
+        if self.pieces[self.king_sq[White as usize] as usize] != Piece::WK as u8 {
+            return Err(format!(
+                "white king square is corrupt: expected white king, got {:?}",
+                self.pieces[self.king_sq[White as usize] as usize]
+            ));
+        }
+        if self.pieces[self.king_sq[Black as usize] as usize] != Piece::BK as u8 {
+            return Err(format!(
+                "black king square is corrupt: expected black king, got {:?}",
+                self.pieces[self.king_sq[Black as usize] as usize]
+            ));
+        }
+
+        Ok(())
     }
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: usize, side: u8) -> bool {
-        use Piece::{Empty, BP, WP};
+        use Piece::Empty;
 
         debug_assert!(side_valid(side));
         debug_assert!(square_on_board(sq.try_into().unwrap()));
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
 
         // pawns
         if side == WHITE {
-            if self.pieces[sq - 11] == WP as u8 || self.pieces[sq - 9] == WP as u8 {
+            if self.pieces[sq - 11] == WP || self.pieces[sq - 9] == WP {
                 return true;
             }
         } else {
-            if self.pieces[sq + 11] == BP as u8 || self.pieces[sq + 9] == BP as u8 {
+            if self.pieces[sq + 11] == BP || self.pieces[sq + 9] == BP {
                 return true;
             }
         }
 
         // knights
-        for &dir in &N_DIR {
+        for &dir in &N_DIRS {
             let p = self.pieces[(sq as isize + dir) as usize];
             if p != Square120::OffBoard as u8
                 && IS_KNIGHT[p as usize]
@@ -509,7 +728,7 @@ impl Board {
         }
 
         // king
-        for &dir in &K_DIR {
+        for &dir in &K_DIRS {
             let p = self.pieces[(sq as isize + dir) as usize];
             if p != Square120::OffBoard as u8
                 && IS_KING[p as usize]
@@ -522,19 +741,55 @@ impl Board {
         false
     }
 
+    #[inline]
     fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
         let _ = self;
-        move_list.push(m, 0);
+        debug_assert!(square_on_board(m.from()));
+        debug_assert!(square_on_board(m.to()));
+
+        let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.ply) };
+
+        let score = if killer_entry[0] == m {
+            FIRST_ORDER_KILLER_SCORE
+        } else if killer_entry[1] == m {
+            SECOND_ORDER_KILLER_SCORE
+        } else {
+            let from = m.from() as usize;
+            let to = m.to() as usize;
+            let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
+            unsafe {
+                *self
+                    .history_table
+                    .get_unchecked(piece_moved)
+                    .get_unchecked(to)
+            }
+        };
+
+        move_list.push(m, score);
     }
 
+    #[inline]
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
-        let _ = self;
-        move_list.push(m, 0);
+        debug_assert!(square_on_board(m.from()));
+        debug_assert!(square_on_board(m.to()));
+        debug_assert!(piece_valid(m.capture()));
+
+        let capture = m.capture() as usize;
+        let from = m.from() as usize;
+        let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
+        let mmvlva = unsafe {
+            *MVV_LVA_SCORE
+                .get_unchecked(capture)
+                .get_unchecked(piece_moved)
+        };
+
+        let score = mmvlva + 10_000_000;
+        move_list.push(m, score);
     }
 
     fn add_ep_move(&self, m: Move, move_list: &mut MoveList) {
         let _ = self;
-        move_list.push(m, 0);
+        move_list.push(m, 1050 + 10_000_000);
     }
 
     fn add_pawn_cap_move<const SIDE: u8>(
@@ -635,11 +890,13 @@ impl Board {
     }
 
     fn generate_ep<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
-        // this has a bug because epsq can be 99 as a default.
+        if self.ep_sq == Square120::NoSquare as u8 {
+            return;
+        }
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
         if left_sq == self.ep_sq {
-            self.add_capture_move(
+            self.add_ep_move(
                 Move::new(
                     sq,
                     left_sq,
@@ -651,7 +908,7 @@ impl Board {
             );
         }
         if right_sq == self.ep_sq {
-            self.add_capture_move(
+            self.add_ep_move(
                 Move::new(
                     sq,
                     right_sq,
@@ -692,22 +949,21 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_all_moves(&self, move_list: &mut MoveList) {
+    pub fn generate_moves(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
 
-        // white pawn moves
         if self.side == WHITE {
-            for piece_num in 0..self.piece_num[Piece::WP as usize] {
-                let sq = self.p_list[Piece::WP as usize][piece_num as usize];
+            let piece_count = self.piece_num[WP as usize] as usize;
+            for &sq in self.piece_list[WP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
                 self.generate_pawn_forward::<{ WHITE }>(sq, move_list);
                 self.generate_pawn_caps::<{ WHITE }>(sq, move_list);
                 self.generate_ep::<{ WHITE }>(sq, move_list);
             }
         } else {
-            for piece_num in 0..self.piece_num[Piece::BP as usize] {
-                let sq = self.p_list[Piece::BP as usize][piece_num as usize];
+            let piece_count = self.piece_num[BP as usize] as usize;
+            for &sq in self.piece_list[BP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
                 self.generate_pawn_forward::<{ BLACK }>(sq, move_list);
                 self.generate_pawn_caps::<{ BLACK }>(sq, move_list);
@@ -722,12 +978,12 @@ impl Board {
         };
         for &piece in jumpers {
             let dirs = if piece == Piece::WN as u8 || piece == Piece::BN as u8 {
-                &N_DIR
+                &N_DIRS
             } else {
-                &K_DIR
+                &K_DIRS
             };
-            for piece_num in 0..self.piece_num[piece as usize] {
-                let sq = self.p_list[piece as usize][piece_num as usize];
+            let piece_count = self.piece_num[piece as usize] as usize;
+            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
                 for &offset in dirs {
                     let t_sq = sq as isize + offset;
@@ -773,10 +1029,10 @@ impl Board {
                 WB | BB => &B_DIR,
                 WR | BR => &R_DIR,
                 WQ | BQ => &Q_DIR,
-                _ => unreachable!(),
+                _ => unsafe { std::hint::unreachable_unchecked() },
             };
-            for piece_num in 0..self.piece_num[piece as usize] {
-                let sq = self.p_list[piece as usize][piece_num as usize];
+            let piece_count = self.piece_num[piece as usize] as usize;
+            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
 
                 for &dir in dirs {
@@ -814,6 +1070,111 @@ impl Board {
 
         // castling
         self.generate_castling_moves(move_list);
+    }
+
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    pub fn generate_captures(&self, move_list: &mut MoveList) {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+
+        // white pawn moves
+        if self.side == WHITE {
+            let piece_count = self.piece_num[WP as usize] as usize;
+            for &sq in self.piece_list[WP as usize][..piece_count].iter() {
+                debug_assert!(square_on_board(sq));
+                self.generate_pawn_caps::<{ WHITE }>(sq, move_list);
+                self.generate_ep::<{ WHITE }>(sq, move_list);
+            }
+        } else {
+            let piece_count = self.piece_num[BP as usize] as usize;
+            for &sq in self.piece_list[BP as usize][..piece_count].iter() {
+                debug_assert!(square_on_board(sq));
+                self.generate_pawn_caps::<{ BLACK }>(sq, move_list);
+                self.generate_ep::<{ BLACK }>(sq, move_list);
+            }
+        }
+
+        let jumpers = if self.side == WHITE {
+            &WHITE_JUMPERS
+        } else {
+            &BLACK_JUMPERS
+        };
+        for &piece in jumpers {
+            let dirs = if piece == Piece::WN as u8 || piece == Piece::BN as u8 {
+                &N_DIRS
+            } else {
+                &K_DIRS
+            };
+            let piece_count = self.piece_num[piece as usize] as usize;
+            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+                debug_assert!(square_on_board(sq));
+                for &offset in dirs {
+                    let t_sq = sq as isize + offset;
+                    if offset_square_offboard(t_sq) {
+                        continue;
+                    }
+
+                    // now safe to convert to u8
+                    // as offset_square_offboard() is false
+                    let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
+
+                    if self.pieces[t_sq as usize] != Piece::Empty as u8
+                        && PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1
+                    {
+                        self.add_capture_move(
+                            Move::new(sq, t_sq, self.pieces[t_sq as usize], Piece::Empty as u8, 0),
+                            move_list,
+                        );
+                    }
+                }
+            }
+        }
+
+        let sliders = if self.side == WHITE {
+            &WHITE_SLIDERS
+        } else {
+            &BLACK_SLIDERS
+        };
+        for &piece in sliders {
+            debug_assert!(piece_valid(piece));
+            let dirs: &[isize] = match piece {
+                WB | BB => &B_DIR,
+                WR | BR => &R_DIR,
+                WQ | BQ => &Q_DIR,
+                _ => unsafe { std::hint::unreachable_unchecked() },
+            };
+            let piece_count = self.piece_num[piece as usize] as usize;
+            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+                debug_assert!(square_on_board(sq));
+
+                for &dir in dirs {
+                    let mut slider = sq as isize + dir;
+                    while !offset_square_offboard(slider) {
+                        // now safe to convert to u8
+                        // as offset_square_offboard() is false
+                        let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
+
+                        if self.pieces[t_sq as usize] != Piece::Empty as u8 {
+                            if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1
+                            {
+                                self.add_capture_move(
+                                    Move::new(
+                                        sq,
+                                        t_sq,
+                                        self.pieces[t_sq as usize],
+                                        Piece::Empty as u8,
+                                        0,
+                                    ),
+                                    move_list,
+                                );
+                            }
+                            break;
+                        }
+                        slider += dir;
+                    }
+                }
+            }
+        }
     }
 
     fn generate_castling_moves(&self, move_list: &mut MoveList) {
@@ -894,6 +1255,54 @@ impl Board {
         }
     }
 
+    /// Checks if a move is legal in the current position.
+    /// Because moves must be played and unplayed, this method
+    /// requires a mutable reference to the position.
+    /// Despite this, you should expect the state of a Board
+    /// object to be the same before and after calling [`is_legal`].
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_legal(&mut self, move_to_check: Move) -> bool {
+        let mut list = MoveList::new();
+        self.generate_moves(&mut list);
+
+        for &m in list.iter() {
+            if !self.make_move(m) {
+                continue;
+            }
+            self.unmake_move();
+            if m == move_to_check {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// An immutable version of [`is_legal`].
+    /// Because the entire board state must be copied, this method
+    /// is much less efficient than [`is_legal`], and is only provided
+    /// for convenience in the case where you need to to do legality
+    /// checking with an immutable Board object.
+    #[deprecated(note = "prefer Board::is_legal")]
+    pub fn is_legal_immutable(&self, move_to_check: Move) -> bool {
+        let mut board = self.clone();
+
+        let mut list = MoveList::new();
+        board.generate_moves(&mut list);
+
+        for &m in list.iter() {
+            if !board.make_move(m) {
+                continue;
+            }
+            board.unmake_move();
+            if m == move_to_check {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn clear_piece(&mut self, sq: u8) {
         debug_assert!(square_on_board(sq));
 
@@ -924,7 +1333,7 @@ impl Board {
 
         let mut piece_num = 255;
         for idx in 0..self.piece_num[piece as usize] {
-            if self.p_list[piece as usize][idx as usize] == sq {
+            if self.piece_list[piece as usize][idx as usize] == sq {
                 piece_num = idx;
                 break;
             }
@@ -935,8 +1344,8 @@ impl Board {
         // decrement the number of pieces of this type
         self.piece_num[piece as usize] -= 1;
         // and move the last piece in the list to the removed piece's position
-        self.p_list[piece as usize][piece_num as usize] =
-            self.p_list[piece as usize][self.piece_num[piece as usize] as usize];
+        self.piece_list[piece as usize][piece_num as usize] =
+            self.piece_list[piece as usize][self.piece_num[piece as usize] as usize];
     }
 
     fn add_piece(&mut self, sq: u8, piece: u8) {
@@ -963,7 +1372,7 @@ impl Board {
             self.pawns[Colour::Both as usize] |= 1 << sq64;
         }
 
-        self.p_list[piece as usize][self.piece_num[piece as usize] as usize] = sq;
+        self.piece_list[piece as usize][self.piece_num[piece as usize] as usize] = sq;
         self.piece_num[piece as usize] += 1;
     }
 
@@ -994,9 +1403,10 @@ impl Board {
             self.pawns[Colour::Both as usize] |= 1 << sq64;
         }
 
-        for idx in 0..self.piece_num[piece as usize] {
-            if self.p_list[piece as usize][idx as usize] == from {
-                self.p_list[piece as usize][idx as usize] = to;
+        let piece_count = self.piece_num[piece as usize] as usize;
+        for sq in self.piece_list[piece as usize][..piece_count].iter_mut() {
+            if *sq == from {
+                *sq = to;
                 #[cfg(debug_assertions)]
                 {
                     t_piece_num = true;
@@ -1014,7 +1424,7 @@ impl Board {
     #[allow(clippy::cognitive_complexity)]
     pub fn make_move(&mut self, m: Move) -> bool {
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
 
         let from = m.from();
         let to = m.to();
@@ -1112,7 +1522,7 @@ impl Board {
         hash_side(&mut self.key);
 
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
 
         if self.sq_attacked(self.king_sq[side as usize] as usize, self.side) {
             self.unmake_move();
@@ -1122,9 +1532,37 @@ impl Board {
         true
     }
 
+    pub fn make_nullmove(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+        debug_assert!(!self.is_check());
+
+        self.ply += 1;
+        self.history.push(Undo {
+            m: Move::null(),
+            castle_perm: self.castle_perm,
+            ep_square: self.ep_sq,
+            fifty_move_counter: self.fifty_move_counter,
+            position_key: self.key,
+        });
+
+        if self.ep_sq != Square120::NoSquare as u8 {
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        self.ep_sq = Square120::NoSquare as u8;
+
+        self.side ^= 1;
+        self.hist_ply += 1;
+        hash_side(&mut self.key);
+
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+    }
+
     pub fn unmake_move(&mut self) {
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
 
         self.ply -= 1;
         self.hist_ply -= 1;
@@ -1208,7 +1646,490 @@ impl Board {
         }
 
         #[cfg(debug_assertions)]
-        self.check_validity();
+        self.check_validity().unwrap();
+    }
+
+    pub fn unmake_nullmove(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+
+        self.ply -= 1;
+        self.hist_ply -= 1;
+
+        if self.ep_sq != Square120::NoSquare as u8 {
+            // this might be unreachable, check.
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        let Undo {
+            m: _,
+            castle_perm,
+            ep_square,
+            fifty_move_counter,
+            position_key: _, // this is sus.
+        } = self.history.pop().expect("No move to unmake!");
+
+        self.castle_perm = castle_perm;
+        self.ep_sq = ep_square;
+        self.fifty_move_counter = fifty_move_counter;
+
+        if self.ep_sq != Square120::NoSquare as u8 {
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        self.side ^= 1;
+        hash_side(&mut self.key);
+
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+    }
+
+    pub const fn zugzwang_unlikely(&self) -> bool {
+        self.big_piece_counts[self.side as usize] > 0
+    }
+
+    // g7g8q
+    pub fn parse_san(&self, san: &str) -> Result<Move, MoveParseError> {
+        use crate::errors::MoveParseError::{
+            IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
+            InvalidPromotionPiece, InvalidToSquareFile, InvalidToSquareRank,
+        };
+        let san_bytes = san.as_bytes();
+        if !(4..=5).contains(&san_bytes.len()) {
+            return Err(InvalidLength);
+        }
+        if !(b'a'..=b'h').contains(&san_bytes[0]) {
+            return Err(InvalidFromSquareFile);
+        }
+        if !(b'1'..=b'8').contains(&san_bytes[1]) {
+            return Err(InvalidFromSquareRank);
+        }
+        if !(b'a'..=b'h').contains(&san_bytes[2]) {
+            return Err(InvalidToSquareFile);
+        }
+        if !(b'1'..=b'8').contains(&san_bytes[3]) {
+            return Err(InvalidToSquareRank);
+        }
+        if san_bytes.len() == 5 && ![b'n', b'b', b'r', b'q', b'k'].contains(&san_bytes[4]) {
+            return Err(InvalidPromotionPiece);
+        }
+
+        let from = filerank_to_square(san_bytes[0] - b'a', san_bytes[1] - b'1');
+        let to = filerank_to_square(san_bytes[2] - b'a', san_bytes[3] - b'1');
+
+        let mut list = MoveList::new();
+        self.generate_moves(&mut list);
+
+        let mut moves = list.iter();
+
+        moves
+            .find(|&m| {
+                m.from() == from
+                    && m.to() == to
+                    && (san_bytes.len() == 4
+                        || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
+            })
+            .ok_or(IllegalMove)
+            .copied()
+    }
+
+    pub fn is_repetition(&self) -> bool {
+        self.history
+            .iter()
+            // .skip(self.history.len() - self.fifty_move_counter as usize)
+            .any(|h| h.position_key == self.key)
+    }
+
+    pub fn is_draw(&self) -> bool {
+        (self.fifty_move_counter >= 100 || self.is_repetition()) && self.ply != 0
+    }
+
+    fn get_pv_line(&mut self, depth: usize) -> usize {
+        self.principal_variation.clear();
+
+        if depth >= MAX_DEPTH {
+            return 0;
+        }
+
+        let mut entry = self.pv_table.probe_pv_move(self.key);
+        let mut moves_done = 0;
+
+        while let Some(&pv_move) = entry {
+            if self.is_legal(pv_move) && moves_done < depth {
+                self.make_move(pv_move);
+                self.principal_variation.push(pv_move);
+                moves_done += 1;
+            } else {
+                break;
+            }
+            entry = self.pv_table.probe_pv_move(self.key);
+        }
+
+        for _ in 0..moves_done {
+            self.unmake_move();
+        }
+
+        moves_done
+    }
+
+    // pub fn eval_terms(&mut self) -> EvalTerms {
+    //     let material = self.material[WHITE as usize] - self.material[BLACK as usize];
+    //     let pawns = self.piece_num[WP as usize] as usize + self.piece_num[BP as usize] as usize;
+    //     let knights = self.piece_num[WN as usize] as usize + self.piece_num[BN as usize] as usize;
+    //     let bishops = self.piece_num[WB as usize] as usize + self.piece_num[BB as usize] as usize;
+    //     let rooks = self.piece_num[WR as usize] as usize + self.piece_num[BR as usize] as usize;
+    //     let queens = self.piece_num[WQ as usize] as usize + self.piece_num[BQ as usize] as usize;
+    //     let phase = crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens);
+    //     let mut mid_pst_counter = [[0.0; 64]; 13];
+    //     let mut end_pst_counter = [[0.0; 64]; 13];
+    //     for piece in (WP as usize)..=(WK as usize) {
+    //         let pnum = self.piece_num[piece] as usize;
+    //         for &sq in self.piece_list[piece][..pnum].iter() {
+    //             mid_pst_counter[piece][sq as usize] += 1.0 - phase;
+    //             end_pst_counter[piece][sq as usize] += phase;
+    //         }
+    //     }
+    //     for piece in (BP as usize)..=(BK as usize) {
+    //         let pnum = self.piece_num[piece] as usize;
+    //         for &sq in self.piece_list[piece][..pnum].iter() {
+    //             mid_pst_counter[piece][sq as usize] += 1.0 - phase;
+    //             end_pst_counter[piece][sq as usize] += phase;
+    //         }
+    //     }
+    //     let mut doubled_pawns = 0;
+    //     let mut isolated_pawns = 0;
+    //     let mut passed_pawns = 0;
+    //     // file counters are padded with zeros to simplify the code.
+    //     let mut w_file_counters = [0; 10];
+    //     for &wp_loc in self.piece_list[WP as usize][..self.piece_num[WP as usize] as usize].iter() {
+    //         let file = FILES_BOARD[wp_loc as usize] as usize;
+    //         unsafe { *w_file_counters.get_unchecked_mut(file + 1) += 1 };
+    //     }
+    //     let mut b_file_counters = [0; 10];
+    //     for &bp_loc in self.piece_list[BP as usize][..self.piece_num[BP as usize] as usize].iter() {
+    //         let file = FILES_BOARD[bp_loc as usize] as usize;
+    //         unsafe { *b_file_counters.get_unchecked_mut(file + 1) += 1 };
+    //     }
+
+    //     for index in 1..9 {
+    //         let w_file_count = unsafe { *w_file_counters.get_unchecked(index) };
+    //         let w_left = unsafe { *w_file_counters.get_unchecked(index - 1) };
+    //         let w_right = unsafe { *w_file_counters.get_unchecked(index + 1) };
+    //         let b_file_count = unsafe { *b_file_counters.get_unchecked(index) };
+    //         let b_left = unsafe { *b_file_counters.get_unchecked(index - 1) };
+    //         let b_right = unsafe { *b_file_counters.get_unchecked(index + 1) };
+    //         if w_file_count > 0 && b_left == 0 && b_right == 0 && b_file_count == 0 {
+    //             passed_pawns += 1;
+    //         } else if b_file_count > 0 && w_left == 0 && w_right == 0 && w_file_count == 0 {
+    //             passed_pawns -= 1;
+    //         }
+    //         if w_file_count > 0 && w_left == 0 && w_right == 0 {
+    //             isolated_pawns += 1 * w_file_count as i32;
+    //         }
+    //         if b_file_count > 0 && b_left == 0 && b_right == 0 {
+    //             isolated_pawns += 1 * b_file_count as i32;
+    //         }
+    //         if w_file_count >= 2 {
+    //             doubled_pawns += 1 * (w_file_count - 1) as i32;
+    //         }
+    //         if b_file_count >= 2 {
+    //             doubled_pawns -= 1 * (b_file_count - 1) as i32;
+    //         }
+    //     }
+
+    //     EvalTerms { phase, material, mobility, kingsafety, bishop_pair: (), passed_pawns: (), isolated_pawns: (), doubled_pawns: (), counters: () }
+    // }
+
+    pub fn evaluate(&mut self) -> i32 {
+        // this function computes a score for the position, from the point of view of the side to move.
+
+        if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
+            return if self.side == WHITE {
+                evaluation::DRAW_SCORE
+            } else {
+                -evaluation::DRAW_SCORE
+            };
+        }
+
+        let mut score = self.material[WHITE as usize] - self.material[BLACK as usize];
+        let pst_val = self.piece_square_term();
+        let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
+        let bishop_pair_val = self.bishop_pair_term();
+        // let king_safety_val = self.king_tropism_term(); // INCREMENTAL UPDATE.
+        // let mobility_val = self.mobility();
+
+        // println!(
+        //     "material: {} pst: {} pawn: {} bishop pair: {} tropism: {} mobility: {}",
+        //     score, pst_val, pawn_val, bishop_pair_val, king_safety_val, mobility_val
+        // );
+
+        score += pst_val;
+        score += pawn_val;
+        score += bishop_pair_val;
+        // score += king_safety_val;
+        // score += mobility_val;
+
+        if self.side == WHITE {
+            score
+        } else {
+            -score
+        }
+    }
+
+    const fn bishop_pair_term(&self) -> i32 {
+        let w_count = self.piece_num[WB as usize];
+        let b_count = self.piece_num[BB as usize];
+        if w_count == b_count {
+            return 0;
+        }
+        if w_count >= 2 {
+            return BISHOP_PAIR_BONUS;
+        }
+        if b_count >= 2 {
+            return -BISHOP_PAIR_BONUS;
+        }
+        0
+    }
+
+    fn king_tropism_term(&self) -> i32 {
+        #![allow(clippy::similar_names)]
+        let white_king_square = self.king_sq[WHITE as usize] as usize;
+        let (wkr, wkf) = (
+            RANKS_BOARD[white_king_square],
+            FILES_BOARD[white_king_square],
+        );
+        let black_king_square = self.king_sq[BLACK as usize] as usize;
+        let (bkr, bkf) = (
+            RANKS_BOARD[black_king_square],
+            FILES_BOARD[black_king_square],
+        );
+        let mut score = 0;
+        for piece_type in BP..=BQ {
+            let piece_type = piece_type as usize;
+            let danger = PIECE_DANGER_VALUES[piece_type];
+            let piece_count = self.piece_num[piece_type] as usize;
+            for &sq in self.piece_list[piece_type][..piece_count].iter() {
+                let rank = RANKS_BOARD[sq as usize];
+                let file = FILES_BOARD[sq as usize];
+                let dist = i32::from(wkr.abs_diff(rank) + wkf.abs_diff(file));
+                score -= danger / dist;
+            }
+        }
+        for piece_type in WP..=WQ {
+            let piece_type = piece_type as usize;
+            let danger = PIECE_DANGER_VALUES[piece_type];
+            let piece_count = self.piece_num[piece_type] as usize;
+            for &sq in self.piece_list[piece_type][..piece_count].iter() {
+                let rank = RANKS_BOARD[sq as usize];
+                let file = FILES_BOARD[sq as usize];
+                let dist = i32::from(bkr.abs_diff(rank) + bkf.abs_diff(file));
+                score += danger / dist;
+            }
+        }
+
+        score
+    }
+
+    fn pawn_structure_term(&self) -> i32 {
+        let mut score = 0;
+
+        // file counters are padded with zeros to simplify the code.
+        let mut w_file_counters = [0; 10];
+        for &wp_loc in self.piece_list[WP as usize][..self.piece_num[WP as usize] as usize].iter() {
+            let file = FILES_BOARD[wp_loc as usize] as usize;
+            unsafe { *w_file_counters.get_unchecked_mut(file + 1) += 1 };
+        }
+        let mut b_file_counters = [0; 10];
+        for &bp_loc in self.piece_list[BP as usize][..self.piece_num[BP as usize] as usize].iter() {
+            let file = FILES_BOARD[bp_loc as usize] as usize;
+            unsafe { *b_file_counters.get_unchecked_mut(file + 1) += 1 };
+        }
+
+        for index in 1..9 {
+            let w_file_count = unsafe { *w_file_counters.get_unchecked(index) };
+            let w_left = unsafe { *w_file_counters.get_unchecked(index - 1) };
+            let w_right = unsafe { *w_file_counters.get_unchecked(index + 1) };
+            let b_file_count = unsafe { *b_file_counters.get_unchecked(index) };
+            let b_left = unsafe { *b_file_counters.get_unchecked(index - 1) };
+            let b_right = unsafe { *b_file_counters.get_unchecked(index + 1) };
+            if w_file_count > 0 && b_left == 0 && b_right == 0 && b_file_count == 0 {
+                score += PASSED_PAWN_BONUS;
+            } else if b_file_count > 0 && w_left == 0 && w_right == 0 && w_file_count == 0 {
+                score -= PASSED_PAWN_BONUS;
+            }
+            if w_file_count > 0 && w_left == 0 && w_right == 0 {
+                score -= ISOLATED_PAWN_MALUS * w_file_count as i32;
+            }
+            if b_file_count > 0 && b_left == 0 && b_right == 0 {
+                score += ISOLATED_PAWN_MALUS * b_file_count as i32;
+            }
+            if w_file_count >= 2 {
+                score -= DOUBLED_PAWN_MALUS * (w_file_count - 1) as i32;
+            }
+            if b_file_count >= 2 {
+                score += DOUBLED_PAWN_MALUS * (b_file_count - 1) as i32;
+            }
+        }
+
+        score
+    }
+
+    fn piece_square_term(&self) -> i32 {
+        #![allow(
+            clippy::needless_range_loop,
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation
+        )]
+        use crate::piecesquaretable::{ENDGAME_PST, MIDGAME_PST};
+        let pawns = self.piece_num[WP as usize] as usize + self.piece_num[BP as usize] as usize;
+        let knights = self.piece_num[WN as usize] as usize + self.piece_num[BN as usize] as usize;
+        let bishops = self.piece_num[WB as usize] as usize + self.piece_num[BB as usize] as usize;
+        let rooks = self.piece_num[WR as usize] as usize + self.piece_num[BR as usize] as usize;
+        let queens = self.piece_num[WQ as usize] as usize + self.piece_num[BQ as usize] as usize;
+        let phase = crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens);
+        let mut pst_val = 0.0;
+        for piece in (WP as usize)..=(WK as usize) {
+            let pnum = self.piece_num[piece] as usize;
+            for &sq in self.piece_list[piece][..pnum].iter() {
+                let mg =
+                    unsafe { *MIDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
+                let eg =
+                    unsafe { *ENDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
+                pst_val += eg.mul_add(phase, (1.0 - phase) * mg);
+            }
+        }
+        for piece in (BP as usize)..=(BK as usize) {
+            let pnum = self.piece_num[piece] as usize;
+            for &sq in self.piece_list[piece][..pnum].iter() {
+                let mg =
+                    unsafe { *MIDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
+                let eg =
+                    unsafe { *ENDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
+                pst_val -= eg.mul_add(phase, (1.0 - phase) * mg);
+            }
+        }
+        (pst_val / 2.0) as i32
+    }
+
+    fn mobility(&mut self) -> i32 {
+        #![allow(clippy::cast_possible_truncation)]
+        const MEAN_LEGAL_MOVES: i32 = 35;
+        let mut list = MoveList::new();
+        self.generate_moves(&mut list);
+        let movecount = (list.len() as i32) - MEAN_LEGAL_MOVES;
+        if self.side == WHITE {
+            movecount * MOBILITY_MULTIPLIER
+        } else {
+            -movecount * MOBILITY_MULTIPLIER
+        }
+    }
+
+    const fn is_material_draw(&self) -> bool {
+        if self.piece_num[WR as usize] == 0
+            && self.piece_num[BR as usize] == 0
+            && self.piece_num[WQ as usize] == 0
+            && self.piece_num[BQ as usize] == 0
+        {
+            if self.piece_num[WB as usize] == 0 && self.piece_num[BB as usize] == 0 {
+                if self.piece_num[WN as usize] < 3 && self.piece_num[BN as usize] < 3 {
+                    return true;
+                }
+            } else if self.piece_num[WN as usize] == 0
+                && self.piece_num[BN as usize] == 0
+                && self.piece_num[WB as usize].abs_diff(self.piece_num[BB as usize]) < 2
+            {
+                return true;
+            }
+        } else if self.piece_num[WQ as usize] == 0 && self.piece_num[BQ as usize] == 0 {
+            if self.piece_num[WR as usize] == 1 && self.piece_num[BR as usize] == 1 {
+                if (self.piece_num[WN as usize] + self.piece_num[WB as usize]) < 2
+                    && (self.piece_num[BN as usize] + self.piece_num[BB as usize]) < 2
+                {
+                    return true;
+                }
+            } else if self.piece_num[WR as usize] == 1 && self.piece_num[BR as usize] == 0 {
+                if (self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 0
+                    && ((self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 1
+                        || (self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 2)
+                {
+                    return true;
+                }
+            } else if self.piece_num[WR as usize] == 0
+                && self.piece_num[BR as usize] == 1
+                && (self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 0
+                && ((self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 1
+                    || (self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 2)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn clear_for_search(&mut self) {
+        self.history_table.iter_mut().for_each(|h| h.fill(0));
+        self.killer_move_table.fill([Move::null(); 2]);
+        self.pv_table.clear();
+        self.ply = 0;
+    }
+
+    pub fn search_position(&mut self, info: &mut SearchInfo) -> Move {
+        self.clear_for_search();
+        info.clear_for_search();
+
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        let first_legal = *move_list.iter().next().unwrap();
+
+        let mut most_recent_move = first_legal;
+        let mut most_recent_score = 0;
+        let mut pv_length = 0;
+        let mut best_depth = 1;
+        for depth in 0..=info.depth {
+            let score = alpha_beta(self, info, depth, -INFINITY, INFINITY);
+
+            if info.stopped {
+                break;
+            }
+
+            most_recent_score = score;
+            best_depth = depth;
+            pv_length = self.get_pv_line(depth);
+            most_recent_move = *self.principal_variation.get(0).unwrap_or(&first_legal);
+
+            print!(
+                "info score cp {} depth {} nodes {} time {} pv ",
+                most_recent_score / 10,
+                depth,
+                info.nodes,
+                info.start_time.elapsed().as_millis()
+            );
+            for &m in &self.principal_variation[..pv_length] {
+                print!("{m} ");
+            }
+            println!();
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        }
+        print!(
+            "info score cp {} depth {} nodes {} time {} pv ",
+            most_recent_score / 10,
+            best_depth,
+            info.nodes,
+            info.start_time.elapsed().as_millis()
+        );
+        for &m in &self.principal_variation[..pv_length] {
+            print!("{m} ");
+        }
+        println!();
+        println!("bestmove {}", most_recent_move);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        most_recent_move
+    }
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        Self::from_fen(Self::STARTING_FEN).expect("for some reason, STARTING_FEN is now broken.")
     }
 }
 
@@ -1259,8 +2180,15 @@ mod tests {
     #[test]
     fn read_fen_validity() {
         use super::*;
-        let mut b = Board::new();
-        b.set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-        b.check_validity();
+        let mut board_1 = Board::new();
+        board_1
+            .set_from_fen(Board::STARTING_FEN)
+            .expect("setfen failed.");
+        board_1.check_validity().unwrap();
+
+        let board_2 = Board::from_fen(Board::STARTING_FEN).expect("setfen failed.");
+        board_2.check_validity().unwrap();
+
+        assert_eq!(board_1, board_2);
     }
 }

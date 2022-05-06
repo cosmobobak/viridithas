@@ -1,10 +1,17 @@
 use crate::{
     chessmove::Move,
-    lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
+    lookups::{SQ120_TO_SQ64, SQUARE_NAMES}, evaluation::PAWN_VALUE,
 };
 
 pub const BOARD_N_SQUARES: usize = 120;
 pub const MAX_GAME_MOVES: usize = 1024;
+pub const MAX_DEPTH: usize = 512;
+pub const INFINITY: i32 = i32::MAX;
+
+pub const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
+pub const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
+
+pub const FUTILITY_MARGIN: i32 = 2 * PAWN_VALUE;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -75,6 +82,7 @@ pub enum Colour {
 
 pub const WHITE: u8 = Colour::White as u8;
 pub const BLACK: u8 = Colour::Black as u8;
+pub const BOTH: u8 = Colour::Both as u8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES};
+use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES, Piece};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -19,7 +19,7 @@ pub const fn filerank_to_square(f: u8, r: u8) -> u8 {
     21 + f + (r * 10)
 }
 
-const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
+pub const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
     let mut sq120_to_sq64 = [0; BOARD_N_SQUARES];
     let mut index = 0;
     while index < BOARD_N_SQUARES {
@@ -164,6 +164,34 @@ pub static PIECE_NAMES: [&str; 13] = [
     "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
     "rook", "queen", "king",
 ];
+
+pub static PIECE_CHARS: [u8; 13] = [
+    b'.', b'p', b'n', b'b', b'r', b'q', b'k', b'P', b'N', b'B', b'R', b'Q', b'K',
+];
+
+pub static PROMO_CHAR_LOOKUP: [u8; 13] = [
+    b'X', b'X', b'n', b'b', b'r', b'q', b'X', b'X', b'n', b'b', b'r', b'q', b'X',
+];
+
+const VICTIM_SCORE: [i32; 13] = [
+    0, 1000, 2000, 3000, 4000, 5000, 6000, 1000, 2000, 3000, 4000, 5000, 6000,
+];
+
+const fn mvvlva_init() -> [[i32; 13]; 13] {
+    let mut mvvlva = [[0; 13]; 13];
+    let mut attacker = Piece::WP as usize;
+    while attacker <= Piece::BK as usize {
+        let mut victim = Piece::WP as usize;
+        while victim <= Piece::BK as usize {
+            mvvlva[victim][attacker] = VICTIM_SCORE[victim] + 60 - VICTIM_SCORE[attacker] / 100;
+            victim += 1;
+        }
+        attacker += 1;
+    }
+    mvvlva
+}
+
+pub static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
 
 mod tests {
 

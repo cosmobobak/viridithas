@@ -1,8 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::{
-    attack::{IS_BISHOPQUEEN, IS_KNIGHT, IS_ROOKQUEEN},
-    definitions::{square120_name, square64_name},
+    definitions::{square120_name, square64_name}, lookups::PROMO_CHAR_LOOKUP,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,6 +30,11 @@ impl Move {
                 | (u32::from(promotion) << 20)
                 | flags,
         }
+    }
+
+    #[inline]
+    pub const fn null() -> Self {
+        Self { data: 0 }
     }
 
     #[inline]
@@ -72,30 +76,31 @@ impl Move {
     pub const fn is_castle(self) -> bool {
         (self.data & Self::CASTLE_MASK) != 0
     }
+
+    #[inline]
+    pub const fn is_capture(self) -> bool {
+        (self.data & Self::CAPTURE_MASK) != 0
+    }
+
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.data == 0
+    }
 }
 
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if self.is_null() {
+            return write!(f, "null");
+        }
+
         let from_square =
             square120_name(self.from()).unwrap_or_else(|| panic!("Invalid square {}", self.from()));
         let to_square =
             square120_name(self.to()).unwrap_or_else(|| panic!("Invalid square {}", self.to()));
 
         if self.is_promo() {
-            let pchar = if IS_KNIGHT[self.promotion() as usize] {
-                'n'
-            } else if IS_ROOKQUEEN[self.promotion() as usize]
-                && !IS_BISHOPQUEEN[self.promotion() as usize]
-            {
-                'r'
-            } else if IS_BISHOPQUEEN[self.promotion() as usize]
-                && !IS_ROOKQUEEN[self.promotion() as usize]
-            {
-                'b'
-            } else {
-                'q'
-            };
-
+            let pchar = PROMO_CHAR_LOOKUP[self.promotion() as usize];
             write!(f, "{}{}{}", from_square, to_square, pchar)?;
         } else {
             write!(f, "{}{}", from_square, to_square)?;
