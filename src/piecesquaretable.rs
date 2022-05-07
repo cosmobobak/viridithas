@@ -1,4 +1,4 @@
-use crate::definitions::{BLACK, WHITE};
+use crate::{definitions::{BLACK, WHITE}, evaluation::PST_MULTIPLIER};
 
 struct S(i32, i32);
 
@@ -117,20 +117,20 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
                     let square120 = SQ120[square64];
                     if MID_OR_END == MIDGAME {
                         out[pieces_idx + offset][square120 as usize] =
-                            multiplier * P_BONUS[rank][file].0 * 10;
+                            multiplier * P_BONUS[rank][file].0 * PST_MULTIPLIER;
                     } else {
                         out[pieces_idx + offset][square120 as usize] =
-                            multiplier * P_BONUS[rank][file].1 * 10;
+                            multiplier * P_BONUS[rank][file].1 * PST_MULTIPLIER;
                     }
                 } else {
                     let access_file = INDEX_MAPPING[file];
                     let square120 = SQ120[square64];
                     if MID_OR_END == MIDGAME {
                         out[pieces_idx + offset][square120 as usize] =
-                            multiplier * BONUS[pieces_idx][rank][access_file].0 * 10;
+                            multiplier * BONUS[pieces_idx][rank][access_file].0 * PST_MULTIPLIER;
                     } else {
                         out[pieces_idx + offset][square120 as usize] =
-                            multiplier * BONUS[pieces_idx][rank][access_file].1 * 10;
+                            multiplier * BONUS[pieces_idx][rank][access_file].1 * PST_MULTIPLIER;
                     }
                 }
                 square64 += 1;

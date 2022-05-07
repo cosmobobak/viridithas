@@ -1895,8 +1895,8 @@ impl Board {
         let mobility_val = self.mobility();
 
         // println!(
-        //     "material: {} pst: {} pawn: {} bishop pair: {} tropism: {} mobility: {}",
-        //     score, pst_val, pawn_val, bishop_pair_val, king_safety_val, mobility_val
+        //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
+        //     score, pst_val, pawn_val, bishop_pair_val, mobility_val
         // );
 
         score += pst_val;
@@ -2038,15 +2038,18 @@ impl Board {
             for &sq in self.piece_list[piece][..pnum].iter() {
                 let mg = MIDGAME_PST[piece][sq as usize];
                 let eg = ENDGAME_PST[piece][sq as usize];
+                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
                 mg_pst_val += mg;
                 eg_pst_val += eg;
             }
         }
+        
         for piece in (BP as usize)..=(BK as usize) {
             let pnum = self.piece_num[piece] as usize;
             for &sq in self.piece_list[piece][..pnum].iter() {
                 let mg = MIDGAME_PST[piece][sq as usize];
                 let eg = ENDGAME_PST[piece][sq as usize];
+                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
                 mg_pst_val += mg;
                 eg_pst_val += eg;
             }

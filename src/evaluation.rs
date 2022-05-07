@@ -42,6 +42,9 @@ pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
 /// The multiplier applied to mobility scores.
 pub const MOBILITY_MULTIPLIER: i32 = 15;
 
+/// The multiplier applied to the pst scores.
+pub const PST_MULTIPLIER: i32 = 2;
+
 const PAWN_DANGER: i32 = 200;
 const KNIGHT_DANGER: i32 = 300;
 const BISHOP_DANGER: i32 = 100;
