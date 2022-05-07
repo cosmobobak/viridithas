@@ -2134,9 +2134,7 @@ impl Board {
         self.clear_for_search();
         info.clear_for_search();
 
-        let mut move_list = MoveList::new();
-        self.generate_moves(&mut move_list);
-        let first_legal = *move_list.iter().next().unwrap();
+        let first_legal = self.get_first_legal_move().expect("No legal moves");
 
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;
@@ -2181,6 +2179,19 @@ impl Board {
         println!("bestmove {}", most_recent_move);
         std::io::Write::flush(&mut std::io::stdout()).unwrap();
         most_recent_move
+    }
+
+    fn get_first_legal_move(&mut self) -> Option<Move> {
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        let mut first_legal = None;
+        for &m in move_list.iter() {
+            if self.make_move(m) {
+                self.unmake_move();
+                first_legal = Some(m);
+            }
+        }
+        first_legal
     }
 }
 
