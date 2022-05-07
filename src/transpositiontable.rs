@@ -21,7 +21,10 @@ pub struct TTEntry {
 }
 
 const MEGABYTE: usize = 1024 * 1024;
-pub const DEFAULT_TABLE_SIZE: usize = MEGABYTE * 64;
+/// The default behaviour is to use 4MB of memory for the hashtable,
+/// as my i5 has 6mb of L3 cache, so this endeavours to keep the
+/// entire hashtable in L3 cache.
+pub const DEFAULT_TABLE_SIZE: usize = MEGABYTE * 4 / std::mem::size_of::<TTEntry>();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranspositionTable<const SIZE: usize> {
@@ -58,7 +61,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
     }
 
     pub fn store(&mut self, key: u64, ply: usize, best_move: Move, score: i32, flag: HFlag, depth: usize) {
-        let index = (key % (SIZE as u64)) as usize;
+        let index = (key % SIZE as u64) as usize;
 
         debug_assert!((1..=MAX_DEPTH).contains(&depth));
         debug_assert!(score >= -INFINITY);

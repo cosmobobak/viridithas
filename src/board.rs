@@ -1990,7 +1990,7 @@ impl Board {
             }
 
             let file = FILES_BOARD[white_pawn_loc as usize] as usize;
-            if FILE_BB[file] & self.pawns[WHITE as usize] > 1 {
+            if (FILE_BB[file] & self.pawns[WHITE as usize]).count_ones() > 1 {
                 w_score -= DOUBLED_PAWN_MALUS;
             }
         }
@@ -2009,7 +2009,7 @@ impl Board {
             }
 
             let file = FILES_BOARD[black_pawn_loc as usize] as usize;
-            if FILE_BB[file] & self.pawns[BLACK as usize] > 1 {
+            if (FILE_BB[file] & self.pawns[BLACK as usize]).count_ones() > 1 {
                 b_score -= DOUBLED_PAWN_MALUS;
             }
         }
