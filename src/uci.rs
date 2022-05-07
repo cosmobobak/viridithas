@@ -70,7 +70,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
 
     if let Some(time) = time {
         info.time_set = true;
-        let time = time as u64 / moves_to_go.unwrap_or(30) as u64;
+        let time = time as u64 / moves_to_go.unwrap_or(30) as u64 + inc.unwrap_or(0) as u64;
         let time = time.checked_sub(50).unwrap_or(1);
         info.stop_time = info.start_time + std::time::Duration::from_millis(time);
     }
@@ -80,9 +80,6 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     } else {
         info.depth = MAX_DEPTH;
     }
-
-    // TODO: do something with inc.
-    let _ = inc;
 
     println!(
         "time: {}, depth: {}, timeset: {}", 
