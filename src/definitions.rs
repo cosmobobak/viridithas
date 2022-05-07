@@ -49,6 +49,15 @@ pub enum File {
     None,
 }
 
+pub const FILE_A: u8 = File::FileA as u8;
+pub const FILE_B: u8 = File::FileB as u8;
+pub const FILE_C: u8 = File::FileC as u8;
+pub const FILE_D: u8 = File::FileD as u8;
+pub const FILE_E: u8 = File::FileE as u8;
+pub const FILE_F: u8 = File::FileF as u8;
+pub const FILE_G: u8 = File::FileG as u8;
+pub const FILE_H: u8 = File::FileH as u8;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Rank {

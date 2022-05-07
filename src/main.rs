@@ -21,6 +21,7 @@ mod searchinfo;
 mod search;
 mod piecesquaretable;
 mod uci;
+mod transpositiontable;
 
 fn main() {
     uci::main_loop();

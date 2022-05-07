@@ -101,7 +101,7 @@ impl Display for Move {
 
         if self.is_promo() {
             let pchar = PROMO_CHAR_LOOKUP[self.promotion() as usize];
-            write!(f, "{}{}{}", from_square, to_square, pchar)?;
+            write!(f, "{}{}{}", from_square, to_square, pchar as char)?;
         } else {
             write!(f, "{}{}", from_square, to_square)?;
         }

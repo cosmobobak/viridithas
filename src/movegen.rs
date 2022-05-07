@@ -5,6 +5,30 @@ use std::{
 
 use crate::{chessmove::Move, definitions::Square120, lookups::FILES_BOARD};
 
+pub trait MoveConsumer {
+    fn push(&mut self, m: Move, score: i32);
+    fn len(&self) -> usize;
+}
+
+pub struct MoveCounter {
+    count: usize,
+}
+
+impl MoveCounter {
+    pub const fn new() -> Self {
+        Self { count: 0 }
+    }
+}
+
+impl MoveConsumer for MoveCounter {
+    fn push(&mut self, _m: Move, _score: i32) {
+        self.count += 1;
+    }
+    fn len(&self) -> usize {
+        self.count
+    }
+}
+
 const MAX_POSITION_MOVES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,22 +52,6 @@ impl MoveList {
             moves: [DEFAULT; MAX_POSITION_MOVES],
             count: 0,
         }
-    }
-
-    #[inline]
-    pub fn push(&mut self, m: Move, score: i32) {
-        // it's quite dangerous to do this,
-        // but this function is very much in the
-        // hot path.
-        debug_assert!(self.count < MAX_POSITION_MOVES);
-        unsafe {
-            *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
-        }
-        self.count += 1;
-    }
-
-    pub const fn len(&self) -> usize {
-        self.count
     }
 
     pub const fn is_empty(&self) -> bool {
@@ -86,6 +94,24 @@ impl MoveList {
                 .iter_mut()
                 .find(|e| e.entry == m)
         }
+    }
+}
+
+impl MoveConsumer for MoveList {
+    #[inline]
+    fn push(&mut self, m: Move, score: i32) {
+        // it's quite dangerous to do this,
+        // but this function is very much in the
+        // hot path.
+        debug_assert!(self.count < MAX_POSITION_MOVES);
+        unsafe {
+            *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
+        }
+        self.count += 1;
+    }
+
+    fn len(&self) -> usize {
+        self.count
     }
 }
 

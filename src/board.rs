@@ -22,25 +22,24 @@ use crate::{
     errors::{FenParseError, MoveParseError, PositionValidityError},
     evaluation::{
         BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS, MOBILITY_MULTIPLIER,
-        PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, PIECE_VALUES, self,
+        PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, PIECE_VALUES, self, ISOLATED_BB, WHITE_PASSED_BB, BLACK_PASSED_BB, FILE_BB,
     },
     lookups::{
         FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
         RANKS_BOARD, SQ120_TO_SQ64,
     },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
-    movegen::{offset_square_offboard, MoveList},
-    pvtable::PVTable,
+    movegen::{offset_square_offboard, MoveList, MoveConsumer, MoveCounter},
     search::alpha_beta,
     searchinfo::SearchInfo,
-    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board},
+    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board}, piecesquaretable::{MIDGAME_PST, ENDGAME_PST}, transpositiontable::{TranspositionTable, HFlag, DEFAULT_TABLE_SIZE, ProbeResult},
 };
 use crate::{
     definitions::{Castling, File, Piece, Rank, Undo, BOARD_N_SQUARES, MAX_GAME_MOVES},
     lookups::{filerank_to_square, SQ64_TO_SQ120},
 };
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Board {
     pieces: [u8; BOARD_N_SQUARES],
     pawns: [u64; 3],
@@ -66,9 +65,11 @@ pub struct Board {
 
     principal_variation: Vec<Move>,
 
-    pv_table: PVTable,
     history_table: [[i32; BOARD_N_SQUARES]; 13],
     killer_move_table: [[Move; 2]; MAX_DEPTH],
+    tt: TranspositionTable<DEFAULT_TABLE_SIZE>,
+
+    pst_vals: [i32; 2],
 }
 
 impl Board {
@@ -94,13 +95,26 @@ impl Board {
             history: Vec::with_capacity(MAX_GAME_MOVES),
             piece_num: [0; 13],
             piece_list: [[0; 10]; 13],
-            pv_table: PVTable::new(),
             principal_variation: Vec::with_capacity(MAX_DEPTH),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
+            pst_vals: [0; 2],
+            tt: TranspositionTable::new(),
         };
         out.reset();
         out
+    }
+
+    pub fn tt_mut(&mut self) -> &mut TranspositionTable<DEFAULT_TABLE_SIZE> {
+        &mut self.tt
+    }
+
+    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: usize) {
+        self.tt.store(self.key, self.ply, best_move, score, flag, depth);
+    }
+
+    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
+        self.tt.probe(self.key, self.ply, alpha, beta, depth)
     }
 
     pub fn insert_killer(&mut self, m: Move) {
@@ -182,14 +196,6 @@ impl Board {
         true
     }
 
-    pub fn store_pv_move(&mut self, best_move: Move) {
-        self.pv_table.store_pv_move(self.key, best_move);
-    }
-
-    pub fn probe_pv_move(&self) -> Option<&Move> {
-        self.pv_table.probe_pv_move(self.key)
-    }
-
     pub fn generate_pos_key(&self) -> u64 {
         let mut key = 0;
         for sq in 0..BOARD_N_SQUARES {
@@ -238,6 +244,8 @@ impl Board {
         self.hist_ply = 0;
         self.castle_perm = 0;
         self.key = 0;
+        self.pst_vals.fill(0);
+        self.history.clear();
     }
 
     pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
@@ -311,7 +319,7 @@ impl Board {
 
         self.key = self.generate_pos_key();
 
-        self.set_up_material_list();
+        self.set_up_incremental_trackers();
 
         Ok(())
     }
@@ -426,7 +434,7 @@ impl Board {
         Ok(())
     }
 
-    fn set_up_material_list(&mut self) {
+    fn set_up_incremental_trackers(&mut self) {
         for index in 0..BOARD_N_SQUARES {
             let sq = index;
             let piece = self.pieces[index];
@@ -459,6 +467,7 @@ impl Board {
                 }
             }
         }
+        (self.pst_vals[0], self.pst_vals[1]) = self.generate_pst_value();
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
@@ -742,7 +751,7 @@ impl Board {
     }
 
     #[inline]
-    fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
+    fn add_quiet_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
         let _ = self;
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
@@ -769,7 +778,7 @@ impl Board {
     }
 
     #[inline]
-    fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
+    fn add_capture_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
         debug_assert!(piece_valid(m.capture()));
@@ -787,17 +796,17 @@ impl Board {
         move_list.push(m, score);
     }
 
-    fn add_ep_move(&self, m: Move, move_list: &mut MoveList) {
+    fn add_ep_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
         let _ = self;
         move_list.push(m, 1050 + 10_000_000);
     }
 
-    fn add_pawn_cap_move<const SIDE: u8>(
+    fn add_pawn_cap_move<const SIDE: u8, MC: MoveConsumer>(
         &self,
         from: u8,
         to: u8,
         cap: u8,
-        move_list: &mut MoveList,
+        move_list: &mut MC,
     ) {
         debug_assert!(piece_valid_empty(cap));
         debug_assert!(square_on_board(from));
@@ -832,7 +841,7 @@ impl Board {
         }
     }
 
-    fn add_pawn_move<const SIDE: u8>(&self, from: u8, to: u8, move_list: &mut MoveList) {
+    fn add_pawn_move<const SIDE: u8, MC: MoveConsumer>(&self, from: u8, to: u8, move_list: &mut MC) {
         debug_assert!(square_on_board(from));
         debug_assert!(square_on_board(to));
         let promo_rank = if SIDE == WHITE {
@@ -874,22 +883,22 @@ impl Board {
         }
     }
 
-    fn generate_pawn_caps<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+    fn generate_pawn_caps<const SIDE: u8, MC: MoveConsumer>(&self, sq: u8, move_list: &mut MC) {
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
         if square_on_board(left_sq)
             && PIECE_COL[self.pieces[left_sq as usize] as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE>(sq, left_sq, self.pieces[left_sq as usize], move_list);
+            self.add_pawn_cap_move::<SIDE, MC>(sq, left_sq, self.pieces[left_sq as usize], move_list);
         }
         if square_on_board(right_sq)
             && PIECE_COL[self.pieces[right_sq as usize] as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE>(sq, right_sq, self.pieces[right_sq as usize], move_list);
+            self.add_pawn_cap_move::<SIDE, MC>(sq, right_sq, self.pieces[right_sq as usize], move_list);
         }
     }
 
-    fn generate_ep<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+    fn generate_ep<const SIDE: u8, MC: MoveConsumer>(&self, sq: u8, move_list: &mut MC) {
         if self.ep_sq == Square120::NoSquare as u8 {
             return;
         }
@@ -921,7 +930,7 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<const SIDE: u8>(&self, sq: u8, move_list: &mut MoveList) {
+    fn generate_pawn_forward<const SIDE: u8, MC: MoveConsumer>(&self, sq: u8, move_list: &mut MC) {
         let start_rank = if SIDE == WHITE {
             Rank::Rank2 as u8
         } else {
@@ -929,7 +938,7 @@ impl Board {
         };
         let offset_sq = if SIDE == WHITE { sq + 10 } else { sq - 10 };
         if self.pieces[offset_sq as usize] == Piece::Empty as u8 {
-            self.add_pawn_move::<SIDE>(sq, offset_sq, move_list);
+            self.add_pawn_move::<SIDE, MC>(sq, offset_sq, move_list);
             let double_sq = if SIDE == WHITE { sq + 20 } else { sq - 20 };
             if RANKS_BOARD[sq as usize] == start_rank
                 && self.pieces[double_sq as usize] == Piece::Empty as u8
@@ -949,7 +958,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_moves(&self, move_list: &mut MoveList) {
+    pub fn generate_moves<MC: MoveConsumer>(&self, move_list: &mut MC) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -957,17 +966,17 @@ impl Board {
             let piece_count = self.piece_num[WP as usize] as usize;
             for &sq in self.piece_list[WP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
-                self.generate_pawn_forward::<{ WHITE }>(sq, move_list);
-                self.generate_pawn_caps::<{ WHITE }>(sq, move_list);
-                self.generate_ep::<{ WHITE }>(sq, move_list);
+                self.generate_pawn_forward::<{ WHITE }, MC>(sq, move_list);
+                self.generate_pawn_caps::<{ WHITE }, MC>(sq, move_list);
+                self.generate_ep::<{ WHITE }, MC>(sq, move_list);
             }
         } else {
             let piece_count = self.piece_num[BP as usize] as usize;
             for &sq in self.piece_list[BP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
-                self.generate_pawn_forward::<{ BLACK }>(sq, move_list);
-                self.generate_pawn_caps::<{ BLACK }>(sq, move_list);
-                self.generate_ep::<{ BLACK }>(sq, move_list);
+                self.generate_pawn_forward::<{ BLACK }, MC>(sq, move_list);
+                self.generate_pawn_caps::<{ BLACK }, MC>(sq, move_list);
+                self.generate_ep::<{ BLACK }, MC>(sq, move_list);
             }
         }
 
@@ -1073,7 +1082,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<MC: MoveConsumer>(&self, move_list: &mut MC) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1082,15 +1091,15 @@ impl Board {
             let piece_count = self.piece_num[WP as usize] as usize;
             for &sq in self.piece_list[WP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
-                self.generate_pawn_caps::<{ WHITE }>(sq, move_list);
-                self.generate_ep::<{ WHITE }>(sq, move_list);
+                self.generate_pawn_caps::<{ WHITE }, MC>(sq, move_list);
+                self.generate_ep::<{ WHITE }, MC>(sq, move_list);
             }
         } else {
             let piece_count = self.piece_num[BP as usize] as usize;
             for &sq in self.piece_list[BP as usize][..piece_count].iter() {
                 debug_assert!(square_on_board(sq));
-                self.generate_pawn_caps::<{ BLACK }>(sq, move_list);
-                self.generate_ep::<{ BLACK }>(sq, move_list);
+                self.generate_pawn_caps::<{ BLACK }, MC>(sq, move_list);
+                self.generate_ep::<{ BLACK }, MC>(sq, move_list);
             }
         }
 
@@ -1177,7 +1186,7 @@ impl Board {
         }
     }
 
-    fn generate_castling_moves(&self, move_list: &mut MoveList) {
+    fn generate_castling_moves(&self, move_list: &mut impl MoveConsumer) {
         if self.side == WHITE {
             if (self.castle_perm & Castling::WK as u8) != 0
                 && self.pieces[Square120::F1 as usize] == Piece::Empty as u8
@@ -1317,6 +1326,8 @@ impl Board {
 
         self.pieces[sq as usize] = Piece::Empty as u8;
         self.material[colour as usize] -= PIECE_VALUES[piece as usize];
+        self.pst_vals[0] -= Self::midgame_pst_value(piece, sq);
+        self.pst_vals[1] -= Self::endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -1348,6 +1359,18 @@ impl Board {
             self.piece_list[piece as usize][self.piece_num[piece as usize] as usize];
     }
 
+    fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
+        debug_assert!(piece_valid(piece));
+        debug_assert!(square_on_board(sq));
+        unsafe { *MIDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+    }
+
+    fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
+        debug_assert!(piece_valid(piece));
+        debug_assert!(square_on_board(sq));
+        unsafe { *ENDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+    }
+
     fn add_piece(&mut self, sq: u8, piece: u8) {
         debug_assert!(piece_valid(piece));
         debug_assert!(square_on_board(sq));
@@ -1358,6 +1381,8 @@ impl Board {
 
         self.pieces[sq as usize] = piece;
         self.material[colour as usize] += PIECE_VALUES[piece as usize];
+        self.pst_vals[0] += Self::midgame_pst_value(piece, sq);
+        self.pst_vals[1] += Self::endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -1391,7 +1416,11 @@ impl Board {
         hash_piece(&mut self.key, piece, to);
 
         self.pieces[from as usize] = Piece::Empty as u8;
+        self.pst_vals[0] -= Self::midgame_pst_value(piece, from);
+        self.pst_vals[1] -= Self::endgame_pst_value(piece, from);
         self.pieces[to as usize] = piece;
+        self.pst_vals[0] += Self::midgame_pst_value(piece, to);
+        self.pst_vals[1] += Self::endgame_pst_value(piece, to);
 
         if !PIECE_BIG[piece as usize] {
             let sq64 = SQ120_TO_SQ64[from as usize];
@@ -1479,6 +1508,7 @@ impl Board {
         hash_castling(&mut self.key, self.castle_perm);
 
         let captured = m.capture();
+        self.fifty_move_counter += 1;
 
         if captured != Piece::Empty as u8 {
             debug_assert!(piece_valid(captured));
@@ -1734,10 +1764,15 @@ impl Board {
     }
 
     pub fn is_repetition(&self) -> bool {
-        self.history
-            .iter()
-            // .skip(self.history.len() - self.fifty_move_counter as usize)
-            .any(|h| h.position_key == self.key)
+        for entry in self.history.iter().rev() {
+            if entry.position_key == self.key {
+                return true;
+            }
+            if entry.fifty_move_counter == 0 {
+                break;
+            }
+        }
+        false
     }
 
     pub fn is_draw(&self) -> bool {
@@ -1751,10 +1786,11 @@ impl Board {
             return 0;
         }
 
-        let mut entry = self.pv_table.probe_pv_move(self.key);
+        let mut entry = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH);
+
         let mut moves_done = 0;
 
-        while let Some(&pv_move) = entry {
+        while let ProbeResult::BestMove(pv_move) = entry {
             if self.is_legal(pv_move) && moves_done < depth {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
@@ -1762,7 +1798,7 @@ impl Board {
             } else {
                 break;
             }
-            entry = self.pv_table.probe_pv_move(self.key);
+            entry = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH);
         }
 
         for _ in 0..moves_done {
@@ -1852,11 +1888,11 @@ impl Board {
         }
 
         let mut score = self.material[WHITE as usize] - self.material[BLACK as usize];
-        let pst_val = self.piece_square_term();
+        let pst_val = self.pst_value();
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
         // let king_safety_val = self.king_tropism_term(); // INCREMENTAL UPDATE.
-        // let mobility_val = self.mobility();
+        let mobility_val = self.mobility();
 
         // println!(
         //     "material: {} pst: {} pawn: {} bishop pair: {} tropism: {} mobility: {}",
@@ -1867,13 +1903,22 @@ impl Board {
         score += pawn_val;
         score += bishop_pair_val;
         // score += king_safety_val;
-        // score += mobility_val;
+        score += mobility_val;
 
         if self.side == WHITE {
             score
         } else {
             -score
         }
+    }
+
+    fn pst_value(&self) -> i32 {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::similar_names)]
+        let phase = self.phase();
+        debug_assert!((0.0..=1.0).contains(&phase));
+        let mg_val = self.pst_vals[0] as f32;
+        let eg_val = self.pst_vals[1] as f32;
+        eg_val.mul_add(phase, (1.0 - phase) * mg_val) as i32
     }
 
     const fn bishop_pair_term(&self) -> i32 {
@@ -1931,97 +1976,106 @@ impl Board {
     }
 
     fn pawn_structure_term(&self) -> i32 {
-        let mut score = 0;
+        let mut w_score = 0;
+        let white_pawn_count = self.piece_num[WP as usize] as usize;
+        for &white_pawn_loc in &self.piece_list[WP as usize][..white_pawn_count] {
+            let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
+            if ISOLATED_BB[sq64] & self.pawns[WHITE as usize] == 0 {
+                w_score -= ISOLATED_PAWN_MALUS;
+            }
 
-        // file counters are padded with zeros to simplify the code.
-        let mut w_file_counters = [0; 10];
-        for &wp_loc in self.piece_list[WP as usize][..self.piece_num[WP as usize] as usize].iter() {
-            let file = FILES_BOARD[wp_loc as usize] as usize;
-            unsafe { *w_file_counters.get_unchecked_mut(file + 1) += 1 };
-        }
-        let mut b_file_counters = [0; 10];
-        for &bp_loc in self.piece_list[BP as usize][..self.piece_num[BP as usize] as usize].iter() {
-            let file = FILES_BOARD[bp_loc as usize] as usize;
-            unsafe { *b_file_counters.get_unchecked_mut(file + 1) += 1 };
-        }
+            if WHITE_PASSED_BB[sq64] & self.pawns[BLACK as usize] == 0 {
+                let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
+                w_score += PASSED_PAWN_BONUS[rank];
+            }
 
-        for index in 1..9 {
-            let w_file_count = unsafe { *w_file_counters.get_unchecked(index) };
-            let w_left = unsafe { *w_file_counters.get_unchecked(index - 1) };
-            let w_right = unsafe { *w_file_counters.get_unchecked(index + 1) };
-            let b_file_count = unsafe { *b_file_counters.get_unchecked(index) };
-            let b_left = unsafe { *b_file_counters.get_unchecked(index - 1) };
-            let b_right = unsafe { *b_file_counters.get_unchecked(index + 1) };
-            if w_file_count > 0 && b_left == 0 && b_right == 0 && b_file_count == 0 {
-                score += PASSED_PAWN_BONUS;
-            } else if b_file_count > 0 && w_left == 0 && w_right == 0 && w_file_count == 0 {
-                score -= PASSED_PAWN_BONUS;
-            }
-            if w_file_count > 0 && w_left == 0 && w_right == 0 {
-                score -= ISOLATED_PAWN_MALUS * w_file_count as i32;
-            }
-            if b_file_count > 0 && b_left == 0 && b_right == 0 {
-                score += ISOLATED_PAWN_MALUS * b_file_count as i32;
-            }
-            if w_file_count >= 2 {
-                score -= DOUBLED_PAWN_MALUS * (w_file_count - 1) as i32;
-            }
-            if b_file_count >= 2 {
-                score += DOUBLED_PAWN_MALUS * (b_file_count - 1) as i32;
+            let file = FILES_BOARD[white_pawn_loc as usize] as usize;
+            if FILE_BB[file] & self.pawns[WHITE as usize] > 1 {
+                w_score -= DOUBLED_PAWN_MALUS;
             }
         }
 
-        score
+        let mut b_score = 0;
+        let black_pawn_count = self.piece_num[BP as usize] as usize;
+        for &black_pawn_loc in &self.piece_list[BP as usize][..black_pawn_count] {
+            let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
+            if ISOLATED_BB[sq64] & self.pawns[BLACK as usize] == 0 {
+                b_score -= ISOLATED_PAWN_MALUS;
+            }
+
+            if BLACK_PASSED_BB[sq64] & self.pawns[WHITE as usize] == 0 {
+                let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
+                b_score += PASSED_PAWN_BONUS[7 - rank];
+            }
+
+            let file = FILES_BOARD[black_pawn_loc as usize] as usize;
+            if FILE_BB[file] & self.pawns[BLACK as usize] > 1 {
+                b_score -= DOUBLED_PAWN_MALUS;
+            }
+        }
+
+        w_score - b_score
     }
 
-    fn piece_square_term(&self) -> i32 {
-        #![allow(
-            clippy::needless_range_loop,
-            clippy::cast_precision_loss,
-            clippy::cast_possible_truncation
-        )]
-        use crate::piecesquaretable::{ENDGAME_PST, MIDGAME_PST};
+    fn phase(&self) -> f32 {
         let pawns = self.piece_num[WP as usize] as usize + self.piece_num[BP as usize] as usize;
         let knights = self.piece_num[WN as usize] as usize + self.piece_num[BN as usize] as usize;
         let bishops = self.piece_num[WB as usize] as usize + self.piece_num[BB as usize] as usize;
         let rooks = self.piece_num[WR as usize] as usize + self.piece_num[BR as usize] as usize;
         let queens = self.piece_num[WQ as usize] as usize + self.piece_num[BQ as usize] as usize;
-        let phase = crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens);
-        let mut pst_val = 0.0;
+        crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens)
+    }
+
+    fn generate_pst_value(&self) -> (i32, i32) {
+        #![allow(
+            clippy::needless_range_loop,
+            clippy::similar_names
+        )]
+        let mut mg_pst_val = 0;
+        let mut eg_pst_val = 0;
         for piece in (WP as usize)..=(WK as usize) {
             let pnum = self.piece_num[piece] as usize;
             for &sq in self.piece_list[piece][..pnum].iter() {
-                let mg =
-                    unsafe { *MIDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
-                let eg =
-                    unsafe { *ENDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
-                pst_val += eg.mul_add(phase, (1.0 - phase) * mg);
+                let mg = MIDGAME_PST[piece][sq as usize];
+                let eg = ENDGAME_PST[piece][sq as usize];
+                mg_pst_val += mg;
+                eg_pst_val += eg;
             }
         }
         for piece in (BP as usize)..=(BK as usize) {
             let pnum = self.piece_num[piece] as usize;
             for &sq in self.piece_list[piece][..pnum].iter() {
-                let mg =
-                    unsafe { *MIDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
-                let eg =
-                    unsafe { *ENDGAME_PST.get_unchecked(piece).get_unchecked(sq as usize) as f32 };
-                pst_val -= eg.mul_add(phase, (1.0 - phase) * mg);
+                let mg = MIDGAME_PST[piece][sq as usize];
+                let eg = ENDGAME_PST[piece][sq as usize];
+                mg_pst_val += mg;
+                eg_pst_val += eg;
             }
         }
-        (pst_val / 2.0) as i32
+        (mg_pst_val, eg_pst_val)
     }
 
     fn mobility(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
-        const MEAN_LEGAL_MOVES: i32 = 35;
-        let mut list = MoveList::new();
+        
+        let mut list = MoveCounter::new();
         self.generate_moves(&mut list);
-        let movecount = (list.len() as i32) - MEAN_LEGAL_MOVES;
-        if self.side == WHITE {
-            movecount * MOBILITY_MULTIPLIER
+        
+        let our_pseudo_legal_moves = list.len();
+
+        self.make_nullmove();
+        let mut list = MoveCounter::new();
+        self.generate_moves(&mut list);
+        self.unmake_nullmove();
+
+        let their_pseudo_legal_moves = list.len();
+
+        let relative_score = if self.side == WHITE {
+            our_pseudo_legal_moves as i32 - their_pseudo_legal_moves as i32
         } else {
-            -movecount * MOBILITY_MULTIPLIER
-        }
+            their_pseudo_legal_moves as i32 - our_pseudo_legal_moves as i32
+        };
+
+        relative_score * MOBILITY_MULTIPLIER
     }
 
     const fn is_material_draw(&self) -> bool {
@@ -2069,8 +2123,8 @@ impl Board {
     fn clear_for_search(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
         self.killer_move_table.fill([Move::null(); 2]);
-        self.pv_table.clear();
         self.ply = 0;
+        self.tt.clear_for_search();
     }
 
     pub fn search_position(&mut self, info: &mut SearchInfo) -> Move {

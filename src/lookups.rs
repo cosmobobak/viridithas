@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES, Piece};
+use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES, Piece, FILE_A, RANK_1, FILE_H, RANK_8};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -97,7 +97,90 @@ const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
     (piece_keys, castle_keys, side_key)
 }
 
-const fn files_ranks() -> ([u8; BOARD_N_SQUARES], [u8; BOARD_N_SQUARES]) {
+pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
+    let mut rank_masks = [0; 8];
+    let mut file_masks = [0; 8];
+
+    let mut r = RANK_8;
+    loop {
+        let mut f = FILE_A;
+        while f <= FILE_H {
+            let sq = r * 8 + f;
+            file_masks[f as usize] |= 1 << sq;
+            rank_masks[r as usize] |= 1 << sq;
+            f += 1;
+        }
+        if r == RANK_1 {
+            break;
+        }
+        r -= 1;
+    }
+
+    (rank_masks, file_masks)
+}
+
+pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
+    #![allow(clippy::cast_possible_wrap)]
+    const _FILE_BB: [u64; 8] = init_eval_masks().0;
+    const _FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
+    const _SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
+    let mut white_passed_bb = [0; 64];
+    let mut black_passed_bb = [0; 64];
+    let mut isolated_bb = [0; 64];
+
+    let mut sq = 0;
+    while sq < 64 {
+        let mut t_sq = sq as isize + 8;
+        while t_sq < 64 {
+            white_passed_bb[sq] |= 1 << t_sq;
+            t_sq += 8;
+        }
+
+        t_sq = sq as isize - 8;
+        while t_sq >= 0 {
+            black_passed_bb[sq] |= 1 << t_sq;
+            t_sq -= 8;
+        }
+
+        if _FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] > FILE_A {
+            isolated_bb[sq] |= _FILE_BB[_FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] as usize - 1];
+
+            t_sq = sq as isize + 7;
+            while t_sq < 64 {
+                white_passed_bb[sq] |= 1 << t_sq;
+                t_sq += 8;
+            }
+
+            t_sq = sq as isize - 9;
+            while t_sq >= 0 {
+                black_passed_bb[sq] |= 1 << t_sq;
+                t_sq -= 8;
+            }
+        }
+
+        if _FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] < FILE_H {
+            isolated_bb[sq] |= _FILE_BB[_FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] as usize + 1];
+
+            t_sq = sq as isize + 9;
+            while t_sq < 64 {
+                white_passed_bb[sq] |= 1 << t_sq;
+                t_sq += 8;
+            }
+
+            t_sq = sq as isize - 7;
+            while t_sq >= 0 {
+                black_passed_bb[sq] |= 1 << t_sq;
+                t_sq -= 8;
+            }
+        }
+
+        sq += 1;
+    }
+
+    (white_passed_bb, black_passed_bb, isolated_bb)
+}
+
+pub const fn files_ranks() -> ([u8; BOARD_N_SQUARES], [u8; BOARD_N_SQUARES]) {
     let mut files = [0; BOARD_N_SQUARES];
     let mut ranks = [0; BOARD_N_SQUARES];
     cfor!(let mut index = 0; index < BOARD_N_SQUARES; index += 1; {

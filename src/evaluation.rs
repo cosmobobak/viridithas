@@ -1,5 +1,7 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
+use crate::lookups::{init_eval_masks, init_passed_isolated_bb};
+
 pub const PAWN_VALUE: i32 = 1_000;
 pub const KNIGHT_VALUE: i32 = 3_250;
 pub const BISHOP_VALUE: i32 = 3_330;
@@ -13,6 +15,8 @@ pub const KING_VALUE: i32 = 500_000;
 /// `3_000_000 - 2 = 2_999_998`.
 pub const MATE_SCORE: i32 = 3_000_000;
 
+pub const IS_MATE_SCORE: i32 = MATE_SCORE - 300;
+
 /// The value of a draw.
 pub const DRAW_SCORE: i32 = 0;
 
@@ -24,13 +28,10 @@ pub static PIECE_VALUES: [i32; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: i32 = PAWN_VALUE / 2;
+pub const ISOLATED_PAWN_MALUS: i32 = PAWN_VALUE / 3;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
 pub const DOUBLED_PAWN_MALUS: i32 = PAWN_VALUE / 2 + 50;
-
-/// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right.
-pub const PASSED_PAWN_BONUS: i32 = PAWN_VALUE / 2 + 100;
 
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: i32 = PAWN_VALUE / 4;
@@ -59,8 +60,34 @@ const KNIGHT_PHASE: f32 = 1.0;
 const BISHOP_PHASE: f32 = 1.0;
 const ROOK_PHASE: f32 = 2.0;
 const QUEEN_PHASE: f32 = 4.0;
-const TOTAL_PHASE: f32 = 16.0 * PAWN_PHASE + 4.0 * KNIGHT_PHASE + 4.0 * BISHOP_PHASE + 4.0 * ROOK_PHASE + 2.0 * QUEEN_PHASE;
+const TOTAL_PHASE: f32 = 16.0 * PAWN_PHASE
+    + 4.0 * KNIGHT_PHASE
+    + 4.0 * BISHOP_PHASE
+    + 4.0 * ROOK_PHASE
+    + 2.0 * QUEEN_PHASE;
 
+pub static RANK_BB: [u64; 8] = init_eval_masks().0;
+pub static FILE_BB: [u64; 8] = init_eval_masks().1;
+
+pub static WHITE_PASSED_BB: [u64; 64] = init_passed_isolated_bb().0;
+pub static BLACK_PASSED_BB: [u64; 64] = init_passed_isolated_bb().1;
+
+pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
+
+/// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
+pub static PASSED_PAWN_BONUS: [i32; 8] = [
+    0,                               // illegal
+    PAWN_VALUE / 10,                 // tenth of a pawn
+    PAWN_VALUE / 8,                  // eighth of a pawn
+    PAWN_VALUE / 5,                  // fifth of a pawn
+    (2 * PAWN_VALUE) / 5,            // two fifths of a pawn
+    PAWN_VALUE / 2 + PAWN_VALUE / 4, // three quarters of a pawn
+    PAWN_VALUE + PAWN_VALUE / 2,     // one and a half pawns
+    0,                               // illegal
+];
+
+/// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
+/// 0.0 is the opening, 1.0 is the endgame.
 #[allow(clippy::cast_precision_loss, clippy::many_single_char_names)]
 pub fn game_phase(p: usize, n: usize, b: usize, r: usize, q: usize) -> f32 {
     let mut phase = TOTAL_PHASE;

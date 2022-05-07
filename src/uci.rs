@@ -1,4 +1,4 @@
-use std::io::{Write, Read};
+use std::io::Write;
 
 use crate::{board::Board, searchinfo::SearchInfo, definitions::{WHITE, BLACK, MAX_DEPTH}};
 
@@ -90,16 +90,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     );
 }
 
-fn input_waiting() -> bool {
-    let mut buf = [0; 1];
-    let mut waiting = false;
-    while std::io::stdin().read(&mut buf).unwrap() > 0 {
-        if buf[0] == b'\n' {
-            waiting = true;
-            break;
-        }
-    }
-    waiting
+const fn input_waiting() -> bool {
+    false
 }
 
 pub fn read_input(info: &mut SearchInfo) {

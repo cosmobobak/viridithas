@@ -4,6 +4,7 @@ struct S(i32, i32);
 
 // 'Bonus' contains Piece-Square parameters.
 // Scores are explicit for files A to D, implicitly mirrored for E to H.
+#[rustfmt::skip]
 const BONUS: [[[S; 4]; 8]; 6] = [
     [
         // None
@@ -73,88 +74,17 @@ const BONUS: [[[S; 4]; 8]; 6] = [
     ],
 ];
 
+#[rustfmt::skip]
 const P_BONUS: [[S; 8]; 8] = [
     // Pawn (asymmetric distribution)
-    [
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-    ],
-    [
-        S(2, -8),
-        S(4, -6),
-        S(11, 9),
-        S(18, 5),
-        S(16, 16),
-        S(21, 6),
-        S(9, -6),
-        S(-3, -18),
-    ],
-    [
-        S(-9, -9),
-        S(-15, -7),
-        S(11, -10),
-        S(15, 5),
-        S(31, 2),
-        S(23, 3),
-        S(6, -8),
-        S(-20, -5),
-    ],
-    [
-        S(-3, 7),
-        S(-20, 1),
-        S(8, -8),
-        S(19, -2),
-        S(39, -14),
-        S(17, -13),
-        S(2, -11),
-        S(-5, -6),
-    ],
-    [
-        S(11, 12),
-        S(-4, 6),
-        S(-11, 2),
-        S(2, -6),
-        S(11, -5),
-        S(0, -4),
-        S(-12, 14),
-        S(5, 9),
-    ],
-    [
-        S(3, 27),
-        S(-11, 18),
-        S(-6, 19),
-        S(22, 29),
-        S(-8, 30),
-        S(-5, 9),
-        S(-14, 8),
-        S(-11, 14),
-    ],
-    [
-        S(-7, -1),
-        S(6, -14),
-        S(-2, 13),
-        S(-11, 22),
-        S(4, 24),
-        S(-14, 17),
-        S(10, 7),
-        S(-9, 7),
-    ],
-    [
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-        S(0, 0),
-    ],
+    [ S(0, 0),   S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0) ],
+    [ S(2, -8),  S(4, -6),   S(11, 9),   S(18, 5),   S(16, 16),  S(21, 6),   S(9, -6),   S(-3, -18) ],
+    [ S(-9, -9), S(-15, -7), S(11, -10), S(15, 5),   S(31, 2),   S(23, 3),   S(6, -8),   S(-20, -5) ],
+    [ S(-3, 7),  S(-20, 1),  S(8, -8),   S(19, -2),  S(39, -14), S(17, -13), S(2, -11),  S(-5, -6) ],
+    [ S(11, 12), S(-4, 6),   S(-11, 2),  S(2, -6),   S(11, -5),  S(0, -4),   S(-12, 14), S(5, 9) ],
+    [ S(3, 27),  S(-11, 18), S(-6, 19),  S(22, 29),  S(-8, 30),  S(-5, 9),   S(-14, 8),  S(-11, 14) ],
+    [ S(-7, -1), S(6, -14),  S(-2, 13),  S(-11, 22), S(4, 24),   S(-14, 17), S(10, 7),   S(-9, 7) ],
+    [ S(0, 0),   S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0),    S(0, 0) ],
 ];
 
 const MIDGAME: bool = false;
@@ -168,6 +98,7 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
     let mut colour = WHITE;
     loop {
         let offset = if colour == BLACK { 7 } else { 1 };
+        let multiplier = if colour == BLACK { -1 } else { 1 };
         let mut pieces_idx = 0;
         while pieces_idx < BONUS.len() {
             let mut square64 = 0;
@@ -185,19 +116,21 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
                     }
                     let square120 = SQ120[square64];
                     if MID_OR_END == MIDGAME {
-                        out[pieces_idx + offset][square120 as usize] = P_BONUS[rank][file].0 * 10;
+                        out[pieces_idx + offset][square120 as usize] =
+                            multiplier * P_BONUS[rank][file].0 * 10;
                     } else {
-                        out[pieces_idx + offset][square120 as usize] = P_BONUS[rank][file].1 * 10;
+                        out[pieces_idx + offset][square120 as usize] =
+                            multiplier * P_BONUS[rank][file].1 * 10;
                     }
                 } else {
                     let access_file = INDEX_MAPPING[file];
                     let square120 = SQ120[square64];
                     if MID_OR_END == MIDGAME {
                         out[pieces_idx + offset][square120 as usize] =
-                            BONUS[pieces_idx][rank][access_file].0 * 10;
+                            multiplier * BONUS[pieces_idx][rank][access_file].0 * 10;
                     } else {
                         out[pieces_idx + offset][square120 as usize] =
-                            BONUS[pieces_idx][rank][access_file].1 * 10;
+                            multiplier * BONUS[pieces_idx][rank][access_file].1 * 10;
                     }
                 }
                 square64 += 1;
@@ -214,4 +147,3 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
 
 pub static MIDGAME_PST: [[i32; 120]; 13] = generate_pst::<MIDGAME>();
 pub static ENDGAME_PST: [[i32; 120]; 13] = generate_pst::<ENDGAME>();
-

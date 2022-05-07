@@ -72,6 +72,6 @@ impl SearchInfo {
         if self.time_set && Instant::now().checked_duration_since(self.stop_time).is_some() {
             self.stopped = true;
         }
-        // crate::uci::read_input(self);
+        crate::uci::read_input(self);
     }
 }

@@ -1,10 +1,10 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{MAX_DEPTH, FUTILITY_MARGIN},
+    definitions::{MAX_DEPTH, FUTILITY_MARGIN, INFINITY},
     evaluation::{DRAW_SCORE, MATE_SCORE},
     movegen::MoveList,
-    searchinfo::SearchInfo,
+    searchinfo::SearchInfo, transpositiontable::{HFlag, ProbeResult},
 };
 
 // In alpha-beta search, there are three classes of node to be aware of:
@@ -115,6 +115,19 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         return pos.evaluate();
     }
 
+    let pv_move = match pos.tt_probe(alpha, beta, depth) {
+        ProbeResult::Cutoff(s) => {
+            pos.tt_mut().incr_cutoffs();
+            return s;
+        }
+        ProbeResult::BestMove(pv_move) => {
+            Some(pv_move)
+        }
+        ProbeResult::Nothing => {
+            None
+        }
+    };
+
     let we_are_in_check = pos.is_check();
 
     if !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth >= 3 {
@@ -137,8 +150,9 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     let original_alpha = alpha;
     let mut moves_made = 0;
     let mut best_move = Move::null();
+    let mut best_score = -INFINITY;
 
-    if let Some(&pv_move) = pos.probe_pv_move() { // this can probably be done in movegen
+    if let Some(pv_move) = pv_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(pv_move) {
             movelist_entry.score = 20_000_000;
         }
@@ -194,24 +208,30 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             return 0;
         }
 
-        if score > alpha {
-            if score >= beta {
-                // we failed high, so this is a cut-node
-                if moves_made == 1 {
-                    info.failhigh_first += 1.0;
-                }
-                info.failhigh += 1.0;
-
-                if !is_capture {
-                    pos.insert_killer(m);
-                }
-
-                return beta;
-            }
-            alpha = score;
+        if score > best_score {
+            best_score = score;
             best_move = m;
-            if !is_capture {
-                pos.insert_history(m, history_score);
+            if score > alpha {
+                if score >= beta {
+                    // we failed high, so this is a cut-node
+                    if moves_made == 1 {
+                        info.failhigh_first += 1.0;
+                    }
+                    info.failhigh += 1.0;
+
+                    if !is_capture {
+                        pos.insert_killer(m);
+                    }
+
+                    pos.tt_store(best_move, beta, HFlag::Beta, depth);
+
+                    return beta;
+                }
+                alpha = score;
+                best_move = m;
+                if !is_capture {
+                    pos.insert_history(m, history_score);
+                }
             }
         }
     }
@@ -225,10 +245,13 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     }
 
     if alpha != original_alpha {
-        // we raised alpha, so this is a PV-node
-        pos.store_pv_move(best_move);
+        // we raised alpha, and didn't raise beta
+        // as if we had, we would have returned early, 
+        // so this is a PV-node
+        pos.tt_store(best_move, best_score, HFlag::Exact, depth);
     } else {
         // we didn't raise alpha, so this is an all-node
+        pos.tt_store(best_move, alpha, HFlag::Alpha, depth);
     }
 
     alpha
