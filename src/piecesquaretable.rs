@@ -147,3 +147,15 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
 
 pub static MIDGAME_PST: [[i32; 120]; 13] = generate_pst::<MIDGAME>();
 pub static ENDGAME_PST: [[i32; 120]; 13] = generate_pst::<ENDGAME>();
+
+pub fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
+    debug_assert!(crate::validate::piece_valid(piece));
+    debug_assert!(crate::validate::square_on_board(sq));
+    unsafe { *MIDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+}
+
+pub fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
+    debug_assert!(crate::validate::piece_valid(piece));
+    debug_assert!(crate::validate::square_on_board(sq));
+    unsafe { *ENDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+}

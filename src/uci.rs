@@ -1,6 +1,6 @@
-use std::io::Write;
+use std::{io::Write, sync::{mpsc, atomic}};
 
-use crate::{board::Board, searchinfo::SearchInfo, definitions::{WHITE, BLACK, MAX_DEPTH}};
+use crate::{board::Board, searchinfo::SearchInfo, definitions::{WHITE, BLACK, MAX_DEPTH}, evaluation::{IS_MATE_SCORE, MATE_SCORE}};
 
 // position fen
 // position startpos
@@ -87,19 +87,43 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     );
 }
 
-const fn input_waiting() -> bool {
-    false
+static KEEP_RUNNING: atomic::AtomicBool = atomic::AtomicBool::new(true);
+
+fn stdin_reader() -> mpsc::Receiver<String> {
+    let (sender, reciever) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("stdin-reader".into())
+        .spawn(|| stdin_reader_worker(sender))
+        .expect("Couldn't start stdin reader worker thread");
+    reciever
 }
 
-pub fn read_input(info: &mut SearchInfo) {
-    if input_waiting() {
-        info.stopped = true;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
-        if input == "quit" {
-            info.quit = true;
+fn stdin_reader_worker(sender: mpsc::Sender<String>) {
+    let mut linebuf = String::with_capacity(128);
+    while std::io::stdin().read_line(&mut linebuf).is_ok() {
+        let cmd = linebuf.trim();
+        if cmd.is_empty() {
+            linebuf.clear();
+            continue;
         }
+        if sender.send(cmd.to_owned()).is_err() {
+            break;
+        }
+        if !KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
+            break;
+        }
+        linebuf.clear();
+    }
+    std::mem::drop(sender);
+}
+
+pub fn format_score(score: i32) -> String {
+    if score.abs() > IS_MATE_SCORE {
+        let plies_to_mate = MATE_SCORE - score.abs();
+        let moves_to_mate = (plies_to_mate + 1) / 2;
+        format!("mate {}", moves_to_mate)
+    } else {
+        format!("cp {}", score / 10)
     }
 }
 
@@ -107,16 +131,17 @@ pub fn main_loop() {
     println!("id name Viridithas");
     println!("id author Cosmo");
     println!("uciok");
-    // std::io::stdout().flush().unwrap();
-    let mut line = String::new();
 
     let mut pos = Board::new();
     let mut info = SearchInfo::default();
 
+    let stdin = stdin_reader();
+
+    info.set_stdin(&stdin);
+
     loop {
-        line.clear();
         std::io::stdout().flush().unwrap();
-        std::io::stdin().read_line(&mut line).unwrap();
+        let line = stdin.recv().expect("Couldn't read from stdin");
         let input = line.trim();
 
         match input {
@@ -144,4 +169,5 @@ pub fn main_loop() {
             break;
         }
     }
+    KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }

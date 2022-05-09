@@ -15,28 +15,31 @@ use crate::{
     bitboard::pop_lsb,
     chessmove::Move,
     definitions::{
-        Colour, Square120, A1, A8, BB, BK, BLACK, BN, BP, BQ, BR, C1, C8, D1, D8, F1, F8,
-        FIRST_ORDER_KILLER_SCORE, G1, G8, H1, H8, INFINITY, MAX_DEPTH, RANK_3, RANK_6,
-        SECOND_ORDER_KILLER_SCORE, WB, WHITE, WK, WN, WP, WQ, WR, BOTH,
+        Castling, Colour, File, Piece, Rank, Square120, Undo, A1, A8, BB, BK, BLACK, BN,
+        BOARD_N_SQUARES, BOTH, BP, BQ, BR, C1, C8, D1, D8, F1, F8, FIRST_ORDER_KILLER_SCORE, G1,
+        G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES, RANK_3, RANK_6, SECOND_ORDER_KILLER_SCORE,
+        WB, WHITE, WK, WN, WP, WQ, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     evaluation::{
-        BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS, MOBILITY_MULTIPLIER,
-        PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, PIECE_VALUES, self, ISOLATED_BB, WHITE_PASSED_BB, BLACK_PASSED_BB, FILE_BB,
+        MoveCounter, BISHOP_PAIR_BONUS, BLACK_PASSED_BB, DOUBLED_PAWN_MALUS, DRAW_SCORE, FILE_BB,
+        ISOLATED_BB, ISOLATED_PAWN_MALUS, LAZY_THRESHOLD_1, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES,
+        PIECE_VALUES, SHIELD_BONUS, WHITE_PASSED_BB, EvalVector, PST_MULTIPLIER,
     },
     lookups::{
-        FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
-        RANKS_BOARD, SQ120_TO_SQ64,
+        filerank_to_square, FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN,
+        PROMO_CHAR_LOOKUP, RANKS_BOARD, SQ120_TO_SQ64, SQ64_TO_SQ120,
     },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
-    movegen::{offset_square_offboard, MoveList, MoveConsumer, MoveCounter},
+    movegen::{offset_square_offboard, MoveConsumer, MoveList},
+    piecesquaretable::{endgame_pst_value, midgame_pst_value, ENDGAME_PST, MIDGAME_PST},
     search::alpha_beta,
     searchinfo::SearchInfo,
-    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board}, piecesquaretable::{MIDGAME_PST, ENDGAME_PST}, transpositiontable::{TranspositionTable, HFlag, DEFAULT_TABLE_SIZE, ProbeResult},
-};
-use crate::{
-    definitions::{Castling, File, Piece, Rank, Undo, BOARD_N_SQUARES, MAX_GAME_MOVES},
-    lookups::{filerank_to_square, SQ64_TO_SQ120},
+    transpositiontable::{
+        HFlag, ProbeResult, DefaultTT,
+    },
+    uci::format_score,
+    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board},
 };
 
 #[derive(Clone, PartialEq)]
@@ -67,7 +70,7 @@ pub struct Board {
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
     killer_move_table: [[Move; 2]; MAX_DEPTH],
-    tt: TranspositionTable<DEFAULT_TABLE_SIZE>,
+    tt: DefaultTT,
 
     pst_vals: [i32; 2],
 }
@@ -99,13 +102,13 @@ impl Board {
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
             pst_vals: [0; 2],
-            tt: TranspositionTable::new(),
+            tt: DefaultTT::new(),
         };
         out.reset();
         out
     }
 
-    pub fn tt_mut(&mut self) -> &mut TranspositionTable<DEFAULT_TABLE_SIZE> {
+    pub fn tt_mut(&mut self) -> &mut DefaultTT {
         &mut self.tt
     }
 
@@ -841,7 +844,12 @@ impl Board {
         }
     }
 
-    fn add_pawn_move<const SIDE: u8, MC: MoveConsumer>(&self, from: u8, to: u8, move_list: &mut MC) {
+    fn add_pawn_move<const SIDE: u8, MC: MoveConsumer>(
+        &self,
+        from: u8,
+        to: u8,
+        move_list: &mut MC,
+    ) {
         debug_assert!(square_on_board(from));
         debug_assert!(square_on_board(to));
         let promo_rank = if SIDE == WHITE {
@@ -889,12 +897,22 @@ impl Board {
         if square_on_board(left_sq)
             && PIECE_COL[self.pieces[left_sq as usize] as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE, MC>(sq, left_sq, self.pieces[left_sq as usize], move_list);
+            self.add_pawn_cap_move::<SIDE, MC>(
+                sq,
+                left_sq,
+                self.pieces[left_sq as usize],
+                move_list,
+            );
         }
         if square_on_board(right_sq)
             && PIECE_COL[self.pieces[right_sq as usize] as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE, MC>(sq, right_sq, self.pieces[right_sq as usize], move_list);
+            self.add_pawn_cap_move::<SIDE, MC>(
+                sq,
+                right_sq,
+                self.pieces[right_sq as usize],
+                move_list,
+            );
         }
     }
 
@@ -1326,8 +1344,8 @@ impl Board {
 
         self.pieces[sq as usize] = Piece::Empty as u8;
         self.material[colour as usize] -= PIECE_VALUES[piece as usize];
-        self.pst_vals[0] -= Self::midgame_pst_value(piece, sq);
-        self.pst_vals[1] -= Self::endgame_pst_value(piece, sq);
+        self.pst_vals[0] -= midgame_pst_value(piece, sq);
+        self.pst_vals[1] -= endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -1342,33 +1360,21 @@ impl Board {
             self.pawns[Colour::Both as usize] &= !(1 << sq64);
         }
 
-        let mut piece_num = 255;
+        let mut remove_idx = 255;
         for idx in 0..self.piece_num[piece as usize] {
             if self.piece_list[piece as usize][idx as usize] == sq {
-                piece_num = idx;
+                remove_idx = idx;
                 break;
             }
         }
 
-        debug_assert!(piece_num != 255);
+        debug_assert!(remove_idx != 255);
 
         // decrement the number of pieces of this type
         self.piece_num[piece as usize] -= 1;
         // and move the last piece in the list to the removed piece's position
-        self.piece_list[piece as usize][piece_num as usize] =
+        self.piece_list[piece as usize][remove_idx as usize] =
             self.piece_list[piece as usize][self.piece_num[piece as usize] as usize];
-    }
-
-    fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
-        debug_assert!(piece_valid(piece));
-        debug_assert!(square_on_board(sq));
-        unsafe { *MIDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
-    }
-
-    fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
-        debug_assert!(piece_valid(piece));
-        debug_assert!(square_on_board(sq));
-        unsafe { *ENDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
     }
 
     fn add_piece(&mut self, sq: u8, piece: u8) {
@@ -1381,8 +1387,8 @@ impl Board {
 
         self.pieces[sq as usize] = piece;
         self.material[colour as usize] += PIECE_VALUES[piece as usize];
-        self.pst_vals[0] += Self::midgame_pst_value(piece, sq);
-        self.pst_vals[1] += Self::endgame_pst_value(piece, sq);
+        self.pst_vals[0] += midgame_pst_value(piece, sq);
+        self.pst_vals[1] += endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -1416,11 +1422,11 @@ impl Board {
         hash_piece(&mut self.key, piece, to);
 
         self.pieces[from as usize] = Piece::Empty as u8;
-        self.pst_vals[0] -= Self::midgame_pst_value(piece, from);
-        self.pst_vals[1] -= Self::endgame_pst_value(piece, from);
+        self.pst_vals[0] -= midgame_pst_value(piece, from);
+        self.pst_vals[1] -= endgame_pst_value(piece, from);
         self.pieces[to as usize] = piece;
-        self.pst_vals[0] += Self::midgame_pst_value(piece, to);
-        self.pst_vals[1] += Self::endgame_pst_value(piece, to);
+        self.pst_vals[0] += midgame_pst_value(piece, to);
+        self.pst_vals[1] += endgame_pst_value(piece, to);
 
         if !PIECE_BIG[piece as usize] {
             let sq64 = SQ120_TO_SQ64[from as usize];
@@ -1448,6 +1454,12 @@ impl Board {
         {
             debug_assert!(t_piece_num);
         }
+    }
+
+    #[inline]
+    pub fn moved_piece(&self, m: Move) -> u8 {
+        debug_assert!(square_on_board(m.from()));
+        unsafe { *self.pieces.get_unchecked(m.from() as usize) }
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -1881,29 +1893,42 @@ impl Board {
 
         if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
             return if self.side == WHITE {
-                evaluation::DRAW_SCORE
+                DRAW_SCORE
             } else {
-                -evaluation::DRAW_SCORE
+                -DRAW_SCORE
             };
         }
 
         let mut score = self.material[WHITE as usize] - self.material[BLACK as usize];
         let pst_val = self.pst_value();
+
+        score += pst_val;
+
+        // if the score is already outwith a threshold, we can stop here.
+        if score.abs() > LAZY_THRESHOLD_1 {
+            // score = self.clamp_score(score);
+            if self.side == WHITE {
+                return score;
+            }
+            return -score;
+        }
+
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
-        // let king_safety_val = self.king_tropism_term(); // INCREMENTAL UPDATE.
         let mobility_val = self.mobility();
+        let king_safety_val = self.pawn_shield_term() /* + self.king_tropism_term() */; // INCREMENTAL UPDATE.
+
+        score += pawn_val;
+        score += bishop_pair_val;
+        score += mobility_val;
+        score += king_safety_val;
 
         // println!(
         //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
         //     score, pst_val, pawn_val, bishop_pair_val, mobility_val
         // );
 
-        score += pst_val;
-        score += pawn_val;
-        score += bishop_pair_val;
-        // score += king_safety_val;
-        score += mobility_val;
+        score = self.clamp_score(score);
 
         if self.side == WHITE {
             score
@@ -1912,8 +1937,148 @@ impl Board {
         }
     }
 
+    pub fn evaluate_recorded(&mut self) -> EvalVector {
+        // this function computes a score for the position, from the point of view of the side to move.
+
+        let mut eval_vec = EvalVector::new();
+
+        if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
+            eval_vec.valid = false;
+        }
+
+        eval_vec.pawns = i32::from(self.piece_num[WP as usize]) - i32::from(self.piece_num[BP as usize]);
+        eval_vec.knights = i32::from(self.piece_num[WN as usize]) - i32::from(self.piece_num[BN as usize]);
+        eval_vec.bishops = i32::from(self.piece_num[WB as usize]) - i32::from(self.piece_num[BB as usize]);
+        eval_vec.rooks = i32::from(self.piece_num[WR as usize]) - i32::from(self.piece_num[BR as usize]);
+        eval_vec.queens = i32::from(self.piece_num[WQ as usize]) - i32::from(self.piece_num[BQ as usize]);
+
+        let pst_val = self.pst_value();
+        eval_vec.pst = pst_val / PST_MULTIPLIER;
+
+        {
+            let this = &self;
+            let white_pawn_count = this.piece_num[WP as usize] as usize;
+            for &white_pawn_loc in &this.piece_list[WP as usize][..white_pawn_count] {
+                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
+                if ISOLATED_BB[sq64] & this.pawns[WHITE as usize] == 0 {
+                    eval_vec.isolated_pawns += 1;
+                }
+
+                if WHITE_PASSED_BB[sq64] & this.pawns[BLACK as usize] == 0 {
+                    let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
+                    eval_vec.passed_pawns_by_rank[rank] += 1;
+                }
+
+                let file = FILES_BOARD[white_pawn_loc as usize] as usize;
+                if (FILE_BB[file] & this.pawns[WHITE as usize]).count_ones() > 1 {
+                    eval_vec.doubled_pawns += 1;
+                }
+            }
+
+            let black_pawn_count = this.piece_num[BP as usize] as usize;
+            for &black_pawn_loc in &this.piece_list[BP as usize][..black_pawn_count] {
+                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
+                if ISOLATED_BB[sq64] & this.pawns[BLACK as usize] == 0 {
+                    eval_vec.isolated_pawns -= 1;
+                }
+
+                if BLACK_PASSED_BB[sq64] & this.pawns[WHITE as usize] == 0 {
+                    let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
+                    eval_vec.passed_pawns_by_rank[rank] -= 1;
+                }
+
+                let file = FILES_BOARD[black_pawn_loc as usize] as usize;
+                if (FILE_BB[file] & this.pawns[BLACK as usize]).count_ones() > 1 {
+                    eval_vec.doubled_pawns -= 1;
+                }
+            }
+        }; // INCREMENTAL UPDATE.
+
+        // we double-count doubled pawns, so we need to divide by 2.
+        eval_vec.doubled_pawns /= 2;
+
+        let bishop_pair_val = self.bishop_pair_term();
+        if bishop_pair_val != 0 {
+            eval_vec.bishop_pair = bishop_pair_val.signum();
+        }
+
+        let mut list_us = MoveCounter::new(self);
+        self.generate_moves(&mut list_us);
+
+        eval_vec.pawn_mobility += list_us.get_mobility_of(Piece::WP);
+        eval_vec.knight_mobility += list_us.get_mobility_of(Piece::WN);
+        eval_vec.bishop_mobility += list_us.get_mobility_of(Piece::WB);
+        eval_vec.rook_mobility += list_us.get_mobility_of(Piece::WR);
+        eval_vec.queen_mobility += list_us.get_mobility_of(Piece::WQ);
+        eval_vec.king_mobility += list_us.get_mobility_of(Piece::WK);
+
+        self.make_nullmove();
+        let mut list_them = MoveCounter::new(self);
+        self.generate_moves(&mut list_them);
+        eval_vec.pawn_mobility -= list_them.get_mobility_of(Piece::WP);
+        eval_vec.knight_mobility -= list_them.get_mobility_of(Piece::WN);
+        eval_vec.bishop_mobility -= list_them.get_mobility_of(Piece::WB);
+        eval_vec.rook_mobility -= list_them.get_mobility_of(Piece::WR);
+        eval_vec.queen_mobility -= list_them.get_mobility_of(Piece::WQ);
+        eval_vec.king_mobility -= list_them.get_mobility_of(Piece::WK);
+        self.unmake_nullmove();
+
+        if self.side == BLACK {
+            eval_vec.pawn_mobility = -eval_vec.pawn_mobility;
+            eval_vec.knight_mobility = -eval_vec.knight_mobility;
+            eval_vec.bishop_mobility = -eval_vec.bishop_mobility;
+            eval_vec.rook_mobility = -eval_vec.rook_mobility;
+            eval_vec.queen_mobility = -eval_vec.queen_mobility;
+            eval_vec.king_mobility = -eval_vec.king_mobility;
+        }
+
+        let white_kingloc = self.king_sq[WHITE as usize] as usize;
+        let black_kingloc = self.king_sq[BLACK as usize] as usize;
+
+        for loc in white_kingloc + 9..=white_kingloc + 11 {
+            if self.pieces[loc] == WP {
+                eval_vec.pawn_shield += 1;
+            }
+        }
+
+        for loc in black_kingloc - 11..=black_kingloc - 9 {
+            if self.pieces[loc] == BP {
+                eval_vec.pawn_shield -= 1;
+            }
+        }
+
+        // println!(
+        //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
+        //     score, pst_val, pawn_val, bishop_pair_val, mobility_val
+        // );
+
+        if self.unwinnable_for::<{ WHITE }>() || self.unwinnable_for::<{ BLACK }>() {
+            eval_vec.valid = false;
+        }
+
+        eval_vec.turn = if self.side == WHITE { 1 } else { -1 };
+
+        eval_vec
+    }
+
+    #[inline]
+    fn clamp_score(&mut self, score: i32) -> i32 {
+        // if we can't win with our material, we clamp the eval to be at best one millipawn.
+        if score > 0 && self.unwinnable_for::<{ WHITE }>() {
+            1
+        } else if score < 0 && self.unwinnable_for::<{ BLACK }>() {
+            -1
+        } else {
+            score
+        }
+    }
+
     fn pst_value(&self) -> i32 {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::similar_names)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss,
+            clippy::similar_names
+        )]
         let phase = self.phase();
         debug_assert!((0.0..=1.0).contains(&phase));
         let mg_val = self.pst_vals[0] as f32;
@@ -1934,6 +2099,30 @@ impl Board {
             return -BISHOP_PAIR_BONUS;
         }
         0
+    }
+
+    fn pawn_shield_term(&self) -> i32 {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+
+        let white_kingloc = self.king_sq[WHITE as usize] as usize;
+        let black_kingloc = self.king_sq[BLACK as usize] as usize;
+
+        let mut white_shield = 0;
+        for loc in white_kingloc + 9..=white_kingloc + 11 {
+            if self.pieces[loc] == WP {
+                white_shield += 1;
+            }
+        }
+
+        let mut black_shield = 0;
+        for loc in black_kingloc - 11..=black_kingloc - 9 {
+            if self.pieces[loc] == BP {
+                black_shield += 1;
+            }
+        }
+
+        (((SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield]) as f32) * (1.0 - self.phase()))
+            as i32
     }
 
     fn king_tropism_term(&self) -> i32 {
@@ -1991,7 +2180,7 @@ impl Board {
 
             let file = FILES_BOARD[white_pawn_loc as usize] as usize;
             if (FILE_BB[file] & self.pawns[WHITE as usize]).count_ones() > 1 {
-                w_score -= DOUBLED_PAWN_MALUS;
+                w_score -= DOUBLED_PAWN_MALUS / 2; // we double-count the malus, so halve it.
             }
         }
 
@@ -2010,7 +2199,7 @@ impl Board {
 
             let file = FILES_BOARD[black_pawn_loc as usize] as usize;
             if (FILE_BB[file] & self.pawns[BLACK as usize]).count_ones() > 1 {
-                b_score -= DOUBLED_PAWN_MALUS;
+                b_score -= DOUBLED_PAWN_MALUS / 2; // we double-count the malus, so halve it.
             }
         }
 
@@ -2027,10 +2216,7 @@ impl Board {
     }
 
     fn generate_pst_value(&self) -> (i32, i32) {
-        #![allow(
-            clippy::needless_range_loop,
-            clippy::similar_names
-        )]
+        #![allow(clippy::needless_range_loop, clippy::similar_names)]
         let mut mg_pst_val = 0;
         let mut eg_pst_val = 0;
         for piece in (WP as usize)..=(WK as usize) {
@@ -2043,7 +2229,7 @@ impl Board {
                 eg_pst_val += eg;
             }
         }
-        
+
         for piece in (BP as usize)..=(BK as usize) {
             let pnum = self.piece_num[piece] as usize;
             for &sq in self.piece_list[piece][..pnum].iter() {
@@ -2059,26 +2245,39 @@ impl Board {
 
     fn mobility(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
-        
-        let mut list = MoveCounter::new();
+
+        let mut list = MoveCounter::new(self);
         self.generate_moves(&mut list);
-        
-        let our_pseudo_legal_moves = list.len();
+
+        let our_pseudo_legal_moves = list.score();
 
         self.make_nullmove();
-        let mut list = MoveCounter::new();
+        let mut list = MoveCounter::new(self);
         self.generate_moves(&mut list);
+        let their_pseudo_legal_moves = list.score();
         self.unmake_nullmove();
 
-        let their_pseudo_legal_moves = list.len();
-
-        let relative_score = if self.side == WHITE {
+        if self.side == WHITE {
             our_pseudo_legal_moves as i32 - their_pseudo_legal_moves as i32
         } else {
             their_pseudo_legal_moves as i32 - our_pseudo_legal_moves as i32
-        };
+        }
+    }
 
-        relative_score * MOBILITY_MULTIPLIER
+    const fn unwinnable_for<const SIDE: u8>(&self) -> bool {
+        assert!(SIDE == WHITE || SIDE == BLACK, "unwinnable_for called with invalid side");
+
+        if SIDE == WHITE {
+            if self.major_piece_counts[WHITE as usize] != 0 { return false; }
+            if self.minor_piece_counts[WHITE as usize] > 1 { return false; }
+            if self.piece_num[WP as usize] != 0 { return false; }
+            true
+        } else {
+            if self.major_piece_counts[BLACK as usize] != 0 { return false; }
+            if self.minor_piece_counts[BLACK as usize] > 1 { return false; }
+            if self.piece_num[BP as usize] != 0 { return false; }
+            true
+        }
     }
 
     const fn is_material_draw(&self) -> bool {
@@ -2091,9 +2290,11 @@ impl Board {
                 if self.piece_num[WN as usize] < 3 && self.piece_num[BN as usize] < 3 {
                     return true;
                 }
-            } else if self.piece_num[WN as usize] == 0
+            } else if (self.piece_num[WN as usize] == 0
                 && self.piece_num[BN as usize] == 0
-                && self.piece_num[WB as usize].abs_diff(self.piece_num[BB as usize]) < 2
+                && self.piece_num[WB as usize].abs_diff(self.piece_num[BB as usize]) < 2)
+                || (self.piece_num[WB as usize] + self.piece_num[WN as usize] == 1
+                    && self.piece_num[BB as usize] + self.piece_num[BN as usize] == 1)
             {
                 return true;
             }
@@ -2152,9 +2353,11 @@ impl Board {
             pv_length = self.get_pv_line(depth);
             most_recent_move = *self.principal_variation.get(0).unwrap_or(&first_legal);
 
+            let score_string = format_score(most_recent_score);
+
             print!(
-                "info score cp {} depth {} nodes {} time {} pv ",
-                most_recent_score / 10,
+                "info score {} depth {} nodes {} time {} pv ",
+                score_string,
                 depth,
                 info.nodes,
                 info.start_time.elapsed().as_millis()
@@ -2165,9 +2368,10 @@ impl Board {
             println!();
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
+        let score_string = format_score(most_recent_score);
         print!(
-            "info score cp {} depth {} nodes {} time {} pv ",
-            most_recent_score / 10,
+            "info score {} depth {} nodes {} time {} pv ",
+            score_string,
             best_depth,
             info.nodes,
             info.start_time.elapsed().as_millis()

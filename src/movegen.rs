@@ -7,26 +7,6 @@ use crate::{chessmove::Move, definitions::Square120, lookups::FILES_BOARD};
 
 pub trait MoveConsumer {
     fn push(&mut self, m: Move, score: i32);
-    fn len(&self) -> usize;
-}
-
-pub struct MoveCounter {
-    count: usize,
-}
-
-impl MoveCounter {
-    pub const fn new() -> Self {
-        Self { count: 0 }
-    }
-}
-
-impl MoveConsumer for MoveCounter {
-    fn push(&mut self, _m: Move, _score: i32) {
-        self.count += 1;
-    }
-    fn len(&self) -> usize {
-        self.count
-    }
 }
 
 const MAX_POSITION_MOVES: usize = 256;
@@ -95,6 +75,10 @@ impl MoveList {
                 .find(|e| e.entry == m)
         }
     }
+
+    const fn len(&self) -> usize {
+        self.count
+    }
 }
 
 impl MoveConsumer for MoveList {
@@ -108,10 +92,6 @@ impl MoveConsumer for MoveList {
             *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
         }
         self.count += 1;
-    }
-
-    fn len(&self) -> usize {
-        self.count
     }
 }
 

@@ -24,7 +24,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
-    if info.nodes.trailing_zeros() >= 11 {
+    if info.nodes.trailing_zeros() >= 12 {
         info.check_up();
     }
 
@@ -101,7 +101,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         return quiescence_search(pos, info, alpha, beta);
     }
 
-    if info.nodes.trailing_zeros() >= 11 {
+    if info.nodes.trailing_zeros() >= 12 {
         info.check_up();
     }
 
@@ -117,7 +117,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let pv_move = match pos.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
-            pos.tt_mut().incr_cutoffs();
             return s;
         }
         ProbeResult::BestMove(pv_move) => {
@@ -141,6 +140,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             return beta;
         }
     }
+
+    let in_pv_node = beta - alpha > 1;
 
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
@@ -188,10 +189,11 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         } else {
             // nullwindow searches to prove PV.
             // we only reduce when a set of conditions are true:
-            // 1. we're not in a branch of the search that has *already* been reduced higher up
-            // 2. the move we're about to make isn't "interesting" (i.e. it's not a capture, a promotion, a check, or a killer)
-            // 3. we're at a greater depth than 2.
-            let can_reduce = !is_interesting && depth > 2 && extension == 0;
+            // 1. the move we're about to make isn't "interesting" (i.e. it's not a capture, a promotion, or a check)
+            // 2. we're at a depth >= 3.
+            // 3. we're not already extending the search.
+            // 4. we've tried at least 2 moves at full depth, or 3 if we're in a PV-node.
+            let can_reduce = moves_made >= (2 + usize::from(in_pv_node)) && extension == 0 && !is_interesting && depth >= 3;
             let reduction = usize::from(can_reduce) * if moves_made >= 7 && depth > 5 { depth / 3 } else { 1 };
             // perform a zero-window search, possibly with a reduction
             let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);

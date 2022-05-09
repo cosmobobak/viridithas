@@ -121,7 +121,7 @@ pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
 
 pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
     #![allow(clippy::cast_possible_wrap)]
-    const _FILE_BB: [u64; 8] = init_eval_masks().0;
+    const _FILE_BB: [u64; 8] = init_eval_masks().1;
     const _FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
     const _SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
     let mut white_passed_bb = [0; 64];
@@ -207,16 +207,20 @@ pub static PIECE_KEYS: [[u64; 120]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
 
+/// knights, bishops, rooks, and queens.
 pub static PIECE_BIG: [bool; 13] = [
-    false, false, true, true, true, true, true, false, true, true, true, true, true,
+    false, false, true, true, true, true, false, false, true, true, true, true, false,
 ];
+/// rooks and queens.
 pub static PIECE_MAJ: [bool; 13] = [
     false, false, false, false, true, true, true, false, false, false, true, true, true,
 ];
+/// knights and bishops.
 pub static PIECE_MIN: [bool; 13] = [
     false, false, true, true, false, false, false, false, true, true, false, false, false,
 ];
 
+/// The colour of a piece.
 pub static PIECE_COL: [Colour; 13] = [
     Colour::Both,
     Colour::White,
@@ -233,9 +237,12 @@ pub static PIECE_COL: [Colour; 13] = [
     Colour::Black,
 ];
 
+/// The file that this 120-indexed square is on.
 pub static FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
+/// The rank that this 120-indexed square is on.
 pub static RANKS_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().1;
 
+/// The name of this 64-indexed square.
 pub static SQUARE_NAMES: [&str; 64] = [
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
     "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
@@ -243,6 +250,7 @@ pub static SQUARE_NAMES: [&str; 64] = [
     "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
 
+/// The name of this piece.
 pub static PIECE_NAMES: [&str; 13] = [
     "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
     "rook", "queen", "king",
@@ -256,6 +264,7 @@ pub static PROMO_CHAR_LOOKUP: [u8; 13] = [
     b'X', b'X', b'n', b'b', b'r', b'q', b'X', b'X', b'n', b'b', b'r', b'q', b'X',
 ];
 
+/// The score of this piece, for MVV/LVA move ordering.
 const VICTIM_SCORE: [i32; 13] = [
     0, 1000, 2000, 3000, 4000, 5000, 6000, 1000, 2000, 3000, 4000, 5000, 6000,
 ];
@@ -274,6 +283,7 @@ const fn mvvlva_init() -> [[i32; 13]; 13] {
     mvvlva
 }
 
+/// The score of this pair of pieces, for MVV/LVA move ordering.
 pub static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
 
 mod tests {

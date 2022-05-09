@@ -21,13 +21,18 @@ pub struct TTEntry {
 }
 
 const MEGABYTE: usize = 1024 * 1024;
-/// The default behaviour is to use 4MB of memory for the hashtable,
+/// One option is to use 4MB of memory for the hashtable,
 /// as my i5 has 6mb of L3 cache, so this endeavours to keep the
 /// entire hashtable in L3 cache.
-pub const DEFAULT_TABLE_SIZE: usize = MEGABYTE * 4 / std::mem::size_of::<TTEntry>();
+pub const IN_CACHE_TABLE_SIZE: usize = MEGABYTE * 4 / std::mem::size_of::<TTEntry>();
+/// Another option is just to use a ton of memory,
+/// wahoooooooo
+pub const BIG_TABLE_SIZE: usize = MEGABYTE * 4096 / std::mem::size_of::<TTEntry>();
+/// The default option is a middle-ground between the two.
+pub const DEFAULT_TABLE_SIZE: usize = MEGABYTE * 256 / std::mem::size_of::<TTEntry>();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TranspositionTable<const SIZE: usize> {
+pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
     table: Vec<TTEntry>,
     cutoffs: u64,
     entries: u64,
@@ -36,13 +41,18 @@ pub struct TranspositionTable<const SIZE: usize> {
     hits: u64,
 }
 
+pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE, ALWAYS_OVERWRITE>;
+
 pub enum ProbeResult {
     Cutoff(i32),
     BestMove(Move),
     Nothing
 }
 
-impl<const SIZE: usize> TranspositionTable<SIZE> {
+pub const ALWAYS_OVERWRITE: u8 = 0;
+pub const DEPTH_PREFERRED: u8 = 1;
+
+impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE, REPLACEMENT_STRATEGY> {
     pub fn new() -> Self {
         Self {
             table: vec![TTEntry {
@@ -77,13 +87,27 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         if score > IS_MATE_SCORE { score += ply as i32; }
         else if score < -IS_MATE_SCORE { score -= ply as i32; }
 
-        self.table[index] = TTEntry {
-            key,
-            m: best_move,
-            score,
-            depth,
-            flag,
-        };
+        if REPLACEMENT_STRATEGY == ALWAYS_OVERWRITE {
+            self.table[index] = TTEntry {
+                key,
+                m: best_move,
+                score,
+                depth,
+                flag,
+            };
+        } else if REPLACEMENT_STRATEGY == DEPTH_PREFERRED {
+            if depth >= self.table[index].depth {
+                self.table[index] = TTEntry {
+                    key,
+                    m: best_move,
+                    score,
+                    depth,
+                    flag,
+                };
+            }
+        } else {
+            panic!("Unknown strategy");
+        }
     }
 
     pub fn probe(&mut self, key: u64, ply: usize, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
@@ -104,6 +128,8 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 
                 debug_assert!(entry.depth >= 1 && entry.depth <= MAX_DEPTH);
 
+                // we can't store the score in a tagged union,
+                // because we need to do mate score preprocessing.
                 let mut score = entry.score;
                 if score > IS_MATE_SCORE { score -= ply as i32; }
                 else if score < -IS_MATE_SCORE { score += ply as i32; }
@@ -114,16 +140,19 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
                     HFlag::Alpha => {
                         if score <= alpha {
                             score = alpha;
+                            self.cutoffs += 1;
                             return ProbeResult::Cutoff(score);
                         }
                     }
                     HFlag::Beta => {
                         if score >= beta {
                             score = beta;
+                            self.cutoffs += 1;
                             return ProbeResult::Cutoff(score);
                         }
                     }
                     HFlag::Exact => {
+                        self.cutoffs += 1;
                         return ProbeResult::Cutoff(score);
                     }
                 }
@@ -132,10 +161,6 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         }
 
         ProbeResult::Nothing
-    }
-
-    pub fn incr_cutoffs(&mut self) {
-        self.cutoffs += 1;
     }
 
     pub fn clear_for_search(&mut self) {
