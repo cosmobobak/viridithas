@@ -4,10 +4,10 @@ use crate::{lookups::{init_eval_masks, init_passed_isolated_bb}, board::Board, m
 use crate::definitions::Piece;
 
 pub const PAWN_VALUE: i32   =   1_000;
-pub const KNIGHT_VALUE: i32 =   3_250;
-pub const BISHOP_VALUE: i32 =   3_330;
-pub const ROOK_VALUE: i32   =   5_500;
-pub const QUEEN_VALUE: i32  =  10_000;
+pub const KNIGHT_VALUE: i32 =   3_457;
+pub const BISHOP_VALUE: i32 =   3_725;
+pub const ROOK_VALUE: i32   =   5_007;
+pub const QUEEN_VALUE: i32  =  10_195;
 pub const KING_VALUE: i32   = 500_000;
 
 /// The value of checkmate.
@@ -30,27 +30,27 @@ pub static PIECE_VALUES: [i32; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: i32 = PAWN_VALUE / 3;
+pub const ISOLATED_PAWN_MALUS: i32 = 80;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: i32 = PAWN_VALUE / 2 + 50;
+pub const DOUBLED_PAWN_MALUS: i32 = 94;
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: i32 = PAWN_VALUE / 4;
+pub const BISHOP_PAIR_BONUS: i32 = 63;
 
 /// The bonus granted for having more pawns when you have knights on the board.
 // pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
 
 // The multipliers applied to mobility scores.
-pub const PAWN_MOBILITY_MULTIPLIER: i32 = 10;
-pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 15;
-pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 10;
-pub const ROOK_MOBILITY_MULTIPLIER: i32 = 10;
-pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 10;
-pub const KING_MOBILITY_MULTIPLIER: i32 = 10;
+pub const PAWN_MOBILITY_MULTIPLIER: i32 = 105;
+pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 50;
+pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 71;
+pub const ROOK_MOBILITY_MULTIPLIER: i32 = 118;
+pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 38;
+pub const KING_MOBILITY_MULTIPLIER: i32 = -129;
 
 /// The multiplier applied to the pst scores.
-pub const PST_MULTIPLIER: i32 = 3;
+pub const PST_MULTIPLIER: i32 = 4;
 
 const PAWN_DANGER: i32   = 200;
 const KNIGHT_DANGER: i32 = 300;
@@ -66,7 +66,9 @@ pub static PIECE_DANGER_VALUES: [i32; 13] = [
 ];
 
 /// The bonus for having IDX pawns in front of the king.
-pub static SHIELD_BONUS: [i32; 4] = [0, 50, 200, 300];
+pub static SHIELD_BONUS: [i32; 4] = [0, 30, 60, 90];
+
+pub const TURN_BONUS: i32 = 200;
 
 /// A threshold over which we will not bother evaluating more than material and PSTs.
 pub const LAZY_THRESHOLD_1: i32 = 14_000;
@@ -95,12 +97,12 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0,                               // illegal
-    PAWN_VALUE / 10,                 // tenth of a pawn
-    PAWN_VALUE / 8,                  // eighth of a pawn
-    PAWN_VALUE / 5,                  // fifth of a pawn
-    (2 * PAWN_VALUE) / 5,            // two fifths of a pawn
-    PAWN_VALUE / 2 + PAWN_VALUE / 4, // three quarters of a pawn
-    PAWN_VALUE + PAWN_VALUE / 2,     // one and a half pawns
+    563,                 
+    940,                  
+    833,                 
+    745,           
+    844, 
+    529,     
     0,                               // illegal
 ];
 

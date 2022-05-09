@@ -24,7 +24,7 @@ use crate::{
     evaluation::{
         MoveCounter, BISHOP_PAIR_BONUS, BLACK_PASSED_BB, DOUBLED_PAWN_MALUS, DRAW_SCORE, FILE_BB,
         ISOLATED_BB, ISOLATED_PAWN_MALUS, LAZY_THRESHOLD_1, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES,
-        PIECE_VALUES, SHIELD_BONUS, WHITE_PASSED_BB, EvalVector, PST_MULTIPLIER,
+        PIECE_VALUES, SHIELD_BONUS, WHITE_PASSED_BB, EvalVector, PST_MULTIPLIER, TURN_BONUS,
     },
     lookups::{
         filerank_to_square, FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN,
@@ -1916,12 +1916,19 @@ impl Board {
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
         let mobility_val = self.mobility();
-        let king_safety_val = self.pawn_shield_term() /* + self.king_tropism_term() */; // INCREMENTAL UPDATE.
+        let king_safety_val = self.pawn_shield_term();
+        let turn_bonus = if self.side == WHITE {
+            TURN_BONUS
+        } else {
+            -TURN_BONUS
+        };
 
         score += pawn_val;
         score += bishop_pair_val;
         score += mobility_val;
         score += king_safety_val;
+        score += turn_bonus;
+        
 
         // println!(
         //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
