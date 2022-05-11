@@ -39,7 +39,7 @@ use crate::{
         HFlag, ProbeResult, DefaultTT,
     },
     uci::format_score,
-    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board},
+    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board}, piecelist::PieceList,
 };
 
 #[derive(Clone, PartialEq)]
@@ -64,8 +64,7 @@ pub struct Board {
     // dynamic arrays. We should refactor to store length and storage in one
     // type, or even just use [Vec<u8>; 13], if we're willing to sacrifice
     // memory fragmentation.
-    piece_num: [u8; 13],
-    piece_list: [[u8; 10]; 13], // p_list[piece][N]
+    piece_lists: [PieceList; 13], // p_list[piece][N]
 
     principal_variation: Vec<Move>,
 
@@ -98,8 +97,7 @@ impl Board {
             eg_material: [0; 2],
             castle_perm: 0,
             history: Vec::with_capacity(MAX_GAME_MOVES),
-            piece_num: [0; 13],
-            piece_list: [[0; 10]; 13],
+            piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::with_capacity(MAX_DEPTH),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
@@ -241,8 +239,8 @@ impl Board {
         self.mg_material.fill(0);
         self.eg_material.fill(0);
         self.pawns.fill(0);
-        self.piece_num.fill(0);
-        self.king_sq.fill(Square120::NoSquare as u8);
+        self.piece_lists.iter_mut().for_each(PieceList::clear);
+        self.king_sq = [Square120::NoSquare as u8, Square120::NoSquare as u8];
         self.side = Colour::Both as u8;
         self.ep_sq = Square120::NoSquare as u8;
         self.fifty_move_counter = 0;
@@ -460,9 +458,7 @@ impl Board {
                 self.mg_material[colour as usize] += MG_PIECE_VALUES[piece as usize];
                 self.eg_material[colour as usize] += EG_PIECE_VALUES[piece as usize];
 
-                self.piece_list[piece as usize][self.piece_num[piece as usize] as usize] =
-                    sq.try_into().unwrap();
-                self.piece_num[piece as usize] += 1;
+                self.piece_lists[piece as usize].insert(sq.try_into().unwrap());
 
                 if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
                     self.king_sq[colour as usize] = sq.try_into().unwrap();
@@ -481,7 +477,7 @@ impl Board {
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         #![allow(clippy::similar_names)]
         use Colour::{Black, Both, White};
-        let mut piece_num = [0; 13];
+        let mut piece_num = [0u8; 13];
         let mut big_pce = [0, 0];
         let mut maj_pce = [0, 0];
         let mut min_pce = [0, 0];
@@ -492,8 +488,7 @@ impl Board {
 
         // check piece lists
         for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
-            let count = self.piece_num[piece as usize] as usize;
-            for &sq120 in &self.piece_list[piece as usize][..count] {
+            for &sq120 in self.piece_lists[piece as usize].iter() {
                 if self.pieces[sq120 as usize] != piece {
                     return Err(format!(
                         "piece list corrupt: expected slot {} to be {} but was {}",
@@ -523,36 +518,36 @@ impl Board {
             }
         }
 
-        if piece_num[1..] != self.piece_num[1..] {
+        if piece_num[1..].to_vec() != self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>() {
             return Err(format!(
                 "piece counts are corrupt: expected {:?}, got {:?}",
                 &piece_num[1..],
-                &self.piece_num[1..]
+                &self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
             ));
         }
 
         // check bitboards count
-        if pawns[White as usize].count_ones() != u32::from(self.piece_num[Piece::WP as usize]) {
+        if pawns[White as usize].count_ones() != u32::from(self.num(WP)) {
             return Err(format!(
                 "white pawn bitboard is corrupt: expected {:?}, got {:?}",
-                self.piece_num[Piece::WP as usize],
+                self.num(WP),
                 pawns[White as usize].count_ones()
             ));
         }
-        if pawns[Black as usize].count_ones() != u32::from(self.piece_num[Piece::BP as usize]) {
+        if pawns[Black as usize].count_ones() != u32::from(self.num(BP)) {
             return Err(format!(
                 "black pawn bitboard is corrupt: expected {:?}, got {:?}",
-                self.piece_num[Piece::BP as usize],
+                self.num(BP),
                 pawns[Black as usize].count_ones()
             ));
         }
         if pawns[Both as usize].count_ones()
-            != u32::from(self.piece_num[Piece::WP as usize])
-                + u32::from(self.piece_num[Piece::BP as usize])
+            != u32::from(self.num(WP))
+                + u32::from(self.num(BP))
         {
             return Err(format!(
                 "both pawns bitboard is corrupt: expected {:?}, got {:?}",
-                self.piece_num[Piece::WP as usize] + self.piece_num[Piece::BP as usize],
+                self.num(WP) + self.num(BP),
                 pawns[Both as usize].count_ones()
             ));
         }
@@ -999,21 +994,21 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if self.side == WHITE {
-            let piece_count = self.piece_num[WP as usize] as usize;
-            for &sq in self.piece_list[WP as usize][..piece_count].iter() {
-                debug_assert!(square_on_board(sq));
-                self.generate_pawn_forward::<{ WHITE }, MC>(sq, move_list);
-                self.generate_pawn_caps::<{ WHITE }, MC>(sq, move_list);
-                self.generate_ep::<{ WHITE }, MC>(sq, move_list);
-            }
-        } else {
-            let piece_count = self.piece_num[BP as usize] as usize;
-            for &sq in self.piece_list[BP as usize][..piece_count].iter() {
-                debug_assert!(square_on_board(sq));
-                self.generate_pawn_forward::<{ BLACK }, MC>(sq, move_list);
-                self.generate_pawn_caps::<{ BLACK }, MC>(sq, move_list);
-                self.generate_ep::<{ BLACK }, MC>(sq, move_list);
+        if MC::DO_PAWN_MOVEGEN {
+            if self.side == WHITE {
+                for &sq in self.piece_lists[WP as usize].iter() {
+                    debug_assert!(square_on_board(sq));
+                    self.generate_pawn_forward::<{ WHITE }, MC>(sq, move_list);
+                    self.generate_pawn_caps::<{ WHITE }, MC>(sq, move_list);
+                    self.generate_ep::<{ WHITE }, MC>(sq, move_list);
+                }
+            } else {
+                for &sq in self.piece_lists[BP as usize].iter() {
+                    debug_assert!(square_on_board(sq));
+                    self.generate_pawn_forward::<{ BLACK }, MC>(sq, move_list);
+                    self.generate_pawn_caps::<{ BLACK }, MC>(sq, move_list);
+                    self.generate_ep::<{ BLACK }, MC>(sq, move_list);
+                }
             }
         }
 
@@ -1028,8 +1023,7 @@ impl Board {
             } else {
                 &K_DIRS
             };
-            let piece_count = self.piece_num[piece as usize] as usize;
-            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 for &offset in dirs {
                     let t_sq = sq as isize + offset;
@@ -1077,8 +1071,7 @@ impl Board {
                 WQ | BQ => &Q_DIR,
                 _ => unsafe { std::hint::unreachable_unchecked() },
             };
-            let piece_count = self.piece_num[piece as usize] as usize;
-            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
 
                 for &dir in dirs {
@@ -1125,15 +1118,13 @@ impl Board {
 
         // white pawn moves
         if self.side == WHITE {
-            let piece_count = self.piece_num[WP as usize] as usize;
-            for &sq in self.piece_list[WP as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[WP as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 self.generate_pawn_caps::<{ WHITE }, MC>(sq, move_list);
                 self.generate_ep::<{ WHITE }, MC>(sq, move_list);
             }
         } else {
-            let piece_count = self.piece_num[BP as usize] as usize;
-            for &sq in self.piece_list[BP as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[BP as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 self.generate_pawn_caps::<{ BLACK }, MC>(sq, move_list);
                 self.generate_ep::<{ BLACK }, MC>(sq, move_list);
@@ -1151,8 +1142,7 @@ impl Board {
             } else {
                 &K_DIRS
             };
-            let piece_count = self.piece_num[piece as usize] as usize;
-            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 for &offset in dirs {
                     let t_sq = sq as isize + offset;
@@ -1189,8 +1179,7 @@ impl Board {
                 WQ | BQ => &Q_DIR,
                 _ => unsafe { std::hint::unreachable_unchecked() },
             };
-            let piece_count = self.piece_num[piece as usize] as usize;
-            for &sq in self.piece_list[piece as usize][..piece_count].iter() {
+            for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
 
                 for &dir in dirs {
@@ -1380,21 +1369,7 @@ impl Board {
             self.pawns[Colour::Both as usize] &= !(1 << sq64);
         }
 
-        let mut remove_idx = 255;
-        for idx in 0..self.piece_num[piece as usize] {
-            if self.piece_list[piece as usize][idx as usize] == sq {
-                remove_idx = idx;
-                break;
-            }
-        }
-
-        debug_assert!(remove_idx != 255);
-
-        // decrement the number of pieces of this type
-        self.piece_num[piece as usize] -= 1;
-        // and move the last piece in the list to the removed piece's position
-        self.piece_list[piece as usize][remove_idx as usize] =
-            self.piece_list[piece as usize][self.piece_num[piece as usize] as usize];
+        self.piece_lists[piece as usize].remove(sq);
     }
 
     fn add_piece(&mut self, sq: u8, piece: u8) {
@@ -1424,8 +1399,7 @@ impl Board {
             self.pawns[Colour::Both as usize] |= 1 << sq64;
         }
 
-        self.piece_list[piece as usize][self.piece_num[piece as usize] as usize] = sq;
-        self.piece_num[piece as usize] += 1;
+        self.piece_lists[piece as usize].insert(sq);
     }
 
     fn move_piece(&mut self, from: u8, to: u8) {
@@ -1459,8 +1433,7 @@ impl Board {
             self.pawns[Colour::Both as usize] |= 1 << sq64to;
         }
 
-        let piece_count = self.piece_num[piece as usize] as usize;
-        for sq in self.piece_list[piece as usize][..piece_count].iter_mut() {
+        for sq in self.piece_lists[piece as usize].iter_mut() {
             if *sq == from {
                 *sq = to;
                 #[cfg(debug_assertions)]
@@ -2010,8 +1983,8 @@ impl Board {
     }
 
     const fn bishop_pair_term(&self) -> i32 {
-        let w_count = self.piece_num[WB as usize];
-        let b_count = self.piece_num[BB as usize];
+        let w_count = self.num(WB);
+        let b_count = self.num(BB);
         if w_count == b_count {
             return 0;
         }
@@ -2064,8 +2037,7 @@ impl Board {
         for piece_type in BP..=BQ {
             let piece_type = piece_type as usize;
             let danger = PIECE_DANGER_VALUES[piece_type];
-            let piece_count = self.piece_num[piece_type] as usize;
-            for &sq in self.piece_list[piece_type][..piece_count].iter() {
+            for &sq in self.piece_lists[piece_type].iter() {
                 let rank = RANKS_BOARD[sq as usize];
                 let file = FILES_BOARD[sq as usize];
                 let dist = i32::from(wkr.abs_diff(rank) + wkf.abs_diff(file));
@@ -2075,8 +2047,7 @@ impl Board {
         for piece_type in WP..=WQ {
             let piece_type = piece_type as usize;
             let danger = PIECE_DANGER_VALUES[piece_type];
-            let piece_count = self.piece_num[piece_type] as usize;
-            for &sq in self.piece_list[piece_type][..piece_count].iter() {
+            for &sq in self.piece_lists[piece_type].iter() {
                 let rank = RANKS_BOARD[sq as usize];
                 let file = FILES_BOARD[sq as usize];
                 let dist = i32::from(bkr.abs_diff(rank) + bkf.abs_diff(file));
@@ -2089,8 +2060,7 @@ impl Board {
 
     fn pawn_structure_term(&self) -> i32 {
         let mut w_score = 0;
-        let white_pawn_count = self.piece_num[WP as usize] as usize;
-        for &white_pawn_loc in &self.piece_list[WP as usize][..white_pawn_count] {
+        for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
             let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
             if ISOLATED_BB[sq64] & self.pawns[WHITE as usize] == 0 {
                 w_score -= ISOLATED_PAWN_MALUS;
@@ -2108,8 +2078,7 @@ impl Board {
         }
 
         let mut b_score = 0;
-        let black_pawn_count = self.piece_num[BP as usize] as usize;
-        for &black_pawn_loc in &self.piece_list[BP as usize][..black_pawn_count] {
+        for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
             let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
             if ISOLATED_BB[sq64] & self.pawns[BLACK as usize] == 0 {
                 b_score -= ISOLATED_PAWN_MALUS;
@@ -2131,11 +2100,11 @@ impl Board {
 
     /// `phase` computes a number between 0.0 and 1.0, which is the phase of the game. 0.0 is the opening, 1.0 is the endgame.
     fn phase(&self) -> f32 {
-        let pawns = self.piece_num[WP as usize] as usize + self.piece_num[BP as usize] as usize;
-        let knights = self.piece_num[WN as usize] as usize + self.piece_num[BN as usize] as usize;
-        let bishops = self.piece_num[WB as usize] as usize + self.piece_num[BB as usize] as usize;
-        let rooks = self.piece_num[WR as usize] as usize + self.piece_num[BR as usize] as usize;
-        let queens = self.piece_num[WQ as usize] as usize + self.piece_num[BQ as usize] as usize;
+        let pawns = self.num(WP) + self.num(BP);
+        let knights = self.num(WN) + self.num(BN);
+        let bishops = self.num(WB) + self.num(BB);
+        let rooks = self.num(WR) + self.num(BR);
+        let queens = self.num(WQ) + self.num(BQ);
         crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens)
     }
 
@@ -2144,8 +2113,7 @@ impl Board {
         let mut mg_pst_val = 0;
         let mut eg_pst_val = 0;
         for piece in (WP as usize)..=(WK as usize) {
-            let pnum = self.piece_num[piece] as usize;
-            for &sq in self.piece_list[piece][..pnum].iter() {
+            for &sq in self.piece_lists[piece].iter() {
                 let mg = MIDGAME_PST[piece][sq as usize];
                 let eg = ENDGAME_PST[piece][sq as usize];
                 // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
@@ -2155,8 +2123,7 @@ impl Board {
         }
 
         for piece in (BP as usize)..=(BK as usize) {
-            let pnum = self.piece_num[piece] as usize;
-            for &sq in self.piece_list[piece][..pnum].iter() {
+            for &sq in self.piece_lists[piece].iter() {
                 let mg = MIDGAME_PST[piece][sq as usize];
                 let eg = ENDGAME_PST[piece][sq as usize];
                 // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
@@ -2196,59 +2163,64 @@ impl Board {
         }
     }
 
+    #[inline]
+    pub const fn num(&self, piece: u8) -> u8 {
+        self.piece_lists[piece as usize].len()
+    }
+
     const fn unwinnable_for<const SIDE: u8>(&self) -> bool {
         assert!(SIDE == WHITE || SIDE == BLACK, "unwinnable_for called with invalid side");
 
         if SIDE == WHITE {
             if self.major_piece_counts[WHITE as usize] != 0 { return false; }
             if self.minor_piece_counts[WHITE as usize] > 1 { return false; }
-            if self.piece_num[WP as usize] != 0 { return false; }
+            if self.num(WP) != 0 { return false; }
             true
         } else {
             if self.major_piece_counts[BLACK as usize] != 0 { return false; }
             if self.minor_piece_counts[BLACK as usize] > 1 { return false; }
-            if self.piece_num[BP as usize] != 0 { return false; }
+            if self.num(BP) != 0 { return false; }
             true
         }
     }
 
     const fn is_material_draw(&self) -> bool {
-        if self.piece_num[WR as usize] == 0
-            && self.piece_num[BR as usize] == 0
-            && self.piece_num[WQ as usize] == 0
-            && self.piece_num[BQ as usize] == 0
+        if self.num(WR) == 0
+            && self.num(BR) == 0
+            && self.num(WQ) == 0
+            && self.num(BQ) == 0
         {
-            if self.piece_num[WB as usize] == 0 && self.piece_num[BB as usize] == 0 {
-                if self.piece_num[WN as usize] < 3 && self.piece_num[BN as usize] < 3 {
+            if self.num(WB) == 0 && self.num(BB) == 0 {
+                if self.num(WN) < 3 && self.num(BN) < 3 {
                     return true;
                 }
-            } else if (self.piece_num[WN as usize] == 0
-                && self.piece_num[BN as usize] == 0
-                && self.piece_num[WB as usize].abs_diff(self.piece_num[BB as usize]) < 2)
-                || (self.piece_num[WB as usize] + self.piece_num[WN as usize] == 1
-                    && self.piece_num[BB as usize] + self.piece_num[BN as usize] == 1)
+            } else if (self.num(WN) == 0
+                && self.num(BN) == 0
+                && self.num(WB).abs_diff(self.num(BB)) < 2)
+                || (self.num(WB) + self.num(WN) == 1
+                    && self.num(BB) + self.num(BN) == 1)
             {
                 return true;
             }
-        } else if self.piece_num[WQ as usize] == 0 && self.piece_num[BQ as usize] == 0 {
-            if self.piece_num[WR as usize] == 1 && self.piece_num[BR as usize] == 1 {
-                if (self.piece_num[WN as usize] + self.piece_num[WB as usize]) < 2
-                    && (self.piece_num[BN as usize] + self.piece_num[BB as usize]) < 2
+        } else if self.num(WQ) == 0 && self.num(BQ) == 0 {
+            if self.num(WR) == 1 && self.num(BR) == 1 {
+                if (self.num(WN) + self.num(WB)) < 2
+                    && (self.num(BN) + self.num(BB)) < 2
                 {
                     return true;
                 }
-            } else if self.piece_num[WR as usize] == 1 && self.piece_num[BR as usize] == 0 {
-                if (self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 0
-                    && ((self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 1
-                        || (self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 2)
+            } else if self.num(WR) == 1 && self.num(BR) == 0 {
+                if (self.num(WN) + self.num(WB)) == 0
+                    && ((self.num(BN) + self.num(BB)) == 1
+                        || (self.num(BN) + self.num(BB)) == 2)
                 {
                     return true;
                 }
-            } else if self.piece_num[WR as usize] == 0
-                && self.piece_num[BR as usize] == 1
-                && (self.piece_num[BN as usize] + self.piece_num[BB as usize]) == 0
-                && ((self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 1
-                    || (self.piece_num[WN as usize] + self.piece_num[WB as usize]) == 2)
+            } else if self.num(WR) == 0
+                && self.num(BR) == 1
+                && (self.num(BN) + self.num(BB)) == 0
+                && ((self.num(WN) + self.num(WB)) == 1
+                    || (self.num(WN) + self.num(WB)) == 2)
             {
                 return true;
             }
