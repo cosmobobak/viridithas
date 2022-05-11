@@ -2261,6 +2261,8 @@ impl Board {
         for depth in 0..=info.depth {
             let score = alpha_beta(self, info, depth, -INFINITY, INFINITY);
 
+            info.check_up();
+
             if info.stopped {
                 break;
             }
