@@ -1,6 +1,7 @@
 use crate::{
     chessmove::Move,
-    lookups::{SQ120_TO_SQ64, SQUARE_NAMES}, evaluation::{MG_PAWN_VALUE, MATE_SCORE},
+    evaluation::{MATE_SCORE, MG_PAWN_VALUE},
+    lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
 };
 
 pub const BOARD_N_SQUARES: usize = 120;

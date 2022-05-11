@@ -1,7 +1,8 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::{
-    definitions::{square120_name, square64_name}, lookups::PROMO_CHAR_LOOKUP,
+    definitions::{square120_name, square64_name},
+    lookups::PROMO_CHAR_LOOKUP,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

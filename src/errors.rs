@@ -1,4 +1,3 @@
-
 pub type FenParseError = String;
 #[derive(Debug)]
 pub enum MoveParseError {
