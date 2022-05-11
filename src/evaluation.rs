@@ -1,14 +1,25 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
-use crate::{lookups::{init_eval_masks, init_passed_isolated_bb}, board::Board, movegen::MoveConsumer, chessmove::Move};
 use crate::definitions::Piece;
+use crate::{
+    board::Board,
+    chessmove::Move,
+    lookups::{init_eval_masks, init_passed_isolated_bb},
+    movegen::MoveConsumer,
+};
 
-pub const PAWN_VALUE: i32   =   1_000;
-pub const KNIGHT_VALUE: i32 =   3_457;
-pub const BISHOP_VALUE: i32 =   3_725;
-pub const ROOK_VALUE: i32   =   5_007;
-pub const QUEEN_VALUE: i32  =  10_195;
-pub const KING_VALUE: i32   = 500_000;
+// These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
+pub const MG_PAWN_VALUE: i32 = 82;
+pub const MG_KNIGHT_VALUE: i32 = 337;
+pub const MG_BISHOP_VALUE: i32 = 365;
+pub const MG_ROOK_VALUE: i32 = 477;
+pub const MG_QUEEN_VALUE: i32 = 1025;
+
+pub const EG_PAWN_VALUE: i32 = 94;
+pub const EG_KNIGHT_VALUE: i32 = 281;
+pub const EG_BISHOP_VALUE: i32 = 297;
+pub const EG_ROOK_VALUE: i32 = 512;
+pub const EG_QUEEN_VALUE: i32 = 936;
 
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
@@ -23,40 +34,45 @@ pub const IS_MATE_SCORE: i32 = MATE_SCORE - 300;
 pub const DRAW_SCORE: i32 = 0;
 
 #[rustfmt::skip]
-pub static PIECE_VALUES: [i32; 13] = [
+pub static MG_PIECE_VALUES: [i32; 13] = [
     0,
-    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, KING_VALUE,
-    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, KING_VALUE,
+    MG_PAWN_VALUE, MG_KNIGHT_VALUE, MG_BISHOP_VALUE, MG_ROOK_VALUE, MG_QUEEN_VALUE, 0,
+    MG_PAWN_VALUE, MG_KNIGHT_VALUE, MG_BISHOP_VALUE, MG_ROOK_VALUE, MG_QUEEN_VALUE, 0,
+];
+
+#[rustfmt::skip]
+pub static EG_PIECE_VALUES: [i32; 13] = [
+    0,
+    EG_PAWN_VALUE, EG_KNIGHT_VALUE, EG_BISHOP_VALUE, EG_ROOK_VALUE, EG_QUEEN_VALUE, 0,
+    EG_PAWN_VALUE, EG_KNIGHT_VALUE, EG_BISHOP_VALUE, EG_ROOK_VALUE, EG_QUEEN_VALUE, 0,
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: i32 = 80;
+pub const ISOLATED_PAWN_MALUS: i32 = MG_PAWN_VALUE / 3;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: i32 = 94;
+pub const DOUBLED_PAWN_MALUS: i32 = 2 * MG_PAWN_VALUE / 5;
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: i32 = 63;
+pub const BISHOP_PAIR_BONUS: i32 = MG_PAWN_VALUE / 5;
 
 /// The bonus granted for having more pawns when you have knights on the board.
 // pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
 
 // The multipliers applied to mobility scores.
-pub const PAWN_MOBILITY_MULTIPLIER: i32 = 105;
-pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 50;
-pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 71;
-pub const ROOK_MOBILITY_MULTIPLIER: i32 = 118;
-pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 38;
-pub const KING_MOBILITY_MULTIPLIER: i32 = -129;
+// These are computed based on a piece's maximal mobility.
+pub const PAWN_MOBILITY_MULTIPLIER: i32 = 1;
+pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 2;
+pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 2;
+pub const ROOK_MOBILITY_MULTIPLIER: i32 = 1;
+pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
+pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
 
-/// The multiplier applied to the pst scores.
-pub const PST_MULTIPLIER: i32 = 4;
-
-const PAWN_DANGER: i32   = 200;
-const KNIGHT_DANGER: i32 = 300;
-const BISHOP_DANGER: i32 = 100;
-const ROOK_DANGER: i32   = 400;
-const QUEEN_DANGER: i32  = 500;
+const PAWN_DANGER: i32 = 40;
+const KNIGHT_DANGER: i32 = 80;
+const BISHOP_DANGER: i32 = 30;
+const ROOK_DANGER: i32 = 90;
+const QUEEN_DANGER: i32 = 190;
 
 #[rustfmt::skip]
 pub static PIECE_DANGER_VALUES: [i32; 13] = [
@@ -66,14 +82,12 @@ pub static PIECE_DANGER_VALUES: [i32; 13] = [
 ];
 
 /// The bonus for having IDX pawns in front of the king.
-pub static SHIELD_BONUS: [i32; 4] = [0, 30, 60, 90];
-
-pub const TURN_BONUS: i32 = 200;
+pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
 
 /// A threshold over which we will not bother evaluating more than material and PSTs.
-pub const LAZY_THRESHOLD_1: i32 = 14_000;
+pub const LAZY_THRESHOLD_1: i32 = 14_00;
 /// A threshold over which we will not bother evaluating more than pawns and mobility.
-pub const LAZY_THRESHOLD_2: i32 = 8_000;
+pub const LAZY_THRESHOLD_2: i32 = 8_00;
 
 const PAWN_PHASE: f32 = 0.1;
 const KNIGHT_PHASE: f32 = 1.0;
@@ -96,14 +110,9 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
-    0,                               // illegal
-    563,                 
-    940,                  
-    833,                 
-    745,           
-    844, 
-    529,     
-    0,                               // illegal
+    0, // illegal
+    30, 40, 50, 70, 110, 250, 
+    0, // illegal
 ];
 
 /// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
@@ -192,15 +201,36 @@ impl EvalVector {
     pub fn csvify(&self) -> String {
         let csv = format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            self.pawns, self.knights, self.bishops, self.rooks, self.queens,
-            self.bishop_pair, self.passed_pawns_by_rank[0], self.passed_pawns_by_rank[1],
-            self.passed_pawns_by_rank[2], self.passed_pawns_by_rank[3], self.passed_pawns_by_rank[4],
-            self.passed_pawns_by_rank[5], self.passed_pawns_by_rank[6], self.passed_pawns_by_rank[7],
-            self.isolated_pawns, self.doubled_pawns, self.pst, self.pawn_mobility,
-            self.knight_mobility, self.bishop_mobility, self.rook_mobility, self.queen_mobility,
-            self.king_mobility, self.pawn_shield, self.turn
+            self.pawns,
+            self.knights,
+            self.bishops,
+            self.rooks,
+            self.queens,
+            self.bishop_pair,
+            self.passed_pawns_by_rank[0],
+            self.passed_pawns_by_rank[1],
+            self.passed_pawns_by_rank[2],
+            self.passed_pawns_by_rank[3],
+            self.passed_pawns_by_rank[4],
+            self.passed_pawns_by_rank[5],
+            self.passed_pawns_by_rank[6],
+            self.passed_pawns_by_rank[7],
+            self.isolated_pawns,
+            self.doubled_pawns,
+            self.pst,
+            self.pawn_mobility,
+            self.knight_mobility,
+            self.bishop_mobility,
+            self.rook_mobility,
+            self.queen_mobility,
+            self.king_mobility,
+            self.pawn_shield,
+            self.turn
         );
-        assert!(csv.chars().filter(|&c| c == ',').count() == Self::header().chars().filter(|&c| c == ',').count());
+        assert!(
+            csv.chars().filter(|&c| c == ',').count()
+                == Self::header().chars().filter(|&c| c == ',').count()
+        );
         csv
     }
 
@@ -216,7 +246,10 @@ pub struct MoveCounter<'a> {
 
 impl<'a> MoveCounter<'a> {
     pub const fn new(board: &'a Board) -> Self {
-        Self { counters: [0; 6], board }
+        Self {
+            counters: [0; 6],
+            board,
+        }
     }
 
     pub const fn score(&self) -> i32 {

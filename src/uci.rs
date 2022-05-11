@@ -123,7 +123,7 @@ pub fn format_score(score: i32) -> String {
         let moves_to_mate = (plies_to_mate + 1) / 2;
         format!("mate {}", moves_to_mate)
     } else {
-        format!("cp {}", score / 10)
+        format!("cp {}", score)
     }
 }
 

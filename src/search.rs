@@ -18,8 +18,6 @@ use crate::{
 // in fail-hard alpha-beta, a call to alpha_beta(ALLNODE, a, b) returns a.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-// I want to try a qsearch-free algorithm, using LMR and
-// futility pruning to cleanly interpolate.
 fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -82,13 +80,28 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     }
 
     if moves_made == 0 && is_check {
-        // can't return a draw score, as sometimes we only check captures,
+        // can't return a draw score when moves_made = 0, as sometimes we only check captures,
         // but we can return mate scores, because we do full movegen when in check.
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         return -MATE_SCORE + pos.ply() as i32;
     }
 
     alpha
+}
+
+fn logistic_reduction(moves: usize, depth: usize) -> usize {
+    #![allow(
+        clippy::cast_precision_loss, 
+        clippy::cast_sign_loss, 
+        clippy::cast_possible_truncation
+    )]
+    const GRADIENT: f32 = 0.7;
+    const MIDPOINT: f32 = 4.5;
+    let moves = moves as f32;
+    let depth = depth as f32;
+    let numerator = 2.0 * depth / 5.0 - 1.0;
+    let denominator = 1.0 + f32::exp(-GRADIENT * (moves - MIDPOINT));
+    (numerator / denominator + 0.5) as usize
 }
 
 #[rustfmt::skip]
@@ -194,11 +207,11 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // 3. we're not already extending the search.
             // 4. we've tried at least 2 moves at full depth, or 3 if we're in a PV-node.
             let can_reduce = moves_made >= (2 + usize::from(in_pv_node)) && extension == 0 && !is_interesting && depth >= 3;
-            let reduction = usize::from(can_reduce) * if moves_made >= 7 && depth > 5 { depth / 3 } else { 1 };
+            let reduction = if can_reduce { logistic_reduction(moves_made, depth) } else { 0 };
             // perform a zero-window search, possibly with a reduction
             let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);
             if r > alpha && r < beta {
-                // if the zero-window search fails high, perform a full window search at full depth
+                // if the zero-window search fails, perform a full window search at full depth
                 -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha)
             } else {
                 r
