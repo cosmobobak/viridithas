@@ -1,5 +1,9 @@
-use crate::{definitions::{BLACK, WHITE, Square120}, lookups::{PIECE_NAMES, SQ64_TO_SQ120}};
+use crate::{
+    definitions::{Square120, BLACK, WHITE},
+    lookups::{PIECE_NAMES, SQ64_TO_SQ120},
+};
 
+#[rustfmt::skip]
 const MG_PAWN_TABLE: [i32; 64] = [
       0,   0,   0,   0,   0,   0,  0,   0,
      98, 134,  61,  95,  68, 126, 34, -11,
@@ -11,6 +15,7 @@ const MG_PAWN_TABLE: [i32; 64] = [
       0,   0,   0,   0,   0,   0,  0,   0,
 ];
 
+#[rustfmt::skip]
 const EG_PAWN_TABLE: [i32; 64] = [
       0,   0,   0,   0,   0,   0,   0,   0,
     178, 173, 158, 134, 147, 132, 165, 187,
@@ -22,6 +27,7 @@ const EG_PAWN_TABLE: [i32; 64] = [
       0,   0,   0,   0,   0,   0,   0,   0,
 ];
 
+#[rustfmt::skip]
 const MG_KNIGHT_TABLE: [i32; 64] = [
     -167, -89, -34, -49,  61, -97, -15, -107,
      -73, -41,  72,  36,  23,  62,   7,  -17,
@@ -33,6 +39,7 @@ const MG_KNIGHT_TABLE: [i32; 64] = [
     -105, -21, -58, -33, -17, -28, -19,  -23,
 ];
 
+#[rustfmt::skip]
 const EG_KNIGHT_TABLE: [i32; 64] = [
     -58, -38, -13, -28, -31, -27, -63, -99,
     -25,  -8, -25,  -2,  -9, -25, -24, -52,
@@ -44,6 +51,7 @@ const EG_KNIGHT_TABLE: [i32; 64] = [
     -29, -51, -23, -15, -22, -18, -50, -64,
 ];
 
+#[rustfmt::skip]
 const MG_BISHOP_TABLE: [i32; 64] = [
     -29,   4, -82, -37, -25, -42,   7,  -8,
     -26,  16, -18, -13,  30,  59,  18, -47,
@@ -55,6 +63,7 @@ const MG_BISHOP_TABLE: [i32; 64] = [
     -33,  -3, -14, -21, -13, -12, -39, -21,
 ];
 
+#[rustfmt::skip]
 const EG_BISHOP_TABLE: [i32; 64] = [
     -14, -21, -11,  -8, -7,  -9, -17, -24,
      -8,  -4,   7, -12, -3, -13,  -4, -14,
@@ -66,6 +75,7 @@ const EG_BISHOP_TABLE: [i32; 64] = [
     -23,  -9, -23,  -5, -9, -16,  -5, -17,
 ];
 
+#[rustfmt::skip]
 const MG_ROOK_TABLE: [i32; 64] = [
      32,  42,  32,  51, 63,  9,  31,  43,
      27,  32,  58,  62, 80, 67,  26,  44,
@@ -77,6 +87,7 @@ const MG_ROOK_TABLE: [i32; 64] = [
     -19, -13,   1,  17, 16,  7, -37, -26,
 ];
 
+#[rustfmt::skip]
 const EG_ROOK_TABLE: [i32; 64] = [
     13, 10, 18, 15, 12,  12,   8,   5,
     11, 13, 13, 11, -3,   3,   8,   3,
@@ -88,6 +99,7 @@ const EG_ROOK_TABLE: [i32; 64] = [
     -9,  2,  3, -1, -5, -13,   4, -20,
 ];
 
+#[rustfmt::skip]
 const MG_QUEEN_TABLE: [i32; 64] = [
     -28,   0,  29,  12,  59,  44,  43,  45,
     -24, -39,  -5,   1, -16,  57,  28,  54,
@@ -99,6 +111,7 @@ const MG_QUEEN_TABLE: [i32; 64] = [
      -1, -18,  -9,  10, -15, -25, -31, -50,
 ];
 
+#[rustfmt::skip]
 const EG_QUEEN_TABLE: [i32; 64] = [
      -9,  22,  22,  27,  27,  19,  10,  20,
     -17,  20,  32,  41,  58,  25,  30,   0,
@@ -110,6 +123,7 @@ const EG_QUEEN_TABLE: [i32; 64] = [
     -33, -28, -22, -43,  -5, -32, -20, -41,
 ];
 
+#[rustfmt::skip]
 const MG_KING_TABLE: [i32; 64] = [
     -65,  23,  16, -15, -56, -34,   2,  13,
      29,  -1, -20,  -7,  -8,  -4, -38, -29,
@@ -121,6 +135,7 @@ const MG_KING_TABLE: [i32; 64] = [
     -15,  36,  12, -54,   8, -28,  24,  14,
 ];
 
+#[rustfmt::skip]
 const EG_KING_TABLE: [i32; 64] = [
     -74, -35, -18, -18, -11,  15,   4, -17,
     -12,  17,  14,  17,  17,  38,  23,  11,
@@ -163,7 +178,11 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
                     square64 ^ 56
                 };
                 let sq120 = SQ120[sq] as usize;
-                out[pieces_idx + offset][sq120] = if MID_OR_END == ENDGAME { endgame_table[square64] } else { midgame_table[square64] } * multiplier;
+                out[pieces_idx + offset][sq120] = if MID_OR_END == ENDGAME {
+                    endgame_table[square64]
+                } else {
+                    midgame_table[square64]
+                } * multiplier;
                 square64 += 1;
             }
             pieces_idx += 1;
@@ -182,19 +201,30 @@ pub static ENDGAME_PST: [[i32; 120]; 13] = generate_pst::<ENDGAME>();
 pub fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
-    unsafe { *MIDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+    unsafe {
+        *MIDGAME_PST
+            .get_unchecked(piece as usize)
+            .get_unchecked(sq as usize)
+    }
 }
 
 pub fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
-    unsafe { *ENDGAME_PST.get_unchecked(piece as usize).get_unchecked(sq as usize) }
+    unsafe {
+        *ENDGAME_PST
+            .get_unchecked(piece as usize)
+            .get_unchecked(sq as usize)
+    }
 }
 
 pub fn render_pst_table(pst: &[[i32; 120]; 13]) {
     for piece in 0..13 {
         println!("{}", PIECE_NAMES[piece]);
-        println!("eval on a1 (bottom left) {}", pst[piece][Square120::A1 as usize]);
+        println!(
+            "eval on a1 (bottom left) {}",
+            pst[piece][Square120::A1 as usize]
+        );
         for row in (0..8).rev() {
             for col in 0..8 {
                 let sq = row * 8 + col;

@@ -68,7 +68,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"depth\"")
                         .parse()
                         .expect("depth not a number"),
-                )
+                );
             }
             "movestogo" => {
                 moves_to_go = Some(
@@ -77,7 +77,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"movestogo\"")
                         .parse()
                         .expect("movestogo not a number"),
-                )
+                );
             }
             "movetime" => {
                 movetime = Some(
@@ -86,7 +86,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"movetime\"")
                         .parse()
                         .expect("movetime not a number"),
-                )
+                );
             }
             "wtime" if pos.turn() == WHITE => {
                 time = Some(
@@ -95,7 +95,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"wtime\"")
                         .parse()
                         .expect("wtime not a number"),
-                )
+                );
             }
             "btime" if pos.turn() == BLACK => {
                 time = Some(
@@ -104,7 +104,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"btime\"")
                         .parse()
                         .expect("btime not a number"),
-                )
+                );
             }
             "winc" if pos.turn() == WHITE => {
                 inc = Some(
@@ -113,7 +113,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"winc\"")
                         .parse()
                         .expect("winc not a number"),
-                )
+                );
             }
             "binc" if pos.turn() == BLACK => {
                 inc = Some(
@@ -122,7 +122,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                         .expect("nothing after \"binc\"")
                         .parse()
                         .expect("binc not a number"),
-                )
+                );
             }
             "infinite" => info.infinite = true,
             _ => eprintln!("ignoring term in parse_go: {}", part),
