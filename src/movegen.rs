@@ -6,6 +6,7 @@ use std::{
 use crate::{chessmove::Move, definitions::Square120, lookups::FILES_BOARD};
 
 pub trait MoveConsumer {
+    const DO_PAWN_MOVEGEN: bool;
     fn push(&mut self, m: Move, score: i32);
 }
 
@@ -76,12 +77,14 @@ impl MoveList {
         }
     }
 
-    const fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.count
     }
 }
 
 impl MoveConsumer for MoveList {
+    const DO_PAWN_MOVEGEN: bool = true;
+
     #[inline]
     fn push(&mut self, m: Move, score: i32) {
         // it's quite dangerous to do this,

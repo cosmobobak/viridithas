@@ -1,14 +1,15 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{MAX_DEPTH, FUTILITY_MARGIN, INFINITY},
+    definitions::{FUTILITY_MARGIN, INFINITY, MAX_DEPTH},
     evaluation::{DRAW_SCORE, MATE_SCORE},
     movegen::MoveList,
-    searchinfo::SearchInfo, transpositiontable::{HFlag, ProbeResult},
+    searchinfo::SearchInfo,
+    transpositiontable::{HFlag, ProbeResult},
 };
 
 // In alpha-beta search, there are three classes of node to be aware of:
-// 1. PV-nodes: nodes that end up being within the alpha-beta window, 
+// 1. PV-nodes: nodes that end up being within the alpha-beta window,
 // i.e. a call to alpha_beta(PVNODE, a, b) returns a value v where v is within the window [a, b].
 // the score returned is an exact score for the node.
 // 2. Cut-nodes: nodes that fail high, i.e. a move is found that leads to a value >= beta.
@@ -91,8 +92,8 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
 
 fn logistic_reduction(moves: usize, depth: usize) -> usize {
     #![allow(
-        clippy::cast_precision_loss, 
-        clippy::cast_sign_loss, 
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
     const GRADIENT: f32 = 0.7;
@@ -193,8 +194,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             continue;
         }
 
-        let check_ext = usize::from(is_check);
-        let extension = check_ext;
+        let extension = usize::from(is_check) + usize::from(is_promotion);
 
         let score = if moves_made == 1 {
             // first move (presumably the PV-move)
