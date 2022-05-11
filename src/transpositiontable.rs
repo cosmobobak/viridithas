@@ -1,13 +1,17 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 
-use crate::{chessmove::Move, definitions::{MAX_DEPTH, INFINITY}, evaluation::IS_MATE_SCORE};
+use crate::{
+    chessmove::Move,
+    definitions::{INFINITY, MAX_DEPTH},
+    evaluation::IS_MATE_SCORE,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HFlag {
     None,
     Alpha,
     Beta,
-    Exact
+    Exact,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,22 +50,27 @@ pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE, ALWAYS_OVERWRITE>;
 pub enum ProbeResult {
     Cutoff(i32),
     BestMove(Move),
-    Nothing
+    Nothing,
 }
 
 pub const ALWAYS_OVERWRITE: u8 = 0;
 pub const DEPTH_PREFERRED: u8 = 1;
 
-impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE, REPLACEMENT_STRATEGY> {
+impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
+    TranspositionTable<SIZE, REPLACEMENT_STRATEGY>
+{
     pub fn new() -> Self {
         Self {
-            table: vec![TTEntry {
-                key: 0,
-                m: Move::null(),
-                score: 0,
-                depth: 0,
-                flag: HFlag::None,
-            }; SIZE],
+            table: vec![
+                TTEntry {
+                    key: 0,
+                    m: Move::null(),
+                    score: 0,
+                    depth: 0,
+                    flag: HFlag::None,
+                };
+                SIZE
+            ],
             cutoffs: 0,
             entries: 0,
             new_writes: 0,
@@ -70,7 +79,15 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE,
         }
     }
 
-    pub fn store(&mut self, key: u64, ply: usize, best_move: Move, score: i32, flag: HFlag, depth: usize) {
+    pub fn store(
+        &mut self,
+        key: u64,
+        ply: usize,
+        best_move: Move,
+        score: i32,
+        flag: HFlag,
+        depth: usize,
+    ) {
         let index = (key % SIZE as u64) as usize;
 
         debug_assert!((1..=MAX_DEPTH).contains(&depth));
@@ -84,8 +101,11 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE,
         }
 
         let mut score = score;
-        if score > IS_MATE_SCORE { score += ply as i32; }
-        else if score < -IS_MATE_SCORE { score -= ply as i32; }
+        if score > IS_MATE_SCORE {
+            score += ply as i32;
+        } else if score < -IS_MATE_SCORE {
+            score -= ply as i32;
+        }
 
         if REPLACEMENT_STRATEGY == ALWAYS_OVERWRITE {
             self.table[index] = TTEntry {
@@ -110,7 +130,14 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE,
         }
     }
 
-    pub fn probe(&mut self, key: u64, ply: usize, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
+    pub fn probe(
+        &mut self,
+        key: u64,
+        ply: usize,
+        alpha: i32,
+        beta: i32,
+        depth: usize,
+    ) -> ProbeResult {
         let index = (key % (SIZE as u64)) as usize;
 
         debug_assert!((1..=MAX_DEPTH).contains(&depth));
@@ -131,8 +158,11 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> TranspositionTable<SIZE,
                 // we can't store the score in a tagged union,
                 // because we need to do mate score preprocessing.
                 let mut score = entry.score;
-                if score > IS_MATE_SCORE { score -= ply as i32; }
-                else if score < -IS_MATE_SCORE { score += ply as i32; }
+                if score > IS_MATE_SCORE {
+                    score -= ply as i32;
+                } else if score < -IS_MATE_SCORE {
+                    score += ply as i32;
+                }
 
                 debug_assert!(score >= -INFINITY);
                 match entry.flag {

@@ -56,7 +56,10 @@ pub fn run_test(fen: &str, depth: usize) {
     println!("Time taken: {}ms", elapsed.as_millis());
     #[allow(clippy::cast_precision_loss)]
     let nodesf64 = leafnodes as f64;
-    println!("Mnps: {:.2}", nodesf64 / elapsed.as_secs_f64() / 1_000_000.0);
+    println!(
+        "Mnps: {:.2}",
+        nodesf64 / elapsed.as_secs_f64() / 1_000_000.0
+    );
 }
 
 pub fn gamut() {
@@ -98,7 +101,8 @@ mod tests {
     fn test_perft() {
         use super::*;
         use crate::definitions::STARTING_FEN;
-        const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        const TEST_FEN: &str =
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         let mut pos = Board::new();
         pos.set_from_fen(STARTING_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 20);

@@ -1,6 +1,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{Colour, File, Rank, Square120, BOARD_N_SQUARES, Piece, FILE_A, RANK_1, FILE_H, RANK_8};
+use crate::definitions::{
+    Colour, File, Piece, Rank, Square120, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8,
+};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {

@@ -1,6 +1,14 @@
-use std::{io::Write, sync::{mpsc, atomic}};
+use std::{
+    io::Write,
+    sync::{atomic, mpsc},
+};
 
-use crate::{board::Board, searchinfo::SearchInfo, definitions::{WHITE, BLACK, MAX_DEPTH}, evaluation::{IS_MATE_SCORE, MATE_SCORE}};
+use crate::{
+    board::Board,
+    definitions::{BLACK, MAX_DEPTH, WHITE},
+    evaluation::{IS_MATE_SCORE, MATE_SCORE},
+    searchinfo::SearchInfo,
+};
 
 // position fen
 // position startpos
@@ -15,7 +23,11 @@ fn parse_position(text: &str, pos: &mut Board) {
         let moves = parts.next(); // skip "moves"
         assert!(matches!(moves, Some("moves") | None));
     } else {
-        assert_eq!(determiner, "fen", "Unknown term after \"position\": {}", determiner); 
+        assert_eq!(
+            determiner, "fen",
+            "Unknown term after \"position\": {}",
+            determiner
+        );
         let mut fen = String::new();
         for part in &mut parts {
             if part == "moves" {
@@ -49,13 +61,69 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
 
     while let Some(part) = parts.next() {
         match part {
-            "depth" => depth = Some(parts.next().expect("nothing after \"depth\"").parse().expect("depth not a number")),
-            "movestogo" => moves_to_go = Some(parts.next().expect("nothing after \"movestogo\"").parse().expect("movestogo not a number")),
-            "movetime" => movetime = Some(parts.next().expect("nothing after \"movetime\"").parse().expect("movetime not a number")),
-            "wtime" if pos.turn() == WHITE => time = Some(parts.next().expect("nothing after \"wtime\"").parse().expect("wtime not a number")),
-            "btime" if pos.turn() == BLACK => time = Some(parts.next().expect("nothing after \"btime\"").parse().expect("btime not a number")),
-            "winc" if pos.turn() == WHITE => inc = Some(parts.next().expect("nothing after \"winc\"").parse().expect("winc not a number")),
-            "binc" if pos.turn() == BLACK => inc = Some(parts.next().expect("nothing after \"binc\"").parse().expect("binc not a number")),
+            "depth" => {
+                depth = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"depth\"")
+                        .parse()
+                        .expect("depth not a number"),
+                )
+            }
+            "movestogo" => {
+                moves_to_go = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"movestogo\"")
+                        .parse()
+                        .expect("movestogo not a number"),
+                )
+            }
+            "movetime" => {
+                movetime = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"movetime\"")
+                        .parse()
+                        .expect("movetime not a number"),
+                )
+            }
+            "wtime" if pos.turn() == WHITE => {
+                time = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"wtime\"")
+                        .parse()
+                        .expect("wtime not a number"),
+                )
+            }
+            "btime" if pos.turn() == BLACK => {
+                time = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"btime\"")
+                        .parse()
+                        .expect("btime not a number"),
+                )
+            }
+            "winc" if pos.turn() == WHITE => {
+                inc = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"winc\"")
+                        .parse()
+                        .expect("winc not a number"),
+                )
+            }
+            "binc" if pos.turn() == BLACK => {
+                inc = Some(
+                    parts
+                        .next()
+                        .expect("nothing after \"binc\"")
+                        .parse()
+                        .expect("binc not a number"),
+                )
+            }
             "infinite" => info.infinite = true,
             _ => eprintln!("ignoring term in parse_go: {}", part),
         }
@@ -82,8 +150,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     }
 
     println!(
-        "time: {}, depth: {}, timeset: {}", 
-        info.stop_time.duration_since(info.start_time).as_millis(), info.depth, info.time_set
+        "time: {}, depth: {}, timeset: {}",
+        info.stop_time.duration_since(info.start_time).as_millis(),
+        info.depth,
+        info.time_set
     );
 }
 
@@ -158,14 +228,15 @@ pub fn main_loop() {
             }
             "ucinewgame" => parse_position("position startpos\n", &mut pos),
             input if input.starts_with("position") => parse_position(input, &mut pos),
-            input if input.starts_with("go") => { 
+            input if input.starts_with("go") => {
                 parse_go(input, &mut info, &mut pos);
                 pos.search_position(&mut info);
-            },
+            }
             _ => println!("Unknown command: {}", input),
         }
 
-        if info.quit { // quit can be set true in parse_go
+        if info.quit {
+            // quit can be set true in parse_go
             break;
         }
     }
