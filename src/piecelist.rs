@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy)]
 pub struct PieceList {
     data: [u8; 10],
@@ -48,7 +47,8 @@ impl PieceList {
             if unsafe { *self.data.get_unchecked(idx as usize) } == sq {
                 self.len -= 1;
                 unsafe {
-                    *self.data.get_unchecked_mut(idx as usize) = *self.data.get_unchecked((self.len) as usize);
+                    *self.data.get_unchecked_mut(idx as usize) =
+                        *self.data.get_unchecked((self.len) as usize);
                     return;
                 }
             }

@@ -22,9 +22,9 @@ use crate::{
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     evaluation::{
-        MoveCounter, BISHOP_PAIR_BONUS, BLACK_PASSED_BB, DOUBLED_PAWN_MALUS, DRAW_SCORE, FILE_BB,
-        ISOLATED_BB, ISOLATED_PAWN_MALUS, LAZY_THRESHOLD_1, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES,
-        MG_PIECE_VALUES, SHIELD_BONUS, WHITE_PASSED_BB, EG_PIECE_VALUES,
+        MoveCounter, BISHOP_PAIR_BONUS, BLACK_PASSED_BB, DOUBLED_PAWN_MALUS, DRAW_SCORE,
+        EG_PIECE_VALUES, FILE_BB, ISOLATED_BB, ISOLATED_PAWN_MALUS, LAZY_THRESHOLD_1,
+        MG_PIECE_VALUES, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, SHIELD_BONUS, WHITE_PASSED_BB,
     },
     lookups::{
         filerank_to_square, FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN,
@@ -32,14 +32,13 @@ use crate::{
     },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     movegen::{offset_square_offboard, MoveConsumer, MoveList},
+    piecelist::PieceList,
     piecesquaretable::{endgame_pst_value, midgame_pst_value, ENDGAME_PST, MIDGAME_PST},
     search::alpha_beta,
     searchinfo::SearchInfo,
-    transpositiontable::{
-        HFlag, ProbeResult, DefaultTT,
-    },
+    transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
-    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board}, piecelist::PieceList,
+    validate::{piece_valid, piece_valid_empty, side_valid, square_on_board},
 };
 
 #[derive(Clone, PartialEq)]
@@ -113,7 +112,8 @@ impl Board {
     }
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: usize) {
-        self.tt.store(self.key, self.ply, best_move, score, flag, depth);
+        self.tt
+            .store(self.key, self.ply, best_move, score, flag, depth);
     }
 
     pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
@@ -518,11 +518,19 @@ impl Board {
             }
         }
 
-        if piece_num[1..].to_vec() != self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>() {
+        if piece_num[1..].to_vec()
+            != self.piece_lists[1..]
+                .iter()
+                .map(PieceList::len)
+                .collect::<Vec<_>>()
+        {
             return Err(format!(
                 "piece counts are corrupt: expected {:?}, got {:?}",
                 &piece_num[1..],
-                &self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
+                &self.piece_lists[1..]
+                    .iter()
+                    .map(PieceList::len)
+                    .collect::<Vec<_>>()
             ));
         }
 
@@ -541,10 +549,7 @@ impl Board {
                 pawns[Black as usize].count_ones()
             ));
         }
-        if pawns[Both as usize].count_ones()
-            != u32::from(self.num(WP))
-                + u32::from(self.num(BP))
-        {
+        if pawns[Both as usize].count_ones() != u32::from(self.num(WP)) + u32::from(self.num(BP)) {
             return Err(format!(
                 "both pawns bitboard is corrupt: expected {:?}, got {:?}",
                 self.num(WP) + self.num(BP),
@@ -1897,7 +1902,8 @@ impl Board {
         let game_phase = self.phase();
         let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
         let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
-        let material = (midgame_material as f32 * (1.0 - game_phase)) as i32 + (endgame_material as f32 * game_phase) as i32;
+        let material = (midgame_material as f32 * (1.0 - game_phase)) as i32
+            + (endgame_material as f32 * game_phase) as i32;
         let pst_val = self.pst_value(game_phase);
 
         let mut score = material;
@@ -1945,7 +1951,9 @@ impl Board {
         self.generate_moves(&mut move_list);
 
         for &m in move_list.iter() {
-            if !self.make_move(m) { continue; }
+            if !self.make_move(m) {
+                continue;
+            }
             if self.is_check() {
                 self.unmake_move();
                 return false;
@@ -2017,8 +2025,7 @@ impl Board {
             }
         }
 
-        (((SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield]) as f32) * (1.0 - phase))
-            as i32
+        (((SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield]) as f32) * (1.0 - phase)) as i32
     }
 
     fn king_tropism_term(&self) -> i32 {
@@ -2169,27 +2176,38 @@ impl Board {
     }
 
     const fn unwinnable_for<const SIDE: u8>(&self) -> bool {
-        assert!(SIDE == WHITE || SIDE == BLACK, "unwinnable_for called with invalid side");
+        assert!(
+            SIDE == WHITE || SIDE == BLACK,
+            "unwinnable_for called with invalid side"
+        );
 
         if SIDE == WHITE {
-            if self.major_piece_counts[WHITE as usize] != 0 { return false; }
-            if self.minor_piece_counts[WHITE as usize] > 1 { return false; }
-            if self.num(WP) != 0 { return false; }
+            if self.major_piece_counts[WHITE as usize] != 0 {
+                return false;
+            }
+            if self.minor_piece_counts[WHITE as usize] > 1 {
+                return false;
+            }
+            if self.num(WP) != 0 {
+                return false;
+            }
             true
         } else {
-            if self.major_piece_counts[BLACK as usize] != 0 { return false; }
-            if self.minor_piece_counts[BLACK as usize] > 1 { return false; }
-            if self.num(BP) != 0 { return false; }
+            if self.major_piece_counts[BLACK as usize] != 0 {
+                return false;
+            }
+            if self.minor_piece_counts[BLACK as usize] > 1 {
+                return false;
+            }
+            if self.num(BP) != 0 {
+                return false;
+            }
             true
         }
     }
 
     const fn is_material_draw(&self) -> bool {
-        if self.num(WR) == 0
-            && self.num(BR) == 0
-            && self.num(WQ) == 0
-            && self.num(BQ) == 0
-        {
+        if self.num(WR) == 0 && self.num(BR) == 0 && self.num(WQ) == 0 && self.num(BQ) == 0 {
             if self.num(WB) == 0 && self.num(BB) == 0 {
                 if self.num(WN) < 3 && self.num(BN) < 3 {
                     return true;
@@ -2197,30 +2215,25 @@ impl Board {
             } else if (self.num(WN) == 0
                 && self.num(BN) == 0
                 && self.num(WB).abs_diff(self.num(BB)) < 2)
-                || (self.num(WB) + self.num(WN) == 1
-                    && self.num(BB) + self.num(BN) == 1)
+                || (self.num(WB) + self.num(WN) == 1 && self.num(BB) + self.num(BN) == 1)
             {
                 return true;
             }
         } else if self.num(WQ) == 0 && self.num(BQ) == 0 {
             if self.num(WR) == 1 && self.num(BR) == 1 {
-                if (self.num(WN) + self.num(WB)) < 2
-                    && (self.num(BN) + self.num(BB)) < 2
-                {
+                if (self.num(WN) + self.num(WB)) < 2 && (self.num(BN) + self.num(BB)) < 2 {
                     return true;
                 }
             } else if self.num(WR) == 1 && self.num(BR) == 0 {
                 if (self.num(WN) + self.num(WB)) == 0
-                    && ((self.num(BN) + self.num(BB)) == 1
-                        || (self.num(BN) + self.num(BB)) == 2)
+                    && ((self.num(BN) + self.num(BB)) == 1 || (self.num(BN) + self.num(BB)) == 2)
                 {
                     return true;
                 }
             } else if self.num(WR) == 0
                 && self.num(BR) == 1
                 && (self.num(BN) + self.num(BB)) == 0
-                && ((self.num(WN) + self.num(WB)) == 1
-                    || (self.num(WN) + self.num(WB)) == 2)
+                && ((self.num(WN) + self.num(WB)) == 1 || (self.num(WN) + self.num(WB)) == 2)
             {
                 return true;
             }
