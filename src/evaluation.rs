@@ -60,11 +60,9 @@ pub const BISHOP_PAIR_BONUS: i32 = MG_PAWN_VALUE / 5;
 // pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
 
 // The multipliers applied to mobility scores.
-// These are computed based on a piece's maximal mobility.
-pub const PAWN_MOBILITY_MULTIPLIER: i32 = 1;
-pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 2;
-pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 2;
-pub const ROOK_MOBILITY_MULTIPLIER: i32 = 1;
+pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 4;
+pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 5;
+pub const ROOK_MOBILITY_MULTIPLIER: i32 = 2;
 pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
 pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
 
@@ -111,20 +109,19 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
-    30, 40, 50, 70, 110, 250, 
-    0, // illegal
+    30, 40, 50, 70, 110, 250, 0, // illegal
 ];
 
 /// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
 /// 0.0 is the opening, 1.0 is the endgame.
-#[allow(clippy::cast_precision_loss, clippy::many_single_char_names)]
-pub fn game_phase(p: usize, n: usize, b: usize, r: usize, q: usize) -> f32 {
+#[allow(clippy::many_single_char_names)]
+pub fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> f32 {
     let mut phase = TOTAL_PHASE;
-    phase -= PAWN_PHASE * p as f32;
-    phase -= KNIGHT_PHASE * n as f32;
-    phase -= BISHOP_PHASE * b as f32;
-    phase -= ROOK_PHASE * r as f32;
-    phase -= QUEEN_PHASE * q as f32;
+    phase -= PAWN_PHASE * f32::from(p);
+    phase -= KNIGHT_PHASE * f32::from(n);
+    phase -= BISHOP_PHASE * f32::from(b);
+    phase -= ROOK_PHASE * f32::from(r);
+    phase -= QUEEN_PHASE * f32::from(q);
     phase / TOTAL_PHASE
 }
 
@@ -253,13 +250,12 @@ impl<'a> MoveCounter<'a> {
     }
 
     pub const fn score(&self) -> i32 {
-        let pawns = self.counters[0] * PAWN_MOBILITY_MULTIPLIER;
         let knights = self.counters[1] * KNIGHT_MOBILITY_MULTIPLIER;
         let bishops = self.counters[2] * BISHOP_MOBILITY_MULTIPLIER;
         let rooks = self.counters[3] * ROOK_MOBILITY_MULTIPLIER;
         let queens = self.counters[4] * QUEEN_MOBILITY_MULTIPLIER;
         let kings = self.counters[5] * KING_MOBILITY_MULTIPLIER;
-        pawns + knights + bishops + rooks + queens + kings
+        knights + bishops + rooks + queens + kings
     }
 
     pub fn get_mobility_of(&self, piece: Piece) -> i32 {
@@ -276,6 +272,8 @@ impl<'a> MoveCounter<'a> {
 }
 
 impl<'a> MoveConsumer for MoveCounter<'a> {
+    const DO_PAWN_MOVEGEN: bool = false;
+
     fn push(&mut self, m: Move, _score: i32) {
         let moved_piece = self.board.moved_piece(m);
         let idx = (moved_piece - 1) % 6;
