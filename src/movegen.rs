@@ -126,7 +126,7 @@ impl Display for MoveList {
 }
 
 #[inline]
-pub fn offset_square_offboard(offset_sq: isize) -> bool {
+pub fn offset_square_offboard(offset_sq: i8) -> bool {
     debug_assert!((0..120).contains(&offset_sq));
     let idx: usize = unsafe { offset_sq.try_into().unwrap_unchecked() };
     let value = unsafe { *FILES_BOARD.get_unchecked(idx) };

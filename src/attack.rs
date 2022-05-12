@@ -1,10 +1,10 @@
 use crate::definitions::Piece;
 
-pub static N_DIRS: [isize; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
-pub static B_DIR: [isize; 4] = [-9, -11, 11, 9];
-pub static R_DIR: [isize; 4] = [-1, -10, 1, 10];
-pub static Q_DIR: [isize; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
-pub static K_DIRS: [isize; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
+pub static N_DIRS: [i8; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
+pub static B_DIR: [i8; 4] = [-9, -11, 11, 9];
+pub static R_DIR: [i8; 4] = [-1, -10, 1, 10];
+pub static Q_DIR: [i8; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
+pub static K_DIRS: [i8; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
 
 pub static IS_KNIGHT: [bool; 13] = [
     false, false, true, false, false, false, false, false, true, false, false, false, false,

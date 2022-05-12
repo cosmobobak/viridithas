@@ -48,7 +48,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     }
 
     let mut move_list = MoveList::new();
-    let is_check = pos.is_check();
+    let is_check = pos.in_check::<{ Board::US }>();
     if is_check {
         pos.generate_moves(&mut move_list); // if we're in check, the position isn't very quiescent, is it?
     } else {
@@ -141,7 +141,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         }
     };
 
-    let we_are_in_check = pos.is_check();
+    let we_are_in_check = pos.in_check::<{ Board::US }>();
 
     if !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth >= 3 {
         pos.make_nullmove();
@@ -175,7 +175,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     move_list.sort();
 
-    let futility_pruning_legal = !pos.is_check() && depth == 1 && pos.evaluate() + FUTILITY_MARGIN < alpha;
+    let futility_pruning_legal = !pos.in_check::<{ Board::US }>() && depth == 1 && pos.evaluate() + FUTILITY_MARGIN < alpha;
 
     for &m in move_list.iter() {
         if !pos.make_move(m) {
@@ -184,7 +184,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         moves_made += 1;
 
         let is_capture = m.is_capture();
-        let is_check = pos.is_check();
+        let is_check = pos.in_check::<{ Board::US }>();
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || is_check;
@@ -252,7 +252,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     }
 
     if moves_made == 0 {
-        if pos.is_check() {
+        if we_are_in_check {
             #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             return -MATE_SCORE + pos.ply() as i32;
         }

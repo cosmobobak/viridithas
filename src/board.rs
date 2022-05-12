@@ -137,9 +137,16 @@ impl Board {
         }
     }
 
-    pub fn is_check(&self) -> bool {
-        let king_sq = unsafe { *self.king_sq.get_unchecked(self.side as usize) as usize };
-        self.sq_attacked(king_sq, self.side ^ 1)
+    pub const US: u8 = 0;
+    pub const THEM: u8 = 1;
+    pub fn in_check<const SIDE: u8>(&self) -> bool {
+        if SIDE == Self::US {
+            let king_sq = unsafe { *self.king_sq.get_unchecked(self.side as usize) };
+            self.sq_attacked(king_sq, self.side ^ 1)
+        } else {
+            let king_sq = unsafe { *self.king_sq.get_unchecked((self.side ^ 1) as usize) };
+            self.sq_attacked(king_sq, self.side)
+        }
     }
 
     pub fn zero_ply(&mut self) {
@@ -161,7 +168,7 @@ impl Board {
 
     #[allow(clippy::wrong_self_convention)]
     pub fn is_checkmate(&mut self) -> bool {
-        if !self.is_check() {
+        if !self.in_check::<{ Self::US }>() {
             return false;
         }
 
@@ -181,7 +188,7 @@ impl Board {
 
     #[allow(clippy::wrong_self_convention)]
     pub fn is_stalemate(&mut self) -> bool {
-        if self.is_check() {
+        if self.in_check::<{ Self::US }>() {
             return false;
         }
 
@@ -200,15 +207,16 @@ impl Board {
     }
 
     pub fn generate_pos_key(&self) -> u64 {
+        #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
-        for sq in 0..BOARD_N_SQUARES {
-            let piece = self.pieces[sq];
+        for sq in 0..(BOARD_N_SQUARES as u8) {
+            let piece = self.piece_at(sq);
             if piece != Piece::Empty as u8
                 && piece != Square120::OffBoard as u8
                 && piece != Square120::NoSquare as u8
             {
                 debug_assert!(piece >= Piece::WP as u8 && piece <= Piece::BK as u8);
-                hash_piece(&mut key, piece, unsafe { sq.try_into().unwrap_unchecked() });
+                hash_piece(&mut key, piece, sq);
             }
         }
 
@@ -230,8 +238,8 @@ impl Board {
 
     pub fn reset(&mut self) {
         self.pieces.fill(Square120::OffBoard as u8);
-        for &i in &SQ64_TO_SQ120 {
-            self.pieces[i as usize] = Piece::Empty as u8;
+        for &sq in &SQ64_TO_SQ120 {
+            *self.piece_at_mut(sq) = Piece::Empty as u8;
         }
         self.big_piece_counts.fill(0);
         self.major_piece_counts.fill(0);
@@ -303,7 +311,7 @@ impl Board {
                 let sq64 = rank * 8 + file;
                 let sq120 = SQ64_TO_SQ120[sq64 as usize];
                 if piece != Piece::Empty as u8 {
-                    self.pieces[sq120 as usize] = piece;
+                    *self.piece_at_mut(sq120) = piece;
                 }
                 file += 1;
             }
@@ -440,8 +448,8 @@ impl Board {
 
     fn set_up_incremental_trackers(&mut self) {
         for index in 0..BOARD_N_SQUARES {
-            let sq = index;
-            let piece = self.pieces[index];
+            let sq: u8 = index.try_into().unwrap();
+            let piece = self.piece_at(sq);
             if piece != Square120::OffBoard as u8 && piece != Piece::Empty as u8 {
                 let colour = PIECE_COL[piece as usize];
 
@@ -458,10 +466,10 @@ impl Board {
                 self.mg_material[colour as usize] += MG_PIECE_VALUES[piece as usize];
                 self.eg_material[colour as usize] += EG_PIECE_VALUES[piece as usize];
 
-                self.piece_lists[piece as usize].insert(sq.try_into().unwrap());
+                self.piece_lists[piece as usize].insert(sq);
 
                 if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
-                    self.king_sq[colour as usize] = sq.try_into().unwrap();
+                    self.king_sq[colour as usize] = sq;
                 }
 
                 if piece == Piece::WP as u8 || piece == Piece::BP as u8 {
@@ -489,10 +497,10 @@ impl Board {
         // check piece lists
         for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
             for &sq120 in self.piece_lists[piece as usize].iter() {
-                if self.pieces[sq120 as usize] != piece {
+                if self.piece_at(sq120) != piece {
                     return Err(format!(
                         "piece list corrupt: expected slot {} to be {} but was {}",
-                        sq120, piece, self.pieces[sq120 as usize]
+                        sq120, piece, self.piece_at(sq120)
                     ));
                 }
             }
@@ -500,7 +508,7 @@ impl Board {
 
         // check piece count and other counters
         for &sq120 in &SQ64_TO_SQ120 {
-            let piece = self.pieces[sq120 as usize];
+            let piece = self.piece_at(sq120);
             piece_num[piece as usize] += 1;
             let colour = PIECE_COL[piece as usize];
             if PIECE_BIG[piece as usize] {
@@ -560,32 +568,32 @@ impl Board {
         // check bitboards' squares
         while pawns[White as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[White as usize]);
-            if self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] != Piece::WP as u8 {
+            if self.piece_at(SQ64_TO_SQ120[sq64 as usize]) != WP {
                 return Err(format!(
                     "white pawn bitboard is corrupt: expected white pawn, got {:?}",
-                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
                 ));
             }
         }
 
         while pawns[Black as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[Black as usize]);
-            if self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] != Piece::BP as u8 {
+            if self.piece_at(SQ64_TO_SQ120[sq64 as usize]) != BP {
                 return Err(format!(
                     "black pawn bitboard is corrupt: expected black pawn, got {:?}",
-                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
                 ));
             }
         }
 
         while pawns[Both as usize] > 0 {
             let sq64 = pop_lsb(&mut pawns[Both as usize]);
-            if !(self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::WP as u8
-                || self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize] == Piece::BP as u8)
+            if !(self.piece_at(SQ64_TO_SQ120[sq64 as usize]) == WP
+                || self.piece_at(SQ64_TO_SQ120[sq64 as usize]) == BP)
             {
                 return Err(format!(
                     "both pawns bitboard is corrupt: expected white or black pawn, got {:?}",
-                    self.pieces[SQ64_TO_SQ120[sq64 as usize] as usize]
+                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
                 ));
             }
         }
@@ -679,16 +687,16 @@ impl Board {
             ));
         }
 
-        if self.pieces[self.king_sq[White as usize] as usize] != Piece::WK as u8 {
+        if self.piece_at(self.king_sq[White as usize]) != WK {
             return Err(format!(
                 "white king square is corrupt: expected white king, got {:?}",
-                self.pieces[self.king_sq[White as usize] as usize]
+                self.piece_at(self.king_sq[White as usize])
             ));
         }
-        if self.pieces[self.king_sq[Black as usize] as usize] != Piece::BK as u8 {
+        if self.piece_at(self.king_sq[Black as usize]) != BK {
             return Err(format!(
                 "black king square is corrupt: expected black king, got {:?}",
-                self.pieces[self.king_sq[Black as usize] as usize]
+                self.piece_at(self.king_sq[Black as usize])
             ));
         }
 
@@ -696,28 +704,29 @@ impl Board {
     }
 
     /// Determines if `sq` is attacked by `side`
-    pub fn sq_attacked(&self, sq: usize, side: u8) -> bool {
+    pub fn sq_attacked(&self, sq: u8, side: u8) -> bool {
         use Piece::Empty;
 
         debug_assert!(side_valid(side));
-        debug_assert!(square_on_board(sq.try_into().unwrap()));
+        debug_assert!(square_on_board(sq));
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         // pawns
         if side == WHITE {
-            if self.pieces[sq - 11] == WP || self.pieces[sq - 9] == WP {
+            if self.piece_at(sq - 11) == WP || self.piece_at(sq - 9) == WP {
                 return true;
             }
         } else {
-            if self.pieces[sq + 11] == BP || self.pieces[sq + 9] == BP {
+            if self.piece_at(sq + 11) == BP || self.piece_at(sq + 9) == BP {
                 return true;
             }
         }
 
         // knights
         for &dir in &N_DIRS {
-            let p = self.pieces[(sq as isize + dir) as usize];
+            let t_sq = (sq as i8 + dir) as u8;
+            let p = self.piece_at(t_sq);
             if p != Square120::OffBoard as u8
                 && IS_KNIGHT[p as usize]
                 && PIECE_COL[p as usize] as u8 == side
@@ -728,8 +737,8 @@ impl Board {
 
         // rooks, queens
         for &dir in &R_DIR {
-            let mut t_sq = sq as isize + dir;
-            let mut piece = self.pieces[t_sq as usize];
+            let mut t_sq = sq as i8 + dir;
+            let mut piece = self.piece_at(t_sq as u8);
             while piece != Square120::OffBoard as u8 {
                 if piece != Empty as u8 {
                     if IS_ROOKQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
@@ -738,14 +747,14 @@ impl Board {
                     break;
                 }
                 t_sq += dir;
-                piece = self.pieces[t_sq as usize];
+                piece = self.piece_at(t_sq as u8);
             }
         }
 
         // bishops, queens
         for &dir in &B_DIR {
-            let mut t_sq = sq as isize + dir;
-            let mut piece = self.pieces[t_sq as usize];
+            let mut t_sq = sq as i8 + dir;
+            let mut piece = self.piece_at(t_sq as u8);
             while piece != Square120::OffBoard as u8 {
                 if piece != Empty as u8 {
                     if IS_BISHOPQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
@@ -754,13 +763,14 @@ impl Board {
                     break;
                 }
                 t_sq += dir;
-                piece = self.pieces[t_sq as usize];
+                piece = self.piece_at(t_sq as u8);
             }
         }
 
         // king
         for &dir in &K_DIRS {
-            let p = self.pieces[(sq as isize + dir) as usize];
+            let t_sq = (sq as i8 + dir) as u8;
+            let p = self.piece_at(t_sq);
             if p != Square120::OffBoard as u8
                 && IS_KING[p as usize]
                 && PIECE_COL[p as usize] as u8 == side
@@ -914,22 +924,22 @@ impl Board {
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
         if square_on_board(left_sq)
-            && PIECE_COL[self.pieces[left_sq as usize] as usize] as u8 == SIDE ^ 1
+            && PIECE_COL[self.piece_at(left_sq) as usize] as u8 == SIDE ^ 1
         {
             self.add_pawn_cap_move::<SIDE, MC>(
                 sq,
                 left_sq,
-                self.pieces[left_sq as usize],
+                self.piece_at(left_sq),
                 move_list,
             );
         }
         if square_on_board(right_sq)
-            && PIECE_COL[self.pieces[right_sq as usize] as usize] as u8 == SIDE ^ 1
+            && PIECE_COL[self.piece_at(right_sq) as usize] as u8 == SIDE ^ 1
         {
             self.add_pawn_cap_move::<SIDE, MC>(
                 sq,
                 right_sq,
-                self.pieces[right_sq as usize],
+                self.piece_at(right_sq),
                 move_list,
             );
         }
@@ -974,11 +984,11 @@ impl Board {
             Rank::Rank7 as u8
         };
         let offset_sq = if SIDE == WHITE { sq + 10 } else { sq - 10 };
-        if self.pieces[offset_sq as usize] == Piece::Empty as u8 {
+        if self.piece_at(offset_sq) == Piece::Empty as u8 {
             self.add_pawn_move::<SIDE, MC>(sq, offset_sq, move_list);
             let double_sq = if SIDE == WHITE { sq + 20 } else { sq - 20 };
             if RANKS_BOARD[sq as usize] == start_rank
-                && self.pieces[double_sq as usize] == Piece::Empty as u8
+                && self.piece_at(double_sq) == Piece::Empty as u8
             {
                 self.add_quiet_move(
                     Move::new(
@@ -1031,7 +1041,7 @@ impl Board {
             for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 for &offset in dirs {
-                    let t_sq = sq as isize + offset;
+                    let t_sq = sq as i8 + offset;
                     if offset_square_offboard(t_sq) {
                         continue;
                     }
@@ -1040,13 +1050,13 @@ impl Board {
                     // as offset_square_offboard() is false
                     let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
 
-                    if self.pieces[t_sq as usize] != Piece::Empty as u8 {
-                        if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1 {
+                    if self.piece_at(t_sq) != Piece::Empty as u8 {
+                        if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                             self.add_capture_move(
                                 Move::new(
                                     sq,
                                     t_sq,
-                                    self.pieces[t_sq as usize],
+                                    self.piece_at(t_sq),
                                     Piece::Empty as u8,
                                     0,
                                 ),
@@ -1070,7 +1080,7 @@ impl Board {
         };
         for &piece in sliders {
             debug_assert!(piece_valid(piece));
-            let dirs: &[isize] = match piece {
+            let dirs: &[i8] = match piece {
                 WB | BB => &B_DIR,
                 WR | BR => &R_DIR,
                 WQ | BQ => &Q_DIR,
@@ -1080,20 +1090,20 @@ impl Board {
                 debug_assert!(square_on_board(sq));
 
                 for &dir in dirs {
-                    let mut slider = sq as isize + dir;
+                    let mut slider = sq as i8 + dir;
                     while !offset_square_offboard(slider) {
                         // now safe to convert to u8
                         // as offset_square_offboard() is false
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
-                        if self.pieces[t_sq as usize] != Piece::Empty as u8 {
-                            if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1
+                        if self.piece_at(t_sq) != Piece::Empty as u8 {
+                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                             {
                                 self.add_capture_move(
                                     Move::new(
                                         sq,
                                         t_sq,
-                                        self.pieces[t_sq as usize],
+                                        self.piece_at(t_sq),
                                         Piece::Empty as u8,
                                         0,
                                     ),
@@ -1150,7 +1160,7 @@ impl Board {
             for &sq in self.piece_lists[piece as usize].iter() {
                 debug_assert!(square_on_board(sq));
                 for &offset in dirs {
-                    let t_sq = sq as isize + offset;
+                    let t_sq = sq as i8 + offset;
                     if offset_square_offboard(t_sq) {
                         continue;
                     }
@@ -1159,11 +1169,11 @@ impl Board {
                     // as offset_square_offboard() is false
                     let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
 
-                    if self.pieces[t_sq as usize] != Piece::Empty as u8
-                        && PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1
+                    if self.piece_at(t_sq) != Piece::Empty as u8
+                        && PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                     {
                         self.add_capture_move(
-                            Move::new(sq, t_sq, self.pieces[t_sq as usize], Piece::Empty as u8, 0),
+                            Move::new(sq, t_sq, self.piece_at(t_sq), Piece::Empty as u8, 0),
                             move_list,
                         );
                     }
@@ -1178,7 +1188,7 @@ impl Board {
         };
         for &piece in sliders {
             debug_assert!(piece_valid(piece));
-            let dirs: &[isize] = match piece {
+            let dirs: &[i8] = match piece {
                 WB | BB => &B_DIR,
                 WR | BR => &R_DIR,
                 WQ | BQ => &Q_DIR,
@@ -1188,20 +1198,20 @@ impl Board {
                 debug_assert!(square_on_board(sq));
 
                 for &dir in dirs {
-                    let mut slider = sq as isize + dir;
+                    let mut slider = sq as i8 + dir;
                     while !offset_square_offboard(slider) {
                         // now safe to convert to u8
                         // as offset_square_offboard() is false
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
-                        if self.pieces[t_sq as usize] != Piece::Empty as u8 {
-                            if PIECE_COL[self.pieces[t_sq as usize] as usize] as u8 == self.side ^ 1
+                        if self.piece_at(t_sq) != Piece::Empty as u8 {
+                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                             {
                                 self.add_capture_move(
                                     Move::new(
                                         sq,
                                         t_sq,
-                                        self.pieces[t_sq as usize],
+                                        self.piece_at(t_sq),
                                         Piece::Empty as u8,
                                         0,
                                     ),
@@ -1220,10 +1230,10 @@ impl Board {
     fn generate_castling_moves(&self, move_list: &mut impl MoveConsumer) {
         if self.side == WHITE {
             if (self.castle_perm & Castling::WK as u8) != 0
-                && self.pieces[Square120::F1 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::G1 as usize] == Piece::Empty as u8
-                && !self.sq_attacked(Square120::E1 as usize, BLACK)
-                && !self.sq_attacked(Square120::F1 as usize, BLACK)
+                && self.piece_at(Square120::F1 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::G1 as u8) == Piece::Empty as u8
+                && !self.sq_attacked(Square120::E1 as u8, BLACK)
+                && !self.sq_attacked(Square120::F1 as u8, BLACK)
             {
                 self.add_quiet_move(
                     Move::new(
@@ -1238,11 +1248,11 @@ impl Board {
             }
 
             if (self.castle_perm & Castling::WQ as u8) != 0
-                && self.pieces[Square120::D1 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::C1 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::B1 as usize] == Piece::Empty as u8
-                && !self.sq_attacked(Square120::E1 as usize, BLACK)
-                && !self.sq_attacked(Square120::D1 as usize, BLACK)
+                && self.piece_at(Square120::D1 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::C1 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::B1 as u8) == Piece::Empty as u8
+                && !self.sq_attacked(Square120::E1 as u8, BLACK)
+                && !self.sq_attacked(Square120::D1 as u8, BLACK)
             {
                 self.add_quiet_move(
                     Move::new(
@@ -1257,10 +1267,10 @@ impl Board {
             }
         } else {
             if (self.castle_perm & Castling::BK as u8) != 0
-                && self.pieces[Square120::F8 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::G8 as usize] == Piece::Empty as u8
-                && !self.sq_attacked(Square120::E8 as usize, WHITE)
-                && !self.sq_attacked(Square120::F8 as usize, WHITE)
+                && self.piece_at(Square120::F8 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::G8 as u8) == Piece::Empty as u8
+                && !self.sq_attacked(Square120::E8 as u8, WHITE)
+                && !self.sq_attacked(Square120::F8 as u8, WHITE)
             {
                 self.add_quiet_move(
                     Move::new(
@@ -1275,11 +1285,11 @@ impl Board {
             }
 
             if (self.castle_perm & Castling::BQ as u8) != 0
-                && self.pieces[Square120::D8 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::C8 as usize] == Piece::Empty as u8
-                && self.pieces[Square120::B8 as usize] == Piece::Empty as u8
-                && !self.sq_attacked(Square120::E8 as usize, WHITE)
-                && !self.sq_attacked(Square120::D8 as usize, WHITE)
+                && self.piece_at(Square120::D8 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::C8 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::B8 as u8) == Piece::Empty as u8
+                && !self.sq_attacked(Square120::E8 as u8, WHITE)
+                && !self.sq_attacked(Square120::D8 as u8, WHITE)
             {
                 self.add_quiet_move(
                     Move::new(
@@ -1347,7 +1357,7 @@ impl Board {
         debug_assert!(square_on_board(sq));
 
         // can be optimised
-        let piece = self.pieces[sq as usize];
+        let piece = self.piece_at(sq);
 
         debug_assert!(piece_valid(piece));
 
@@ -1355,7 +1365,7 @@ impl Board {
 
         hash_piece(&mut self.key, piece, sq);
 
-        self.pieces[sq as usize] = Piece::Empty as u8;
+        *self.piece_at_mut(sq) = Piece::Empty as u8;
         self.mg_material[colour as usize] -= MG_PIECE_VALUES[piece as usize];
         self.eg_material[colour as usize] -= EG_PIECE_VALUES[piece as usize];
         self.pst_vals[0] -= midgame_pst_value(piece, sq);
@@ -1385,7 +1395,7 @@ impl Board {
 
         hash_piece(&mut self.key, piece, sq);
 
-        self.pieces[sq as usize] = piece;
+        *self.piece_at_mut(sq) = piece;
         self.mg_material[colour as usize] += MG_PIECE_VALUES[piece as usize];
         self.eg_material[colour as usize] += EG_PIECE_VALUES[piece as usize];
         self.pst_vals[0] += midgame_pst_value(piece, sq);
@@ -1411,7 +1421,7 @@ impl Board {
         debug_assert!(square_on_board(from));
         debug_assert!(square_on_board(to));
 
-        let piece = self.pieces[from as usize];
+        let piece = self.piece_at(from);
         let colour = PIECE_COL[piece as usize] as u8;
 
         // if we're in debug mode, check that we actually find a matching piecelist entry.
@@ -1421,10 +1431,10 @@ impl Board {
         hash_piece(&mut self.key, piece, from);
         hash_piece(&mut self.key, piece, to);
 
-        self.pieces[from as usize] = Piece::Empty as u8;
+        *self.piece_at_mut(from) = Piece::Empty as u8;
         self.pst_vals[0] -= midgame_pst_value(piece, from);
         self.pst_vals[1] -= endgame_pst_value(piece, from);
-        self.pieces[to as usize] = piece;
+        *self.piece_at_mut(to) = piece;
         self.pst_vals[0] += midgame_pst_value(piece, to);
         self.pst_vals[1] += endgame_pst_value(piece, to);
 
@@ -1461,6 +1471,18 @@ impl Board {
         unsafe { *self.pieces.get_unchecked(m.from() as usize) }
     }
 
+    #[inline]
+    pub fn piece_at(&self, sq: u8) -> u8 {
+        debug_assert!(square_on_board(sq));
+        unsafe { *self.pieces.get_unchecked(sq as usize) }
+    }
+
+    #[inline]
+    pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
+        debug_assert!(square_on_board(sq));
+        unsafe { self.pieces.get_unchecked_mut(sq as usize) }
+    }
+
     #[allow(clippy::cognitive_complexity)]
     pub fn make_move(&mut self, m: Move) -> bool {
         #[cfg(debug_assertions)]
@@ -1469,7 +1491,7 @@ impl Board {
         let from = m.from();
         let to = m.to();
         let side = self.side;
-        let piece = self.pieces[from as usize];
+        let piece = self.piece_at(from);
 
         debug_assert!(square_on_board(from));
         debug_assert!(square_on_board(to));
@@ -1511,8 +1533,8 @@ impl Board {
             position_key: saved_key,
         });
 
-        self.castle_perm &= CASTLE_PERM_MASKS[from as usize];
-        self.castle_perm &= CASTLE_PERM_MASKS[to as usize];
+        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from as usize) };
+        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to as usize) };
         self.ep_sq = Square120::NoSquare as u8;
 
         // reinsert the castling rights
@@ -1556,7 +1578,7 @@ impl Board {
         }
 
         if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
-            self.king_sq[side as usize] = to;
+            unsafe { *self.king_sq.get_unchecked_mut(side as usize) = to; }
         }
 
         self.side ^= 1;
@@ -1565,7 +1587,8 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if self.sq_attacked(self.king_sq[side as usize] as usize, self.side) {
+        // reversed in_check fn
+        if self.in_check::<{ Self::THEM }>() {
             self.unmake_move();
             return false;
         }
@@ -1576,7 +1599,7 @@ impl Board {
     pub fn make_nullmove(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-        debug_assert!(!self.is_check());
+        debug_assert!(!self.in_check::<{ Self::US }>());
 
         self.ply += 1;
         self.history.push(Undo {
@@ -1660,8 +1683,8 @@ impl Board {
 
         self.move_piece(to, from);
 
-        if self.pieces[from as usize] == Piece::WK as u8
-            || self.pieces[from as usize] == Piece::BK as u8
+        if self.piece_at(from) == Piece::WK as u8
+            || self.piece_at(from) == Piece::BK as u8
         {
             self.king_sq[self.side as usize] = from;
         }
@@ -1906,9 +1929,7 @@ impl Board {
             + (endgame_material as f32 * game_phase) as i32;
         let pst_val = self.pst_value(game_phase);
 
-        let mut score = material;
-
-        score += pst_val;
+        let mut score = material + pst_val;
 
         // if the score is already outwith a threshold, we can stop here.
         if score.abs() > LAZY_THRESHOLD_1 {
@@ -1954,7 +1975,7 @@ impl Board {
             if !self.make_move(m) {
                 continue;
             }
-            if self.is_check() {
+            if self.in_check::<{ Self::US }>() {
                 self.unmake_move();
                 return false;
             }
@@ -2008,19 +2029,19 @@ impl Board {
     fn pawn_shield_term(&self, phase: f32) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-        let white_kingloc = self.king_sq[WHITE as usize] as usize;
-        let black_kingloc = self.king_sq[BLACK as usize] as usize;
+        let white_kingloc = self.king_sq[WHITE as usize];
+        let black_kingloc = self.king_sq[BLACK as usize];
 
         let mut white_shield = 0;
         for loc in white_kingloc + 9..=white_kingloc + 11 {
-            if self.pieces[loc] == WP {
+            if self.piece_at(loc) == WP {
                 white_shield += 1;
             }
         }
 
         let mut black_shield = 0;
         for loc in black_kingloc - 11..=black_kingloc - 9 {
-            if self.pieces[loc] == BP {
+            if self.piece_at(loc) == BP {
                 black_shield += 1;
             }
         }
@@ -2143,7 +2164,7 @@ impl Board {
 
     fn mobility(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
-        let is_check = self.is_check();
+        let is_check = self.in_check::<{ Self::US }>();
         if is_check {
             match self.side {
                 WHITE => return -50,
@@ -2336,7 +2357,7 @@ impl Display for Board {
             write!(f, "{} ", rank + 1)?;
             for file in (File::FileA as u8)..=(File::FileH as u8) {
                 let sq = filerank_to_square(file, rank);
-                let piece = self.pieces[sq as usize];
+                let piece = self.piece_at(sq);
                 write!(f, "{} ", PIECE_CHAR[piece as usize] as char)?;
             }
             writeln!(f)?;
