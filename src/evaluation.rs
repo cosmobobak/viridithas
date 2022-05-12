@@ -20,6 +20,8 @@ pub const EG_BISHOP_VALUE: i32 = 297;
 pub const EG_ROOK_VALUE: i32 = 512;
 pub const EG_QUEEN_VALUE: i32 = 936;
 
+pub const ONE_PAWN: i32 = 100;
+
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
 /// e.g. if white has a mate in two ply, the output from a depth-5 search will be

@@ -24,7 +24,8 @@ use crate::{
     evaluation::{
         MoveCounter, BISHOP_PAIR_BONUS, BLACK_PASSED_BB, DOUBLED_PAWN_MALUS, DRAW_SCORE,
         EG_PIECE_VALUES, FILE_BB, ISOLATED_BB, ISOLATED_PAWN_MALUS, LAZY_THRESHOLD_1,
-        MG_PIECE_VALUES, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, SHIELD_BONUS, WHITE_PASSED_BB,
+        MG_PIECE_VALUES, ONE_PAWN, PASSED_PAWN_BONUS, PIECE_DANGER_VALUES, SHIELD_BONUS,
+        WHITE_PASSED_BB,
     },
     lookups::{
         filerank_to_square, FILES_BOARD, MVV_LVA_SCORE, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN,
@@ -2193,8 +2194,39 @@ impl Board {
         let mut most_recent_score = 0;
         let mut pv_length = 0;
         let mut best_depth = 1;
+        let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         for depth in 0..=info.depth {
-            let score = alpha_beta(self, info, depth, -INFINITY, INFINITY);
+            let mut score = alpha_beta(self, info, depth, alpha, beta);
+
+            info.check_up();
+
+            if info.stopped {
+                break;
+            }
+
+            if score <= alpha || score >= beta {
+                let score_string = format_score(score);
+                let boundstr = if score <= alpha {
+                    "lowerbound"
+                } else {
+                    "upperbound"
+                };
+                print!(
+                    "info score {} {} depth {} nodes {} time {} pv ",
+                    score_string,
+                    boundstr,
+                    depth,
+                    info.nodes,
+                    info.start_time.elapsed().as_millis()
+                );
+                pv_length = self.get_pv_line(depth);
+                for &m in &self.principal_variation[..pv_length] {
+                    print!("{m} ");
+                }
+                println!();
+                std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                score = alpha_beta(self, info, depth - 1, -INFINITY, INFINITY);
+            }
 
             info.check_up();
 
@@ -2204,6 +2236,8 @@ impl Board {
 
             most_recent_score = score;
             best_depth = depth;
+            alpha = score - ONE_PAWN / 4;
+            beta = score + ONE_PAWN / 4;
             pv_length = self.get_pv_line(depth);
             most_recent_move = *self.principal_variation.get(0).unwrap_or(&first_legal);
 
