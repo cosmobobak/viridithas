@@ -1473,13 +1473,13 @@ impl Board {
 
     #[inline]
     pub fn piece_at(&self, sq: u8) -> u8 {
-        debug_assert!(square_on_board(sq));
+        debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { *self.pieces.get_unchecked(sq as usize) }
     }
 
     #[inline]
     pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
-        debug_assert!(square_on_board(sq));
+        debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { self.pieces.get_unchecked_mut(sq as usize) }
     }
 

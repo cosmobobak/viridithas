@@ -22,5 +22,8 @@ mod uci;
 mod validate;
 
 fn main() {
+    #[cfg(debug_assertions)]
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     uci::main_loop();
 }
