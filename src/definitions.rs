@@ -111,6 +111,8 @@ pub enum Square120 {
     OffBoard,
 }
 
+pub const NO_SQUARE: u8 = Square120::NoSquare as u8;
+pub const OFF_BOARD: u8 = Square120::OffBoard as u8;
 pub const A1: u8 = Square120::A1 as u8;
 pub const B1: u8 = Square120::B1 as u8;
 pub const C1: u8 = Square120::C1 as u8;

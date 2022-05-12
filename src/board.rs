@@ -15,10 +15,10 @@ use crate::{
     bitboard::pop_lsb,
     chessmove::Move,
     definitions::{
-        Castling, Colour, File, Rank, Square120, Undo, A1, A8, BB, BK, BLACK, BN,
-        BOARD_N_SQUARES, BOTH, BP, BQ, BR, C1, C8, D1, D8, F1, F8, FIRST_ORDER_KILLER_SCORE, G1,
-        G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES, RANK_3, RANK_6, SECOND_ORDER_KILLER_SCORE,
-        WB, WHITE, WK, WN, WP, WQ, WR, PIECE_EMPTY,
+        Castling, Colour, File, Rank, Square120, Undo, A1, A8, BB, BK, BLACK, BN, BOARD_N_SQUARES,
+        BOTH, BP, BQ, BR, C1, C8, D1, D8, F1, F8, FIRST_ORDER_KILLER_SCORE, G1, G8, H1, H8,
+        INFINITY, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE, OFF_BOARD, PIECE_EMPTY, RANK_3, RANK_6,
+        SECOND_ORDER_KILLER_SCORE, WB, WHITE, WK, WN, WP, WQ, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     evaluation::{
@@ -76,11 +76,11 @@ impl Board {
 
     pub fn new() -> Self {
         let mut out = Self {
-            pieces: [Square120::NoSquare as u8; BOARD_N_SQUARES],
+            pieces: [NO_SQUARE; BOARD_N_SQUARES],
             pawns: [0; 3],
-            king_sq: [Square120::NoSquare as u8; 2],
+            king_sq: [NO_SQUARE; 2],
             side: 0,
-            ep_sq: Square120::NoSquare as u8,
+            ep_sq: NO_SQUARE,
             fifty_move_counter: 0,
             ply: 0,
             hist_ply: 0,
@@ -207,10 +207,7 @@ impl Board {
         let mut key = 0;
         for sq in 0..(BOARD_N_SQUARES as u8) {
             let piece = self.piece_at(sq);
-            if piece != PIECE_EMPTY
-                && piece != Square120::OffBoard as u8
-                && piece != Square120::NoSquare as u8
-            {
+            if piece != PIECE_EMPTY && piece != OFF_BOARD && piece != NO_SQUARE {
                 debug_assert!((WP..=BK).contains(&piece));
                 hash_piece(&mut key, piece, sq);
             }
@@ -220,7 +217,7 @@ impl Board {
             hash_side(&mut key);
         }
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             debug_assert!(self.ep_sq < BOARD_N_SQUARES.try_into().unwrap());
             hash_ep(&mut key, self.ep_sq as u8);
         }
@@ -233,7 +230,7 @@ impl Board {
     }
 
     pub fn reset(&mut self) {
-        self.pieces.fill(Square120::OffBoard as u8);
+        self.pieces.fill(OFF_BOARD);
         for &sq in &SQ64_TO_SQ120 {
             *self.piece_at_mut(sq) = PIECE_EMPTY;
         }
@@ -244,9 +241,9 @@ impl Board {
         self.eg_material.fill(0);
         self.pawns.fill(0);
         self.piece_lists.iter_mut().for_each(PieceList::clear);
-        self.king_sq = [Square120::NoSquare as u8, Square120::NoSquare as u8];
+        self.king_sq = [NO_SQUARE, NO_SQUARE];
         self.side = Colour::Both as u8;
-        self.ep_sq = Square120::NoSquare as u8;
+        self.ep_sq = NO_SQUARE;
         self.fifty_move_counter = 0;
         self.ply = 0;
         self.hist_ply = 0;
@@ -381,7 +378,7 @@ impl Board {
     fn set_ep(&mut self, ep_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match ep_part {
             None => return Err("FEN string is invalid, expected en passant part.".to_string()),
-            Some([b'-']) => self.ep_sq = Square120::NoSquare as u8,
+            Some([b'-']) => self.ep_sq = NO_SQUARE,
             Some(ep_sq) => {
                 if ep_sq.len() != 2 {
                     return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>()));
@@ -446,7 +443,7 @@ impl Board {
         for index in 0..BOARD_N_SQUARES {
             let sq: u8 = index.try_into().unwrap();
             let piece = self.piece_at(sq);
-            if piece != Square120::OffBoard as u8 && piece != PIECE_EMPTY {
+            if piece != OFF_BOARD && piece != PIECE_EMPTY {
                 let colour = PIECE_COL[piece as usize];
 
                 if PIECE_BIG[piece as usize] {
@@ -496,7 +493,9 @@ impl Board {
                 if self.piece_at(sq120) != piece {
                     return Err(format!(
                         "piece list corrupt: expected slot {} to be {} but was {}",
-                        sq120, piece, self.piece_at(sq120)
+                        sq120,
+                        piece,
+                        self.piece_at(sq120)
                     ));
                 }
             }
@@ -669,11 +668,11 @@ impl Board {
             ));
         }
 
-        if !(self.ep_sq == Square120::NoSquare as u8
+        if !(self.ep_sq == NO_SQUARE
             || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank6 as u8 && self.side == WHITE)
             || (RANKS_BOARD[self.ep_sq as usize] == Rank::Rank3 as u8 && self.side == BLACK))
         {
-            return Err(format!("en passant square is corrupt: expected square to be {} (NoSquare) or to be on ranks 6 or 3, got {} (Rank {})", Square120::NoSquare as u8, self.ep_sq, RANKS_BOARD[self.ep_sq as usize]));
+            return Err(format!("en passant square is corrupt: expected square to be {} (NoSquare) or to be on ranks 6 or 3, got {} (Rank {})", NO_SQUARE, self.ep_sq, RANKS_BOARD[self.ep_sq as usize]));
         }
 
         if self.fifty_move_counter >= 100 {
@@ -721,10 +720,7 @@ impl Board {
         for &dir in &N_DIRS {
             let t_sq = (sq as i8 + dir) as u8;
             let p = self.piece_at(t_sq);
-            if p != Square120::OffBoard as u8
-                && IS_KNIGHT[p as usize]
-                && PIECE_COL[p as usize] as u8 == side
-            {
+            if p != OFF_BOARD && IS_KNIGHT[p as usize] && PIECE_COL[p as usize] as u8 == side {
                 return true;
             }
         }
@@ -733,7 +729,7 @@ impl Board {
         for &dir in &R_DIR {
             let mut t_sq = sq as i8 + dir;
             let mut piece = self.piece_at(t_sq as u8);
-            while piece != Square120::OffBoard as u8 {
+            while piece != OFF_BOARD {
                 if piece != PIECE_EMPTY {
                     if IS_ROOKQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
                         return true;
@@ -749,7 +745,7 @@ impl Board {
         for &dir in &B_DIR {
             let mut t_sq = sq as i8 + dir;
             let mut piece = self.piece_at(t_sq as u8);
-            while piece != Square120::OffBoard as u8 {
+            while piece != OFF_BOARD {
                 if piece != PIECE_EMPTY {
                     if IS_BISHOPQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
                         return true;
@@ -765,10 +761,7 @@ impl Board {
         for &dir in &K_DIRS {
             let t_sq = (sq as i8 + dir) as u8;
             let p = self.piece_at(t_sq);
-            if p != Square120::OffBoard as u8
-                && IS_KING[p as usize]
-                && PIECE_COL[p as usize] as u8 == side
-            {
+            if p != OFF_BOARD && IS_KING[p as usize] && PIECE_COL[p as usize] as u8 == side {
                 return true;
             }
         }
@@ -844,21 +837,11 @@ impl Board {
         };
         if RANKS_BOARD[from as usize] == promo_rank {
             if SIDE == WHITE {
-                for &promo in &[
-                    WQ,
-                    WN,
-                    WR,
-                    WB,
-                ] {
+                for &promo in &[WQ, WN, WR, WB] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             } else {
-                for &promo in &[
-                    BQ,
-                    BN,
-                    BR,
-                    BB,
-                ] {
+                for &promo in &[BQ, BN, BR, BB] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             };
@@ -882,90 +865,48 @@ impl Board {
         };
         if RANKS_BOARD[from as usize] == promo_rank {
             if SIDE == WHITE {
-                for &promo in &[
-                    WQ,
-                    WN,
-                    WR,
-                    WB,
-                ] {
-                    self.add_quiet_move(
-                        Move::new(from, to, PIECE_EMPTY, promo, 0),
-                        move_list,
-                    );
+                for &promo in &[WQ, WN, WR, WB] {
+                    self.add_quiet_move(Move::new(from, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
-                for &promo in &[
-                    BQ,
-                    BN,
-                    BR,
-                    BB,
-                ] {
-                    self.add_quiet_move(
-                        Move::new(from, to, PIECE_EMPTY, promo, 0),
-                        move_list,
-                    );
+                for &promo in &[BQ, BN, BR, BB] {
+                    self.add_quiet_move(Move::new(from, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             };
         } else {
-            self.add_quiet_move(
-                Move::new(from, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                move_list,
-            );
+            self.add_quiet_move(Move::new(from, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
         }
     }
 
     fn generate_pawn_caps<const SIDE: u8, MC: MoveConsumer>(&self, sq: u8, move_list: &mut MC) {
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
-        if square_on_board(left_sq)
-            && PIECE_COL[self.piece_at(left_sq) as usize] as u8 == SIDE ^ 1
+        if square_on_board(left_sq) && PIECE_COL[self.piece_at(left_sq) as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE, MC>(
-                sq,
-                left_sq,
-                self.piece_at(left_sq),
-                move_list,
-            );
+            self.add_pawn_cap_move::<SIDE, MC>(sq, left_sq, self.piece_at(left_sq), move_list);
         }
         if square_on_board(right_sq)
             && PIECE_COL[self.piece_at(right_sq) as usize] as u8 == SIDE ^ 1
         {
-            self.add_pawn_cap_move::<SIDE, MC>(
-                sq,
-                right_sq,
-                self.piece_at(right_sq),
-                move_list,
-            );
+            self.add_pawn_cap_move::<SIDE, MC>(sq, right_sq, self.piece_at(right_sq), move_list);
         }
     }
 
     fn generate_ep<const SIDE: u8, MC: MoveConsumer>(&self, sq: u8, move_list: &mut MC) {
-        if self.ep_sq == Square120::NoSquare as u8 {
+        if self.ep_sq == NO_SQUARE {
             return;
         }
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
         if left_sq == self.ep_sq {
             self.add_ep_move(
-                Move::new(
-                    sq,
-                    left_sq,
-                    PIECE_EMPTY,
-                    PIECE_EMPTY,
-                    Move::EP_MASK,
-                ),
+                Move::new(sq, left_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
         }
         if right_sq == self.ep_sq {
             self.add_ep_move(
-                Move::new(
-                    sq,
-                    right_sq,
-                    PIECE_EMPTY,
-                    PIECE_EMPTY,
-                    Move::EP_MASK,
-                ),
+                Move::new(sq, right_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
         }
@@ -981,9 +922,7 @@ impl Board {
         if self.piece_at(offset_sq) == PIECE_EMPTY {
             self.add_pawn_move::<SIDE, MC>(sq, offset_sq, move_list);
             let double_sq = if SIDE == WHITE { sq + 20 } else { sq - 20 };
-            if RANKS_BOARD[sq as usize] == start_rank
-                && self.piece_at(double_sq) == PIECE_EMPTY
-            {
+            if RANKS_BOARD[sq as usize] == start_rank && self.piece_at(double_sq) == PIECE_EMPTY {
                 self.add_quiet_move(
                     Move::new(
                         sq,
@@ -1047,13 +986,7 @@ impl Board {
                     if self.piece_at(t_sq) != PIECE_EMPTY {
                         if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                             self.add_capture_move(
-                                Move::new(
-                                    sq,
-                                    t_sq,
-                                    self.piece_at(t_sq),
-                                    PIECE_EMPTY,
-                                    0,
-                                ),
+                                Move::new(sq, t_sq, self.piece_at(t_sq), PIECE_EMPTY, 0),
                                 move_list,
                             );
                         }
@@ -1091,16 +1024,9 @@ impl Board {
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
                         if self.piece_at(t_sq) != PIECE_EMPTY {
-                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
-                            {
+                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                                 self.add_capture_move(
-                                    Move::new(
-                                        sq,
-                                        t_sq,
-                                        self.piece_at(t_sq),
-                                        PIECE_EMPTY,
-                                        0,
-                                    ),
+                                    Move::new(sq, t_sq, self.piece_at(t_sq), PIECE_EMPTY, 0),
                                     move_list,
                                 );
                             }
@@ -1198,16 +1124,9 @@ impl Board {
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
                         if self.piece_at(t_sq) != PIECE_EMPTY {
-                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
-                            {
+                            if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                                 self.add_capture_move(
-                                    Move::new(
-                                        sq,
-                                        t_sq,
-                                        self.piece_at(t_sq),
-                                        PIECE_EMPTY,
-                                        0,
-                                    ),
+                                    Move::new(sq, t_sq, self.piece_at(t_sq), PIECE_EMPTY, 0),
                                     move_list,
                                 );
                             }
@@ -1510,7 +1429,7 @@ impl Board {
             }
         }
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -1527,7 +1446,7 @@ impl Board {
 
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from as usize) };
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to as usize) };
-        self.ep_sq = Square120::NoSquare as u8;
+        self.ep_sq = NO_SQUARE;
 
         // reinsert the castling rights
         hash_castling(&mut self.key, self.castle_perm);
@@ -1570,7 +1489,9 @@ impl Board {
         }
 
         if piece == WK || piece == BK {
-            unsafe { *self.king_sq.get_unchecked_mut(side as usize) = to; }
+            unsafe {
+                *self.king_sq.get_unchecked_mut(side as usize) = to;
+            }
         }
 
         self.side ^= 1;
@@ -1602,11 +1523,11 @@ impl Board {
             position_key: self.key,
         });
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        self.ep_sq = Square120::NoSquare as u8;
+        self.ep_sq = NO_SQUARE;
 
         self.side ^= 1;
         self.hist_ply += 1;
@@ -1634,7 +1555,7 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -1645,7 +1566,7 @@ impl Board {
         self.ep_sq = ep_square;
         self.fifty_move_counter = fifty_move_counter;
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -1676,8 +1597,7 @@ impl Board {
         self.move_piece(to, from);
 
         let from_piece = self.piece_at(from);
-        if from_piece == WK || from_piece == BK
-        {
+        if from_piece == WK || from_piece == BK {
             self.king_sq[self.side as usize] = from;
         }
 
@@ -1712,7 +1632,7 @@ impl Board {
         self.ply -= 1;
         self.hist_ply -= 1;
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             // this might be unreachable, but that's ok.
             // the branch predictor will hopefully figure it out.
             hash_ep(&mut self.key, self.ep_sq);
@@ -1730,7 +1650,7 @@ impl Board {
         self.ep_sq = ep_square;
         self.fifty_move_counter = fifty_move_counter;
 
-        if self.ep_sq != Square120::NoSquare as u8 {
+        if self.ep_sq != NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
