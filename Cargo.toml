@@ -7,3 +7,10 @@ edition = "2021"
 
 [dependencies]
 const-random = "0.1.13"
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1

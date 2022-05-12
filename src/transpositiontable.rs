@@ -24,16 +24,25 @@ pub struct TTEntry {
     pub flag: HFlag,
 }
 
+pub const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
+
+const TASTY_PRIME_NUMBER: usize = 12_582_917;
+
 const MEGABYTE: usize = 1024 * 1024;
+
 /// One option is to use 4MB of memory for the hashtable,
 /// as my i5 has 6mb of L3 cache, so this endeavours to keep the
 /// entire hashtable in L3 cache.
-pub const IN_CACHE_TABLE_SIZE: usize = MEGABYTE * 4 / std::mem::size_of::<TTEntry>();
+pub const IN_CACHE_TABLE_SIZE: usize = MEGABYTE * 4 / TT_ENTRY_SIZE;
 /// Another option is just to use a ton of memory,
 /// wahoooooooo
-pub const BIG_TABLE_SIZE: usize = MEGABYTE * 4096 / std::mem::size_of::<TTEntry>();
-/// The default option is a middle-ground between the two.
-pub const DEFAULT_TABLE_SIZE: usize = MEGABYTE * 256 / std::mem::size_of::<TTEntry>();
+pub const BIG_TABLE_SIZE: usize = MEGABYTE * 4096 / TT_ENTRY_SIZE;
+/// Middle-ground between the two.
+pub const MEDIUM_TABLE_SIZE: usize = MEGABYTE * 512 / TT_ENTRY_SIZE;
+/// Prime sized table that's around 256-512 megabytes.
+pub const PRIME_TABLE_SIZE: usize = TASTY_PRIME_NUMBER;
+
+pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
@@ -45,7 +54,7 @@ pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
     hits: u64,
 }
 
-pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE, ALWAYS_OVERWRITE>;
+pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE, DEPTH_PREFERRED>;
 
 pub enum ProbeResult {
     Cutoff(i32),
