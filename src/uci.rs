@@ -226,7 +226,10 @@ pub fn main_loop() {
                 info.quit = true;
                 break;
             }
-            "ucinewgame" => parse_position("position startpos\n", &mut pos),
+            "ucinewgame" => { 
+                parse_position("position startpos\n", &mut pos);
+                pos.clear_tt();
+            }
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
                 parse_go(input, &mut info, &mut pos);

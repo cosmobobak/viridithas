@@ -103,10 +103,6 @@ impl Board {
         out
     }
 
-    pub fn tt_mut(&mut self) -> &mut DefaultTT {
-        &mut self.tt
-    }
-
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: usize) {
         self.tt
             .store(self.key, self.ply, best_move, score, flag, depth);
@@ -114,6 +110,10 @@ impl Board {
 
     pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
         self.tt.probe(self.key, self.ply, alpha, beta, depth)
+    }
+
+    pub fn clear_tt(&mut self) {
+        self.tt.clear();
     }
 
     pub fn insert_killer(&mut self, m: Move) {

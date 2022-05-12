@@ -88,6 +88,16 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         }
     }
 
+    pub fn clear(&mut self) {
+        self.table.fill(TTEntry {
+            key: 0,
+            m: Move::null(),
+            score: 0,
+            depth: 0,
+            flag: HFlag::None,
+        });
+    }
+
     pub fn store(
         &mut self,
         key: u64,
