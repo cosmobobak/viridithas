@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    evaluation::{MATE_SCORE, MG_PAWN_VALUE},
+    evaluation::{MATE_SCORE, ONE_PAWN},
     lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
 };
 
@@ -12,7 +12,7 @@ pub const INFINITY: i32 = MATE_SCORE * 2;
 pub const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 pub const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 
-pub const FUTILITY_MARGIN: i32 = 2 * MG_PAWN_VALUE;
+pub const FUTILITY_MARGIN: i32 = 2 * ONE_PAWN;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
