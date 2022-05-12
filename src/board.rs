@@ -2002,40 +2002,41 @@ impl Board {
     }
 
     fn pawn_structure_term(&self) -> i32 {
+        static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = 0;
+        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-            let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
-            if ISOLATED_BB[sq64] & self.pawns[WHITE as usize] == 0 {
+            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(white_pawn_loc as usize) as usize };
+            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & white_pawns == 0 {
                 w_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if WHITE_PASSED_BB[sq64] & self.pawns[BLACK as usize] == 0 {
-                let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
-                w_score += PASSED_PAWN_BONUS[rank];
-            }
-
-            let file = FILES_BOARD[white_pawn_loc as usize] as usize;
-            if (FILE_BB[file] & self.pawns[WHITE as usize]).count_ones() > 1 {
-                w_score -= DOUBLED_PAWN_MALUS / 2; // we double-count the malus, so halve it.
+            if unsafe { *WHITE_PASSED_BB.get_unchecked(sq64) } & black_pawns == 0 {
+                let rank = unsafe { *RANKS_BOARD.get_unchecked(white_pawn_loc as usize) } as usize;
+                w_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(rank) };
             }
         }
 
         let mut b_score = 0;
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-            let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
-            if ISOLATED_BB[sq64] & self.pawns[BLACK as usize] == 0 {
+            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(black_pawn_loc as usize) } as usize;
+            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & black_pawns == 0 {
                 b_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if BLACK_PASSED_BB[sq64] & self.pawns[WHITE as usize] == 0 {
-                let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
-                b_score += PASSED_PAWN_BONUS[7 - rank];
+            if unsafe { *BLACK_PASSED_BB.get_unchecked(sq64) } & white_pawns == 0 {
+                let rank = unsafe { *RANKS_BOARD.get_unchecked(black_pawn_loc as usize) } as usize;
+                b_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(7 - rank) };
             }
+        }
 
-            let file = FILES_BOARD[black_pawn_loc as usize] as usize;
-            if (FILE_BB[file] & self.pawns[BLACK as usize]).count_ones() > 1 {
-                b_score -= DOUBLED_PAWN_MALUS / 2; // we double-count the malus, so halve it.
-            }
+        for &file_mask in &FILE_BB {
+            let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
+            let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
+            w_score -= multiplier * DOUBLED_PAWN_MALUS;
+            let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
+            let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
+            b_score -= multiplier * DOUBLED_PAWN_MALUS;
         }
 
         w_score - b_score
