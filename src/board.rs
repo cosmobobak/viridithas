@@ -59,11 +59,7 @@ pub struct Board {
     eg_material: [i32; 2],
     castle_perm: u8,
     history: Vec<Undo>,
-    // TODO: this is a really sus way of implementing what is essentially 13
-    // dynamic arrays. We should refactor to store length and storage in one
-    // type, or even just use [Vec<u8>; 13], if we're willing to sacrifice
-    // memory fragmentation.
-    piece_lists: [PieceList; 13], // p_list[piece][N]
+    piece_lists: [PieceList; 13],
 
     principal_variation: Vec<Move>,
 
@@ -495,7 +491,7 @@ impl Board {
         let mut pawns = self.pawns;
 
         // check piece lists
-        for piece in (Piece::WP as u8)..=(Piece::BK as u8) {
+        for piece in WP..=BK {
             for &sq120 in self.piece_lists[piece as usize].iter() {
                 if self.piece_at(sq120) != piece {
                     return Err(format!(
@@ -542,7 +538,7 @@ impl Board {
             ));
         }
 
-        // check bitboards count
+        // check bitboards' count
         if pawns[White as usize].count_ones() != u32::from(self.num(WP)) {
             return Err(format!(
                 "white pawn bitboard is corrupt: expected {:?}, got {:?}",
@@ -1122,7 +1118,6 @@ impl Board {
             }
         }
 
-        // castling
         self.generate_castling_moves(move_list);
     }
 
@@ -1131,7 +1126,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        // white pawn moves
+        // both pawn moves and captures
         if self.side == WHITE {
             for &sq in self.piece_lists[WP as usize].iter() {
                 debug_assert!(square_on_board(sq));
@@ -1356,7 +1351,6 @@ impl Board {
     fn clear_piece(&mut self, sq: u8) {
         debug_assert!(square_on_board(sq));
 
-        // can be optimised
         let piece = self.piece_at(sq);
 
         debug_assert!(piece_valid(piece));
@@ -1587,7 +1581,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        // reversed in_check fn
+        // reversed in_check fn, as we have now swapped sides
         if self.in_check::<{ Self::THEM }>() {
             self.unmake_move();
             return false;
@@ -1721,7 +1715,8 @@ impl Board {
         self.hist_ply -= 1;
 
         if self.ep_sq != Square120::NoSquare as u8 {
-            // this might be unreachable, check.
+            // this might be unreachable, but that's ok.
+            // the branch predictor will hopefully figure it out.
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -1752,7 +1747,7 @@ impl Board {
         self.big_piece_counts[self.side as usize] > 0
     }
 
-    // g7g8q
+    /// Parses Standard Algebraic Notation (SAN) and returns a move or a reason why it couldn't be parsed.
     pub fn parse_san(&self, san: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{
             IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
@@ -1910,9 +1905,11 @@ impl Board {
     //     EvalTerms { phase, material, mobility, kingsafety, bishop_pair: (), passed_pawns: (), isolated_pawns: (), doubled_pawns: (), counters: () }
     // }
 
+    /// Computes a score for the position, from the point of view of the side to move.
+    /// This function should strive to be as cheap to call as possible, relying on
+    /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        // this function computes a score for the position, from the point of view of the side to move.
 
         if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
             return if self.side == WHITE {
@@ -1964,10 +1961,9 @@ impl Board {
         }
     }
 
+    /// Determines whether a given position is quiescent (no checks or captures).
     #[allow(clippy::wrong_self_convention)]
     pub fn is_quiet_position(&mut self) -> bool {
-        // this function returns true if the position is quiet, i.e. if it is not in a state where
-        // there are legal captures or check.
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
 
