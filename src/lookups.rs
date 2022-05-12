@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::definitions::{
-    Colour, File, Piece, Rank, Square120, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8,
+    Colour, File, Rank, Square120, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8, WP, BK,
 };
 
 macro_rules! cfor {
@@ -273,10 +273,10 @@ const VICTIM_SCORE: [i32; 13] = [
 
 const fn mvvlva_init() -> [[i32; 13]; 13] {
     let mut mvvlva = [[0; 13]; 13];
-    let mut attacker = Piece::WP as usize;
-    while attacker <= Piece::BK as usize {
-        let mut victim = Piece::WP as usize;
-        while victim <= Piece::BK as usize {
+    let mut attacker = WP as usize;
+    while attacker <= BK as usize {
+        let mut victim = WP as usize;
+        while victim <= BK as usize {
             mvvlva[victim][attacker] = VICTIM_SCORE[victim] + 60 - VICTIM_SCORE[attacker] / 100;
             victim += 1;
         }

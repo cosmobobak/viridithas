@@ -17,12 +17,13 @@ pub const FUTILITY_MARGIN: i32 = 2 * MG_PAWN_VALUE;
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[rustfmt::skip]
-pub enum Piece {
+enum Piece {
     Empty = 0,
     WP, WN, WB, WR, WQ, WK,
     BP, BN, BB, BR, BQ, BK,
 }
 
+pub const PIECE_EMPTY: u8 = Piece::Empty as u8;
 pub const WP: u8 = Piece::WP as u8;
 pub const WN: u8 = Piece::WN as u8;
 pub const WB: u8 = Piece::WB as u8;

@@ -15,10 +15,10 @@ use crate::{
     bitboard::pop_lsb,
     chessmove::Move,
     definitions::{
-        Castling, Colour, File, Piece, Rank, Square120, Undo, A1, A8, BB, BK, BLACK, BN,
+        Castling, Colour, File, Rank, Square120, Undo, A1, A8, BB, BK, BLACK, BN,
         BOARD_N_SQUARES, BOTH, BP, BQ, BR, C1, C8, D1, D8, F1, F8, FIRST_ORDER_KILLER_SCORE, G1,
         G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES, RANK_3, RANK_6, SECOND_ORDER_KILLER_SCORE,
-        WB, WHITE, WK, WN, WP, WQ, WR,
+        WB, WHITE, WK, WN, WP, WQ, WR, PIECE_EMPTY,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     evaluation::{
@@ -207,11 +207,11 @@ impl Board {
         let mut key = 0;
         for sq in 0..(BOARD_N_SQUARES as u8) {
             let piece = self.piece_at(sq);
-            if piece != Piece::Empty as u8
+            if piece != PIECE_EMPTY
                 && piece != Square120::OffBoard as u8
                 && piece != Square120::NoSquare as u8
             {
-                debug_assert!(piece >= Piece::WP as u8 && piece <= Piece::BK as u8);
+                debug_assert!((WP..=BK).contains(&piece));
                 hash_piece(&mut key, piece, sq);
             }
         }
@@ -235,7 +235,7 @@ impl Board {
     pub fn reset(&mut self) {
         self.pieces.fill(Square120::OffBoard as u8);
         for &sq in &SQ64_TO_SQ120 {
-            *self.piece_at_mut(sq) = Piece::Empty as u8;
+            *self.piece_at_mut(sq) = PIECE_EMPTY;
         }
         self.big_piece_counts.fill(0);
         self.major_piece_counts.fill(0);
@@ -274,20 +274,20 @@ impl Board {
             let mut count = 1;
             let piece;
             match c {
-                b'P' => piece = Piece::WP as u8,
-                b'R' => piece = Piece::WR as u8,
-                b'N' => piece = Piece::WN as u8,
-                b'B' => piece = Piece::WB as u8,
-                b'Q' => piece = Piece::WQ as u8,
-                b'K' => piece = Piece::WK as u8,
-                b'p' => piece = Piece::BP as u8,
-                b'r' => piece = Piece::BR as u8,
-                b'n' => piece = Piece::BN as u8,
-                b'b' => piece = Piece::BB as u8,
-                b'q' => piece = Piece::BQ as u8,
-                b'k' => piece = Piece::BK as u8,
+                b'P' => piece = WP,
+                b'R' => piece = WR,
+                b'N' => piece = WN,
+                b'B' => piece = WB,
+                b'Q' => piece = WQ,
+                b'K' => piece = WK,
+                b'p' => piece = BP,
+                b'r' => piece = BR,
+                b'n' => piece = BN,
+                b'b' => piece = BB,
+                b'q' => piece = BQ,
+                b'k' => piece = BK,
                 b'1'..=b'8' => {
-                    piece = Piece::Empty as u8;
+                    piece = PIECE_EMPTY;
                     count = c - b'0';
                 }
                 b'/' => {
@@ -306,7 +306,7 @@ impl Board {
             for _ in 0..count {
                 let sq64 = rank * 8 + file;
                 let sq120 = SQ64_TO_SQ120[sq64 as usize];
-                if piece != Piece::Empty as u8 {
+                if piece != PIECE_EMPTY {
                     *self.piece_at_mut(sq120) = piece;
                 }
                 file += 1;
@@ -446,7 +446,7 @@ impl Board {
         for index in 0..BOARD_N_SQUARES {
             let sq: u8 = index.try_into().unwrap();
             let piece = self.piece_at(sq);
-            if piece != Square120::OffBoard as u8 && piece != Piece::Empty as u8 {
+            if piece != Square120::OffBoard as u8 && piece != PIECE_EMPTY {
                 let colour = PIECE_COL[piece as usize];
 
                 if PIECE_BIG[piece as usize] {
@@ -464,11 +464,11 @@ impl Board {
 
                 self.piece_lists[piece as usize].insert(sq);
 
-                if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
+                if piece == WK || piece == BK {
                     self.king_sq[colour as usize] = sq;
                 }
 
-                if piece == Piece::WP as u8 || piece == Piece::BP as u8 {
+                if piece == WP || piece == BP {
                     self.pawns[colour as usize] |= 1 << SQ120_TO_SQ64[sq as usize];
                     self.pawns[Colour::Both as usize] |= 1 << SQ120_TO_SQ64[sq as usize];
                 }
@@ -701,8 +701,6 @@ impl Board {
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: u8, side: u8) -> bool {
-        use Piece::Empty;
-
         debug_assert!(side_valid(side));
         debug_assert!(square_on_board(sq));
         #[cfg(debug_assertions)]
@@ -736,7 +734,7 @@ impl Board {
             let mut t_sq = sq as i8 + dir;
             let mut piece = self.piece_at(t_sq as u8);
             while piece != Square120::OffBoard as u8 {
-                if piece != Empty as u8 {
+                if piece != PIECE_EMPTY {
                     if IS_ROOKQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
                         return true;
                     }
@@ -752,7 +750,7 @@ impl Board {
             let mut t_sq = sq as i8 + dir;
             let mut piece = self.piece_at(t_sq as u8);
             while piece != Square120::OffBoard as u8 {
-                if piece != Empty as u8 {
+                if piece != PIECE_EMPTY {
                     if IS_BISHOPQUEEN[piece as usize] && PIECE_COL[piece as usize] as u8 == side {
                         return true;
                     }
@@ -847,25 +845,25 @@ impl Board {
         if RANKS_BOARD[from as usize] == promo_rank {
             if SIDE == WHITE {
                 for &promo in &[
-                    Piece::WQ as u8,
-                    Piece::WN as u8,
-                    Piece::WR as u8,
-                    Piece::WB as u8,
+                    WQ,
+                    WN,
+                    WR,
+                    WB,
                 ] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[
-                    Piece::BQ as u8,
-                    Piece::BN as u8,
-                    Piece::BR as u8,
-                    Piece::BB as u8,
+                    BQ,
+                    BN,
+                    BR,
+                    BB,
                 ] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             };
         } else {
-            self.add_capture_move(Move::new(from, to, cap, Piece::Empty as u8, 0), move_list);
+            self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
     }
 
@@ -885,32 +883,32 @@ impl Board {
         if RANKS_BOARD[from as usize] == promo_rank {
             if SIDE == WHITE {
                 for &promo in &[
-                    Piece::WQ as u8,
-                    Piece::WN as u8,
-                    Piece::WR as u8,
-                    Piece::WB as u8,
+                    WQ,
+                    WN,
+                    WR,
+                    WB,
                 ] {
                     self.add_quiet_move(
-                        Move::new(from, to, Piece::Empty as u8, promo, 0),
+                        Move::new(from, to, PIECE_EMPTY, promo, 0),
                         move_list,
                     );
                 }
             } else {
                 for &promo in &[
-                    Piece::BQ as u8,
-                    Piece::BN as u8,
-                    Piece::BR as u8,
-                    Piece::BB as u8,
+                    BQ,
+                    BN,
+                    BR,
+                    BB,
                 ] {
                     self.add_quiet_move(
-                        Move::new(from, to, Piece::Empty as u8, promo, 0),
+                        Move::new(from, to, PIECE_EMPTY, promo, 0),
                         move_list,
                     );
                 }
             };
         } else {
             self.add_quiet_move(
-                Move::new(from, to, Piece::Empty as u8, Piece::Empty as u8, 0),
+                Move::new(from, to, PIECE_EMPTY, PIECE_EMPTY, 0),
                 move_list,
             );
         }
@@ -952,8 +950,8 @@ impl Board {
                 Move::new(
                     sq,
                     left_sq,
-                    Piece::Empty as u8,
-                    Piece::Empty as u8,
+                    PIECE_EMPTY,
+                    PIECE_EMPTY,
                     Move::EP_MASK,
                 ),
                 move_list,
@@ -964,8 +962,8 @@ impl Board {
                 Move::new(
                     sq,
                     right_sq,
-                    Piece::Empty as u8,
-                    Piece::Empty as u8,
+                    PIECE_EMPTY,
+                    PIECE_EMPTY,
                     Move::EP_MASK,
                 ),
                 move_list,
@@ -980,18 +978,18 @@ impl Board {
             Rank::Rank7 as u8
         };
         let offset_sq = if SIDE == WHITE { sq + 10 } else { sq - 10 };
-        if self.piece_at(offset_sq) == Piece::Empty as u8 {
+        if self.piece_at(offset_sq) == PIECE_EMPTY {
             self.add_pawn_move::<SIDE, MC>(sq, offset_sq, move_list);
             let double_sq = if SIDE == WHITE { sq + 20 } else { sq - 20 };
             if RANKS_BOARD[sq as usize] == start_rank
-                && self.piece_at(double_sq) == Piece::Empty as u8
+                && self.piece_at(double_sq) == PIECE_EMPTY
             {
                 self.add_quiet_move(
                     Move::new(
                         sq,
                         double_sq,
-                        Piece::Empty as u8,
-                        Piece::Empty as u8,
+                        PIECE_EMPTY,
+                        PIECE_EMPTY,
                         Move::PAWN_START_MASK,
                     ),
                     move_list,
@@ -1029,7 +1027,7 @@ impl Board {
             &BLACK_JUMPERS
         };
         for &piece in jumpers {
-            let dirs = if piece == Piece::WN as u8 || piece == Piece::BN as u8 {
+            let dirs = if piece == WN || piece == BN {
                 &N_DIRS
             } else {
                 &K_DIRS
@@ -1046,14 +1044,14 @@ impl Board {
                     // as offset_square_offboard() is false
                     let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
 
-                    if self.piece_at(t_sq) != Piece::Empty as u8 {
+                    if self.piece_at(t_sq) != PIECE_EMPTY {
                         if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                             self.add_capture_move(
                                 Move::new(
                                     sq,
                                     t_sq,
                                     self.piece_at(t_sq),
-                                    Piece::Empty as u8,
+                                    PIECE_EMPTY,
                                     0,
                                 ),
                                 move_list,
@@ -1061,7 +1059,7 @@ impl Board {
                         }
                     } else {
                         self.add_quiet_move(
-                            Move::new(sq, t_sq, Piece::Empty as u8, Piece::Empty as u8, 0),
+                            Move::new(sq, t_sq, PIECE_EMPTY, PIECE_EMPTY, 0),
                             move_list,
                         );
                     }
@@ -1092,7 +1090,7 @@ impl Board {
                         // as offset_square_offboard() is false
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
-                        if self.piece_at(t_sq) != Piece::Empty as u8 {
+                        if self.piece_at(t_sq) != PIECE_EMPTY {
                             if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                             {
                                 self.add_capture_move(
@@ -1100,7 +1098,7 @@ impl Board {
                                         sq,
                                         t_sq,
                                         self.piece_at(t_sq),
-                                        Piece::Empty as u8,
+                                        PIECE_EMPTY,
                                         0,
                                     ),
                                     move_list,
@@ -1109,7 +1107,7 @@ impl Board {
                             break;
                         }
                         self.add_quiet_move(
-                            Move::new(sq, t_sq, Piece::Empty as u8, Piece::Empty as u8, 0),
+                            Move::new(sq, t_sq, PIECE_EMPTY, PIECE_EMPTY, 0),
                             move_list,
                         );
                         slider += dir;
@@ -1147,7 +1145,7 @@ impl Board {
             &BLACK_JUMPERS
         };
         for &piece in jumpers {
-            let dirs = if piece == Piece::WN as u8 || piece == Piece::BN as u8 {
+            let dirs = if piece == WN || piece == BN {
                 &N_DIRS
             } else {
                 &K_DIRS
@@ -1164,11 +1162,11 @@ impl Board {
                     // as offset_square_offboard() is false
                     let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
 
-                    if self.piece_at(t_sq) != Piece::Empty as u8
+                    if self.piece_at(t_sq) != PIECE_EMPTY
                         && PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                     {
                         self.add_capture_move(
-                            Move::new(sq, t_sq, self.piece_at(t_sq), Piece::Empty as u8, 0),
+                            Move::new(sq, t_sq, self.piece_at(t_sq), PIECE_EMPTY, 0),
                             move_list,
                         );
                     }
@@ -1199,7 +1197,7 @@ impl Board {
                         // as offset_square_offboard() is false
                         let t_sq: u8 = unsafe { slider.try_into().unwrap_unchecked() };
 
-                        if self.piece_at(t_sq) != Piece::Empty as u8 {
+                        if self.piece_at(t_sq) != PIECE_EMPTY {
                             if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1
                             {
                                 self.add_capture_move(
@@ -1207,7 +1205,7 @@ impl Board {
                                         sq,
                                         t_sq,
                                         self.piece_at(t_sq),
-                                        Piece::Empty as u8,
+                                        PIECE_EMPTY,
                                         0,
                                     ),
                                     move_list,
@@ -1225,8 +1223,8 @@ impl Board {
     fn generate_castling_moves(&self, move_list: &mut impl MoveConsumer) {
         if self.side == WHITE {
             if (self.castle_perm & Castling::WK as u8) != 0
-                && self.piece_at(Square120::F1 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::G1 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::F1 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::G1 as u8) == PIECE_EMPTY
                 && !self.sq_attacked(Square120::E1 as u8, BLACK)
                 && !self.sq_attacked(Square120::F1 as u8, BLACK)
             {
@@ -1234,8 +1232,8 @@ impl Board {
                     Move::new(
                         Square120::E1 as u8,
                         Square120::G1 as u8,
-                        Piece::Empty as u8,
-                        Piece::Empty as u8,
+                        PIECE_EMPTY,
+                        PIECE_EMPTY,
                         Move::CASTLE_MASK,
                     ),
                     move_list,
@@ -1243,9 +1241,9 @@ impl Board {
             }
 
             if (self.castle_perm & Castling::WQ as u8) != 0
-                && self.piece_at(Square120::D1 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::C1 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::B1 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::D1 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::C1 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::B1 as u8) == PIECE_EMPTY
                 && !self.sq_attacked(Square120::E1 as u8, BLACK)
                 && !self.sq_attacked(Square120::D1 as u8, BLACK)
             {
@@ -1253,8 +1251,8 @@ impl Board {
                     Move::new(
                         Square120::E1 as u8,
                         Square120::C1 as u8,
-                        Piece::Empty as u8,
-                        Piece::Empty as u8,
+                        PIECE_EMPTY,
+                        PIECE_EMPTY,
                         Move::CASTLE_MASK,
                     ),
                     move_list,
@@ -1262,8 +1260,8 @@ impl Board {
             }
         } else {
             if (self.castle_perm & Castling::BK as u8) != 0
-                && self.piece_at(Square120::F8 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::G8 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::F8 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::G8 as u8) == PIECE_EMPTY
                 && !self.sq_attacked(Square120::E8 as u8, WHITE)
                 && !self.sq_attacked(Square120::F8 as u8, WHITE)
             {
@@ -1271,8 +1269,8 @@ impl Board {
                     Move::new(
                         Square120::E8 as u8,
                         Square120::G8 as u8,
-                        Piece::Empty as u8,
-                        Piece::Empty as u8,
+                        PIECE_EMPTY,
+                        PIECE_EMPTY,
                         Move::CASTLE_MASK,
                     ),
                     move_list,
@@ -1280,9 +1278,9 @@ impl Board {
             }
 
             if (self.castle_perm & Castling::BQ as u8) != 0
-                && self.piece_at(Square120::D8 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::C8 as u8) == Piece::Empty as u8
-                && self.piece_at(Square120::B8 as u8) == Piece::Empty as u8
+                && self.piece_at(Square120::D8 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::C8 as u8) == PIECE_EMPTY
+                && self.piece_at(Square120::B8 as u8) == PIECE_EMPTY
                 && !self.sq_attacked(Square120::E8 as u8, WHITE)
                 && !self.sq_attacked(Square120::D8 as u8, WHITE)
             {
@@ -1290,8 +1288,8 @@ impl Board {
                     Move::new(
                         Square120::E8 as u8,
                         Square120::C8 as u8,
-                        Piece::Empty as u8,
-                        Piece::Empty as u8,
+                        PIECE_EMPTY,
+                        PIECE_EMPTY,
                         Move::CASTLE_MASK,
                     ),
                     move_list,
@@ -1359,7 +1357,7 @@ impl Board {
 
         hash_piece(&mut self.key, piece, sq);
 
-        *self.piece_at_mut(sq) = Piece::Empty as u8;
+        *self.piece_at_mut(sq) = PIECE_EMPTY;
         self.mg_material[colour as usize] -= MG_PIECE_VALUES[piece as usize];
         self.eg_material[colour as usize] -= EG_PIECE_VALUES[piece as usize];
         self.pst_vals[0] -= midgame_pst_value(piece, sq);
@@ -1425,7 +1423,7 @@ impl Board {
         hash_piece(&mut self.key, piece, from);
         hash_piece(&mut self.key, piece, to);
 
-        *self.piece_at_mut(from) = Piece::Empty as u8;
+        *self.piece_at_mut(from) = PIECE_EMPTY;
         self.pst_vals[0] -= midgame_pst_value(piece, from);
         self.pst_vals[1] -= endgame_pst_value(piece, from);
         *self.piece_at_mut(to) = piece;
@@ -1537,7 +1535,7 @@ impl Board {
         let captured = m.capture();
         self.fifty_move_counter += 1;
 
-        if captured != Piece::Empty as u8 {
+        if captured != PIECE_EMPTY {
             debug_assert!(piece_valid(captured));
             self.clear_piece(to);
             self.fifty_move_counter = 0;
@@ -1546,7 +1544,7 @@ impl Board {
         self.hist_ply += 1;
         self.ply += 1;
 
-        if piece == Piece::WP as u8 || piece == Piece::BP as u8 {
+        if piece == WP || piece == BP {
             self.fifty_move_counter = 0;
             if m.is_pawn_start() {
                 if side == WHITE {
@@ -1564,14 +1562,14 @@ impl Board {
 
         let promoted_piece = m.promotion();
 
-        if promoted_piece != Piece::Empty as u8 {
+        if promoted_piece != PIECE_EMPTY {
             debug_assert!(piece_valid(promoted_piece));
-            debug_assert!(promoted_piece != Piece::WP as u8 && promoted_piece != Piece::BP as u8);
+            debug_assert!(promoted_piece != WP && promoted_piece != BP);
             self.clear_piece(to);
             self.add_piece(to, promoted_piece);
         }
 
-        if piece == Piece::WK as u8 || piece == Piece::BK as u8 {
+        if piece == WK || piece == BK {
             unsafe { *self.king_sq.get_unchecked_mut(side as usize) = to; }
         }
 
@@ -1659,9 +1657,9 @@ impl Board {
 
         if m.is_ep() {
             if self.side == WHITE {
-                self.add_piece(to - 10, Piece::BP as u8);
+                self.add_piece(to - 10, BP);
             } else {
-                self.add_piece(to + 10, Piece::WP as u8);
+                self.add_piece(to + 10, WP);
             }
         } else if m.is_castle() {
             match to {
@@ -1677,28 +1675,28 @@ impl Board {
 
         self.move_piece(to, from);
 
-        if self.piece_at(from) == Piece::WK as u8
-            || self.piece_at(from) == Piece::BK as u8
+        let from_piece = self.piece_at(from);
+        if from_piece == WK || from_piece == BK
         {
             self.king_sq[self.side as usize] = from;
         }
 
         let captured = m.capture();
-        if captured != Piece::Empty as u8 {
+        if captured != PIECE_EMPTY {
             debug_assert!(piece_valid(captured));
             self.add_piece(to, captured);
         }
 
-        if m.promotion() != Piece::Empty as u8 {
+        if m.promotion() != PIECE_EMPTY {
             debug_assert!(piece_valid(m.promotion()));
-            debug_assert!(m.promotion() != Piece::WP as u8 && m.promotion() != Piece::BP as u8);
+            debug_assert!(m.promotion() != WP && m.promotion() != BP);
             self.clear_piece(from);
             self.add_piece(
                 from,
                 if PIECE_COL[m.promotion() as usize] as u8 == WHITE {
-                    Piece::WP as u8
+                    WP
                 } else {
-                    Piece::BP as u8
+                    BP
                 },
             );
         }

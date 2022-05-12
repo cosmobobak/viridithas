@@ -1,5 +1,5 @@
 use crate::{
-    definitions::{Piece, Square120},
+    definitions::{Square120, PIECE_EMPTY, BK, WP},
     lookups::FILES_BOARD,
 };
 
@@ -17,9 +17,9 @@ pub fn file_rank_valid(fr: u8) -> bool {
 }
 
 pub const fn piece_valid_empty(pc: u8) -> bool {
-    pc >= Piece::Empty as u8 && pc <= Piece::BK as u8
+    pc >= PIECE_EMPTY as u8 && pc <= BK
 }
 
 pub const fn piece_valid(pc: u8) -> bool {
-    pc >= Piece::WP as u8 && pc <= Piece::BK as u8
+    pc >= WP && pc <= BK
 }

@@ -1,4 +1,4 @@
-use crate::definitions::Piece;
+use crate::definitions::{WB, WR, WQ, BQ, BR, BB, WN, WK, BK, BN};
 
 pub static N_DIRS: [i8; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
 pub static B_DIR: [i8; 4] = [-9, -11, 11, 9];
@@ -22,10 +22,10 @@ pub static IS_SLIDER: [bool; 13] = [
     false, false, false, true, true, true, false, false, false, true, true, true, false,
 ];
 
-pub static WHITE_SLIDERS: [u8; 3] = [Piece::WB as u8, Piece::WR as u8, Piece::WQ as u8];
+pub static WHITE_SLIDERS: [u8; 3] = [WB, WR, WQ];
 
-pub static BLACK_SLIDERS: [u8; 3] = [Piece::BB as u8, Piece::BR as u8, Piece::BQ as u8];
+pub static BLACK_SLIDERS: [u8; 3] = [BB, BR, BQ];
 
-pub static WHITE_JUMPERS: [u8; 2] = [Piece::WN as u8, Piece::WK as u8];
+pub static WHITE_JUMPERS: [u8; 2] = [WN, WK];
 
-pub static BLACK_JUMPERS: [u8; 2] = [Piece::BN as u8, Piece::BK as u8];
+pub static BLACK_JUMPERS: [u8; 2] = [BN, BK];

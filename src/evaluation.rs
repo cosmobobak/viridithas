@@ -1,11 +1,10 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
-use crate::definitions::Piece;
 use crate::{
     board::Board,
     chessmove::Move,
     lookups::{init_eval_masks, init_passed_isolated_bb},
-    movegen::MoveConsumer,
+    movegen::MoveConsumer, definitions::{PIECE_EMPTY, WK, WQ, WR, WB, WN, WP, BP, BN, BB, BR, BQ, BK},
 };
 
 // These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
@@ -258,15 +257,16 @@ impl<'a> MoveCounter<'a> {
         knights + bishops + rooks + queens + kings
     }
 
-    pub fn get_mobility_of(&self, piece: Piece) -> i32 {
+    pub fn get_mobility_of(&self, piece: u8) -> i32 {
         match piece {
-            Piece::WP | Piece::BP => self.counters[0],
-            Piece::WN | Piece::BN => self.counters[1],
-            Piece::WB | Piece::BB => self.counters[2],
-            Piece::WR | Piece::BR => self.counters[3],
-            Piece::WQ | Piece::BQ => self.counters[4],
-            Piece::WK | Piece::BK => self.counters[5],
-            Piece::Empty => panic!("Tried to get mobility of empty piece"),
+            WP | BP => self.counters[0],
+            WN | BN => self.counters[1],
+            WB | BB => self.counters[2],
+            WR | BR => self.counters[3],
+            WQ | BQ => self.counters[4],
+            WK | BK => self.counters[5],
+            PIECE_EMPTY => panic!("Tried to get mobility of empty piece"),
+            _ => panic!("Tried to get mobility of invalid piece"),
         }
     }
 }

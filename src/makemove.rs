@@ -3,10 +3,7 @@
 // utility functions here that are used in
 // the Board::make_move() function.
 
-use crate::{
-    definitions::Piece,
-    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
-};
+use crate::{lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY}, definitions::PIECE_EMPTY};
 
 #[inline]
 pub fn hash_castling(key: &mut u64, castle_perm: u8) {
@@ -37,7 +34,7 @@ pub fn hash_ep(key: &mut u64, ep_sq: u8) {
     debug_assert!((ep_sq as usize) < 120);
     let ep_key = unsafe {
         *PIECE_KEYS
-            .get_unchecked(Piece::Empty as usize)
+            .get_unchecked(PIECE_EMPTY as usize)
             .get_unchecked(ep_sq as usize)
     };
     *key ^= ep_key;
