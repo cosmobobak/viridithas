@@ -35,14 +35,6 @@ impl MoveList {
         }
     }
 
-    pub const fn is_empty(&self) -> bool {
-        self.count == 0
-    }
-
-    pub fn clear(&mut self) {
-        self.count = 0;
-    }
-
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Move> {
         unsafe {
@@ -51,11 +43,6 @@ impl MoveList {
                 .iter()
                 .map(|e| &e.entry)
         }
-    }
-
-    #[inline]
-    pub fn iter_with_scores(&self) -> impl Iterator<Item = &MoveListEntry> {
-        unsafe { self.moves.get_unchecked(..self.count).iter() }
     }
 
     #[inline]
@@ -75,10 +62,6 @@ impl MoveList {
                 .iter_mut()
                 .find(|e| e.entry == m)
         }
-    }
-
-    pub const fn len(&self) -> usize {
-        self.count
     }
 }
 

@@ -3,7 +3,10 @@
 // utility functions here that are used in
 // the Board::make_move() function.
 
-use crate::{lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY}, definitions::PIECE_EMPTY};
+use crate::{
+    definitions::PIECE_EMPTY,
+    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
+};
 
 #[inline]
 pub fn hash_castling(key: &mut u64, castle_perm: u8) {

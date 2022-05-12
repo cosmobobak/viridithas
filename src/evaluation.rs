@@ -4,7 +4,7 @@ use crate::{
     board::Board,
     chessmove::Move,
     lookups::{init_eval_masks, init_passed_isolated_bb},
-    movegen::MoveConsumer, definitions::{PIECE_EMPTY, WK, WQ, WR, WB, WN, WP, BP, BN, BB, BR, BQ, BK},
+    movegen::MoveConsumer,
 };
 
 // These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
@@ -85,8 +85,6 @@ pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
 
 /// A threshold over which we will not bother evaluating more than material and PSTs.
 pub const LAZY_THRESHOLD_1: i32 = 14_00;
-/// A threshold over which we will not bother evaluating more than pawns and mobility.
-pub const LAZY_THRESHOLD_2: i32 = 8_00;
 
 const PAWN_PHASE: f32 = 0.1;
 const KNIGHT_PHASE: f32 = 1.0;
@@ -99,6 +97,7 @@ const TOTAL_PHASE: f32 = 16.0 * PAWN_PHASE
     + 4.0 * ROOK_PHASE
     + 2.0 * QUEEN_PHASE;
 
+#[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
 pub static FILE_BB: [u64; 8] = init_eval_masks().1;
 
@@ -171,6 +170,7 @@ pub struct EvalVector {
     pub turn: i32,
 }
 
+#[allow(dead_code)]
 impl EvalVector {
     pub const fn new() -> Self {
         Self {
@@ -257,19 +257,6 @@ impl<'a> MoveCounter<'a> {
         let queens = self.counters[4] * QUEEN_MOBILITY_MULTIPLIER;
         let kings = self.counters[5] * KING_MOBILITY_MULTIPLIER;
         knights + bishops + rooks + queens + kings
-    }
-
-    pub fn get_mobility_of(&self, piece: u8) -> i32 {
-        match piece {
-            WP | BP => self.counters[0],
-            WN | BN => self.counters[1],
-            WB | BB => self.counters[2],
-            WR | BR => self.counters[3],
-            WQ | BQ => self.counters[4],
-            WK | BK => self.counters[5],
-            PIECE_EMPTY => panic!("Tried to get mobility of empty piece"),
-            _ => panic!("Tried to get mobility of invalid piece"),
-        }
     }
 }
 

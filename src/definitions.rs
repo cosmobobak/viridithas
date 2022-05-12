@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{
     chessmove::Move,
     evaluation::{MATE_SCORE, ONE_PAWN},
@@ -220,16 +222,3 @@ pub fn square64_name(sq: u8) -> Option<&'static str> {
 }
 
 pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-pub fn print_bitboard(bb: u64) {
-    for row in 0..8 {
-        for col in 0..8 {
-            if bb & (1 << (row * 8 + col)) != 0 {
-                print!("X");
-            } else {
-                print!(".");
-            }
-        }
-        println!();
-    }
-}

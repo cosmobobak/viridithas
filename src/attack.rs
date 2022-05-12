@@ -1,4 +1,4 @@
-use crate::definitions::{WB, WR, WQ, BQ, BR, BB, WN, WK, BK, BN};
+use crate::definitions::{BB, BK, BN, BQ, BR, WB, WK, WN, WQ, WR};
 
 pub static N_DIRS: [i8; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
 pub static B_DIR: [i8; 4] = [-9, -11, 11, 9];
@@ -17,9 +17,6 @@ pub static IS_ROOKQUEEN: [bool; 13] = [
 ];
 pub static IS_BISHOPQUEEN: [bool; 13] = [
     false, false, false, true, false, true, false, false, false, true, false, true, false,
-];
-pub static IS_SLIDER: [bool; 13] = [
-    false, false, false, true, true, true, false, false, false, true, true, true, false,
 ];
 
 pub static WHITE_SLIDERS: [u8; 3] = [WB, WR, WQ];

@@ -134,14 +134,13 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
         moves_to_go = Some(1);
     }
 
-    info.start_time = std::time::Instant::now();
-
-    if let Some(time) = time {
+    let search_time_window = time.map_or(1, |t| {
         info.time_set = true;
-        let time = time as u64 / moves_to_go.unwrap_or(30) as u64 + inc.unwrap_or(0) as u64;
-        let time = time.checked_sub(50).unwrap_or(1);
-        info.stop_time = info.start_time + std::time::Duration::from_millis(time);
-    }
+        let time = t as u64 / moves_to_go.unwrap_or(30) as u64 + inc.unwrap_or(0) as u64;
+        time.checked_sub(50).unwrap_or(1)
+    });
+
+    info.set_time_window(search_time_window);
 
     if let Some(depth) = depth {
         info.depth = depth;
@@ -226,7 +225,7 @@ pub fn main_loop() {
                 info.quit = true;
                 break;
             }
-            "ucinewgame" => { 
+            "ucinewgame" => {
                 parse_position("position startpos\n", &mut pos);
                 pos.clear_tt();
             }

@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::definitions::{
-    Colour, File, Rank, Square120, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8, WP, BK,
+    Colour, File, Rank, Square120, BK, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8, WP,
 };
 
 macro_rules! cfor {
@@ -48,18 +48,6 @@ pub const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
         rank += 1;
     }
     (sq120_to_sq64, sq64_to_sq120)
-}
-
-const fn init_bit_masks() -> ([u64; 64], [u64; 64]) {
-    let mut setmask = [0; 64];
-    let mut clearmask = [0; 64];
-
-    cfor!(let mut index = 0; index < 64; index += 1; {
-        setmask[index] = 1 << index;
-        clearmask[index] = !setmask[index];
-    });
-
-    (setmask, clearmask)
 }
 
 struct XorShiftState {
@@ -202,9 +190,6 @@ pub const fn files_ranks() -> ([u8; BOARD_N_SQUARES], [u8; BOARD_N_SQUARES]) {
 pub static SQ120_TO_SQ64: [u8; BOARD_N_SQUARES] = init_sq120_to_sq64().0;
 pub static SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
 
-pub static SET_MASK: [u64; 64] = init_bit_masks().0;
-pub static CLEAR_MASK: [u64; 64] = init_bit_masks().1;
-
 pub static PIECE_KEYS: [[u64; 120]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
@@ -253,11 +238,12 @@ pub static SQUARE_NAMES: [&str; 64] = [
 ];
 
 /// The name of this piece.
+#[allow(dead_code)]
 pub static PIECE_NAMES: [&str; 13] = [
     "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
     "rook", "queen", "king",
 ];
-
+#[allow(dead_code)]
 pub static PIECE_CHARS: [u8; 13] = [
     b'.', b'p', b'n', b'b', b'r', b'q', b'k', b'P', b'N', b'B', b'R', b'Q', b'K',
 ];

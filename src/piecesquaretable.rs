@@ -151,7 +151,6 @@ const MIDGAME: bool = false;
 const ENDGAME: bool = true;
 
 const SQ120: [u8; 64] = crate::lookups::init_sq120_to_sq64().1;
-const INDEX_MAPPING: [usize; 8] = [0, 1, 2, 3, 3, 2, 1, 0];
 
 const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
     let mut out = [[0; 120]; 13];
@@ -218,7 +217,7 @@ pub fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
     }
 }
 
-pub fn render_pst_table(pst: &[[i32; 120]; 13]) {
+pub fn _render_pst_table(pst: &[[i32; 120]; 13]) {
     for piece in 0..13 {
         println!("{}", PIECE_NAMES[piece]);
         println!(

@@ -1,5 +1,5 @@
 use crate::{
-    definitions::{Square120, PIECE_EMPTY, BK, WP},
+    definitions::{Square120, BK, PIECE_EMPTY, WP},
     lookups::FILES_BOARD,
 };
 
@@ -10,10 +10,6 @@ pub fn square_on_board(sq: u8) -> bool {
 
 pub const fn side_valid(side: u8) -> bool {
     side == 0 || side == 1
-}
-
-pub fn file_rank_valid(fr: u8) -> bool {
-    (0..=7).contains(&fr)
 }
 
 pub const fn piece_valid_empty(pc: u8) -> bool {

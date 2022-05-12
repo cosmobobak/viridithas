@@ -7,7 +7,7 @@ pub fn pop_lsb(bb: &mut u64) -> u32 {
     lsb
 }
 
-pub fn write_bb(bb: u64, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+pub fn _write_bb(bb: u64, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     for rank in (0..=7).rev() {
         for file in 0..=7 {
             let sq = filerank_to_square(file, rank);

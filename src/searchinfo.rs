@@ -1,11 +1,5 @@
 use std::{sync::mpsc, time::Instant};
 
-enum SearchLimit {
-    Depth(usize),
-    Time(Instant),
-    Infinite,
-}
-
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
@@ -69,11 +63,6 @@ impl<'a> SearchInfo<'a> {
     pub fn set_time_window(&mut self, millis: u64) {
         self.start_time = Instant::now();
         self.stop_time = self.start_time + std::time::Duration::from_millis(millis);
-    }
-
-    pub fn set_time_window_secs(&mut self, secs: u64) {
-        self.start_time = Instant::now();
-        self.stop_time = self.start_time + std::time::Duration::from_secs(secs);
     }
 
     pub fn check_up(&mut self) {

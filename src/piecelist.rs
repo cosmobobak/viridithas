@@ -63,11 +63,6 @@ impl PieceList {
     }
 
     #[inline]
-    pub const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    #[inline]
     pub fn clear(&mut self) {
         self.len = 0;
     }
