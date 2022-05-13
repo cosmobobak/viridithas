@@ -47,11 +47,11 @@ pub fn _gamut() {
                 break;
             }
             let perft_nodes = _perft(&mut pos, d as usize);
-            if perft_nodes != nodes {
+            if perft_nodes == nodes {
+                println!("PASS: fen {fen}, depth {d}");
+            } else {
                 println!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
                 panic!("perft failed");
-            } else {
-                println!("PASS: fen {fen}, depth {d}");
             }
         }
     }

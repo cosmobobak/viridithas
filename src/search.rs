@@ -261,14 +261,14 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         return DRAW_SCORE;
     }
 
-    if alpha != original_alpha {
+    if alpha == original_alpha {
+        // we didn't raise alpha, so this is an all-node
+        pos.tt_store(best_move, alpha, HFlag::Alpha, depth);
+    } else {
         // we raised alpha, and didn't raise beta
         // as if we had, we would have returned early, 
         // so this is a PV-node
         pos.tt_store(best_move, best_score, HFlag::Exact, depth);
-    } else {
-        // we didn't raise alpha, so this is an all-node
-        pos.tt_store(best_move, alpha, HFlag::Alpha, depth);
     }
 
     alpha

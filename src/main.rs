@@ -1,5 +1,4 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(clippy::if_not_else)]
 
 mod attack;
 mod bitboard;
@@ -18,7 +17,7 @@ mod transpositiontable;
 mod uci;
 mod validate;
 
-pub const NAME: &str = "Viridithas II";
+pub const NAME: &str = "Viridithas";
 
 fn main() {
     #[cfg(debug_assertions)]

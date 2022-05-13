@@ -345,18 +345,18 @@ impl Board {
                     // as offset_square_offboard() is false
                     let t_sq: u8 = unsafe { t_sq.try_into().unwrap_unchecked() };
 
-                    if self.piece_at(t_sq) != PIECE_EMPTY {
+                    if self.piece_at(t_sq) == PIECE_EMPTY {
+                        self.add_quiet_move(
+                            Move::new(sq, t_sq, PIECE_EMPTY, PIECE_EMPTY, 0),
+                            move_list,
+                        );
+                    } else {
                         if PIECE_COL[self.piece_at(t_sq) as usize] as u8 == self.side ^ 1 {
                             self.add_capture_move(
                                 Move::new(sq, t_sq, self.piece_at(t_sq), PIECE_EMPTY, 0),
                                 move_list,
                             );
                         }
-                    } else {
-                        self.add_quiet_move(
-                            Move::new(sq, t_sq, PIECE_EMPTY, PIECE_EMPTY, 0),
-                            move_list,
-                        );
                     }
                 }
             }
