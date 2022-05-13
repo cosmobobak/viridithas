@@ -8,7 +8,10 @@
 pub mod evaluation;
 pub mod movegen;
 
-use std::{fmt::{Debug, Display, Formatter}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display, Formatter},
+};
 
 use crate::{
     attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIRS, N_DIRS, R_DIR},
@@ -1280,19 +1283,16 @@ impl Board {
             return 0;
         }
 
-        let mut entry = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH);
-
         let mut moves_done = 0;
 
-        while let ProbeResult::BestMove(pv_move) = entry {
-            if self.is_legal(pv_move) && moves_done < depth {
+        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
+            if self.is_legal(pv_move) {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
                 moves_done += 1;
             } else {
                 break;
             }
-            entry = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH);
         }
 
         for _ in 0..moves_done {
