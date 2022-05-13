@@ -18,12 +18,11 @@ mod transpositiontable;
 mod uci;
 mod validate;
 
+pub const NAME: &str = "Viridithas II";
+
 fn main() {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
-
-    println!("btyes: {}", transpositiontable::TT_ENTRY_SIZE);
-    println!("default size: {}", transpositiontable::DEFAULT_TABLE_SIZE);
 
     uci::main_loop();
 }

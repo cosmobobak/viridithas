@@ -3,7 +3,7 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use crate::board::{Board, movegen::MoveList};
+use crate::board::{movegen::MoveList, Board};
 
 fn _perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]

@@ -4,9 +4,13 @@ use std::{
 };
 
 use crate::{
-    board::{Board, evaluation::{IS_MATE_SCORE, MATE_SCORE}},
+    board::{
+        evaluation::{IS_MATE_SCORE, MATE_SCORE},
+        Board,
+    },
     definitions::{BLACK, MAX_DEPTH, WHITE},
     searchinfo::SearchInfo,
+    NAME,
 };
 
 // position fen
@@ -196,7 +200,7 @@ pub fn format_score(score: i32) -> String {
 }
 
 pub fn main_loop() {
-    println!("id name Viridithas");
+    println!("id name {NAME}");
     println!("id author Cosmo");
     println!("uciok");
 
@@ -215,7 +219,7 @@ pub fn main_loop() {
         match input {
             "\n" => continue,
             "uci" => {
-                println!("id name Viridithas");
+                println!("id name {NAME}");
                 println!("id author Cosmo");
                 println!("uciok");
             }

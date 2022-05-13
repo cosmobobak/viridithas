@@ -1,9 +1,9 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 
 use crate::{
+    board::evaluation::IS_MATE_SCORE,
     chessmove::Move,
     definitions::{INFINITY, MAX_DEPTH},
-    board::evaluation::IS_MATE_SCORE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,8 +23,6 @@ pub struct TTEntry {
     /// encode in tagged union instead.
     pub flag: HFlag,
 }
-
-pub const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 const TASTY_PRIME_NUMBER: usize = 12_582_917;
 

@@ -1,11 +1,11 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
 use crate::{
+    board::movegen::MoveConsumer,
     board::Board,
     chessmove::Move,
     definitions::{BB, BK, BLACK, BN, BOTH, BP, BQ, BR, WB, WHITE, WK, WN, WP, WQ, WR},
     lookups::{init_eval_masks, init_passed_isolated_bb, FILES_BOARD, RANKS_BOARD, SQ120_TO_SQ64},
-    board::movegen::MoveConsumer,
     piecesquaretable::{ENDGAME_PST, MIDGAME_PST},
 };
 

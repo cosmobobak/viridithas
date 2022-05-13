@@ -1,8 +1,11 @@
 use crate::{
-    board::{Board, evaluation::{DRAW_SCORE, MATE_SCORE}},
+    board::movegen::MoveList,
+    board::{
+        evaluation::{DRAW_SCORE, MATE_SCORE},
+        Board,
+    },
     chessmove::Move,
     definitions::{FUTILITY_MARGIN, INFINITY, MAX_DEPTH},
-    board::movegen::MoveList,
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-    chessmove::Move,
     board::evaluation::{MATE_SCORE, ONE_PAWN},
+    chessmove::Move,
     lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
 };
 
