@@ -1102,9 +1102,9 @@ impl Board {
             castle_perm,
             ep_square,
             fifty_move_counter,
-            position_key: _, // this is sus.
+            position_key: r_key,
         } = self.history.pop().expect("No move to unmake!");
-        let something_removed = self.repetition_cache.remove(&self.key);
+        let something_removed = self.repetition_cache.remove(&r_key);
         debug_assert!(something_removed);
 
         let from = m.from();
