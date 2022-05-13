@@ -4,9 +4,8 @@ use std::{
 };
 
 use crate::{
-    board::Board,
+    board::{Board, evaluation::{IS_MATE_SCORE, MATE_SCORE}},
     definitions::{BLACK, MAX_DEPTH, WHITE},
-    evaluation::{IS_MATE_SCORE, MATE_SCORE},
     searchinfo::SearchInfo,
 };
 

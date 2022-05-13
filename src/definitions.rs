@@ -2,7 +2,7 @@
 
 use crate::{
     chessmove::Move,
-    evaluation::{MATE_SCORE, ONE_PAWN},
+    board::evaluation::{MATE_SCORE, ONE_PAWN},
     lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
 };
 

@@ -3,7 +3,7 @@
 use crate::{
     chessmove::Move,
     definitions::{INFINITY, MAX_DEPTH},
-    evaluation::IS_MATE_SCORE,
+    board::evaluation::IS_MATE_SCORE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
