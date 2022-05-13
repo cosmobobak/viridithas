@@ -8,7 +8,7 @@
 pub mod evaluation;
 pub mod movegen;
 
-use std::fmt::{Debug, Display, Formatter};
+use std::{fmt::{Debug, Display, Formatter}, collections::HashSet};
 
 use crate::{
     attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIRS, N_DIRS, R_DIR},
@@ -56,6 +56,7 @@ pub struct Board {
     eg_material: [i32; 2],
     castle_perm: u8,
     history: Vec<Undo>,
+    repetition_cache: HashSet<u64>,
     piece_lists: [PieceList; 13],
 
     principal_variation: Vec<Move>,
@@ -89,6 +90,7 @@ impl Board {
             eg_material: [0; 2],
             castle_perm: 0,
             history: Vec::with_capacity(MAX_GAME_MOVES),
+            repetition_cache: HashSet::with_capacity(MAX_GAME_MOVES),
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::with_capacity(MAX_DEPTH),
             history_table: [[0; BOARD_N_SQUARES]; 13],
@@ -248,6 +250,7 @@ impl Board {
         self.key = 0;
         self.pst_vals.fill(0);
         self.history.clear();
+        self.repetition_cache.clear();
     }
 
     pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
@@ -992,6 +995,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             position_key: saved_key,
         });
+        self.repetition_cache.insert(saved_key);
 
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from as usize) };
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to as usize) };
@@ -1100,6 +1104,8 @@ impl Board {
             fifty_move_counter,
             position_key: _, // this is sus.
         } = self.history.pop().expect("No move to unmake!");
+        let something_removed = self.repetition_cache.remove(&self.key);
+        debug_assert!(something_removed);
 
         let from = m.from();
         let to = m.to();
@@ -1260,15 +1266,7 @@ impl Board {
     }
 
     pub fn is_repetition(&self) -> bool {
-        for entry in self.history.iter().rev() {
-            if entry.position_key == self.key {
-                return true;
-            }
-            if entry.fifty_move_counter == 0 {
-                break;
-            }
-        }
-        false
+        self.repetition_cache.contains(&self.key)
     }
 
     pub fn is_draw(&self) -> bool {
@@ -1484,7 +1482,8 @@ impl Board {
         let mut pv_length = 0;
         let mut best_depth = 1;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
-        for depth in 0..=info.depth {
+        let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1);
+        for depth in 0..=max_depth {
             let mut score = alpha_beta(self, info, depth, alpha, beta);
 
             info.check_up();
@@ -1528,7 +1527,7 @@ impl Board {
             alpha = score - ONE_PAWN / 4;
             beta = score + ONE_PAWN / 4;
             pv_length = self.get_pv_line(depth);
-            most_recent_move = *self.principal_variation.get(0).unwrap_or(&first_legal);
+            most_recent_move = *self.principal_variation.get(0).unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score);
 
