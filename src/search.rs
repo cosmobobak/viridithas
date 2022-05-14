@@ -158,7 +158,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
-    if !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth >= 3 {
+    if !in_pv_node && !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth >= 3 {
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
