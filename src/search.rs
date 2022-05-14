@@ -177,7 +177,10 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     move_list.sort();
 
-    let futility_pruning_legal = !pos.in_check::<{ Board::US }>() && depth == 1 && pos.evaluate() + FUTILITY_MARGIN < alpha;
+    let futility_pruning_legal = !pos.in_check::<{ Board::US }>() 
+        && depth == 1
+        && pos.evaluate() + FUTILITY_MARGIN < alpha
+        && !in_pv_node;
 
     for &m in move_list.iter() {
         if !pos.make_move(m) {
@@ -207,8 +210,13 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // 1. the move we're about to make isn't "interesting" (i.e. it's not a capture, a promotion, or a check)
             // 2. we're at a depth >= 3.
             // 3. we're not already extending the search.
-            // 4. we've tried at least 2 moves at full depth, or 3 if we're in a PV-node.
-            let can_reduce = moves_made >= (2 + usize::from(in_pv_node)) && extension == 0 && !is_interesting && depth >= 3;
+            // 4. we've tried at least 2 moves at full depth.
+            // 5. we're not in a pv-node.
+            let can_reduce = !is_interesting
+                && depth >= 3
+                && extension == 0
+                && moves_made >= 2
+                && !in_pv_node;
             let reduction = if can_reduce { logistic_reduction(moves_made, depth) } else { 0 };
             // perform a zero-window search, possibly with a reduction
             let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);

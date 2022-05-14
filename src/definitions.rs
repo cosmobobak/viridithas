@@ -11,9 +11,6 @@ pub const MAX_GAME_MOVES: usize = 1024;
 pub const MAX_DEPTH: usize = 512;
 pub const INFINITY: i32 = MATE_SCORE * 2;
 
-pub const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
-pub const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
-
 pub const FUTILITY_MARGIN: i32 = 2 * ONE_PAWN;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
