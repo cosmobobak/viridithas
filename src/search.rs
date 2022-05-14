@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN},
+        evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN, MG_PIECE_VALUES},
         Board,
     },
     chessmove::Move,
@@ -27,6 +27,9 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
 
     if info.nodes.trailing_zeros() >= 12 {
         info.check_up();
+        if info.stopped {
+            return 0;
+        }
     }
 
     info.nodes += 1;
@@ -39,14 +42,14 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         return pos.evaluate();
     }
 
-    let score = pos.evaluate();
+    let stand_pat = pos.evaluate();
 
-    if score >= beta {
+    if stand_pat >= beta {
         return beta;
     }
 
-    if score > alpha {
-        alpha = score;
+    if stand_pat > alpha {
+        alpha = stand_pat;
     }
 
     let mut move_list = MoveList::new();
@@ -62,6 +65,14 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     move_list.sort();
 
     for &m in move_list.iter() {
+        // delta pruning: if this capture cannot raise 
+        // the static eval + a safety margin to alpha, skip it.
+        // this should not be on during the late endgame, as it
+        // will cause suffering in insufficient material situations.
+        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[pos.piece_at(m.to()) as usize] + ONE_PAWN * 2 < alpha {
+            continue;
+        }
+
         if !pos.make_move(m) {
             continue;
         }
@@ -223,6 +234,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             }
             if extension == 0 && !in_pv_node && depth == 2 && reduction < 2 {
                 // razoring at the pre-frontier nodes.
+                // broadly taken from the Crafty pseudocode
+                // here https://www.chessprogramming.org/Razoring
                 let static_eval = pos.evaluate();
                 if static_eval + ONE_PAWN / 2 < alpha {
                     reduction += 1;
