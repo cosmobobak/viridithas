@@ -125,7 +125,7 @@ impl Board {
         entry[0] = m;
     }
 
-    pub fn insert_history(&mut self, m: Move, score: i32) {
+    pub fn add_history(&mut self, m: Move, score: i32) {
         let from = m.from() as usize;
         let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
         let history_board = unsafe { self.history_table.get_unchecked_mut(piece_moved) };

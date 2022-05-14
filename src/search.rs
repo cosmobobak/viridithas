@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE},
+        evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN},
         Board,
     },
     chessmove::Move,
@@ -92,7 +92,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     alpha
 }
 
-fn logistic_reduction(moves: usize, depth: usize) -> usize {
+fn lateness_reduction(moves: usize, depth: usize) -> usize {
     #![allow(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -116,6 +116,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     if depth == 0 {
         return quiescence_search(pos, info, alpha, beta);
     }
+
+    let in_pv_node = beta - alpha > 1;
 
     if info.nodes.trailing_zeros() >= 12 {
         info.check_up();
@@ -157,7 +159,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         }
     }
 
-    let in_pv_node = beta - alpha > 1;
 
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
@@ -212,12 +213,21 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // 3. we're not already extending the search.
             // 4. we've tried at least 2 moves at full depth.
             // 5. we're not in a pv-node.
-            let can_reduce = !is_interesting
+            let mut reduction = 0; 
+            if !is_interesting
                 && depth >= 3
                 && extension == 0
                 && moves_made >= 2
-                && !in_pv_node;
-            let reduction = if can_reduce { logistic_reduction(moves_made, depth) } else { 0 };
+                && !in_pv_node { 
+                reduction += lateness_reduction(moves_made, depth);
+            }
+            if extension == 0 && !in_pv_node && depth == 2 && reduction < 2 {
+                // razoring at the pre-frontier nodes.
+                let static_eval = pos.evaluate();
+                if static_eval + ONE_PAWN / 2 < alpha {
+                    reduction += 1;
+                }
+            }
             // perform a zero-window search, possibly with a reduction
             let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);
             if r > alpha && r < beta {
@@ -245,6 +255,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                     info.failhigh += 1.0;
 
                     if !is_capture {
+                        // quiet moves that fail high are killers.
                         pos.insert_killer(m);
                     }
 
@@ -255,7 +266,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                 alpha = score;
                 best_move = m;
                 if !is_capture {
-                    pos.insert_history(m, history_score);
+                    // quiet moves that improve alpha increment the history table
+                    pos.add_history(m, history_score);
                 }
             }
         }
