@@ -69,7 +69,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         // the static eval + a safety margin to alpha, skip it.
         // this should not be on during the late endgame, as it
         // will cause suffering in insufficient material situations.
-        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[pos.piece_at(m.to()) as usize] + ONE_PAWN * 2 < alpha {
+        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[m.capture() as usize] + ONE_PAWN * 2 < alpha {
             continue;
         }
 
@@ -207,6 +207,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         let is_interesting = is_capture || is_promotion || is_check;
 
         if futility_pruning_legal && !is_interesting {
+            // this can in theory be staged, because captures and promos can be determined without making the move.
             pos.unmake_move();
             continue;
         }
