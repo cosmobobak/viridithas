@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN, MG_PIECE_VALUES},
+        evaluation::{DRAW_SCORE, MATE_SCORE, MG_PIECE_VALUES, ONE_PAWN},
         Board,
     },
     chessmove::Move,
@@ -65,11 +65,12 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     move_list.sort();
 
     for &m in move_list.iter() {
-        // delta pruning: if this capture cannot raise 
+        // delta pruning: if this capture cannot raise
         // the static eval + a safety margin to alpha, skip it.
         // this should not be on during the late endgame, as it
         // will cause suffering in insufficient material situations.
-        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[m.capture() as usize] + ONE_PAWN * 2 < alpha {
+        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[m.capture() as usize] + ONE_PAWN * 2 < alpha
+        {
             continue;
         }
 
@@ -225,7 +226,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // 3. we're not already extending the search.
             // 4. we've tried at least 2 moves at full depth.
             // 5. we're not in a pv-node.
-            let mut reduction = 0; 
+            let mut reduction = 0;
             if !is_interesting
                 && depth >= 3
                 && extension == 0
@@ -235,8 +236,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             }
             if extension == 0 && !in_pv_node && depth == 2 && reduction < 2 {
                 // razoring at the pre-frontier nodes.
-                // broadly taken from the Crafty pseudocode
-                // here https://www.chessprogramming.org/Razoring
+                // broadly taken from the Crafty pseudocode here
+                // https://www.chessprogramming.org/Razoring
                 let static_eval = pos.evaluate();
                 if static_eval + ONE_PAWN / 2 < alpha {
                     reduction += 1;

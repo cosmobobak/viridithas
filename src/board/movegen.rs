@@ -10,8 +10,8 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        Castling, Rank, Square120, BB, BLACK, BN, BP, BQ, BR, NO_SQUARE,
-        PIECE_EMPTY, WB, WHITE, WN, WP, WQ, WR,
+        Castling, Rank, Square120, BB, BLACK, BN, BP, BQ, BR, NO_SQUARE, PIECE_EMPTY, WB, WHITE,
+        WN, WP, WQ, WR,
     },
     lookups::{FILES_BOARD, MVV_LVA_SCORE, PIECE_COL, RANKS_BOARD},
     validate::{piece_valid, piece_valid_empty, square_on_board},
@@ -148,7 +148,8 @@ impl Board {
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
         } else {
-            if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m } {
+            if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
+            {
                 THIRD_ORDER_KILLER_SCORE
             } else {
                 let from = m.from() as usize;
