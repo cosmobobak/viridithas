@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-    board::evaluation::{MATE_SCORE, ONE_PAWN},
+    board::evaluation::MATE_SCORE,
     chessmove::Move,
     lookups::{SQ120_TO_SQ64, SQUARE_NAMES},
 };
@@ -10,8 +10,6 @@ pub const BOARD_N_SQUARES: usize = 120;
 pub const MAX_GAME_MOVES: usize = 1024;
 pub const MAX_DEPTH: usize = 512;
 pub const INFINITY: i32 = MATE_SCORE * 2;
-
-pub const FUTILITY_MARGIN: i32 = 2 * ONE_PAWN;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

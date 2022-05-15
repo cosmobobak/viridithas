@@ -5,7 +5,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{FUTILITY_MARGIN, INFINITY, MAX_DEPTH},
+    definitions::{INFINITY, MAX_DEPTH},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -20,6 +20,9 @@ use crate::{
 // 3. All-nodes: nodes that fail low, i.e. no move leads to a value > alpha.
 // in fail-hard alpha-beta, a call to alpha_beta(ALLNODE, a, b) returns a.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
+
+const DELTA_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
+const FUTILITY_PRUNING_MARGIN: i32 = 2 * ONE_PAWN;
 
 fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
@@ -69,10 +72,14 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         // the static eval + a safety margin to alpha, skip it.
         // this should not be on during the late endgame, as it
         // will cause suffering in insufficient material situations.
-        if !m.is_promo() && stand_pat + MG_PIECE_VALUES[m.capture() as usize] + ONE_PAWN * 2 < alpha
-        {
-            continue;
+        if !is_check {
+            let value_of_capture = MG_PIECE_VALUES[m.capture() as usize];
+            let predicted_value = stand_pat + value_of_capture;
+            if !m.is_promo() && predicted_value + DELTA_PRUNING_MARGIN < alpha {
+                continue;
+            }
         }
+        
 
         if !pos.make_move(m) {
             continue;
@@ -192,27 +199,24 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let futility_pruning_legal = !pos.in_check::<{ Board::US }>() 
         && depth == 1
-        && pos.evaluate() + FUTILITY_MARGIN < alpha
+        && pos.evaluate() + FUTILITY_PRUNING_MARGIN < alpha
         && !in_pv_node;
 
     for &m in move_list.iter() {
+        let is_capture = m.is_capture();
+        let is_promotion = m.is_promo();
+        if !is_capture && !is_promotion && futility_pruning_legal {
+            continue;
+        }
+
         if !pos.make_move(m) {
             continue;
         }
+
         moves_made += 1;
 
-        let is_capture = m.is_capture();
         let is_check = pos.in_check::<{ Board::US }>();
-        let is_promotion = m.is_promo();
-
         let is_interesting = is_capture || is_promotion || is_check;
-
-        if futility_pruning_legal && !is_interesting {
-            // this can in theory be staged, because captures and promos can be determined without making the move.
-            pos.unmake_move();
-            continue;
-        }
-
         let extension = usize::from(is_check) + usize::from(is_promotion);
 
         let score = if moves_made == 1 {
@@ -220,21 +224,34 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha)
         } else {
             // nullwindow searches to prove PV.
-            // we only reduce when a set of conditions are true:
+            // we only do late move reductions when a set of conditions are true:
             // 1. the move we're about to make isn't "interesting" (i.e. it's not a capture, a promotion, or a check)
+            // RATIONALE: captures, promotions, and checks are likely to be very important moves to search.
             // 2. we're at a depth >= 3.
+            // RATIONALE: depth < 3 is cheap as hell already, and razoring handles depth == 2.
             // 3. we're not already extending the search.
-            // 4. we've tried at least 2 moves at full depth.
-            // 5. we're not in a pv-node.
+            // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
+            // 4. we've tried at least 2 moves at full depth, or five if we're in a PV-node.
+            // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
             let mut reduction = 0;
-            if !is_interesting
-                && depth >= 3
+            let lmr_movecount_requirement = if in_pv_node { 5 } else { 2 };
+            if depth >= 3
                 && extension == 0
-                && moves_made >= 2
-                && !in_pv_node { 
+                && moves_made >= lmr_movecount_requirement
+                && !is_interesting { 
                 reduction += lateness_reduction(moves_made, depth);
             }
-            if extension == 0 && !in_pv_node && depth == 2 && reduction < 2 {
+            // we do razoring when 
+            // 1. we're not in a PV-node
+            // RATIONALE: razoring is possibly the most dangerous form of forward pruning, we definitely don't want
+            // to miss ideas in the PV.
+            // 2. we're not already extending the search
+            // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
+            // 3. depth == 2.
+            // RATIONALE: this is just how razoring works.
+            // 4. we're not already reducing by more than 2 ply
+            // RATIONALE: if we're reducing by two ply, and depth == 2, then razoring will underflow depth.
+            if !in_pv_node && extension == 0 && depth == 2 && reduction <= 2 {
                 // razoring at the pre-frontier nodes.
                 // broadly taken from the Crafty pseudocode here
                 // https://www.chessprogramming.org/Razoring
