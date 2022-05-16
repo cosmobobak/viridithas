@@ -22,7 +22,7 @@ use crate::{
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const DELTA_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
-const FUTILITY_PRUNING_MARGIN: i32 = 2 * ONE_PAWN;
+const FUTILITY_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
 
 fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
@@ -79,7 +79,6 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
                 continue;
             }
         }
-        
 
         if !pos.make_move(m) {
             continue;
@@ -166,7 +165,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
-    if !in_pv_node && !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth >= 3 {
+    if !in_pv_node && !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth > 3 {
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
@@ -177,7 +176,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             return beta;
         }
     }
-
 
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
@@ -240,25 +238,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                 && moves_made >= lmr_movecount_requirement
                 && !is_interesting { 
                 reduction += lateness_reduction(moves_made, depth);
-            }
-            // we do razoring when 
-            // 1. we're not in a PV-node
-            // RATIONALE: razoring is possibly the most dangerous form of forward pruning, we definitely don't want
-            // to miss ideas in the PV.
-            // 2. we're not already extending the search
-            // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
-            // 3. depth == 2.
-            // RATIONALE: this is just how razoring works.
-            // 4. we're not already reducing by more than 2 ply
-            // RATIONALE: if we're reducing by two ply, and depth == 2, then razoring will underflow depth.
-            if !in_pv_node && extension == 0 && depth == 2 && reduction <= 2 {
-                // razoring at the pre-frontier nodes.
-                // broadly taken from the Crafty pseudocode here
-                // https://www.chessprogramming.org/Razoring
-                let static_eval = pos.evaluate();
-                if static_eval + ONE_PAWN / 2 < alpha {
-                    reduction += 1;
-                }
             }
             // perform a zero-window search, possibly with a reduction
             let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);
