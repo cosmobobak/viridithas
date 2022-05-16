@@ -309,12 +309,12 @@ impl Board {
 
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
-        // let mobility_val = self.mobility();
+        let mobility_val = self.mobility();
         let king_safety_val = self.pawn_shield_term(game_phase);
 
         score += pawn_val;
         score += bishop_pair_val;
-        // score += mobility_val;
+        score += mobility_val;
         score += king_safety_val;
 
         // println!(
