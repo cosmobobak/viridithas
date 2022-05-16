@@ -111,7 +111,8 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
-    30, 40, 50, 70, 110, 250, 0, // illegal
+    30, 40, 50, 70, 110, 250, 
+    0, // illegal
 ];
 
 /// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
