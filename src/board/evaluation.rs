@@ -111,8 +111,7 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
-    30, 40, 50, 70, 110, 250, 
-    0, // illegal
+    30, 40, 50, 60, 70, 90, 0, // illegal
 ];
 
 /// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
@@ -135,17 +134,9 @@ pub fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> f32 {
 pub struct EvalVector {
     /// Whether this position is valid to use for tuning (positions should be quiescent, amongst other considerations).
     pub valid: bool,
-    /// The relative pawn count
-    pub pawns: i32,
-    /// The relative knight count
-    pub knights: i32,
-    /// The relative bishop count
-    pub bishops: i32,
-    /// The relative rook count
-    pub rooks: i32,
-    /// The relative queen count
-    pub queens: i32,
-    /// The bishop pair score. (can only be -1, 0 or 1)
+    /// The aggregated material and PST term, as we do not plan to tune this.
+    pub material_pst: i32,
+    /// The relative bishop pair count. (can only be -1, 0 or 1)
     pub bishop_pair: i32,
     /// The relative number of passed pawns by rank.
     pub passed_pawns_by_rank: [i32; 8],
@@ -153,10 +144,6 @@ pub struct EvalVector {
     pub isolated_pawns: i32,
     /// The relative number of doubled pawns.
     pub doubled_pawns: i32,
-    /// The relative pst score, before scaling.
-    pub pst: i32,
-    /// The relative pawn mobility count.
-    pub pawn_mobility: i32,
     /// The relative knight mobility count.
     pub knight_mobility: i32,
     /// The relative bishop mobility count.
@@ -175,51 +162,18 @@ pub struct EvalVector {
 
 #[allow(dead_code)]
 impl EvalVector {
-    pub const fn new() -> Self {
-        Self {
-            valid: true,
-            pawns: 0,
-            knights: 0,
-            bishops: 0,
-            rooks: 0,
-            queens: 0,
-            bishop_pair: 0,
-            passed_pawns_by_rank: [0; 8],
-            isolated_pawns: 0,
-            doubled_pawns: 0,
-            pst: 0,
-            pawn_mobility: 0,
-            knight_mobility: 0,
-            bishop_mobility: 0,
-            rook_mobility: 0,
-            queen_mobility: 0,
-            king_mobility: 0,
-            pawn_shield: 0,
-            turn: 0,
-        }
-    }
-
     pub fn csvify(&self) -> String {
         let csv = format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            self.pawns,
-            self.knights,
-            self.bishops,
-            self.rooks,
-            self.queens,
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.bishop_pair,
-            self.passed_pawns_by_rank[0],
             self.passed_pawns_by_rank[1],
             self.passed_pawns_by_rank[2],
             self.passed_pawns_by_rank[3],
             self.passed_pawns_by_rank[4],
             self.passed_pawns_by_rank[5],
             self.passed_pawns_by_rank[6],
-            self.passed_pawns_by_rank[7],
             self.isolated_pawns,
             self.doubled_pawns,
-            self.pst,
-            self.pawn_mobility,
             self.knight_mobility,
             self.bishop_mobility,
             self.rook_mobility,
@@ -228,15 +182,15 @@ impl EvalVector {
             self.pawn_shield,
             self.turn
         );
-        assert!(
-            csv.chars().filter(|&c| c == ',').count()
-                == Self::header().chars().filter(|&c| c == ',').count()
+        assert_eq!(
+            csv.chars().filter(|&c| c == ',').count(),
+            Self::header().chars().filter(|&c| c == ',').count()
         );
         csv
     }
 
     pub const fn header() -> &'static str {
-        "p,n,b,r,q,bpair,ppr0,ppr1,ppr2,ppr3,ppr4,ppr5,ppr6,ppr7,isolated,doubled,pst,p_mob,n_mob,b_mob,r_mob,q_mob,k_mob,p_shield,turn"
+        "bpair,ppr2,ppr3,ppr4,ppr5,ppr6,ppr7,isolated,doubled,n_mob,b_mob,r_mob,q_mob,k_mob,p_shield,turn"
     }
 }
 
@@ -533,6 +487,134 @@ impl Board {
             our_pseudo_legal_moves as i32 - their_pseudo_legal_moves as i32
         } else {
             their_pseudo_legal_moves as i32 - our_pseudo_legal_moves as i32
+        }
+    }
+
+    pub fn eval_vector(&mut self) -> EvalVector {
+        #![allow(clippy::too_many_lines, clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let game_phase = self.phase();
+        let material_pst = {
+            let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
+            let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
+            let material = (midgame_material as f32 * (1.0 - game_phase)) as i32
+                + (endgame_material as f32 * game_phase) as i32;
+            let pst_val = self.pst_value(game_phase);
+
+            material + pst_val
+        };
+        let bishop_pair = {
+            let w_count = self.num(WB);
+            let b_count = self.num(BB);
+            let whitebp = w_count == 2;
+            let blackbp = b_count == 2;
+            i32::from(whitebp) - i32::from(blackbp)
+        };
+        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
+        let passed_pawns_by_rank = {
+            let mut passed_pawns_by_rank = [0; 8];
+            for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
+                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
+                if WHITE_PASSED_BB[sq64] & black_pawns == 0 {
+                    let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
+                    passed_pawns_by_rank[rank] += 1;
+                }
+            }
+            for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
+                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
+                if BLACK_PASSED_BB[sq64] & white_pawns == 0 {
+                    let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
+                    passed_pawns_by_rank[7 - rank] -= 1;
+                }
+            }
+            passed_pawns_by_rank
+        };
+        let isolated_pawns = {
+            let mut isolated = 0;
+            for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
+                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
+                if ISOLATED_BB[sq64] & white_pawns == 0 {
+                    isolated += 1;
+                }
+            }
+            for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
+                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
+                if ISOLATED_BB[sq64] & black_pawns == 0 {
+                    isolated -= 1;
+                }
+            }
+            isolated
+        };
+        let doubled_pawns = {
+            static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
+            let mut doubled_pawns = 0;
+            for &file_mask in &FILE_BB {
+                let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
+                let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
+                doubled_pawns += multiplier;
+                let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
+                let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
+                doubled_pawns -= multiplier;
+            }
+            doubled_pawns
+        };
+
+        let mut counter = MoveCounter::new(self);
+        if !self.in_check::<{ Self::US }>() {
+            self.generate_moves(&mut counter);
+        }
+        let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] = counter.counters;
+        if !self.in_check::<{ Self::US }>() {
+            self.make_nullmove();
+        }
+        let mut counter = MoveCounter::new(self);
+        if !self.in_check::<{ Self::US }>() {
+            self.generate_moves(&mut counter);
+        }
+        let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] = counter.counters;
+        if !self.in_check::<{ Self::US }>() {
+            self.unmake_nullmove();
+        }
+        let knight_mobility = wh_knight_mob - bl_knight_mob;
+        let bishop_mobility = wh_bishop_mob - bl_bishop_mob;
+        let rook_mobility = wh_rook_mob - bl_rook_mob;
+        let queen_mobility = wh_queen_mob - bl_queen_mob;
+        let king_mobility = wh_king_mob - bl_king_mob;
+
+        let pawn_shield = {
+            let white_kingloc = self.king_sq[WHITE as usize];
+            let black_kingloc = self.king_sq[BLACK as usize];
+
+            let mut white_shield = 0;
+            for loc in white_kingloc + 9..=white_kingloc + 11 {
+                if self.piece_at(loc) == WP {
+                    white_shield += 1;
+                }
+            }
+
+            let mut black_shield = 0;
+            for loc in black_kingloc - 11..=black_kingloc - 9 {
+                if self.piece_at(loc) == BP {
+                    black_shield += 1;
+                }
+            }
+            white_shield - black_shield
+        };
+
+        let turn = if self.turn() == WHITE { 1 } else { -1 };
+        EvalVector { 
+            valid: true, 
+            material_pst, 
+            bishop_pair, 
+            passed_pawns_by_rank, 
+            isolated_pawns, 
+            doubled_pawns, 
+            knight_mobility, 
+            bishop_mobility, 
+            rook_mobility, 
+            queen_mobility, 
+            king_mobility, 
+            pawn_shield, 
+            turn,
         }
     }
 }
