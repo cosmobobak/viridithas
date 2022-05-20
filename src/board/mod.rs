@@ -1373,6 +1373,9 @@ impl Board {
     /// Determines whether a given position is quiescent (no checks or captures).
     #[allow(clippy::wrong_self_convention)]
     pub fn is_quiet_position(&mut self) -> bool {
+        if self.in_check::<{ Self::US }>() {
+            return false;
+        }
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
 
@@ -1471,7 +1474,8 @@ impl Board {
         self.tt.clear_for_search();
     }
 
-    pub fn search_position(&mut self, info: &mut SearchInfo) {
+    /// Performs the root search. Returns the score of the position, from white's perspective.
+    pub fn search_position<const DO_PRINTOUT: bool>(&mut self, info: &mut SearchInfo) -> i32 {
         self.clear_for_search();
         info.clear_for_search();
 
@@ -1495,30 +1499,31 @@ impl Board {
             if score <= alpha || score >= beta {
                 let score_string = format_score(score);
                 let boundstr = if score <= alpha {
-                    "lowerbound"
-                } else {
                     "upperbound"
+                } else {
+                    "lowerbound"
                 };
-                print!(
-                    "info score {} {} depth {} nodes {} time {} pv ",
-                    score_string,
-                    boundstr,
-                    depth,
-                    info.nodes,
-                    info.start_time.elapsed().as_millis()
-                );
-                pv_length = self.get_pv_line(depth);
-                for &m in &self.principal_variation[..pv_length] {
-                    print!("{m} ");
+                if DO_PRINTOUT {
+                    print!(
+                        "info score {} {} depth {} nodes {} time {} pv ",
+                        score_string,
+                        boundstr,
+                        depth,
+                        info.nodes,
+                        info.start_time.elapsed().as_millis()
+                    );
+                    pv_length = self.get_pv_line(depth);
+                    for &m in &self.principal_variation[..pv_length] {
+                        print!("{m} ");
+                    }
+                    println!();
                 }
-                println!();
                 std::io::Write::flush(&mut std::io::stdout()).unwrap();
                 score = alpha_beta(self, info, depth - 1, -INFINITY, INFINITY);
                 info.check_up();
-            }
-
-            if info.stopped {
-                break;
+                if info.stopped {
+                    break;
+                }
             }
 
             most_recent_score = score;
@@ -1530,10 +1535,32 @@ impl Board {
 
             let score_string = format_score(most_recent_score);
 
+            if DO_PRINTOUT {
+                print!(
+                    "info score {} depth {} nodes {} time {} pv ",
+                    score_string,
+                    depth,
+                    info.nodes,
+                    info.start_time.elapsed().as_millis()
+                );
+                for &m in &self.principal_variation[..pv_length] {
+                    print!("{m} ");
+                }
+                println!();
+                let r = info.lmr_stats.reductions;
+                let f = info.lmr_stats.fails;
+                #[allow(clippy::cast_precision_loss)]
+                let p = (f as f64 + 0.0001) / r as f64;
+                eprintln!("lmr fail rate: {:.1}%", p * 100.0);
+            }
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        }
+        let score_string = format_score(most_recent_score);
+        if DO_PRINTOUT {
             print!(
                 "info score {} depth {} nodes {} time {} pv ",
                 score_string,
-                depth,
+                best_depth,
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
@@ -1541,22 +1568,14 @@ impl Board {
                 print!("{m} ");
             }
             println!();
+            println!("bestmove {}", most_recent_move);
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
-        let score_string = format_score(most_recent_score);
-        print!(
-            "info score {} depth {} nodes {} time {} pv ",
-            score_string,
-            best_depth,
-            info.nodes,
-            info.start_time.elapsed().as_millis()
-        );
-        for &m in &self.principal_variation[..pv_length] {
-            print!("{m} ");
+        if self.side == WHITE {
+            most_recent_score
+        } else {
+            -most_recent_score
         }
-        println!();
-        println!("bestmove {}", most_recent_move);
-        std::io::Write::flush(&mut std::io::stdout()).unwrap();
     }
 
     fn get_first_legal_move(&mut self) -> Option<Move> {
