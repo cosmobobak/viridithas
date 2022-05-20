@@ -51,6 +51,7 @@ fn parse_position(text: &str, pos: &mut Board) {
 }
 
 fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
+    #![allow(clippy::too_many_lines)]
     let mut depth: Option<usize> = None;
     let mut moves_to_go: Option<usize> = None;
     let mut movetime: Option<usize> = None;
@@ -140,8 +141,11 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     let search_time_window = time.map_or(1, |t| {
         info.time_set = true;
         let time = t as u64 / moves_to_go.unwrap_or(30) as u64 + inc.unwrap_or(0) as u64;
-        time.checked_sub(50).unwrap_or(1)
+        let time = time.checked_sub(50).unwrap_or(1);
+        std::cmp::min(time, t as u64)
     });
+
+    assert!(!info.time_set || search_time_window <= time.unwrap() as u64, "search window was {}, but time was {}", search_time_window, time.unwrap());
 
     info.set_time_window(search_time_window);
 
@@ -235,7 +239,7 @@ pub fn main_loop() {
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
                 parse_go(input, &mut info, &mut pos);
-                pos.search_position(&mut info);
+                pos.search_position::<true>(&mut info);
             }
             _ => println!("Unknown command: {}", input),
         }
