@@ -16,6 +16,7 @@ mod searchinfo;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod tuning;
 
 pub const NAME: &str = "Viridithas";
 
@@ -23,5 +24,6 @@ fn main() {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
+    // tuning::annotate_positions("chessData.csv", "TRAINING_DATA.csv", 1_000_000, 4);
     uci::main_loop();
 }
