@@ -15,10 +15,10 @@ use crate::{
 // i.e. a call to alpha_beta(PVNODE, a, b) returns a value v where v is within the window [a, b].
 // the score returned is an exact score for the node.
 // 2. Cut-nodes: nodes that fail high, i.e. a move is found that leads to a value >= beta.
-// in fail-hard alpha-beta, a call to alpha_beta(CUTNODE, a, b) returns b.
+// in alpha-beta, a call to alpha_beta(CUTNODE, alpha, beta) returns a score >= beta.
 // The score returned is a lower bound (might be greater) on the exact score of the node
 // 3. All-nodes: nodes that fail low, i.e. no move leads to a value > alpha.
-// in fail-hard alpha-beta, a call to alpha_beta(ALLNODE, a, b) returns a.
+// in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const DELTA_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
@@ -117,19 +117,36 @@ fn lateness_reduction(moves: usize, depth: usize) -> usize {
         clippy::cast_possible_truncation
     )]
     const GRADIENT: f32 = 0.7;
-    const MIDPOINT: f32 = 4.5;
+    const MIDPOINT: f32 = 5.5;
+    const REDUCTION_FACTOR: f32 = 0.45;
     let moves = moves as f32;
     let depth = depth as f32;
-    let numerator = 2.0 * depth / 5.0 - 1.0;
+    let numerator = REDUCTION_FACTOR * depth - 1.0;
     let denominator = 1.0 + f32::exp(-GRADIENT * (moves - MIDPOINT));
     (numerator / denominator + 0.5) as usize
 }
 
+fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
+    #![allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    const PV_BACKOFF: f64 = 2.0 / 3.0;
+    let r = f64::sqrt((depth - 1) as f64) + f64::sqrt((moves - 1) as f64);
+    if in_pv {
+        (r * PV_BACKOFF) as usize
+    } else {
+        r as usize
+    }
+}
+
 #[rustfmt::skip]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
+    debug_assert!(alpha < beta);
 
     if depth == 0 {
         return quiescence_search(pos, info, alpha, beta);
@@ -137,7 +154,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let in_pv_node = beta - alpha > 1;
 
-    if info.nodes.trailing_zeros() >= 12 {
+    if info.nodes.trailing_zeros() >= 11 {
         info.check_up();
     }
 
@@ -165,7 +182,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
-    if !in_pv_node && !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth > 3 {
+    if !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth > 3 {
+        info.nullmove_stats.uses += 1;
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
@@ -173,6 +191,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             return 0;
         }
         if score >= beta {
+            info.nullmove_stats.cutoffs += 1;
             return beta;
         }
     }
@@ -217,9 +236,10 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         let is_interesting = is_capture || is_promotion || is_check;
         let extension = usize::from(is_check) + usize::from(is_promotion);
 
-        let score = if moves_made == 1 {
+        let mut score;
+        if moves_made == 1 {
             // first move (presumably the PV-move)
-            -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha)
+            score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -231,7 +251,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
             // 4. we've tried at least 2 moves at full depth, or five if we're in a PV-node.
             // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
-            let mut reduction = 0;
+            let mut reduction = 1;
             let lmr_movecount_requirement = if in_pv_node { 5 } else { 2 };
             if depth >= 3
                 && extension == 0
@@ -239,13 +259,18 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                 && !is_interesting { 
                 reduction += lateness_reduction(moves_made, depth);
             }
+            if reduction > 1 { info.lmr_stats.reductions += 1; }
+            reduction = reduction.min(depth);
             // perform a zero-window search, possibly with a reduction
-            let r = -alpha_beta(pos, info, depth - 1 + extension - reduction, -alpha - 1, -alpha);
-            if r > alpha && r < beta {
-                // if the zero-window search fails, perform a full window search at full depth
-                -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha)
-            } else {
-                r
+            score = -alpha_beta(pos, info, depth + extension - reduction, -alpha - 1, -alpha);
+            // if we reduced and failed, nullwindow again with full depth
+            if reduction > 1 && score > alpha {
+                info.lmr_stats.fails += 1;
+                score = -alpha_beta(pos, info, depth - 1 + extension, -alpha - 1, -alpha);
+            }
+            // if we failed again (or simply failed a fulldepth nullwindow), then full window search
+            if score > alpha {
+                score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
             }
         };
         pos.unmake_move();
