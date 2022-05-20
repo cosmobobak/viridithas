@@ -1,5 +1,16 @@
 use std::{sync::mpsc, time::Instant};
 
+pub struct LmrStats {
+    pub reductions: u64,
+    pub fails: u64,
+    pub pv_node_fails: u64,
+}
+
+pub struct NullmoveStats {
+    pub uses: u64,
+    pub cutoffs: u64,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
@@ -24,6 +35,9 @@ pub struct SearchInfo<'a> {
     pub failhigh: f32,
     pub failhigh_first: f32,
 
+    pub lmr_stats: LmrStats,
+    pub nullmove_stats: NullmoveStats,
+
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
 }
@@ -43,6 +57,15 @@ impl Default for SearchInfo<'_> {
             stopped: false,
             failhigh: 0.0,
             failhigh_first: 0.0,
+            lmr_stats: LmrStats {
+                reductions: 0,
+                fails: 0,
+                pv_node_fails: 0,
+            },
+            nullmove_stats: NullmoveStats {
+                uses: 0,
+                cutoffs: 0,
+            },
             stdin_rx: None,
         }
     }
@@ -54,6 +77,11 @@ impl<'a> SearchInfo<'a> {
         self.nodes = 0;
         self.failhigh = 0.0;
         self.failhigh_first = 0.0;
+        self.lmr_stats.reductions = 0;
+        self.lmr_stats.fails = 0;
+        self.lmr_stats.pv_node_fails = 0;
+        self.nullmove_stats.uses = 0;
+        self.nullmove_stats.cutoffs = 0;
     }
 
     pub fn set_stdin(&mut self, stdin_rx: &'a mpsc::Receiver<String>) {
@@ -73,7 +101,7 @@ impl<'a> SearchInfo<'a> {
         {
             self.stopped = true;
         }
-        if let Some(Ok(cmd)) = self.stdin_rx.map(std::sync::mpsc::Receiver::try_recv) {
+        if let Some(Ok(cmd)) = self.stdin_rx.map(mpsc::Receiver::try_recv) {
             self.stopped = true;
             let cmd = cmd.trim();
             if cmd == "quit" {
