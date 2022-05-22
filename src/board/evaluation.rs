@@ -51,13 +51,22 @@ pub static EG_PIECE_VALUES: [i32; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: i32 = ONE_PAWN / 3;
+pub const ISOLATED_PAWN_MALUS: i32 = ONE_PAWN / 6;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: i32 = 2 * ONE_PAWN / 5;
+pub const DOUBLED_PAWN_MALUS: i32 = ONE_PAWN / 3;
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: i32 = ONE_PAWN / 5;
+pub const BISHOP_PAIR_BONUS: i32 = ONE_PAWN / 4;
+
+/// The bonus for having a rook on an open file.
+pub const ROOK_OPEN_FILE_BONUS: i32 = ONE_PAWN / 10;
+/// The bonus for having a rook on a semi-open file.
+pub const ROOK_HALF_OPEN_FILE_BONUS: i32 = ONE_PAWN / 20;
+/// The bonus for having a queen on an open file.
+pub const QUEEN_OPEN_FILE_BONUS: i32 = ONE_PAWN / 20;
+/// The bonus for having a queen on a semi-open file.
+pub const QUEEN_HALF_OPEN_FILE_BONUS: i32 = ONE_PAWN / 40;
 
 /// The bonus granted for having more pawns when you have knights on the board.
 // pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
@@ -111,7 +120,8 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
-    30, 40, 50, 60, 70, 90, 0, // illegal
+    5, 10, 20, 35, 60, 100, // values from VICE.
+    0, // illegal
 ];
 
 /// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
@@ -156,6 +166,10 @@ pub struct EvalVector {
     pub king_mobility: i32,
     /// The relative shield count.
     pub pawn_shield: i32,
+    /// The relative number of rooks on open files.
+    pub open_rooks: i32,
+    /// The relative number of rooks on semi-open files.
+    pub half_open_rooks: i32,
     /// The turn (1 or -1)
     pub turn: i32,
 }
@@ -164,7 +178,7 @@ pub struct EvalVector {
 impl EvalVector {
     pub fn csvify(&self) -> String {
         let csv = format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.bishop_pair,
             self.passed_pawns_by_rank[1],
             self.passed_pawns_by_rank[2],
@@ -180,6 +194,8 @@ impl EvalVector {
             self.queen_mobility,
             self.king_mobility,
             self.pawn_shield,
+            self.open_rooks,
+            self.half_open_rooks,
             self.turn
         );
         assert_eq!(
@@ -266,11 +282,15 @@ impl Board {
         let bishop_pair_val = self.bishop_pair_term();
         let mobility_val = self.mobility();
         let king_safety_val = self.pawn_shield_term(game_phase);
+        let rook_open_file_val = self.rook_open_file_term();
+        let queen_open_file_val = self.queen_open_file_term();
 
         score += pawn_val;
         score += bishop_pair_val;
         score += mobility_val;
         score += king_safety_val;
+        score += rook_open_file_val;
+        score += queen_open_file_val;
 
         // println!(
         //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
@@ -423,6 +443,64 @@ impl Board {
         }
 
         w_score - b_score
+    }
+
+    #[inline]
+    fn is_file_open(&self, file: u8) -> bool {
+        let mask = FILE_BB[file as usize];
+        let pawns = self.pawns[BOTH as usize];
+        (mask & pawns) == 0
+    }
+
+    #[inline]
+    fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
+        let mask = FILE_BB[file as usize];
+        let pawns = self.pawns[SIDE as usize];
+        (mask & pawns) == 0
+    }
+
+    #[inline]
+    fn rook_open_file_term(&self) -> i32 {
+        let mut score = 0;
+        for &rook_sq in self.piece_lists[WR as usize].iter() {
+            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            if self.is_file_open(file) {
+                score += ROOK_OPEN_FILE_BONUS;
+            } else if self.is_file_halfopen::<WHITE>(file) {
+                score += ROOK_HALF_OPEN_FILE_BONUS;
+            }
+        }
+        for &rook_sq in self.piece_lists[BR as usize].iter() {
+            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            if self.is_file_open(file) {
+                score -= ROOK_OPEN_FILE_BONUS;
+            } else if self.is_file_halfopen::<BLACK>(file) {
+                score -= ROOK_HALF_OPEN_FILE_BONUS;
+            }
+        }
+        score
+    }
+
+    #[inline]
+    fn queen_open_file_term(&self) -> i32 {
+        let mut score = 0;
+        for &queen_sq in self.piece_lists[WQ as usize].iter() {
+            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            if self.is_file_open(file) {
+                score += QUEEN_OPEN_FILE_BONUS;
+            } else if self.is_file_halfopen::<WHITE>(file) {
+                score += QUEEN_HALF_OPEN_FILE_BONUS;
+            }
+        }
+        for &queen_sq in self.piece_lists[BQ as usize].iter() {
+            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            if self.is_file_open(file) {
+                score -= QUEEN_OPEN_FILE_BONUS;
+            } else if self.is_file_halfopen::<BLACK>(file) {
+                score -= QUEEN_HALF_OPEN_FILE_BONUS;
+            }
+        }
+        score
     }
 
     /// `phase` computes a number between 0.0 and 1.0, which is the phase of the game. 0.0 is the opening, 1.0 is the endgame.
@@ -600,6 +678,28 @@ impl Board {
             white_shield - black_shield
         };
 
+        let (open_rooks, half_open_rooks) = {
+            let mut open_rooks = 0;
+            let mut half_open_rooks = 0;
+            for &rook_sq in self.piece_lists[WR as usize].iter() {
+                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                if self.is_file_open(file) {
+                    open_rooks += 1;
+                } else if self.is_file_halfopen::<WHITE>(file) {
+                    half_open_rooks += 1;
+                }
+            }
+            for &rook_sq in self.piece_lists[BR as usize].iter() {
+                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                if self.is_file_open(file) {
+                    open_rooks -= 1;
+                } else if self.is_file_halfopen::<BLACK>(file) {
+                    half_open_rooks -= 1;
+                }
+            }
+            (open_rooks, half_open_rooks)
+        };
+
         let turn = if self.turn() == WHITE { 1 } else { -1 };
         EvalVector { 
             valid: true, 
@@ -614,6 +714,8 @@ impl Board {
             queen_mobility, 
             king_mobility, 
             pawn_shield, 
+            open_rooks,
+            half_open_rooks,
             turn,
         }
     }
