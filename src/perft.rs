@@ -5,7 +5,8 @@ use std::{
 
 use crate::board::{movegen::MoveList, Board};
 
-fn _perft(pos: &mut Board, depth: usize) -> u64 {
+#[allow(dead_code)]
+fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
@@ -21,14 +22,15 @@ fn _perft(pos: &mut Board, depth: usize) -> u64 {
         if !pos.make_move(m) {
             continue;
         }
-        count += _perft(pos, depth - 1);
+        count += perft(pos, depth - 1);
         pos.unmake_move();
     }
 
     count
 }
 
-pub fn _gamut() {
+#[allow(dead_code)]
+pub fn gamut() {
     // open perftsuite.epd
     let f = File::open("perftsuite.epd").unwrap();
     let mut pos = Board::new();
@@ -46,7 +48,7 @@ pub fn _gamut() {
                 println!("Skipping...");
                 break;
             }
-            let perft_nodes = _perft(&mut pos, d as usize);
+            let perft_nodes = perft(&mut pos, d as usize);
             if perft_nodes == nodes {
                 println!("PASS: fen {fen}, depth {d}");
             } else {
@@ -59,21 +61,26 @@ pub fn _gamut() {
 
 mod tests {
     #[test]
-    fn test_perft() {
+    fn perft_hard_position() {
         use super::*;
-        use crate::definitions::STARTING_FEN;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         let mut pos = Board::new();
-        pos.set_from_fen(STARTING_FEN).unwrap();
-        assert_eq!(_perft(&mut pos, 1), 20);
-        assert_eq!(_perft(&mut pos, 2), 400);
-        assert_eq!(_perft(&mut pos, 3), 8_902);
-        assert_eq!(_perft(&mut pos, 4), 197_281);
         pos.set_from_fen(TEST_FEN).unwrap();
-        assert_eq!(_perft(&mut pos, 1), 48);
-        assert_eq!(_perft(&mut pos, 2), 2_039);
-        assert_eq!(_perft(&mut pos, 3), 97_862);
+        assert_eq!(perft(&mut pos, 1), 48);
+        assert_eq!(perft(&mut pos, 2), 2_039);
+        assert_eq!(perft(&mut pos, 3), 97_862);
         // assert_eq!(perft(&mut pos, 4), 4_085_603);
+    }
+
+    #[test]
+    fn perft_start_position() {
+        use super::*;
+        let mut pos = Board::new();
+        pos.set_startpos();
+        assert_eq!(perft(&mut pos, 1), 20);
+        assert_eq!(perft(&mut pos, 2), 400);
+        assert_eq!(perft(&mut pos, 3), 8_902);
+        assert_eq!(perft(&mut pos, 4), 197_281);
     }
 }
