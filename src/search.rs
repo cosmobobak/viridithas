@@ -251,20 +251,20 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
             // 4. we've tried at least 2 moves at full depth, or five if we're in a PV-node.
             // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
-            let mut reduction = 1;
+            let mut r = 1;
             let lmr_movecount_requirement = if in_pv_node { 5 } else { 2 };
             if depth >= 3
                 && extension == 0
                 && moves_made >= lmr_movecount_requirement
                 && !is_interesting { 
-                reduction += lateness_reduction(moves_made, depth);
+                r += lateness_reduction(moves_made, depth);
             }
-            if reduction > 1 { info.lmr_stats.reductions += 1; }
-            reduction = reduction.min(depth);
+            if r > 1 { info.lmr_stats.reductions += 1; }
+            r = r.min(depth);
             // perform a zero-window search, possibly with a reduction
-            score = -alpha_beta(pos, info, depth + extension - reduction, -alpha - 1, -alpha);
+            score = -alpha_beta(pos, info, depth + extension - r, -alpha - 1, -alpha);
             // if we reduced and failed, nullwindow again with full depth
-            if reduction > 1 && score > alpha {
+            if r > 1 && score > alpha {
                 info.lmr_stats.fails += 1;
                 score = -alpha_beta(pos, info, depth - 1 + extension, -alpha - 1, -alpha);
             }
