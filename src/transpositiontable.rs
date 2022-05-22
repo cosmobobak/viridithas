@@ -41,7 +41,7 @@ pub const MEDIUM_TABLE_SIZE: usize = MEGABYTE * 512 / TT_ENTRY_SIZE;
 /// Prime sized table that's around 256-512 megabytes.
 pub const PRIME_TABLE_SIZE: usize = TASTY_PRIME_NUMBER;
 
-pub const DEFAULT_TABLE_SIZE: usize = BIG_TABLE_SIZE;
+pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
 
 #[derive(Debug, Clone)]
 pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
