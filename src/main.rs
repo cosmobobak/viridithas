@@ -24,6 +24,8 @@ fn main() {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    // tuning::annotate_positions("chessData.csv", "TRAINING_DATA.csv", 1_000_000, 4);
     uci::main_loop();
+
+    // tuning::annotate_positions("chessData.csv", "TRAINING_DATA.csv", 1_000_000, 4);
+    // perft::gamut();
 }
