@@ -2,13 +2,7 @@ use std::{fs::File, io::{BufReader, BufRead, BufWriter, Write}};
 
 use crate::{board::evaluation::EvalVector, board::Board, searchinfo::SearchInfo};
 
-// pub fn eval_positions(fens: &[&str]) -> Vec<EvalVector> {
-//     let mut board = Board::new();
-//     fens.iter()
-//         .filter_map(|fen| eval_vec_for_fen(fen, &mut board).ok())
-//         .collect()
-// }
-
+#[allow(dead_code)]
 pub fn annotate_positions(input_fname: &str, output_fname: &str, n_positions: usize, depth: usize) {
     #![allow(clippy::cast_possible_truncation)]
     let i = File::open(input_fname).unwrap();
