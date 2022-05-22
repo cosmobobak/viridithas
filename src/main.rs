@@ -18,7 +18,7 @@ mod uci;
 mod validate;
 mod tuning;
 
-pub const NAME: &str = "Viridithas";
+pub const NAME: &str = "Viridithas 2.1.0dev";
 
 fn main() {
     #[cfg(debug_assertions)]
