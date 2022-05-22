@@ -41,7 +41,7 @@ use crate::{
     validate::{piece_valid, side_valid, square_on_board},
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Board {
     pieces: [u8; BOARD_N_SQUARES],
     pawns: [u64; 3],
@@ -69,6 +69,21 @@ pub struct Board {
     tt: DefaultTT,
 
     pst_vals: [i32; 2],
+}
+
+impl PartialEq for Board {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+        #[cfg(debug_assertions)]
+        other.check_validity().unwrap();
+        self.pieces == other.pieces
+            && self.side == other.side
+            && self.ep_sq == other.ep_sq
+            && self.fifty_move_counter == other.fifty_move_counter
+            && self.castle_perm == other.castle_perm
+            && self.key == other.key
+    }
 }
 
 impl Board {
