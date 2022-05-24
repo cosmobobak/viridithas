@@ -110,7 +110,8 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     alpha
 }
 
-fn lateness_reduction(moves: usize, depth: usize) -> usize {
+#[inline]
+fn _logistic_lateness_reduction(moves: usize, depth: usize) -> usize {
     #![allow(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -126,6 +127,7 @@ fn lateness_reduction(moves: usize, depth: usize) -> usize {
     (numerator / denominator + 0.5) as usize
 }
 
+#[inline]
 fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
     #![allow(
         clippy::cast_precision_loss,
@@ -141,6 +143,17 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
     }
 }
 
+#[inline]
+fn senpai_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
+    // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
+    // We take a similar approach, but we're less aggressive when in PV.
+    if in_pv || moves < 6 {
+        1
+    } else {
+        std::cmp::max(1, depth / 3)
+    }
+}
+
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alpha: i32, beta: i32) -> i32 {
@@ -152,7 +165,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         return quiescence_search(pos, info, alpha, beta);
     }
 
-    let in_pv_node = beta - alpha > 1;
+    let in_pv = beta - alpha > 1;
 
     if info.nodes.trailing_zeros() >= 11 {
         info.check_up();
@@ -182,7 +195,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
-    if !we_are_in_check && pos.ply() != 0 && pos.zugzwang_unlikely() && depth > 3 {
+    if !we_are_in_check && pos.ply() != 0 && depth > 3 && pos.zugzwang_unlikely() {
         info.nullmove_stats.uses += 1;
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
@@ -217,7 +230,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     let futility_pruning_legal = !pos.in_check::<{ Board::US }>() 
         && depth == 1
         && pos.evaluate() + FUTILITY_PRUNING_MARGIN < alpha
-        && !in_pv_node;
+        && !in_pv;
 
     for &m in move_list.iter() {
         let is_capture = m.is_capture();
@@ -251,26 +264,26 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
             // 4. we've tried at least 2 moves at full depth, or five if we're in a PV-node.
             // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
-            let mut r = 1;
-            let lmr_movecount_requirement = if in_pv_node { 5 } else { 2 };
+            let mut r = 0;
+            let depth = depth + extension;
             if depth >= 3
                 && extension == 0
-                && moves_made >= lmr_movecount_requirement
+                && moves_made >= if in_pv { 5 } else { 2 }
                 && !is_interesting { 
-                r += lateness_reduction(moves_made, depth);
+                r += senpai_lateness_reduction(moves_made, depth, in_pv);
             }
-            if r > 1 { info.lmr_stats.reductions += 1; }
+            if r > 0 { info.lmr_stats.reductions += 1; }
             r = r.min(depth);
             // perform a zero-window search, possibly with a reduction
-            score = -alpha_beta(pos, info, depth + extension - r, -alpha - 1, -alpha);
+            score = -alpha_beta(pos, info, depth - 1 - r, -alpha - 1, -alpha);
             // if we reduced and failed, nullwindow again with full depth
-            if r > 1 && score > alpha {
+            if r > 0 && score > alpha {
                 info.lmr_stats.fails += 1;
-                score = -alpha_beta(pos, info, depth - 1 + extension, -alpha - 1, -alpha);
+                score = -alpha_beta(pos, info, depth - 1, -alpha - 1, -alpha);
             }
             // if we failed again (or simply failed a fulldepth nullwindow), then full window search
             if score > alpha {
-                score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
+                score = -alpha_beta(pos, info, depth - 1, -beta, -alpha);
             }
         };
         pos.unmake_move();

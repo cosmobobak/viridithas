@@ -1234,10 +1234,6 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    pub const fn zugzwang_unlikely(&self) -> bool {
-        self.big_piece_counts[self.side as usize] > 0
-    }
-
     /// Parses Standard Algebraic Notation (SAN) and returns a move or a reason why it couldn't be parsed.
     pub fn parse_san(&self, san: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{

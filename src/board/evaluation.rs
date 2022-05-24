@@ -318,6 +318,11 @@ impl Board {
         }
     }
 
+    pub fn zugzwang_unlikely(&self) -> bool {
+        let endgame_phase = 0.86;
+        self.big_piece_counts[self.side as usize] > 0 && self.phase() < endgame_phase
+    }
+
     fn pst_value(&self, phase: f32) -> i32 {
         #![allow(
             clippy::cast_possible_truncation,
