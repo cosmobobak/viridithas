@@ -134,8 +134,8 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
-    const PV_BACKOFF: f64 = 2.0 / 3.0;
-    let r = f64::sqrt((depth - 1) as f64) + f64::sqrt((moves - 1) as f64);
+    const PV_BACKOFF: f32 = 2.0 / 3.0;
+    let r = f32::sqrt((depth - 1) as f32) + f32::sqrt((moves - 1) as f32);
     if in_pv {
         (r * PV_BACKOFF) as usize
     } else {
@@ -144,13 +144,12 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
 }
 
 #[inline]
-fn senpai_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
+fn senpai_lateness_reduction(moves: usize, depth: usize) -> usize {
     // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
-    // We take a similar approach, but we're less aggressive when in PV.
-    if in_pv || moves < 6 {
+    if moves < 6 {
         1
     } else {
-        std::cmp::max(1, depth / 3)
+        (depth / 3).max(1)
     }
 }
 
@@ -169,6 +168,9 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
 
     if info.nodes.trailing_zeros() >= 11 {
         info.check_up();
+        if info.stopped {
+            return 0;
+        }
     }
 
     info.nodes += 1;
@@ -262,16 +264,16 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // RATIONALE: depth < 3 is cheap as hell already, and razoring handles depth == 2.
             // 3. we're not already extending the search.
             // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
-            // 4. we've tried at least 2 moves at full depth, or five if we're in a PV-node.
+            // 4. we've tried at least two moves at full depth, or five if we're in a PV-node.
             // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
             let mut r = 0;
-            let depth = depth + extension;
-            if depth >= 3
-                && extension == 0
-                && moves_made >= if in_pv { 5 } else { 2 }
-                && !is_interesting { 
-                r += senpai_lateness_reduction(moves_made, depth, in_pv);
+            if extension == 0
+                && !is_interesting
+                && depth >= 3
+                && moves_made >= (2 + 3 * usize::from(in_pv)) { 
+                r += senpai_lateness_reduction(moves_made, depth);
             }
+            let depth = depth + extension;
             if r > 0 { info.lmr_stats.reductions += 1; }
             r = r.min(depth);
             // perform a zero-window search, possibly with a reduction
