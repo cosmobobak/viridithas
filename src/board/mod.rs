@@ -67,6 +67,7 @@ pub struct Board {
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
     killer_move_table: [[Move; 2]; MAX_DEPTH],
+    counter_move_table: [[Move; BOARD_N_SQUARES]; 13],
     tt: DefaultTT,
 
     pst_vals: [i32; 2],
@@ -114,6 +115,7 @@ impl Board {
             principal_variation: Vec::with_capacity(MAX_DEPTH),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
+            counter_move_table: [[Move::null(); BOARD_N_SQUARES]; 13],
             pst_vals: [0; 2],
             tt: DefaultTT::new(),
         };
@@ -141,6 +143,7 @@ impl Board {
         entry[0] = m;
     }
 
+    #[inline]
     pub fn add_history(&mut self, m: Move, score: i32) {
         let from = m.from() as usize;
         let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
@@ -148,6 +151,30 @@ impl Board {
         let to = m.to() as usize;
         unsafe {
             *history_board.get_unchecked_mut(to) += score;
+        }
+    }
+
+    #[inline]
+    pub fn insert_countermove(&mut self, m: Move) {
+        debug_assert!(self.ply < MAX_DEPTH);
+        let prev_move = self.history.last().map_or(Move::null(), |u| u.m);
+        let prev_to = prev_move.to();
+        let prev_piece = self.piece_at(prev_to);
+        self.counter_move_table[prev_piece as usize][prev_to as usize] = m;
+    }
+
+    #[inline]
+    pub fn is_countermove(&self, m: Move) -> bool {
+        let prev_move = self.history.last().map(|u| u.m);
+        if let Some(prev_move) = prev_move {
+            if prev_move.is_null() {
+                return false;
+            }
+            let prev_to = prev_move.to();
+            let prev_piece = self.piece_at(prev_to);
+            self.counter_move_table[prev_piece as usize][prev_to as usize] == m
+        } else {
+            false
         }
     }
 
@@ -1476,6 +1503,7 @@ impl Board {
     fn clear_for_search(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
         self.killer_move_table.fill([Move::null(); 2]);
+        self.counter_move_table.iter_mut().for_each(|r| r.fill(Move::null()));
         self.ply = 0;
         self.tt.clear_for_search();
     }

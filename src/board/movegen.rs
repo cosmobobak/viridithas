@@ -20,6 +20,7 @@ use crate::{
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 7_000_000;
+const COUNTERMOVE_SCORE: i32 = 7_500_000;
 
 use super::Board;
 
@@ -148,7 +149,9 @@ impl Board {
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
         } else {
-            if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
+            if self.is_countermove(m) {
+                COUNTERMOVE_SCORE
+            } else if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
             {
                 THIRD_ORDER_KILLER_SCORE
             } else {
