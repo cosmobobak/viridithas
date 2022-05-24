@@ -97,16 +97,16 @@ pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
 /// A threshold over which we will not bother evaluating more than material and PSTs.
 pub const LAZY_THRESHOLD_1: i32 = 14_00;
 
-const PAWN_PHASE: f32 = 0.1;
-const KNIGHT_PHASE: f32 = 1.0;
-const BISHOP_PHASE: f32 = 1.0;
-const ROOK_PHASE: f32 = 2.0;
-const QUEEN_PHASE: f32 = 4.0;
-const TOTAL_PHASE: f32 = 16.0 * PAWN_PHASE
-    + 4.0 * KNIGHT_PHASE
-    + 4.0 * BISHOP_PHASE
-    + 4.0 * ROOK_PHASE
-    + 2.0 * QUEEN_PHASE;
+const PAWN_PHASE: i32 = 1;
+const KNIGHT_PHASE: i32 = 10;
+const BISHOP_PHASE: i32 = 10;
+const ROOK_PHASE: i32 = 20;
+const QUEEN_PHASE: i32 = 40;
+const TOTAL_PHASE: i32 = 16 * PAWN_PHASE
+    + 4 * KNIGHT_PHASE
+    + 4 * BISHOP_PHASE
+    + 4 * ROOK_PHASE
+    + 2 * QUEEN_PHASE;
 
 #[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
@@ -124,17 +124,25 @@ pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
 ];
 
-/// `game_phase` computes a number between 0.0 and 1.0, which is the phase of the game.
-/// 0.0 is the opening, 1.0 is the endgame.
+/// `game_phase` computes a number between 0 and 256, which is the phase of the game.
+/// 0 is the opening, 256 is the endgame.
 #[allow(clippy::many_single_char_names)]
-pub fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> f32 {
+pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
     let mut phase = TOTAL_PHASE;
-    phase -= PAWN_PHASE * f32::from(p);
-    phase -= KNIGHT_PHASE * f32::from(n);
-    phase -= BISHOP_PHASE * f32::from(b);
-    phase -= ROOK_PHASE * f32::from(r);
-    phase -= QUEEN_PHASE * f32::from(q);
-    phase / TOTAL_PHASE
+    phase -= PAWN_PHASE * p as i32;
+    phase -= KNIGHT_PHASE * n as i32;
+    phase -= BISHOP_PHASE * b as i32;
+    phase -= ROOK_PHASE * r as i32;
+    phase -= QUEEN_PHASE * q as i32;
+    phase
+}
+
+/// `lerp` linearly interpolates between `a` and `b` by `t`.
+/// `t` is between 0 and 256.
+#[inline]
+pub const fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
+    debug_assert!(t >= 0 && t <= 256);
+    mg * (256 - t) / 256 + eg * t / 256
 }
 
 /// A struct that holds all the terms in the evaluation function, intended to be used by the
@@ -263,8 +271,7 @@ impl Board {
         let game_phase = self.phase();
         let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
         let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
-        let material = (midgame_material as f32 * (1.0 - game_phase)) as i32
-            + (endgame_material as f32 * game_phase) as i32;
+        let material = lerp(midgame_material, endgame_material, game_phase);
         let pst_val = self.pst_value(game_phase);
 
         let mut score = material + pst_val;
@@ -306,32 +313,94 @@ impl Board {
         }
     }
 
+    fn unwinnable_for<const SIDE: u8>(&self) -> bool {
+        assert!(
+            SIDE == WHITE || SIDE == BLACK,
+            "unwinnable_for called with invalid side"
+        );
+
+        if SIDE == WHITE {
+            if self.major_piece_counts[WHITE as usize] != 0 {
+                return false;
+            }
+            if self.minor_piece_counts[WHITE as usize] > 1 {
+                return false;
+            }
+            if self.num(WP) != 0 {
+                return false;
+            }
+            true
+        } else {
+            if self.major_piece_counts[BLACK as usize] != 0 {
+                return false;
+            }
+            if self.minor_piece_counts[BLACK as usize] > 1 {
+                return false;
+            }
+            if self.num(BP) != 0 {
+                return false;
+            }
+            true
+        }
+    }
+
+    const fn is_material_draw(&self) -> bool {
+        if self.num(WR) == 0 && self.num(BR) == 0 && self.num(WQ) == 0 && self.num(BQ) == 0 {
+            if self.num(WB) == 0 && self.num(BB) == 0 {
+                if self.num(WN) < 3 && self.num(BN) < 3 {
+                    return true;
+                }
+            } else if (self.num(WN) == 0
+                && self.num(BN) == 0
+                && self.num(WB).abs_diff(self.num(BB)) < 2)
+                || (self.num(WB) + self.num(WN) == 1 && self.num(BB) + self.num(BN) == 1)
+            {
+                return true;
+            }
+        } else if self.num(WQ) == 0 && self.num(BQ) == 0 {
+            if self.num(WR) == 1 && self.num(BR) == 1 {
+                if (self.num(WN) + self.num(WB)) < 2 && (self.num(BN) + self.num(BB)) < 2 {
+                    return true;
+                }
+            } else if self.num(WR) == 1 && self.num(BR) == 0 {
+                if (self.num(WN) + self.num(WB)) == 0
+                    && ((self.num(BN) + self.num(BB)) == 1 || (self.num(BN) + self.num(BB)) == 2)
+                {
+                    return true;
+                }
+            } else if self.num(WR) == 0
+                && self.num(BR) == 1
+                && (self.num(BN) + self.num(BB)) == 0
+                && ((self.num(WN) + self.num(WB)) == 1 || (self.num(WN) + self.num(WB)) == 2)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     #[inline]
     fn clamp_score(&mut self, score: i32) -> i32 {
-        // if we can't win with our material, we clamp the eval to be at best one millipawn.
-        if score > 0 && self.unwinnable_for::<{ WHITE }>() {
-            1
-        } else if score < 0 && self.unwinnable_for::<{ BLACK }>() {
-            -1
+        // if we can't win with our material, we clamp the eval to zero.
+        if score > 0 && self.unwinnable_for::<{ WHITE }>() || score < 0 && self.unwinnable_for::<{ BLACK }>() {
+            0
         } else {
             score
         }
     }
 
-    pub fn zugzwang_unlikely(&self) -> bool {
-        let endgame_phase = 0.86;
-        self.big_piece_counts[self.side as usize] > 0 && self.phase() < endgame_phase
+    pub const fn zugzwang_unlikely(&self) -> bool {
+        const ENDGAME_PHASE: i32 = game_phase(16, 1, 1, 0, 0);
+        self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
     }
 
-    fn pst_value(&self, phase: f32) -> i32 {
+    const fn pst_value(&self, phase: i32) -> i32 {
         #![allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_precision_loss,
             clippy::similar_names
         )]
-        let mg_val = self.pst_vals[0] as f32;
-        let eg_val = self.pst_vals[1] as f32;
-        eg_val.mul_add(phase, (1.0 - phase) * mg_val) as i32
+        let mg_val = self.pst_vals[0];
+        let eg_val = self.pst_vals[1];
+        lerp(mg_val, eg_val, phase)
     }
 
     const fn bishop_pair_term(&self) -> i32 {
@@ -349,7 +418,7 @@ impl Board {
         0
     }
 
-    fn pawn_shield_term(&self, phase: f32) -> i32 {
+    fn pawn_shield_term(&self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
         let white_kingloc = self.king_sq[WHITE as usize];
@@ -369,7 +438,8 @@ impl Board {
             }
         }
 
-        (((SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield]) as f32) * (1.0 - phase)) as i32
+        let bonus = SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield];
+        lerp(bonus, 0, phase)
     }
 
     fn king_tropism_term(&self) -> i32 {
@@ -508,8 +578,8 @@ impl Board {
         score
     }
 
-    /// `phase` computes a number between 0.0 and 1.0, which is the phase of the game. 0.0 is the opening, 1.0 is the endgame.
-    fn phase(&self) -> f32 {
+    /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
+    const fn phase(&self) -> i32 {
         let pawns = self.num(WP) + self.num(BP);
         let knights = self.num(WN) + self.num(BN);
         let bishops = self.num(WB) + self.num(BB);
@@ -579,8 +649,7 @@ impl Board {
         let material_pst = {
             let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
             let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
-            let material = (midgame_material as f32 * (1.0 - game_phase)) as i32
-                + (endgame_material as f32 * game_phase) as i32;
+            let material = lerp(midgame_material, endgame_material, game_phase);
             let pst_val = self.pst_value(game_phase);
 
             material + pst_val
@@ -723,5 +792,15 @@ impl Board {
             half_open_rooks,
             turn,
         }
+    }
+}
+
+mod tests {
+    #[test]
+    fn unwinnable() {
+        const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
+        let mut board = super::Board::from_fen(FEN).unwrap();
+        let eval = board.evaluate();
+        assert!(eval.abs() <= 1, "eval is not a draw score ({eval} != 0cp) in a position unwinnable for both sides.");
     }
 }
