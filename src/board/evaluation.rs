@@ -137,8 +137,8 @@ pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
 /// `lerp` linearly interpolates between `a` and `b` by `t`.
 /// `t` is between 0 and 256.
 #[inline]
-pub const fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
-    debug_assert!(t >= 0 && t <= 256);
+pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
+    let t = t.min(256);
     mg * (256 - t) / 256 + eg * t / 256
 }
 
@@ -393,7 +393,7 @@ impl Board {
         self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
     }
 
-    const fn pst_value(&self, phase: i32) -> i32 {
+    fn pst_value(&self, phase: i32) -> i32 {
         #![allow(clippy::similar_names)]
         let mg_val = self.pst_vals[0];
         let eg_val = self.pst_vals[1];
