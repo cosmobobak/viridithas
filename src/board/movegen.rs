@@ -186,8 +186,7 @@ impl Board {
         move_list.push(m, score);
     }
 
-    fn add_ep_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
-        let _ = self;
+    fn add_ep_move(m: Move, move_list: &mut impl MoveConsumer) {
         move_list.push(m, 1050 + 10_000_000);
     }
 
@@ -270,13 +269,13 @@ impl Board {
         let left_sq = if SIDE == WHITE { sq + 9 } else { sq - 9 };
         let right_sq = if SIDE == WHITE { sq + 11 } else { sq - 11 };
         if left_sq == self.ep_sq {
-            self.add_ep_move(
+            Self::add_ep_move(
                 Move::new(sq, left_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
         }
         if right_sq == self.ep_sq {
-            self.add_ep_move(
+            Self::add_ep_move(
                 Move::new(sq, right_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );

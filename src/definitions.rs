@@ -198,6 +198,11 @@ pub enum Castling {
     BQ = 0b1000,
 }
 
+pub const WKCA: u8 = Castling::WK as u8;
+pub const WQCA: u8 = Castling::WQ as u8;
+pub const BKCA: u8 = Castling::BK as u8;
+pub const BQCA: u8 = Castling::BQ as u8;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
     pub m: Move,

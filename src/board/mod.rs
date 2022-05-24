@@ -24,12 +24,12 @@ use crate::{
     definitions::{
         Castling, Colour, File, Rank, Undo, A1, A8, BB, BK, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BR,
         C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE,
-        OFF_BOARD, PIECE_EMPTY, RANK_3, RANK_6, WB, WHITE, WK, WN, WP, WQ, WR,
+        OFF_BOARD, PIECE_EMPTY, RANK_3, RANK_6, WB, WHITE, WK, WN, WP, WQ, WR, WKCA, WQCA, BKCA, BQCA,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     lookups::{
         filerank_to_square, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
-        RANKS_BOARD, SQ120_TO_SQ64, SQ64_TO_SQ120,
+        RANKS_BOARD, SQ120_TO_SQ64, SQ64_TO_SQ120, PIECE_CHARS, SQUARE_NAMES,
     },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
@@ -282,7 +282,7 @@ impl Board {
         self.reset();
 
         let fen_chars = fen.as_bytes();
-        let split_idx = fen_chars.iter().position(|&c| c == b' ').unwrap();
+        let split_idx = fen_chars.iter().position(|&c| c == b' ').ok_or_else(|| format!("FEN string is missing space: {}", fen))?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -358,6 +358,62 @@ impl Board {
         Ok(out)
     }
 
+    pub fn fen(&self) -> String {
+        let mut fen = String::with_capacity(100);
+
+        let mut counter = 0;
+        for rank in (0..8).rev() {
+            for file in 0..8 {
+                let sq64 = rank * 8 + file;
+                let sq120 = SQ64_TO_SQ120[sq64 as usize];
+                let piece = self.piece_at(sq120);
+                if piece != PIECE_EMPTY {
+                    if counter != 0 {
+                        fen.push_str(&counter.to_string());
+                    }
+                    counter = 0;
+                    fen.push(PIECE_CHARS[piece as usize] as char);
+                } else {
+                    counter += 1;
+                }
+            }
+            if counter != 0 {
+                fen.push_str(&counter.to_string());
+            }
+            counter = 0;
+            if rank != 0 {
+                fen.push('/');
+            }
+        }
+
+        fen.push(' ');
+        fen.push(if self.side == WHITE { 'w' } else { 'b' });
+        fen.push(' ');
+        if self.castle_perm != 0 {
+            fen.push_str(&format!(
+                "{}{}{}{}",
+                if self.castle_perm & WKCA != 0 { "K" } else { "" },
+                if self.castle_perm & WQCA != 0 { "Q" } else { "" },
+                if self.castle_perm & BKCA != 0 { "k" } else { "" },
+                if self.castle_perm & BQCA != 0 { "q" } else { "" },
+            ));
+        } else {
+            fen.push('-');
+        }
+        fen.push(' ');
+        if self.ep_sq != NO_SQUARE {
+            fen.push_str(SQUARE_NAMES[self.ep_sq as usize]);
+        } else {
+            fen.push('-');
+        }
+        fen.push(' ');
+        fen.push_str(&format!("{}", self.fifty_move_counter));
+        fen.push(' ');
+        fen.push_str(&format!("{}", self.ply / 2 + 1));
+
+        fen
+    }
+
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
             None => return Err("FEN string is invalid, expected side part.".to_string()),
@@ -366,7 +422,7 @@ impl Board {
             Some(other) => {
                 return Err(format!(
                     "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
-                    std::str::from_utf8(other).unwrap()
+                    std::str::from_utf8(other).unwrap_or("<invalid utf8>")
                 ))
             }
         };
@@ -384,7 +440,7 @@ impl Board {
                         b'Q' => self.castle_perm |= Castling::WQ as u8,
                         b'k' => self.castle_perm |= Castling::BK as u8,
                         b'q' => self.castle_perm |= Castling::BQ as u8,
-                        _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", castling.iter().map(|&c| c as char).collect::<String>())),
+                        _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", std::str::from_utf8(castling).unwrap_or("<invalid utf8>"))),
                     }
                 }
             }
@@ -399,7 +455,7 @@ impl Board {
             Some([b'-']) => self.ep_sq = NO_SQUARE,
             Some(ep_sq) => {
                 if ep_sq.len() != 2 {
-                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>()));
+                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
                 }
                 let file = ep_sq[0] as u8 - b'a';
                 let rank = ep_sq[1] as u8 - b'1';
@@ -408,7 +464,7 @@ impl Board {
                     && rank >= Rank::Rank1 as u8
                     && rank <= Rank::Rank8 as u8)
                 {
-                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", ep_sq.iter().map(|&c| c as char).collect::<String>()));
+                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
                 }
                 self.ep_sq = filerank_to_square(file, rank);
             }
@@ -439,15 +495,15 @@ impl Board {
         match fullmove_part {
             None => return Err("FEN string is invalid, expected fullmove number part.".to_string()),
             Some(fullmove_number) => {
-                self.ply = std::str::from_utf8(fullmove_number)
+                let fullmove_number = std::str::from_utf8(fullmove_number)
                     .map_err(|_| {
                         "FEN string is invalid, expected fullmove number part to be valid UTF-8"
                     })?
                     .parse::<usize>()
                     .map_err(|_| {
                         "FEN string is invalid, expected fullmove number part to be a number"
-                    })?
-                    * 2;
+                    })?;
+                self.ply = (fullmove_number - 1) * 2;
                 if self.side == BLACK {
                     self.ply += 1;
                 }
@@ -1587,6 +1643,8 @@ impl Debug for Board {
 }
 
 mod tests {
+
+
     #[test]
     fn read_fen_validity() {
         use super::*;
@@ -1600,5 +1658,21 @@ mod tests {
         board_2.check_validity().unwrap();
 
         assert_eq!(board_1, board_2);
+    }
+
+    #[test]
+    fn fen_round_trip() {
+        use crate::board::Board;
+        use std::{io::{BufReader, BufRead}, fs::File};
+        let fens = BufReader::new(File::open("perftsuite.epd").unwrap())
+            .lines()
+            .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
+            .collect::<Vec<_>>();
+        let mut board = Board::new();
+        for fen in fens {
+            board.set_from_fen(&fen).expect("setfen failed.");
+            let fen_2 = board.fen();
+            assert_eq!(fen, fen_2);
+        }
     }
 }

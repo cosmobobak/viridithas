@@ -243,9 +243,9 @@ pub static PIECE_NAMES: [&str; 13] = [
     "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
     "rook", "queen", "king",
 ];
-#[allow(dead_code)]
+
 pub static PIECE_CHARS: [u8; 13] = [
-    b'.', b'p', b'n', b'b', b'r', b'q', b'k', b'P', b'N', b'B', b'R', b'Q', b'K',
+    b'.', b'P', b'N', b'B', b'R', b'Q', b'K', b'p', b'n', b'b', b'r', b'q', b'k',
 ];
 
 pub static PROMO_CHAR_LOOKUP: [u8; 13] = [

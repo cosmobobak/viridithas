@@ -1,4 +1,5 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::if_not_else)]
 
 mod attack;
 mod bitboard;
