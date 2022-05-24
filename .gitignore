@@ -2,3 +2,4 @@
 perftsuite.epd
 *.csv
 *.pgn
+/training_data
