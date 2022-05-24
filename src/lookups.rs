@@ -200,7 +200,7 @@ pub static PIECE_BIG: [bool; 13] = [
 ];
 /// rooks and queens.
 pub static PIECE_MAJ: [bool; 13] = [
-    false, false, false, false, true, true, true, false, false, false, true, true, true,
+    false, false, false, false, true, true, false, false, false, false, true, true, false,
 ];
 /// knights and bishops.
 pub static PIECE_MIN: [bool; 13] = [
