@@ -102,11 +102,8 @@ const KNIGHT_PHASE: i32 = 10;
 const BISHOP_PHASE: i32 = 10;
 const ROOK_PHASE: i32 = 20;
 const QUEEN_PHASE: i32 = 40;
-const TOTAL_PHASE: i32 = 16 * PAWN_PHASE
-    + 4 * KNIGHT_PHASE
-    + 4 * BISHOP_PHASE
-    + 4 * ROOK_PHASE
-    + 2 * QUEEN_PHASE;
+const TOTAL_PHASE: i32 =
+    16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
 
 #[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
@@ -121,7 +118,7 @@ pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
 pub static PASSED_PAWN_BONUS: [i32; 8] = [
     0, // illegal
     5, 10, 20, 35, 60, 100, // values from VICE.
-    0, // illegal
+    0,   // illegal
 ];
 
 /// `game_phase` computes a number between 0 and 256, which is the phase of the game.
@@ -382,7 +379,9 @@ impl Board {
     #[inline]
     fn clamp_score(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
-        if score > 0 && self.unwinnable_for::<{ WHITE }>() || score < 0 && self.unwinnable_for::<{ BLACK }>() {
+        if score > 0 && self.unwinnable_for::<{ WHITE }>()
+            || score < 0 && self.unwinnable_for::<{ BLACK }>()
+        {
             0
         } else {
             score
@@ -395,9 +394,7 @@ impl Board {
     }
 
     const fn pst_value(&self, phase: i32) -> i32 {
-        #![allow(
-            clippy::similar_names
-        )]
+        #![allow(clippy::similar_names)]
         let mg_val = self.pst_vals[0];
         let eg_val = self.pst_vals[1];
         lerp(mg_val, eg_val, phase)
@@ -644,11 +641,17 @@ impl Board {
     }
 
     pub fn eval_vector(&mut self) -> EvalVector {
-        #![allow(clippy::too_many_lines, clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        #![allow(
+            clippy::too_many_lines,
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss
+        )]
         let game_phase = self.phase();
         let material_pst = {
-            let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
-            let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
+            let midgame_material =
+                self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
+            let endgame_material =
+                self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
             let material = lerp(midgame_material, endgame_material, game_phase);
             let pst_val = self.pst_value(game_phase);
 
@@ -714,7 +717,8 @@ impl Board {
         if !self.in_check::<{ Self::US }>() {
             self.generate_moves(&mut counter);
         }
-        let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] = counter.counters;
+        let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] =
+            counter.counters;
         if !self.in_check::<{ Self::US }>() {
             self.make_nullmove();
         }
@@ -722,7 +726,8 @@ impl Board {
         if !self.in_check::<{ Self::US }>() {
             self.generate_moves(&mut counter);
         }
-        let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] = counter.counters;
+        let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] =
+            counter.counters;
         if !self.in_check::<{ Self::US }>() {
             self.unmake_nullmove();
         }
@@ -775,19 +780,19 @@ impl Board {
         };
 
         let turn = if self.turn() == WHITE { 1 } else { -1 };
-        EvalVector { 
-            valid: true, 
-            material_pst, 
-            bishop_pair, 
-            passed_pawns_by_rank, 
-            isolated_pawns, 
-            doubled_pawns, 
-            knight_mobility, 
-            bishop_mobility, 
-            rook_mobility, 
-            queen_mobility, 
-            king_mobility, 
-            pawn_shield, 
+        EvalVector {
+            valid: true,
+            material_pst,
+            bishop_pair,
+            passed_pawns_by_rank,
+            isolated_pawns,
+            doubled_pawns,
+            knight_mobility,
+            bishop_mobility,
+            rook_mobility,
+            queen_mobility,
+            king_mobility,
+            pawn_shield,
             open_rooks,
             half_open_rooks,
             turn,
@@ -801,6 +806,9 @@ mod tests {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         let mut board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate();
-        assert!(eval.abs() <= 1, "eval is not a draw score ({eval} != 0cp) in a position unwinnable for both sides.");
+        assert!(
+            eval.abs() <= 1,
+            "eval is not a draw score ({eval} != 0cp) in a position unwinnable for both sides."
+        );
     }
 }

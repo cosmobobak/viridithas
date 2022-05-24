@@ -1,4 +1,7 @@
-use std::{fs::File, io::{BufReader, BufRead, BufWriter, Write}};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+};
 
 use crate::{board::evaluation::EvalVector, board::Board, searchinfo::SearchInfo};
 
@@ -10,9 +13,14 @@ pub fn annotate_positions(input_fname: &str, output_fname: &str, n_positions: us
     let o = File::create(output_fname).unwrap();
     let mut writer = BufWriter::new(o);
     let mut board = Board::new();
-    writer.write_all(format!("eval,{}\n", EvalVector::header()).as_bytes()).unwrap();
+    writer
+        .write_all(format!("eval,{}\n", EvalVector::header()).as_bytes())
+        .unwrap();
     let mut counter = 0;
-    let mut info = SearchInfo { depth, ..SearchInfo::default() };
+    let mut info = SearchInfo {
+        depth,
+        ..SearchInfo::default()
+    };
     for line in reader.lines().skip(1).take(n_positions) {
         if counter % 10 == 0 {
             print!("{}                   \r", counter);
@@ -31,7 +39,9 @@ pub fn annotate_positions(input_fname: &str, output_fname: &str, n_positions: us
         let eval_vec = board.eval_vector();
         if eval_vec.valid {
             let eval = board.search_position::<false>(&mut info);
-            if eval.abs() > 700 { continue; }
+            if eval.abs() > 700 {
+                continue;
+            }
             let eval_positional = eval - eval_vec.material_pst;
             let output = format!("{},{}\n", eval_positional, eval_vec.csvify());
             writer.write_all(output.as_bytes()).unwrap();

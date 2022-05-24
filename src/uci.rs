@@ -145,7 +145,12 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
         std::cmp::min(time, t as u64)
     });
 
-    assert!(!info.time_set || search_time_window <= time.unwrap() as u64, "search window was {}, but time was {}", search_time_window, time.unwrap());
+    assert!(
+        !info.time_set || search_time_window <= time.unwrap() as u64,
+        "search window was {}, but time was {}",
+        search_time_window,
+        time.unwrap()
+    );
 
     info.set_time_window(search_time_window);
 

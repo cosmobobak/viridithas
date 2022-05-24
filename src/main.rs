@@ -15,9 +15,9 @@ mod piecesquaretable;
 mod search;
 mod searchinfo;
 mod transpositiontable;
+mod tuning;
 mod uci;
 mod validate;
-mod tuning;
 
 pub const NAME: &str = "Viridithas 2.1.0dev";
 

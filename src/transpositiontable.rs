@@ -1,4 +1,8 @@
-#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, dead_code)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    dead_code
+)]
 
 use crate::{
     board::evaluation::IS_MATE_SCORE,

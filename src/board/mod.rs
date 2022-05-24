@@ -22,14 +22,15 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        Castling, Colour, File, Rank, Undo, A1, A8, BB, BK, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BR,
-        C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE,
-        OFF_BOARD, PIECE_EMPTY, RANK_3, RANK_6, WB, WHITE, WK, WN, WP, WQ, WR, WKCA, WQCA, BKCA, BQCA,
+        Castling, Colour, File, Rank, Undo, A1, A8, BB, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP,
+        BQ, BQCA, BR, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, INFINITY, MAX_DEPTH, MAX_GAME_MOVES,
+        NO_SQUARE, OFF_BOARD, PIECE_EMPTY, RANK_3, RANK_6, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA,
+        WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     lookups::{
-        filerank_to_square, PIECE_BIG, PIECE_COL, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
-        RANKS_BOARD, SQ120_TO_SQ64, SQ64_TO_SQ120, PIECE_CHARS, SQUARE_NAMES,
+        filerank_to_square, PIECE_BIG, PIECE_CHARS, PIECE_COL, PIECE_MAJ, PIECE_MIN,
+        PROMO_CHAR_LOOKUP, RANKS_BOARD, SQ120_TO_SQ64, SQ64_TO_SQ120, SQUARE_NAMES,
     },
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
@@ -282,7 +283,10 @@ impl Board {
         self.reset();
 
         let fen_chars = fen.as_bytes();
-        let split_idx = fen_chars.iter().position(|&c| c == b' ').ok_or_else(|| format!("FEN string is missing space: {}", fen))?;
+        let split_idx = fen_chars
+            .iter()
+            .position(|&c| c == b' ')
+            .ok_or_else(|| format!("FEN string is missing space: {}", fen))?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -390,6 +394,7 @@ impl Board {
         fen.push(if self.side == WHITE { 'w' } else { 'b' });
         fen.push(' ');
         if self.castle_perm != 0 {
+            #[rustfmt::skip]
             fen.push_str(&format!(
                 "{}{}{}{}",
                 if self.castle_perm & WKCA != 0 { "K" } else { "" },
@@ -1644,7 +1649,6 @@ impl Debug for Board {
 
 mod tests {
 
-
     #[test]
     fn read_fen_validity() {
         use super::*;
@@ -1663,7 +1667,10 @@ mod tests {
     #[test]
     fn fen_round_trip() {
         use crate::board::Board;
-        use std::{io::{BufReader, BufRead}, fs::File};
+        use std::{
+            fs::File,
+            io::{BufRead, BufReader},
+        };
         let fens = BufReader::new(File::open("perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
