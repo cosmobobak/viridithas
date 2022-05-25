@@ -118,8 +118,8 @@ fn _logistic_lateness_reduction(moves: usize, depth: usize) -> usize {
         clippy::cast_possible_truncation
     )]
     const GRADIENT: f32 = 0.7;
-    const MIDPOINT: f32 = 5.5;
-    const REDUCTION_FACTOR: f32 = 0.45;
+    const MIDPOINT: f32 = 4.5;
+    const REDUCTION_FACTOR: f32 = 2.0 / 5.0;
     let moves = moves as f32;
     let depth = depth as f32;
     let numerator = REDUCTION_FACTOR * depth - 1.0;
@@ -146,7 +146,7 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
 #[inline]
 fn senpai_lateness_reduction(moves: usize, depth: usize) -> usize {
     // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
-    if moves < 5 {
+    if moves <= 6 {
         1
     } else {
         (depth / 3).max(1)
@@ -270,7 +270,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             if extension == 0
                 && !is_interesting
                 && depth >= 3
-                && moves_made >= (2 + usize::from(in_pv)) { 
+                && moves_made >= (2 + 3 * usize::from(in_pv)) { 
                 r += senpai_lateness_reduction(moves_made, depth);
             }
             let depth = depth + extension;
@@ -279,12 +279,12 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             // perform a zero-window search, possibly with a reduction
             score = -alpha_beta(pos, info, depth - 1 - r, -alpha - 1, -alpha);
             // if we reduced and failed, nullwindow again with full depth
-            if r > 0 && score > alpha {
+            if r > 0 && score > alpha && score < beta {
                 info.lmr_stats.fails += 1;
                 score = -alpha_beta(pos, info, depth - 1, -alpha - 1, -alpha);
             }
             // if we failed again (or simply failed a fulldepth nullwindow), then full window search
-            if score > alpha {
+            if score > alpha && score < beta  {
                 score = -alpha_beta(pos, info, depth - 1, -beta, -alpha);
             }
         };
