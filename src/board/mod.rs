@@ -1387,7 +1387,7 @@ impl Board {
         let mut moves_done = 0;
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.is_legal(pv_move) && moves_done < MAX_DEPTH && !self.principal_variation.contains(&pv_move) {
+            if self.is_legal(pv_move) && moves_done < depth && !self.is_draw() {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
                 moves_done += 1;
