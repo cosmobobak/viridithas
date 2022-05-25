@@ -51,10 +51,10 @@ pub static EG_PIECE_VALUES: [i32; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: i32 = ONE_PAWN / 6;
+pub const ISOLATED_PAWN_MALUS: i32 = ONE_PAWN / 3;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: i32 = ONE_PAWN / 3;
+pub const DOUBLED_PAWN_MALUS: i32 = 2 * ONE_PAWN / 5;
 
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: i32 = ONE_PAWN / 4;
