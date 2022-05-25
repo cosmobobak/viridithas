@@ -310,9 +310,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                         pos.insert_killer(m);
                         // this is a countermove.
                         pos.insert_countermove(m);
-                    }
-
-                    if !is_capture {
                         // double-strength history heuristic :3
                         pos.add_history(m, 2 * history_score);
                     }
