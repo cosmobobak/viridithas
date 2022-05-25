@@ -198,7 +198,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
     if !we_are_in_check && pos.ply() != 0 && depth > 3 && pos.zugzwang_unlikely() {
-        info.nullmove_stats.uses += 1;
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
@@ -206,7 +205,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             return 0;
         }
         if score >= beta {
-            info.nullmove_stats.cutoffs += 1;
             return beta;
         }
     }
@@ -214,8 +212,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    let history_score = (depth * depth) as i32;
+    let history_score = 1 << depth;
     let original_alpha = alpha;
     let mut moves_made = 0;
     let mut best_move = Move::null();
@@ -255,7 +252,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         if moves_made == 1 {
             // first move (presumably the PV-move)
             score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
-            info.pvs_stats.pvsearches += 1;
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -275,18 +271,15 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                 r += senpai_lateness_reduction(moves_made, depth);
             }
             let depth = depth + extension;
-            if r > 0 { info.lmr_stats.reductions += 1; }
             r = r.min(depth);
             // perform a zero-window search, possibly with a reduction
             score = -alpha_beta(pos, info, depth - 1 - r, -alpha - 1, -alpha);
             // if we reduced and failed, nullwindow again with full depth
             if r > 0 && score > alpha && score < beta {
-                info.lmr_stats.fails += 1;
                 score = -alpha_beta(pos, info, depth - 1, -alpha - 1, -alpha);
             }
             // if we failed again (or simply failed a fulldepth nullwindow), then full window search
             if score > alpha && score < beta  {
-                info.pvs_stats.pvfails += 1;
                 score = -alpha_beta(pos, info, depth - 1, -beta, -alpha);
             }
         };

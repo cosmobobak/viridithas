@@ -1515,16 +1515,6 @@ impl Board {
                     print!("{m} ");
                 }
                 println!();
-                let r = info.lmr_stats.reductions;
-                let f = info.lmr_stats.fails;
-                #[allow(clippy::cast_precision_loss)]
-                let p = (f as f64 + 0.0001) / r as f64;
-                eprintln!("lmr fail rate: {:.1}%", p * 100.0);
-                let p = info.pvs_stats.pvsearches;
-                let f = info.pvs_stats.pvfails;
-                #[allow(clippy::cast_precision_loss)]
-                let p = (f as f64 + 0.0001) / p as f64;
-                eprintln!("pvs fail rate: {:.1}%", p * 100.0);
             }
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
