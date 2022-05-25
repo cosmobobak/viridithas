@@ -54,7 +54,7 @@ pub static EG_PIECE_VALUES: [i32; 13] = [
 pub const ISOLATED_PAWN_MALUS: i32 = ONE_PAWN / 3;
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: i32 = 2 * ONE_PAWN / 5;
+pub const DOUBLED_PAWN_MALUS: i32 = 3 * ONE_PAWN / 8;
 
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: i32 = ONE_PAWN / 4;
@@ -74,7 +74,8 @@ pub const QUEEN_HALF_OPEN_FILE_BONUS: i32 = ONE_PAWN / 40;
 // The multipliers applied to mobility scores.
 pub const KNIGHT_MOBILITY_MULTIPLIER: i32 = 4;
 pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 5;
-pub const ROOK_MOBILITY_MULTIPLIER: i32 = 2;
+pub const MG_ROOK_MOBILITY_MULTIPLIER: i32 = 2;
+pub const EG_ROOK_MOBILITY_MULTIPLIER: i32 = 4;
 pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
 pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
 
@@ -228,10 +229,12 @@ impl<'a> MoveCounter<'a> {
         }
     }
 
-    pub const fn score(&self) -> i32 {
+    pub fn score(&self, phase: i32) -> i32 {
         let knights = self.counters[1] * KNIGHT_MOBILITY_MULTIPLIER;
         let bishops = self.counters[2] * BISHOP_MOBILITY_MULTIPLIER;
-        let rooks = self.counters[3] * ROOK_MOBILITY_MULTIPLIER;
+        let midg_rooks = self.counters[3] * MG_ROOK_MOBILITY_MULTIPLIER;
+        let endg_rooks = self.counters[3] * EG_ROOK_MOBILITY_MULTIPLIER;
+        let rooks = lerp(midg_rooks, endg_rooks, phase);
         let queens = self.counters[4] * QUEEN_MOBILITY_MULTIPLIER;
         let kings = self.counters[5] * KING_MOBILITY_MULTIPLIER;
         knights + bishops + rooks + queens + kings
@@ -284,10 +287,11 @@ impl Board {
 
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
-        let mobility_val = self.mobility();
+        let mobility_val = self.mobility(game_phase);
         let king_safety_val = self.pawn_shield_term(game_phase);
-        let rook_open_file_val = self.rook_open_file_term();
-        let queen_open_file_val = self.queen_open_file_term();
+        let rook_open_file_val = self.rook_open_file_term(game_phase);
+        let queen_open_file_val = self.queen_open_file_term(game_phase);
+        let tempo_val = lerp(20, 10, game_phase);
 
         score += pawn_val;
         score += bishop_pair_val;
@@ -295,11 +299,7 @@ impl Board {
         score += king_safety_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-
-        // println!(
-        //     "material: {} pst: {} pawn: {} bishop pair: {} mobility: {}",
-        //     score, pst_val, pawn_val, bishop_pair_val, mobility_val
-        // );
+        score += tempo_val;
 
         score = self.clamp_score(score);
 
@@ -532,7 +532,7 @@ impl Board {
     }
 
     #[inline]
-    fn rook_open_file_term(&self) -> i32 {
+    fn rook_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &rook_sq in self.piece_lists[WR as usize].iter() {
             let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
@@ -550,11 +550,11 @@ impl Board {
                 score -= ROOK_HALF_OPEN_FILE_BONUS;
             }
         }
-        score
+        lerp(score, 0, phase)
     }
 
     #[inline]
-    fn queen_open_file_term(&self) -> i32 {
+    fn queen_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
             let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
@@ -572,7 +572,7 @@ impl Board {
                 score -= QUEEN_HALF_OPEN_FILE_BONUS;
             }
         }
-        score
+        lerp(score, 0, phase)
     }
 
     /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
@@ -611,7 +611,7 @@ impl Board {
         (mg_pst_val, eg_pst_val)
     }
 
-    fn mobility(&mut self) -> i32 {
+    fn mobility(&mut self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
         let is_check = self.in_check::<{ Self::US }>();
         if is_check {
@@ -625,12 +625,12 @@ impl Board {
         let mut list = MoveCounter::new(self);
         self.generate_moves(&mut list);
 
-        let our_pseudo_legal_moves = list.score();
+        let our_pseudo_legal_moves = list.score(phase);
 
         self.make_nullmove();
         let mut list = MoveCounter::new(self);
         self.generate_moves(&mut list);
-        let their_pseudo_legal_moves = list.score();
+        let their_pseudo_legal_moves = list.score(phase);
         self.unmake_nullmove();
 
         if self.side == WHITE {
