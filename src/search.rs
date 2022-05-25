@@ -146,7 +146,7 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
 #[inline]
 fn senpai_lateness_reduction(moves: usize, depth: usize) -> usize {
     // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
-    if moves < 6 {
+    if moves < 5 {
         1
     } else {
         (depth / 3).max(1)
@@ -270,7 +270,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             if extension == 0
                 && !is_interesting
                 && depth >= 3
-                && moves_made >= (2 + 3 * usize::from(in_pv)) { 
+                && moves_made >= (2 + usize::from(in_pv)) { 
                 r += senpai_lateness_reduction(moves_made, depth);
             }
             let depth = depth + extension;
