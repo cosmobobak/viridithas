@@ -219,7 +219,7 @@ impl Board {
         let mut moves = MoveList::new();
         self.generate_moves(&mut moves);
 
-        for &m in moves.iter() {
+        for m in moves {
             if !self.make_move(m) {
                 continue;
             }
@@ -239,7 +239,7 @@ impl Board {
         let mut moves = MoveList::new();
         self.generate_moves(&mut moves);
 
-        for &m in moves.iter() {
+        for m in moves {
             if !self.make_move(m) {
                 continue;
             }
@@ -888,7 +888,7 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
-        for &m in list.iter() {
+        for m in list {
             if !self.make_move(m) {
                 continue;
             }
@@ -913,7 +913,7 @@ impl Board {
         let mut list = MoveList::new();
         board.generate_moves(&mut list);
 
-        for &m in list.iter() {
+        for m in list {
             if !board.make_move(m) {
                 continue;
             }
@@ -1357,7 +1357,7 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
-        let mut moves = list.iter();
+        let mut moves = list;
 
         moves
             .find(|&m| {
@@ -1367,7 +1367,6 @@ impl Board {
                         || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
             })
             .ok_or(IllegalMove)
-            .copied()
     }
 
     pub fn is_repetition(&self) -> bool {
@@ -1481,7 +1480,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
 
-        for &m in move_list.iter() {
+        for m in move_list {
             if !self.make_move(m) {
                 continue;
             }
@@ -1619,7 +1618,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut first_legal = None;
-        for &m in move_list.iter() {
+        for m in move_list {
             if self.make_move(m) {
                 self.unmake_move();
                 first_legal = Some(m);

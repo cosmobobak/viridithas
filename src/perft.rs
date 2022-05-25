@@ -18,7 +18,7 @@ fn perft(pos: &mut Board, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
-    for &m in ml.iter() {
+    for m in ml {
         if !pos.make_move(m) {
             continue;
         }

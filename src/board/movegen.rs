@@ -40,6 +40,7 @@ pub struct MoveListEntry {
 pub struct MoveList {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
+    progress: usize,
 }
 
 impl MoveList {
@@ -51,26 +52,7 @@ impl MoveList {
         Self {
             moves: [DEFAULT; MAX_POSITION_MOVES],
             count: 0,
-        }
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &Move> {
-        unsafe {
-            self.moves
-                .get_unchecked(..self.count)
-                .iter()
-                .map(|e| &e.entry)
-        }
-    }
-
-    #[inline]
-    pub fn sort(&mut self) {
-        // reversed, as we want to sort from highest to lowest
-        unsafe {
-            self.moves
-                .get_unchecked_mut(..self.count)
-                .sort_unstable_by(|a, b| b.score.cmp(&a.score));
+            progress: 0,
         }
     }
 
@@ -81,6 +63,50 @@ impl MoveList {
                 .iter_mut()
                 .find(|e| e.entry == m)
         }
+    }
+}
+
+impl Iterator for MoveList {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Move> {
+        if self.progress == self.count {
+            return None;
+        }
+        let mut best_score = 0;
+        let mut best_num = self.progress;
+
+        for index in self.progress..self.count {
+            let score = unsafe { self.moves.get_unchecked(index).score };
+            if score > best_score {
+                best_score = score;
+                best_num = index;
+            }
+        }
+
+        debug_assert!(self.progress < self.count);
+        debug_assert!(best_num < self.count);
+        debug_assert!(best_num >= self.progress);
+
+        let m = unsafe { self.moves.get_unchecked(best_num).entry };
+
+        // manual swap_unchecked implementation
+        unsafe {
+            let a = self.progress;
+            #[cfg(debug_assertions)]
+            {
+                let _ = &self.moves[a];
+                let _ = &self.moves[best_num];
+            }
+
+            let ptr = self.moves.as_mut_ptr();
+            // SAFETY: caller has to guarantee that `a < self.len()` and `b < self.len()`
+            std::ptr::swap(ptr.add(a), ptr.add(best_num));
+        };
+
+        self.progress += 1;
+
+        Some(m)
     }
 }
 

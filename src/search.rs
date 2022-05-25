@@ -65,9 +65,9 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
 
     let mut moves_made = 0;
 
-    move_list.sort();
+    // move_list.sort();
 
-    for &m in move_list.iter() {
+    for m in move_list {
         // delta pruning: if this capture cannot raise
         // the static eval + a safety margin to alpha, skip it.
         // this should not be on during the late endgame, as it
@@ -227,14 +227,14 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         }
     }
 
-    move_list.sort();
+    // move_list.sort();
 
     let futility_pruning_legal = !pos.in_check::<{ Board::US }>() 
         && depth == 1
         && pos.evaluate() + FUTILITY_PRUNING_MARGIN < alpha
         && !in_pv;
 
-    for &m in move_list.iter() {
+    for m in move_list {
         let is_capture = m.is_capture();
         let is_promotion = m.is_promo();
         if !is_capture && !is_promotion && futility_pruning_legal {
