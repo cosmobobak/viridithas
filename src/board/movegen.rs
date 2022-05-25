@@ -20,7 +20,7 @@ use crate::{
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 7_000_000;
-const COUNTERMOVE_SCORE: i32 = 7_500_000;
+const COUNTERMOVE_BONUS: i32 = 100_000;
 
 use super::Board;
 
@@ -144,14 +144,12 @@ impl Board {
 
         let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.ply) };
 
-        let score = if killer_entry[0] == m {
+        let mut score = if killer_entry[0] == m {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
         } else {
-            if self.is_countermove(m) {
-                COUNTERMOVE_SCORE
-            } else if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
+            if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
             {
                 THIRD_ORDER_KILLER_SCORE
             } else {
@@ -166,6 +164,10 @@ impl Board {
                 }
             }
         };
+
+        if self.is_countermove(m) {
+            score += COUNTERMOVE_BONUS;
+        }
 
         move_list.push(m, score);
     }

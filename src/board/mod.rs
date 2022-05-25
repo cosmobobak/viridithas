@@ -158,6 +158,9 @@ impl Board {
     pub fn insert_countermove(&mut self, m: Move) {
         debug_assert!(self.ply < MAX_DEPTH);
         let prev_move = self.history.last().map_or(Move::null(), |u| u.m);
+        if prev_move.is_null() {
+            return;
+        }
         let prev_to = prev_move.to();
         let prev_piece = self.piece_at(prev_to);
         self.counter_move_table[prev_piece as usize][prev_to as usize] = m;

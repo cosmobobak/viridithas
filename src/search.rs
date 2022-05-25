@@ -308,6 +308,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
                     if !is_capture {
                         // quiet moves that fail high are killers.
                         pos.insert_killer(m);
+                        // this is a countermove.
+                        pos.insert_countermove(m);
                     }
 
                     pos.tt_store(best_move, beta, HFlag::Beta, depth);
