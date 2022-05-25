@@ -50,6 +50,7 @@ pub const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
     (sq120_to_sq64, sq64_to_sq120)
 }
 
+const SEED: u128 = 0x246C_CB2D_3B40_2853_9918_0A6D_BC3A_F444;
 struct XorShiftState {
     pub state: u128,
 }
@@ -65,7 +66,7 @@ const fn rand_u64(mut xs: XorShiftState) -> (u64, XorShiftState) {
 
 const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
     let mut state = XorShiftState {
-        state: const_random::const_random!(u128),
+        state: SEED,
     };
     let mut piece_keys = [[0; 120]; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
