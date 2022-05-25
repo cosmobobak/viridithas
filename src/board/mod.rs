@@ -1465,7 +1465,7 @@ impl Board {
             }
 
             if score <= alpha || score >= beta {
-                let score_string = format_score(score);
+                let score_string = format_score(score, self.turn());
                 let boundstr = if score <= alpha {
                     "upperbound"
                 } else {
@@ -1501,7 +1501,7 @@ impl Board {
             pv_length = self.get_pv_line(depth);
             most_recent_move = *self.principal_variation.get(0).unwrap_or(&most_recent_move);
 
-            let score_string = format_score(most_recent_score);
+            let score_string = format_score(most_recent_score, self.turn());
 
             if DO_PRINTOUT {
                 print!(
@@ -1518,7 +1518,7 @@ impl Board {
             }
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
-        let score_string = format_score(most_recent_score);
+        let score_string = format_score(most_recent_score, self.turn());
         if DO_PRINTOUT {
             print!(
                 "info score {} depth {} nodes {} time {} pv ",

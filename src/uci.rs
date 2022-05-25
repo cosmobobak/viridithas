@@ -198,11 +198,16 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     std::mem::drop(sender);
 }
 
-pub fn format_score(score: i32) -> String {
+pub fn format_score(score: i32, turn: u8) -> String {
+    assert!(turn == WHITE || turn == BLACK);
     if score.abs() > IS_MATE_SCORE {
         let plies_to_mate = MATE_SCORE - score.abs();
         let moves_to_mate = (plies_to_mate + 1) / 2;
-        format!("mate {}", moves_to_mate)
+        if score > 0 {
+            format!("mate {}", moves_to_mate)
+        } else {
+            format!("mate -{}", moves_to_mate)
+        }
     } else {
         format!("cp {}", score)
     }
