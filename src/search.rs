@@ -255,6 +255,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
         if moves_made == 1 {
             // first move (presumably the PV-move)
             score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
+            info.pvs_stats.pvsearches += 1;
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -285,6 +286,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
             }
             // if we failed again (or simply failed a fulldepth nullwindow), then full window search
             if score > alpha && score < beta  {
+                info.pvs_stats.pvfails += 1;
                 score = -alpha_beta(pos, info, depth - 1, -beta, -alpha);
             }
         };

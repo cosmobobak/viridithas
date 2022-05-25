@@ -1387,7 +1387,7 @@ impl Board {
         let mut moves_done = 0;
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.is_legal(pv_move) && moves_done < MAX_DEPTH {
+            if self.is_legal(pv_move) && moves_done < MAX_DEPTH && !self.principal_variation.contains(&pv_move) {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
                 moves_done += 1;
@@ -1402,74 +1402,6 @@ impl Board {
 
         moves_done
     }
-
-    // pub fn eval_terms(&mut self) -> EvalTerms {
-    //     let material = self.material[WHITE as usize] - self.material[BLACK as usize];
-    //     let pawns = self.piece_num[WP as usize] as usize + self.piece_num[BP as usize] as usize;
-    //     let knights = self.piece_num[WN as usize] as usize + self.piece_num[BN as usize] as usize;
-    //     let bishops = self.piece_num[WB as usize] as usize + self.piece_num[BB as usize] as usize;
-    //     let rooks = self.piece_num[WR as usize] as usize + self.piece_num[BR as usize] as usize;
-    //     let queens = self.piece_num[WQ as usize] as usize + self.piece_num[BQ as usize] as usize;
-    //     let phase = crate::evaluation::game_phase(pawns, knights, bishops, rooks, queens);
-    //     let mut mid_pst_counter = [[0.0; 64]; 13];
-    //     let mut end_pst_counter = [[0.0; 64]; 13];
-    //     for piece in (WP as usize)..=(WK as usize) {
-    //         let pnum = self.piece_num[piece] as usize;
-    //         for &sq in self.piece_list[piece][..pnum].iter() {
-    //             mid_pst_counter[piece][sq as usize] += 1.0 - phase;
-    //             end_pst_counter[piece][sq as usize] += phase;
-    //         }
-    //     }
-    //     for piece in (BP as usize)..=(BK as usize) {
-    //         let pnum = self.piece_num[piece] as usize;
-    //         for &sq in self.piece_list[piece][..pnum].iter() {
-    //             mid_pst_counter[piece][sq as usize] += 1.0 - phase;
-    //             end_pst_counter[piece][sq as usize] += phase;
-    //         }
-    //     }
-    //     let mut doubled_pawns = 0;
-    //     let mut isolated_pawns = 0;
-    //     let mut passed_pawns = 0;
-    //     // file counters are padded with zeros to simplify the code.
-    //     let mut w_file_counters = [0; 10];
-    //     for &wp_loc in self.piece_list[WP as usize][..self.piece_num[WP as usize] as usize].iter() {
-    //         let file = FILES_BOARD[wp_loc as usize] as usize;
-    //         unsafe { *w_file_counters.get_unchecked_mut(file + 1) += 1 };
-    //     }
-    //     let mut b_file_counters = [0; 10];
-    //     for &bp_loc in self.piece_list[BP as usize][..self.piece_num[BP as usize] as usize].iter() {
-    //         let file = FILES_BOARD[bp_loc as usize] as usize;
-    //         unsafe { *b_file_counters.get_unchecked_mut(file + 1) += 1 };
-    //     }
-
-    //     for index in 1..9 {
-    //         let w_file_count = unsafe { *w_file_counters.get_unchecked(index) };
-    //         let w_left = unsafe { *w_file_counters.get_unchecked(index - 1) };
-    //         let w_right = unsafe { *w_file_counters.get_unchecked(index + 1) };
-    //         let b_file_count = unsafe { *b_file_counters.get_unchecked(index) };
-    //         let b_left = unsafe { *b_file_counters.get_unchecked(index - 1) };
-    //         let b_right = unsafe { *b_file_counters.get_unchecked(index + 1) };
-    //         if w_file_count > 0 && b_left == 0 && b_right == 0 && b_file_count == 0 {
-    //             passed_pawns += 1;
-    //         } else if b_file_count > 0 && w_left == 0 && w_right == 0 && w_file_count == 0 {
-    //             passed_pawns -= 1;
-    //         }
-    //         if w_file_count > 0 && w_left == 0 && w_right == 0 {
-    //             isolated_pawns += 1 * w_file_count as i32;
-    //         }
-    //         if b_file_count > 0 && b_left == 0 && b_right == 0 {
-    //             isolated_pawns += 1 * b_file_count as i32;
-    //         }
-    //         if w_file_count >= 2 {
-    //             doubled_pawns += 1 * (w_file_count - 1) as i32;
-    //         }
-    //         if b_file_count >= 2 {
-    //             doubled_pawns -= 1 * (b_file_count - 1) as i32;
-    //         }
-    //     }
-
-    //     EvalTerms { phase, material, mobility, kingsafety, bishop_pair: (), passed_pawns: (), isolated_pawns: (), doubled_pawns: (), counters: () }
-    // }
 
     /// Determines whether a given position is quiescent (no checks or captures).
     #[allow(clippy::wrong_self_convention)]
@@ -1588,6 +1520,11 @@ impl Board {
                 #[allow(clippy::cast_precision_loss)]
                 let p = (f as f64 + 0.0001) / r as f64;
                 eprintln!("lmr fail rate: {:.1}%", p * 100.0);
+                let p = info.pvs_stats.pvsearches;
+                let f = info.pvs_stats.pvfails;
+                #[allow(clippy::cast_precision_loss)]
+                let p = (f as f64 + 0.0001) / p as f64;
+                eprintln!("pvs fail rate: {:.1}%", p * 100.0);
             }
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
