@@ -1,3 +1,5 @@
+use std::cmp::{max, min};
+
 use crate::{
     board::movegen::MoveList,
     board::{
@@ -154,7 +156,7 @@ fn senpai_lateness_reduction(moves: usize, depth: usize) -> usize {
 }
 
 #[rustfmt::skip]
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -174,6 +176,11 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     }
 
     info.nodes += 1;
+
+    // mate-distance pruning
+    if max(alpha, -MATE_SCORE + pos.ply() as i32) >= min(beta, MATE_SCORE - pos.ply() as i32 - 1) {
+        return max(alpha, -MATE_SCORE + pos.ply() as i32);
+    }
 
     if pos.is_draw() {
         return DRAW_SCORE;
