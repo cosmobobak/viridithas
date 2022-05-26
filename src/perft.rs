@@ -6,7 +6,7 @@ use std::{
 use crate::board::{movegen::MoveList, Board};
 
 #[allow(dead_code)]
-fn perft(pos: &mut Board, depth: usize) -> u64 {
+pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
