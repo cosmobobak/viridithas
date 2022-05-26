@@ -1581,7 +1581,7 @@ impl Display for Board {
         }
 
         writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "side: {}", SIDE_CHAR[self.side as usize] as char)?;
+        writeln!(f, "FEN: {}", self.fen())?;
 
         Ok(())
     }
