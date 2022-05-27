@@ -23,8 +23,8 @@ pub struct TTEntry {
     pub key: u64,
     pub m: Move,
     pub score: i32,
+    /// This should be a u16.
     pub depth: usize,
-    /// encode in tagged union instead.
     pub flag: HFlag,
 }
 
