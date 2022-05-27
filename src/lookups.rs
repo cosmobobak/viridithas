@@ -245,13 +245,8 @@ pub static PIECE_NAMES: [&str; 13] = [
     "rook", "queen", "king",
 ];
 
-pub static PIECE_CHARS: [u8; 13] = [
-    b'.', b'P', b'N', b'B', b'R', b'Q', b'K', b'p', b'n', b'b', b'r', b'q', b'k',
-];
-
-pub static PROMO_CHAR_LOOKUP: [u8; 13] = [
-    b'X', b'X', b'n', b'b', b'r', b'q', b'X', b'X', b'n', b'b', b'r', b'q', b'X',
-];
+pub static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";
+pub static PROMO_CHAR_LOOKUP: [u8; 13] = *b"XXnbrqXXnbrqX";
 
 /// The score of this piece, for MVV/LVA move ordering.
 const VICTIM_SCORE: [i32; 13] = [

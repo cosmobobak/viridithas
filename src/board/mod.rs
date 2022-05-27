@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+
 #![allow(
     clippy::collapsible_else_if,
     clippy::cast_sign_loss,
@@ -199,51 +199,6 @@ impl Board {
 
     pub const fn turn(&self) -> u8 {
         self.side
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_terminal(&mut self) -> bool {
-        self.is_checkmate() || self.is_stalemate() || self.is_draw()
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_checkmate(&mut self) -> bool {
-        if !self.in_check::<{ Self::US }>() {
-            return false;
-        }
-
-        let mut moves = MoveList::new();
-        self.generate_moves(&mut moves);
-
-        for m in moves {
-            if !self.make_move(m) {
-                continue;
-            }
-            self.unmake_move();
-            return false;
-        }
-
-        true
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_stalemate(&mut self) -> bool {
-        if self.in_check::<{ Self::US }>() {
-            return false;
-        }
-
-        let mut moves = MoveList::new();
-        self.generate_moves(&mut moves);
-
-        for m in moves {
-            if !self.make_move(m) {
-                continue;
-            }
-            self.unmake_move();
-            return false;
-        }
-
-        true
     }
 
     pub fn generate_pos_key(&self) -> u64 {
@@ -894,31 +849,6 @@ impl Board {
         false
     }
 
-    /// An immutable version of [`Board::is_legal`].
-    /// Because the entire board state must be copied, this method
-    /// is much less efficient than [`Board::is_legal`], and is only provided
-    /// for convenience in the case where you need to to do legality
-    /// checking with an immutable Board object.
-    #[deprecated(note = "prefer Board::is_legal")]
-    pub fn is_legal_immutable(&self, move_to_check: Move) -> bool {
-        let mut board = self.clone();
-
-        let mut list = MoveList::new();
-        board.generate_moves(&mut list);
-
-        for m in list {
-            if !board.make_move(m) {
-                continue;
-            }
-            board.unmake_move();
-            if m == move_to_check {
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn clear_piece(&mut self, sq: u8) {
         debug_assert!(square_on_board(sq));
 
@@ -1482,7 +1412,7 @@ impl Board {
             alpha = score - ONE_PAWN / 4;
             beta = score + ONE_PAWN / 4;
             self.regenerate_pv_line(best_depth);
-            most_recent_move = *self.principal_variation.get(0).unwrap_or(&most_recent_move);
+            most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score, self.turn());
             print!(
@@ -1534,11 +1464,6 @@ impl Default for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        static PIECE_CHAR: [u8; 13] = *b".PNBRQKpnbrqk";
-        static SIDE_CHAR: [u8; 3] = *b"wb-";
-        static RANK_CHAR: [u8; 8] = *b"12345678";
-        static FILE_CHAR: [u8; 8] = *b"abcdefgh";
-
         writeln!(f, "Game Board:")?;
 
         for rank in ((Rank::Rank1 as u8)..=(Rank::Rank8 as u8)).rev() {
@@ -1546,7 +1471,7 @@ impl Display for Board {
             for file in (File::FileA as u8)..=(File::FileH as u8) {
                 let sq = filerank_to_square(file, rank);
                 let piece = self.piece_at(sq);
-                write!(f, "{} ", PIECE_CHAR[piece as usize] as char)?;
+                write!(f, "{} ", PIECE_CHARS[piece as usize] as char)?;
             }
             writeln!(f)?;
         }

@@ -79,19 +79,6 @@ pub const EG_ROOK_MOBILITY_MULTIPLIER: i32 = 4;
 pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
 pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
 
-const PAWN_DANGER: i32 = 40;
-const KNIGHT_DANGER: i32 = 80;
-const BISHOP_DANGER: i32 = 30;
-const ROOK_DANGER: i32 = 90;
-const QUEEN_DANGER: i32 = 190;
-
-#[rustfmt::skip]
-pub static PIECE_DANGER_VALUES: [i32; 13] = [
-    0,
-    PAWN_DANGER, KNIGHT_DANGER, BISHOP_DANGER, ROOK_DANGER, QUEEN_DANGER, 0,
-    PAWN_DANGER, KNIGHT_DANGER, BISHOP_DANGER, ROOK_DANGER, QUEEN_DANGER, 0,
-];
-
 /// The bonus for having IDX pawns in front of the king.
 pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
 
@@ -435,43 +422,6 @@ impl Board {
 
         let bonus = SHIELD_BONUS[white_shield] - SHIELD_BONUS[black_shield];
         lerp(bonus, 0, phase)
-    }
-
-    fn king_tropism_term(&self) -> i32 {
-        #![allow(clippy::similar_names)]
-        let white_king_square = self.king_sq[WHITE as usize] as usize;
-        let (wkr, wkf) = (
-            RANKS_BOARD[white_king_square],
-            FILES_BOARD[white_king_square],
-        );
-        let black_king_square = self.king_sq[BLACK as usize] as usize;
-        let (bkr, bkf) = (
-            RANKS_BOARD[black_king_square],
-            FILES_BOARD[black_king_square],
-        );
-        let mut score = 0;
-        for piece_type in BP..=BQ {
-            let piece_type = piece_type as usize;
-            let danger = PIECE_DANGER_VALUES[piece_type];
-            for &sq in self.piece_lists[piece_type].iter() {
-                let rank = RANKS_BOARD[sq as usize];
-                let file = FILES_BOARD[sq as usize];
-                let dist = i32::from(wkr.abs_diff(rank) + wkf.abs_diff(file));
-                score -= danger / dist;
-            }
-        }
-        for piece_type in WP..=WQ {
-            let piece_type = piece_type as usize;
-            let danger = PIECE_DANGER_VALUES[piece_type];
-            for &sq in self.piece_lists[piece_type].iter() {
-                let rank = RANKS_BOARD[sq as usize];
-                let file = FILES_BOARD[sq as usize];
-                let dist = i32::from(bkr.abs_diff(rank) + bkf.abs_diff(file));
-                score += danger / dist;
-            }
-        }
-
-        score
     }
 
     fn pawn_structure_term(&self) -> i32 {

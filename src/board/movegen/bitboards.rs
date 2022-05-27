@@ -1,3 +1,4 @@
+
 use crate::lookups::SQ120_TO_SQ64;
 use crate::lookups::filerank_to_square;
 

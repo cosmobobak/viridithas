@@ -61,7 +61,6 @@ pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
 pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
     table: Vec<TTEntry>,
     cutoffs: u64,
-    entries: u64,
     new_writes: u64,
     overwrites: u64,
     hits: u64,
@@ -85,7 +84,6 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         Self {
             table: vec![TTEntry::NULL; SIZE],
             cutoffs: 0,
-            entries: 0,
             new_writes: 0,
             overwrites: 0,
             hits: 0,
