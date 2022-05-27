@@ -112,7 +112,6 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     alpha
 }
 
-#[inline]
 fn _logistic_lateness_reduction(moves: usize, depth: usize) -> usize {
     #![allow(
         clippy::cast_precision_loss,
@@ -129,7 +128,6 @@ fn _logistic_lateness_reduction(moves: usize, depth: usize) -> usize {
     (numerator / denominator + 0.5) as usize
 }
 
-#[inline]
 fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
     #![allow(
         clippy::cast_precision_loss,
@@ -145,7 +143,6 @@ fn _fruit_lateness_reduction(moves: usize, depth: usize, in_pv: bool) -> usize {
     }
 }
 
-#[inline]
 fn senpai_lateness_reduction(moves: usize, depth: usize) -> usize {
     // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
     if moves <= 6 {
@@ -222,7 +219,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: usize, mut alph
     let history_score = 1 << depth;
     let original_alpha = alpha;
     let mut moves_made = 0;
-    let mut best_move = Move::null();
+    let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
 
     if let Some(pv_move) = pv_move {

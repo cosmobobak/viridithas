@@ -137,7 +137,6 @@ pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
 
 /// `lerp` linearly interpolates between `a` and `b` by `t`.
 /// `t` is between 0 and 256.
-#[inline]
 pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
     let t = t.min(256);
     mg * (256 - t) / 256 + eg * t / 256
@@ -376,7 +375,6 @@ impl Board {
         false
     }
 
-    #[inline]
     fn clamp_score(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
         if score > 0 && self.unwinnable_for::<{ WHITE }>()
@@ -517,21 +515,18 @@ impl Board {
         w_score - b_score
     }
 
-    #[inline]
     fn is_file_open(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
         let pawns = self.pawns[BOTH as usize];
         (mask & pawns) == 0
     }
 
-    #[inline]
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
         let pawns = self.pawns[SIDE as usize];
         (mask & pawns) == 0
     }
 
-    #[inline]
     fn rook_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &rook_sq in self.piece_lists[WR as usize].iter() {
@@ -553,7 +548,6 @@ impl Board {
         lerp(score, 0, phase)
     }
 
-    #[inline]
     fn queen_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &queen_sq in self.piece_lists[WQ as usize].iter() {

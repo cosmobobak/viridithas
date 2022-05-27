@@ -15,10 +15,9 @@ use std::{
 
 use crate::{
     attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIRS, N_DIRS, R_DIR},
-    bitboard::pop_lsb,
     board::{
         evaluation::{EG_PIECE_VALUES, MG_PIECE_VALUES, ONE_PAWN},
-        movegen::MoveList,
+        movegen::{MoveList, bitboards::BitLoop},
     },
     chessmove::Move,
     definitions::{
@@ -114,8 +113,8 @@ impl Board {
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::with_capacity(MAX_DEPTH),
             history_table: [[0; BOARD_N_SQUARES]; 13],
-            killer_move_table: [[Move::null(); 2]; MAX_DEPTH],
-            counter_move_table: [[Move::null(); BOARD_N_SQUARES]; 13],
+            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH],
+            counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
             pst_vals: [0; 2],
             tt: DefaultTT::new(),
         };
@@ -143,7 +142,6 @@ impl Board {
         entry[0] = m;
     }
 
-    #[inline]
     pub fn add_history(&mut self, m: Move, score: i32) {
         let from = m.from() as usize;
         let piece_moved = unsafe { *self.pieces.get_unchecked(from) as usize };
@@ -154,10 +152,9 @@ impl Board {
         }
     }
 
-    #[inline]
     pub fn insert_countermove(&mut self, m: Move) {
         debug_assert!(self.ply < MAX_DEPTH);
-        let prev_move = self.history.last().map_or(Move::null(), |u| u.m);
+        let prev_move = self.history.last().map_or(Move::NULL, |u| u.m);
         if prev_move.is_null() {
             return;
         }
@@ -166,7 +163,6 @@ impl Board {
         self.counter_move_table[prev_piece as usize][prev_to as usize] = m;
     }
 
-    #[inline]
     pub fn is_countermove(&self, m: Move) -> bool {
         let prev_move = self.history.last().map(|u| u.m);
         if let Some(prev_move) = prev_move {
@@ -585,7 +581,7 @@ impl Board {
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
-        #![allow(clippy::similar_names)]
+        #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
         use Colour::{Black, Both, White};
         let mut piece_num = [0u8; 13];
         let mut big_pce = [0, 0];
@@ -594,7 +590,7 @@ impl Board {
         let mut mg_material = [0, 0];
         let mut eg_material = [0, 0];
 
-        let mut pawns = self.pawns;
+        let pawns = self.pawns;
 
         // check piece lists
         for piece in WP..=BK {
@@ -670,34 +666,31 @@ impl Board {
         }
 
         // check bitboards' squares
-        while pawns[White as usize] > 0 {
-            let sq64 = pop_lsb(&mut pawns[White as usize]);
-            if self.piece_at(SQ64_TO_SQ120[sq64 as usize]) != WP {
+        for sq64 in BitLoop::new(pawns[White as usize]).map(|s| s as usize) {
+            if self.piece_at(SQ64_TO_SQ120[sq64]) != WP {
                 return Err(format!(
                     "white pawn bitboard is corrupt: expected white pawn, got {:?}",
-                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
+                    self.piece_at(SQ64_TO_SQ120[sq64])
                 ));
             }
         }
 
-        while pawns[Black as usize] > 0 {
-            let sq64 = pop_lsb(&mut pawns[Black as usize]);
-            if self.piece_at(SQ64_TO_SQ120[sq64 as usize]) != BP {
+        for sq64 in BitLoop::new(pawns[Black as usize]).map(|s| s as usize) {
+            if self.piece_at(SQ64_TO_SQ120[sq64]) != BP {
                 return Err(format!(
                     "black pawn bitboard is corrupt: expected black pawn, got {:?}",
-                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
+                    self.piece_at(SQ64_TO_SQ120[sq64])
                 ));
             }
         }
 
-        while pawns[Both as usize] > 0 {
-            let sq64 = pop_lsb(&mut pawns[Both as usize]);
-            if !(self.piece_at(SQ64_TO_SQ120[sq64 as usize]) == WP
-                || self.piece_at(SQ64_TO_SQ120[sq64 as usize]) == BP)
+        for sq64 in BitLoop::new(pawns[Both as usize]).map(|s| s as usize) {
+            if !(self.piece_at(SQ64_TO_SQ120[sq64]) == WP
+                || self.piece_at(SQ64_TO_SQ120[sq64]) == BP)
             {
                 return Err(format!(
                     "both pawns bitboard is corrupt: expected white or black pawn, got {:?}",
-                    self.piece_at(SQ64_TO_SQ120[sq64 as usize])
+                    self.piece_at(SQ64_TO_SQ120[sq64])
                 ));
             }
         }
@@ -882,7 +875,7 @@ impl Board {
     /// Because moves must be played and unplayed, this method
     /// requires a mutable reference to the position.
     /// Despite this, you should expect the state of a Board
-    /// object to be the same before and after calling [`is_legal`].
+    /// object to be the same before and after calling [`Board::is_legal`].
     #[allow(clippy::wrong_self_convention)]
     pub fn is_legal(&mut self, move_to_check: Move) -> bool {
         let mut list = MoveList::new();
@@ -901,9 +894,9 @@ impl Board {
         false
     }
 
-    /// An immutable version of [`is_legal`].
+    /// An immutable version of [`Board::is_legal`].
     /// Because the entire board state must be copied, this method
-    /// is much less efficient than [`is_legal`], and is only provided
+    /// is much less efficient than [`Board::is_legal`], and is only provided
     /// for convenience in the case where you need to to do legality
     /// checking with an immutable Board object.
     #[deprecated(note = "prefer Board::is_legal")]
@@ -1037,19 +1030,16 @@ impl Board {
         }
     }
 
-    #[inline]
     pub fn moved_piece(&self, m: Move) -> u8 {
         debug_assert!(square_on_board(m.from()));
         unsafe { *self.pieces.get_unchecked(m.from() as usize) }
     }
 
-    #[inline]
     pub fn piece_at(&self, sq: u8) -> u8 {
         debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { *self.pieces.get_unchecked(sq as usize) }
     }
 
-    #[inline]
     pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
         debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { self.pieces.get_unchecked_mut(sq as usize) }
@@ -1178,7 +1168,7 @@ impl Board {
 
         self.ply += 1;
         self.history.push(Undo {
-            m: Move::null(),
+            m: Move::NULL,
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
@@ -1429,15 +1419,14 @@ impl Board {
         true
     }
 
-    #[inline]
     pub const fn num(&self, piece: u8) -> u8 {
         self.piece_lists[piece as usize].len()
     }
 
     fn clear_for_search(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
-        self.killer_move_table.fill([Move::null(); 2]);
-        self.counter_move_table.iter_mut().for_each(|r| r.fill(Move::null()));
+        self.killer_move_table.fill([Move::NULL; 2]);
+        self.counter_move_table.iter_mut().for_each(|r| r.fill(Move::NULL));
         self.ply = 0;
         self.tt.clear_for_search();
     }
@@ -1447,7 +1436,7 @@ impl Board {
         self.clear_for_search();
         info.clear_for_search();
 
-        let first_legal = self.get_first_legal_move().unwrap_or(Move::null());
+        let first_legal = self.get_first_legal_move().unwrap_or(Move::NULL);
 
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;

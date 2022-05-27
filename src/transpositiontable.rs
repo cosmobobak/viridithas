@@ -28,6 +28,16 @@ pub struct TTEntry {
     pub flag: HFlag,
 }
 
+impl TTEntry {
+    pub const NULL: Self = Self {
+        key: 0,
+        m: Move::NULL,
+        score: 0,
+        depth: 0,
+        flag: HFlag::None,
+    };
+}
+
 const TASTY_PRIME_NUMBER: usize = 12_582_917;
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -73,16 +83,7 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
 {
     pub fn new() -> Self {
         Self {
-            table: vec![
-                TTEntry {
-                    key: 0,
-                    m: Move::null(),
-                    score: 0,
-                    depth: 0,
-                    flag: HFlag::None,
-                };
-                SIZE
-            ],
+            table: vec![TTEntry::NULL; SIZE],
             cutoffs: 0,
             entries: 0,
             new_writes: 0,
@@ -92,13 +93,7 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
     }
 
     pub fn clear(&mut self) {
-        self.table.fill(TTEntry {
-            key: 0,
-            m: Move::null(),
-            score: 0,
-            depth: 0,
-            flag: HFlag::None,
-        });
+        self.table.fill(TTEntry::NULL);
     }
 
     pub fn store(

@@ -2,7 +2,6 @@
 #![allow(clippy::if_not_else)]
 
 mod attack;
-mod bitboard;
 mod board;
 mod chessmove;
 mod definitions;

@@ -17,12 +17,15 @@ use crate::{
     validate::{piece_valid, piece_valid_empty, square_on_board},
 };
 
+use super::Board;
+
+pub mod bitboards;
+
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 7_000_000;
 const COUNTERMOVE_BONUS: i32 = 100_000;
 
-use super::Board;
 
 pub trait MoveConsumer {
     const DO_PAWN_MOVEGEN: bool;
@@ -113,7 +116,6 @@ impl Iterator for MoveList {
 impl MoveConsumer for MoveList {
     const DO_PAWN_MOVEGEN: bool = true;
 
-    #[inline]
     fn push(&mut self, m: Move, score: i32) {
         // it's quite dangerous to do this,
         // but this function is very much in the
@@ -153,7 +155,6 @@ impl Display for MoveList {
     }
 }
 
-#[inline]
 pub fn offset_square_offboard(offset_sq: i8) -> bool {
     debug_assert!((0..120).contains(&offset_sq));
     let idx: usize = unsafe { offset_sq.try_into().unwrap_unchecked() };
@@ -162,7 +163,6 @@ pub fn offset_square_offboard(offset_sq: i8) -> bool {
 }
 
 impl Board {
-    #[inline]
     fn add_quiet_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
         let _ = self;
         debug_assert!(square_on_board(m.from()));
@@ -198,7 +198,6 @@ impl Board {
         move_list.push(m, score);
     }
 
-    #[inline]
     fn add_capture_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));

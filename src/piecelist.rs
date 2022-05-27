@@ -20,7 +20,6 @@ impl PieceList {
         }
     }
 
-    #[inline]
     pub fn insert(&mut self, piece: u8) {
         debug_assert!(self.len < 10, "PieceList is full");
         unsafe {
@@ -29,17 +28,14 @@ impl PieceList {
         self.len += 1;
     }
 
-    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &u8> {
         unsafe { self.data.get_unchecked(..self.len as usize).iter() }
     }
 
-    #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut u8> {
         unsafe { self.data.get_unchecked_mut(..self.len as usize).iter_mut() }
     }
 
-    #[inline]
     pub fn remove(&mut self, sq: u8) {
         debug_assert!(self.len > 0, "PieceList is empty");
         let mut idx = 0;
@@ -57,12 +53,10 @@ impl PieceList {
         debug_assert!(false, "PieceList::remove: piece not found");
     }
 
-    #[inline]
     pub const fn len(&self) -> u8 {
         self.len
     }
 
-    #[inline]
     pub fn clear(&mut self) {
         self.len = 0;
     }

@@ -18,8 +18,8 @@ impl Move {
     pub const EP_MASK: u32 = 0b0100_0000_0000_0000_0000;
     pub const PAWN_START_MASK: u32 = 0b1000_0000_0000_0000_0000;
     pub const CASTLE_MASK: u32 = 0b0001_0000_0000_0000_0000_0000_0000;
+    pub const NULL: Self = Self { data: 0 };
 
-    #[inline]
     pub fn new(from: u8, to: u8, capture: u8, promotion: u8, flags: u32) -> Self {
         debug_assert!(
             (flags & (Self::EP_MASK | Self::PAWN_START_MASK | Self::CASTLE_MASK)) == flags
@@ -33,57 +33,42 @@ impl Move {
         }
     }
 
-    #[inline]
-    pub const fn null() -> Self {
-        Self { data: 0 }
-    }
-
-    #[inline]
     pub const fn from(self) -> u8 {
         (self.data & Self::FROM_MASK) as u8
     }
 
-    #[inline]
     pub const fn to(self) -> u8 {
         (((self.data & Self::TO_MASK) >> 7) & 0x7F) as u8
     }
 
-    #[inline]
     pub const fn capture(self) -> u8 {
         (((self.data & Self::CAPTURE_MASK) >> 14) & 0xF) as u8
     }
 
-    #[inline]
     pub const fn promotion(self) -> u8 {
         (((self.data & Self::PROMO_MASK) >> 20) & 0xF) as u8
     }
 
-    #[inline]
     pub const fn is_promo(self) -> bool {
         ((self.data & Self::PROMO_MASK) != 0) as bool
     }
 
-    #[inline]
     pub const fn is_ep(self) -> bool {
         (self.data & Self::EP_MASK) != 0
     }
 
-    #[inline]
     pub const fn is_pawn_start(self) -> bool {
         (self.data & Self::PAWN_START_MASK) != 0
     }
 
-    #[inline]
     pub const fn is_castle(self) -> bool {
         (self.data & Self::CASTLE_MASK) != 0
     }
 
-    #[inline]
     pub const fn is_capture(self) -> bool {
         (self.data & Self::CAPTURE_MASK) != 0
     }
 
-    #[inline]
     pub const fn is_null(self) -> bool {
         self.data == 0
     }
