@@ -17,7 +17,7 @@ use crate::{
     attack::{B_DIR, IS_BISHOPQUEEN, IS_KING, IS_KNIGHT, IS_ROOKQUEEN, K_DIRS, N_DIRS, R_DIR},
     board::{
         evaluation::{EG_PIECE_VALUES, MG_PIECE_VALUES, ONE_PAWN},
-        movegen::{MoveList, bitboards::BitLoop},
+        movegen::{bitboards::BitLoop, MoveList},
     },
     chessmove::Move,
     definitions::{
@@ -1367,32 +1367,6 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.ply != 0
     }
 
-    fn get_pv_line(&mut self, depth: usize) -> usize {
-        self.principal_variation.clear();
-
-        if depth >= MAX_DEPTH {
-            return 0;
-        }
-
-        let mut moves_done = 0;
-
-        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.is_legal(pv_move) && moves_done < depth && !self.is_draw() {
-                self.make_move(pv_move);
-                self.principal_variation.push(pv_move);
-                moves_done += 1;
-            } else {
-                break;
-            }
-        }
-
-        for _ in 0..moves_done {
-            self.unmake_move();
-        }
-
-        moves_done
-    }
-
     /// Determines whether a given position is quiescent (no checks or captures).
     #[allow(clippy::wrong_self_convention)]
     pub fn is_quiet_position(&mut self) -> bool {
@@ -1426,9 +1400,37 @@ impl Board {
     fn clear_for_search(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.counter_move_table.iter_mut().for_each(|r| r.fill(Move::NULL));
+        self.counter_move_table
+            .iter_mut()
+            .for_each(|r| r.fill(Move::NULL));
         self.ply = 0;
         self.tt.clear_for_search();
+    }
+
+    fn get_pv_line(&mut self, depth: usize) -> &[Move] {
+        self.principal_variation.clear();
+
+        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
+            if self.principal_variation.len() < depth && self.is_legal(pv_move) && !self.is_draw() {
+                self.make_move(pv_move);
+                self.principal_variation.push(pv_move);
+            } else {
+                break;
+            }
+        }
+
+        for _ in 0..self.principal_variation.len() {
+            self.unmake_move();
+        }
+
+        &self.principal_variation
+    }
+
+    fn print_pv(&mut self, depth: usize) {
+        for &m in self.get_pv_line(depth) {
+            print!("{m} ");
+        }
+        println!();
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective.
@@ -1440,7 +1442,6 @@ impl Board {
 
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;
-        let mut pv_length = 0;
         let mut best_depth = 1;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1);
@@ -1448,19 +1449,14 @@ impl Board {
             let mut score = alpha_beta(self, info, depth, alpha, beta);
 
             info.check_up();
-
             if info.stopped {
                 break;
             }
 
             if score <= alpha || score >= beta {
                 let score_string = format_score(score, self.turn());
-                let boundstr = if score <= alpha {
-                    "upperbound"
-                } else {
-                    "lowerbound"
-                };
                 if DO_PRINTOUT {
+                    let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
                     print!(
                         "info score {} {} depth {} nodes {} time {} pv ",
                         score_string,
@@ -1469,13 +1465,8 @@ impl Board {
                         info.nodes,
                         info.start_time.elapsed().as_millis()
                     );
-                    pv_length = self.get_pv_line(depth);
-                    for &m in &self.principal_variation[..pv_length] {
-                        print!("{m} ");
-                    }
-                    println!();
+                    self.print_pv(best_depth);
                 }
-                std::io::Write::flush(&mut std::io::stdout()).unwrap();
                 score = alpha_beta(self, info, depth - 1, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
@@ -1487,7 +1478,6 @@ impl Board {
             best_depth = depth;
             alpha = score - ONE_PAWN / 4;
             beta = score + ONE_PAWN / 4;
-            pv_length = self.get_pv_line(depth);
             most_recent_move = *self.principal_variation.get(0).unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score, self.turn());
@@ -1500,12 +1490,8 @@ impl Board {
                     info.nodes,
                     info.start_time.elapsed().as_millis()
                 );
-                for &m in &self.principal_variation[..pv_length] {
-                    print!("{m} ");
-                }
-                println!();
+                self.print_pv(best_depth);
             }
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
         let score_string = format_score(most_recent_score, self.turn());
         if DO_PRINTOUT {
@@ -1516,12 +1502,8 @@ impl Board {
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
-            for &m in &self.principal_variation[..pv_length] {
-                print!("{m} ");
-            }
-            println!();
+            self.print_pv(best_depth);
             println!("bestmove {}", most_recent_move);
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
         }
         if self.side == WHITE {
             most_recent_score
