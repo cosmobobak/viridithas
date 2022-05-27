@@ -1407,7 +1407,7 @@ impl Board {
         self.tt.clear_for_search();
     }
 
-    fn get_pv_line(&mut self, depth: usize) -> &[Move] {
+    fn regenerate_pv_line(&mut self, depth: usize) {
         self.principal_variation.clear();
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
@@ -1422,12 +1422,14 @@ impl Board {
         for _ in 0..self.principal_variation.len() {
             self.unmake_move();
         }
+    }
 
+    fn get_pv_line(&self) -> &[Move] {
         &self.principal_variation
     }
 
-    fn print_pv(&mut self, depth: usize) {
-        for &m in self.get_pv_line(depth) {
+    fn print_pv(&self) {
+        for &m in self.get_pv_line() {
             print!("{m} ");
         }
         println!();
@@ -1465,7 +1467,8 @@ impl Board {
                         info.nodes,
                         info.start_time.elapsed().as_millis()
                     );
-                    self.print_pv(best_depth);
+                    self.regenerate_pv_line(best_depth);
+                    self.print_pv();
                 }
                 score = alpha_beta(self, info, depth - 1, -INFINITY, INFINITY);
                 info.check_up();
@@ -1478,33 +1481,30 @@ impl Board {
             best_depth = depth;
             alpha = score - ONE_PAWN / 4;
             beta = score + ONE_PAWN / 4;
+            self.regenerate_pv_line(best_depth);
             most_recent_move = *self.principal_variation.get(0).unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score, self.turn());
-
-            if DO_PRINTOUT {
-                print!(
-                    "info score {} depth {} nodes {} time {} pv ",
-                    score_string,
-                    depth,
-                    info.nodes,
-                    info.start_time.elapsed().as_millis()
-                );
-                self.print_pv(best_depth);
-            }
-        }
-        let score_string = format_score(most_recent_score, self.turn());
-        if DO_PRINTOUT {
             print!(
                 "info score {} depth {} nodes {} time {} pv ",
                 score_string,
-                best_depth,
+                depth,
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
-            self.print_pv(best_depth);
-            println!("bestmove {}", most_recent_move);
+            self.print_pv();
         }
+        let score_string = format_score(most_recent_score, self.turn());
+        print!(
+            "info score {} depth {} nodes {} time {} pv ",
+            score_string,
+            best_depth,
+            info.nodes,
+            info.start_time.elapsed().as_millis()
+        );
+        self.regenerate_pv_line(best_depth);
+        self.print_pv();
+        println!("bestmove {}", most_recent_move);
         if self.side == WHITE {
             most_recent_score
         } else {
