@@ -1,3 +1,8 @@
+
+pub mod bitboards;
+
+use super::Board;
+
 use std::{
     fmt::{Display, Formatter},
     ops::Index,
@@ -16,10 +21,6 @@ use crate::{
     lookups::{FILES_BOARD, MVV_LVA_SCORE, PIECE_COL, RANKS_BOARD},
     validate::{piece_valid, piece_valid_empty, square_on_board},
 };
-
-use super::Board;
-
-pub mod bitboards;
 
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;

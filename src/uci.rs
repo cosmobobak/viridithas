@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{IS_MATE_SCORE, MATE_SCORE},
+        evaluation::{is_mate_score, MATE_SCORE},
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
@@ -200,7 +200,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
 
 pub fn format_score(score: i32, turn: u8) -> String {
     assert!(turn == WHITE || turn == BLACK);
-    if score.abs() > IS_MATE_SCORE {
+    if is_mate_score(score) {
         let plies_to_mate = MATE_SCORE - score.abs();
         let moves_to_mate = (plies_to_mate + 1) / 2;
         if score > 0 {

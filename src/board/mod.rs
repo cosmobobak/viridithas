@@ -1409,8 +1409,13 @@ impl Board {
 
             most_recent_score = score;
             best_depth = depth;
-            alpha = score - ONE_PAWN / 4;
-            beta = score + ONE_PAWN / 4;
+            if !evaluation::is_mate_score(score) && depth > 4 {
+                alpha = score - ONE_PAWN / 4;
+                beta = score + ONE_PAWN / 4;
+            } else {
+                alpha = -INFINITY;
+                beta = INFINITY;
+            }
             self.regenerate_pv_line(best_depth);
             most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 

@@ -4,7 +4,7 @@ use crate::{
     board::movegen::MoveConsumer,
     board::Board,
     chessmove::Move,
-    definitions::{BB, BK, BLACK, BN, BOTH, BP, BQ, BR, WB, WHITE, WK, WN, WP, WQ, WR},
+    definitions::{BB, BK, BLACK, BN, BOTH, BP, BQ, BR, WB, WHITE, WK, WN, WP, WQ, WR, MAX_DEPTH},
     lookups::{init_eval_masks, init_passed_isolated_bb, FILES_BOARD, RANKS_BOARD, SQ120_TO_SQ64},
     piecesquaretable::{ENDGAME_PST, MIDGAME_PST},
 };
@@ -31,7 +31,8 @@ pub const ONE_PAWN: i32 = 100;
 pub const MATE_SCORE: i32 = 3_000_000;
 
 /// A threshold over which scores must be mate.
-pub const IS_MATE_SCORE: i32 = MATE_SCORE - 300;
+#[allow(clippy::cast_possible_truncation)]
+pub const IS_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH as i32;
 
 /// The value of a draw.
 pub const DRAW_SCORE: i32 = 0;
@@ -127,6 +128,10 @@ pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
 pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
     let t = t.min(256);
     mg * (256 - t) / 256 + eg * t / 256
+}
+
+pub const fn is_mate_score(score: i32) -> bool {
+    score.abs() >= IS_MATE_SCORE
 }
 
 /// A struct that holds all the terms in the evaluation function, intended to be used by the

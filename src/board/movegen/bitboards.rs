@@ -1,19 +1,27 @@
+#![allow(dead_code, unused_macros)]
 
-use crate::lookups::SQ120_TO_SQ64;
-use crate::lookups::filerank_to_square;
-
-const FILE_1: u64 = 0x8080_8080_8080_8080;
-const FILE_8: u64 = 0x0101_0101_0101_0101;
-const RANK_2: u64 = 0x0000_0000_0000_FF00;
-const RANK_7: u64 = 0x00FF_0000_0000_0000;
-const RANK_MID: u64 = 0x0000_FFFF_FFFF_0000;
-const BACKRANKS: u64 = 0xFF00_0000_0000_00FF;
+pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
+pub const BB_RANK_2: u64 = 0x0000_0000_0000_FF00;
+pub const BB_RANK_3: u64 = 0x0000_0000_00FF_0000;
+pub const BB_RANK_4: u64 = 0x0000_0000_FF00_0000;
+pub const BB_RANK_5: u64 = 0x0000_00FF_0000_0000;
+pub const BB_RANK_6: u64 = 0x0000_FF00_0000_0000;
+pub const BB_RANK_7: u64 = 0x00FF_0000_0000_0000;
+pub const BB_RANK_8: u64 = 0xFF00_0000_0000_0000;
+pub const BB_FILE_A: u64 = 0x0101_0101_0101_0101;
+pub const BB_FILE_B: u64 = 0x0202_0202_0202_0202;
+pub const BB_FILE_C: u64 = 0x0404_0404_0404_0404;
+pub const BB_FILE_D: u64 = 0x0808_0808_0808_0808;
+pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
+pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
+pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
+pub const BB_FILE_H: u64 = 0x8080_8080_8080_8080;
 
 /// least significant bit of a u64
 /// ```
 /// assert_eq!(3, bitboard::lsb(0b00001000));
 /// ```
-const fn lsb(x: u64) -> u64 {
+pub const fn lsb(x: u64) -> u64 {
     x.trailing_zeros() as u64
 }
 
@@ -49,66 +57,8 @@ impl Iterator for BitLoop {
     }
 }
 
-const fn pawns_notleft() -> u64 {
-    !FILE_1
-}
-
-const fn pawns_notright() -> u64 {
-    !FILE_8
-}
-
-#[rustfmt::skip]
-const fn pawn_forward<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask << 8 } else { mask >> 8 }
-}
-
-#[rustfmt::skip]
-const fn pawn_forward_2<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask << 16 } else { mask >> 16 }
-}
-
-#[rustfmt::skip]
-const fn pawn_backward<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask >> 8 } else { mask << 8 }
-}
-
-#[rustfmt::skip]
-const fn pawn_backward_2<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask >> 16 } else { mask << 16 }
-}
-
-#[rustfmt::skip]
-const fn pawn_attack_left<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask << 9 } else { mask >> 7 }
-}
-
-#[rustfmt::skip]
-const fn pawn_attack_right<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if IS_WHITE { mask << 7 } else { mask >> 9 }
-}
-
-#[rustfmt::skip]
-const fn pawn_invert_left<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if !IS_WHITE { mask << 7 } else { mask >> 9 }
-}
-
-#[rustfmt::skip]
-const fn pawn_invert_right<const IS_WHITE: bool>(mask: u64) -> u64 {
-    if !IS_WHITE { mask << 9 } else { mask >> 7 }
-}
-
-#[rustfmt::skip]
-const fn pawns_first_rank<const IS_WHITE: bool>() -> u64 {
-    if IS_WHITE { RANK_2 } else { RANK_7 }
-}
-
-#[rustfmt::skip]
-const fn pawns_last_rank<const IS_WHITE: bool>() -> u64 {
-    if IS_WHITE { RANK_7 } else { RANK_2 }
-}
-
 #[derive(Clone, PartialEq, Eq)]
-struct BitBoard {
+pub struct BitBoard {
     w_pawns: u64,
     w_knights: u64,
     w_bishops: u64,
@@ -129,7 +79,9 @@ struct BitBoard {
 }
 
 impl BitBoard {
-    #![allow(clippy::too_many_arguments)]
+    pub const NULL: Self = Self::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         bp: u64,
         bn: u64,
@@ -218,7 +170,6 @@ impl BitBoard {
         if IS_WHITE { !self.white } else { !self.black }
     }
 
-    #[rustfmt::skip]
     pub const fn empty(&self) -> u64 {
         !self.occupied
     }
@@ -244,11 +195,11 @@ impl BitBoard {
     }
 }
 
-pub fn _write_bb(bb: u64, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+pub fn print_bb(bb: u64) {
     for rank in (0..=7).rev() {
         for file in 0..=7 {
-            let sq = filerank_to_square(file, rank);
-            let sq64 = SQ120_TO_SQ64[sq as usize];
+            let sq = crate::lookups::filerank_to_square(file, rank);
+            let sq64 = crate::lookups::SQ120_TO_SQ64[sq as usize];
             assert!(
                 sq64 < 64,
                 "sq64: {}, sq: {}, file: {}, rank: {}",
@@ -257,13 +208,12 @@ pub fn _write_bb(bb: u64, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 file,
                 rank
             );
-            if ((1 << sq64) & bb) == 0 {
-                write!(f, ".")?;
+            if bb & (1 << sq64) != 0 {
+                print!(" X");
             } else {
-                write!(f, "X")?;
+                print!(" .");
             }
         }
-        writeln!(f)?;
+        println!();
     }
-    Ok(())
 }

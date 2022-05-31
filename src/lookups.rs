@@ -1,8 +1,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::definitions::{
+use crate::{definitions::{
     Colour, File, Rank, Square120, BK, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8, WP,
-};
+}, rng::XorShiftState};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -50,40 +50,24 @@ pub const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
     (sq120_to_sq64, sq64_to_sq120)
 }
 
-const SEED: u128 = 0x246C_CB2D_3B40_2853_9918_0A6D_BC3A_F444;
-struct XorShiftState {
-    pub state: u128,
-}
-
-const fn rand_u64(mut xs: XorShiftState) -> (u64, XorShiftState) {
-    let mut x = xs.state;
-    x ^= x >> 12;
-    x ^= x << 25;
-    x ^= x >> 27;
-    xs.state = x;
-    (x as u64, xs)
-}
-
 const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
-    let mut state = XorShiftState {
-        state: SEED,
-    };
+    let mut state = XorShiftState::new();
     let mut piece_keys = [[0; 120]; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
         cfor!(let mut sq = 0; sq < 120; sq += 1; {
             let key;
-            (key, state) = rand_u64(state);
+            (key, state) = state.next_self();
             piece_keys[index][sq] = key;
         });
     });
     let mut castle_keys = [0; 16];
     cfor!(let mut index = 0; index < 16; index += 1; {
         let key;
-        (key, state) = rand_u64(state);
+        (key, state) = state.next_self();
         castle_keys[index] = key;
     });
     let key;
-    (key, _) = rand_u64(state);
+    (key, _) = state.next_self();
     let side_key = key;
     (piece_keys, castle_keys, side_key)
 }
