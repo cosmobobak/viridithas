@@ -1,7 +1,9 @@
-
 pub mod bitboards;
 
-use self::bitboards::{BitLoop, BB_NONE, BB_RANK_7, BB_RANK_2, south_east_one, south_west_one, north_west_one, north_east_one, lsb};
+use self::bitboards::{
+    lsb, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE,
+    BB_RANK_2, BB_RANK_7,
+};
 
 use super::Board;
 
@@ -13,17 +15,18 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Castling, BB, BLACK, BN, BQ, BR, NO_SQUARE, PIECE_EMPTY, WB, WHITE,
-        WN, WQ, WR, KNIGHT, KING, BISHOP, ROOK, F1, G1, E1, D1, C1, B1, F8, G8, E8, D8, C8, B8,
+        Castling, B1, B8, BB, BISHOP, BLACK, BN, BQ, BR, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8,
+        KING, KNIGHT, NO_SQUARE, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR,
     },
-    lookups::{MVV_LVA_SCORE},
-    validate::{piece_valid, square_on_board}, opt,
+    lookups::MVV_LVA_SCORE,
+    opt,
+    validate::{piece_valid, square_on_board},
 };
 
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
-const THIRD_ORDER_KILLER_SCORE: i32 = 7_000_000;
-const COUNTERMOVE_BONUS: i32 = 100_000;
+const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
+const COUNTERMOVE_SCORE: i32 = 2_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -152,14 +155,10 @@ impl Display for MoveVecWrapper {
             return write!(f, "MoveList: (0) []");
         }
         writeln!(f, "MoveList: ({}) [", self.0.len())?;
-        for m in &self.0[..self.0.len()-1] {
+        for m in &self.0[..self.0.len() - 1] {
             writeln!(f, "  {},", m)?;
         }
-        writeln!(
-            f,
-            "  {}",
-            self.0.last().unwrap()
-        )?;
+        writeln!(f, "  {}", self.0.last().unwrap())?;
         write!(f, "]")
     }
 }
@@ -172,16 +171,17 @@ impl Board {
 
         let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.ply) };
 
-        let mut score = if killer_entry[0] == m {
+        let score = if killer_entry[0] == m {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
         } else {
-            if self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
-            {
+            if self.is_countermove(m) {
+                COUNTERMOVE_SCORE
+            } else if self.is_third_order_killer(m) {
                 THIRD_ORDER_KILLER_SCORE
             } else {
-                let piece_moved = self.piece_at(m.from()) as usize;
+                let piece_moved = self.moved_piece(m) as usize;
                 let to = m.to() as usize;
                 unsafe {
                     *self
@@ -192,11 +192,11 @@ impl Board {
             }
         };
 
-        if self.is_countermove(m) {
-            score += COUNTERMOVE_BONUS;
-        }
-
         move_list.push(m, score);
+    }
+
+    fn is_third_order_killer(&self, m: Move) -> bool {
+        self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
     }
 
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
@@ -222,8 +222,16 @@ impl Board {
 
     #[allow(clippy::cognitive_complexity)]
     fn generate_pawn_caps<const SIDE: u8>(&self, move_list: &mut MoveList) {
-        let our_pawns = if SIDE == WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
-        let their_pieces = if SIDE == WHITE { self.pieces.their_pieces::<true>() } else { self.pieces.their_pieces::<false>() };
+        let our_pawns = if SIDE == WHITE {
+            self.pieces.pawns::<true>()
+        } else {
+            self.pieces.pawns::<false>()
+        };
+        let their_pieces = if SIDE == WHITE {
+            self.pieces.their_pieces::<true>()
+        } else {
+            self.pieces.their_pieces::<false>()
+        };
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacks_west = if SIDE == WHITE {
             south_east_one(their_pieces) & our_pawns
@@ -240,19 +248,13 @@ impl Board {
             let to = if SIDE == WHITE { from + 7 } else { from - 9 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            self.add_capture_move(
-                Move::new(from, to, cap, PIECE_EMPTY, 0),
-                move_list,
-            );
+            self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::<u8>::new(attacks_east & !promo_rank) {
             let to = if SIDE == WHITE { from + 9 } else { from - 7 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            self.add_capture_move(
-                Move::new(from, to, cap, PIECE_EMPTY, 0),
-                move_list,
-            );
+            self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::<u8>::new(attacks_west & promo_rank) {
             let to = if SIDE == WHITE { from + 7 } else { from - 9 };
@@ -260,17 +262,11 @@ impl Board {
             debug_assert!(piece_valid(cap));
             if SIDE == WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    self.add_capture_move(
-                        Move::new(from, to, cap, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    self.add_capture_move(
-                        Move::new(from, to, cap, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             }
         }
@@ -280,17 +276,11 @@ impl Board {
             debug_assert!(piece_valid(cap));
             if SIDE == WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    self.add_capture_move(
-                        Move::new(from, to, cap, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    self.add_capture_move(
-                        Move::new(from, to, cap, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
             }
         }
@@ -302,7 +292,11 @@ impl Board {
             return;
         }
         let ep_bb = 1 << self.ep_sq;
-        let our_pawns = if SIDE == WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
+        let our_pawns = if SIDE == WHITE {
+            self.pieces.pawns::<true>()
+        } else {
+            self.pieces.pawns::<false>()
+        };
         let attacks_west = if SIDE == WHITE {
             south_east_one(ep_bb) & our_pawns
         } else {
@@ -313,7 +307,7 @@ impl Board {
         } else {
             north_west_one(ep_bb) & our_pawns
         };
-        
+
         if attacks_west != 0 {
             let from_sq = lsb(attacks_west) as u8;
             Self::add_ep_move(
@@ -343,7 +337,9 @@ impl Board {
         } else {
             self.pieces.empty() << 16
         };
-        let our_pawns = if SIDE == WHITE { self.pieces.pawns::<true>() } else {
+        let our_pawns = if SIDE == WHITE {
+            self.pieces.pawns::<true>()
+        } else {
             self.pieces.pawns::<false>()
         };
         let pushable_pawns = our_pawns & shifted_empty_squares;
@@ -351,10 +347,7 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::<u8>::new(pushable_pawns & !promoting_pawns) {
             let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
-            self.add_quiet_move(
-                Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                move_list,
-            );
+            self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
         }
         for sq in BitLoop::<u8>::new(double_pushable_pawns) {
             let to = if SIDE == WHITE { sq + 16 } else { sq - 16 };
@@ -367,17 +360,11 @@ impl Board {
             let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
             if SIDE == WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    self.add_capture_move(
-                        Move::new(sq, to, PIECE_EMPTY, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    self.add_capture_move(
-                        Move::new(sq, to, PIECE_EMPTY, promo, 0),
-                        move_list,
-                    );
+                    self.add_capture_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             }
         }
@@ -392,6 +379,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[inline(never)]
     pub fn generate_moves_comptime<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -433,10 +421,7 @@ impl Board {
                 );
             }
             for to in BitLoop::<u8>::new(moves & freespace) {
-                self.add_quiet_move(
-                    Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                    move_list,
-                );
+                self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
 
@@ -461,10 +446,7 @@ impl Board {
                 );
             }
             for to in BitLoop::<u8>::new(moves & freespace) {
-                self.add_quiet_move(
-                    Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                    move_list,
-                );
+                self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
 
@@ -490,10 +472,7 @@ impl Board {
                 );
             }
             for to in BitLoop::<u8>::new(moves & freespace) {
-                self.add_quiet_move(
-                    Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                    move_list,
-                );
+                self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
 
@@ -519,10 +498,7 @@ impl Board {
                 );
             }
             for to in BitLoop::<u8>::new(moves & freespace) {
-                self.add_quiet_move(
-                    Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0),
-                    move_list,
-                );
+                self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
 
@@ -653,13 +629,7 @@ impl Board {
                 && !self.sq_attacked(F1, BLACK)
             {
                 self.add_quiet_move(
-                    Move::new(
-                        E1,
-                        G1,
-                        PIECE_EMPTY,
-                        PIECE_EMPTY,
-                        Move::CASTLE_MASK,
-                    ),
+                    Move::new(E1, G1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
@@ -672,13 +642,7 @@ impl Board {
                 && !self.sq_attacked(D1, BLACK)
             {
                 self.add_quiet_move(
-                    Move::new(
-                        E1,
-                        C1,
-                        PIECE_EMPTY,
-                        PIECE_EMPTY,
-                        Move::CASTLE_MASK,
-                    ),
+                    Move::new(E1, C1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
@@ -690,13 +654,7 @@ impl Board {
                 && !self.sq_attacked(F8, WHITE)
             {
                 self.add_quiet_move(
-                    Move::new(
-                        E8,
-                        G8,
-                        PIECE_EMPTY,
-                        PIECE_EMPTY,
-                        Move::CASTLE_MASK,
-                    ),
+                    Move::new(E8, G8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
@@ -709,13 +667,7 @@ impl Board {
                 && !self.sq_attacked(D8, WHITE)
             {
                 self.add_quiet_move(
-                    Move::new(
-                        E8,
-                        C8,
-                        PIECE_EMPTY,
-                        PIECE_EMPTY,
-                        Move::CASTLE_MASK,
-                    ),
+                    Move::new(E8, C8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }

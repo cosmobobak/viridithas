@@ -6,7 +6,7 @@ use std::{
 use crate::{board::evaluation::EvalVector, board::Board, searchinfo::SearchInfo};
 
 #[allow(dead_code)]
-pub fn annotate_positions(input_fname: &str, output_fname: &str, n_positions: usize, depth: usize) {
+pub fn annotate_positions(input_fname: &str, output_fname: &str, n_positions: usize, depth: i32) {
     #![allow(clippy::cast_possible_truncation)]
     let i = File::open(input_fname).unwrap();
     let reader = BufReader::new(i);

@@ -73,7 +73,7 @@ pub struct Board {
     principal_variation: Vec<Move>,
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
-    killer_move_table: [[Move; 2]; MAX_DEPTH],
+    killer_move_table: [[Move; 2]; MAX_DEPTH as usize],
     counter_move_table: [[Move; BOARD_N_SQUARES]; 13],
     tt: DefaultTT,
 
@@ -118,9 +118,9 @@ impl Board {
             history: Vec::with_capacity(MAX_GAME_MOVES),
             repetition_cache: HashSet::with_capacity(MAX_GAME_MOVES),
             piece_lists: [PieceList::new(); 13],
-            principal_variation: Vec::with_capacity(MAX_DEPTH),
+            principal_variation: Vec::with_capacity(MAX_DEPTH as usize),
             history_table: [[0; BOARD_N_SQUARES]; 13],
-            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH],
+            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH as usize],
             counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
             pst_vals: [0; 2],
             tt: DefaultTT::new(),
@@ -129,12 +129,12 @@ impl Board {
         out
     }
 
-    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: usize) {
+    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: i32) {
         self.tt
             .store(self.key, self.ply, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: usize) -> ProbeResult {
+    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: i32) -> ProbeResult {
         self.tt.probe(self.key, self.ply, alpha, beta, depth)
     }
 
@@ -143,14 +143,14 @@ impl Board {
     }
 
     pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH);
+        debug_assert!(self.ply < MAX_DEPTH as usize);
         let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.ply) };
         entry[1] = entry[0];
         entry[0] = m;
     }
 
     pub fn add_history(&mut self, m: Move, score: i32) {
-        let piece_moved = self.piece_at(m.from()) as usize;
+        let piece_moved = self.moved_piece(m) as usize;
         let history_board = unsafe { self.history_table.get_unchecked_mut(piece_moved) };
         let to = m.to() as usize;
         unsafe {
@@ -159,7 +159,7 @@ impl Board {
     }
 
     pub fn insert_countermove(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH);
+        debug_assert!(self.ply < MAX_DEPTH as usize);
         let prev_move = self.history.last().map_or(Move::NULL, |u| u.m);
         if prev_move.is_null() {
             return;
@@ -1293,11 +1293,11 @@ impl Board {
         self.tt.clear_for_search();
     }
 
-    fn regenerate_pv_line(&mut self, depth: usize) {
+    fn regenerate_pv_line(&mut self, depth: i32) {
         self.principal_variation.clear();
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.principal_variation.len() < depth && self.is_legal(pv_move) && !self.is_draw() {
+            if self.principal_variation.len() < depth.try_into().unwrap() && self.is_legal(pv_move) && !self.is_draw() {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
             } else {

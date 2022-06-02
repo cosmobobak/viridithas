@@ -491,7 +491,6 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
-    #[inline(never)]
     fn mobility(&mut self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
         let is_check = self.in_check::<{ Self::US }>();
@@ -521,22 +520,22 @@ impl Board {
             mob_score -= attacks.count_ones() as i32 * BISHOP_MOBILITY_MULTIPLIER;
         }
         let mut midgame_rook_mob = 0;
-        let mut endgmae_rook_mob = 0;
+        let mut endgame_rook_mob = 0;
         for wrook in BitLoop::<u8>::new(self.pieces.rooks::<true>()) {
             let attacks = bitboards::attacks::<ROOK>(wrook, self.pieces.occupied());
             let attacks = attacks & self.pieces.enemy_or_empty::<true>();
             let ones = attacks.count_ones() as i32;
             midgame_rook_mob += ones * MG_ROOK_MOBILITY_MULTIPLIER;
-            endgmae_rook_mob += ones * EG_ROOK_MOBILITY_MULTIPLIER;
+            endgame_rook_mob += ones * EG_ROOK_MOBILITY_MULTIPLIER;
         }
         for brook in BitLoop::<u8>::new(self.pieces.rooks::<false>()) {
             let attacks = bitboards::attacks::<ROOK>(brook, self.pieces.occupied());
             let attacks = attacks & self.pieces.enemy_or_empty::<false>();
             let ones = attacks.count_ones() as i32;
             midgame_rook_mob -= ones * MG_ROOK_MOBILITY_MULTIPLIER;
-            endgmae_rook_mob -= ones * EG_ROOK_MOBILITY_MULTIPLIER;
+            endgame_rook_mob -= ones * EG_ROOK_MOBILITY_MULTIPLIER;
         }
-        mob_score += lerp(midgame_rook_mob, endgmae_rook_mob, phase);
+        mob_score += lerp(midgame_rook_mob, endgame_rook_mob, phase);
         for wqueen in BitLoop::<u8>::new(self.pieces.queens::<true>()) {
             let attacks = bitboards::attacks::<QUEEN>(wqueen, self.pieces.occupied());
             let attacks = attacks & self.pieces.enemy_or_empty::<true>();

@@ -52,7 +52,7 @@ fn parse_position(text: &str, pos: &mut Board) {
 
 fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     #![allow(clippy::too_many_lines)]
-    let mut depth: Option<usize> = None;
+    let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<usize> = None;
     let mut movetime: Option<usize> = None;
     let mut time: Option<usize> = None;

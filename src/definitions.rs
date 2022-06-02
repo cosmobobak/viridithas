@@ -8,7 +8,7 @@ use crate::{
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_GAME_MOVES: usize = 1024;
-pub const MAX_DEPTH: usize = 512;
+pub const MAX_DEPTH: i32 = 512;
 pub const INFINITY: i32 = MATE_SCORE * 2;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
