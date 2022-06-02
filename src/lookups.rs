@@ -2,7 +2,7 @@
 
 use crate::{
     definitions::{
-        square_distance, BK, FILE_A, FILE_H, KING, KNIGHT, MAX_DEPTH, RANK_1, RANK_8, WP,
+        square_distance, BK, FILE_A, FILE_H, KING, KNIGHT, RANK_1, RANK_8, WP,
     },
     rng::XorShiftState,
 };
