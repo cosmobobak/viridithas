@@ -950,7 +950,7 @@ impl Board {
         let from = m.from();
         let to = m.to();
         let side = self.side;
-        let piece = self.piece_at(from);
+        let piece = self.moved_piece(m);
 
         debug_assert!(square_on_board(from));
         debug_assert!(square_on_board(to));

@@ -1,12 +1,12 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
 use crate::{
-    board::movegen::MoveConsumer,
     board::Board,
-    chessmove::Move,
-    definitions::{BB, BLACK, BN, BP, BQ, BR, WB, WHITE, WN, WP, WQ, WR, MAX_DEPTH},
+    definitions::{BB, BLACK, BN, BP, BQ, BR, WB, WHITE, WN, WP, WQ, WR, MAX_DEPTH, KNIGHT, BISHOP, ROOK, QUEEN},
     lookups::{init_eval_masks, init_passed_isolated_bb, rank, file}, opt,
 };
+
+use super::movegen::bitboards::{BitLoop, self, BB_NONE};
 
 // These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
 pub const MG_PAWN_VALUE: i32 = 82;
@@ -77,7 +77,6 @@ pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 5;
 pub const MG_ROOK_MOBILITY_MULTIPLIER: i32 = 2;
 pub const EG_ROOK_MOBILITY_MULTIPLIER: i32 = 4;
 pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
-pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
 
 /// The bonus for having IDX pawns in front of the king.
 pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
@@ -203,43 +202,6 @@ impl EvalVector {
 
     pub const fn header() -> &'static str {
         "bpair,ppr2,ppr3,ppr4,ppr5,ppr6,ppr7,isolated,doubled,n_mob,b_mob,r_mob,q_mob,k_mob,p_shield,turn"
-    }
-}
-
-pub struct MoveCounter<'a> {
-    counters: [i32; 6],
-    board: &'a Board,
-}
-
-impl<'a> MoveCounter<'a> {
-    pub const fn new(board: &'a Board) -> Self {
-        Self {
-            counters: [0; 6],
-            board,
-        }
-    }
-
-    pub fn score(&self, phase: i32) -> i32 {
-        let knights = self.counters[1] * KNIGHT_MOBILITY_MULTIPLIER;
-        let bishops = self.counters[2] * BISHOP_MOBILITY_MULTIPLIER;
-        let midg_rooks = self.counters[3] * MG_ROOK_MOBILITY_MULTIPLIER;
-        let endg_rooks = self.counters[3] * EG_ROOK_MOBILITY_MULTIPLIER;
-        let rooks = lerp(midg_rooks, endg_rooks, phase);
-        let queens = self.counters[4] * QUEEN_MOBILITY_MULTIPLIER;
-        let kings = self.counters[5] * KING_MOBILITY_MULTIPLIER;
-        knights + bishops + rooks + queens + kings
-    }
-}
-
-impl<'a> MoveConsumer for MoveCounter<'a> {
-    const MOBILITY_MODE: bool = true;
-
-    fn push(&mut self, m: Move, _score: i32) {
-        let moved_piece = self.board.moved_piece(m);
-        let idx = (moved_piece - 1) % 6;
-        unsafe {
-            *self.counters.get_unchecked_mut(idx as usize) += 1;
-        }
     }
 }
 
@@ -529,6 +491,7 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
+    #[inline(never)]
     fn mobility(&mut self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
         let is_check = self.in_check::<{ Self::US }>();
@@ -540,21 +503,55 @@ impl Board {
             }
         }
 
-        let mut list = MoveCounter::new(self);
-        self.generate_moves(&mut list);
-
-        let our_pseudo_legal_moves = list.score(phase);
-
-        self.make_nullmove();
-        let mut list = MoveCounter::new(self);
-        self.generate_moves(&mut list);
-        let their_pseudo_legal_moves = list.score(phase);
-        self.unmake_nullmove();
+        let mut mob_score = 0;
+        for wknight in BitLoop::<u8>::new(self.pieces.knights::<true>()) {
+            mob_score += bitboards::attacks::<KNIGHT>(wknight, BB_NONE).count_ones() as i32 * KNIGHT_MOBILITY_MULTIPLIER;
+        }
+        for bknight in BitLoop::<u8>::new(self.pieces.knights::<false>()) {
+            mob_score -= bitboards::attacks::<KNIGHT>(bknight, BB_NONE).count_ones() as i32 * KNIGHT_MOBILITY_MULTIPLIER;
+        }
+        for wbishop in BitLoop::<u8>::new(self.pieces.bishops::<true>()) {
+            let attacks = bitboards::attacks::<BISHOP>(wbishop, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            mob_score += attacks.count_ones() as i32 * BISHOP_MOBILITY_MULTIPLIER;
+        }
+        for bbishop in BitLoop::<u8>::new(self.pieces.bishops::<false>()) {
+            let attacks = bitboards::attacks::<BISHOP>(bbishop, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            mob_score -= attacks.count_ones() as i32 * BISHOP_MOBILITY_MULTIPLIER;
+        }
+        let mut midgame_rook_mob = 0;
+        let mut endgmae_rook_mob = 0;
+        for wrook in BitLoop::<u8>::new(self.pieces.rooks::<true>()) {
+            let attacks = bitboards::attacks::<ROOK>(wrook, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            let ones = attacks.count_ones() as i32;
+            midgame_rook_mob += ones * MG_ROOK_MOBILITY_MULTIPLIER;
+            endgmae_rook_mob += ones * EG_ROOK_MOBILITY_MULTIPLIER;
+        }
+        for brook in BitLoop::<u8>::new(self.pieces.rooks::<false>()) {
+            let attacks = bitboards::attacks::<ROOK>(brook, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            let ones = attacks.count_ones() as i32;
+            midgame_rook_mob -= ones * MG_ROOK_MOBILITY_MULTIPLIER;
+            endgmae_rook_mob -= ones * EG_ROOK_MOBILITY_MULTIPLIER;
+        }
+        mob_score += lerp(midgame_rook_mob, endgmae_rook_mob, phase);
+        for wqueen in BitLoop::<u8>::new(self.pieces.queens::<true>()) {
+            let attacks = bitboards::attacks::<QUEEN>(wqueen, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            mob_score += attacks.count_ones() as i32 * QUEEN_MOBILITY_MULTIPLIER;
+        }
+        for bqueen in BitLoop::<u8>::new(self.pieces.queens::<false>()) {
+            let attacks = bitboards::attacks::<QUEEN>(bqueen, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            mob_score -= attacks.count_ones() as i32 * QUEEN_MOBILITY_MULTIPLIER;
+        }
 
         if self.side == WHITE {
-            our_pseudo_legal_moves as i32 - their_pseudo_legal_moves as i32
+            mob_score
         } else {
-            their_pseudo_legal_moves as i32 - our_pseudo_legal_moves as i32
+            -mob_score
         }
     }
 
@@ -629,29 +626,29 @@ impl Board {
             doubled_pawns
         };
 
-        let mut counter = MoveCounter::new(self);
-        if !self.in_check::<{ Self::US }>() {
-            self.generate_moves(&mut counter);
-        }
-        let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] =
-            counter.counters;
-        if !self.in_check::<{ Self::US }>() {
-            self.make_nullmove();
-        }
-        let mut counter = MoveCounter::new(self);
-        if !self.in_check::<{ Self::US }>() {
-            self.generate_moves(&mut counter);
-        }
-        let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] =
-            counter.counters;
-        if !self.in_check::<{ Self::US }>() {
-            self.unmake_nullmove();
-        }
-        let knight_mobility = wh_knight_mob - bl_knight_mob;
-        let bishop_mobility = wh_bishop_mob - bl_bishop_mob;
-        let rook_mobility = wh_rook_mob - bl_rook_mob;
-        let queen_mobility = wh_queen_mob - bl_queen_mob;
-        let king_mobility = wh_king_mob - bl_king_mob;
+        // let mut counter = MoveCounter::new(self);
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.generate_moves(&mut counter);
+        // }
+        // let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] =
+        //     counter.counters;
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.make_nullmove();
+        // }
+        // let mut counter = MoveCounter::new(self);
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.generate_moves(&mut counter);
+        // }
+        // let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] =
+        //     counter.counters;
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.unmake_nullmove();
+        // }
+        // let knight_mobility = wh_knight_mob - bl_knight_mob;
+        // let bishop_mobility = wh_bishop_mob - bl_bishop_mob;
+        // let rook_mobility = wh_rook_mob - bl_rook_mob;
+        // let queen_mobility = wh_queen_mob - bl_queen_mob;
+        // let king_mobility = wh_king_mob - bl_king_mob;
 
         let pawn_shield = {
             let white_kingloc = self.king_sq(WHITE);
@@ -703,11 +700,11 @@ impl Board {
             passed_pawns_by_rank,
             isolated_pawns,
             doubled_pawns,
-            knight_mobility,
-            bishop_mobility,
-            rook_mobility,
-            queen_mobility,
-            king_mobility,
+            knight_mobility: 0,
+            bishop_mobility: 0,
+            rook_mobility: 0,
+            queen_mobility: 0,
+            king_mobility: 0,
             pawn_shield,
             open_rooks,
             half_open_rooks,

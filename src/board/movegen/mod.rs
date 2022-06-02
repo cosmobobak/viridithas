@@ -25,12 +25,6 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 7_000_000;
 const COUNTERMOVE_BONUS: i32 = 100_000;
 
-
-pub trait MoveConsumer {
-    const MOBILITY_MODE: bool;
-    fn push(&mut self, m: Move, score: i32);
-}
-
 const MAX_POSITION_MOVES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +60,17 @@ impl MoveList {
                 .iter_mut()
                 .find(|e| e.entry == m)
         }
+    }
+
+    pub fn push(&mut self, m: Move, score: i32) {
+        // it's quite dangerous to do this,
+        // but this function is very much in the
+        // hot path.
+        debug_assert!(self.count < MAX_POSITION_MOVES);
+        unsafe {
+            *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
+        }
+        self.count += 1;
     }
 }
 
@@ -110,21 +115,6 @@ impl Iterator for MoveList {
         self.progress += 1;
 
         Some(m)
-    }
-}
-
-impl MoveConsumer for MoveList {
-    const MOBILITY_MODE: bool = false;
-
-    fn push(&mut self, m: Move, score: i32) {
-        // it's quite dangerous to do this,
-        // but this function is very much in the
-        // hot path.
-        debug_assert!(self.count < MAX_POSITION_MOVES);
-        unsafe {
-            *self.moves.get_unchecked_mut(self.count) = MoveListEntry { entry: m, score };
-        }
-        self.count += 1;
     }
 }
 
@@ -175,7 +165,7 @@ impl Display for MoveVecWrapper {
 }
 
 impl Board {
-    fn add_quiet_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
+    fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
         let _ = self;
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
@@ -209,7 +199,7 @@ impl Board {
         move_list.push(m, score);
     }
 
-    fn add_capture_move(&self, m: Move, move_list: &mut impl MoveConsumer) {
+    fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
         debug_assert!(piece_valid(m.capture()));
@@ -226,12 +216,12 @@ impl Board {
         move_list.push(m, score);
     }
 
-    fn add_ep_move(m: Move, move_list: &mut impl MoveConsumer) {
+    fn add_ep_move(m: Move, move_list: &mut MoveList) {
         move_list.push(m, 1050 + 10_000_000);
     }
 
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    fn generate_pawn_caps<const SIDE: u8>(&self, move_list: &mut MoveList) {
         let our_pawns = if SIDE == WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
         let their_pieces = if SIDE == WHITE { self.pieces.their_pieces::<true>() } else { self.pieces.their_pieces::<false>() };
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -306,7 +296,7 @@ impl Board {
         }
     }
 
-    fn generate_ep<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    fn generate_ep<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #![allow(clippy::cast_possible_truncation)]
         if self.ep_sq == NO_SQUARE {
             return;
@@ -340,7 +330,7 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    fn generate_pawn_forward<const SIDE: u8>(&self, move_list: &mut MoveList) {
         let start_rank = if SIDE == WHITE { BB_RANK_2 } else { BB_RANK_7 };
         let promo_rank = if SIDE == WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares = if SIDE == WHITE {
@@ -393,16 +383,16 @@ impl Board {
         }
     }
 
-    pub fn generate_moves<MC: MoveConsumer>(&self, move_list: &mut MC) {
+    pub fn generate_moves(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_moves_comptime::<WHITE, MC>(move_list);
+            self.generate_moves_comptime::<WHITE>(move_list);
         } else {
-            self.generate_moves_comptime::<BLACK, MC>(move_list);
+            self.generate_moves_comptime::<BLACK>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_moves_comptime<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    pub fn generate_moves_comptime<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -412,16 +402,14 @@ impl Board {
             }
         }
 
-        if !MC::MOBILITY_MODE {
-            if SIDE == WHITE {
-                self.generate_pawn_forward::<{ WHITE }, MC>(move_list);
-                self.generate_pawn_caps::<{ WHITE }, MC>(move_list);
-                self.generate_ep::<{ WHITE }, MC>(move_list);
-            } else {
-                self.generate_pawn_forward::<{ BLACK }, MC>(move_list);
-                self.generate_pawn_caps::<{ BLACK }, MC>(move_list);
-                self.generate_ep::<{ BLACK }, MC>(move_list);
-            }
+        if SIDE == WHITE {
+            self.generate_pawn_forward::<WHITE>(move_list);
+            self.generate_pawn_caps::<WHITE>(move_list);
+            self.generate_ep::<WHITE>(move_list);
+        } else {
+            self.generate_pawn_forward::<BLACK>(move_list);
+            self.generate_pawn_caps::<BLACK>(move_list);
+            self.generate_ep::<BLACK>(move_list);
         }
 
         // knights
@@ -538,21 +526,19 @@ impl Board {
             }
         }
 
-        if !MC::MOBILITY_MODE {
-            self.generate_castling_moves::<SIDE, MC>(move_list);
-        }
+        self.generate_castling_moves::<SIDE>(move_list);
     }
 
-    pub fn generate_captures<MC: MoveConsumer>(&self, move_list: &mut MC) {
+    pub fn generate_captures(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_captures_comptime::<WHITE, MC>(move_list);
+            self.generate_captures_comptime::<WHITE>(move_list);
         } else {
-            self.generate_captures_comptime::<BLACK, MC>(move_list);
+            self.generate_captures_comptime::<BLACK>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_comptime<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    pub fn generate_captures_comptime<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -564,11 +550,11 @@ impl Board {
 
         // both pawn moves and captures
         if SIDE == WHITE {
-            self.generate_pawn_caps::<WHITE, MC>(move_list);
-            self.generate_ep::<WHITE, MC>(move_list);
+            self.generate_pawn_caps::<WHITE>(move_list);
+            self.generate_ep::<WHITE>(move_list);
         } else {
-            self.generate_pawn_caps::<BLACK, MC>(move_list);
-            self.generate_ep::<BLACK, MC>(move_list);
+            self.generate_pawn_caps::<BLACK>(move_list);
+            self.generate_ep::<BLACK>(move_list);
         }
 
         // knights
@@ -658,7 +644,7 @@ impl Board {
         }
     }
 
-    fn generate_castling_moves<const SIDE: u8, MC: MoveConsumer>(&self, move_list: &mut MC) {
+    fn generate_castling_moves<const SIDE: u8>(&self, move_list: &mut MoveList) {
         if SIDE == WHITE {
             if (self.castle_perm & Castling::WK as u8) != 0
                 && self.piece_at(F1) == PIECE_EMPTY
