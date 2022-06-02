@@ -8,8 +8,7 @@ pub struct SearchInfo<'a> {
     pub stop_time: Instant,
 
     /// The maximum depth of the search.
-    pub depth: usize,
-    pub depth_set: usize,
+    pub depth: i32,
 
     pub time_set: bool,
     pub moves_to_go: usize,
@@ -34,7 +33,6 @@ impl Default for SearchInfo<'_> {
             start_time: Instant::now(),
             stop_time: Instant::now() + std::time::Duration::from_secs(1),
             depth: 60,
-            depth_set: 0,
             time_set: false,
             moves_to_go: 0,
             infinite: false,

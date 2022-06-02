@@ -1,13 +1,12 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
 use crate::{
-    board::movegen::MoveConsumer,
     board::Board,
-    chessmove::Move,
-    definitions::{BB, BK, BLACK, BN, BOTH, BP, BQ, BR, WB, WHITE, WK, WN, WP, WQ, WR},
-    lookups::{init_eval_masks, init_passed_isolated_bb, FILES_BOARD, RANKS_BOARD, SQ120_TO_SQ64},
-    piecesquaretable::{ENDGAME_PST, MIDGAME_PST},
+    definitions::{BB, BLACK, BN, BP, BQ, BR, WB, WHITE, WN, WP, WQ, WR, MAX_DEPTH, KNIGHT, BISHOP, ROOK, QUEEN},
+    lookups::{init_eval_masks, init_passed_isolated_bb, rank, file}, opt,
 };
+
+use super::movegen::bitboards::{BitLoop, self, BB_NONE};
 
 // These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
 pub const MG_PAWN_VALUE: i32 = 82;
@@ -31,7 +30,8 @@ pub const ONE_PAWN: i32 = 100;
 pub const MATE_SCORE: i32 = 3_000_000;
 
 /// A threshold over which scores must be mate.
-pub const IS_MATE_SCORE: i32 = MATE_SCORE - 300;
+#[allow(clippy::cast_possible_truncation)]
+pub const IS_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH as i32;
 
 /// The value of a draw.
 pub const DRAW_SCORE: i32 = 0;
@@ -77,20 +77,6 @@ pub const BISHOP_MOBILITY_MULTIPLIER: i32 = 5;
 pub const MG_ROOK_MOBILITY_MULTIPLIER: i32 = 2;
 pub const EG_ROOK_MOBILITY_MULTIPLIER: i32 = 4;
 pub const QUEEN_MOBILITY_MULTIPLIER: i32 = 1;
-pub const KING_MOBILITY_MULTIPLIER: i32 = 1;
-
-const PAWN_DANGER: i32 = 40;
-const KNIGHT_DANGER: i32 = 80;
-const BISHOP_DANGER: i32 = 30;
-const ROOK_DANGER: i32 = 90;
-const QUEEN_DANGER: i32 = 190;
-
-#[rustfmt::skip]
-pub static PIECE_DANGER_VALUES: [i32; 13] = [
-    0,
-    PAWN_DANGER, KNIGHT_DANGER, BISHOP_DANGER, ROOK_DANGER, QUEEN_DANGER, 0,
-    PAWN_DANGER, KNIGHT_DANGER, BISHOP_DANGER, ROOK_DANGER, QUEEN_DANGER, 0,
-];
 
 /// The bonus for having IDX pawns in front of the king.
 pub static SHIELD_BONUS: [i32; 4] = [0, 5, 17, 20];
@@ -137,10 +123,13 @@ pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
 
 /// `lerp` linearly interpolates between `a` and `b` by `t`.
 /// `t` is between 0 and 256.
-#[inline]
 pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
     let t = t.min(256);
     mg * (256 - t) / 256 + eg * t / 256
+}
+
+pub const fn is_mate_score(score: i32) -> bool {
+    score.abs() >= IS_MATE_SCORE
 }
 
 /// A struct that holds all the terms in the evaluation function, intended to be used by the
@@ -216,43 +205,6 @@ impl EvalVector {
     }
 }
 
-pub struct MoveCounter<'a> {
-    counters: [i32; 6],
-    board: &'a Board,
-}
-
-impl<'a> MoveCounter<'a> {
-    pub const fn new(board: &'a Board) -> Self {
-        Self {
-            counters: [0; 6],
-            board,
-        }
-    }
-
-    pub fn score(&self, phase: i32) -> i32 {
-        let knights = self.counters[1] * KNIGHT_MOBILITY_MULTIPLIER;
-        let bishops = self.counters[2] * BISHOP_MOBILITY_MULTIPLIER;
-        let midg_rooks = self.counters[3] * MG_ROOK_MOBILITY_MULTIPLIER;
-        let endg_rooks = self.counters[3] * EG_ROOK_MOBILITY_MULTIPLIER;
-        let rooks = lerp(midg_rooks, endg_rooks, phase);
-        let queens = self.counters[4] * QUEEN_MOBILITY_MULTIPLIER;
-        let kings = self.counters[5] * KING_MOBILITY_MULTIPLIER;
-        knights + bishops + rooks + queens + kings
-    }
-}
-
-impl<'a> MoveConsumer for MoveCounter<'a> {
-    const DO_PAWN_MOVEGEN: bool = false;
-
-    fn push(&mut self, m: Move, _score: i32) {
-        let moved_piece = self.board.moved_piece(m);
-        let idx = (moved_piece - 1) % 6;
-        unsafe {
-            *self.counters.get_unchecked_mut(idx as usize) += 1;
-        }
-    }
-}
-
 impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
@@ -260,7 +212,7 @@ impl Board {
     pub fn evaluate(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-        if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
+        if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE {
                 DRAW_SCORE
             } else {
@@ -272,9 +224,11 @@ impl Board {
         let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
         let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
         let material = lerp(midgame_material, endgame_material, game_phase);
-        let pst_val = self.pst_value(game_phase);
+        let midgame_pst = self.pst_vals[0];
+        let endgame_pst = self.pst_vals[1];
+        let pst = lerp(midgame_pst, endgame_pst, game_phase);
 
-        let mut score = material + pst_val;
+        let mut score = material + pst;
 
         // if the score is already outwith a threshold, we can stop here.
         if score.abs() > LAZY_THRESHOLD_1 {
@@ -291,7 +245,6 @@ impl Board {
         let king_safety_val = self.pawn_shield_term(game_phase);
         let rook_open_file_val = self.rook_open_file_term(game_phase);
         let queen_open_file_val = self.queen_open_file_term(game_phase);
-        let tempo_val = lerp(20, 10, game_phase);
 
         score += pawn_val;
         score += bishop_pair_val;
@@ -299,7 +252,6 @@ impl Board {
         score += king_safety_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        score += tempo_val;
 
         score = self.clamp_score(score);
 
@@ -376,7 +328,6 @@ impl Board {
         false
     }
 
-    #[inline]
     fn clamp_score(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
         if score > 0 && self.unwinnable_for::<{ WHITE }>()
@@ -391,13 +342,6 @@ impl Board {
     pub const fn zugzwang_unlikely(&self) -> bool {
         const ENDGAME_PHASE: i32 = game_phase(3, 0, 0, 2, 0);
         self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
-    }
-
-    fn pst_value(&self, phase: i32) -> i32 {
-        #![allow(clippy::similar_names)]
-        let mg_val = self.pst_vals[0];
-        let eg_val = self.pst_vals[1];
-        lerp(mg_val, eg_val, phase)
     }
 
     const fn bishop_pair_term(&self) -> i32 {
@@ -418,8 +362,8 @@ impl Board {
     fn pawn_shield_term(&self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-        let white_kingloc = self.king_sq[WHITE as usize];
-        let black_kingloc = self.king_sq[BLACK as usize];
+        let white_kingloc = self.king_sq(WHITE);
+        let black_kingloc = self.king_sq(BLACK);
 
         let mut white_shield = 0;
         for loc in white_kingloc + 9..=white_kingloc + 11 {
@@ -439,68 +383,29 @@ impl Board {
         lerp(bonus, 0, phase)
     }
 
-    fn king_tropism_term(&self) -> i32 {
-        #![allow(clippy::similar_names)]
-        let white_king_square = self.king_sq[WHITE as usize] as usize;
-        let (wkr, wkf) = (
-            RANKS_BOARD[white_king_square],
-            FILES_BOARD[white_king_square],
-        );
-        let black_king_square = self.king_sq[BLACK as usize] as usize;
-        let (bkr, bkf) = (
-            RANKS_BOARD[black_king_square],
-            FILES_BOARD[black_king_square],
-        );
-        let mut score = 0;
-        for piece_type in BP..=BQ {
-            let piece_type = piece_type as usize;
-            let danger = PIECE_DANGER_VALUES[piece_type];
-            for &sq in self.piece_lists[piece_type].iter() {
-                let rank = RANKS_BOARD[sq as usize];
-                let file = FILES_BOARD[sq as usize];
-                let dist = i32::from(wkr.abs_diff(rank) + wkf.abs_diff(file));
-                score -= danger / dist;
-            }
-        }
-        for piece_type in WP..=WQ {
-            let piece_type = piece_type as usize;
-            let danger = PIECE_DANGER_VALUES[piece_type];
-            for &sq in self.piece_lists[piece_type].iter() {
-                let rank = RANKS_BOARD[sq as usize];
-                let file = FILES_BOARD[sq as usize];
-                let dist = i32::from(bkr.abs_diff(rank) + bkf.abs_diff(file));
-                score += danger / dist;
-            }
-        }
-
-        score
-    }
-
     fn pawn_structure_term(&self) -> i32 {
         static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = 0;
-        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
+        let (white_pawns, black_pawns) = (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(white_pawn_loc as usize) as usize };
-            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & white_pawns == 0 {
+            if unsafe { *ISOLATED_BB.get_unchecked(white_pawn_loc as usize) } & white_pawns == 0 {
                 w_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if unsafe { *WHITE_PASSED_BB.get_unchecked(sq64) } & black_pawns == 0 {
-                let rank = unsafe { *RANKS_BOARD.get_unchecked(white_pawn_loc as usize) } as usize;
+            if unsafe { *WHITE_PASSED_BB.get_unchecked(white_pawn_loc as usize) } & black_pawns == 0 {
+                let rank = rank(white_pawn_loc) as usize;
                 w_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(rank) };
             }
         }
 
         let mut b_score = 0;
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(black_pawn_loc as usize) } as usize;
-            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & black_pawns == 0 {
+            if unsafe { *ISOLATED_BB.get_unchecked(black_pawn_loc as usize) } & black_pawns == 0 {
                 b_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if unsafe { *BLACK_PASSED_BB.get_unchecked(sq64) } & white_pawns == 0 {
-                let rank = unsafe { *RANKS_BOARD.get_unchecked(black_pawn_loc as usize) } as usize;
+            if unsafe { *BLACK_PASSED_BB.get_unchecked(black_pawn_loc as usize) } & white_pawns == 0 {
+                let rank = rank(black_pawn_loc) as usize;
                 b_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(7 - rank) };
             }
         }
@@ -517,25 +422,26 @@ impl Board {
         w_score - b_score
     }
 
-    #[inline]
     fn is_file_open(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = self.pawns[BOTH as usize];
+        let pawns = self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
         (mask & pawns) == 0
     }
 
-    #[inline]
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = self.pawns[SIDE as usize];
+        let pawns = if SIDE == WHITE {
+            self.pieces.pawns::<true>()
+        } else {
+            self.pieces.pawns::<false>()
+        };
         (mask & pawns) == 0
     }
 
-    #[inline]
     fn rook_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &rook_sq in self.piece_lists[WR as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            let file = file(rook_sq);
             if self.is_file_open(file) {
                 score += ROOK_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -543,7 +449,7 @@ impl Board {
             }
         }
         for &rook_sq in self.piece_lists[BR as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            let file = file(rook_sq);
             if self.is_file_open(file) {
                 score -= ROOK_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -553,11 +459,10 @@ impl Board {
         lerp(score, 0, phase)
     }
 
-    #[inline]
     fn queen_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            let file = file(queen_sq);
             if self.is_file_open(file) {
                 score += QUEEN_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -565,7 +470,7 @@ impl Board {
             }
         }
         for &queen_sq in self.piece_lists[BQ as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            let file = file(queen_sq);
             if self.is_file_open(file) {
                 score -= QUEEN_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -576,39 +481,14 @@ impl Board {
     }
 
     /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
-    const fn phase(&self) -> i32 {
+    pub const fn phase(&self) -> i32 {
+        // todo: this can be incrementally updated.
         let pawns = self.num(WP) + self.num(BP);
         let knights = self.num(WN) + self.num(BN);
         let bishops = self.num(WB) + self.num(BB);
         let rooks = self.num(WR) + self.num(BR);
         let queens = self.num(WQ) + self.num(BQ);
         game_phase(pawns, knights, bishops, rooks, queens)
-    }
-
-    pub fn generate_pst_value(&self) -> (i32, i32) {
-        #![allow(clippy::needless_range_loop, clippy::similar_names)]
-        let mut mg_pst_val = 0;
-        let mut eg_pst_val = 0;
-        for piece in (WP as usize)..=(WK as usize) {
-            for &sq in self.piece_lists[piece].iter() {
-                let mg = MIDGAME_PST[piece][sq as usize];
-                let eg = ENDGAME_PST[piece][sq as usize];
-                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
-                mg_pst_val += mg;
-                eg_pst_val += eg;
-            }
-        }
-
-        for piece in (BP as usize)..=(BK as usize) {
-            for &sq in self.piece_lists[piece].iter() {
-                let mg = MIDGAME_PST[piece][sq as usize];
-                let eg = ENDGAME_PST[piece][sq as usize];
-                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
-                mg_pst_val += mg;
-                eg_pst_val += eg;
-            }
-        }
-        (mg_pst_val, eg_pst_val)
     }
 
     fn mobility(&mut self, phase: i32) -> i32 {
@@ -618,25 +498,59 @@ impl Board {
             match self.side {
                 WHITE => return -50,
                 BLACK => return 50,
-                _ => unsafe { std::hint::unreachable_unchecked() },
+                _ => unsafe { opt::impossible!() },
             }
         }
 
-        let mut list = MoveCounter::new(self);
-        self.generate_moves(&mut list);
-
-        let our_pseudo_legal_moves = list.score(phase);
-
-        self.make_nullmove();
-        let mut list = MoveCounter::new(self);
-        self.generate_moves(&mut list);
-        let their_pseudo_legal_moves = list.score(phase);
-        self.unmake_nullmove();
+        let mut mob_score = 0;
+        for wknight in BitLoop::<u8>::new(self.pieces.knights::<true>()) {
+            mob_score += bitboards::attacks::<KNIGHT>(wknight, BB_NONE).count_ones() as i32 * KNIGHT_MOBILITY_MULTIPLIER;
+        }
+        for bknight in BitLoop::<u8>::new(self.pieces.knights::<false>()) {
+            mob_score -= bitboards::attacks::<KNIGHT>(bknight, BB_NONE).count_ones() as i32 * KNIGHT_MOBILITY_MULTIPLIER;
+        }
+        for wbishop in BitLoop::<u8>::new(self.pieces.bishops::<true>()) {
+            let attacks = bitboards::attacks::<BISHOP>(wbishop, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            mob_score += attacks.count_ones() as i32 * BISHOP_MOBILITY_MULTIPLIER;
+        }
+        for bbishop in BitLoop::<u8>::new(self.pieces.bishops::<false>()) {
+            let attacks = bitboards::attacks::<BISHOP>(bbishop, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            mob_score -= attacks.count_ones() as i32 * BISHOP_MOBILITY_MULTIPLIER;
+        }
+        let mut midgame_rook_mob = 0;
+        let mut endgame_rook_mob = 0;
+        for wrook in BitLoop::<u8>::new(self.pieces.rooks::<true>()) {
+            let attacks = bitboards::attacks::<ROOK>(wrook, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            let ones = attacks.count_ones() as i32;
+            midgame_rook_mob += ones * MG_ROOK_MOBILITY_MULTIPLIER;
+            endgame_rook_mob += ones * EG_ROOK_MOBILITY_MULTIPLIER;
+        }
+        for brook in BitLoop::<u8>::new(self.pieces.rooks::<false>()) {
+            let attacks = bitboards::attacks::<ROOK>(brook, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            let ones = attacks.count_ones() as i32;
+            midgame_rook_mob -= ones * MG_ROOK_MOBILITY_MULTIPLIER;
+            endgame_rook_mob -= ones * EG_ROOK_MOBILITY_MULTIPLIER;
+        }
+        mob_score += lerp(midgame_rook_mob, endgame_rook_mob, phase);
+        for wqueen in BitLoop::<u8>::new(self.pieces.queens::<true>()) {
+            let attacks = bitboards::attacks::<QUEEN>(wqueen, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<true>();
+            mob_score += attacks.count_ones() as i32 * QUEEN_MOBILITY_MULTIPLIER;
+        }
+        for bqueen in BitLoop::<u8>::new(self.pieces.queens::<false>()) {
+            let attacks = bitboards::attacks::<QUEEN>(bqueen, self.pieces.occupied());
+            let attacks = attacks & self.pieces.enemy_or_empty::<false>();
+            mob_score -= attacks.count_ones() as i32 * QUEEN_MOBILITY_MULTIPLIER;
+        }
 
         if self.side == WHITE {
-            our_pseudo_legal_moves as i32 - their_pseudo_legal_moves as i32
+            mob_score
         } else {
-            their_pseudo_legal_moves as i32 - our_pseudo_legal_moves as i32
+            -mob_score
         }
     }
 
@@ -653,9 +567,11 @@ impl Board {
             let endgame_material =
                 self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
             let material = lerp(midgame_material, endgame_material, game_phase);
-            let pst_val = self.pst_value(game_phase);
+            let midgame_pst = self.pst_vals[0];
+            let endgame_pst = self.pst_vals[1];
+            let pst = lerp(midgame_pst, endgame_pst, game_phase);
 
-            material + pst_val
+            material + pst
         };
         let bishop_pair = {
             let w_count = self.num(WB);
@@ -664,20 +580,18 @@ impl Board {
             let blackbp = b_count == 2;
             i32::from(whitebp) - i32::from(blackbp)
         };
-        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
+        let (white_pawns, black_pawns) = (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         let passed_pawns_by_rank = {
             let mut passed_pawns_by_rank = [0; 8];
             for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
-                if WHITE_PASSED_BB[sq64] & black_pawns == 0 {
-                    let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
+                if WHITE_PASSED_BB[white_pawn_loc as usize] & black_pawns == 0 {
+                    let rank = rank(white_pawn_loc) as usize;
                     passed_pawns_by_rank[rank] += 1;
                 }
             }
             for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
-                if BLACK_PASSED_BB[sq64] & white_pawns == 0 {
-                    let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
+                if BLACK_PASSED_BB[black_pawn_loc as usize] & white_pawns == 0 {
+                    let rank = rank(black_pawn_loc) as usize;
                     passed_pawns_by_rank[7 - rank] -= 1;
                 }
             }
@@ -686,14 +600,12 @@ impl Board {
         let isolated_pawns = {
             let mut isolated = 0;
             for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
-                if ISOLATED_BB[sq64] & white_pawns == 0 {
+                if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
                     isolated += 1;
                 }
             }
             for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
-                if ISOLATED_BB[sq64] & black_pawns == 0 {
+                if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
                     isolated -= 1;
                 }
             }
@@ -713,33 +625,33 @@ impl Board {
             doubled_pawns
         };
 
-        let mut counter = MoveCounter::new(self);
-        if !self.in_check::<{ Self::US }>() {
-            self.generate_moves(&mut counter);
-        }
-        let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] =
-            counter.counters;
-        if !self.in_check::<{ Self::US }>() {
-            self.make_nullmove();
-        }
-        let mut counter = MoveCounter::new(self);
-        if !self.in_check::<{ Self::US }>() {
-            self.generate_moves(&mut counter);
-        }
-        let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] =
-            counter.counters;
-        if !self.in_check::<{ Self::US }>() {
-            self.unmake_nullmove();
-        }
-        let knight_mobility = wh_knight_mob - bl_knight_mob;
-        let bishop_mobility = wh_bishop_mob - bl_bishop_mob;
-        let rook_mobility = wh_rook_mob - bl_rook_mob;
-        let queen_mobility = wh_queen_mob - bl_queen_mob;
-        let king_mobility = wh_king_mob - bl_king_mob;
+        // let mut counter = MoveCounter::new(self);
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.generate_moves(&mut counter);
+        // }
+        // let [_, wh_knight_mob, wh_bishop_mob, wh_rook_mob, wh_queen_mob, wh_king_mob] =
+        //     counter.counters;
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.make_nullmove();
+        // }
+        // let mut counter = MoveCounter::new(self);
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.generate_moves(&mut counter);
+        // }
+        // let [_, bl_knight_mob, bl_bishop_mob, bl_rook_mob, bl_queen_mob, bl_king_mob] =
+        //     counter.counters;
+        // if !self.in_check::<{ Self::US }>() {
+        //     self.unmake_nullmove();
+        // }
+        // let knight_mobility = wh_knight_mob - bl_knight_mob;
+        // let bishop_mobility = wh_bishop_mob - bl_bishop_mob;
+        // let rook_mobility = wh_rook_mob - bl_rook_mob;
+        // let queen_mobility = wh_queen_mob - bl_queen_mob;
+        // let king_mobility = wh_king_mob - bl_king_mob;
 
         let pawn_shield = {
-            let white_kingloc = self.king_sq[WHITE as usize];
-            let black_kingloc = self.king_sq[BLACK as usize];
+            let white_kingloc = self.king_sq(WHITE);
+            let black_kingloc = self.king_sq(BLACK);
 
             let mut white_shield = 0;
             for loc in white_kingloc + 9..=white_kingloc + 11 {
@@ -761,7 +673,7 @@ impl Board {
             let mut open_rooks = 0;
             let mut half_open_rooks = 0;
             for &rook_sq in self.piece_lists[WR as usize].iter() {
-                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                let file = file(rook_sq);
                 if self.is_file_open(file) {
                     open_rooks += 1;
                 } else if self.is_file_halfopen::<WHITE>(file) {
@@ -769,7 +681,7 @@ impl Board {
                 }
             }
             for &rook_sq in self.piece_lists[BR as usize].iter() {
-                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                let file = file(rook_sq);
                 if self.is_file_open(file) {
                     open_rooks -= 1;
                 } else if self.is_file_halfopen::<BLACK>(file) {
@@ -787,11 +699,11 @@ impl Board {
             passed_pawns_by_rank,
             isolated_pawns,
             doubled_pawns,
-            knight_mobility,
-            bishop_mobility,
-            rook_mobility,
-            queen_mobility,
-            king_mobility,
+            knight_mobility: 0,
+            bishop_mobility: 0,
+            rook_mobility: 0,
+            queen_mobility: 0,
+            king_mobility: 0,
             pawn_shield,
             open_rooks,
             half_open_rooks,
@@ -804,11 +716,57 @@ mod tests {
     #[test]
     fn unwinnable() {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
+        crate::magic::initialise();
         let mut board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate();
         assert!(
-            eval.abs() <= 1,
-            "eval is not a draw score ({eval} != 0cp) in a position unwinnable for both sides."
+            eval.abs() == 0,
+            "eval is not a draw score ({eval}cp != 0cp) in a position unwinnable for both sides."
         );
+    }
+
+    #[test]
+    fn turn_equality() {
+        const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
+        crate::magic::initialise();
+        let mut board1 = super::Board::from_fen(FEN1).unwrap();
+        let mut board2 = super::Board::from_fen(FEN2).unwrap();
+        let eval1 = board1.evaluate();
+        let eval2 = board2.evaluate();
+        assert_eq!(eval1, -eval2);
+    }
+
+    #[test]
+    fn startpos_mobility_equality() {
+        let mut board = super::Board::default();
+        assert_eq!(board.mobility(0), 0);
+    }
+
+    #[test]
+    fn startpos_eval_equality() {
+        let mut board = super::Board::default();
+        assert_eq!(board.evaluate(), 0);
+    }
+
+    #[test]
+    fn startpos_pawn_structure_equality() {
+        let board = super::Board::default();
+        assert_eq!(board.pawn_structure_term(), 0);
+    }
+
+    #[test]
+    fn startpos_pawn_shield_equality() {
+        let board = super::Board::default();
+        assert_eq!(board.pawn_shield_term(board.phase()), 0);
+    }
+
+    #[test]
+    fn startpos_open_file_equality() {
+        let board = super::Board::default();
+        let phase = board.phase();
+        let rook_points = board.rook_open_file_term(phase);
+        let queen_points = board.queen_open_file_term(phase);
+        assert_eq!(rook_points + queen_points, 0);
     }
 }

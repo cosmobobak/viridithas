@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{IS_MATE_SCORE, MATE_SCORE},
+        evaluation::{is_mate_score, MATE_SCORE},
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
@@ -52,7 +52,7 @@ fn parse_position(text: &str, pos: &mut Board) {
 
 fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     #![allow(clippy::too_many_lines)]
-    let mut depth: Option<usize> = None;
+    let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<usize> = None;
     let mut movetime: Option<usize> = None;
     let mut time: Option<usize> = None;
@@ -200,7 +200,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
 
 pub fn format_score(score: i32, turn: u8) -> String {
     assert!(turn == WHITE || turn == BLACK);
-    if score.abs() > IS_MATE_SCORE {
+    if is_mate_score(score) {
         let plies_to_mate = MATE_SCORE - score.abs();
         let moves_to_mate = (plies_to_mate + 1) / 2;
         if score > 0 {

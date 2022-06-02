@@ -23,9 +23,18 @@ pub struct TTEntry {
     pub key: u64,
     pub m: Move,
     pub score: i32,
-    pub depth: usize,
-    /// encode in tagged union instead.
+    pub depth: i32,
     pub flag: HFlag,
+}
+
+impl TTEntry {
+    pub const NULL: Self = Self {
+        key: 0,
+        m: Move::NULL,
+        score: 0,
+        depth: 0,
+        flag: HFlag::None,
+    };
 }
 
 const TASTY_PRIME_NUMBER: usize = 12_582_917;
@@ -51,7 +60,6 @@ pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
 pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
     table: Vec<TTEntry>,
     cutoffs: u64,
-    entries: u64,
     new_writes: u64,
     overwrites: u64,
     hits: u64,
@@ -73,18 +81,8 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
 {
     pub fn new() -> Self {
         Self {
-            table: vec![
-                TTEntry {
-                    key: 0,
-                    m: Move::null(),
-                    score: 0,
-                    depth: 0,
-                    flag: HFlag::None,
-                };
-                SIZE
-            ],
+            table: vec![TTEntry::NULL; SIZE],
             cutoffs: 0,
-            entries: 0,
             new_writes: 0,
             overwrites: 0,
             hits: 0,
@@ -92,13 +90,7 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
     }
 
     pub fn clear(&mut self) {
-        self.table.fill(TTEntry {
-            key: 0,
-            m: Move::null(),
-            score: 0,
-            depth: 0,
-            flag: HFlag::None,
-        });
+        self.table.fill(TTEntry::NULL);
     }
 
     pub fn store(
@@ -108,13 +100,13 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         best_move: Move,
         score: i32,
         flag: HFlag,
-        depth: usize,
+        depth: i32,
     ) {
         let index = (key % SIZE as u64) as usize;
 
         debug_assert!((1..=MAX_DEPTH).contains(&depth));
         debug_assert!(score >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
 
         if self.table[index].key == 0 {
             self.new_writes += 1;
@@ -158,7 +150,7 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         ply: usize,
         alpha: i32,
         beta: i32,
-        depth: usize,
+        depth: i32,
     ) -> ProbeResult {
         let index = (key % (SIZE as u64)) as usize;
 
@@ -166,7 +158,7 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         debug_assert!(alpha < beta);
         debug_assert!(alpha >= -INFINITY);
         debug_assert!(beta >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
 
         let entry = &self.table[index];
 
