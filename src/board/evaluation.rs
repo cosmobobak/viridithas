@@ -3,7 +3,7 @@
 use crate::{
     board::Board,
     definitions::{BB, BLACK, BN, BP, BQ, BR, WB, WHITE, WN, WP, WQ, WR, MAX_DEPTH, KNIGHT, BISHOP, ROOK, QUEEN},
-    lookups::{init_eval_masks, init_passed_isolated_bb, rank, file}, opt,
+    lookups::{init_eval_masks, init_passed_isolated_bb, rank, file},
 };
 
 use super::movegen::bitboards::{BitLoop, self, BB_NONE};
@@ -366,14 +366,14 @@ impl Board {
         let black_kingloc = self.king_sq(BLACK);
 
         let mut white_shield = 0;
-        for loc in white_kingloc + 9..=white_kingloc + 11 {
+        for loc in white_kingloc + 7..=white_kingloc + 9 {
             if self.piece_at(loc) == WP {
                 white_shield += 1;
             }
         }
 
         let mut black_shield = 0;
-        for loc in black_kingloc - 11..=black_kingloc - 9 {
+        for loc in black_kingloc - 9..=black_kingloc - 7 {
             if self.piece_at(loc) == BP {
                 black_shield += 1;
             }
@@ -492,16 +492,6 @@ impl Board {
     }
 
     fn mobility(&mut self, phase: i32) -> i32 {
-        #![allow(clippy::cast_possible_truncation)]
-        let is_check = self.in_check::<{ Self::US }>();
-        if is_check {
-            match self.side {
-                WHITE => return -50,
-                BLACK => return 50,
-                _ => unsafe { opt::impossible!() },
-            }
-        }
-
         let mut mob_score = 0;
         for wknight in BitLoop::<u8>::new(self.pieces.knights::<true>()) {
             mob_score += bitboards::attacks::<KNIGHT>(wknight, BB_NONE).count_ones() as i32 * KNIGHT_MOBILITY_MULTIPLIER;
@@ -654,14 +644,14 @@ impl Board {
             let black_kingloc = self.king_sq(BLACK);
 
             let mut white_shield = 0;
-            for loc in white_kingloc + 9..=white_kingloc + 11 {
+            for loc in white_kingloc + 7..=white_kingloc + 9 {
                 if self.piece_at(loc) == WP {
                     white_shield += 1;
                 }
             }
 
             let mut black_shield = 0;
-            for loc in black_kingloc - 11..=black_kingloc - 9 {
+            for loc in black_kingloc - 9..=black_kingloc - 7 {
                 if self.piece_at(loc) == BP {
                     black_shield += 1;
                 }
@@ -768,5 +758,16 @@ mod tests {
         let rook_points = board.rook_open_file_term(phase);
         let queen_points = board.queen_open_file_term(phase);
         assert_eq!(rook_points + queen_points, 0);
+    }
+
+    #[test]
+    fn double_pawn_eval() {
+        use crate::board::evaluation::DOUBLED_PAWN_MALUS;
+        let board = super::Board::from_fen("rnbqkbnr/pppppppp/8/8/8/5P2/PPPP1PPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let pawn_eval = board.pawn_structure_term();
+        assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS);
+        let board = super::Board::from_fen("rnbqkbnr/pppppppp/8/8/8/2P2P2/PPP2PPP/RNBQKBNR b KQkq - 0 1").unwrap();
+        let pawn_eval = board.pawn_structure_term();
+        assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS * 2);
     }
 }
