@@ -33,8 +33,6 @@ If a move is made that gives check or is a promotion, the depth to which that mo
 When the iterative deepening search progresses from depth N to depth N + 1, the search is initially run with a small alpha-beta window around the value returned by the previous search. This provides the search with the ability to prune more aggressively in circumstances where the search is stable. If a window fails, a re-search is done with an infinite window, but this does not happen often enough to be a problem.
 ### Razoring
 At pre-frontier nodes (nodes that we intend to search to depth 2), we check if the static evaluation of the position is sufficiently below alpha. If it is, we only search to depth 1. This is probably the most dangerous pruning heuristic in the search, but it is generally reported to improve playing strength.
-### Delta Pruning
-In the quiescence search, before trying each move, we determine if the captured piece is sufficiently valuable to exceed alpha minus a small safety margin. If it is not, we prune the move.
 
 ## Evaluation
 ### Tapered Evaluation

@@ -1,15 +1,14 @@
-use std::cmp::{max, min};
 
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, MG_PIECE_VALUES, ONE_PAWN, self},
+        evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN},
         Board,
     },
     chessmove::Move,
     definitions::{INFINITY, MAX_DEPTH},
     searchinfo::SearchInfo,
-    transpositiontable::{HFlag, ProbeResult}, lookups::REDUCTIONS,
+    transpositiontable::{HFlag, ProbeResult},
 };
 
 // In alpha-beta search, there are three classes of node to be aware of:
@@ -99,7 +98,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     alpha
 }
 
-fn _logistic_lateness_reduction(moves: usize, depth: i32) -> i32 {
+fn logistic_lateness_reduction(moves: usize, depth: i32) -> i32 {
     #![allow(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -139,17 +138,6 @@ fn _senpai_lateness_reduction(moves: usize, depth: i32) -> i32 {
     }
 }
 
-fn table_lookup_reduction(moves: usize, depth: i32) -> i32 {
-    let depth = depth as usize;
-    let r = REDUCTIONS[depth] * REDUCTIONS[moves];
-    let reduction = r / (1024 * 1024 * 2);
-    reduction.max(1)
-}
-
-fn simple_reduction(moves: usize) -> i32 {
-    REDUCTIONS[moves] / 14
-}
-
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha: i32, beta: i32) -> i32 {
@@ -187,8 +175,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
             None
         }
     };
-
-    let iid_reduction = i32::from(in_pv && pv_move == None && depth > 5);
 
     let we_are_in_check = pos.in_check::<{ Board::US }>();
 
@@ -265,14 +251,13 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
                 && depth >= 3
                 && moves_made >= (2 + usize::from(in_pv));
             let mut r = 0;
-            if can_reduce { 
-                r += _logistic_lateness_reduction(moves_made, depth);
-                r += iid_reduction;
+            if can_reduce {
+                r += logistic_lateness_reduction(moves_made, depth).clamp(1, depth - 2);
             }
             // perform a zero-window search, possibly with a reduction
             score = -alpha_beta(pos, info, depth - 1 + extension - r, -alpha - 1, -alpha);
             // if we failed, then full window search
-            if score > alpha && score < beta  {
+            if score > alpha && score < beta {
                 score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
             }
         };
