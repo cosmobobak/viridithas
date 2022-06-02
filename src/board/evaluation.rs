@@ -283,7 +283,6 @@ impl Board {
         let king_safety_val = self.pawn_shield_term(game_phase);
         let rook_open_file_val = self.rook_open_file_term(game_phase);
         let queen_open_file_val = self.queen_open_file_term(game_phase);
-        let tempo_val = tempo_bonus(game_phase);
 
         score += pawn_val;
         score += bishop_pair_val;
@@ -291,7 +290,6 @@ impl Board {
         score += king_safety_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        score += tempo_val;
 
         score = self.clamp_score(score);
 
@@ -521,7 +519,8 @@ impl Board {
     }
 
     /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
-    const fn phase(&self) -> i32 {
+    pub const fn phase(&self) -> i32 {
+        // todo: this can be incrementally updated.
         let pawns = self.num(WP) + self.num(BP);
         let knights = self.num(WN) + self.num(BN);
         let bishops = self.num(WB) + self.num(BB);
@@ -717,10 +716,6 @@ impl Board {
     }
 }
 
-fn tempo_bonus(game_phase: i32) -> i32 {
-    lerp(20, 10, game_phase)
-}
-
 mod tests {
     #[test]
     fn unwinnable() {
@@ -754,9 +749,8 @@ mod tests {
 
     #[test]
     fn startpos_eval_equality() {
-        use crate::board::evaluation::tempo_bonus;
         let mut board = super::Board::default();
-        assert_eq!(board.evaluate() - tempo_bonus(board.phase()), 0);
+        assert_eq!(board.evaluate(), 0);
     }
 
     #[test]

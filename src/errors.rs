@@ -9,4 +9,5 @@ pub enum MoveParseError {
     InvalidPromotionPiece,
     IllegalMove,
 }
+#[allow(dead_code)]
 pub type PositionValidityError = String;

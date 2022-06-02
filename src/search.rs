@@ -3,7 +3,7 @@ use std::cmp::{max, min};
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, MG_PIECE_VALUES, ONE_PAWN},
+        evaluation::{DRAW_SCORE, MATE_SCORE, MG_PIECE_VALUES, ONE_PAWN, self},
         Board,
     },
     chessmove::Move,
@@ -25,6 +25,7 @@ use crate::{
 
 const DELTA_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
 const FUTILITY_PRUNING_MARGIN: i32 = ONE_PAWN * 2;
+const DELTA_PRUNING_ENDGAME_CUTOFF: i32 = evaluation::game_phase(2, 1, 1, 0, 0);
 
 fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
@@ -74,8 +75,8 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         // the static eval + a safety margin to alpha, skip it.
         // this should not be on during the late endgame, as it
         // will cause suffering in insufficient material situations.
-        if !is_check {
-            let value_of_capture = -MG_PIECE_VALUES[m.capture() as usize];
+        if !is_check && pos.phase() < DELTA_PRUNING_ENDGAME_CUTOFF {
+            let value_of_capture = MG_PIECE_VALUES[m.capture() as usize];
             let predicted_value = stand_pat + value_of_capture;
             if !m.is_promo() && predicted_value + DELTA_PRUNING_MARGIN < alpha {
                 continue;

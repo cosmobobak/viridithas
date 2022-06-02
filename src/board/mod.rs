@@ -185,11 +185,19 @@ impl Board {
 
     pub fn king_sq(&self, side: u8) -> u8 {
         debug_assert!(side == WHITE || side == BLACK);
-        match side {
+        debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);
+        debug_assert_eq!(self.pieces.king::<false>().count_ones(), 1);
+        debug_assert_eq!(self.piece_lists[WK as usize].len(), 1);
+        debug_assert_eq!(self.piece_lists[BK as usize].len(), 1);
+        let sq = match side {
             WHITE => *self.piece_lists[WK as usize].first().unwrap(),
             BLACK => *self.piece_lists[BK as usize].first().unwrap(),
             _ => unsafe { opt::impossible!() },
-        }
+        };
+        debug_assert!(sq < 64);
+        debug_assert_eq!(colour_of(self.piece_at(sq)), side);
+        debug_assert_eq!(type_of(self.piece_at(sq)), KING);
+        sq
     }
 
     pub const US: u8 = 0;
@@ -527,7 +535,7 @@ impl Board {
         Ok(())
     }
 
-    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
         use Colour::{Black, White};

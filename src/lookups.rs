@@ -137,6 +137,7 @@ pub static PIECE_MAJ: [bool; 13] = [
     false, false, false, false, true, true, false, false, false, false, true, true, false,
 ];
 /// knights and bishops.
+#[allow(dead_code)]
 pub static PIECE_MIN: [bool; 13] = [
     false, false, true, true, false, false, false, false, true, true, false, false, false,
 ];
