@@ -75,7 +75,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         // this should not be on during the late endgame, as it
         // will cause suffering in insufficient material situations.
         if !is_check {
-            let value_of_capture = MG_PIECE_VALUES[m.capture() as usize];
+            let value_of_capture = -MG_PIECE_VALUES[m.capture() as usize];
             let predicted_value = stand_pat + value_of_capture;
             if !m.is_promo() && predicted_value + DELTA_PRUNING_MARGIN < alpha {
                 continue;

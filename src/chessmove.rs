@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::{
-    definitions::{square120_name, square64_name},
+    definitions::square_name,
     lookups::PROMO_CHAR_LOOKUP,
 };
 
@@ -81,9 +81,9 @@ impl Display for Move {
         }
 
         let from_square =
-            square120_name(self.from()).unwrap_or_else(|| panic!("Invalid square {}", self.from()));
+            square_name(self.from()).unwrap_or_else(|| panic!("Invalid square {}", self.from()));
         let to_square =
-            square120_name(self.to()).unwrap_or_else(|| panic!("Invalid square {}", self.to()));
+            square_name(self.to()).unwrap_or_else(|| panic!("Invalid square {}", self.to()));
 
         if self.is_promo() {
             let pchar = PROMO_CHAR_LOOKUP[self.promotion() as usize];
@@ -102,9 +102,9 @@ impl Debug for Move {
             f,
             "move from {} ({}) to {} ({}), capture {}, promo {}, ispromo {}, ep {}, pawn start {}, castle {}",
             self.from(),
-            square64_name(self.from()).unwrap_or("NONE"), 
+            square_name(self.from()).unwrap_or("NONE"), 
             self.to(),
-            square64_name(self.to()).unwrap_or("NONE"),
+            square_name(self.to()).unwrap_or("NONE"),
             self.capture(),
             self.promotion(),
             self.is_promo(),

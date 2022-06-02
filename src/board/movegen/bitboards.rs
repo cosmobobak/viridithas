@@ -1,4 +1,6 @@
-#![allow(dead_code, unused_macros)]
+#![allow(dead_code)]
+
+use crate::{definitions::{PAWN, BISHOP, ROOK, QUEEN, KING, KNIGHT, colour_of, WHITE, type_of, WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK, BLACK}, magic, lookups, opt};
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
 pub const BB_RANK_2: u64 = 0x0000_0000_0000_FF00;
@@ -16,6 +18,8 @@ pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
 pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
 pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
 pub const BB_FILE_H: u64 = 0x8080_8080_8080_8080;
+pub const BB_NONE: u64 = 0x0000_0000_0000_0000;
+pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 
 /// least significant bit of a u64
 /// ```
@@ -32,25 +36,47 @@ pub const fn lsb(x: u64) -> u64 {
 /// let squares = BitLoop::new(bb).collect::<Vec<_>>();
 /// assert_eq!(squares, vec![1, 2, 4]);
 /// ```
-pub struct BitLoop {
+pub struct BitLoop<Output = u64> {
     value: u64,
+    phantom: std::marker::PhantomData<Output>,
 }
 
-impl BitLoop {
+impl BitLoop<u64> {
     pub const fn new(value: u64) -> Self {
-        Self { value }
+        Self { value, phantom: std::marker::PhantomData }
     }
 }
 
-impl Iterator for BitLoop {
+impl BitLoop<u8> {
+    pub const fn new(value: u64) -> Self {
+        Self { value, phantom: std::marker::PhantomData }
+    }
+}
+
+impl Iterator for BitLoop<u64> {
     type Item = u64;
 
-    fn next(&mut self) -> Option<u64> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.value == 0 {
             None
         } else {
             // faster if we have bmi (maybe)
             let lsb = lsb(self.value);
+            self.value ^= 1 << lsb;
+            Some(lsb)
+        }
+    }
+}
+
+impl Iterator for BitLoop<u8> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.value == 0 {
+            None
+        } else {
+            // faster if we have bmi (maybe)
+            let lsb: u8 = unsafe { lsb(self.value).try_into().unwrap_unchecked() };
             self.value ^= 1 << lsb;
             Some(lsb)
         }
@@ -174,6 +200,10 @@ impl BitBoard {
         !self.occupied
     }
 
+    pub const fn occupied(&self) -> u64 {
+        self.occupied
+    }
+
     #[rustfmt::skip]
     pub const fn knights<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_knights } else { self.b_knights }
@@ -193,22 +223,233 @@ impl BitBoard {
     pub const fn queens<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_queens } else { self.b_queens }
     }
+
+    pub fn reset(&mut self) {
+        *self = Self::NULL;
+    }
+
+    pub fn move_piece_comptime<const PIECE: u8>(&mut self, from_to_bb: u64) {
+        match PIECE {
+            WP => self.w_pawns ^= from_to_bb,
+            WN => self.w_knights ^= from_to_bb,
+            WB => self.w_bishops ^= from_to_bb,
+            WR => self.w_rooks ^= from_to_bb,
+            WQ => self.w_queens ^= from_to_bb,
+            WK => self.w_king ^= from_to_bb,
+            BP => self.b_pawns ^= from_to_bb,
+            BN => self.b_knights ^= from_to_bb,
+            BB => self.b_bishops ^= from_to_bb,
+            BR => self.b_rooks ^= from_to_bb,
+            BQ => self.b_queens ^= from_to_bb,
+            BK => self.b_king ^= from_to_bb,
+            _ => unsafe { opt::impossible!() },
+        }
+        match colour_of(PIECE) {
+            WHITE => self.white ^= from_to_bb,
+            BLACK => self.black ^= from_to_bb,
+            _ => unsafe { opt::impossible!() },
+        }
+        self.occupied ^= from_to_bb;
+    }
+
+    pub fn set_piece_comptime<const PIECE: u8>(&mut self, sq: u8) {
+        match PIECE {
+            WP => self.w_pawns |= 1u64 << sq,
+            WN => self.w_knights |= 1u64 << sq,
+            WB => self.w_bishops |= 1u64 << sq,
+            WR => self.w_rooks |= 1u64 << sq,
+            WQ => self.w_queens |= 1u64 << sq,
+            WK => self.w_king |= 1u64 << sq,
+            BP => self.b_pawns |= 1u64 << sq,
+            BN => self.b_knights |= 1u64 << sq,
+            BB => self.b_bishops |= 1u64 << sq,
+            BR => self.b_rooks |= 1u64 << sq,
+            BQ => self.b_queens |= 1u64 << sq,
+            BK => self.b_king |= 1u64 << sq,
+            _ => unsafe { opt::impossible!() },
+        }
+        match colour_of(PIECE) {
+            WHITE => self.white |= 1u64 << sq,
+            BLACK => self.black |= 1u64 << sq,
+            _ => unsafe { opt::impossible!() },
+        }
+        self.occupied |= 1u64 << sq;
+    }
+
+    pub fn clear_piece_comptime<const PIECE: u8>(&mut self, sq: u8) {
+        match PIECE {
+            WP => self.w_pawns &= !(1u64 << sq),
+            WN => self.w_knights &= !(1u64 << sq),
+            WB => self.w_bishops &= !(1u64 << sq),
+            WR => self.w_rooks &= !(1u64 << sq),
+            WQ => self.w_queens &= !(1u64 << sq),
+            WK => self.w_king &= !(1u64 << sq),
+            BP => self.b_pawns &= !(1u64 << sq),
+            BN => self.b_knights &= !(1u64 << sq),
+            BB => self.b_bishops &= !(1u64 << sq),
+            BR => self.b_rooks &= !(1u64 << sq),
+            BQ => self.b_queens &= !(1u64 << sq),
+            BK => self.b_king &= !(1u64 << sq),
+            _ => unsafe { opt::impossible!() },
+        }
+        match colour_of(PIECE) {
+            WHITE => self.white &= !(1u64 << sq),
+            BLACK => self.black &= !(1u64 << sq),
+            _ => unsafe { opt::impossible!() },
+        }
+        self.occupied &= !(1u64 << sq);
+    }
+
+    pub fn move_piece(&mut self, from_to_bb: u64, piece: u8) {
+        self.occupied ^= from_to_bb;
+        if colour_of(piece) == WHITE {
+            self.white ^= from_to_bb;
+            match type_of(piece) {
+                PAWN => self.w_pawns ^= from_to_bb,
+                KNIGHT => self.w_knights ^= from_to_bb,
+                BISHOP => self.w_bishops ^= from_to_bb,
+                ROOK => self.w_rooks ^= from_to_bb,
+                QUEEN => self.w_queens ^= from_to_bb,
+                KING => self.w_king ^= from_to_bb,
+                _ => unsafe { opt::impossible!() },
+            }
+        } else {
+            self.black ^= from_to_bb;
+            match type_of(piece) {
+                PAWN => self.b_pawns ^= from_to_bb,
+                KNIGHT => self.b_knights ^= from_to_bb,
+                BISHOP => self.b_bishops ^= from_to_bb,
+                ROOK => self.b_rooks ^= from_to_bb,
+                QUEEN => self.b_queens ^= from_to_bb,
+                KING => self.b_king ^= from_to_bb,
+                _ => unsafe { opt::impossible!() },
+            }
+        }
+    }
+
+    pub fn set_piece_at(&mut self, sq: u8, piece: u8) {
+        self.occupied |= 1u64 << sq;
+        if colour_of(piece) == WHITE {
+            self.white |= 1u64 << sq;
+            match type_of(piece) {
+                PAWN => self.w_pawns |= 1u64 << sq,
+                KNIGHT => self.w_knights |= 1u64 << sq,
+                BISHOP => self.w_bishops |= 1u64 << sq,
+                ROOK => self.w_rooks |= 1u64 << sq,
+                QUEEN => self.w_queens |= 1u64 << sq,
+                KING => self.w_king |= 1u64 << sq,
+                _ => unsafe { opt::impossible!() },
+            }
+        } else {
+            self.black |= 1u64 << sq;
+            match type_of(piece) {
+                PAWN => self.b_pawns |= 1u64 << sq,
+                KNIGHT => self.b_knights |= 1u64 << sq,
+                BISHOP => self.b_bishops |= 1u64 << sq,
+                ROOK => self.b_rooks |= 1u64 << sq,
+                QUEEN => self.b_queens |= 1u64 << sq,
+                KING => self.b_king |= 1u64 << sq,
+                _ => unsafe { opt::impossible!() },
+            }
+        }
+    }
+
+    pub fn clear_piece_at(&mut self, sq: u8, piece: u8) {
+        self.occupied &= !(1u64 << sq);
+        if colour_of(piece) == WHITE {
+            self.white &= !(1u64 << sq);
+            match type_of(piece) {
+                PAWN => self.w_pawns &= !(1u64 << sq),
+                KNIGHT => self.w_knights &= !(1u64 << sq),
+                BISHOP => self.w_bishops &= !(1u64 << sq),
+                ROOK => self.w_rooks &= !(1u64 << sq),
+                QUEEN => self.w_queens &= !(1u64 << sq),
+                KING => self.w_king &= !(1u64 << sq),
+                _ => unsafe { opt::impossible!() },
+            }
+        } else {
+            self.black &= !(1u64 << sq);
+            match type_of(piece) {
+                PAWN => self.b_pawns &= !(1u64 << sq),
+                KNIGHT => self.b_knights &= !(1u64 << sq),
+                BISHOP => self.b_bishops &= !(1u64 << sq),
+                ROOK => self.b_rooks &= !(1u64 << sq),
+                QUEEN => self.b_queens &= !(1u64 << sq),
+                KING => self.b_king &= !(1u64 << sq),
+                _ => unsafe { opt::impossible!() },
+            }
+        }
+    }
+
+    pub const fn any_pawns(&self) -> bool {
+        self.w_pawns | self.b_pawns != 0
+    }
+
+    pub const fn piece_bb_comptime<const PIECE: u8>(&self) -> u64 {
+        match PIECE {
+            WP => self.w_pawns,
+            WN => self.w_knights,
+            WB => self.w_bishops,
+            WR => self.w_rooks,
+            WQ => self.w_queens,
+            WK => self.w_king,
+            BP => self.b_pawns,
+            BN => self.b_knights,
+            BB => self.b_bishops,
+            BR => self.b_rooks,
+            BQ => self.b_queens,
+            BK => self.b_king,
+            _ => unsafe { opt::impossible!() },
+        }
+    }
+
+    pub const fn piece_bb(&self, piece: u8) -> u64 {
+        match piece {
+            WP => self.w_pawns,
+            WN => self.w_knights,
+            WB => self.w_bishops,
+            WR => self.w_rooks,
+            WQ => self.w_queens,
+            WK => self.w_king,
+            BP => self.b_pawns,
+            BN => self.b_knights,
+            BB => self.b_bishops,
+            BR => self.b_rooks,
+            BQ => self.b_queens,
+            BK => self.b_king,
+            _ => unsafe { opt::impossible!() },
+        }
+    }
+}
+
+pub const fn north_east_one(b: u64) -> u64 { (b << 9) & !BB_FILE_A }
+pub const fn south_east_one(b: u64) -> u64 { (b >> 7) & !BB_FILE_A }
+pub const fn south_west_one(b: u64) -> u64 { (b >> 9) & !BB_FILE_H }
+pub const fn north_west_one(b: u64) -> u64 { (b << 7) & !BB_FILE_H }
+
+pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
+    debug_assert!(PIECE_TYPE != PAWN);
+    match PIECE_TYPE {
+        BISHOP => magic::get_bishop_attacks(sq, blockers),
+        ROOK => magic::get_rook_attacks(sq, blockers),
+        QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        other => lookups::get_jumping_piece_attack(sq, other),
+    }
 }
 
 pub fn print_bb(bb: u64) {
     for rank in (0..=7).rev() {
         for file in 0..=7 {
             let sq = crate::lookups::filerank_to_square(file, rank);
-            let sq64 = crate::lookups::SQ120_TO_SQ64[sq as usize];
             assert!(
-                sq64 < 64,
+                sq < 64,
                 "sq64: {}, sq: {}, file: {}, rank: {}",
-                sq64,
+                sq,
                 sq,
                 file,
                 rank
             );
-            if bb & (1 << sq64) != 0 {
+            if bb & (1 << sq) != 0 {
                 print!(" X");
             } else {
                 print!(" .");

@@ -60,14 +60,27 @@ pub fn gamut() {
 }
 
 mod tests {
+
     #[test]
     fn perft_hard_position() {
+        use crate::board::movegen::MoveVecWrapper;
         use super::*;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
-        assert_eq!(perft(&mut pos, 1), 48);
+        assert_eq!(perft(&mut pos, 1), 48, "got {}", {
+            let mut ml = MoveList::new();
+            pos.generate_moves(&mut ml);
+            let mut legal = vec![];
+            for m in ml {
+                if pos.make_move(m) {
+                    legal.push(m);
+                    pos.unmake_move();
+                }
+            }
+            MoveVecWrapper(legal)
+        });
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
         // assert_eq!(perft(&mut pos, 4), 4_085_603);
@@ -75,12 +88,44 @@ mod tests {
 
     #[test]
     fn perft_start_position() {
+        use crate::board::movegen::MoveVecWrapper;
         use super::*;
         let mut pos = Board::new();
         pos.set_startpos();
-        assert_eq!(perft(&mut pos, 1), 20);
+        assert_eq!(perft(&mut pos, 1), 20, "got {}", {
+            let mut ml = MoveList::new();
+            pos.generate_moves(&mut ml);
+            let mut legal = vec![];
+            for m in ml {
+                if pos.make_move(m) {
+                    legal.push(m);
+                    pos.unmake_move();
+                }
+            }
+            MoveVecWrapper(legal)
+        });
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
         // assert_eq!(perft(&mut pos, 4), 197_281);
+    }
+
+    #[test]
+    fn perft_krk() {
+        use crate::board::movegen::MoveVecWrapper;
+        use super::*;
+        let mut pos = Board::new();
+        pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
+        assert_eq!(perft(&mut pos, 1), 3, "got {}", {
+            let mut ml = MoveList::new();
+            pos.generate_moves(&mut ml);
+            let mut legal = vec![];
+            for m in ml {
+                if pos.make_move(m) {
+                    legal.push(m);
+                    pos.unmake_move();
+                }
+            }
+            MoveVecWrapper(legal)
+        });
     }
 }

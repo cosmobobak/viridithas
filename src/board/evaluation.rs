@@ -4,9 +4,8 @@ use crate::{
     board::movegen::MoveConsumer,
     board::Board,
     chessmove::Move,
-    definitions::{BB, BK, BLACK, BN, BOTH, BP, BQ, BR, WB, WHITE, WK, WN, WP, WQ, WR, MAX_DEPTH},
-    lookups::{init_eval_masks, init_passed_isolated_bb, FILES_BOARD, RANKS_BOARD, SQ120_TO_SQ64},
-    piecesquaretable::{ENDGAME_PST, MIDGAME_PST},
+    definitions::{BB, BLACK, BN, BP, BQ, BR, WB, WHITE, WN, WP, WQ, WR, MAX_DEPTH},
+    lookups::{init_eval_masks, init_passed_isolated_bb, rank, file}, opt,
 };
 
 // These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
@@ -233,7 +232,7 @@ impl<'a> MoveCounter<'a> {
 }
 
 impl<'a> MoveConsumer for MoveCounter<'a> {
-    const DO_PAWN_MOVEGEN: bool = false;
+    const MOBILITY_MODE: bool = true;
 
     fn push(&mut self, m: Move, _score: i32) {
         let moved_piece = self.board.moved_piece(m);
@@ -251,7 +250,7 @@ impl Board {
     pub fn evaluate(&mut self) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-        if self.pawns[BOTH as usize] == 0 && self.is_material_draw() {
+        if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE {
                 DRAW_SCORE
             } else {
@@ -263,9 +262,11 @@ impl Board {
         let midgame_material = self.mg_material[WHITE as usize] - self.mg_material[BLACK as usize];
         let endgame_material = self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
         let material = lerp(midgame_material, endgame_material, game_phase);
-        let pst_val = self.pst_value(game_phase);
+        let midgame_pst = self.pst_vals[0];
+        let endgame_pst = self.pst_vals[1];
+        let pst = lerp(midgame_pst, endgame_pst, game_phase);
 
-        let mut score = material + pst_val;
+        let mut score = material + pst;
 
         // if the score is already outwith a threshold, we can stop here.
         if score.abs() > LAZY_THRESHOLD_1 {
@@ -282,7 +283,7 @@ impl Board {
         let king_safety_val = self.pawn_shield_term(game_phase);
         let rook_open_file_val = self.rook_open_file_term(game_phase);
         let queen_open_file_val = self.queen_open_file_term(game_phase);
-        let tempo_val = lerp(20, 10, game_phase);
+        let tempo_val = tempo_bonus(game_phase);
 
         score += pawn_val;
         score += bishop_pair_val;
@@ -383,13 +384,6 @@ impl Board {
         self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
     }
 
-    fn pst_value(&self, phase: i32) -> i32 {
-        #![allow(clippy::similar_names)]
-        let mg_val = self.pst_vals[0];
-        let eg_val = self.pst_vals[1];
-        lerp(mg_val, eg_val, phase)
-    }
-
     const fn bishop_pair_term(&self) -> i32 {
         let w_count = self.num(WB);
         let b_count = self.num(BB);
@@ -408,8 +402,8 @@ impl Board {
     fn pawn_shield_term(&self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-        let white_kingloc = self.king_sq[WHITE as usize];
-        let black_kingloc = self.king_sq[BLACK as usize];
+        let white_kingloc = self.king_sq(WHITE);
+        let black_kingloc = self.king_sq(BLACK);
 
         let mut white_shield = 0;
         for loc in white_kingloc + 9..=white_kingloc + 11 {
@@ -432,28 +426,26 @@ impl Board {
     fn pawn_structure_term(&self) -> i32 {
         static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = 0;
-        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
+        let (white_pawns, black_pawns) = (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(white_pawn_loc as usize) as usize };
-            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & white_pawns == 0 {
+            if unsafe { *ISOLATED_BB.get_unchecked(white_pawn_loc as usize) } & white_pawns == 0 {
                 w_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if unsafe { *WHITE_PASSED_BB.get_unchecked(sq64) } & black_pawns == 0 {
-                let rank = unsafe { *RANKS_BOARD.get_unchecked(white_pawn_loc as usize) } as usize;
+            if unsafe { *WHITE_PASSED_BB.get_unchecked(white_pawn_loc as usize) } & black_pawns == 0 {
+                let rank = rank(white_pawn_loc) as usize;
                 w_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(rank) };
             }
         }
 
         let mut b_score = 0;
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-            let sq64 = unsafe { *SQ120_TO_SQ64.get_unchecked(black_pawn_loc as usize) } as usize;
-            if unsafe { *ISOLATED_BB.get_unchecked(sq64) } & black_pawns == 0 {
+            if unsafe { *ISOLATED_BB.get_unchecked(black_pawn_loc as usize) } & black_pawns == 0 {
                 b_score -= ISOLATED_PAWN_MALUS;
             }
 
-            if unsafe { *BLACK_PASSED_BB.get_unchecked(sq64) } & white_pawns == 0 {
-                let rank = unsafe { *RANKS_BOARD.get_unchecked(black_pawn_loc as usize) } as usize;
+            if unsafe { *BLACK_PASSED_BB.get_unchecked(black_pawn_loc as usize) } & white_pawns == 0 {
+                let rank = rank(black_pawn_loc) as usize;
                 b_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(7 - rank) };
             }
         }
@@ -472,20 +464,24 @@ impl Board {
 
     fn is_file_open(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = self.pawns[BOTH as usize];
+        let pawns = self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
         (mask & pawns) == 0
     }
 
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = self.pawns[SIDE as usize];
+        let pawns = if SIDE == WHITE {
+            self.pieces.pawns::<true>()
+        } else {
+            self.pieces.pawns::<false>()
+        };
         (mask & pawns) == 0
     }
 
     fn rook_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &rook_sq in self.piece_lists[WR as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            let file = file(rook_sq);
             if self.is_file_open(file) {
                 score += ROOK_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -493,7 +489,7 @@ impl Board {
             }
         }
         for &rook_sq in self.piece_lists[BR as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+            let file = file(rook_sq);
             if self.is_file_open(file) {
                 score -= ROOK_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -506,7 +502,7 @@ impl Board {
     fn queen_open_file_term(&self, phase: i32) -> i32 {
         let mut score = 0;
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            let file = file(queen_sq);
             if self.is_file_open(file) {
                 score += QUEEN_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -514,7 +510,7 @@ impl Board {
             }
         }
         for &queen_sq in self.piece_lists[BQ as usize].iter() {
-            let file = unsafe { *FILES_BOARD.get_unchecked(queen_sq as usize) };
+            let file = file(queen_sq);
             if self.is_file_open(file) {
                 score -= QUEEN_OPEN_FILE_BONUS;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -534,32 +530,6 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
-    pub fn generate_pst_value(&self) -> (i32, i32) {
-        #![allow(clippy::needless_range_loop, clippy::similar_names)]
-        let mut mg_pst_val = 0;
-        let mut eg_pst_val = 0;
-        for piece in (WP as usize)..=(WK as usize) {
-            for &sq in self.piece_lists[piece].iter() {
-                let mg = MIDGAME_PST[piece][sq as usize];
-                let eg = ENDGAME_PST[piece][sq as usize];
-                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
-                mg_pst_val += mg;
-                eg_pst_val += eg;
-            }
-        }
-
-        for piece in (BP as usize)..=(BK as usize) {
-            for &sq in self.piece_lists[piece].iter() {
-                let mg = MIDGAME_PST[piece][sq as usize];
-                let eg = ENDGAME_PST[piece][sq as usize];
-                // println!("adding {} for {} at {}", mg, PIECE_NAMES[piece], SQUARE_NAMES[SQ120_TO_SQ64[sq as usize] as usize]);
-                mg_pst_val += mg;
-                eg_pst_val += eg;
-            }
-        }
-        (mg_pst_val, eg_pst_val)
-    }
-
     fn mobility(&mut self, phase: i32) -> i32 {
         #![allow(clippy::cast_possible_truncation)]
         let is_check = self.in_check::<{ Self::US }>();
@@ -567,7 +537,7 @@ impl Board {
             match self.side {
                 WHITE => return -50,
                 BLACK => return 50,
-                _ => unsafe { std::hint::unreachable_unchecked() },
+                _ => unsafe { opt::impossible!() },
             }
         }
 
@@ -602,9 +572,11 @@ impl Board {
             let endgame_material =
                 self.eg_material[WHITE as usize] - self.eg_material[BLACK as usize];
             let material = lerp(midgame_material, endgame_material, game_phase);
-            let pst_val = self.pst_value(game_phase);
+            let midgame_pst = self.pst_vals[0];
+            let endgame_pst = self.pst_vals[1];
+            let pst = lerp(midgame_pst, endgame_pst, game_phase);
 
-            material + pst_val
+            material + pst
         };
         let bishop_pair = {
             let w_count = self.num(WB);
@@ -613,20 +585,18 @@ impl Board {
             let blackbp = b_count == 2;
             i32::from(whitebp) - i32::from(blackbp)
         };
-        let (white_pawns, black_pawns) = (self.pawns[WHITE as usize], self.pawns[BLACK as usize]);
+        let (white_pawns, black_pawns) = (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         let passed_pawns_by_rank = {
             let mut passed_pawns_by_rank = [0; 8];
             for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
-                if WHITE_PASSED_BB[sq64] & black_pawns == 0 {
-                    let rank = RANKS_BOARD[white_pawn_loc as usize] as usize;
+                if WHITE_PASSED_BB[white_pawn_loc as usize] & black_pawns == 0 {
+                    let rank = rank(white_pawn_loc) as usize;
                     passed_pawns_by_rank[rank] += 1;
                 }
             }
             for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
-                if BLACK_PASSED_BB[sq64] & white_pawns == 0 {
-                    let rank = RANKS_BOARD[black_pawn_loc as usize] as usize;
+                if BLACK_PASSED_BB[black_pawn_loc as usize] & white_pawns == 0 {
+                    let rank = rank(black_pawn_loc) as usize;
                     passed_pawns_by_rank[7 - rank] -= 1;
                 }
             }
@@ -635,14 +605,12 @@ impl Board {
         let isolated_pawns = {
             let mut isolated = 0;
             for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[white_pawn_loc as usize] as usize;
-                if ISOLATED_BB[sq64] & white_pawns == 0 {
+                if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
                     isolated += 1;
                 }
             }
             for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-                let sq64 = SQ120_TO_SQ64[black_pawn_loc as usize] as usize;
-                if ISOLATED_BB[sq64] & black_pawns == 0 {
+                if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
                     isolated -= 1;
                 }
             }
@@ -687,8 +655,8 @@ impl Board {
         let king_mobility = wh_king_mob - bl_king_mob;
 
         let pawn_shield = {
-            let white_kingloc = self.king_sq[WHITE as usize];
-            let black_kingloc = self.king_sq[BLACK as usize];
+            let white_kingloc = self.king_sq(WHITE);
+            let black_kingloc = self.king_sq(BLACK);
 
             let mut white_shield = 0;
             for loc in white_kingloc + 9..=white_kingloc + 11 {
@@ -710,7 +678,7 @@ impl Board {
             let mut open_rooks = 0;
             let mut half_open_rooks = 0;
             for &rook_sq in self.piece_lists[WR as usize].iter() {
-                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                let file = file(rook_sq);
                 if self.is_file_open(file) {
                     open_rooks += 1;
                 } else if self.is_file_halfopen::<WHITE>(file) {
@@ -718,7 +686,7 @@ impl Board {
                 }
             }
             for &rook_sq in self.piece_lists[BR as usize].iter() {
-                let file = unsafe { *FILES_BOARD.get_unchecked(rook_sq as usize) };
+                let file = file(rook_sq);
                 if self.is_file_open(file) {
                     open_rooks -= 1;
                 } else if self.is_file_halfopen::<BLACK>(file) {
@@ -749,15 +717,66 @@ impl Board {
     }
 }
 
+fn tempo_bonus(game_phase: i32) -> i32 {
+    lerp(20, 10, game_phase)
+}
+
 mod tests {
     #[test]
     fn unwinnable() {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
+        crate::magic::initialise();
         let mut board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate();
         assert!(
-            eval.abs() <= 1,
-            "eval is not a draw score ({eval} != 0cp) in a position unwinnable for both sides."
+            eval.abs() == 0,
+            "eval is not a draw score ({eval}cp != 0cp) in a position unwinnable for both sides."
         );
+    }
+
+    #[test]
+    fn turn_equality() {
+        const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
+        crate::magic::initialise();
+        let mut board1 = super::Board::from_fen(FEN1).unwrap();
+        let mut board2 = super::Board::from_fen(FEN2).unwrap();
+        let eval1 = board1.evaluate();
+        let eval2 = board2.evaluate();
+        assert_eq!(eval1, -eval2);
+    }
+
+    #[test]
+    fn startpos_mobility_equality() {
+        let mut board = super::Board::default();
+        assert_eq!(board.mobility(0), 0);
+    }
+
+    #[test]
+    fn startpos_eval_equality() {
+        use crate::board::evaluation::tempo_bonus;
+        let mut board = super::Board::default();
+        assert_eq!(board.evaluate() - tempo_bonus(board.phase()), 0);
+    }
+
+    #[test]
+    fn startpos_pawn_structure_equality() {
+        let board = super::Board::default();
+        assert_eq!(board.pawn_structure_term(), 0);
+    }
+
+    #[test]
+    fn startpos_pawn_shield_equality() {
+        let board = super::Board::default();
+        assert_eq!(board.pawn_shield_term(board.phase()), 0);
+    }
+
+    #[test]
+    fn startpos_open_file_equality() {
+        let board = super::Board::default();
+        let phase = board.phase();
+        let rook_points = board.rook_open_file_term(phase);
+        let queen_points = board.queen_open_file_term(phase);
+        assert_eq!(rook_points + queen_points, 0);
     }
 }

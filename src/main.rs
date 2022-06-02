@@ -1,10 +1,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::if_not_else)]
 
-use board::movegen::bitboards::print_bb;
-use definitions::Square64;
+#[macro_use]
+mod opt;
 
-mod attack;
 mod board;
 mod chessmove;
 mod definitions;
@@ -32,7 +31,7 @@ fn main() {
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
 
-    // uci::main_loop();
+    uci::main_loop();
 
     // tuning::annotate_positions("chessData.csv", "TRAINING_DATA.csv", 1_000_000, 4);
     // perft::gamut();

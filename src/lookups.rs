@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{definitions::{
-    Colour, File, Rank, Square120, BK, BOARD_N_SQUARES, FILE_A, FILE_H, RANK_1, RANK_8, WP,
+    BK, FILE_A, FILE_H, RANK_1, RANK_8, WP, KNIGHT, KING, square_distance,
 }, rng::XorShiftState};
 
 macro_rules! cfor {
@@ -18,43 +18,14 @@ macro_rules! cfor {
 }
 
 pub const fn filerank_to_square(f: u8, r: u8) -> u8 {
-    21 + f + (r * 10)
+    f + r * 8
 }
 
-pub const fn init_sq120_to_sq64() -> ([u8; BOARD_N_SQUARES], [u8; 64]) {
-    let mut sq120_to_sq64 = [0; BOARD_N_SQUARES];
-    let mut index = 0;
-    while index < BOARD_N_SQUARES {
-        sq120_to_sq64[index] = 65;
-        index += 1;
-    }
-    let mut sq64_to_sq120 = [0; 64];
-    let mut index = 0;
-    while index < 64 {
-        sq64_to_sq120[index] = 120;
-        index += 1;
-    }
-    let mut sq64 = 0;
-    let mut rank = Rank::Rank1 as u8;
-    while rank <= Rank::Rank8 as u8 {
-        let mut file = File::FileA as u8;
-        while file <= File::FileH as u8 {
-            let sq = filerank_to_square(file, rank);
-            sq64_to_sq120[sq64] = sq as u8;
-            sq120_to_sq64[sq as usize] = sq64 as u8;
-            sq64 += 1;
-            file += 1;
-        }
-        rank += 1;
-    }
-    (sq120_to_sq64, sq64_to_sq120)
-}
-
-const fn init_hash_keys() -> ([[u64; 120]; 13], [u64; 16], u64) {
+const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
     let mut state = XorShiftState::new();
-    let mut piece_keys = [[0; 120]; 13];
+    let mut piece_keys = [[0; 64]; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
-        cfor!(let mut sq = 0; sq < 120; sq += 1; {
+        cfor!(let mut sq = 0; sq < 64; sq += 1; {
             let key;
             (key, state) = state.next_self();
             piece_keys[index][sq] = key;
@@ -97,8 +68,6 @@ pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
 pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
     #![allow(clippy::cast_possible_wrap)]
     const _FILE_BB: [u64; 8] = init_eval_masks().1;
-    const _FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
-    const _SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
     let mut white_passed_bb = [0; 64];
     let mut black_passed_bb = [0; 64];
     let mut isolated_bb = [0; 64];
@@ -117,8 +86,8 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
             t_sq -= 8;
         }
 
-        if _FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] > FILE_A {
-            isolated_bb[sq] |= _FILE_BB[_FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] as usize - 1];
+        if file(sq as u8) > FILE_A {
+            isolated_bb[sq] |= _FILE_BB[file(sq as u8) as usize - 1];
 
             t_sq = sq as isize + 7;
             while t_sq < 64 {
@@ -133,8 +102,8 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
             }
         }
 
-        if _FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] < FILE_H {
-            isolated_bb[sq] |= _FILE_BB[_FILES_BOARD[_SQ64_TO_SQ120[sq] as usize] as usize + 1];
+        if file(sq as u8) < FILE_H {
+            isolated_bb[sq] |= _FILE_BB[file(sq as u8) as usize + 1];
 
             t_sq = sq as isize + 9;
             while t_sq < 64 {
@@ -155,27 +124,7 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
     (white_passed_bb, black_passed_bb, isolated_bb)
 }
 
-pub const fn files_ranks() -> ([u8; BOARD_N_SQUARES], [u8; BOARD_N_SQUARES]) {
-    let mut files = [0; BOARD_N_SQUARES];
-    let mut ranks = [0; BOARD_N_SQUARES];
-    cfor!(let mut index = 0; index < BOARD_N_SQUARES; index += 1; {
-        files[index] = Square120::OffBoard as u8;
-        ranks[index] = Square120::OffBoard as u8;
-    });
-    cfor!(let mut rank = Rank::Rank1 as u8; rank <= Rank::Rank8 as u8; rank += 1; {
-        cfor!(let mut file = File::FileA as u8; file <= File::FileH as u8; file += 1; {
-            let sq = filerank_to_square(file, rank);
-            files[sq as usize] = file;
-            ranks[sq as usize] = rank;
-        });
-    });
-    (files, ranks)
-}
-
-pub static SQ120_TO_SQ64: [u8; BOARD_N_SQUARES] = init_sq120_to_sq64().0;
-pub static SQ64_TO_SQ120: [u8; 64] = init_sq120_to_sq64().1;
-
-pub static PIECE_KEYS: [[u64; 120]; 13] = init_hash_keys().0;
+pub static PIECE_KEYS: [[u64; 64]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
 
@@ -192,27 +141,10 @@ pub static PIECE_MIN: [bool; 13] = [
     false, false, true, true, false, false, false, false, true, true, false, false, false,
 ];
 
-/// The colour of a piece.
-pub static PIECE_COL: [Colour; 13] = [
-    Colour::Both,
-    Colour::White,
-    Colour::White,
-    Colour::White,
-    Colour::White,
-    Colour::White,
-    Colour::White,
-    Colour::Black,
-    Colour::Black,
-    Colour::Black,
-    Colour::Black,
-    Colour::Black,
-    Colour::Black,
-];
-
-/// The file that this 120-indexed square is on.
-pub static FILES_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().0;
-/// The rank that this 120-indexed square is on.
-pub static RANKS_BOARD: [u8; BOARD_N_SQUARES] = files_ranks().1;
+/// The file that this square is on.
+pub const fn file(sq: u8) -> u8 { sq % 8 }
+/// The rank that this square is on.
+pub const fn rank(sq: u8) -> u8 { sq / 8 }
 
 /// The name of this 64-indexed square.
 pub static SQUARE_NAMES: [&str; 64] = [
@@ -224,13 +156,22 @@ pub static SQUARE_NAMES: [&str; 64] = [
 
 /// The name of this piece.
 #[allow(dead_code)]
-pub static PIECE_NAMES: [&str; 13] = [
+static PIECE_NAMES: [&str; 13] = [
     "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
     "rook", "queen", "king",
 ];
 
-pub static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";
+#[allow(dead_code)]
+pub fn piece_name(piece: u8) -> Option<&'static str> {
+    PIECE_NAMES.get(piece as usize).copied()
+}
+
+static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";
 pub static PROMO_CHAR_LOOKUP: [u8; 13] = *b"XXnbrqXXnbrqX";
+
+pub fn piece_char(piece: u8) -> Option<char> {
+    PIECE_CHARS.get(piece as usize).map(|&c| c as char)
+}
 
 /// The score of this piece, for MVV/LVA move ordering.
 const VICTIM_SCORE: [i32; 13] = [
@@ -254,8 +195,51 @@ const fn mvvlva_init() -> [[i32; 13]; 13] {
 /// The score of this pair of pieces, for MVV/LVA move ordering.
 pub static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
 
-mod tests {
+const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
+    let mut attacks = [0; 64];
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
+    cfor!(let mut sq = 0; sq < 64; sq += 1; {
+        let mut attacks_bb = 0;
+        cfor!(let mut idx = 0; idx < 8; idx += 1; {
+            let delta = deltas[idx];
+            #[allow(clippy::cast_possible_wrap)]
+            let attacked_sq = sq as i32 + delta;
+            #[allow(clippy::cast_sign_loss)]
+            if attacked_sq >= 0 && attacked_sq < 64 && square_distance(sq as u8, attacked_sq as u8) <= 2 {
+                attacks_bb |= 1 << attacked_sq;
+            }
+        });
+        attacks[sq] = attacks_bb;
+    });
+    attacks
+}
 
+static JUMPING_ATTACKS: [[u64; 64]; 7] = [
+    [0; 64], // no_piece
+    [0; 64], // pawn
+    init_jumping_attacks::<true>(), // knight
+    [0; 64], // bishop
+    [0; 64], // rook
+    [0; 64], // queen
+    init_jumping_attacks::<false>(), // king
+];
+
+pub fn get_jumping_piece_attack(sq: u8, piece: u8) -> u64 {
+    debug_assert!(piece < 7);
+    debug_assert!(sq < 64);
+    debug_assert!(piece == KNIGHT || piece == KING);
+    unsafe {
+        *JUMPING_ATTACKS
+            .get_unchecked(piece as usize)
+            .get_unchecked(sq as usize)
+    }
+}
+
+mod tests {
     #[test]
     fn all_piece_keys_different() {
         use crate::lookups::PIECE_KEYS;
@@ -276,5 +260,18 @@ mod tests {
         hashkeys.dedup();
         let len_after = hashkeys.len();
         assert_eq!(len_before, len_after);
+    }
+
+    #[test]
+    fn python_chess_validation() {
+        use crate::lookups::get_jumping_piece_attack;
+        use crate::definitions::{KING, KNIGHT}; 
+        // testing that the attack bitboards match the ones in the python-chess library,
+        // which are known to be correct.
+        assert_eq!(get_jumping_piece_attack(0, KNIGHT), 132_096);
+        assert_eq!(get_jumping_piece_attack(63, KNIGHT), 9_077_567_998_918_656);
+
+        assert_eq!(get_jumping_piece_attack(0, KING), 770);
+        assert_eq!(get_jumping_piece_attack(63, KING), 4_665_729_213_955_833_856);
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    definitions::{Square120, BLACK, WHITE},
-    lookups::{PIECE_NAMES, SQ64_TO_SQ120},
+    definitions::{BLACK, WHITE, A1},
+    lookups::piece_name,
 };
 
 #[rustfmt::skip]
@@ -150,10 +150,8 @@ const EG_KING_TABLE: [i32; 64] = [
 const MIDGAME: bool = false;
 const ENDGAME: bool = true;
 
-const SQ120: [u8; 64] = crate::lookups::init_sq120_to_sq64().1;
-
-const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
-    let mut out = [[0; 120]; 13];
+const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 64]; 13] {
+    let mut out = [[0; 64]; 13];
     let mut colour = WHITE;
     loop {
         let offset = if colour == BLACK { 7 } else { 1 };
@@ -169,20 +167,19 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
                 5 => (&MG_KING_TABLE, &EG_KING_TABLE),
                 _ => unreachable!(),
             };
-            let mut square64 = 0;
-            while square64 < 64 {
+            let mut pst_idx = 0;
+            while pst_idx < 64 {
                 let sq = if colour == BLACK {
-                    square64
+                    pst_idx
                 } else {
-                    square64 ^ 56
+                    pst_idx ^ 56
                 };
-                let sq120 = SQ120[sq] as usize;
-                out[pieces_idx + offset][sq120] = if MID_OR_END == ENDGAME {
-                    endgame_table[square64]
+                out[pieces_idx + offset][sq] = if MID_OR_END == ENDGAME {
+                    endgame_table[pst_idx]
                 } else {
-                    midgame_table[square64]
+                    midgame_table[pst_idx]
                 } * multiplier;
-                square64 += 1;
+                pst_idx += 1;
             }
             pieces_idx += 1;
         }
@@ -194,8 +191,8 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 120]; 13] {
     out
 }
 
-pub static MIDGAME_PST: [[i32; 120]; 13] = generate_pst::<MIDGAME>();
-pub static ENDGAME_PST: [[i32; 120]; 13] = generate_pst::<ENDGAME>();
+pub static MIDGAME_PST: [[i32; 64]; 13] = generate_pst::<MIDGAME>();
+pub static ENDGAME_PST: [[i32; 64]; 13] = generate_pst::<ENDGAME>();
 
 pub fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
     debug_assert!(crate::validate::piece_valid(piece));
@@ -217,21 +214,52 @@ pub fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
     }
 }
 
-pub fn _render_pst_table(pst: &[[i32; 120]; 13]) {
+pub fn _render_pst_table(pst: &[[i32; 64]; 13]) {
+    #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
     for piece in 0..13 {
-        println!("{}", PIECE_NAMES[piece]);
+        println!("{}", piece_name(piece as u8).unwrap());
         println!(
             "eval on a1 (bottom left) {}",
-            pst[piece][Square120::A1 as usize]
+            pst[piece][A1 as usize]
         );
         for row in (0..8).rev() {
             for col in 0..8 {
                 let sq = row * 8 + col;
-                let sq120 = SQ64_TO_SQ120[sq] as usize;
-                let pst_val = pst[piece][sq120];
+                let pst_val = pst[piece][sq];
                 print!("{:>5}", pst_val);
             }
             println!();
+        }
+    }
+}
+
+mod tests {
+    #[test]
+    fn psts_are_mirrored_properly() {
+        #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
+        use super::*;
+        use crate::definitions::square_name;
+        for white_piece in 1..7 {
+            let mg_white_pst = &MIDGAME_PST[white_piece];
+            let eg_white_pst = &ENDGAME_PST[white_piece];
+            let mg_black_pst = &MIDGAME_PST[white_piece + 6];
+            let eg_black_pst = &ENDGAME_PST[white_piece + 6];
+            for sq in 0..64 {
+                assert_eq!(
+                    mg_white_pst[sq],
+                    -mg_black_pst[sq ^ 56],
+                    "mg pst mirroring failed on square {} for piece {}",
+                    square_name(sq as u8).unwrap(),
+                    piece_name(white_piece as u8).unwrap()
+                );
+                assert_eq!(
+                    eg_white_pst[sq],
+                    -eg_black_pst[sq ^ 56],
+                    "eg pst mirroring failed on square {} for piece {}",
+                    square_name(sq as u8).unwrap(),
+                    piece_name(white_piece as u8).unwrap()
+                );
+            }
         }
     }
 }
