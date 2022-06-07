@@ -14,7 +14,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{EG_PIECE_VALUES, MG_PIECE_VALUES, ONE_PAWN},
+        evaluation::{ONE_PAWN, PIECE_VALUES},
         movegen::{
             bitboards::{
                 self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop,
@@ -46,9 +46,8 @@ use crate::{
     validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
 };
 
-use self::movegen::bitboards::BitBoard;
+use self::{evaluation::S, movegen::bitboards::BitBoard};
 
-#[derive(Clone)]
 pub struct Board {
     /// The bitboards of all the pieces on the board.
     pieces: BitBoard,
@@ -63,8 +62,7 @@ pub struct Board {
     big_piece_counts: [u8; 2],
     major_piece_counts: [u8; 2],
     minor_piece_counts: [u8; 2],
-    mg_material: [i32; 2],
-    eg_material: [i32; 2],
+    material: [S; 2],
     castle_perm: u8,
     history: Vec<Undo>,
     repetition_cache: HashSet<u64>,
@@ -77,7 +75,7 @@ pub struct Board {
     counter_move_table: [[Move; BOARD_N_SQUARES]; 13],
     tt: DefaultTT,
 
-    pst_vals: [i32; 2],
+    pst_vals: S,
 }
 
 impl PartialEq for Board {
@@ -112,8 +110,7 @@ impl Board {
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
-            mg_material: [0; 2],
-            eg_material: [0; 2],
+            material: [S(0, 0); 2],
             castle_perm: 0,
             history: Vec::with_capacity(MAX_GAME_MOVES),
             repetition_cache: HashSet::with_capacity(MAX_GAME_MOVES),
@@ -122,7 +119,7 @@ impl Board {
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH as usize],
             counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
-            pst_vals: [0; 2],
+            pst_vals: S(0, 0),
             tt: DefaultTT::new(),
         };
         out.reset();
@@ -256,8 +253,7 @@ impl Board {
         self.big_piece_counts.fill(0);
         self.major_piece_counts.fill(0);
         self.minor_piece_counts.fill(0);
-        self.mg_material.fill(0);
-        self.eg_material.fill(0);
+        self.material.fill(S(0, 0));
         self.piece_lists.iter_mut().for_each(PieceList::clear);
         self.side = Colour::Both as u8;
         self.ep_sq = NO_SQUARE;
@@ -266,7 +262,7 @@ impl Board {
         self.hist_ply = 0;
         self.castle_perm = 0;
         self.key = 0;
-        self.pst_vals.fill(0);
+        self.pst_vals = S(0, 0);
         self.history.clear();
         self.repetition_cache.clear();
     }
@@ -352,24 +348,24 @@ impl Board {
         self.set_from_fen(Self::STARTING_FEN)
             .expect("for some reason, STARTING_FEN is now broken.");
         debug_assert_eq!(
-            self.mg_material[WHITE as usize], self.mg_material[BLACK as usize],
+            self.material[WHITE as usize].0, self.material[BLACK as usize].0,
             "mg_material is not equal, white: {}, black: {}",
-            self.mg_material[WHITE as usize], self.mg_material[BLACK as usize]
+            self.material[WHITE as usize].0, self.material[BLACK as usize].0
         );
         debug_assert_eq!(
-            self.eg_material[WHITE as usize], self.eg_material[BLACK as usize],
+            self.material[WHITE as usize].1, self.material[BLACK as usize].1,
             "eg_material is not equal, white: {}, black: {}",
-            self.eg_material[WHITE as usize], self.eg_material[BLACK as usize]
+            self.material[WHITE as usize].1, self.material[BLACK as usize].1
         );
         debug_assert_eq!(
-            self.pst_vals[0], 0,
+            self.pst_vals.0, 0,
             "midgame pst value is not 0, it is: {}",
-            self.pst_vals[0]
+            self.pst_vals.0
         );
         debug_assert_eq!(
-            self.pst_vals[1], 0,
+            self.pst_vals.1, 0,
             "endgame pst value is not 0, it is: {}",
-            self.pst_vals[1]
+            self.pst_vals.1
         );
     }
 
@@ -543,8 +539,7 @@ impl Board {
         let mut big_pce = [0, 0];
         let mut maj_pce = [0, 0];
         let mut min_pce = [0, 0];
-        let mut mg_material = [0, 0];
-        let mut eg_material = [0, 0];
+        let mut material = [S(0, 0), S(0, 0)];
 
         // check piece lists
         for piece in WP..=BK {
@@ -586,8 +581,7 @@ impl Board {
             if PIECE_MIN[piece as usize] {
                 min_pce[colour as usize] += 1;
             }
-            mg_material[colour as usize] += MG_PIECE_VALUES[piece as usize];
-            eg_material[colour as usize] += EG_PIECE_VALUES[piece as usize];
+            material[colour as usize] += PIECE_VALUES[piece as usize];
         }
 
         if piece_num[1..].to_vec()
@@ -621,28 +615,28 @@ impl Board {
             }
         }
 
-        if mg_material[White as usize] != self.mg_material[White as usize] {
+        if material[White as usize].0 != self.material[White as usize].0 {
             return Err(format!(
                 "white midgame material is corrupt: expected {:?}, got {:?}",
-                mg_material[White as usize], self.mg_material[White as usize]
+                material[White as usize].0, self.material[White as usize].0
             ));
         }
-        if eg_material[White as usize] != self.eg_material[White as usize] {
+        if material[White as usize].1 != self.material[White as usize].1 {
             return Err(format!(
                 "white endgame material is corrupt: expected {:?}, got {:?}",
-                eg_material[White as usize], self.eg_material[White as usize]
+                material[White as usize].1, self.material[White as usize].1
             ));
         }
-        if mg_material[Black as usize] != self.mg_material[Black as usize] {
+        if material[Black as usize].0 != self.material[Black as usize].0 {
             return Err(format!(
                 "black midgame material is corrupt: expected {:?}, got {:?}",
-                mg_material[Black as usize], self.mg_material[Black as usize]
+                material[Black as usize].0, self.material[Black as usize].0
             ));
         }
-        if eg_material[Black as usize] != self.eg_material[Black as usize] {
+        if material[Black as usize].1 != self.material[Black as usize].1 {
             return Err(format!(
                 "black endgame material is corrupt: expected {:?}, got {:?}",
-                eg_material[Black as usize], self.eg_material[Black as usize]
+                material[Black as usize].1, self.material[Black as usize].1
             ));
         }
         if min_pce[White as usize] != self.minor_piece_counts[White as usize] {
@@ -842,10 +836,9 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = PIECE_EMPTY;
-        self.mg_material[colour as usize] -= MG_PIECE_VALUES[piece as usize];
-        self.eg_material[colour as usize] -= EG_PIECE_VALUES[piece as usize];
-        self.pst_vals[0] -= midgame_pst_value(piece, sq);
-        self.pst_vals[1] -= endgame_pst_value(piece, sq);
+        self.material[colour as usize] -= PIECE_VALUES[piece as usize];
+        self.pst_vals.0 -= midgame_pst_value(piece, sq);
+        self.pst_vals.1 -= endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -870,10 +863,9 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.mg_material[colour as usize] += MG_PIECE_VALUES[piece as usize];
-        self.eg_material[colour as usize] += EG_PIECE_VALUES[piece as usize];
-        self.pst_vals[0] += midgame_pst_value(piece, sq);
-        self.pst_vals[1] += endgame_pst_value(piece, sq);
+        self.material[colour as usize] += PIECE_VALUES[piece as usize];
+        self.pst_vals.0 += midgame_pst_value(piece, sq);
+        self.pst_vals.1 += endgame_pst_value(piece, sq);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -904,11 +896,11 @@ impl Board {
         hash_piece(&mut self.key, piece_moved, to);
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
-        self.pst_vals[0] -= midgame_pst_value(piece_moved, from);
-        self.pst_vals[1] -= endgame_pst_value(piece_moved, from);
+        self.pst_vals.0 -= midgame_pst_value(piece_moved, from);
+        self.pst_vals.1 -= endgame_pst_value(piece_moved, from);
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals[0] += midgame_pst_value(piece_moved, to);
-        self.pst_vals[1] += endgame_pst_value(piece_moved, to);
+        self.pst_vals.0 += midgame_pst_value(piece_moved, to);
+        self.pst_vals.1 += endgame_pst_value(piece_moved, to);
 
         for sq in self.piece_lists[piece_moved as usize].iter_mut() {
             if *sq == from {
@@ -1233,9 +1225,7 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
-        let mut moves = list;
-
-        moves
+        list.into_iter()
             .find(|&m| {
                 m.from() == from
                     && m.to() == to
@@ -1254,7 +1244,7 @@ impl Board {
     }
 
     /// Determines whether a given position is quiescent (no checks or captures).
-    #[allow(clippy::wrong_self_convention)]
+    #[allow(clippy::wrong_self_convention, dead_code)]
     pub fn is_quiet_position(&mut self) -> bool {
         if self.in_check::<{ Self::US }>() {
             return false;
@@ -1297,7 +1287,10 @@ impl Board {
         self.principal_variation.clear();
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.principal_variation.len() < depth.try_into().unwrap() && self.is_legal(pv_move) && !self.is_draw() {
+            if self.principal_variation.len() < depth.try_into().unwrap()
+                && self.is_legal(pv_move)
+                && !self.is_draw()
+            {
                 self.make_move(pv_move);
                 self.principal_variation.push(pv_move);
             } else {
@@ -1346,10 +1339,11 @@ impl Board {
                 if DO_PRINTOUT {
                     let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
                     print!(
-                        "info score {} {} depth {} nodes {} time {} pv ",
+                        "info score {} {} depth {} seldepth {} nodes {} time {} pv ",
                         score_string,
                         boundstr,
                         depth,
+                        info.seldepth,
                         info.nodes,
                         info.start_time.elapsed().as_millis()
                     );
@@ -1380,9 +1374,10 @@ impl Board {
 
             let score_string = format_score(most_recent_score, self.turn());
             print!(
-                "info score {} depth {} nodes {} time {} pv ",
+                "info score {} depth {} seldepth {} nodes {} time {} pv ",
                 score_string,
                 depth,
+                info.seldepth,
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
