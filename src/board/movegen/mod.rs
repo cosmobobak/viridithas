@@ -1,9 +1,9 @@
 pub mod bitboards;
 
 use self::bitboards::{
-    lsb, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE,
-    BB_RANK_2, BB_RANK_7,
+    lsb, north_east_one, north_west_one, south_east_one, south_west_one, BB_RANK_2, BB_RANK_7,
 };
+pub use self::bitboards::{BitLoop, BB_NONE};
 
 use super::Board;
 
@@ -27,6 +27,7 @@ const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const COUNTERMOVE_SCORE: i32 = 2_000_000;
+pub const TT_MOVE_SCORE: i32 = 20_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -40,7 +41,12 @@ pub struct MoveListEntry {
 pub struct MoveList {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
-    progress: usize,
+}
+
+pub struct MoveListIter {
+    moves: [MoveListEntry; MAX_POSITION_MOVES],
+    count: usize,
+    index: usize,
 }
 
 impl MoveList {
@@ -52,7 +58,6 @@ impl MoveList {
         Self {
             moves: [DEFAULT; MAX_POSITION_MOVES],
             count: 0,
-            progress: 0,
         }
     }
 
@@ -77,17 +82,30 @@ impl MoveList {
     }
 }
 
-impl Iterator for MoveList {
+impl IntoIterator for MoveList {
+    type Item = Move;
+    type IntoIter = MoveListIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MoveListIter {
+            moves: self.moves,
+            count: self.count,
+            index: 0,
+        }
+    }
+}
+
+impl Iterator for MoveListIter {
     type Item = Move;
 
     fn next(&mut self) -> Option<Move> {
-        if self.progress == self.count {
+        if self.index == self.count {
             return None;
         }
         let mut best_score = 0;
-        let mut best_num = self.progress;
+        let mut best_num = self.index;
 
-        for index in self.progress..self.count {
+        for index in self.index..self.count {
             let score = unsafe { self.moves.get_unchecked(index).score };
             if score > best_score {
                 best_score = score;
@@ -95,27 +113,17 @@ impl Iterator for MoveList {
             }
         }
 
-        debug_assert!(self.progress < self.count);
+        debug_assert!(self.index < self.count);
         debug_assert!(best_num < self.count);
-        debug_assert!(best_num >= self.progress);
+        debug_assert!(best_num >= self.index);
 
         let m = unsafe { self.moves.get_unchecked(best_num).entry };
 
-        // manual swap_unchecked implementation
         unsafe {
-            let a = self.progress;
-            #[cfg(debug_assertions)]
-            {
-                let _ = &self.moves[a];
-                let _ = &self.moves[best_num];
-            }
+            *self.moves.get_unchecked_mut(best_num) = *self.moves.get_unchecked(self.index);
+        }
 
-            let ptr = self.moves.as_mut_ptr();
-            // SAFETY: caller has to guarantee that `a < self.len()` and `b < self.len()`
-            std::ptr::swap(ptr.add(a), ptr.add(best_num));
-        };
-
-        self.progress += 1;
+        self.index += 1;
 
         Some(m)
     }
@@ -202,7 +210,7 @@ impl Board {
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
-        debug_assert!(piece_valid(m.capture()));
+        debug_assert!(piece_valid(m.capture()), "piece: {}", m);
 
         let capture = m.capture() as usize;
         let piece_moved = self.piece_at(m.from()) as usize;
@@ -360,11 +368,11 @@ impl Board {
             let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
             if SIDE == WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    self.add_capture_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    self.add_capture_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             }
         }
@@ -672,5 +680,60 @@ impl Board {
                 );
             }
         }
+    }
+
+    pub fn attackers_mask(&self, sq: u8, side: u8, blockers: u64) -> u64 {
+        let mut attackers = 0;
+        if side == WHITE {
+            let our_pawns = self.pieces.pawns::<true>();
+            let west_attacks = north_west_one(our_pawns);
+            let east_attacks = north_east_one(our_pawns);
+            let pawn_attacks = west_attacks | east_attacks;
+            attackers |= pawn_attacks;
+        } else {
+            let our_pawns = self.pieces.pawns::<false>();
+            let west_attacks = south_west_one(our_pawns);
+            let east_attacks = south_east_one(our_pawns);
+            let pawn_attacks = west_attacks | east_attacks;
+            attackers |= pawn_attacks;
+        }
+
+        let our_knights = if side == WHITE {
+            self.pieces.knights::<true>()
+        } else {
+            self.pieces.knights::<false>()
+        };
+
+        let knight_attacks = bitboards::attacks::<KNIGHT>(sq, BB_NONE) & our_knights;
+        attackers |= knight_attacks;
+
+        let our_diag_pieces = if side == WHITE {
+            self.pieces.bishopqueen::<true>()
+        } else {
+            self.pieces.bishopqueen::<false>()
+        };
+
+        let diag_attacks = bitboards::attacks::<BISHOP>(sq, blockers) & our_diag_pieces;
+        attackers |= diag_attacks;
+
+        let our_orth_pieces = if side == WHITE {
+            self.pieces.rookqueen::<true>()
+        } else {
+            self.pieces.rookqueen::<false>()
+        };
+
+        let orth_attacks = bitboards::attacks::<ROOK>(sq, blockers) & our_orth_pieces;
+        attackers |= orth_attacks;
+
+        let our_king = if side == WHITE {
+            self.pieces.king::<true>()
+        } else {
+            self.pieces.king::<false>()
+        };
+
+        let king_attacks = bitboards::attacks::<KING>(sq, BB_NONE) & our_king;
+        attackers |= king_attacks;
+
+        attackers
     }
 }
