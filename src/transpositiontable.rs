@@ -8,6 +8,7 @@ use crate::{
     board::evaluation::IS_MATE_SCORE,
     chessmove::Move,
     definitions::{INFINITY, MAX_DEPTH},
+    opt,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +24,7 @@ pub struct TTEntry {
     pub key: u64,
     pub m: Move,
     pub score: i32,
-    pub depth: i32,
+    pub depth: i16,
     pub flag: HFlag,
 }
 
@@ -37,10 +38,23 @@ impl TTEntry {
     };
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Bucket {
+    pub depth_preferred: TTEntry,
+    pub always_replace: TTEntry,
+}
+
+impl Bucket {
+    pub const NULL: Self = Self {
+        depth_preferred: TTEntry::NULL,
+        always_replace: TTEntry::NULL,
+    };
+}
+
 const TASTY_PRIME_NUMBER: usize = 12_582_917;
 
 const MEGABYTE: usize = 1024 * 1024;
-const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
+const TT_ENTRY_SIZE: usize = std::mem::size_of::<Bucket>();
 
 /// One option is to use 4MB of memory for the hashtable,
 /// as my i5 has 6mb of L3 cache, so this endeavours to keep the
@@ -56,16 +70,12 @@ pub const PRIME_TABLE_SIZE: usize = TASTY_PRIME_NUMBER;
 
 pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
 
-#[derive(Debug, Clone)]
-pub struct TranspositionTable<const SIZE: usize, const REPLACEMENT_STRATEGY: u8> {
-    table: Vec<TTEntry>,
-    cutoffs: u64,
-    new_writes: u64,
-    overwrites: u64,
-    hits: u64,
+#[derive(Debug)]
+pub struct TranspositionTable<const SIZE: usize> {
+    table: Vec<Bucket>,
 }
 
-pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE, DEPTH_PREFERRED>;
+pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE>;
 
 pub enum ProbeResult {
     Cutoff(i32),
@@ -73,24 +83,15 @@ pub enum ProbeResult {
     Nothing,
 }
 
-pub const ALWAYS_OVERWRITE: u8 = 0;
-pub const DEPTH_PREFERRED: u8 = 1;
-
-impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
-    TranspositionTable<SIZE, REPLACEMENT_STRATEGY>
-{
+impl<const SIZE: usize> TranspositionTable<SIZE> {
     pub fn new() -> Self {
         Self {
-            table: vec![TTEntry::NULL; SIZE],
-            cutoffs: 0,
-            new_writes: 0,
-            overwrites: 0,
-            hits: 0,
+            table: vec![Bucket::NULL; SIZE],
         }
     }
 
     pub fn clear(&mut self) {
-        self.table.fill(TTEntry::NULL);
+        self.table.fill(Bucket::NULL);
     }
 
     pub fn store(
@@ -108,12 +109,6 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
 
-        if self.table[index].key == 0 {
-            self.new_writes += 1;
-        } else {
-            self.overwrites += 1;
-        }
-
         let mut score = score;
         if score > IS_MATE_SCORE {
             score += ply as i32;
@@ -121,26 +116,20 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
             score -= ply as i32;
         }
 
-        if REPLACEMENT_STRATEGY == ALWAYS_OVERWRITE {
-            self.table[index] = TTEntry {
-                key,
-                m: best_move,
-                score,
-                depth,
-                flag,
-            };
-        } else if REPLACEMENT_STRATEGY == DEPTH_PREFERRED {
-            if depth >= self.table[index].depth {
-                self.table[index] = TTEntry {
-                    key,
-                    m: best_move,
-                    score,
-                    depth,
-                    flag,
-                };
-            }
+        let slot = &mut self.table[index];
+
+        let entry = TTEntry {
+            key,
+            m: best_move,
+            score,
+            depth: depth.try_into().unwrap(),
+            flag,
+        };
+
+        if depth >= i32::from(slot.depth_preferred.depth) {
+            slot.depth_preferred = entry;
         } else {
-            panic!("Unknown strategy");
+            slot.always_replace = entry;
         }
     }
 
@@ -160,14 +149,16 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
         debug_assert!(beta >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
 
-        let entry = &self.table[index];
+        let slot = &self.table[index];
+        let e1 = &slot.depth_preferred;
+        let e2 = &slot.always_replace;
 
-        if entry.key == key {
+        if e1.key == key || e2.key == key {
+            let entry = if e1.key == key { e1 } else { e2 };
             let m = entry.m;
-            if entry.depth >= depth {
-                self.hits += 1;
-
-                debug_assert!(entry.depth >= 1 && entry.depth <= MAX_DEPTH);
+            let e_depth = i32::from(entry.depth);
+            if e_depth >= depth {
+                debug_assert!((1..=MAX_DEPTH).contains(&e_depth));
 
                 // we can't store the score in a tagged union,
                 // because we need to do mate score preprocessing.
@@ -180,23 +171,18 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
 
                 debug_assert!(score >= -INFINITY);
                 match entry.flag {
-                    HFlag::None => unreachable!(),
+                    HFlag::None => unsafe { opt::impossible!() },
                     HFlag::Alpha => {
                         if score <= alpha {
-                            score = alpha;
-                            self.cutoffs += 1;
-                            return ProbeResult::Cutoff(score);
+                            return ProbeResult::Cutoff(alpha);
                         }
                     }
                     HFlag::Beta => {
                         if score >= beta {
-                            score = beta;
-                            self.cutoffs += 1;
-                            return ProbeResult::Cutoff(score);
+                            return ProbeResult::Cutoff(beta);
                         }
                     }
                     HFlag::Exact => {
-                        self.cutoffs += 1;
                         return ProbeResult::Cutoff(score);
                     }
                 }
@@ -208,8 +194,6 @@ impl<const SIZE: usize, const REPLACEMENT_STRATEGY: u8>
     }
 
     pub fn clear_for_search(&mut self) {
-        self.overwrites = 0;
-        self.hits = 0;
-        self.cutoffs = 0;
+        let _ = self;
     }
 }
