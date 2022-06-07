@@ -1,8 +1,8 @@
-
 use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{DRAW_SCORE, MATE_SCORE, ONE_PAWN},
+        movegen::TT_MOVE_SCORE,
         Board,
     },
     chessmove::Move,
@@ -35,13 +35,18 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         }
     }
 
+    let height: i32 = pos.ply().try_into().unwrap();
     info.nodes += 1;
+    info.seldepth = info.seldepth.max(height);
 
+    // check draw
     if pos.is_draw() {
-        return DRAW_SCORE;
+        // score fuzzing apparently helps with threefolds.
+        return (1 - (info.nodes & 2)).try_into().unwrap();
     }
 
-    if pos.ply() > MAX_DEPTH as usize - 1 {
+    // are we too deep?
+    if height > MAX_DEPTH - 1 {
         return pos.evaluate();
     }
 
@@ -152,14 +157,31 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
         info.check_up();
     }
 
+    let height: i32 = pos.ply().try_into().unwrap();
+
+    let root_node = height == 0;
+
     info.nodes += 1;
+    info.seldepth = if root_node { 0 } else { info.seldepth.max(height) };
 
-    if pos.is_draw() {
-        return DRAW_SCORE;
-    }
+    if !root_node {
+        // check draw
+        if pos.is_draw() {
+            // score fuzzing apparently helps with threefolds.
+            return (1 - (info.nodes & 2)).try_into().unwrap();
+        }
 
-    if pos.ply() > MAX_DEPTH as usize - 1 {
-        return pos.evaluate();
+        // are we too deep?
+        if height > MAX_DEPTH - 1 {
+            return pos.evaluate();
+        }
+
+        // mate-distance pruning.
+        // doesn't actually add strength, but it makes viri better at solving puzzles.
+        // approach taken from Ethereal.
+        let r_alpha = if alpha > -MATE_SCORE + height     { alpha } else { -MATE_SCORE + height };
+        let r_beta  = if  beta <  MATE_SCORE - height - 1 {  beta } else {  MATE_SCORE - height - 1 };
+        if r_alpha >= r_beta {return r_alpha; }
     }
 
     let in_pv = beta - alpha > 1;
@@ -201,7 +223,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
 
     if let Some(pv_move) = pv_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(pv_move) {
-            movelist_entry.score = 20_000_000;
+            movelist_entry.score = TT_MOVE_SCORE;
         }
     }
 
@@ -284,7 +306,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
                         // // this is a countermove.
                         pos.insert_countermove(m);
                         // // double-strength history heuristic :3
-                        // pos.add_history(m, 2 * history_score);
+                        pos.add_history(m, 2 * history_score);
                     }
 
                     pos.tt_store(best_move, beta, HFlag::Beta, depth);

@@ -20,8 +20,12 @@ pub struct SearchInfo<'a> {
     /// Signal to stop the search.
     pub stopped: bool,
 
+    /// The number of fail-highs found (beta cutoffs).
     pub failhigh: f32,
+    /// The number of fail-highs that occured on the first move searched.
     pub failhigh_first: f32,
+    /// The highest depth reached (selective depth).
+    pub seldepth: i32,
 
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
@@ -41,6 +45,7 @@ impl Default for SearchInfo<'_> {
             stopped: false,
             failhigh: 0.0,
             failhigh_first: 0.0,
+            seldepth: 0,
             stdin_rx: None,
         }
     }
