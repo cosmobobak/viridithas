@@ -1,4 +1,4 @@
-use crate::{rng::XorShiftState, opt};
+use crate::{opt, rng::XorShiftState};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {

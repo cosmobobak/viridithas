@@ -16,18 +16,18 @@ mod piecesquaretable;
 mod search;
 mod searchinfo;
 mod transpositiontable;
-mod tuning;
+// mod tuning;
+mod magic;
+mod rng;
 mod uci;
 mod validate;
-mod rng;
-mod magic;
 
 pub const NAME: &str = "Viridithas 2.1.0dev";
 
 fn main() {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
-    
+
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
 

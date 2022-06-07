@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 
-use crate::{definitions::{PAWN, BISHOP, ROOK, QUEEN, KING, KNIGHT, colour_of, WHITE, type_of, WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK, BLACK}, magic, lookups, opt};
+use crate::{
+    definitions::{
+        colour_of, type_of, BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK,
+        WB, WHITE, WK, WN, WP, WQ, WR,
+    },
+    lookups, magic, opt,
+};
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
 pub const BB_RANK_2: u64 = 0x0000_0000_0000_FF00;
@@ -43,13 +49,19 @@ pub struct BitLoop<Output = u64> {
 
 impl BitLoop<u64> {
     pub const fn new(value: u64) -> Self {
-        Self { value, phantom: std::marker::PhantomData }
+        Self {
+            value,
+            phantom: std::marker::PhantomData,
+        }
     }
 }
 
 impl BitLoop<u8> {
     pub const fn new(value: u64) -> Self {
-        Self { value, phantom: std::marker::PhantomData }
+        Self {
+            value,
+            phantom: std::marker::PhantomData,
+        }
     }
 }
 
@@ -61,9 +73,9 @@ impl Iterator for BitLoop<u64> {
             None
         } else {
             // faster if we have bmi (maybe)
-            let lsb = lsb(self.value);
+            let lsb = self.value.trailing_zeros();
             self.value ^= 1 << lsb;
-            Some(lsb)
+            Some(lsb.into())
         }
     }
 }
@@ -76,7 +88,7 @@ impl Iterator for BitLoop<u8> {
             None
         } else {
             // faster if we have bmi (maybe)
-            let lsb: u8 = unsafe { lsb(self.value).try_into().unwrap_unchecked() };
+            let lsb: u8 = unsafe { self.value.trailing_zeros().try_into().unwrap_unchecked() };
             self.value ^= 1 << lsb;
             Some(lsb)
         }
@@ -422,10 +434,18 @@ impl BitBoard {
     }
 }
 
-pub const fn north_east_one(b: u64) -> u64 { (b << 9) & !BB_FILE_A }
-pub const fn south_east_one(b: u64) -> u64 { (b >> 7) & !BB_FILE_A }
-pub const fn south_west_one(b: u64) -> u64 { (b >> 9) & !BB_FILE_H }
-pub const fn north_west_one(b: u64) -> u64 { (b << 7) & !BB_FILE_H }
+pub const fn north_east_one(b: u64) -> u64 {
+    (b << 9) & !BB_FILE_A
+}
+pub const fn south_east_one(b: u64) -> u64 {
+    (b >> 7) & !BB_FILE_A
+}
+pub const fn south_west_one(b: u64) -> u64 {
+    (b >> 9) & !BB_FILE_H
+}
+pub const fn north_west_one(b: u64) -> u64 {
+    (b << 7) & !BB_FILE_H
+}
 
 pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
     debug_assert!(PIECE_TYPE != PAWN);

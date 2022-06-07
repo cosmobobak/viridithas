@@ -63,8 +63,8 @@ mod tests {
 
     #[test]
     fn perft_hard_position() {
-        use crate::board::movegen::MoveVecWrapper;
         use super::*;
+        use crate::board::movegen::MoveVecWrapper;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         let mut pos = Board::new();
@@ -88,8 +88,8 @@ mod tests {
 
     #[test]
     fn perft_start_position() {
-        use crate::board::movegen::MoveVecWrapper;
         use super::*;
+        use crate::board::movegen::MoveVecWrapper;
         let mut pos = Board::new();
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
@@ -111,8 +111,8 @@ mod tests {
 
     #[test]
     fn perft_krk() {
-        use crate::board::movegen::MoveVecWrapper;
         use super::*;
+        use crate::board::movegen::MoveVecWrapper;
         let mut pos = Board::new();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {

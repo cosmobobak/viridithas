@@ -1,6 +1,7 @@
 use crate::{
-    definitions::{BLACK, WHITE, A1},
+    definitions::{A1, BLACK, WHITE},
     lookups::piece_name,
+    opt,
 };
 
 #[rustfmt::skip]
@@ -165,7 +166,7 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 64]; 13] {
                 3 => (&MG_ROOK_TABLE, &EG_ROOK_TABLE),
                 4 => (&MG_QUEEN_TABLE, &EG_QUEEN_TABLE),
                 5 => (&MG_KING_TABLE, &EG_KING_TABLE),
-                _ => unreachable!(),
+                _ => unsafe { opt::impossible!() },
             };
             let mut pst_idx = 0;
             while pst_idx < 64 {
@@ -218,10 +219,7 @@ pub fn _render_pst_table(pst: &[[i32; 64]; 13]) {
     #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
     for piece in 0..13 {
         println!("{}", piece_name(piece as u8).unwrap());
-        println!(
-            "eval on a1 (bottom left) {}",
-            pst[piece][A1 as usize]
-        );
+        println!("eval on a1 (bottom left) {}", pst[piece][A1 as usize]);
         for row in (0..8).rev() {
             for col in 0..8 {
                 let sq = row * 8 + col;

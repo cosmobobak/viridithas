@@ -3,7 +3,8 @@
 use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
-    lookups::{SQUARE_NAMES, rank, file}, opt,
+    lookups::{file, rank, SQUARE_NAMES},
+    opt,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -77,10 +78,7 @@ pub const fn u8max(a: u8, b: u8) -> u8 {
 }
 
 pub const fn square_distance(a: u8, b: u8) -> u8 {
-    u8max(
-        file(a).abs_diff(file(b)),
-        rank(a).abs_diff(rank(b)),
-    )
+    u8max(file(a).abs_diff(file(b)), rank(a).abs_diff(rank(b)))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -1,4 +1,3 @@
-
 const SEED: u128 = 0x246C_CB2D_3B40_2853_9918_0A6D_BC3A_F444;
 pub struct XorShiftState {
     pub state: u128,
@@ -6,9 +5,7 @@ pub struct XorShiftState {
 
 impl XorShiftState {
     pub const fn new() -> Self {
-        Self {
-            state: SEED,
-        }
+        Self { state: SEED }
     }
 
     /// Generates the next random number in the sequence, consuming self

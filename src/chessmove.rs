@@ -1,9 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::{
-    definitions::square_name,
-    lookups::PROMO_CHAR_LOOKUP,
-};
+use crate::{definitions::square_name, lookups::PROMO_CHAR_LOOKUP};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {

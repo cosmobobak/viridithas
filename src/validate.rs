@@ -1,4 +1,4 @@
-use crate::definitions::{BK, WP, PAWN, KING};
+use crate::definitions::{BK, KING, PAWN, WP};
 
 pub const fn square_on_board(sq: u8) -> bool {
     sq < 64
