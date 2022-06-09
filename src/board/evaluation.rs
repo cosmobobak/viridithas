@@ -119,119 +119,23 @@ pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(ONE_PAWN / 40, 0);
 /// The bonus granted for having more pawns when you have knights on the board.
 // pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
 
-/// The bonus for having IDX pawns in front of the king.
-pub static PAWN_SHIELD_BONUS: [S; 4] = [S(0, 0), S(5, 6), S(17, 10), S(20, 15)];
+// Stockfish nonlinear mobility eval tables.
+#[rustfmt::skip]
+const KNIGHT_MOBILITY_BONUS: [S; 9] = 
+    [ S(-62,-79), S(-53,-57), S(-12,-31), S( -3,-17), S(  3,  7), S( 12, 13), // Knight
+      S( 21, 16), S( 28, 21), S( 37, 26) ];
+const BISHOP_MOBILITY_BONUS: [S; 14] = [ S(-47,-59), S(-20,-25), S( 14, -8), S( 29, 12), S( 39, 21), S( 53, 40), // Bishop
+      S( 53, 56), S( 60, 58), S( 62, 65), S( 69, 72), S( 78, 78), S( 83, 87),
+      S( 91, 88), S( 96, 98) ];
+const ROOK_MOBILITY_BONUS: [S; 15] = [ S(-60,-82), S(-24,-15), S(  0, 17) ,S(  3, 43), S(  4, 72), S( 14,100), // Rook
+      S( 20,102), S( 30,122), S( 41,133), S(41 ,139), S( 41,153), S( 45,160),
+      S( 57,165), S( 58,170), S( 67,175) ];
+const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29,-49), S(-16,-29), S( -8, -8), S( -8, 17), S( 18, 39), S( 25, 54), // Queen
+      S( 23, 59), S( 37, 73), S( 41, 76), S( 54, 95), S( 65, 95) ,S( 68,101),
+      S( 69,124), S( 70,128), S( 70,132), S( 70,133) ,S( 71,136), S( 72,140),
+      S( 74,147), S( 76,149), S( 90,153), S(104,169), S(105,171), S(106,171),
+      S(112,178), S(114,185), S(114,187), S(119,221) ];
 
-/// The bonus for xraying the king with a piece.
-static XRAY_ATTACKERS_BONUS: [S; 20] = [
-    S(5, 5),
-    S(20, 20),
-    S(45, 45),
-    S(70, 70),
-    S(90, 90),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-    S(200, 200),
-];
-
-// MADCHESS nonlinear mobility eval tables.
-// (10 * x Pow 0.5) - 15;
-// (20 * x Pow 0.5) - 30;
-static KNIGHT_MOBILITY: [S; 9] = [
-    S(-15, -30),
-    S(-5, -10),
-    S(-1, -2),
-    S(2, 4),
-    S(5, 10),
-    S(7, 14),
-    S(9, 18),
-    S(11, 22),
-    S(13, 26),
-];
-
-// (14 * x Pow 0.5) - 25;
-// (28 * x Pow 0.5) - 50;
-static BISHOP_MOBILITY: [S; 14] = [
-    S(-25, -50),
-    S(-11, -22),
-    S(-6, -11),
-    S(-1, -2),
-    S(3, 6),
-    S(6, 12),
-    S(9, 18),
-    S(12, 24),
-    S(14, 29),
-    S(17, 34),
-    S(19, 38),
-    S(21, 42),
-    S(23, 46),
-    S(25, 50),
-];
-
-// (6 * x Pow 0.5) - 10;
-// (28 * x Pow 0.5) - 50;
-static ROOK_MOBILITY: [S; 15] = [
-    S(-10, -50),
-    S(-4, -22),
-    S(-2, -11),
-    S(0, -2),
-    S(2, 6),
-    S(3, 12),
-    S(4, 18),
-    S(5, 24),
-    S(6, 29),
-    S(8, 34),
-    S(8, 38),
-    S(9, 42),
-    S(10, 46),
-    S(11, 50),
-    S(12, 54),
-];
-
-// (4 * x Pow 0.5) - 10;
-// (20 * x Pow 0.5) - 50;
-static QUEEN_MOBILITY: [S; 28] = [
-    S(-10, -50),
-    S(-6, -30),
-    S(-5, -22),
-    S(-4, -16),
-    S(-2, -10),
-    S(-2, -6),
-    S(-1, -2),
-    S(0, 2),
-    S(1, 6),
-    S(2, 10),
-    S(2, 13),
-    S(3, 16),
-    S(3, 19),
-    S(4, 22),
-    S(4, 24),
-    S(5, 27),
-    S(6, 30),
-    S(6, 32),
-    S(6, 34),
-    S(7, 37),
-    S(7, 39),
-    S(8, 41),
-    S(8, 43),
-    S(9, 45),
-    S(9, 47),
-    S(10, 50),
-    S(10, 51),
-    S(10, 53),
-];
 
 /// A threshold over which we will not bother evaluating more than material and PSTs.
 pub const LAZY_THRESHOLD_1: i32 = 14_00;
@@ -395,18 +299,14 @@ impl Board {
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
         let mobility_val = self.mobility();
-        let king_safety_val = self.pawn_shield_term();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
-        let king_xray_val = self.king_xray_term();
 
         score += pawn_val;
         score += bishop_pair_val;
         score += mobility_val;
-        score += king_safety_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        score += king_xray_val;
 
         let score = score.value(self.phase());
 
@@ -514,29 +414,6 @@ impl Board {
             return -BISHOP_PAIR_BONUS;
         }
         S(0, 0)
-    }
-
-    fn pawn_shield_term(&self) -> S {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-
-        let white_kingloc = self.king_sq(WHITE);
-        let black_kingloc = self.king_sq(BLACK);
-
-        let mut white_shield = 0;
-        for loc in white_kingloc + 7..=white_kingloc + 9 {
-            if self.piece_at(loc) == WP {
-                white_shield += 1;
-            }
-        }
-
-        let mut black_shield = 0;
-        for loc in black_kingloc - 9..=black_kingloc - 7 {
-            if self.piece_at(loc) == BP {
-                black_shield += 1;
-            }
-        }
-
-        PAWN_SHIELD_BONUS[white_shield] - PAWN_SHIELD_BONUS[black_shield]
     }
 
     fn pawn_structure_term(&self) -> S {
@@ -652,64 +529,63 @@ impl Board {
 
     fn mobility(&mut self) -> S {
         let mut mob_score = S(0, 0);
-        let white_knight_moves: S = BitLoop::<u8>::new(self.pieces.knights::<true>())
-            .map(|sq| KNIGHT_MOBILITY[attacks::<KNIGHT>(sq, BB_NONE).count_ones() as usize])
-            .sum();
-        let black_knight_moves: S = BitLoop::<u8>::new(self.pieces.knights::<false>())
-            .map(|sq| KNIGHT_MOBILITY[attacks::<KNIGHT>(sq, BB_NONE).count_ones() as usize])
-            .sum();
-        mob_score += white_knight_moves - black_knight_moves;
-        let white_bishop_moves: S = BitLoop::<u8>::new(self.pieces.bishops::<true>())
-            .map(|sq| {
-                BISHOP_MOBILITY[attacks::<BISHOP>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        let black_bishop_moves: S = BitLoop::<u8>::new(self.pieces.bishops::<false>())
-            .map(|sq| {
-                BISHOP_MOBILITY[attacks::<BISHOP>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        mob_score += white_bishop_moves - black_bishop_moves;
-        let white_rook_moves: S = BitLoop::<u8>::new(self.pieces.rooks::<true>())
-            .map(|sq| {
-                ROOK_MOBILITY[attacks::<ROOK>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        let black_rook_moves: S = BitLoop::<u8>::new(self.pieces.rooks::<false>())
-            .map(|sq| {
-                ROOK_MOBILITY[attacks::<ROOK>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        mob_score += white_rook_moves - black_rook_moves;
-        let white_queen_moves: S = BitLoop::<u8>::new(self.pieces.queens::<true>())
-            .map(|sq| {
-                QUEEN_MOBILITY[attacks::<QUEEN>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        let black_queen_moves: S = BitLoop::<u8>::new(self.pieces.queens::<false>())
-            .map(|sq| {
-                QUEEN_MOBILITY[attacks::<QUEEN>(sq, self.pieces.occupied()).count_ones() as usize]
-            })
-            .sum();
-        mob_score += white_queen_moves - black_queen_moves;
+        let attacked_by_black_pawns = self.pieces.pawn_attacks::<false>();
+        let attacked_by_white_pawns = self.pieces.pawn_attacks::<true>();
+        let blockers = self.pieces.occupied();
+        for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
+            let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            let attacks = attacks & attacked_by_black_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score += KNIGHT_MOBILITY_BONUS[attacks];
+        }
+        for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
+            let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            let attacks = attacks & attacked_by_white_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score -= KNIGHT_MOBILITY_BONUS[attacks];
+        }
+        for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
+            let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            let attacks = attacks & attacked_by_black_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score += BISHOP_MOBILITY_BONUS[attacks];
+        }
+        for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
+            let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            let attacks = attacks & attacked_by_white_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score -= BISHOP_MOBILITY_BONUS[attacks];
+        }
+        for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
+            let attacks = attacks::<ROOK>(rook_sq, blockers);
+            let attacks = attacks & attacked_by_black_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score += ROOK_MOBILITY_BONUS[attacks];
+        }
+        for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
+            let attacks = attacks::<ROOK>(rook_sq, blockers);
+            let attacks = attacks & attacked_by_white_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score -= ROOK_MOBILITY_BONUS[attacks];
+        }
+        for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
+            let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            let attacks = attacks & attacked_by_black_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score += QUEEN_MOBILITY_BONUS[attacks];
+        }
+        for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
+            let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            let attacks = attacks & attacked_by_white_pawns;
+            let attacks: usize = attacks.count_ones() as usize;
+            mob_score -= QUEEN_MOBILITY_BONUS[attacks];
+        }
 
         if self.side == WHITE {
             mob_score
         } else {
             -mob_score
         }
-    }
-
-    pub fn king_xray_term(&self) -> S {
-        let black_king = self.king_sq(BLACK);
-        let white_king = self.king_sq(WHITE);
-        let white_xray_attackers = self.attackers_mask(black_king, WHITE, BB_NONE);
-        let black_xray_attackers = self.attackers_mask(white_king, BLACK, BB_NONE);
-        let white_xray_attackers_count = white_xray_attackers.count_ones() as usize;
-        let black_xray_attackers_count = black_xray_attackers.count_ones() as usize;
-        let white_xray_attackers_count_term = XRAY_ATTACKERS_BONUS[white_xray_attackers_count];
-        let black_xray_attackers_count_term = XRAY_ATTACKERS_BONUS[black_xray_attackers_count];
-        white_xray_attackers_count_term - black_xray_attackers_count_term
     }
 }
 
@@ -757,13 +633,6 @@ mod tests {
         use crate::board::evaluation::S;
         let board = super::Board::default();
         assert_eq!(board.pawn_structure_term(), S(0, 0));
-    }
-
-    #[test]
-    fn startpos_pawn_shield_equality() {
-        use crate::board::evaluation::S;
-        let board = super::Board::default();
-        assert_eq!(board.pawn_shield_term(), S(0, 0));
     }
 
     #[test]

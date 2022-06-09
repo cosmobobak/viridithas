@@ -603,7 +603,7 @@ impl Board {
         // check bitboard / piece array coherency
         for piece in WP..=BK {
             let bb = self.pieces.piece_bb(piece);
-            for sq in BitLoop::<u8>::new(bb) {
+            for sq in BitLoop::new(bb) {
                 if self.piece_at(sq) != piece {
                     return Err(format!(
                         "bitboard / piece array coherency corrupt: expected square {} to be '{}' but was '{}'",
@@ -1385,9 +1385,10 @@ impl Board {
         }
         let score_string = format_score(most_recent_score, self.turn());
         print!(
-            "info score {} depth {} nodes {} time {} pv ",
+            "info score {} depth {} seldepth {} nodes {} time {} pv ",
             score_string,
             best_depth,
+            info.seldepth,
             info.nodes,
             info.start_time.elapsed().as_millis()
         );

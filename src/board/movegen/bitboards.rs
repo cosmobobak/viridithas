@@ -42,45 +42,19 @@ pub const fn lsb(x: u64) -> u64 {
 /// let squares = BitLoop::new(bb).collect::<Vec<_>>();
 /// assert_eq!(squares, vec![1, 2, 4]);
 /// ```
-pub struct BitLoop<Output = u64> {
+pub struct BitLoop {
     value: u64,
-    phantom: std::marker::PhantomData<Output>,
 }
 
-impl BitLoop<u64> {
+impl BitLoop {
     pub const fn new(value: u64) -> Self {
         Self {
             value,
-            phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl BitLoop<u8> {
-    pub const fn new(value: u64) -> Self {
-        Self {
-            value,
-            phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl Iterator for BitLoop<u64> {
-    type Item = u64;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.value == 0 {
-            None
-        } else {
-            // faster if we have bmi (maybe)
-            let lsb = self.value.trailing_zeros();
-            self.value ^= 1 << lsb;
-            Some(lsb.into())
-        }
-    }
-}
-
-impl Iterator for BitLoop<u8> {
+impl Iterator for BitLoop {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -432,6 +406,14 @@ impl BitBoard {
             _ => unsafe { opt::impossible!() },
         }
     }
+
+    pub const fn pawn_attacks<const IS_WHITE: bool>(&self) -> u64 {
+        if IS_WHITE {
+            north_east_one(self.w_pawns) | north_west_one(self.w_pawns)
+        } else {
+            south_east_one(self.b_pawns) | south_west_one(self.b_pawns)
+        }
+    }
 }
 
 pub const fn north_east_one(b: u64) -> u64 {
@@ -453,7 +435,9 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
         BISHOP => magic::get_bishop_attacks(sq, blockers),
         ROOK => magic::get_rook_attacks(sq, blockers),
         QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
-        other => lookups::get_jumping_piece_attack(sq, other),
+        KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
+        KING => lookups::get_jumping_piece_attack::<KING>(sq),
+        _ => unsafe { opt::impossible!() },
     }
 }
 

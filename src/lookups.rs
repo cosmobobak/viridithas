@@ -234,13 +234,13 @@ static JUMPING_ATTACKS: [[u64; 64]; 7] = [
     init_jumping_attacks::<false>(), // king
 ];
 
-pub fn get_jumping_piece_attack(sq: u8, piece: u8) -> u64 {
-    debug_assert!(piece < 7);
+pub fn get_jumping_piece_attack<const PIECE: u8>(sq: u8) -> u64 {
+    debug_assert!(PIECE < 7);
     debug_assert!(sq < 64);
-    debug_assert!(piece == KNIGHT || piece == KING);
+    debug_assert!(PIECE == KNIGHT || PIECE == KING);
     unsafe {
         *JUMPING_ATTACKS
-            .get_unchecked(piece as usize)
+            .get_unchecked(PIECE as usize)
             .get_unchecked(sq as usize)
     }
 }
@@ -274,12 +274,12 @@ mod tests {
         use crate::lookups::get_jumping_piece_attack;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_jumping_piece_attack(0, KNIGHT), 132_096);
-        assert_eq!(get_jumping_piece_attack(63, KNIGHT), 9_077_567_998_918_656);
+        assert_eq!(get_jumping_piece_attack::<KNIGHT>(0), 132_096);
+        assert_eq!(get_jumping_piece_attack::<KNIGHT>(63), 9_077_567_998_918_656);
 
-        assert_eq!(get_jumping_piece_attack(0, KING), 770);
+        assert_eq!(get_jumping_piece_attack::<KING>(0), 770);
         assert_eq!(
-            get_jumping_piece_attack(63, KING),
+            get_jumping_piece_attack::<KING>(63),
             4_665_729_213_955_833_856
         );
     }

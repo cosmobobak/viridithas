@@ -252,19 +252,19 @@ impl Board {
             north_west_one(their_pieces) & our_pawns
         };
         let promo_rank = if SIDE == WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        for from in BitLoop::<u8>::new(attacks_west & !promo_rank) {
+        for from in BitLoop::new(attacks_west & !promo_rank) {
             let to = if SIDE == WHITE { from + 7 } else { from - 9 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
-        for from in BitLoop::<u8>::new(attacks_east & !promo_rank) {
+        for from in BitLoop::new(attacks_east & !promo_rank) {
             let to = if SIDE == WHITE { from + 9 } else { from - 7 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
-        for from in BitLoop::<u8>::new(attacks_west & promo_rank) {
+        for from in BitLoop::new(attacks_west & promo_rank) {
             let to = if SIDE == WHITE { from + 7 } else { from - 9 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
@@ -278,7 +278,7 @@ impl Board {
                 }
             }
         }
-        for from in BitLoop::<u8>::new(attacks_east & promo_rank) {
+        for from in BitLoop::new(attacks_east & promo_rank) {
             let to = if SIDE == WHITE { from + 9 } else { from - 7 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
@@ -353,18 +353,18 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in BitLoop::<u8>::new(pushable_pawns & !promoting_pawns) {
+        for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
             let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
             self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
         }
-        for sq in BitLoop::<u8>::new(double_pushable_pawns) {
+        for sq in BitLoop::new(double_pushable_pawns) {
             let to = if SIDE == WHITE { sq + 16 } else { sq - 16 };
             self.add_quiet_move(
                 Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, Move::PAWN_START_MASK),
                 move_list,
             );
         }
-        for sq in BitLoop::<u8>::new(promoting_pawns) {
+        for sq in BitLoop::new(promoting_pawns) {
             let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
             if SIDE == WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
@@ -420,15 +420,15 @@ impl Board {
             self.pieces.their_pieces::<false>()
         };
         let freespace = self.pieces.empty();
-        for sq in BitLoop::<u8>::new(our_knights) {
+        for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
                 );
             }
-            for to in BitLoop::<u8>::new(moves & freespace) {
+            for to in BitLoop::new(moves & freespace) {
                 self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
@@ -445,15 +445,15 @@ impl Board {
             self.pieces.their_pieces::<false>()
         };
         let freespace = self.pieces.empty();
-        for sq in BitLoop::<u8>::new(our_king) {
+        for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
                 );
             }
-            for to in BitLoop::<u8>::new(moves & freespace) {
+            for to in BitLoop::new(moves & freespace) {
                 self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
@@ -471,15 +471,15 @@ impl Board {
         };
         let freespace = self.pieces.empty();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::<u8>::new(our_diagonal_sliders) {
+        for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
                 );
             }
-            for to in BitLoop::<u8>::new(moves & freespace) {
+            for to in BitLoop::new(moves & freespace) {
                 self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
@@ -497,15 +497,15 @@ impl Board {
         };
         let freespace = self.pieces.empty();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::<u8>::new(our_orthogonal_sliders) {
+        for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
                 );
             }
-            for to in BitLoop::<u8>::new(moves & freespace) {
+            for to in BitLoop::new(moves & freespace) {
                 self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
             }
         }
@@ -552,9 +552,9 @@ impl Board {
         } else {
             self.pieces.their_pieces::<false>()
         };
-        for sq in BitLoop::<u8>::new(our_knights) {
+        for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
@@ -573,9 +573,9 @@ impl Board {
         } else {
             self.pieces.their_pieces::<false>()
         };
-        for sq in BitLoop::<u8>::new(our_king) {
+        for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
@@ -595,9 +595,9 @@ impl Board {
             self.pieces.their_pieces::<false>()
         };
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::<u8>::new(our_diagonal_sliders) {
+        for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
@@ -617,9 +617,9 @@ impl Board {
             self.pieces.their_pieces::<false>()
         };
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::<u8>::new(our_orthogonal_sliders) {
+        for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
-            for to in BitLoop::<u8>::new(moves & their_pieces) {
+            for to in BitLoop::new(moves & their_pieces) {
                 self.add_capture_move(
                     Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
                     move_list,
