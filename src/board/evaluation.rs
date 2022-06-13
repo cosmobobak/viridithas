@@ -139,7 +139,6 @@ const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29,-49), S(-16,-29), S( -8, -8), S( -
       S( 74,147), S( 76,149), S( 90,153), S(104,169), S(105,171), S(106,171),
       S(112,178), S(114,185), S(114,187), S(119,221) ];
 
-
 /// A threshold over which we will not bother evaluating more than material and PSTs.
 pub const LAZY_THRESHOLD_1: i32 = 14_00;
 
@@ -593,7 +592,6 @@ impl Board {
 }
 
 mod tests {
-
     #[test]
     fn unwinnable() {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
