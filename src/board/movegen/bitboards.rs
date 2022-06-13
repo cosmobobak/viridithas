@@ -48,9 +48,7 @@ pub struct BitLoop {
 
 impl BitLoop {
     pub const fn new(value: u64) -> Self {
-        Self {
-            value,
-        }
+        Self { value }
     }
 }
 
