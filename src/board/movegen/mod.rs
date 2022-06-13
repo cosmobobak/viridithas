@@ -682,7 +682,7 @@ impl Board {
         }
     }
 
-    pub fn attackers_mask(&self, sq: u8, side: u8, blockers: u64) -> u64 {
+    pub fn _attackers_mask(&self, sq: u8, side: u8, blockers: u64) -> u64 {
         let mut attackers = 0;
         if side == WHITE {
             let our_pawns = self.pieces.pawns::<true>();
