@@ -25,10 +25,10 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        colour_of, square_name, type_of, Castling, Colour, File, Rank, Undo, A1, A8, BB, BISHOP,
-        BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, C1, C8, D1, D8, F1, F8, G1, G8, H1,
-        H8, INFINITY, KING, KNIGHT, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE, PIECE_EMPTY, RANK_3,
-        RANK_6, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        colour_of, square_name, type_of, Castling, Colour, Depth, File, Rank, Undo, A1, A8, BB,
+        BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, C1, C8, D1, D8, F1, F8, G1,
+        G8, H1, H8, INFINITY, KING, KNIGHT, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE, PIECE_EMPTY,
+        RANK_3, RANK_6, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     lookups::{
@@ -71,7 +71,7 @@ pub struct Board {
     principal_variation: Vec<Move>,
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
-    killer_move_table: [[Move; 2]; MAX_DEPTH as usize],
+    killer_move_table: [[Move; 2]; MAX_DEPTH.n_ply()],
     counter_move_table: [[Move; BOARD_N_SQUARES]; 13],
     tt: DefaultTT,
 
@@ -115,9 +115,9 @@ impl Board {
             history: Vec::with_capacity(MAX_GAME_MOVES),
             repetition_cache: HashSet::with_capacity(MAX_GAME_MOVES),
             piece_lists: [PieceList::new(); 13],
-            principal_variation: Vec::with_capacity(MAX_DEPTH as usize),
+            principal_variation: Vec::with_capacity(MAX_DEPTH.n_ply()),
             history_table: [[0; BOARD_N_SQUARES]; 13],
-            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH as usize],
+            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.n_ply()],
             counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
@@ -126,12 +126,12 @@ impl Board {
         out
     }
 
-    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: i32) {
+    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
         self.tt
             .store(self.key, self.ply, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: i32) -> ProbeResult {
+    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
         self.tt.probe(self.key, self.ply, alpha, beta, depth)
     }
 
@@ -140,7 +140,7 @@ impl Board {
     }
 
     pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH as usize);
+        debug_assert!(self.ply < MAX_DEPTH.n_ply());
         let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.ply) };
         entry[1] = entry[0];
         entry[0] = m;
@@ -156,7 +156,7 @@ impl Board {
     }
 
     pub fn insert_countermove(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH as usize);
+        debug_assert!(self.ply < MAX_DEPTH.n_ply());
         let prev_move = self.history.last().map_or(Move::NULL, |u| u.m);
         if prev_move.is_null() {
             return;
@@ -1287,7 +1287,7 @@ impl Board {
         self.principal_variation.clear();
 
         while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
-            if self.principal_variation.len() < depth.try_into().unwrap()
+            if self.principal_variation.len() < depth as usize
                 && self.is_legal(pv_move)
                 && !self.is_draw()
             {
@@ -1315,7 +1315,7 @@ impl Board {
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective.
-    pub fn search_position<const DO_PRINTOUT: bool>(&mut self, info: &mut SearchInfo) -> i32 {
+    pub fn search_position(&mut self, info: &mut SearchInfo) -> i32 {
         self.clear_for_search();
         info.clear_for_search();
 
@@ -1325,8 +1325,10 @@ impl Board {
         let mut most_recent_score = 0;
         let mut best_depth = 1;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
-        let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1);
-        for depth in 0..=max_depth {
+        let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
+        for i_depth in 0..=max_depth {
+            let depth = Depth::from(i_depth);
+            // main search
             let mut score = alpha_beta(self, info, depth, alpha, beta);
 
             info.check_up();
@@ -1336,21 +1338,20 @@ impl Board {
 
             if score <= alpha || score >= beta {
                 let score_string = format_score(score, self.turn());
-                if DO_PRINTOUT {
-                    let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
-                    print!(
-                        "info score {} {} depth {} seldepth {} nodes {} time {} pv ",
-                        score_string,
-                        boundstr,
-                        depth,
-                        info.seldepth,
-                        info.nodes,
-                        info.start_time.elapsed().as_millis()
-                    );
-                    self.regenerate_pv_line(best_depth);
-                    self.print_pv();
-                }
-                score = alpha_beta(self, info, depth - 1, -INFINITY, INFINITY);
+                let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
+                print!(
+                    "info score {} {} depth {} seldepth {} nodes {} time {} pv ",
+                    score_string,
+                    boundstr,
+                    i_depth,
+                    info.seldepth.n_ply(),
+                    info.nodes,
+                    info.start_time.elapsed().as_millis()
+                );
+                self.regenerate_pv_line(best_depth);
+                self.print_pv();
+                // recalculate the score with a full window, as we failed either low or high.
+                score = alpha_beta(self, info, depth, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
                     break;
@@ -1358,8 +1359,8 @@ impl Board {
             }
 
             most_recent_score = score;
-            best_depth = depth;
-            if !evaluation::is_mate_score(score) && depth > 4 {
+            best_depth = i_depth;
+            if !evaluation::is_mate_score(score) && i_depth > 4 {
                 alpha = score - ONE_PAWN / 4;
                 beta = score + ONE_PAWN / 4;
             } else {
@@ -1376,8 +1377,8 @@ impl Board {
             print!(
                 "info score {} depth {} seldepth {} nodes {} time {} pv ",
                 score_string,
-                depth,
-                info.seldepth,
+                i_depth,
+                info.seldepth.n_ply(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
@@ -1388,7 +1389,7 @@ impl Board {
             "info score {} depth {} seldepth {} nodes {} time {} pv ",
             score_string,
             best_depth,
-            info.seldepth,
+            info.seldepth.n_ply(),
             info.nodes,
             info.start_time.elapsed().as_millis()
         );

@@ -1,5 +1,7 @@
 use std::{sync::mpsc, time::Instant};
 
+use crate::definitions::Depth;
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
@@ -8,7 +10,7 @@ pub struct SearchInfo<'a> {
     pub stop_time: Instant,
 
     /// The maximum depth of the search.
-    pub depth: i32,
+    pub depth: Depth,
 
     pub time_set: bool,
     pub moves_to_go: usize,
@@ -25,7 +27,7 @@ pub struct SearchInfo<'a> {
     /// The number of fail-highs that occured on the first move searched.
     pub failhigh_first: f32,
     /// The highest depth reached (selective depth).
-    pub seldepth: i32,
+    pub seldepth: Depth,
 
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
@@ -36,7 +38,7 @@ impl Default for SearchInfo<'_> {
         Self {
             start_time: Instant::now(),
             stop_time: Instant::now() + std::time::Duration::from_secs(1),
-            depth: 60,
+            depth: 60.into(),
             time_set: false,
             moves_to_go: 0,
             infinite: false,
@@ -45,7 +47,7 @@ impl Default for SearchInfo<'_> {
             stopped: false,
             failhigh: 0.0,
             failhigh_first: 0.0,
-            seldepth: 0,
+            seldepth: 0.into(),
             stdin_rx: None,
         }
     }

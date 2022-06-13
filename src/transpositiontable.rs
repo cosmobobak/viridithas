@@ -7,7 +7,7 @@
 use crate::{
     board::evaluation::IS_MATE_SCORE,
     chessmove::Move,
-    definitions::{INFINITY, MAX_DEPTH},
+    definitions::{CompactDepthStorage, Depth, INFINITY, MAX_DEPTH},
     opt,
 };
 
@@ -24,7 +24,7 @@ pub struct TTEntry {
     pub key: u64,
     pub m: Move,
     pub score: i32,
-    pub depth: i16,
+    pub depth: CompactDepthStorage,
     pub flag: HFlag,
 }
 
@@ -33,7 +33,7 @@ impl TTEntry {
         key: 0,
         m: Move::NULL,
         score: 0,
-        depth: 0,
+        depth: CompactDepthStorage::NULL,
         flag: HFlag::None,
     };
 }
@@ -101,13 +101,13 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         best_move: Move,
         score: i32,
         flag: HFlag,
-        depth: i32,
+        depth: Depth,
     ) {
         let index = (key % SIZE as u64) as usize;
 
-        debug_assert!((1..=MAX_DEPTH).contains(&depth));
+        debug_assert!((1i32.into()..=MAX_DEPTH).contains(&depth));
         debug_assert!(score >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH.n_ply()).contains(&ply));
 
         let mut score = score;
         if score > IS_MATE_SCORE {
@@ -126,7 +126,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
             flag,
         };
 
-        if depth >= i32::from(slot.depth_preferred.depth) {
+        if depth >= slot.depth_preferred.depth.into() {
             slot.depth_preferred = entry;
         } else {
             slot.always_replace = entry;
@@ -139,15 +139,15 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         ply: usize,
         alpha: i32,
         beta: i32,
-        depth: i32,
+        depth: Depth,
     ) -> ProbeResult {
         let index = (key % (SIZE as u64)) as usize;
 
-        debug_assert!((1..=MAX_DEPTH).contains(&depth));
+        debug_assert!((1i32.into()..=MAX_DEPTH).contains(&depth));
         debug_assert!(alpha < beta);
         debug_assert!(alpha >= -INFINITY);
         debug_assert!(beta >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH as usize).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH.n_ply()).contains(&ply));
 
         let slot = &self.table[index];
         let e1 = &slot.depth_preferred;
@@ -156,9 +156,9 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         if e1.key == key || e2.key == key {
             let entry = if e1.key == key { e1 } else { e2 };
             let m = entry.m;
-            let e_depth = i32::from(entry.depth);
+            let e_depth = entry.depth.into();
             if e_depth >= depth {
-                debug_assert!((1..=MAX_DEPTH).contains(&e_depth));
+                debug_assert!((1i32.into()..=MAX_DEPTH).contains(&e_depth));
 
                 // we can't store the score in a tagged union,
                 // because we need to do mate score preprocessing.

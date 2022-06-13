@@ -155,7 +155,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     info.set_time_window(search_time_window);
 
     if let Some(depth) = depth {
-        info.depth = depth;
+        info.depth = depth.into();
     } else {
         info.depth = MAX_DEPTH;
     }
@@ -163,7 +163,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
     println!(
         "time: {}, depth: {}, timeset: {}",
         info.stop_time.duration_since(info.start_time).as_millis(),
-        info.depth,
+        info.depth.n_ply(),
         info.time_set
     );
 }
@@ -249,7 +249,7 @@ pub fn main_loop() {
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
                 parse_go(input, &mut info, &mut pos);
-                pos.search_position::<true>(&mut info);
+                pos.search_position(&mut info);
             }
             _ => println!("Unknown command: {}", input),
         }

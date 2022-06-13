@@ -1,5 +1,10 @@
 #![allow(dead_code)]
 
+use std::{
+    fmt::Display,
+    ops::{Add, AddAssign, Sub, SubAssign},
+};
+
 use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
@@ -9,8 +14,179 @@ use crate::{
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_GAME_MOVES: usize = 1024;
-pub const MAX_DEPTH: i32 = 512;
+pub const MAX_DEPTH: Depth = Depth::new(128);
 pub const INFINITY: i32 = MATE_SCORE * 2;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Depth(i32);
+
+impl Depth {
+    const INNER_INCREMENT_PER_PLY: i32 = 100;
+
+    pub const fn new(depth: i32) -> Self {
+        Self(depth * Self::INNER_INCREMENT_PER_PLY)
+    }
+
+    pub const fn from_raw(raw: i32) -> Self {
+        Self(raw)
+    }
+
+    pub const fn n_ply(self) -> usize {
+        #![allow(clippy::cast_sign_loss)]
+        if self.0 <= 0 {
+            0
+        } else {
+            (self.0 / Self::INNER_INCREMENT_PER_PLY) as usize
+        }
+    }
+
+    pub const fn round(self) -> i32 {
+        self.0 / Self::INNER_INCREMENT_PER_PLY
+    }
+
+    pub const fn nearest_full_ply(self) -> Self {
+        let x = self.0;
+        let x = x + Self::INNER_INCREMENT_PER_PLY / 2;
+        Self(x - x % Self::INNER_INCREMENT_PER_PLY)
+    }
+
+    pub const fn is_exact_ply(self) -> bool {
+        self.0 % Self::INNER_INCREMENT_PER_PLY == 0
+    }
+
+    pub const fn raw_inner(self) -> i32 {
+        self.0
+    }
+}
+
+impl Add<Self> for Depth {
+    type Output = Self;
+    fn add(self, other: Self) -> Self::Output {
+        debug_assert!(
+            self.is_exact_ply() && other.is_exact_ply(),
+            "Depth::add: only exact ply allowed, got {} and {}",
+            self,
+            other
+        );
+        Self(self.0 + other.0)
+    }
+}
+impl AddAssign<Self> for Depth {
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other;
+    }
+}
+impl Add<i32> for Depth {
+    type Output = Self;
+    fn add(self, other: i32) -> Self::Output {
+        debug_assert!(
+            self.is_exact_ply(),
+            "Depth::add: only exact ply allowed, got {}",
+            self
+        );
+        Self(self.0 + other * Self::INNER_INCREMENT_PER_PLY)
+    }
+}
+impl AddAssign<i32> for Depth {
+    fn add_assign(&mut self, other: i32) {
+        *self = *self + other;
+    }
+}
+impl Sub<Self> for Depth {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self::Output {
+        debug_assert!(
+            self.is_exact_ply() && other.is_exact_ply(),
+            "Depth::sub: only exact ply allowed, got {} and {}",
+            self,
+            other
+        );
+        Self(self.0 - other.0)
+    }
+}
+impl SubAssign<Self> for Depth {
+    fn sub_assign(&mut self, other: Self) {
+        *self = *self - other;
+    }
+}
+impl Sub<i32> for Depth {
+    type Output = Self;
+    fn sub(self, other: i32) -> Self::Output {
+        debug_assert!(
+            self.is_exact_ply(),
+            "Depth::sub: only exact ply allowed, got {}",
+            self
+        );
+        Self(self.0 - other * Self::INNER_INCREMENT_PER_PLY)
+    }
+}
+impl SubAssign<i32> for Depth {
+    fn sub_assign(&mut self, other: i32) {
+        *self = *self - other;
+    }
+}
+impl From<i32> for Depth {
+    fn from(depth: i32) -> Self {
+        Self::new(depth)
+    }
+}
+impl From<f32> for Depth {
+    fn from(depth: f32) -> Self {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let inner_depth = depth * Self::INNER_INCREMENT_PER_PLY as f32;
+        Self::from_raw(inner_depth as i32)
+    }
+}
+impl From<Depth> for f32 {
+    fn from(depth: Depth) -> Self {
+        #![allow(clippy::cast_precision_loss)]
+        depth.0 as Self / Depth::INNER_INCREMENT_PER_PLY as Self
+    }
+}
+impl TryFrom<Depth> for i16 {
+    type Error = <Self as std::convert::TryFrom<i32>>::Error;
+    fn try_from(depth: Depth) -> Result<Self, Self::Error> {
+        depth.0.try_into()
+    }
+}
+impl From<i16> for Depth {
+    fn from(depth: i16) -> Self {
+        Self::from_raw(i32::from(depth))
+    }
+}
+impl Display for Depth {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let sign = match self.0.signum() {
+            1 | 0 => "",
+            -1 => "-",
+            _ => unreachable!(),
+        };
+        write!(
+            f,
+            "{}{}.{}",
+            sign,
+            self.0.abs() / Self::INNER_INCREMENT_PER_PLY,
+            self.0.abs() % Self::INNER_INCREMENT_PER_PLY
+        )
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct CompactDepthStorage(i16);
+impl CompactDepthStorage {
+    pub const NULL: Self = Self(0);
+}
+impl TryFrom<Depth> for CompactDepthStorage {
+    type Error = <i16 as std::convert::TryFrom<i32>>::Error;
+    fn try_from(depth: Depth) -> Result<Self, Self::Error> {
+        let inner = depth.0.try_into()?;
+        Ok(Self(inner))
+    }
+}
+impl From<CompactDepthStorage> for Depth {
+    fn from(depth: CompactDepthStorage) -> Self {
+        Self::from_raw(i32::from(depth.0))
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

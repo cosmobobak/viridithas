@@ -1,12 +1,13 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
+        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE},
         movegen::TT_MOVE_SCORE,
         Board,
     },
     chessmove::Move,
-    definitions::{INFINITY, MAX_DEPTH},
+    definitions::{Depth, INFINITY, MAX_DEPTH},
+    lookups::LOG,
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -44,7 +45,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
 
     let height: i32 = pos.ply().try_into().unwrap();
     info.nodes += 1;
-    info.seldepth = info.seldepth.max(height);
+    info.seldepth = info.seldepth.max(height.into());
 
     // check draw
     if pos.is_draw() {
@@ -53,7 +54,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     }
 
     // are we too deep?
-    if height > MAX_DEPTH - 1 {
+    if height > (MAX_DEPTH - 1).round() {
         return pos.evaluate();
     }
 
@@ -110,7 +111,8 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     alpha
 }
 
-fn logistic_lateness_reduction(moves: usize, depth: i32) -> i32 {
+#[allow(dead_code)]
+fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
     #![allow(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -119,44 +121,28 @@ fn logistic_lateness_reduction(moves: usize, depth: i32) -> i32 {
     const GRADIENT: f32 = 0.7;
     const MIDPOINT: f32 = 4.5;
     const REDUCTION_FACTOR: f32 = 2.0 / 5.0;
-    let moves = moves as f32;
-    let depth = depth as f32;
+    let moves: f32 = moves as f32;
+    let depth: f32 = depth.into();
     let numerator = REDUCTION_FACTOR * depth - 1.0;
     let denominator = 1.0 + f32::exp(-GRADIENT * (moves - MIDPOINT));
-    (numerator / denominator + 0.5) as i32
+    ((numerator / denominator + 0.5) as i32).into()
 }
 
-fn _fruit_lateness_reduction(moves: usize, depth: i32, in_pv: bool) -> i32 {
-    #![allow(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
-    const PV_BACKOFF: f32 = 2.0 / 3.0;
-    let r = f32::sqrt((depth - 1) as f32) + f32::sqrt((moves - 1) as f32);
-    if in_pv {
-        (r * PV_BACKOFF) as i32
-    } else {
-        r as i32
-    }
-}
-
-fn _senpai_lateness_reduction(moves: usize, depth: i32) -> i32 {
-    // Senpai reduces by one ply for the first 6 moves and by depth / 3 for remaining moves.
-    if moves <= 6 {
-        1
-    } else {
-        (depth / 3).max(1)
-    }
+#[allow(dead_code)]
+fn logproduct_lateness_reduction(moves: usize, depth: Depth) -> Depth {
+    const SCALE: f32 = 0.6;
+    let r_moves = LOG[moves] * SCALE;
+    let r_depth = LOG[depth.n_ply()] * SCALE;
+    (r_moves * r_depth).into()
 }
 
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha: i32, beta: i32) -> i32 {
+pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
-    if depth <= 0 {
+    if depth <= 0.into() {
         return quiescence_search(pos, info, alpha, beta);
     }
 
@@ -169,7 +155,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
     let root_node = height == 0;
 
     info.nodes += 1;
-    info.seldepth = if root_node { 0 } else { info.seldepth.max(height) };
+    info.seldepth = if root_node { 0.into() } else { info.seldepth.max(height.into()) };
 
     let static_eval = pos.evaluate();
 
@@ -181,7 +167,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
         }
 
         // are we too deep?
-        if height > MAX_DEPTH - 1 {
+        if height > MAX_DEPTH.round() - 1 {
             return static_eval;
         }
 
@@ -190,7 +176,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
         // approach taken from Ethereal.
         let r_alpha = if alpha > -MATE_SCORE + height     { alpha } else { -MATE_SCORE + height };
         let r_beta  = if  beta <  MATE_SCORE - height - 1 {  beta } else {  MATE_SCORE - height - 1 };
-        if r_alpha >= r_beta {return r_alpha; }
+        if r_alpha >= r_beta { return r_alpha; }
     }
 
     let in_pv = beta - alpha > 1;
@@ -209,7 +195,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
 
     let in_check = pos.in_check::<{ Board::US }>();
 
-    if !in_check && pos.ply() != 0 && depth >= 3 && pos.zugzwang_unlikely() {
+    if !in_check && pos.ply() != 0 && depth >= 3.into() && pos.zugzwang_unlikely() {
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
@@ -224,7 +210,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
 
-    let history_score = depth * depth;
+    let history_score = depth.round() * depth.round();
     let original_alpha = alpha;
     let mut moves_made = 0;
     let mut best_move = Move::NULL;
@@ -256,12 +242,16 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
             continue;
         }
 
-        let extension = i32::from(gives_check) + i32::from(is_promotion);
+        let extension = if gives_check {
+            Depth::new(1)
+        } else {
+            Depth::new(0)
+        };
 
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
-            score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
+            score = -alpha_beta(pos, info, depth + extension - 1, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -273,22 +263,22 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
             // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
             // 4. we've tried at least two moves at full depth, or three if we're in a PV-node.
             // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
-            let can_reduce = extension == 0
+            let can_reduce = extension == 0.into()
                 && !is_interesting
-                && depth >= 3
+                && depth >= 3.into()
                 && moves_made >= (2 + usize::from(in_pv));
-            let mut r = 0;
-            // late move reductions (75.6 +/- 83.3 elo)
+            let mut r: Depth = 0.into();
+            // late move reductions (75 +/- 83 elo)
             if can_reduce {
-                r += logistic_lateness_reduction(moves_made, depth).clamp(1, depth - 2);
+                r += logistic_lateness_reduction(moves_made, depth).clamp(1.into(), depth - 2);
             }
             // perform a zero-window search, possibly with a reduction
-            score = -alpha_beta(pos, info, depth - 1 + extension - r, -alpha - 1, -alpha);
+            score = -alpha_beta(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
             // if we failed, then full window search
             if score > alpha && score < beta {
-                score = -alpha_beta(pos, info, depth - 1 + extension, -beta, -alpha);
+                score = -alpha_beta(pos, info, depth + extension - 1, -beta, -alpha);
             }
-        };
+        }
         pos.unmake_move();
 
         if info.stopped {
@@ -350,14 +340,21 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: i32, mut alpha:
     alpha
 }
 
-fn is_move_futile(depth: i32, moves_made: usize, interesting: bool, static_eval: i32, a: i32, b: i32) -> bool {
-    if !(1..=4).contains(&depth) || interesting || moves_made == 1 {
+fn is_move_futile(
+    depth: Depth,
+    moves_made: usize,
+    interesting: bool,
+    static_eval: i32,
+    a: i32,
+    b: i32,
+) -> bool {
+    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
         return false;
     }
     if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
     #[allow(clippy::cast_sign_loss)]
-    let threshold = FUTILITY_PRUNING_MARGINS[depth as usize];
+    let threshold = FUTILITY_PRUNING_MARGINS[depth.n_ply()];
     static_eval + threshold < a
 }
