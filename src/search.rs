@@ -24,7 +24,7 @@ use crate::{
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 // values taken from MadChess.
-const FUTILITY_PRUNING_MARGINS: [i32; 5] = [
+static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
     100, // 0 moves to the horizon
     150, // 1 move to the horizon
     250, // 2 moves to the horizon
@@ -32,7 +32,7 @@ const FUTILITY_PRUNING_MARGINS: [i32; 5] = [
     600, // 4 moves to the horizon
 ];
 
-fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
+pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
@@ -43,7 +43,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         }
     }
 
-    let height: i32 = pos.ply().try_into().unwrap();
+    let height: i32 = pos.height().try_into().unwrap();
     info.nodes += 1;
     info.seldepth = info.seldepth.max(height.into());
 
@@ -69,16 +69,9 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
     }
 
     let mut move_list = MoveList::new();
-    let is_check = pos.in_check::<{ Board::US }>();
-    if is_check {
-        pos.generate_moves(&mut move_list); // if we're in check, the position isn't very quiescent, is it?
-    } else {
-        pos.generate_captures(&mut move_list);
-    }
+    pos.generate_captures(&mut move_list);
 
     let mut moves_made = 0;
-
-    // move_list.sort();
 
     for m in move_list {
         if !pos.make_move(m) {
@@ -86,7 +79,7 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         }
 
         moves_made += 1;
-        let score = -quiescence_search(pos, info, -beta, -alpha);
+        let score = -quiescence(pos, info, -beta, -alpha);
         pos.unmake_move();
 
         if score > alpha {
@@ -101,16 +94,12 @@ fn quiescence_search(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, bet
         }
     }
 
-    if moves_made == 0 && is_check {
-        // can't return a draw score when moves_made = 0, as sometimes we only check captures,
-        // but we can return mate scores, because we do full movegen when in check.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        return -MATE_SCORE + pos.ply() as i32;
-    }
-
     alpha
 }
 
+pub static mut LMRGRADIENT: f32 = 1.16;
+pub static mut LMRMIDPOINT: f32 = 3.85;
+pub static mut LMRMAXDEPTH: f32 = 0.41;
 #[allow(dead_code)]
 fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
     #![allow(
@@ -118,21 +107,24 @@ fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
-    const GRADIENT: f32 = 0.7;
-    const MIDPOINT: f32 = 4.5;
-    const REDUCTION_FACTOR: f32 = 2.0 / 5.0;
+    let gradient = unsafe { LMRGRADIENT };
+    let midpoint = unsafe { LMRMIDPOINT };
+    let reduction_factor = unsafe { LMRMAXDEPTH };
     let moves: f32 = moves as f32;
     let depth: f32 = depth.into();
-    let numerator = REDUCTION_FACTOR * depth - 1.0;
-    let denominator = 1.0 + f32::exp(-GRADIENT * (moves - MIDPOINT));
+    let numerator = reduction_factor * depth - 1.0;
+    let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
     ((numerator / denominator + 0.5) as i32).into()
 }
 
+pub static mut LOGSCALEFACTOR: f32 = 0.6;
+pub static mut LOGCONSTANT: f32 = 0.8;
 #[allow(dead_code)]
 fn logproduct_lateness_reduction(moves: usize, depth: Depth) -> Depth {
-    const SCALE: f32 = 0.6;
-    let r_moves = LOG[moves] * SCALE;
-    let r_depth = LOG[depth.n_ply()] * SCALE;
+    let scale = unsafe { LOGSCALEFACTOR };
+    let constant = unsafe { LOGCONSTANT };
+    let r_moves = LOG[moves].mul_add(scale, constant);
+    let r_depth = LOG[depth.n_ply()].mul_add(scale, constant);
     (r_moves * r_depth).into()
 }
 
@@ -143,14 +135,17 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
     pos.check_validity().unwrap();
 
     if depth <= 0.into() {
-        return quiescence_search(pos, info, alpha, beta);
+        return quiescence(pos, info, alpha, beta);
     }
 
     if info.nodes.trailing_zeros() >= 12 {
         info.check_up();
+        if info.stopped {
+            return 0;
+        }
     }
 
-    let height: i32 = pos.ply().try_into().unwrap();
+    let height: i32 = pos.height().try_into().unwrap();
 
     let root_node = height == 0;
 
@@ -195,7 +190,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
 
     let in_check = pos.in_check::<{ Board::US }>();
 
-    if !in_check && pos.ply() != 0 && depth >= 3.into() && pos.zugzwang_unlikely() {
+    if !in_check && pos.height() != 0 && depth >= 3.into() && pos.zugzwang_unlikely() {
         pos.make_nullmove();
         let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
         pos.unmake_nullmove();
@@ -222,8 +217,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
         }
     }
 
-    // move_list.sort();
-
     for m in move_list {
         if !pos.make_move(m) {
             continue;
@@ -242,10 +235,10 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
             continue;
         }
 
-        let extension = if gives_check {
-            Depth::new(1)
+        let extension: Depth = if gives_check {
+            0.8.into()
         } else {
-            Depth::new(0)
+            0.into()
         };
 
         let mut score;
@@ -270,7 +263,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
             let mut r: Depth = 0.into();
             // late move reductions (75 +/- 83 elo)
             if can_reduce {
-                r += logistic_lateness_reduction(moves_made, depth).clamp(1.into(), depth - 2);
+                r += logistic_lateness_reduction(moves_made, depth).max(0.into());
             }
             // perform a zero-window search, possibly with a reduction
             score = -alpha_beta(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
@@ -298,11 +291,12 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
 
                     if !is_capture {
                         // quiet moves that fail high are killers.
+                        // store the killer move based on this depth.
                         pos.insert_killer(m);
-                        // // this is a countermove.
+                        // store the move as a counter-move based on the previously made move.
                         pos.insert_countermove(m);
-                        // // double-strength history heuristic :3
-                        pos.add_history(m, 2 * history_score);
+                        // increase the history score for the move.
+                        pos.add_history(m, history_score);
                     }
 
                     pos.tt_store(best_move, beta, HFlag::Beta, depth);
@@ -311,10 +305,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
                 }
                 alpha = score;
                 best_move = m;
-                if !is_capture {
-                    // quiet moves that improve alpha increment the history table
-                    pos.add_history(m, history_score);
-                }
             }
         }
     }

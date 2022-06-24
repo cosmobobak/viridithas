@@ -4,7 +4,7 @@ macro_rules! impossible {
     () => {{
         #[cfg(debug_assertions)]
         {
-            panic!("Unreachable code!");
+            panic!("entered an impossible branch!");
         }
         #[allow(unreachable_code)]
         {

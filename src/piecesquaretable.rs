@@ -1,7 +1,8 @@
 use crate::{
+    board::evaluation::S,
     definitions::{A1, BLACK, WHITE},
     lookups::piece_name,
-    opt,
+    macros,
 };
 
 #[rustfmt::skip]
@@ -166,7 +167,7 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 64]; 13] {
                 3 => (&MG_ROOK_TABLE, &EG_ROOK_TABLE),
                 4 => (&MG_QUEEN_TABLE, &EG_QUEEN_TABLE),
                 5 => (&MG_KING_TABLE, &EG_KING_TABLE),
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             };
             let mut pst_idx = 0;
             while pst_idx < 64 {
@@ -195,23 +196,23 @@ const fn generate_pst<const MID_OR_END: bool>() -> [[i32; 64]; 13] {
 pub static MIDGAME_PST: [[i32; 64]; 13] = generate_pst::<MIDGAME>();
 pub static ENDGAME_PST: [[i32; 64]; 13] = generate_pst::<ENDGAME>();
 
-pub fn midgame_pst_value(piece: u8, sq: u8) -> i32 {
+pub fn midgame_pst_value(piece: u8, sq: u8, pst: &[[S; 64]; 13]) -> i32 {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
     unsafe {
-        *MIDGAME_PST
-            .get_unchecked(piece as usize)
+        pst.get_unchecked(piece as usize)
             .get_unchecked(sq as usize)
+            .0
     }
 }
 
-pub fn endgame_pst_value(piece: u8, sq: u8) -> i32 {
+pub fn endgame_pst_value(piece: u8, sq: u8, pst: &[[S; 64]; 13]) -> i32 {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
     unsafe {
-        *ENDGAME_PST
-            .get_unchecked(piece as usize)
+        pst.get_unchecked(piece as usize)
             .get_unchecked(sq as usize)
+            .1
     }
 }
 
@@ -229,6 +230,24 @@ pub fn _render_pst_table(pst: &[[i32; 64]; 13]) {
             println!();
         }
     }
+}
+
+pub fn construct_merged_psts() -> [[S; 64]; 13] {
+    let mut out = [[S(0, 0); 64]; 13];
+    for ((mg_table, eg_table), output_table) in MIDGAME_PST
+        .iter()
+        .zip(ENDGAME_PST.iter())
+        .zip(out.iter_mut())
+    {
+        for ((&mg, &eg), val) in mg_table
+            .iter()
+            .zip(eg_table.iter())
+            .zip(output_table.iter_mut())
+        {
+            *val = S(mg, eg);
+        }
+    }
+    out
 }
 
 mod tests {

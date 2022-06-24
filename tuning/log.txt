@@ -1,0 +1,2185 @@
+2022-06-18 11:42:54,298 INFO     chess-tuning-tools version: 0.9.3
+2022-06-18 11:42:54,339 INFO     Importing 140 existing datapoints. This could take a while...
+2022-06-18 11:43:19,837 INFO     chess-tuning-tools version: 0.9.3
+2022-06-18 11:43:19,851 INFO     Starting iteration 0
+2022-06-18 11:43:19,852 INFO     Testing {'LMRGRADIENT': 0.6846870434702708, 'LMRMIDPOINT': 2.047979355778866, 'LMRMAXDEPTH': 0.6680924274519179}
+2022-06-18 11:43:19,853 INFO     Start experiment
+2022-06-18 12:08:47,868 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 12:08:47,901 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 12:08:47,969 WARNING  Engine engine1 lost on time as White.
+2022-06-18 12:08:48,058 WARNING  Engine engine1 lost on time as White.
+2022-06-18 12:08:48,081 WARNING  Engine engine2 lost on time as White.
+2022-06-18 12:08:48,141 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 12:08:48,143 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 12:08:48,286 WARNING  Engine engine1 lost on time as White.
+2022-06-18 12:08:48,299 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 12:08:48,438 WARNING  Engine engine2 lost on time as White.
+2022-06-18 12:08:48,441 INFO     Experiment finished (1528.585434s elapsed).
+2022-06-18 12:08:48,884 INFO     Got Elo: -86.68364398557813 +- 35.77635640716732
+2022-06-18 12:08:48,885 INFO     Estimated draw rate: 36.96%
+2022-06-18 12:08:48,885 INFO     Updating model
+2022-06-18 12:08:48,893 INFO     GP sampling finished (0.007s)
+2022-06-18 12:08:49,002 INFO     Starting iteration 1
+2022-06-18 12:08:49,085 INFO     Testing {'LMRGRADIENT': 1.684687112759968, 'LMRMIDPOINT': 5.547976769024616, 'LMRMAXDEPTH': 0.1680926636372426}
+2022-06-18 12:08:49,089 INFO     Start experiment
+2022-06-18 12:35:52,171 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 12:35:52,481 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 12:35:52,484 WARNING  Engine engine1 lost on time as White.
+2022-06-18 12:35:52,634 WARNING  Engine engine1 lost on time as White.
+2022-06-18 12:35:53,076 INFO     Experiment finished (1623.987518s elapsed).
+2022-06-18 12:35:53,537 INFO     Got Elo: -120.41199826559246 +- 43.07176098923679
+2022-06-18 12:35:53,538 INFO     Estimated draw rate: 32.61%
+2022-06-18 12:35:53,539 INFO     Updating model
+2022-06-18 12:35:53,542 INFO     GP sampling finished (0.001998s)
+2022-06-18 12:35:53,589 INFO     Starting iteration 2
+2022-06-18 12:35:53,665 INFO     Testing {'LMRGRADIENT': 0.18468729379205776, 'LMRMIDPOINT': 7.29797717846561, 'LMRMAXDEPTH': 0.9180924892744904}
+2022-06-18 12:35:53,667 INFO     Start experiment
+2022-06-18 13:02:41,758 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:02:41,872 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:02:41,916 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:02:41,976 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:02:41,982 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:02:42,059 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:02:42,101 WARNING  Engine engine1 lost on time as White.
+2022-06-18 13:02:42,220 WARNING  Engine engine1 lost on time as White.
+2022-06-18 13:02:42,304 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:02:42,322 WARNING  Engine engine1 lost on time as White.
+2022-06-18 13:02:42,403 WARNING  Engine engine1 lost on time as White.
+2022-06-18 13:02:42,455 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:02:42,505 INFO     Experiment finished (1608.836905s elapsed).
+2022-06-18 13:02:42,879 INFO     Got Elo: -111.79612712314851 +- 53.03842378651436
+2022-06-18 13:02:42,879 INFO     Estimated draw rate: 30.43%
+2022-06-18 13:02:42,879 INFO     Updating model
+2022-06-18 13:02:42,882 INFO     GP sampling finished (0.001998s)
+2022-06-18 13:02:42,918 INFO     Starting iteration 3
+2022-06-18 13:02:43,159 INFO     Testing {'LMRGRADIENT': 1.18468705862259, 'LMRMIDPOINT': 3.797977775577469, 'LMRMAXDEPTH': 0.4180924917658989}
+2022-06-18 13:02:43,162 INFO     Start experiment
+2022-06-18 13:32:40,642 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:32:40,671 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:32:40,914 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:32:40,939 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:32:41,110 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:32:41,169 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:32:41,193 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:32:41,314 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 13:32:41,337 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 13:32:41,400 WARNING  Engine engine2 lost on time as White.
+2022-06-18 13:32:41,413 INFO     Experiment finished (1798.249191s elapsed).
+2022-06-18 13:32:41,759 INFO     Got Elo: 23.196778791074745 +- 39.48361742192314
+2022-06-18 13:32:41,759 INFO     Estimated draw rate: 36.96%
+2022-06-18 13:32:41,759 INFO     Updating model
+2022-06-18 13:32:41,763 INFO     GP sampling finished (0.002998s)
+2022-06-18 13:32:41,797 INFO     Starting iteration 4
+2022-06-18 13:32:41,877 INFO     Testing {'LMRGRADIENT': 1.3466143581593883, 'LMRMIDPOINT': 6.422977343432308, 'LMRMAXDEPTH': 0.7490560185476096}
+2022-06-18 13:32:41,879 INFO     Start experiment
+2022-06-18 14:00:27,475 WARNING  Engine engine2 lost on time as White.
+2022-06-18 14:00:27,545 WARNING  Engine engine2 lost on time as White.
+2022-06-18 14:00:27,787 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 14:00:27,861 WARNING  Engine engine2 lost on time as White.
+2022-06-18 14:00:27,951 WARNING  Engine engine2 lost on time as White.
+2022-06-18 14:00:28,109 WARNING  Engine engine1 lost on time as White.
+2022-06-18 14:00:28,211 INFO     Experiment finished (1666.330777s elapsed).
+2022-06-18 14:00:28,521 INFO     Got Elo: -38.764005203222595 +- 40.83560165972678
+2022-06-18 14:00:28,521 INFO     Estimated draw rate: 36.96%
+2022-06-18 14:00:28,522 INFO     Updating model
+2022-06-18 14:00:28,525 INFO     GP sampling finished (0.002786s)
+2022-06-18 14:00:28,558 INFO     Starting iteration 5
+2022-06-18 14:00:28,639 INFO     Testing {'LMRGRADIENT': 0.03022776967145792, 'LMRMIDPOINT': 2.632837575914017, 'LMRMAXDEPTH': 0.2917133415727809}
+2022-06-18 14:00:28,641 INFO     Start experiment
+2022-06-18 14:28:10,052 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 14:28:10,061 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 14:28:10,217 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 14:28:10,345 WARNING  Engine engine1 lost on time as White.
+2022-06-18 14:28:10,521 WARNING  Engine engine1 lost on time as White.
+2022-06-18 14:28:10,530 WARNING  Engine engine2 lost on time as White.
+2022-06-18 14:28:10,538 INFO     Experiment finished (1661.896634s elapsed).
+2022-06-18 14:28:10,861 INFO     Got Elo: -54.48789880719554 +- 35.52978309179617
+2022-06-18 14:28:10,861 INFO     Estimated draw rate: 32.61%
+2022-06-18 14:28:10,862 INFO     Updating model
+2022-06-18 14:28:10,862 INFO     GP sampling finished (0.0s)
+2022-06-18 14:28:10,884 INFO     Starting iteration 6
+2022-06-18 14:28:10,958 INFO     Testing {'LMRGRADIENT': 0.39319755357998537, 'LMRMIDPOINT': 5.038906984833585, 'LMRMAXDEPTH': 0.5429643054077975}
+2022-06-18 14:28:10,960 INFO     Start experiment
+2022-06-18 16:21:17,174 INFO     chess-tuning-tools version: 0.9.3
+2022-06-18 16:21:17,224 INFO     Resuming from existing optimizer in model.pkl.
+2022-06-18 16:21:17,224 INFO     Starting iteration 6
+2022-06-18 16:21:17,300 INFO     Testing {'LMRGRADIENT': 0.39319755357998537, 'LMRMIDPOINT': 5.038906984833585, 'LMRMAXDEPTH': 0.5429643054077975}
+2022-06-18 16:21:17,302 INFO     Start experiment
+2022-06-18 16:50:40,958 WARNING  Engine engine1 lost on time as White.
+2022-06-18 16:50:40,974 WARNING  Engine engine2 lost on time as White.
+2022-06-18 16:50:41,073 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 16:50:41,127 WARNING  Engine engine2 lost on time as White.
+2022-06-18 16:50:41,210 WARNING  Engine engine1 lost on time as White.
+2022-06-18 16:50:41,253 WARNING  Engine engine1 lost on time as White.
+2022-06-18 16:50:41,367 WARNING  Engine engine2 lost on time as White.
+2022-06-18 16:50:41,522 WARNING  Engine engine1 lost on time as White.
+2022-06-18 16:50:41,556 WARNING  Engine engine2 lost on time as White.
+2022-06-18 16:50:41,639 WARNING  Engine engine1 lost on time as White.
+2022-06-18 16:50:41,717 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 16:50:41,732 INFO     Experiment finished (1764.429587s elapsed).
+2022-06-18 16:50:42,081 INFO     Got Elo: -30.964889323511326 +- 33.53399267472398
+2022-06-18 16:50:42,084 INFO     Estimated draw rate: 34.78%
+2022-06-18 16:50:42,084 INFO     Updating model
+2022-06-18 16:50:42,095 INFO     GP sampling finished (0.010215s)
+2022-06-18 16:50:42,201 INFO     Starting iteration 7
+2022-06-18 16:50:42,298 INFO     Testing {'LMRGRADIENT': 0.9748504092020338, 'LMRMIDPOINT': 8.0, 'LMRMAXDEPTH': 0.09831476678321172}
+2022-06-18 16:50:42,303 INFO     Start experiment
+2022-06-18 17:19:45,821 WARNING  Engine engine2 lost on time as White.
+2022-06-18 17:19:45,927 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 17:19:45,958 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 17:19:46,204 WARNING  Engine engine1 lost on time as White.
+2022-06-18 17:19:46,498 WARNING  Engine engine1 lost on time as White.
+2022-06-18 17:19:46,529 WARNING  Engine engine2 lost on time as White.
+2022-06-18 17:19:46,560 INFO     Experiment finished (1744.256973s elapsed).
+2022-06-18 17:19:46,879 INFO     Got Elo: -111.79612712314851 +- 44.123894400420255
+2022-06-18 17:19:46,879 INFO     Estimated draw rate: 26.09%
+2022-06-18 17:19:46,880 INFO     Updating model
+2022-06-18 17:19:46,881 INFO     GP sampling finished (0.00102s)
+2022-06-18 17:19:46,898 INFO     Starting iteration 8
+2022-06-18 17:19:46,951 INFO     Testing {'LMRGRADIENT': 0.800886799860615, 'LMRMIDPOINT': 3.5135685640250114, 'LMRMAXDEPTH': 0.971373755069995}
+2022-06-18 17:19:46,953 INFO     Start experiment
+2022-06-18 17:41:28,723 INFO     Experiment finished (1301.769974s elapsed).
+2022-06-18 17:41:29,152 INFO     Got Elo: -381.69700377572997 +- 80.08784893232408
+2022-06-18 17:41:29,152 INFO     Estimated draw rate: 13.04%
+2022-06-18 17:41:29,152 INFO     Updating model
+2022-06-18 17:41:29,153 INFO     GP sampling finished (0.0s)
+2022-06-18 17:41:29,170 INFO     Starting iteration 9
+2022-06-18 17:41:29,233 INFO     Testing {'LMRGRADIENT': 1.6138769557109545, 'LMRMIDPOINT': 1.7322301827796966, 'LMRMAXDEPTH': 0.835003717942601}
+2022-06-18 17:41:29,235 INFO     Start experiment
+2022-06-18 18:07:08,866 WARNING  Engine engine2 lost on time as White.
+2022-06-18 18:07:09,300 WARNING  Engine engine2 lost on time as White.
+2022-06-18 18:07:09,353 INFO     Experiment finished (1540.118306s elapsed).
+2022-06-18 18:07:09,712 INFO     Got Elo: -279.5880017344074 +- 64.81282959870556
+2022-06-18 18:07:09,712 INFO     Estimated draw rate: 17.39%
+2022-06-18 18:07:09,713 INFO     Updating model
+2022-06-18 18:07:09,713 INFO     GP sampling finished (0.0s)
+2022-06-18 18:07:09,728 INFO     Starting iteration 10
+2022-06-18 18:07:09,796 INFO     Testing {'LMRGRADIENT': 0.8316113686748833, 'LMRMIDPOINT': 6.75866984549388, 'LMRMAXDEPTH': 0.35373670618987957}
+2022-06-18 18:07:09,798 INFO     Start experiment
+2022-06-18 18:33:27,921 WARNING  Engine engine2 lost on time as White.
+2022-06-18 18:33:28,005 WARNING  Engine engine2 lost on time as White.
+2022-06-18 18:33:28,187 WARNING  Engine engine1 lost on time as White.
+2022-06-18 18:33:28,604 INFO     Experiment finished (1578.805811s elapsed).
+2022-06-18 18:33:28,996 INFO     Got Elo: -7.722062078154725 +- 29.227815427212672
+2022-06-18 18:33:28,996 INFO     Estimated draw rate: 45.65%
+2022-06-18 18:33:28,996 INFO     Updating model
+2022-06-18 18:33:28,998 INFO     GP sampling finished (0.000999s)
+2022-06-18 18:33:29,029 INFO     Starting iteration 11
+2022-06-18 18:33:29,079 INFO     Testing {'LMRGRADIENT': 1.8397503199819463, 'LMRMIDPOINT': 1.1142170926667605, 'LMRMAXDEPTH': 0.4917425766440105}
+2022-06-18 18:33:29,082 INFO     Start experiment
+2022-06-18 19:00:46,730 WARNING  Engine engine2 lost on time as White.
+2022-06-18 19:00:46,757 WARNING  Engine engine1 lost on time as White.
+2022-06-18 19:00:46,815 WARNING  Engine engine1 lost on time as White.
+2022-06-18 19:00:47,218 WARNING  Engine engine1 lost on time as White.
+2022-06-18 19:00:47,286 WARNING  Engine engine2 lost on time as White.
+2022-06-18 19:00:47,287 INFO     Experiment finished (1638.205335s elapsed).
+2022-06-18 19:00:47,623 INFO     Got Elo: -46.602227628574866 +- 38.32168735700737
+2022-06-18 19:00:47,623 INFO     Estimated draw rate: 43.48%
+2022-06-18 19:00:47,624 INFO     Updating model
+2022-06-18 19:00:47,625 INFO     GP sampling finished (0.001024s)
+2022-06-18 19:00:47,651 INFO     Starting iteration 12
+2022-06-18 19:00:47,731 INFO     Testing {'LMRGRADIENT': 0.3048255152385559, 'LMRMIDPOINT': 3.1102321616072897, 'LMRMAXDEPTH': 0.06897412778515488}
+2022-06-18 19:00:47,733 INFO     Start experiment
+2022-06-18 19:29:50,795 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 19:29:50,930 WARNING  Engine engine1 lost on time as White.
+2022-06-18 19:29:50,933 WARNING  Engine engine2 lost on time as White.
+2022-06-18 19:29:51,076 INFO     Experiment finished (1743.341565s elapsed).
+2022-06-18 19:29:51,395 INFO     Got Elo: -86.68364398557813 +- 40.996703489909706
+2022-06-18 19:29:51,396 INFO     Estimated draw rate: 28.26%
+2022-06-18 19:29:51,396 INFO     Updating model
+2022-06-18 19:29:51,398 INFO     GP sampling finished (0.000993s)
+2022-06-18 19:29:51,422 INFO     Starting iteration 13
+2022-06-18 19:29:51,485 INFO     Testing {'LMRGRADIENT': 1.9061107792492216, 'LMRMIDPOINT': 4.371094283439515, 'LMRMAXDEPTH': 0.9466578847199048}
+2022-06-18 19:29:51,488 INFO     Start experiment
+2022-06-18 19:52:18,874 WARNING  Engine engine2 lost on time as White.
+2022-06-18 19:52:19,013 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 19:52:19,074 INFO     Experiment finished (1347.58592s elapsed).
+2022-06-18 19:52:19,457 INFO     Got Elo: -361.2359947967774 +- 79.43939606879957
+2022-06-18 19:52:19,458 INFO     Estimated draw rate: 10.87%
+2022-06-18 19:52:19,459 INFO     Updating model
+2022-06-18 19:52:19,460 INFO     GP sampling finished (0.0s)
+2022-06-18 19:52:19,476 INFO     Starting iteration 14
+2022-06-18 19:52:19,524 INFO     Testing {'LMRGRADIENT': 1.5072089788230236, 'LMRMIDPOINT': 4.170807827027987, 'LMRMAXDEPTH': 0.619920078739464}
+2022-06-18 19:52:19,525 INFO     Start experiment
+2022-06-18 20:18:22,254 WARNING  Engine engine2 lost on time as White.
+2022-06-18 20:18:22,358 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 20:18:22,429 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 20:18:22,595 WARNING  Engine engine1 lost on time as White.
+2022-06-18 20:18:22,851 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 20:18:22,857 INFO     Experiment finished (1563.331242s elapsed).
+2022-06-18 20:18:23,191 INFO     Got Elo: -147.19071411783773 +- 44.14015585269003
+2022-06-18 20:18:23,191 INFO     Estimated draw rate: 39.13%
+2022-06-18 20:18:23,192 INFO     Updating model
+2022-06-18 20:18:23,192 INFO     GP sampling finished (0.0s)
+2022-06-18 20:18:23,210 INFO     Starting iteration 15
+2022-06-18 20:18:23,256 INFO     Testing {'LMRGRADIENT': 1.3062636074376057, 'LMRMIDPOINT': 2.207451321001224, 'LMRMAXDEPTH': 0.21595273695016098}
+2022-06-18 20:18:23,258 INFO     Start experiment
+2022-06-18 20:45:46,381 WARNING  Engine engine1 lost on time as White.
+2022-06-18 20:45:46,456 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 20:45:46,812 WARNING  Engine engine1 lost on time as White.
+2022-06-18 20:45:46,844 WARNING  Engine engine2 lost on time as White.
+2022-06-18 20:45:46,992 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 20:45:47,014 WARNING  Engine engine2 lost on time as White.
+2022-06-18 20:45:47,103 INFO     Experiment finished (1643.843931s elapsed).
+2022-06-18 20:45:47,470 INFO     Got Elo: -70.43650362227247 +- 52.683785026650774
+2022-06-18 20:45:47,471 INFO     Estimated draw rate: 23.91%
+2022-06-18 20:45:47,471 INFO     Updating model
+2022-06-18 20:46:41,557 INFO     GP sampling finished (54.085336s)
+2022-06-18 20:46:41,659 INFO     Starting iteration 16
+2022-06-18 20:46:45,674 INFO     Current optimum:
+{'LMRGRADIENT': 0.9382642708984796, 'LMRMIDPOINT': 4.423100659122239, 'LMRMAXDEPTH': 0.4060594127736268}
+2022-06-18 20:46:45,675 INFO     Estimated Elo: 7.3542 +- 42.0853
+2022-06-18 20:46:45,675 INFO     90.0% confidence interval of the Elo value: (-61.8699, 76.5783)
+2022-06-18 20:46:45,877 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.03         1.64
+LMRMIDPOINT          1.5          8.0
+LMRMAXDEPTH          0.0         0.65
+
+2022-06-18 20:47:00,716 INFO     Saving a plot to plots\landscapes\landscape-20220618-204645-16.png.
+2022-06-18 20:47:01,399 INFO     Testing {'LMRGRADIENT': 0.6253977455744646, 'LMRMIDPOINT': 7.953959876638042, 'LMRMAXDEPTH': 0.6400757325347315}
+2022-06-18 20:47:01,399 INFO     Start experiment
+2022-06-18 21:12:49,752 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:12:49,818 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:12:49,840 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 21:12:49,860 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 21:12:49,910 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 21:12:49,939 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:12:50,124 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 21:12:50,354 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:12:50,453 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:12:50,457 INFO     Experiment finished (1549.055013s elapsed).
+2022-06-18 21:12:50,871 INFO     Got Elo: -62.42965821351763 +- 35.948370218253615
+2022-06-18 21:12:50,872 INFO     Estimated draw rate: 43.48%
+2022-06-18 21:12:50,872 INFO     Updating model
+2022-06-18 21:12:55,248 INFO     GP sampling finished (4.374302s)
+2022-06-18 21:12:55,318 INFO     Starting iteration 17
+2022-06-18 21:12:58,547 INFO     Current optimum:
+{'LMRGRADIENT': 0.9441816363748758, 'LMRMIDPOINT': 4.420328638893487, 'LMRMAXDEPTH': 0.40639118442913913}
+2022-06-18 21:12:58,548 INFO     Estimated Elo: 5.9584 +- 42.2687
+2022-06-18 21:12:58,549 INFO     90.0% confidence interval of the Elo value: (-63.5674, 75.4842)
+2022-06-18 21:12:58,744 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.7
+LMRMIDPOINT          1.7          7.9
+LMRMAXDEPTH         0.08         0.69
+
+2022-06-18 21:13:11,101 INFO     Saving a plot to plots\landscapes\landscape-20220618-211258-17.png.
+2022-06-18 21:13:11,656 INFO     Testing {'LMRGRADIENT': 0.7447644790907371, 'LMRMIDPOINT': 4.437609833050876, 'LMRMAXDEPTH': 0.37341208496194844}
+2022-06-18 21:13:11,658 INFO     Start experiment
+2022-06-18 21:42:31,896 WARNING  Engine engine2 lost on time as White.
+2022-06-18 21:42:31,927 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 21:42:32,144 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 21:42:32,203 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 21:42:32,518 WARNING  Engine engine2 lost on time as White.
+2022-06-18 21:42:32,540 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:42:32,584 WARNING  Engine engine2 lost on time as White.
+2022-06-18 21:42:32,589 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:42:32,625 WARNING  Engine engine1 lost on time as White.
+2022-06-18 21:42:32,634 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 21:42:32,676 INFO     Experiment finished (1761.017289s elapsed).
+2022-06-18 21:42:33,042 INFO     Got Elo: -54.48789880719554 +- 37.179641120696054
+2022-06-18 21:42:33,043 INFO     Estimated draw rate: 28.26%
+2022-06-18 21:42:33,044 INFO     Updating model
+2022-06-18 21:42:37,411 INFO     GP sampling finished (4.366058s)
+2022-06-18 21:42:37,476 INFO     Starting iteration 18
+2022-06-18 21:42:41,338 INFO     Current optimum:
+{'LMRGRADIENT': 1.1528823604098477, 'LMRMIDPOINT': 3.862188346438982, 'LMRMAXDEPTH': 0.4118267192086538}
+2022-06-18 21:42:41,338 INFO     Estimated Elo: -10.6921 +- 31.4427
+2022-06-18 21:42:41,339 INFO     90.0% confidence interval of the Elo value: (-62.4108, 41.0266)
+2022-06-18 21:42:41,522 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.7
+LMRMIDPOINT          1.3          7.8
+LMRMAXDEPTH         0.01         0.65
+
+2022-06-18 21:42:53,699 INFO     Saving a plot to plots\landscapes\landscape-20220618-214241-18.png.
+2022-06-18 21:42:54,673 INFO     Testing {'LMRGRADIENT': 0.40640645585717494, 'LMRMIDPOINT': 6.270900644411197, 'LMRMAXDEPTH': 0.2930962062704031}
+2022-06-18 21:42:54,676 INFO     Start experiment
+2022-06-18 22:08:57,836 WARNING  Engine engine1 lost on time as White.
+2022-06-18 22:08:57,875 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 22:08:58,099 WARNING  Engine engine1 lost on time as White.
+2022-06-18 22:08:58,325 WARNING  Engine engine1 lost on time as White.
+2022-06-18 22:08:58,459 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 22:08:58,480 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 22:08:58,556 WARNING  Engine engine2 lost on time as White.
+2022-06-18 22:08:58,561 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 22:08:58,564 WARNING  Engine engine2 lost on time as White.
+2022-06-18 22:08:58,593 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 22:08:58,603 WARNING  Engine engine1 lost on time as White.
+2022-06-18 22:08:58,608 WARNING  Engine engine1 lost on time as Black.
+2022-06-18 22:08:58,671 WARNING  Engine engine2 lost on time as Black.
+2022-06-18 22:08:58,671 WARNING  Engine engine2 lost on time as White.
+2022-06-18 22:08:58,675 INFO     Experiment finished (1563.997467s elapsed).
+2022-06-18 22:08:59,161 INFO     Got Elo: -23.196778791074692 +- 47.940203056423634
+2022-06-18 22:08:59,162 INFO     Estimated draw rate: 23.91%
+2022-06-18 22:08:59,163 INFO     Updating model
+2022-06-18 22:09:08,305 INFO     GP sampling finished (9.141003s)
+2022-06-18 22:09:08,467 INFO     Starting iteration 19
+2022-06-18 22:09:20,316 INFO     Current optimum:
+{'LMRGRADIENT': 1.1558851132035257, 'LMRMIDPOINT': 3.8484971296551995, 'LMRMAXDEPTH': 0.40908839475063985}
+2022-06-18 22:09:20,317 INFO     Estimated Elo: -10.6477 +- 31.9138
+2022-06-18 22:09:20,318 INFO     90.0% confidence interval of the Elo value: (-63.1412, 41.8458)
+2022-06-18 22:09:20,579 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0         1.68
+LMRMIDPOINT          1.4          8.0
+LMRMAXDEPTH         0.01         0.69
+
+2022-06-18 22:09:41,285 INFO     Saving a plot to plots\landscapes\landscape-20220618-220920-19.png.
+2022-06-18 22:09:42,062 INFO     Testing {'LMRGRADIENT': 1.0162288134380022, 'LMRMIDPOINT': 6.163751434514136, 'LMRMAXDEPTH': 0.4994891284221399}
+2022-06-18 22:09:42,064 INFO     Start experiment
+2022-06-19 01:13:24,378 INFO     chess-tuning-tools version: 0.9.3
+2022-06-19 01:13:24,439 INFO     Resuming from existing optimizer in model.pkl.
+2022-06-19 01:13:24,440 INFO     Starting iteration 19
+2022-06-19 01:13:28,284 INFO     Current optimum:
+{'LMRGRADIENT': 1.155885081921952, 'LMRMIDPOINT': 3.8484972168200753, 'LMRMAXDEPTH': 0.4090883965166506}
+2022-06-19 01:13:28,284 INFO     Estimated Elo: -10.6477 +- 31.9138
+2022-06-19 01:13:28,285 INFO     90.0% confidence interval of the Elo value: (-63.1412, 41.8458)
+2022-06-19 01:13:28,485 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.68
+LMRMIDPOINT          1.7          8.0
+LMRMAXDEPTH          0.0         0.73
+
+2022-06-19 01:13:42,439 INFO     Saving a plot to plots\landscapes\landscape-20220619-011328-19.png.
+2022-06-19 01:13:43,374 INFO     Testing {'LMRGRADIENT': 1.0162288134380022, 'LMRMIDPOINT': 6.163751434514136, 'LMRMAXDEPTH': 0.4994891284221399}
+2022-06-19 01:13:43,375 INFO     Start experiment
+2022-06-19 01:40:26,018 WARNING  Engine engine2 lost on time as White.
+2022-06-19 01:40:26,080 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 01:40:26,091 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 01:40:26,098 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 01:40:26,104 WARNING  Engine engine2 lost on time as White.
+2022-06-19 01:40:26,164 WARNING  Engine engine2 lost on time as White.
+2022-06-19 01:40:26,234 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 01:40:26,490 WARNING  Engine engine1 lost on time as White.
+2022-06-19 01:40:26,499 WARNING  Engine engine2 lost on time as White.
+2022-06-19 01:40:26,550 WARNING  Engine engine1 lost on time as White.
+2022-06-19 01:40:26,712 WARNING  Engine engine1 lost on time as White.
+2022-06-19 01:40:26,716 INFO     Experiment finished (1603.338983s elapsed).
+2022-06-19 01:40:27,133 INFO     Got Elo: 1.9286549331065745e-14 +- 33.92219706830726
+2022-06-19 01:40:27,134 INFO     Estimated draw rate: 39.13%
+2022-06-19 01:40:27,135 INFO     Updating model
+2022-06-19 01:40:32,136 INFO     GP sampling finished (4.99932s)
+2022-06-19 01:40:32,166 INFO     Starting iteration 20
+2022-06-19 01:40:36,028 INFO     Current optimum:
+{'LMRGRADIENT': 0.9064811783894771, 'LMRMIDPOINT': 6.240754173998883, 'LMRMAXDEPTH': 0.457814039192222}
+2022-06-19 01:40:36,029 INFO     Estimated Elo: -2.7936 +- 28.9283
+2022-06-19 01:40:36,030 INFO     90.0% confidence interval of the Elo value: (-50.3764, 44.7893)
+2022-06-19 01:40:36,214 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.75
+LMRMIDPOINT          1.7          8.0
+LMRMAXDEPTH          0.0         0.71
+
+2022-06-19 01:40:48,151 INFO     Saving a plot to plots\landscapes\landscape-20220619-014036-20.png.
+2022-06-19 01:40:48,726 INFO     Testing {'LMRGRADIENT': 0.0849715411579649, 'LMRMIDPOINT': 6.594946939253118, 'LMRMAXDEPTH': 0.4668250864728421}
+2022-06-19 01:40:48,727 INFO     Start experiment
+2022-06-19 02:11:16,112 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 02:11:16,132 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:11:16,210 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:11:16,406 WARNING  Engine engine2 lost on time as White.
+2022-06-19 02:11:16,500 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:11:16,567 WARNING  Engine engine2 lost on time as White.
+2022-06-19 02:11:16,721 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:11:16,762 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:11:16,790 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 02:11:16,795 INFO     Experiment finished (1828.065887s elapsed).
+2022-06-19 02:11:17,151 INFO     Got Elo: -23.196778791074692 +- 42.51592558587919
+2022-06-19 02:11:17,152 INFO     Estimated draw rate: 36.96%
+2022-06-19 02:11:17,152 INFO     Updating model
+2022-06-19 02:11:21,273 INFO     GP sampling finished (4.120982s)
+2022-06-19 02:11:21,297 INFO     Starting iteration 21
+2022-06-19 02:11:24,872 INFO     Current optimum:
+{'LMRGRADIENT': 0.8786146860984682, 'LMRMIDPOINT': 6.293155879536738, 'LMRMAXDEPTH': 0.4564138052261154}
+2022-06-19 02:11:24,873 INFO     Estimated Elo: -2.5869 +- 29.5537
+2022-06-19 02:11:24,874 INFO     90.0% confidence interval of the Elo value: (-51.1984, 46.0245)
+2022-06-19 02:11:25,044 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT          1.8          8.0
+LMRMAXDEPTH          0.0          0.7
+
+2022-06-19 02:11:36,872 INFO     Saving a plot to plots\landscapes\landscape-20220619-021125-21.png.
+2022-06-19 02:11:37,428 INFO     Testing {'LMRGRADIENT': 1.075411350241907, 'LMRMIDPOINT': 4.9227925640569845, 'LMRMAXDEPTH': 0.1377425398292581}
+2022-06-19 02:11:37,429 INFO     Start experiment
+2022-06-19 02:40:56,183 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 02:40:56,391 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:40:56,554 WARNING  Engine engine2 lost on time as White.
+2022-06-19 02:40:56,769 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 02:40:56,778 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 02:40:56,801 INFO     Experiment finished (1759.370798s elapsed).
+2022-06-19 02:40:57,153 INFO     Got Elo: -120.41199826559246 +- 41.144442744561324
+2022-06-19 02:40:57,154 INFO     Estimated draw rate: 32.61%
+2022-06-19 02:40:57,154 INFO     Updating model
+2022-06-19 02:41:01,318 INFO     GP sampling finished (4.163975s)
+2022-06-19 02:41:01,349 INFO     Starting iteration 22
+2022-06-19 02:41:04,907 INFO     Current optimum:
+{'LMRGRADIENT': 0.8761452863096326, 'LMRMIDPOINT': 6.310813719478209, 'LMRMAXDEPTH': 0.4584422798013129}
+2022-06-19 02:41:04,908 INFO     Estimated Elo: -2.4548 +- 29.5432
+2022-06-19 02:41:04,908 INFO     90.0% confidence interval of the Elo value: (-51.049, 46.1395)
+2022-06-19 02:41:05,079 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.7
+LMRMIDPOINT          1.4          7.9
+LMRMAXDEPTH          0.0          0.7
+
+2022-06-19 02:41:17,248 INFO     Saving a plot to plots\landscapes\landscape-20220619-024105-22.png.
+2022-06-19 02:41:18,000 INFO     Testing {'LMRGRADIENT': 1.524447677907604, 'LMRMIDPOINT': 7.363560881660093, 'LMRMAXDEPTH': 0.4133733323224296}
+2022-06-19 02:41:18,001 INFO     Start experiment
+2022-06-19 03:09:43,739 WARNING  Engine engine1 lost on time as White.
+2022-06-19 03:09:43,913 WARNING  Engine engine2 lost on time as White.
+2022-06-19 03:09:44,151 WARNING  Engine engine1 lost on time as White.
+2022-06-19 03:09:44,250 WARNING  Engine engine2 lost on time as White.
+2022-06-19 03:09:44,387 WARNING  Engine engine1 lost on time as White.
+2022-06-19 03:09:44,408 INFO     Experiment finished (1706.405695s elapsed).
+2022-06-19 03:09:44,735 INFO     Got Elo: -30.96488932351123 +- 43.01644463560849
+2022-06-19 03:09:44,736 INFO     Estimated draw rate: 39.13%
+2022-06-19 03:09:44,736 INFO     Updating model
+2022-06-19 03:09:48,897 INFO     GP sampling finished (4.161607s)
+2022-06-19 03:09:48,926 INFO     Starting iteration 23
+2022-06-19 03:09:52,451 INFO     Current optimum:
+{'LMRGRADIENT': 0.9483982957202485, 'LMRMIDPOINT': 6.357588516349048, 'LMRMAXDEPTH': 0.45700331826753715}
+2022-06-19 03:09:52,452 INFO     Estimated Elo: -2.0203 +- 28.2947
+2022-06-19 03:09:52,452 INFO     90.0% confidence interval of the Elo value: (-48.5609, 44.5203)
+2022-06-19 03:09:52,622 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0         1.73
+LMRMIDPOINT          1.4          7.9
+LMRMAXDEPTH         0.07         0.74
+
+2022-06-19 03:10:04,512 INFO     Saving a plot to plots\landscapes\landscape-20220619-030952-23.png.
+2022-06-19 03:10:05,085 INFO     Testing {'LMRGRADIENT': 0.5291188292276485, 'LMRMIDPOINT': 6.833780973585474, 'LMRMAXDEPTH': 0.6261927191209329}
+2022-06-19 03:10:05,087 INFO     Start experiment
+2022-06-19 03:39:11,920 WARNING  Engine engine1 lost on time as White.
+2022-06-19 03:39:12,241 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 03:39:12,318 WARNING  Engine engine2 lost on time as White.
+2022-06-19 03:39:12,594 INFO     Experiment finished (1747.507552s elapsed).
+2022-06-19 03:39:12,908 INFO     Got Elo: -38.764005203222595 +- 34.17984839689427
+2022-06-19 03:39:12,909 INFO     Estimated draw rate: 45.65%
+2022-06-19 03:39:12,909 INFO     Updating model
+2022-06-19 03:39:16,997 INFO     GP sampling finished (4.088s)
+2022-06-19 03:39:17,021 INFO     Starting iteration 24
+2022-06-19 03:39:20,636 INFO     Current optimum:
+{'LMRGRADIENT': 0.9154870481724828, 'LMRMIDPOINT': 6.398780160472767, 'LMRMAXDEPTH': 0.45800538888575304}
+2022-06-19 03:39:20,636 INFO     Estimated Elo: -1.9007 +- 28.5644
+2022-06-19 03:39:20,636 INFO     90.0% confidence interval of the Elo value: (-48.885, 45.0836)
+2022-06-19 03:39:20,799 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT         1.37         7.95
+LMRMAXDEPTH          0.0         0.75
+
+2022-06-19 03:39:32,550 INFO     Saving a plot to plots\landscapes\landscape-20220619-033920-24.png.
+2022-06-19 03:39:33,437 INFO     Testing {'LMRGRADIENT': 1.1983244915068672, 'LMRMIDPOINT': 7.620171718427722, 'LMRMAXDEPTH': 0.5864954118221309}
+2022-06-19 03:39:33,438 INFO     Start experiment
+2022-06-19 04:06:20,855 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:06:20,951 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:06:21,015 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:06:21,077 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:06:21,085 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:06:21,098 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:06:21,108 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:06:21,130 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:06:21,133 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:06:21,137 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:06:21,171 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:06:21,180 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:06:21,308 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:06:21,362 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:06:21,383 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:06:21,388 INFO     Experiment finished (1607.946272s elapsed).
+2022-06-19 04:06:21,757 INFO     Got Elo: -7.722062078154614 +- 43.970389043013235
+2022-06-19 04:06:21,758 INFO     Estimated draw rate: 32.61%
+2022-06-19 04:06:21,758 INFO     Updating model
+2022-06-19 04:06:25,980 INFO     GP sampling finished (4.221707s)
+2022-06-19 04:06:26,025 INFO     Starting iteration 25
+2022-06-19 04:06:29,782 INFO     Current optimum:
+{'LMRGRADIENT': 0.9483217452129453, 'LMRMIDPOINT': 6.557730169204198, 'LMRMAXDEPTH': 0.4705381566073446}
+2022-06-19 04:06:29,788 INFO     Estimated Elo: -0.7387 +- 28.3453
+2022-06-19 04:06:29,789 INFO     90.0% confidence interval of the Elo value: (-47.3626, 45.8851)
+2022-06-19 04:06:29,969 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.88
+LMRMIDPOINT          1.7          8.0
+LMRMAXDEPTH          0.0          0.7
+
+2022-06-19 04:06:42,344 INFO     Saving a plot to plots\landscapes\landscape-20220619-040629-25.png.
+2022-06-19 04:06:42,924 INFO     Testing {'LMRGRADIENT': 0.5444502019995461, 'LMRMIDPOINT': 7.010816025713632, 'LMRMAXDEPTH': 0.4406609346700895}
+2022-06-19 04:06:42,926 INFO     Start experiment
+2022-06-19 04:34:17,377 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:34:17,470 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:34:17,472 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:34:17,539 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:34:17,550 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:34:17,602 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:34:17,620 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:34:17,622 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:34:17,632 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:34:17,690 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:34:17,698 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 04:34:17,724 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:34:17,795 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 04:34:17,810 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:34:17,831 WARNING  Engine engine2 lost on time as White.
+2022-06-19 04:34:17,901 WARNING  Engine engine1 lost on time as White.
+2022-06-19 04:34:17,975 INFO     Experiment finished (1655.048974s elapsed).
+2022-06-19 04:34:18,314 INFO     Got Elo: -0.0 +- 33.97784009708934
+2022-06-19 04:34:18,314 INFO     Estimated draw rate: 39.13%
+2022-06-19 04:34:18,315 INFO     Updating model
+2022-06-19 04:34:22,515 INFO     GP sampling finished (4.200265s)
+2022-06-19 04:34:22,537 INFO     Starting iteration 26
+2022-06-19 04:34:26,392 INFO     Current optimum:
+{'LMRGRADIENT': 0.8472386776860735, 'LMRMIDPOINT': 6.6323179159289944, 'LMRMAXDEPTH': 0.4619499754421118}
+2022-06-19 04:34:26,392 INFO     Estimated Elo: 1.4036 +- 26.9927
+2022-06-19 04:34:26,393 INFO     90.0% confidence interval of the Elo value: (-42.9954, 45.8025)
+2022-06-19 04:34:26,559 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.88
+LMRMIDPOINT          1.3          8.0
+LMRMAXDEPTH         0.01         0.72
+
+2022-06-19 04:34:38,679 INFO     Saving a plot to plots\landscapes\landscape-20220619-043426-26.png.
+2022-06-19 04:34:39,247 INFO     Testing {'LMRGRADIENT': 1.9988362391146017, 'LMRMIDPOINT': 1.2220723833885137, 'LMRMAXDEPTH': 0.07249815962669776}
+2022-06-19 04:34:39,248 INFO     Start experiment
+2022-06-19 05:02:49,415 WARNING  Engine engine2 lost on time as White.
+2022-06-19 05:02:49,861 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 05:02:49,938 WARNING  Engine engine2 lost on time as White.
+2022-06-19 05:02:50,013 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 05:02:50,102 INFO     Experiment finished (1690.854197s elapsed).
+2022-06-19 05:02:50,449 INFO     Got Elo: -120.41199826559246 +- 42.98839804638945
+2022-06-19 05:02:50,450 INFO     Estimated draw rate: 32.61%
+2022-06-19 05:02:50,450 INFO     Updating model
+2022-06-19 05:02:55,572 INFO     GP sampling finished (5.122001s)
+2022-06-19 05:02:55,593 INFO     Starting iteration 27
+2022-06-19 05:02:59,313 INFO     Current optimum:
+{'LMRGRADIENT': 0.8440978576900848, 'LMRMIDPOINT': 6.635350479428196, 'LMRMAXDEPTH': 0.4630563350286703}
+2022-06-19 05:02:59,313 INFO     Estimated Elo: 1.2732 +- 26.3544
+2022-06-19 05:02:59,314 INFO     90.0% confidence interval of the Elo value: (-42.0759, 44.6223)
+2022-06-19 05:02:59,484 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.68
+LMRMIDPOINT          1.6          8.0
+LMRMAXDEPTH         0.03         0.74
+
+2022-06-19 05:03:11,190 INFO     Saving a plot to plots\landscapes\landscape-20220619-050259-27.png.
+2022-06-19 05:03:11,757 INFO     Testing {'LMRGRADIENT': 0.832870559239619, 'LMRMIDPOINT': 6.892962301584382, 'LMRMAXDEPTH': 0.5757527627212582}
+2022-06-19 05:03:11,759 INFO     Start experiment
+2022-06-19 05:30:58,479 WARNING  Engine engine1 lost on time as White.
+2022-06-19 05:30:58,487 WARNING  Engine engine2 lost on time as White.
+2022-06-19 05:30:58,692 WARNING  Engine engine2 lost on time as White.
+2022-06-19 05:30:58,865 WARNING  Engine engine1 lost on time as White.
+2022-06-19 05:30:59,075 WARNING  Engine engine2 lost on time as White.
+2022-06-19 05:30:59,185 INFO     Experiment finished (1667.426135s elapsed).
+2022-06-19 05:30:59,568 INFO     Got Elo: -54.48789880719554 +- 27.565524956480793
+2022-06-19 05:30:59,569 INFO     Estimated draw rate: 45.65%
+2022-06-19 05:30:59,569 INFO     Updating model
+2022-06-19 05:31:03,612 INFO     GP sampling finished (4.042022s)
+2022-06-19 05:31:03,643 INFO     Starting iteration 28
+2022-06-19 05:31:07,579 INFO     Current optimum:
+{'LMRGRADIENT': 0.7341756809452928, 'LMRMIDPOINT': 6.565456619933898, 'LMRMAXDEPTH': 0.418816298885083}
+2022-06-19 05:31:07,580 INFO     Estimated Elo: -5.9413 +- 23.5762
+2022-06-19 05:31:07,580 INFO     90.0% confidence interval of the Elo value: (-44.7208, 32.8381)
+2022-06-19 05:31:07,752 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT          1.6          8.0
+LMRMAXDEPTH         0.01          0.7
+
+2022-06-19 05:31:20,349 INFO     Saving a plot to plots\landscapes\landscape-20220619-053107-28.png.
+2022-06-19 05:31:20,927 INFO     Testing {'LMRGRADIENT': 1.6337719945910598, 'LMRMIDPOINT': 7.993196002646, 'LMRMAXDEPTH': 0.8275870828270566}
+2022-06-19 05:31:20,928 INFO     Start experiment
+2022-06-19 05:59:06,988 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 05:59:07,065 WARNING  Engine engine1 lost on time as White.
+2022-06-19 05:59:07,240 WARNING  Engine engine1 lost on time as White.
+2022-06-19 05:59:07,597 WARNING  Engine engine1 lost on time as White.
+2022-06-19 05:59:07,620 INFO     Experiment finished (1666.690588s elapsed).
+2022-06-19 05:59:07,982 INFO     Got Elo: -147.19071411783773 +- 37.72977763129676
+2022-06-19 05:59:07,982 INFO     Estimated draw rate: 43.48%
+2022-06-19 05:59:07,983 INFO     Updating model
+2022-06-19 05:59:12,038 INFO     GP sampling finished (4.054531s)
+2022-06-19 05:59:12,069 INFO     Starting iteration 29
+2022-06-19 05:59:15,815 INFO     Current optimum:
+{'LMRGRADIENT': 0.7761407071252124, 'LMRMIDPOINT': 6.564783252389219, 'LMRMAXDEPTH': 0.42098420863764324}
+2022-06-19 05:59:15,816 INFO     Estimated Elo: -5.5908 +- 23.671
+2022-06-19 05:59:15,816 INFO     90.0% confidence interval of the Elo value: (-44.5262, 33.3446)
+2022-06-19 05:59:15,988 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0         1.65
+LMRMIDPOINT          1.6          8.0
+LMRMAXDEPTH          0.0          0.6
+
+2022-06-19 05:59:27,875 INFO     Saving a plot to plots\landscapes\landscape-20220619-055915-29.png.
+2022-06-19 05:59:28,943 INFO     Testing {'LMRGRADIENT': 0.16774396599535266, 'LMRMIDPOINT': 7.9843119007315595, 'LMRMAXDEPTH': 0.4053154948194379}
+2022-06-19 05:59:28,944 INFO     Start experiment
+2022-06-19 06:26:57,002 WARNING  Engine engine2 lost on time as White.
+2022-06-19 06:26:57,014 WARNING  Engine engine2 lost on time as White.
+2022-06-19 06:26:57,043 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 06:26:57,047 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:26:57,056 WARNING  Engine engine2 lost on time as White.
+2022-06-19 06:26:57,111 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:26:57,172 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:26:57,219 WARNING  Engine engine2 lost on time as White.
+2022-06-19 06:26:57,646 INFO     Experiment finished (1648.700441s elapsed).
+2022-06-19 06:26:57,997 INFO     Got Elo: 38.76400520322258 +- 43.72486824861049
+2022-06-19 06:26:57,998 INFO     Estimated draw rate: 36.96%
+2022-06-19 06:26:57,998 INFO     Updating model
+2022-06-19 06:27:02,235 INFO     GP sampling finished (4.235977s)
+2022-06-19 06:27:02,270 INFO     Starting iteration 30
+2022-06-19 06:27:06,704 INFO     Current optimum:
+{'LMRGRADIENT': 0.2545833627954125, 'LMRMIDPOINT': 7.763827103160271, 'LMRMAXDEPTH': 0.40076042948618606}
+2022-06-19 06:27:06,710 INFO     Estimated Elo: 6.7407 +- 31.3476
+2022-06-19 06:27:06,717 INFO     90.0% confidence interval of the Elo value: (-44.8215, 58.303)
+2022-06-19 06:27:06,902 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0         1.63
+LMRMIDPOINT          1.4          7.8
+LMRMAXDEPTH        0.048        0.635
+
+2022-06-19 06:27:19,678 INFO     Saving a plot to plots\landscapes\landscape-20220619-062706-30.png.
+2022-06-19 06:27:20,268 INFO     Testing {'LMRGRADIENT': 0.26853418076663804, 'LMRMIDPOINT': 7.856448723072846, 'LMRMAXDEPTH': 0.2366931155054422}
+2022-06-19 06:27:20,269 INFO     Start experiment
+2022-06-19 06:56:25,634 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:56:25,802 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 06:56:25,920 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:56:25,973 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 06:56:26,045 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 06:56:26,106 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 06:56:26,168 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:56:26,178 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 06:56:26,204 WARNING  Engine engine1 lost on time as White.
+2022-06-19 06:56:26,244 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 06:56:26,245 INFO     Experiment finished (1745.974808s elapsed).
+2022-06-19 06:56:26,563 INFO     Got Elo: -54.48789880719554 +- 43.46135890529646
+2022-06-19 06:56:26,564 INFO     Estimated draw rate: 15.22%
+2022-06-19 06:56:26,564 INFO     Updating model
+2022-06-19 06:56:30,710 INFO     GP sampling finished (4.146s)
+2022-06-19 06:56:30,737 INFO     Starting iteration 31
+2022-06-19 06:56:35,709 INFO     Current optimum:
+{'LMRGRADIENT': 0.2668400732212964, 'LMRMIDPOINT': 7.711955598869694, 'LMRMAXDEPTH': 0.41453633990027344}
+2022-06-19 06:56:35,710 INFO     Estimated Elo: 2.7456 +- 28.9449
+2022-06-19 06:56:35,710 INFO     90.0% confidence interval of the Elo value: (-44.8645, 50.3556)
+2022-06-19 06:56:35,882 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.73
+LMRMIDPOINT          1.5          8.0
+LMRMAXDEPTH         0.21         0.78
+
+2022-06-19 06:56:49,159 INFO     Saving a plot to plots\landscapes\landscape-20220619-065635-31.png.
+2022-06-19 06:56:49,747 INFO     Testing {'LMRGRADIENT': 1.9084117619411942, 'LMRMIDPOINT': 1.301889281352448, 'LMRMAXDEPTH': 0.1551939839089503}
+2022-06-19 06:56:49,748 INFO     Start experiment
+2022-06-19 07:25:25,595 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 07:25:25,656 WARNING  Engine engine2 lost on time as White.
+2022-06-19 07:25:25,739 WARNING  Engine engine2 lost on time as White.
+2022-06-19 07:25:25,921 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:25:25,969 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:25:26,041 WARNING  Engine engine2 lost on time as White.
+2022-06-19 07:25:26,113 WARNING  Engine engine2 lost on time as White.
+2022-06-19 07:25:26,186 INFO     Experiment finished (1716.438182s elapsed).
+2022-06-19 07:25:26,489 INFO     Got Elo: 7.722062078154712 +- 42.521842621670395
+2022-06-19 07:25:26,489 INFO     Estimated draw rate: 32.61%
+2022-06-19 07:25:26,489 INFO     Updating model
+2022-06-19 07:25:30,532 INFO     GP sampling finished (4.041837s)
+2022-06-19 07:25:30,560 INFO     Starting iteration 32
+2022-06-19 07:25:35,781 INFO     Current optimum:
+{'LMRGRADIENT': 0.2804694440623376, 'LMRMIDPOINT': 7.7104672571059165, 'LMRMAXDEPTH': 0.4133143566978297}
+2022-06-19 07:25:35,781 INFO     Estimated Elo: 2.6048 +- 27.9422
+2022-06-19 07:25:35,782 INFO     90.0% confidence interval of the Elo value: (-43.356, 48.5656)
+2022-06-19 07:25:35,962 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.75
+LMRMIDPOINT          1.7          8.0
+LMRMAXDEPTH          0.0         0.58
+
+2022-06-19 07:25:49,094 INFO     Saving a plot to plots\landscapes\landscape-20220619-072535-32.png.
+2022-06-19 07:25:49,710 INFO     Testing {'LMRGRADIENT': 0.0593670910895912, 'LMRMIDPOINT': 7.959039093871717, 'LMRMAXDEPTH': 0.5716600739087527}
+2022-06-19 07:25:49,712 INFO     Start experiment
+2022-06-19 07:55:03,517 WARNING  Engine engine1 lost on time as White.
+2022-06-19 07:55:03,521 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:55:03,553 WARNING  Engine engine2 lost on time as White.
+2022-06-19 07:55:03,633 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:55:03,743 WARNING  Engine engine1 lost on time as White.
+2022-06-19 07:55:03,815 WARNING  Engine engine1 lost on time as White.
+2022-06-19 07:55:03,880 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 07:55:04,117 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 07:55:04,125 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:55:04,200 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 07:55:04,206 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 07:55:04,234 INFO     Experiment finished (1754.522208s elapsed).
+2022-06-19 07:55:04,604 INFO     Got Elo: -0.0 +- 21.14305624159972
+2022-06-19 07:55:04,605 INFO     Estimated draw rate: 34.78%
+2022-06-19 07:55:04,605 INFO     Updating model
+2022-06-19 07:55:08,777 INFO     GP sampling finished (4.172144s)
+2022-06-19 07:55:08,802 INFO     Starting iteration 33
+2022-06-19 07:55:14,082 INFO     Current optimum:
+{'LMRGRADIENT': 0.1712176764302482, 'LMRMIDPOINT': 7.925489612880758, 'LMRMAXDEPTH': 0.44748722163782584}
+2022-06-19 07:55:14,082 INFO     Estimated Elo: 10.21 +- 27.439
+2022-06-19 07:55:14,083 INFO     90.0% confidence interval of the Elo value: (-34.9231, 55.3431)
+2022-06-19 07:55:14,253 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.86
+LMRMIDPOINT          1.5          8.0
+LMRMAXDEPTH         0.04         0.61
+
+2022-06-19 07:55:31,395 INFO     Saving a plot to plots\landscapes\landscape-20220619-075514-33.png.
+2022-06-19 07:55:31,971 INFO     Testing {'LMRGRADIENT': 0.3785660638649085, 'LMRMIDPOINT': 7.878628247359688, 'LMRMAXDEPTH': 0.40349677087103225}
+2022-06-19 07:55:31,972 INFO     Start experiment
+2022-06-19 08:23:57,535 WARNING  Engine engine1 lost on time as White.
+2022-06-19 08:23:57,660 WARNING  Engine engine2 lost on time as White.
+2022-06-19 08:23:57,980 WARNING  Engine engine2 lost on time as White.
+2022-06-19 08:23:58,013 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 08:23:58,141 WARNING  Engine engine2 lost on time as White.
+2022-06-19 08:23:58,163 WARNING  Engine engine1 lost on time as White.
+2022-06-19 08:23:58,187 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 08:23:58,189 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 08:23:58,201 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 08:23:58,203 INFO     Experiment finished (1706.230419s elapsed).
+2022-06-19 08:23:58,551 INFO     Got Elo: 23.196778791074703 +- 42.51802013631571
+2022-06-19 08:23:58,552 INFO     Estimated draw rate: 36.96%
+2022-06-19 08:23:58,552 INFO     Updating model
+2022-06-19 08:24:02,849 INFO     GP sampling finished (4.295378s)
+2022-06-19 08:24:02,898 INFO     Starting iteration 34
+2022-06-19 08:24:08,596 INFO     Current optimum:
+{'LMRGRADIENT': 0.21759255658136464, 'LMRMIDPOINT': 7.953373466004773, 'LMRMAXDEPTH': 0.43714940656448115}
+2022-06-19 08:24:08,597 INFO     Estimated Elo: 14.7294 +- 24.763
+2022-06-19 08:24:08,598 INFO     90.0% confidence interval of the Elo value: (-26.0021, 55.4609)
+2022-06-19 08:24:08,774 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.02         1.86
+LMRMIDPOINT          1.3          7.9
+LMRMAXDEPTH         0.03         0.59
+
+2022-06-19 08:24:23,760 INFO     Saving a plot to plots\landscapes\landscape-20220619-082408-34.png.
+2022-06-19 08:24:24,393 INFO     Testing {'LMRGRADIENT': 0.4655497888670871, 'LMRMIDPOINT': 7.870435990865024, 'LMRMAXDEPTH': 0.4430265875290443}
+2022-06-19 08:24:24,395 INFO     Start experiment
+2022-06-19 08:52:58,824 WARNING  Engine engine1 lost on time as White.
+2022-06-19 08:52:58,904 WARNING  Engine engine1 lost on time as White.
+2022-06-19 08:52:58,922 WARNING  Engine engine2 lost on time as White.
+2022-06-19 08:52:59,294 WARNING  Engine engine2 lost on time as White.
+2022-06-19 08:52:59,399 INFO     Experiment finished (1715.003378s elapsed).
+2022-06-19 08:52:59,712 INFO     Got Elo: 23.196778791074745 +- 40.937772333802336
+2022-06-19 08:52:59,713 INFO     Estimated draw rate: 41.30%
+2022-06-19 08:52:59,713 INFO     Updating model
+2022-06-19 08:53:03,940 INFO     GP sampling finished (4.226988s)
+2022-06-19 08:53:03,961 INFO     Starting iteration 35
+2022-06-19 08:53:08,729 INFO     Current optimum:
+{'LMRGRADIENT': 0.25467669509029417, 'LMRMIDPOINT': 7.970013224660372, 'LMRMAXDEPTH': 0.43678447869296516}
+2022-06-19 08:53:08,729 INFO     Estimated Elo: 17.2524 +- 22.556
+2022-06-19 08:53:08,730 INFO     90.0% confidence interval of the Elo value: (-19.8489, 54.3537)
+2022-06-19 08:53:08,907 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT          1.5          8.0
+LMRMAXDEPTH         0.19         0.65
+
+2022-06-19 08:53:22,681 INFO     Saving a plot to plots\landscapes\landscape-20220619-085308-35.png.
+2022-06-19 08:53:23,273 INFO     Testing {'LMRGRADIENT': 1.2419228431733478, 'LMRMIDPOINT': 6.138713001728316, 'LMRMAXDEPTH': 0.4344852207922714}
+2022-06-19 08:53:23,275 INFO     Start experiment
+2022-06-19 09:20:04,437 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 09:20:04,499 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:20:04,507 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 09:20:04,525 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 09:20:04,571 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 09:20:04,745 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:20:04,849 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:20:05,051 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:20:05,063 INFO     Experiment finished (1601.787542s elapsed).
+2022-06-19 09:20:05,387 INFO     Got Elo: -23.196778791074692 +- 43.86616967449601
+2022-06-19 09:20:05,387 INFO     Estimated draw rate: 41.30%
+2022-06-19 09:20:05,388 INFO     Updating model
+2022-06-19 09:20:09,568 INFO     GP sampling finished (4.18s)
+2022-06-19 09:20:09,600 INFO     Starting iteration 36
+2022-06-19 09:20:13,759 INFO     Current optimum:
+{'LMRGRADIENT': 0.2576806959443893, 'LMRMIDPOINT': 7.988945645642502, 'LMRMAXDEPTH': 0.4362103987423239}
+2022-06-19 09:20:13,759 INFO     Estimated Elo: 16.7026 +- 22.2256
+2022-06-19 09:20:13,760 INFO     90.0% confidence interval of the Elo value: (-19.8553, 53.2606)
+2022-06-19 09:20:13,935 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT          1.3          8.0
+LMRMAXDEPTH         0.01         0.55
+
+2022-06-19 09:20:27,582 INFO     Saving a plot to plots\landscapes\landscape-20220619-092013-36.png.
+2022-06-19 09:20:28,172 INFO     Testing {'LMRGRADIENT': 0.11629457167415086, 'LMRMIDPOINT': 7.741487123567244, 'LMRMAXDEPTH': 0.48670196172904034}
+2022-06-19 09:20:28,173 INFO     Start experiment
+2022-06-19 09:49:39,785 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 09:49:39,791 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:49:40,018 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 09:49:40,058 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:49:40,072 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 09:49:40,090 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:49:40,103 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:49:40,128 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 09:49:40,132 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:49:40,151 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 09:49:40,217 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:49:40,269 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:49:40,277 WARNING  Engine engine2 lost on time as White.
+2022-06-19 09:49:40,289 WARNING  Engine engine1 lost on time as White.
+2022-06-19 09:49:40,467 INFO     Experiment finished (1752.291737s elapsed).
+2022-06-19 09:49:40,818 INFO     Got Elo: -54.48789880719554 +- 42.09201913795842
+2022-06-19 09:49:40,819 INFO     Estimated draw rate: 28.26%
+2022-06-19 09:49:40,819 INFO     Updating model
+2022-06-19 09:49:45,134 INFO     GP sampling finished (4.3137s)
+2022-06-19 09:49:45,193 INFO     Starting iteration 37
+2022-06-19 09:49:49,257 INFO     Current optimum:
+{'LMRGRADIENT': 0.4043807732418567, 'LMRMIDPOINT': 7.929221817363532, 'LMRMAXDEPTH': 0.41514156781531564}
+2022-06-19 09:49:49,264 INFO     Estimated Elo: 9.2591 +- 21.0934
+2022-06-19 09:49:49,265 INFO     90.0% confidence interval of the Elo value: (-25.4364, 43.9547)
+2022-06-19 09:49:49,451 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.01         1.86
+LMRMIDPOINT          1.3          8.0
+LMRMAXDEPTH         0.01          0.6
+
+2022-06-19 09:50:04,938 INFO     Saving a plot to plots\landscapes\landscape-20220619-094949-37.png.
+2022-06-19 09:50:05,603 INFO     Testing {'LMRGRADIENT': 1.4130711224013082, 'LMRMIDPOINT': 1.0239285556976172, 'LMRMAXDEPTH': 0.34175910440416357}
+2022-06-19 09:50:05,605 INFO     Start experiment
+2022-06-19 10:20:50,893 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:20:50,904 WARNING  Engine engine1 lost on time as White.
+2022-06-19 10:20:50,925 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:20:51,009 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:20:51,052 WARNING  Engine engine1 lost on time as White.
+2022-06-19 10:20:51,204 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 10:20:51,279 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:20:51,328 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 10:20:51,416 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 10:20:51,450 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 10:20:51,488 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:20:51,577 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 10:20:51,624 INFO     Experiment finished (1846.019497s elapsed).
+2022-06-19 10:20:51,934 INFO     Got Elo: 54.48789880719559 +- 46.32045807822464
+2022-06-19 10:20:51,935 INFO     Estimated draw rate: 32.61%
+2022-06-19 10:20:51,935 INFO     Updating model
+2022-06-19 10:20:56,143 INFO     GP sampling finished (4.206541s)
+2022-06-19 10:20:56,177 INFO     Starting iteration 38
+2022-06-19 10:21:00,168 INFO     Current optimum:
+{'LMRGRADIENT': 1.4632628279734465, 'LMRMIDPOINT': 1.0124958726803255, 'LMRMAXDEPTH': 0.3388671497682999}
+2022-06-19 10:21:00,169 INFO     Estimated Elo: 11.2325 +- 33.6466
+2022-06-19 10:21:00,169 INFO     90.0% confidence interval of the Elo value: (-44.1112, 66.5763)
+2022-06-19 10:21:00,339 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.13         1.95
+LMRMIDPOINT          1.0          7.5
+LMRMAXDEPTH          0.0         0.52
+
+2022-06-19 10:21:12,574 INFO     Saving a plot to plots\landscapes\landscape-20220619-102100-38.png.
+2022-06-19 10:21:13,165 INFO     Testing {'LMRGRADIENT': 1.5577011148525517, 'LMRMIDPOINT': 2.5028799116838676, 'LMRMAXDEPTH': 0.3550798552697458}
+2022-06-19 10:21:13,167 INFO     Start experiment
+2022-06-19 10:47:00,245 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:47:00,280 WARNING  Engine engine1 lost on time as White.
+2022-06-19 10:47:00,329 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:47:00,609 WARNING  Engine engine2 lost on time as White.
+2022-06-19 10:47:00,628 WARNING  Engine engine1 lost on time as White.
+2022-06-19 10:47:00,763 INFO     Experiment finished (1547.596951s elapsed).
+2022-06-19 10:47:01,105 INFO     Got Elo: -38.764005203222595 +- 36.0774262426159
+2022-06-19 10:47:01,105 INFO     Estimated draw rate: 50.00%
+2022-06-19 10:47:01,105 INFO     Updating model
+2022-06-19 10:47:05,315 INFO     GP sampling finished (4.21s)
+2022-06-19 10:47:05,338 INFO     Starting iteration 39
+2022-06-19 10:47:08,872 INFO     Current optimum:
+{'LMRGRADIENT': 0.4037510249610921, 'LMRMIDPOINT': 7.950521818914219, 'LMRMAXDEPTH': 0.4155974525047077}
+2022-06-19 10:47:08,873 INFO     Estimated Elo: 8.8366 +- 20.952
+2022-06-19 10:47:08,873 INFO     90.0% confidence interval of the Elo value: (-25.6265, 43.2996)
+2022-06-19 10:47:09,040 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.0          1.8
+LMRMIDPOINT          1.1          7.7
+LMRMAXDEPTH          0.2          0.7
+
+2022-06-19 10:47:20,710 INFO     Saving a plot to plots\landscapes\landscape-20220619-104709-39.png.
+2022-06-19 10:47:21,287 INFO     Testing {'LMRGRADIENT': 1.7145421113225439, 'LMRMIDPOINT': 1.336390249255397, 'LMRMAXDEPTH': 0.3170060992362418}
+2022-06-19 10:47:21,289 INFO     Start experiment
+2022-06-19 11:15:47,772 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 11:15:47,898 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:15:48,289 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 11:15:48,336 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:15:48,365 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:15:48,393 INFO     Experiment finished (1707.103881s elapsed).
+2022-06-19 11:15:48,698 INFO     Got Elo: 30.96488932351128 +- 36.96506768577018
+2022-06-19 11:15:48,699 INFO     Estimated draw rate: 39.13%
+2022-06-19 11:15:48,699 INFO     Updating model
+2022-06-19 11:15:52,817 INFO     GP sampling finished (4.117788s)
+2022-06-19 11:15:52,844 INFO     Starting iteration 40
+2022-06-19 11:15:56,173 INFO     Current optimum:
+{'LMRGRADIENT': 1.5671682396940878, 'LMRMIDPOINT': 1.0, 'LMRMAXDEPTH': 0.32126482183007765}
+2022-06-19 11:15:56,173 INFO     Estimated Elo: 20.0935 +- 28.3645
+2022-06-19 11:15:56,174 INFO     90.0% confidence interval of the Elo value: (-26.5619, 66.749)
+2022-06-19 11:15:56,341 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.06         1.95
+LMRMIDPOINT          1.0          7.5
+LMRMAXDEPTH         0.01         0.56
+
+2022-06-19 11:16:07,811 INFO     Saving a plot to plots\landscapes\landscape-20220619-111556-40.png.
+2022-06-19 11:16:08,378 INFO     Testing {'LMRGRADIENT': 0.8281531056046252, 'LMRMIDPOINT': 1.4649755142049656, 'LMRMAXDEPTH': 0.42382602537841896}
+2022-06-19 11:16:08,379 INFO     Start experiment
+2022-06-19 11:44:46,931 WARNING  Engine engine1 lost on time as Black.
+2022-06-19 11:44:46,935 WARNING  Engine engine1 lost on time as White.
+2022-06-19 11:44:46,944 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:44:47,134 WARNING  Engine engine1 lost on time as White.
+2022-06-19 11:44:47,214 WARNING  Engine engine2 lost on time as Black.
+2022-06-19 11:44:47,286 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:44:47,556 WARNING  Engine engine2 lost on time as White.
+2022-06-19 11:44:47,647 INFO     Experiment finished (1719.26788s elapsed).
+2022-06-19 11:44:47,955 INFO     Got Elo: 23.196778791074745 +- 39.446925104900785
+2022-06-19 11:44:47,955 INFO     Estimated draw rate: 32.61%
+2022-06-19 11:44:47,956 INFO     Updating model
+2022-06-19 11:44:52,127 INFO     GP sampling finished (4.171s)
+2022-06-19 11:44:52,153 INFO     Starting iteration 41
+2022-06-19 11:44:55,410 INFO     Current optimum:
+{'LMRGRADIENT': 1.4445235483285555, 'LMRMIDPOINT': 1.0, 'LMRMAXDEPTH': 0.3371322041840575}
+2022-06-19 11:44:55,411 INFO     Estimated Elo: 24.5775 +- 29.783
+2022-06-19 11:44:55,411 INFO     90.0% confidence interval of the Elo value: (-24.4111, 73.5662)
+2022-06-19 11:44:55,583 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.09         1.91
+LMRMIDPOINT          1.0          7.3
+LMRMAXDEPTH        0.007        0.543
+
+2022-06-19 11:45:06,683 INFO     Saving a plot to plots\landscapes\landscape-20220619-114455-41.png.
+2022-06-19 11:45:07,259 INFO     Testing {'LMRGRADIENT': 1.9231273860198277, 'LMRMIDPOINT': 1.3330379728797546, 'LMRMAXDEPTH': 0.24652931969273686}
+2022-06-19 11:45:07,260 INFO     Start experiment
+2022-06-20 00:53:35,170 INFO     chess-tuning-tools version: 0.9.3
+2022-06-20 00:53:35,227 INFO     Resuming from existing optimizer in model.pkl.
+2022-06-20 00:53:35,227 INFO     Parameter ranges have been changed and the existing optimizer instance is no longer valid. Reinitializing now.
+2022-06-20 00:53:35,227 INFO     Importing 35 existing datapoints. This could take a while...
+2022-06-20 00:54:21,825 INFO     Importing finished.
+2022-06-20 00:54:21,825 INFO     Starting iteration 41
+2022-06-20 00:54:24,157 INFO     Current optimum:
+{'LMRGRADIENT': 1.3996241229468038, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.32755287843331804}
+2022-06-20 00:54:24,158 INFO     Estimated Elo: 33.793 +- 35.0889
+2022-06-20 00:54:24,158 INFO     90.0% confidence interval of the Elo value: (-23.9231, 91.509)
+2022-06-20 00:54:24,341 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.32         2.99
+LMRMIDPOINT          1.2         14.0
+LMRMAXDEPTH         0.16         1.49
+
+2022-06-20 00:54:34,736 INFO     Saving a plot to plots\landscapes\landscape-20220620-005424-41.png.
+2022-06-20 00:54:35,304 INFO     Testing {'LMRGRADIENT': 0.27284503142700434, 'LMRMIDPOINT': 0.8189101007170082, 'LMRMAXDEPTH': 0.21534263658248787}
+2022-06-20 00:54:35,306 INFO     Start experiment
+2022-06-20 01:22:04,744 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 01:22:05,055 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 01:22:05,088 INFO     Experiment finished (1649.7819s elapsed).
+2022-06-20 01:22:05,401 INFO     Got Elo: -86.68364398557813 +- 37.37981883937504
+2022-06-20 01:22:05,402 INFO     Estimated draw rate: 36.96%
+2022-06-20 01:22:05,402 INFO     Updating model
+2022-06-20 01:22:09,522 INFO     GP sampling finished (4.118472s)
+2022-06-20 01:22:09,567 INFO     Starting iteration 42
+2022-06-20 01:22:11,954 INFO     Current optimum:
+{'LMRGRADIENT': 1.6240517809691888, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.32312620854971397}
+2022-06-20 01:22:11,955 INFO     Estimated Elo: 28.1468 +- 33.8567
+2022-06-20 01:22:11,955 INFO     90.0% confidence interval of the Elo value: (-27.5425, 83.836)
+2022-06-20 01:22:12,128 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.2          3.0
+LMRMIDPOINT          1.0         14.0
+LMRMAXDEPTH         0.21         1.49
+
+2022-06-20 01:22:22,253 INFO     Saving a plot to plots\landscapes\landscape-20220620-012212-42.png.
+2022-06-20 01:22:22,828 INFO     Testing {'LMRGRADIENT': 0.27075323755956593, 'LMRMIDPOINT': 12.279624344482842, 'LMRMAXDEPTH': 0.28778452860647424}
+2022-06-20 01:22:22,829 INFO     Start experiment
+2022-06-20 01:52:38,014 WARNING  Engine engine1 lost on time as White.
+2022-06-20 01:52:38,127 WARNING  Engine engine1 lost on time as White.
+2022-06-20 01:52:38,254 WARNING  Engine engine1 lost on time as White.
+2022-06-20 01:52:38,331 WARNING  Engine engine2 lost on time as White.
+2022-06-20 01:52:38,431 WARNING  Engine engine1 lost on time as White.
+2022-06-20 01:52:38,564 WARNING  Engine engine2 lost on time as White.
+2022-06-20 01:52:38,638 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 01:52:38,714 WARNING  Engine engine2 lost on time as White.
+2022-06-20 01:52:38,715 INFO     Experiment finished (1815.885684s elapsed).
+2022-06-20 01:52:39,015 INFO     Got Elo: -94.94436631784154 +- 49.45605783860155
+2022-06-20 01:52:39,016 INFO     Estimated draw rate: 21.74%
+2022-06-20 01:52:39,016 INFO     Updating model
+2022-06-20 01:52:43,081 INFO     GP sampling finished (4.065011s)
+2022-06-20 01:52:43,101 INFO     Starting iteration 43
+2022-06-20 01:52:45,104 INFO     Current optimum:
+{'LMRGRADIENT': 1.6172443944791017, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3247110178051803}
+2022-06-20 01:52:45,105 INFO     Estimated Elo: 26.9229 +- 33.4448
+2022-06-20 01:52:45,105 INFO     90.0% confidence interval of the Elo value: (-28.0888, 81.9347)
+2022-06-20 01:52:45,276 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.45         2.98
+LMRMIDPOINT          0.5         13.2
+LMRMAXDEPTH         0.16          1.5
+
+2022-06-20 01:52:54,475 INFO     Saving a plot to plots\landscapes\landscape-20220620-015245-43.png.
+2022-06-20 01:52:55,108 INFO     Testing {'LMRGRADIENT': 2.855107861575881, 'LMRMIDPOINT': 0.7389280810041612, 'LMRMAXDEPTH': 0.26675923821341374}
+2022-06-20 01:52:55,109 INFO     Start experiment
+2022-06-20 02:20:04,387 WARNING  Engine engine2 lost on time as White.
+2022-06-20 02:20:04,388 WARNING  Engine engine1 lost on time as White.
+2022-06-20 02:20:04,450 WARNING  Engine engine2 lost on time as White.
+2022-06-20 02:20:04,560 WARNING  Engine engine2 lost on time as White.
+2022-06-20 02:20:04,623 WARNING  Engine engine1 lost on time as White.
+2022-06-20 02:20:04,797 WARNING  Engine engine1 lost on time as White.
+2022-06-20 02:20:04,941 WARNING  Engine engine1 lost on time as White.
+2022-06-20 02:20:04,958 WARNING  Engine engine2 lost on time as White.
+2022-06-20 02:20:05,004 INFO     Experiment finished (1629.89545s elapsed).
+2022-06-20 02:20:05,330 INFO     Got Elo: -78.51785805758723 +- 45.29365533267165
+2022-06-20 02:20:05,330 INFO     Estimated draw rate: 43.48%
+2022-06-20 02:20:05,331 INFO     Updating model
+2022-06-20 02:20:09,436 INFO     GP sampling finished (4.104483s)
+2022-06-20 02:20:09,458 INFO     Starting iteration 44
+2022-06-20 02:20:11,377 INFO     Current optimum:
+{'LMRGRADIENT': 1.4519521040032006, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3405521661896286}
+2022-06-20 02:20:11,378 INFO     Estimated Elo: 24.9354 +- 33.0141
+2022-06-20 02:20:11,379 INFO     90.0% confidence interval of the Elo value: (-29.3679, 79.2388)
+2022-06-20 02:20:11,550 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.36          3.0
+LMRMIDPOINT          1.4         14.0
+LMRMAXDEPTH          0.2          1.5
+
+2022-06-20 02:20:20,764 INFO     Saving a plot to plots\landscapes\landscape-20220620-022011-44.png.
+2022-06-20 02:20:21,320 INFO     Testing {'LMRGRADIENT': 2.5047261383328316, 'LMRMIDPOINT': 13.84430428289747, 'LMRMAXDEPTH': 1.4805614831834666}
+2022-06-20 02:20:21,321 INFO     Start experiment
+2022-06-20 02:45:35,865 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 02:45:36,436 INFO     Experiment finished (1515.115327s elapsed).
+2022-06-20 02:45:36,817 INFO     Got Elo: -325.1653426571421 +- 75.44406559571537
+2022-06-20 02:45:36,818 INFO     Estimated draw rate: 15.22%
+2022-06-20 02:45:36,818 INFO     Updating model
+2022-06-20 02:45:40,936 INFO     GP sampling finished (4.117012s)
+2022-06-20 02:45:40,964 INFO     Starting iteration 45
+2022-06-20 02:45:43,594 INFO     Current optimum:
+{'LMRGRADIENT': 1.4700567780860183, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.33918835964041605}
+2022-06-20 02:45:43,595 INFO     Estimated Elo: 28.0317 +- 33.8839
+2022-06-20 02:45:43,596 INFO     90.0% confidence interval of the Elo value: (-27.7023, 83.7658)
+2022-06-20 02:45:43,771 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.25         2.98
+LMRMIDPOINT          1.1         13.8
+LMRMAXDEPTH         0.17          1.5
+
+2022-06-20 02:45:54,077 INFO     Saving a plot to plots\landscapes\landscape-20220620-024543-45.png.
+2022-06-20 02:45:54,641 INFO     Testing {'LMRGRADIENT': 2.1877030505591777, 'LMRMIDPOINT': 3.122783922956255, 'LMRMAXDEPTH': 0.2986122892695757}
+2022-06-20 02:45:54,641 INFO     Start experiment
+2022-06-20 03:14:29,154 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:14:29,179 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:14:29,224 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:14:29,251 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 03:14:29,352 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:14:29,452 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 03:14:29,617 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 03:14:29,695 WARNING  Engine engine1 lost on time as White.
+2022-06-20 03:14:29,787 WARNING  Engine engine1 lost on time as White.
+2022-06-20 03:14:29,799 INFO     Experiment finished (1715.156681s elapsed).
+2022-06-20 03:14:30,117 INFO     Got Elo: 23.196778791074703 +- 34.595236544308676
+2022-06-20 03:14:30,118 INFO     Estimated draw rate: 32.61%
+2022-06-20 03:14:30,118 INFO     Updating model
+2022-06-20 03:14:34,207 INFO     GP sampling finished (4.089s)
+2022-06-20 03:14:34,233 INFO     Starting iteration 46
+2022-06-20 03:14:37,886 INFO     Current optimum:
+{'LMRGRADIENT': 1.5977058866210156, 'LMRMIDPOINT': 0.5097372477515038, 'LMRMAXDEPTH': 0.32709890060409014}
+2022-06-20 03:14:37,887 INFO     Estimated Elo: 22.611 +- 32.1428
+2022-06-20 03:14:37,887 INFO     90.0% confidence interval of the Elo value: (-30.2592, 75.4813)
+2022-06-20 03:14:38,059 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.24          3.0
+LMRMIDPOINT          1.0         14.0
+LMRMAXDEPTH          0.1          1.4
+
+2022-06-20 03:14:49,082 INFO     Saving a plot to plots\landscapes\landscape-20220620-031438-46.png.
+2022-06-20 03:14:49,643 INFO     Testing {'LMRGRADIENT': 2.9796470396751347, 'LMRMIDPOINT': 13.947497417391295, 'LMRMAXDEPTH': 0.5377205829928966}
+2022-06-20 03:14:49,644 INFO     Start experiment
+2022-06-20 03:43:49,624 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:43:49,653 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 03:43:49,676 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:43:49,911 WARNING  Engine engine1 lost on time as White.
+2022-06-20 03:43:49,997 WARNING  Engine engine1 lost on time as White.
+2022-06-20 03:43:50,018 WARNING  Engine engine2 lost on time as White.
+2022-06-20 03:43:50,125 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 03:43:50,126 INFO     Experiment finished (1740.481134s elapsed).
+2022-06-20 03:43:50,435 INFO     Got Elo: -46.602227628574866 +- 49.76054683598242
+2022-06-20 03:43:50,436 INFO     Estimated draw rate: 30.43%
+2022-06-20 03:43:50,436 INFO     Updating model
+2022-06-20 03:43:54,535 INFO     GP sampling finished (4.09917s)
+2022-06-20 03:43:54,556 INFO     Starting iteration 47
+2022-06-20 03:43:56,910 INFO     Current optimum:
+{'LMRGRADIENT': 1.6114128590228762, 'LMRMIDPOINT': 0.5276189313554256, 'LMRMAXDEPTH': 0.3257314722495106}
+2022-06-20 03:43:56,911 INFO     Estimated Elo: 22.3711 +- 31.771
+2022-06-20 03:43:56,911 INFO     90.0% confidence interval of the Elo value: (-29.8876, 74.6298)
+2022-06-20 03:43:57,085 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.4          3.0
+LMRMIDPOINT          1.0         14.0
+LMRMAXDEPTH          0.1         1.42
+
+2022-06-20 03:44:07,267 INFO     Saving a plot to plots\landscapes\landscape-20220620-034357-47.png.
+2022-06-20 03:44:07,829 INFO     Testing {'LMRGRADIENT': 1.6082185055519367, 'LMRMIDPOINT': 13.965244183481303, 'LMRMAXDEPTH': 0.10306976590993217}
+2022-06-20 03:44:07,830 INFO     Start experiment
+2022-06-20 04:12:20,569 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 04:12:20,781 WARNING  Engine engine1 lost on time as White.
+2022-06-20 04:12:20,985 WARNING  Engine engine1 lost on time as White.
+2022-06-20 04:12:21,034 INFO     Experiment finished (1693.203461s elapsed).
+2022-06-20 04:12:21,363 INFO     Got Elo: -70.43650362227247 +- 40.10811164975687
+2022-06-20 04:12:21,363 INFO     Estimated draw rate: 23.91%
+2022-06-20 04:12:21,364 INFO     Updating model
+2022-06-20 04:12:25,424 INFO     GP sampling finished (4.059817s)
+2022-06-20 04:12:25,443 INFO     Starting iteration 48
+2022-06-20 04:12:28,409 INFO     Current optimum:
+{'LMRGRADIENT': 1.629000103014181, 'LMRMIDPOINT': 0.541367918209984, 'LMRMAXDEPTH': 0.32405677072611405}
+2022-06-20 04:12:28,410 INFO     Estimated Elo: 22.3842 +- 31.669
+2022-06-20 04:12:28,410 INFO     90.0% confidence interval of the Elo value: (-29.7066, 74.475)
+2022-06-20 04:12:28,580 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.4          3.0
+LMRMIDPOINT          0.5         13.4
+LMRMAXDEPTH          0.2          1.5
+
+2022-06-20 04:12:38,923 INFO     Saving a plot to plots\landscapes\landscape-20220620-041228-48.png.
+2022-06-20 04:12:39,491 INFO     Testing {'LMRGRADIENT': 2.9286689499085377, 'LMRMIDPOINT': 8.053006508530501, 'LMRMAXDEPTH': 0.150390036812686}
+2022-06-20 04:12:39,492 INFO     Start experiment
+2022-06-20 04:41:04,087 WARNING  Engine engine2 lost on time as White.
+2022-06-20 04:41:04,523 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 04:41:04,702 INFO     Experiment finished (1705.208907s elapsed).
+2022-06-20 04:41:05,043 INFO     Got Elo: -138.09346326241388 +- 47.42088087967928
+2022-06-20 04:41:05,043 INFO     Estimated draw rate: 28.26%
+2022-06-20 04:41:05,043 INFO     Updating model
+2022-06-20 04:41:09,144 INFO     GP sampling finished (4.099944s)
+2022-06-20 04:41:09,168 INFO     Starting iteration 49
+2022-06-20 04:41:12,934 INFO     Current optimum:
+{'LMRGRADIENT': 1.666651069542099, 'LMRMIDPOINT': 0.5680538783778667, 'LMRMAXDEPTH': 0.3184551049617578}
+2022-06-20 04:41:12,934 INFO     Estimated Elo: 22.074 +- 30.9986
+2022-06-20 04:41:12,935 INFO     90.0% confidence interval of the Elo value: (-28.9142, 73.0622)
+2022-06-20 04:41:13,109 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.2          3.0
+LMRMIDPOINT          1.0         14.0
+LMRMAXDEPTH          0.1          1.4
+
+2022-06-20 04:41:23,722 INFO     Saving a plot to plots\landscapes\landscape-20220620-044113-49.png.
+2022-06-20 04:41:24,446 INFO     Testing {'LMRGRADIENT': 2.9933892222735596, 'LMRMIDPOINT': 1.1803608095499054, 'LMRMAXDEPTH': 1.4617489979688727}
+2022-06-20 04:41:24,446 INFO     Start experiment
+2022-06-20 05:02:05,551 INFO     Experiment finished (1241.104112s elapsed).
+2022-06-20 05:02:05,957 INFO     Got Elo: -404.28954615670943 +- 88.72214809358071
+2022-06-20 05:02:05,957 INFO     Estimated draw rate: 10.87%
+2022-06-20 05:02:05,957 INFO     Updating model
+2022-06-20 05:02:10,053 INFO     GP sampling finished (4.09434s)
+2022-06-20 05:02:10,077 INFO     Starting iteration 50
+2022-06-20 05:02:13,721 INFO     Current optimum:
+{'LMRGRADIENT': 1.6706579847507843, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.31730311858017657}
+2022-06-20 05:02:13,722 INFO     Estimated Elo: 24.7853 +- 33.3781
+2022-06-20 05:02:13,722 INFO     90.0% confidence interval of the Elo value: (-30.1168, 79.6875)
+2022-06-20 05:02:13,892 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.11         2.87
+LMRMIDPOINT          1.1         14.0
+LMRMAXDEPTH         0.13         1.35
+
+2022-06-20 05:02:24,954 INFO     Saving a plot to plots\landscapes\landscape-20220620-050213-50.png.
+2022-06-20 05:02:25,533 INFO     Testing {'LMRGRADIENT': 1.3848832322661166, 'LMRMIDPOINT': 13.076961893105693, 'LMRMAXDEPTH': 0.5860392051241408}
+2022-06-20 05:02:25,535 INFO     Start experiment
+2022-06-20 05:31:13,055 WARNING  Engine engine1 lost on time as White.
+2022-06-20 05:31:13,191 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 05:31:13,399 WARNING  Engine engine2 lost on time as White.
+2022-06-20 05:31:13,690 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 05:31:13,718 INFO     Experiment finished (1728.183607s elapsed).
+2022-06-20 05:31:14,061 INFO     Got Elo: -138.09346326241388 +- 41.72517298640487
+2022-06-20 05:31:14,061 INFO     Estimated draw rate: 36.96%
+2022-06-20 05:31:14,061 INFO     Updating model
+2022-06-20 05:31:18,224 INFO     GP sampling finished (4.162021s)
+2022-06-20 05:31:18,248 INFO     Starting iteration 51
+2022-06-20 05:31:20,912 INFO     Current optimum:
+{'LMRGRADIENT': 1.6936136547275362, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.31402801227506094}
+2022-06-20 05:31:20,912 INFO     Estimated Elo: 25.3928 +- 33.9595
+2022-06-20 05:31:20,913 INFO     90.0% confidence interval of the Elo value: (-30.4655, 81.2512)
+2022-06-20 05:31:21,087 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.32         2.98
+LMRMIDPOINT          0.5         13.4
+LMRMAXDEPTH         0.13         1.41
+
+2022-06-20 05:31:31,228 INFO     Saving a plot to plots\landscapes\landscape-20220620-053121-51.png.
+2022-06-20 05:31:31,802 INFO     Testing {'LMRGRADIENT': 0.5738565386242709, 'LMRMIDPOINT': 13.30919439787511, 'LMRMAXDEPTH': 1.4401185464042314}
+2022-06-20 05:31:31,803 INFO     Start experiment
+2022-06-20 05:56:28,808 WARNING  Engine engine1 lost on time as White.
+2022-06-20 05:56:28,906 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 05:56:29,069 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 05:56:29,315 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 05:56:29,346 INFO     Experiment finished (1497.543385s elapsed).
+2022-06-20 05:56:29,678 INFO     Got Elo: -185.73878667329345 +- 51.919029594679245
+2022-06-20 05:56:29,679 INFO     Estimated draw rate: 21.74%
+2022-06-20 05:56:29,679 INFO     Updating model
+2022-06-20 05:56:33,827 INFO     GP sampling finished (4.147607s)
+2022-06-20 05:56:33,851 INFO     Starting iteration 52
+2022-06-20 05:56:37,153 INFO     Current optimum:
+{'LMRGRADIENT': 1.668074173173071, 'LMRMIDPOINT': 0.5397363602825398, 'LMRMAXDEPTH': 0.3167510766735958}
+2022-06-20 05:56:37,153 INFO     Estimated Elo: 25.0611 +- 33.642
+2022-06-20 05:56:37,154 INFO     90.0% confidence interval of the Elo value: (-30.275, 80.3972)
+2022-06-20 05:56:37,328 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.3          3.0
+LMRMIDPOINT          0.5         13.4
+LMRMAXDEPTH          0.1         1.15
+
+2022-06-20 05:56:48,331 INFO     Saving a plot to plots\landscapes\landscape-20220620-055637-52.png.
+2022-06-20 05:56:49,278 INFO     Testing {'LMRGRADIENT': 2.9326121053073964, 'LMRMIDPOINT': 13.833760360093152, 'LMRMAXDEPTH': 1.032387329000201}
+2022-06-20 05:56:49,279 INFO     Start experiment
+2022-06-20 06:23:27,805 WARNING  Engine engine2 lost on time as White.
+2022-06-20 06:23:27,807 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 06:23:27,835 WARNING  Engine engine2 lost on time as White.
+2022-06-20 06:23:28,280 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 06:23:28,339 WARNING  Engine engine2 lost on time as White.
+2022-06-20 06:23:28,373 WARNING  Engine engine2 lost on time as White.
+2022-06-20 06:23:28,374 INFO     Experiment finished (1599.094379s elapsed).
+2022-06-20 06:23:28,682 INFO     Got Elo: -165.98933918832716 +- 52.30658728422303
+2022-06-20 06:23:28,683 INFO     Estimated draw rate: 21.74%
+2022-06-20 06:23:28,683 INFO     Updating model
+2022-06-20 06:23:32,796 INFO     GP sampling finished (4.113001s)
+2022-06-20 06:23:32,821 INFO     Starting iteration 53
+2022-06-20 06:23:35,498 INFO     Current optimum:
+{'LMRGRADIENT': 1.6751619881620103, 'LMRMIDPOINT': 0.5203283186956148, 'LMRMAXDEPTH': 0.3155170101414284}
+2022-06-20 06:23:35,499 INFO     Estimated Elo: 24.5036 +- 33.2621
+2022-06-20 06:23:35,499 INFO     90.0% confidence interval of the Elo value: (-30.2077, 79.2149)
+2022-06-20 06:23:35,666 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.4          3.0
+LMRMIDPOINT          0.5         13.2
+LMRMAXDEPTH         0.11         1.05
+
+2022-06-20 06:23:46,825 INFO     Saving a plot to plots\landscapes\landscape-20220620-062335-53.png.
+2022-06-20 06:23:47,399 INFO     Testing {'LMRGRADIENT': 2.9343515756968803, 'LMRMIDPOINT': 13.621558327539038, 'LMRMAXDEPTH': 0.17026208730383402}
+2022-06-20 06:23:47,400 INFO     Start experiment
+2022-06-20 06:51:39,417 WARNING  Engine engine1 lost on time as White.
+2022-06-20 06:51:39,682 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 06:51:39,775 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 06:51:39,926 INFO     Experiment finished (1672.525232s elapsed).
+2022-06-20 06:51:40,272 INFO     Got Elo: -185.73878667329345 +- 47.33613029279768
+2022-06-20 06:51:40,273 INFO     Estimated draw rate: 34.78%
+2022-06-20 06:51:40,273 INFO     Updating model
+2022-06-20 06:51:44,419 INFO     GP sampling finished (4.146001s)
+2022-06-20 06:51:44,445 INFO     Starting iteration 54
+2022-06-20 06:51:47,167 INFO     Current optimum:
+{'LMRGRADIENT': 1.6748808469458476, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.315480266997292}
+2022-06-20 06:51:47,168 INFO     Estimated Elo: 24.269 +- 32.8768
+2022-06-20 06:51:47,168 INFO     90.0% confidence interval of the Elo value: (-29.8086, 78.3466)
+2022-06-20 06:51:47,343 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.36          3.0
+LMRMIDPOINT          0.5         12.0
+LMRMAXDEPTH          0.1          0.9
+
+2022-06-20 06:51:58,093 INFO     Saving a plot to plots\landscapes\landscape-20220620-065147-54.png.
+2022-06-20 06:51:58,695 INFO     Testing {'LMRGRADIENT': 0.4310517533210815, 'LMRMIDPOINT': 13.960161232384959, 'LMRMAXDEPTH': 0.6609225963723493}
+2022-06-20 06:51:58,696 INFO     Start experiment
+2022-06-20 07:21:13,383 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:21:13,506 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:21:13,701 WARNING  Engine engine1 lost on time as White.
+2022-06-20 07:21:13,846 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 07:21:13,916 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 07:21:13,971 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 07:21:13,973 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 07:21:14,081 INFO     Experiment finished (1755.385635s elapsed).
+2022-06-20 07:21:14,377 INFO     Got Elo: -30.964889323511326 +- 40.160064249830825
+2022-06-20 07:21:14,377 INFO     Estimated draw rate: 21.74%
+2022-06-20 07:21:14,378 INFO     Updating model
+2022-06-20 07:21:18,527 INFO     GP sampling finished (4.148613s)
+2022-06-20 07:21:18,549 INFO     Starting iteration 55
+2022-06-20 07:21:21,183 INFO     Current optimum:
+{'LMRGRADIENT': 1.663168084039311, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3172260668113376}
+2022-06-20 07:21:21,184 INFO     Estimated Elo: 23.4926 +- 32.2801
+2022-06-20 07:21:21,184 INFO     90.0% confidence interval of the Elo value: (-29.6034, 76.5886)
+2022-06-20 07:21:21,359 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          0.5         13.2
+LMRMAXDEPTH          0.0          1.0
+
+2022-06-20 07:21:32,036 INFO     Saving a plot to plots\landscapes\landscape-20220620-072121-55.png.
+2022-06-20 07:21:32,609 INFO     Testing {'LMRGRADIENT': 0.5426601608424602, 'LMRMIDPOINT': 13.583809469234728, 'LMRMAXDEPTH': 0.8792792884776803}
+2022-06-20 07:21:32,610 INFO     Start experiment
+2022-06-20 07:50:46,615 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 07:50:46,617 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:50:46,618 WARNING  Engine engine1 lost on time as White.
+2022-06-20 07:50:46,794 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 07:50:46,860 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 07:50:46,896 WARNING  Engine engine1 lost on time as White.
+2022-06-20 07:50:47,000 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:50:47,071 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:50:47,288 WARNING  Engine engine2 lost on time as White.
+2022-06-20 07:50:47,302 INFO     Experiment finished (1754.692202s elapsed).
+2022-06-20 07:50:47,598 INFO     Got Elo: -46.602227628574866 +- 42.81689081223278
+2022-06-20 07:50:47,598 INFO     Estimated draw rate: 26.09%
+2022-06-20 07:50:47,598 INFO     Updating model
+2022-06-20 07:50:51,703 INFO     GP sampling finished (4.103999s)
+2022-06-20 07:50:51,724 INFO     Starting iteration 56
+2022-06-20 07:50:54,245 INFO     Current optimum:
+{'LMRGRADIENT': 1.641308179060286, 'LMRMIDPOINT': 0.536982216921016, 'LMRMAXDEPTH': 0.3192120794131994}
+2022-06-20 07:50:54,246 INFO     Estimated Elo: 22.7897 +- 31.711
+2022-06-20 07:50:54,246 INFO     90.0% confidence interval of the Elo value: (-29.3703, 74.9497)
+2022-06-20 07:50:54,417 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.12         2.77
+LMRMIDPOINT          1.0         12.0
+LMRMAXDEPTH          0.1         1.02
+
+2022-06-20 07:51:05,213 INFO     Saving a plot to plots\landscapes\landscape-20220620-075054-56.png.
+2022-06-20 07:51:05,801 INFO     Testing {'LMRGRADIENT': 2.999467980701879, 'LMRMIDPOINT': 3.876808797582374, 'LMRMAXDEPTH': 0.45520369248779124}
+2022-06-20 07:51:05,802 INFO     Start experiment
+2022-06-20 08:19:47,948 WARNING  Engine engine1 lost on time as White.
+2022-06-20 08:19:47,965 WARNING  Engine engine2 lost on time as White.
+2022-06-20 08:19:48,022 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 08:19:48,199 WARNING  Engine engine1 lost on time as White.
+2022-06-20 08:19:48,479 WARNING  Engine engine1 lost on time as White.
+2022-06-20 08:19:48,515 INFO     Experiment finished (1722.711667s elapsed).
+2022-06-20 08:19:48,818 INFO     Got Elo: -23.196778791074692 +- 42.4331616182451
+2022-06-20 08:19:48,818 INFO     Estimated draw rate: 41.30%
+2022-06-20 08:19:48,819 INFO     Updating model
+2022-06-20 08:19:52,965 INFO     GP sampling finished (4.14599s)
+2022-06-20 08:19:52,985 INFO     Starting iteration 57
+2022-06-20 08:19:55,581 INFO     Current optimum:
+{'LMRGRADIENT': 1.6134721539129795, 'LMRMIDPOINT': 0.5455281578967144, 'LMRMAXDEPTH': 0.32170585122329043}
+2022-06-20 08:19:55,582 INFO     Estimated Elo: 21.6053 +- 31.201
+2022-06-20 08:19:55,582 INFO     90.0% confidence interval of the Elo value: (-29.7157, 72.9264)
+2022-06-20 08:19:55,758 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.14         2.85
+LMRMIDPOINT          0.6         12.1
+LMRMAXDEPTH          0.1          1.0
+
+2022-06-20 08:20:06,932 INFO     Saving a plot to plots\landscapes\landscape-20220620-081955-57.png.
+2022-06-20 08:20:07,494 INFO     Testing {'LMRGRADIENT': 0.9095094960134701, 'LMRMIDPOINT': 0.5726699251131658, 'LMRMAXDEPTH': 0.31196408798468056}
+2022-06-20 08:20:07,495 INFO     Start experiment
+2022-06-20 08:50:53,420 WARNING  Engine engine2 lost on time as White.
+2022-06-20 08:50:53,516 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 08:50:53,527 WARNING  Engine engine2 lost on time as White.
+2022-06-20 08:50:54,080 WARNING  Engine engine2 lost on time as White.
+2022-06-20 08:50:54,104 WARNING  Engine engine1 lost on time as White.
+2022-06-20 08:50:54,179 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 08:50:54,189 INFO     Experiment finished (1846.692568s elapsed).
+2022-06-20 08:50:54,495 INFO     Got Elo: -15.451760942452331 +- 45.94612684875188
+2022-06-20 08:50:54,495 INFO     Estimated draw rate: 21.74%
+2022-06-20 08:50:54,496 INFO     Updating model
+2022-06-20 08:50:58,627 INFO     GP sampling finished (4.131387s)
+2022-06-20 08:50:58,652 INFO     Starting iteration 58
+2022-06-20 08:51:01,495 INFO     Current optimum:
+{'LMRGRADIENT': 1.6801286898638443, 'LMRMIDPOINT': 0.6691272481918464, 'LMRMAXDEPTH': 0.3177534983214999}
+2022-06-20 08:51:01,495 INFO     Estimated Elo: 20.1083 +- 29.0497
+2022-06-20 08:51:01,496 INFO     90.0% confidence interval of the Elo value: (-27.6743, 67.8908)
+2022-06-20 08:51:01,671 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          0.5         12.0
+LMRMAXDEPTH          0.1         1.13
+
+2022-06-20 08:51:12,798 INFO     Saving a plot to plots\landscapes\landscape-20220620-085101-58.png.
+2022-06-20 08:51:13,362 INFO     Testing {'LMRGRADIENT': 2.8250671958779594, 'LMRMIDPOINT': 7.423607376815707, 'LMRMAXDEPTH': 0.4210346177437482}
+2022-06-20 08:51:13,363 INFO     Start experiment
+2022-06-20 09:18:06,828 WARNING  Engine engine2 lost on time as White.
+2022-06-20 09:18:06,898 WARNING  Engine engine1 lost on time as White.
+2022-06-20 09:18:07,037 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 09:18:07,186 WARNING  Engine engine2 lost on time as White.
+2022-06-20 09:18:07,249 INFO     Experiment finished (1613.886284s elapsed).
+2022-06-20 09:18:07,551 INFO     Got Elo: 46.60222762857488 +- 47.03150032156486
+2022-06-20 09:18:07,551 INFO     Estimated draw rate: 43.48%
+2022-06-20 09:18:07,551 INFO     Updating model
+2022-06-20 09:18:11,680 INFO     GP sampling finished (4.127868s)
+2022-06-20 09:18:11,706 INFO     Starting iteration 59
+2022-06-20 09:18:14,233 INFO     Current optimum:
+{'LMRGRADIENT': 1.6456378601474457, 'LMRMIDPOINT': 0.6142877690249624, 'LMRMAXDEPTH': 0.3205957764102474}
+2022-06-20 09:18:14,234 INFO     Estimated Elo: 20.3137 +- 29.6037
+2022-06-20 09:18:14,234 INFO     90.0% confidence interval of the Elo value: (-28.3801, 69.0074)
+2022-06-20 09:18:14,407 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1         2.86
+LMRMIDPOINT          0.5         11.5
+LMRMAXDEPTH          0.1          0.8
+
+2022-06-20 09:18:25,018 INFO     Saving a plot to plots\landscapes\landscape-20220620-091814-59.png.
+2022-06-20 09:18:25,581 INFO     Testing {'LMRGRADIENT': 2.6906009724628333, 'LMRMIDPOINT': 7.144097177719383, 'LMRMAXDEPTH': 0.4460667267703897}
+2022-06-20 09:18:25,582 INFO     Start experiment
+2022-06-20 09:46:49,806 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 09:46:49,854 WARNING  Engine engine1 lost on time as White.
+2022-06-20 09:46:49,994 WARNING  Engine engine2 lost on time as White.
+2022-06-20 09:46:50,028 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 09:46:50,120 WARNING  Engine engine1 lost on time as White.
+2022-06-20 09:46:50,208 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 09:46:50,226 WARNING  Engine engine1 lost on time as White.
+2022-06-20 09:46:50,229 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 09:46:50,426 WARNING  Engine engine2 lost on time as White.
+2022-06-20 09:46:50,427 INFO     Experiment finished (1704.844084s elapsed).
+2022-06-20 09:46:50,752 INFO     Got Elo: -94.94436631784154 +- 34.20776812773354
+2022-06-20 09:46:50,753 INFO     Estimated draw rate: 43.48%
+2022-06-20 09:46:50,753 INFO     Updating model
+2022-06-20 09:46:54,889 INFO     GP sampling finished (4.135722s)
+2022-06-20 09:46:54,915 INFO     Starting iteration 60
+2022-06-20 09:46:57,979 INFO     Current optimum:
+{'LMRGRADIENT': 1.674182425388948, 'LMRMIDPOINT': 0.621975877528336, 'LMRMAXDEPTH': 0.31830489254478994}
+2022-06-20 09:46:57,980 INFO     Estimated Elo: 20.4425 +- 29.4589
+2022-06-20 09:46:57,985 INFO     90.0% confidence interval of the Elo value: (-28.013, 68.8981)
+2022-06-20 09:46:58,158 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          0.6         12.4
+LMRMAXDEPTH          0.1         1.07
+
+2022-06-20 09:47:09,134 INFO     Saving a plot to plots\landscapes\landscape-20220620-094658-60.png.
+2022-06-20 09:47:10,022 INFO     Testing {'LMRGRADIENT': 1.7709637013365338, 'LMRMIDPOINT': 9.817252663463119, 'LMRMAXDEPTH': 0.5046293367339151}
+2022-06-20 09:47:10,023 INFO     Start experiment
+2022-06-20 10:15:08,906 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 10:15:09,036 WARNING  Engine engine2 lost on time as White.
+2022-06-20 10:15:09,239 WARNING  Engine engine2 lost on time as White.
+2022-06-20 10:15:09,309 WARNING  Engine engine1 lost on time as White.
+2022-06-20 10:15:09,355 INFO     Experiment finished (1679.330385s elapsed).
+2022-06-20 10:15:09,653 INFO     Got Elo: -94.94436631784154 +- 54.601485026354105
+2022-06-20 10:15:09,654 INFO     Estimated draw rate: 30.43%
+2022-06-20 10:15:09,654 INFO     Updating model
+2022-06-20 10:15:13,805 INFO     GP sampling finished (4.151343s)
+2022-06-20 10:15:13,834 INFO     Starting iteration 61
+2022-06-20 10:15:16,609 INFO     Current optimum:
+{'LMRGRADIENT': 1.7088075296728784, 'LMRMIDPOINT': 0.557108071479528, 'LMRMAXDEPTH': 0.3149984682474105}
+2022-06-20 10:15:16,610 INFO     Estimated Elo: 20.3176 +- 29.8495
+2022-06-20 10:15:16,610 INFO     90.0% confidence interval of the Elo value: (-28.7804, 69.4157)
+2022-06-20 10:15:16,787 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          0.5         11.3
+LMRMAXDEPTH          0.1         0.97
+
+2022-06-20 10:15:27,722 INFO     Saving a plot to plots\landscapes\landscape-20220620-101516-61.png.
+2022-06-20 10:15:28,290 INFO     Testing {'LMRGRADIENT': 1.8044186088456933, 'LMRMIDPOINT': 0.7394810024948751, 'LMRMAXDEPTH': 0.13808927645111646}
+2022-06-20 10:15:28,291 INFO     Start experiment
+2022-06-20 10:44:22,039 WARNING  Engine engine1 lost on time as White.
+2022-06-20 10:44:22,150 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 10:44:22,241 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 10:44:22,310 WARNING  Engine engine2 lost on time as White.
+2022-06-20 10:44:22,443 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 10:44:22,462 WARNING  Engine engine1 lost on time as White.
+2022-06-20 10:44:22,589 WARNING  Engine engine2 lost on time as White.
+2022-06-20 10:44:22,631 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 10:44:22,696 INFO     Experiment finished (1734.404799s elapsed).
+2022-06-20 10:44:23,003 INFO     Got Elo: -86.68364398557813 +- 47.39856569488028
+2022-06-20 10:44:23,004 INFO     Estimated draw rate: 23.91%
+2022-06-20 10:44:23,004 INFO     Updating model
+2022-06-20 10:44:27,162 INFO     GP sampling finished (4.157909s)
+2022-06-20 10:44:27,191 INFO     Starting iteration 62
+2022-06-20 10:44:30,524 INFO     Current optimum:
+{'LMRGRADIENT': 1.6119264303654035, 'LMRMIDPOINT': 0.6166391252939247, 'LMRMAXDEPTH': 0.3401013903144593}
+2022-06-20 10:44:30,525 INFO     Estimated Elo: 15.4821 +- 26.2321
+2022-06-20 10:44:30,526 INFO     90.0% confidence interval of the Elo value: (-27.6658, 58.63)
+2022-06-20 10:44:30,699 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.13          2.8
+LMRMIDPOINT          0.5         12.0
+LMRMAXDEPTH         0.11         0.88
+
+2022-06-20 10:44:42,317 INFO     Saving a plot to plots\landscapes\landscape-20220620-104430-62.png.
+2022-06-20 10:44:42,884 INFO     Testing {'LMRGRADIENT': 0.6666258428616897, 'LMRMIDPOINT': 8.682603696492533, 'LMRMAXDEPTH': 0.3205346463678325}
+2022-06-20 10:44:42,885 INFO     Start experiment
+2022-06-20 11:13:29,539 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:13:29,581 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:13:29,608 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 11:13:29,679 WARNING  Engine engine2 lost on time as White.
+2022-06-20 11:13:29,749 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 11:13:29,754 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:13:29,769 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:13:29,818 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:13:29,834 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:13:29,914 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:13:29,994 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:13:30,018 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 11:13:30,108 INFO     Experiment finished (1727.221819s elapsed).
+2022-06-20 11:13:30,413 INFO     Got Elo: -23.196778791074692 +- 37.92084835222972
+2022-06-20 11:13:30,414 INFO     Estimated draw rate: 32.61%
+2022-06-20 11:13:30,414 INFO     Updating model
+2022-06-20 11:13:34,572 INFO     GP sampling finished (4.158365s)
+2022-06-20 11:13:34,596 INFO     Starting iteration 63
+2022-06-20 11:13:37,420 INFO     Current optimum:
+{'LMRGRADIENT': 1.6412681759928494, 'LMRMIDPOINT': 0.5319413741435944, 'LMRMAXDEPTH': 0.33647885534670896}
+2022-06-20 11:13:37,421 INFO     Estimated Elo: 15.1097 +- 26.36
+2022-06-20 11:13:37,421 INFO     90.0% confidence interval of the Elo value: (-28.2486, 58.4679)
+2022-06-20 11:13:37,601 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.11         2.86
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH        0.105        0.764
+
+2022-06-20 11:13:48,586 INFO     Saving a plot to plots\landscapes\landscape-20220620-111337-63.png.
+2022-06-20 11:13:49,151 INFO     Testing {'LMRGRADIENT': 0.26514727497534984, 'LMRMIDPOINT': 0.7396863937939384, 'LMRMAXDEPTH': 0.5103776028820579}
+2022-06-20 11:13:49,152 INFO     Start experiment
+2022-06-20 11:42:38,712 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:42:38,895 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 11:42:38,900 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:42:39,053 WARNING  Engine engine2 lost on time as White.
+2022-06-20 11:42:39,179 WARNING  Engine engine1 lost on time as White.
+2022-06-20 11:42:39,243 INFO     Experiment finished (1730.091295s elapsed).
+2022-06-20 11:42:39,582 INFO     Got Elo: -7.722062078154614 +- 34.758751819258
+2022-06-20 11:42:39,583 INFO     Estimated draw rate: 45.65%
+2022-06-20 11:42:39,583 INFO     Updating model
+2022-06-20 11:42:43,740 INFO     GP sampling finished (4.156875s)
+2022-06-20 11:42:43,763 INFO     Starting iteration 64
+2022-06-20 11:42:46,795 INFO     Current optimum:
+{'LMRGRADIENT': 1.6656419637943558, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.33452456887741266}
+2022-06-20 11:42:46,795 INFO     Estimated Elo: 15.2917 +- 26.3754
+2022-06-20 11:42:46,795 INFO     90.0% confidence interval of the Elo value: (-28.092, 58.6754)
+2022-06-20 11:42:46,993 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.7
+LMRMIDPOINT          0.6         11.9
+LMRMAXDEPTH          0.1         0.78
+
+2022-06-20 11:42:58,344 INFO     Saving a plot to plots\landscapes\landscape-20220620-114246-64.png.
+2022-06-20 11:42:58,917 INFO     Testing {'LMRGRADIENT': 2.9415162076976817, 'LMRMIDPOINT': 9.426083540168943, 'LMRMAXDEPTH': 0.5209037938207269}
+2022-06-20 11:42:58,917 INFO     Start experiment
+2022-06-20 12:12:42,419 WARNING  Engine engine1 lost on time as White.
+2022-06-20 12:12:42,526 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:12:42,622 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 12:12:42,626 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 12:12:42,658 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 12:12:42,744 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:12:42,793 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:12:43,098 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:12:43,117 INFO     Experiment finished (1784.198877s elapsed).
+2022-06-20 12:12:43,422 INFO     Got Elo: -0.0 +- 43.18067829283215
+2022-06-20 12:12:43,423 INFO     Estimated draw rate: 34.78%
+2022-06-20 12:12:43,423 INFO     Updating model
+2022-06-20 12:12:47,611 INFO     GP sampling finished (4.188005s)
+2022-06-20 12:12:47,640 INFO     Starting iteration 65
+2022-06-20 12:12:50,685 INFO     Current optimum:
+{'LMRGRADIENT': 1.6860772455434452, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3325601030196417}
+2022-06-20 12:12:50,686 INFO     Estimated Elo: 15.4988 +- 26.5093
+2022-06-20 12:12:50,687 INFO     90.0% confidence interval of the Elo value: (-28.105, 59.1027)
+2022-06-20 12:12:50,859 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.3          3.0
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH         0.11         0.87
+
+2022-06-20 12:13:02,320 INFO     Saving a plot to plots\landscapes\landscape-20220620-121250-65.png.
+2022-06-20 12:13:02,892 INFO     Testing {'LMRGRADIENT': 2.111968933818516, 'LMRMIDPOINT': 0.6508558612301778, 'LMRMAXDEPTH': 0.35589476210237914}
+2022-06-20 12:13:02,893 INFO     Start experiment
+2022-06-20 12:43:28,432 WARNING  Engine engine1 lost on time as White.
+2022-06-20 12:43:28,713 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 12:43:28,757 WARNING  Engine engine1 lost on time as White.
+2022-06-20 12:43:28,924 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 12:43:29,035 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:43:29,114 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:43:29,118 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 12:43:29,159 WARNING  Engine engine2 lost on time as White.
+2022-06-20 12:43:29,160 INFO     Experiment finished (1826.265813s elapsed).
+2022-06-20 12:43:29,499 INFO     Got Elo: -78.51785805758723 +- 45.313836258631135
+2022-06-20 12:43:29,499 INFO     Estimated draw rate: 39.13%
+2022-06-20 12:43:29,500 INFO     Updating model
+2022-06-20 12:43:33,700 INFO     GP sampling finished (4.199985s)
+2022-06-20 12:43:33,731 INFO     Starting iteration 66
+2022-06-20 12:43:36,690 INFO     Current optimum:
+{'LMRGRADIENT': 1.1983137725373474, 'LMRMIDPOINT': 0.5697302719154097, 'LMRMAXDEPTH': 0.38332667505238327}
+2022-06-20 12:43:36,691 INFO     Estimated Elo: 10.033 +- 26.4785
+2022-06-20 12:43:36,692 INFO     90.0% confidence interval of the Elo value: (-33.5202, 53.5862)
+2022-06-20 12:43:36,866 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.9
+LMRMIDPOINT          0.6         12.8
+LMRMAXDEPTH          0.1         0.94
+
+2022-06-20 12:43:48,889 INFO     Saving a plot to plots\landscapes\landscape-20220620-124336-66.png.
+2022-06-20 12:43:49,457 INFO     Testing {'LMRGRADIENT': 2.9968722005276627, 'LMRMIDPOINT': 10.935160009094606, 'LMRMAXDEPTH': 0.7119451077902919}
+2022-06-20 12:43:49,458 INFO     Start experiment
+2022-06-20 13:11:48,865 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 13:11:48,963 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 13:11:49,001 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 13:11:49,041 WARNING  Engine engine1 lost on time as White.
+2022-06-20 13:11:49,053 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:11:49,133 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 13:11:49,207 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 13:11:49,396 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 13:11:49,522 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:11:49,670 WARNING  Engine engine1 lost on time as White.
+2022-06-20 13:11:49,703 INFO     Experiment finished (1680.241338s elapsed).
+2022-06-20 13:11:50,121 INFO     Got Elo: 7.722062078154712 +- 39.58464609028911
+2022-06-20 13:11:50,123 INFO     Estimated draw rate: 36.96%
+2022-06-20 13:11:50,124 INFO     Updating model
+2022-06-20 13:11:55,683 INFO     GP sampling finished (5.556793s)
+2022-06-20 13:11:55,818 INFO     Starting iteration 67
+2022-06-20 13:11:59,377 INFO     Current optimum:
+{'LMRGRADIENT': 1.1913098892773715, 'LMRMIDPOINT': 0.65415933959527, 'LMRMAXDEPTH': 0.38323244533322975}
+2022-06-20 13:11:59,383 INFO     Estimated Elo: 9.6961 +- 25.9735
+2022-06-20 13:11:59,386 INFO     90.0% confidence interval of the Elo value: (-33.0266, 52.4187)
+2022-06-20 13:11:59,592 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.23         2.97
+LMRMIDPOINT          0.5         12.3
+LMRMAXDEPTH          0.1         0.99
+
+2022-06-20 13:12:13,150 INFO     Saving a plot to plots\landscapes\landscape-20220620-131159-67.png.
+2022-06-20 13:12:13,863 INFO     Testing {'LMRGRADIENT': 2.979136809652372, 'LMRMIDPOINT': 2.6364732927681334, 'LMRMAXDEPTH': 0.7111731627653601}
+2022-06-20 13:12:13,865 INFO     Start experiment
+2022-06-20 13:39:30,247 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:39:30,264 WARNING  Engine engine1 lost on time as White.
+2022-06-20 13:39:30,266 WARNING  Engine engine1 lost on time as White.
+2022-06-20 13:39:30,426 WARNING  Engine engine1 lost on time as White.
+2022-06-20 13:39:30,461 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:39:30,508 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:39:30,779 WARNING  Engine engine2 lost on time as White.
+2022-06-20 13:39:30,828 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 13:39:30,996 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 13:39:31,001 INFO     Experiment finished (1637.135286s elapsed).
+2022-06-20 13:39:31,377 INFO     Got Elo: -111.79612712314851 +- 40.83880956488207
+2022-06-20 13:39:31,378 INFO     Estimated draw rate: 34.78%
+2022-06-20 13:39:31,378 INFO     Updating model
+2022-06-20 13:39:35,817 INFO     GP sampling finished (4.437475s)
+2022-06-20 13:39:35,872 INFO     Starting iteration 68
+2022-06-20 13:39:38,680 INFO     Current optimum:
+{'LMRGRADIENT': 1.1940699590262043, 'LMRMIDPOINT': 0.657001358881996, 'LMRMAXDEPTH': 0.382237410620311}
+2022-06-20 13:39:38,681 INFO     Estimated Elo: 9.2 +- 25.5236
+2022-06-20 13:39:38,687 INFO     90.0% confidence interval of the Elo value: (-32.7825, 51.1826)
+2022-06-20 13:39:38,868 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.3          3.0
+LMRMIDPOINT          0.7         12.2
+LMRMAXDEPTH          0.1         0.91
+
+2022-06-20 13:39:50,279 INFO     Saving a plot to plots\landscapes\landscape-20220620-133938-68.png.
+2022-06-20 13:39:50,902 INFO     Testing {'LMRGRADIENT': 2.9073802971969194, 'LMRMIDPOINT': 3.125354869847434, 'LMRMAXDEPTH': 0.1023057786248979}
+2022-06-20 13:39:50,904 INFO     Start experiment
+2022-06-20 14:10:26,991 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 14:10:27,056 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 14:10:27,075 WARNING  Engine engine1 lost on time as White.
+2022-06-20 14:10:27,236 WARNING  Engine engine1 lost on time as White.
+2022-06-20 14:10:27,295 WARNING  Engine engine2 lost on time as White.
+2022-06-20 14:10:27,304 WARNING  Engine engine1 lost on time as White.
+2022-06-20 14:10:27,424 WARNING  Engine engine2 lost on time as White.
+2022-06-20 14:10:27,694 INFO     Experiment finished (1836.789125s elapsed).
+2022-06-20 14:10:28,070 INFO     Got Elo: -129.17273484472443 +- 47.25252736692896
+2022-06-20 14:10:28,071 INFO     Estimated draw rate: 13.04%
+2022-06-20 14:10:28,071 INFO     Updating model
+2022-06-20 14:10:32,468 INFO     GP sampling finished (4.39637s)
+2022-06-20 14:10:32,514 INFO     Starting iteration 69
+2022-06-20 14:10:35,295 INFO     Current optimum:
+{'LMRGRADIENT': 1.2086329009420191, 'LMRMIDPOINT': 0.6756401648101649, 'LMRMAXDEPTH': 0.3791046581962745}
+2022-06-20 14:10:35,297 INFO     Estimated Elo: 8.689 +- 25.1115
+2022-06-20 14:10:35,298 INFO     90.0% confidence interval of the Elo value: (-32.6157, 49.9937)
+2022-06-20 14:10:35,479 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1         2.86
+LMRMIDPOINT          0.9         13.3
+LMRMAXDEPTH          0.1         0.99
+
+2022-06-20 14:10:47,180 INFO     Saving a plot to plots\landscapes\landscape-20220620-141035-69.png.
+2022-06-20 14:10:47,786 INFO     Testing {'LMRGRADIENT': 1.2705312809443403, 'LMRMIDPOINT': 1.5180271551262616, 'LMRMAXDEPTH': 0.33331175933130863}
+2022-06-20 14:10:47,789 INFO     Start experiment
+2022-06-20 14:39:16,650 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 14:39:16,652 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 14:39:16,716 WARNING  Engine engine2 lost on time as White.
+2022-06-20 14:39:16,721 WARNING  Engine engine2 lost on time as White.
+2022-06-20 14:39:16,783 WARNING  Engine engine2 lost on time as White.
+2022-06-20 14:39:16,834 WARNING  Engine engine1 lost on time as White.
+2022-06-20 14:39:17,036 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 14:39:17,126 WARNING  Engine engine1 lost on time as White.
+2022-06-20 14:39:17,368 INFO     Experiment finished (1709.578468s elapsed).
+2022-06-20 14:39:17,710 INFO     Got Elo: 23.196778791074703 +- 32.73409907792949
+2022-06-20 14:39:17,710 INFO     Estimated draw rate: 41.30%
+2022-06-20 14:39:17,710 INFO     Updating model
+2022-06-20 14:39:22,307 INFO     GP sampling finished (4.596035s)
+2022-06-20 14:39:22,339 INFO     Starting iteration 70
+2022-06-20 14:39:25,127 INFO     Current optimum:
+{'LMRGRADIENT': 1.2381088451224995, 'LMRMIDPOINT': 0.7157144031681016, 'LMRMAXDEPTH': 0.3709038575242074}
+2022-06-20 14:39:25,128 INFO     Estimated Elo: 14.1246 +- 22.0075
+2022-06-20 14:39:25,128 INFO     90.0% confidence interval of the Elo value: (-22.0745, 50.3238)
+2022-06-20 14:39:25,297 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.15         2.96
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH         0.11          0.9
+
+2022-06-20 14:39:37,356 INFO     Saving a plot to plots\landscapes\landscape-20220620-143925-70.png.
+2022-06-20 14:39:37,948 INFO     Testing {'LMRGRADIENT': 2.9993613602956235, 'LMRMIDPOINT': 8.240813182398568, 'LMRMAXDEPTH': 0.4638387971025759}
+2022-06-20 14:39:37,949 INFO     Start experiment
+2022-06-20 15:08:39,126 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:08:39,277 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:08:39,473 WARNING  Engine engine1 lost on time as White.
+2022-06-20 15:08:39,824 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 15:08:39,824 INFO     Experiment finished (1741.873422s elapsed).
+2022-06-20 15:08:40,164 INFO     Got Elo: -54.48789880719554 +- 37.31816336571607
+2022-06-20 15:08:40,164 INFO     Estimated draw rate: 41.30%
+2022-06-20 15:08:40,165 INFO     Updating model
+2022-06-20 15:08:44,685 INFO     GP sampling finished (4.520157s)
+2022-06-20 15:08:44,710 INFO     Starting iteration 71
+2022-06-20 15:08:47,682 INFO     Current optimum:
+{'LMRGRADIENT': 1.234306709922464, 'LMRMIDPOINT': 0.6901937150866613, 'LMRMAXDEPTH': 0.3718520401622156}
+2022-06-20 15:08:47,682 INFO     Estimated Elo: 14.4058 +- 22.3151
+2022-06-20 15:08:47,683 INFO     90.0% confidence interval of the Elo value: (-22.2993, 51.1109)
+2022-06-20 15:08:47,856 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.2          3.0
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH          0.1         0.94
+
+2022-06-20 15:08:59,512 INFO     Saving a plot to plots\landscapes\landscape-20220620-150847-71.png.
+2022-06-20 15:09:00,110 INFO     Testing {'LMRGRADIENT': 0.17691813396102624, 'LMRMIDPOINT': 13.911795891564807, 'LMRMAXDEPTH': 0.7837269431928923}
+2022-06-20 15:09:00,111 INFO     Start experiment
+2022-06-20 15:39:54,052 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:39:54,103 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:39:54,203 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 15:39:54,340 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:39:54,425 WARNING  Engine engine1 lost on time as White.
+2022-06-20 15:39:54,512 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 15:39:54,622 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 15:39:54,798 WARNING  Engine engine2 lost on time as White.
+2022-06-20 15:39:54,798 INFO     Experiment finished (1854.687308s elapsed).
+2022-06-20 15:39:55,103 INFO     Got Elo: 30.96488932351128 +- 38.51857031884354
+2022-06-20 15:39:55,103 INFO     Estimated draw rate: 30.43%
+2022-06-20 15:39:55,103 INFO     Updating model
+2022-06-20 15:39:59,824 INFO     GP sampling finished (4.72s)
+2022-06-20 15:39:59,856 INFO     Starting iteration 72
+2022-06-20 15:40:02,507 INFO     Current optimum:
+{'LMRGRADIENT': 1.231768816062937, 'LMRMIDPOINT': 0.6041906297808196, 'LMRMAXDEPTH': 0.3717123699882364}
+2022-06-20 15:40:02,508 INFO     Estimated Elo: 14.668 +- 22.7041
+2022-06-20 15:40:02,508 INFO     90.0% confidence interval of the Elo value: (-22.6769, 52.0128)
+2022-06-20 15:40:02,684 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.9
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH         0.14         1.01
+
+2022-06-20 15:40:14,254 INFO     Saving a plot to plots\landscapes\landscape-20220620-154002-72.png.
+2022-06-20 15:40:14,902 INFO     Testing {'LMRGRADIENT': 2.953294296874047, 'LMRMIDPOINT': 11.318863300034872, 'LMRMAXDEPTH': 0.5039710613964871}
+2022-06-20 15:40:14,904 INFO     Start experiment
+2022-06-20 16:07:21,431 WARNING  Engine engine1 lost on time as White.
+2022-06-20 16:07:21,449 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 16:07:21,666 WARNING  Engine engine1 lost on time as White.
+2022-06-20 16:07:21,738 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 16:07:21,791 WARNING  Engine engine1 lost on time as White.
+2022-06-20 16:07:21,902 WARNING  Engine engine2 lost on time as White.
+2022-06-20 16:07:21,903 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 16:07:21,908 INFO     Experiment finished (1627.001113s elapsed).
+2022-06-20 16:07:22,290 INFO     Got Elo: -54.48789880719554 +- 46.30388326293164
+2022-06-20 16:07:22,291 INFO     Estimated draw rate: 28.26%
+2022-06-20 16:07:22,291 INFO     Updating model
+2022-06-20 16:07:27,453 INFO     GP sampling finished (5.159908s)
+2022-06-20 16:07:27,538 INFO     Starting iteration 73
+2022-06-20 16:07:30,466 INFO     Current optimum:
+{'LMRGRADIENT': 1.2361440609159997, 'LMRMIDPOINT': 0.5909301525380609, 'LMRMAXDEPTH': 0.3703754906144656}
+2022-06-20 16:07:30,472 INFO     Estimated Elo: 14.3391 +- 22.543
+2022-06-20 16:07:30,474 INFO     90.0% confidence interval of the Elo value: (-22.7409, 51.419)
+2022-06-20 16:07:30,671 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.16         2.92
+LMRMIDPOINT          2.0         13.6
+LMRMAXDEPTH          0.1         0.94
+
+2022-06-20 16:07:43,181 INFO     Saving a plot to plots\landscapes\landscape-20220620-160730-73.png.
+2022-06-20 16:07:46,323 INFO     Testing {'LMRGRADIENT': 0.2039338954033972, 'LMRMIDPOINT': 6.776655916548, 'LMRMAXDEPTH': 0.40221018670073205}
+2022-06-20 16:07:46,324 INFO     Start experiment
+2022-06-20 16:35:10,988 WARNING  Engine engine2 lost on time as White.
+2022-06-20 16:35:11,056 WARNING  Engine engine1 lost on time as White.
+2022-06-20 16:35:11,066 WARNING  Engine engine2 lost on time as White.
+2022-06-20 16:35:11,066 WARNING  Engine engine1 lost on time as White.
+2022-06-20 16:35:11,616 WARNING  Engine engine2 lost on time as White.
+2022-06-20 16:35:11,623 WARNING  Engine engine2 lost on time as White.
+2022-06-20 16:35:11,624 INFO     Experiment finished (1645.298746s elapsed).
+2022-06-20 16:35:12,022 INFO     Got Elo: 1.9286549331065745e-14 +- 30.187007494101277
+2022-06-20 16:35:12,022 INFO     Estimated draw rate: 52.17%
+2022-06-20 16:35:12,022 INFO     Updating model
+2022-06-20 16:35:16,850 INFO     GP sampling finished (4.825801s)
+2022-06-20 16:35:16,901 INFO     Starting iteration 74
+2022-06-20 16:35:20,113 INFO     Current optimum:
+{'LMRGRADIENT': 1.2422779573847618, 'LMRMIDPOINT': 0.5959189020268608, 'LMRMAXDEPTH': 0.36993447325497986}
+2022-06-20 16:35:20,113 INFO     Estimated Elo: 14.6871 +- 22.8363
+2022-06-20 16:35:20,114 INFO     90.0% confidence interval of the Elo value: (-22.8753, 52.2494)
+2022-06-20 16:35:20,299 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          2.4         14.0
+LMRMAXDEPTH         0.15         1.04
+
+2022-06-20 16:35:32,387 INFO     Saving a plot to plots\landscapes\landscape-20220620-163520-74.png.
+2022-06-20 16:35:33,002 INFO     Testing {'LMRGRADIENT': 1.2187790152621079, 'LMRMIDPOINT': 1.9074818045801643, 'LMRMAXDEPTH': 0.42228460614981134}
+2022-06-20 16:35:33,004 INFO     Start experiment
+2022-06-20 17:03:14,074 WARNING  Engine engine1 lost on time as White.
+2022-06-20 17:03:14,462 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 17:03:14,801 WARNING  Engine engine1 lost on time as White.
+2022-06-20 17:03:14,811 INFO     Experiment finished (1661.805514s elapsed).
+2022-06-20 17:03:15,184 INFO     Got Elo: -46.602227628574866 +- 39.809551218359665
+2022-06-20 17:03:15,185 INFO     Estimated draw rate: 43.48%
+2022-06-20 17:03:15,185 INFO     Updating model
+2022-06-20 17:03:20,024 INFO     GP sampling finished (4.837819s)
+2022-06-20 17:03:20,079 INFO     Starting iteration 75
+2022-06-20 17:03:22,940 INFO     Current optimum:
+{'LMRGRADIENT': 1.3853563655620884, 'LMRMIDPOINT': 0.5371824498791039, 'LMRMAXDEPTH': 0.33808227946644775}
+2022-06-20 17:03:22,946 INFO     Estimated Elo: 8.3185 +- 21.6572
+2022-06-20 17:03:22,947 INFO     90.0% confidence interval of the Elo value: (-27.3044, 43.9415)
+2022-06-20 17:03:23,129 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.14         2.79
+LMRMIDPOINT          0.7         12.1
+LMRMAXDEPTH         0.12          0.9
+
+2022-06-20 17:03:34,809 INFO     Saving a plot to plots\landscapes\landscape-20220620-170323-75.png.
+2022-06-20 17:03:35,465 INFO     Testing {'LMRGRADIENT': 0.15486719880360006, 'LMRMIDPOINT': 13.950570524945194, 'LMRMAXDEPTH': 0.8953493151996842}
+2022-06-20 17:03:35,467 INFO     Start experiment
+2022-06-20 17:32:32,727 WARNING  Engine engine2 lost on time as White.
+2022-06-20 17:32:32,859 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 17:32:32,894 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 17:32:33,054 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 17:32:33,274 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 17:32:33,280 WARNING  Engine engine2 lost on time as White.
+2022-06-20 17:32:33,283 INFO     Experiment finished (1737.814758s elapsed).
+2022-06-20 17:32:33,645 INFO     Got Elo: -38.764005203222595 +- 42.211538870892866
+2022-06-20 17:32:33,646 INFO     Estimated draw rate: 28.26%
+2022-06-20 17:32:33,647 INFO     Updating model
+2022-06-20 17:32:38,587 INFO     GP sampling finished (4.93805s)
+2022-06-20 17:32:38,652 INFO     Starting iteration 76
+2022-06-20 17:32:41,687 INFO     Current optimum:
+{'LMRGRADIENT': 1.3856361254252938, 'LMRMIDPOINT': 0.5203141032627332, 'LMRMAXDEPTH': 0.33841425625951804}
+2022-06-20 17:32:41,688 INFO     Estimated Elo: 8.1182 +- 21.6364
+2022-06-20 17:32:41,689 INFO     90.0% confidence interval of the Elo value: (-27.4704, 43.7069)
+2022-06-20 17:32:41,874 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.12         2.88
+LMRMIDPOINT          0.5         13.0
+LMRMAXDEPTH         0.15         0.99
+
+2022-06-20 17:32:53,216 INFO     Saving a plot to plots\landscapes\landscape-20220620-173241-76.png.
+2022-06-20 17:32:53,861 INFO     Testing {'LMRGRADIENT': 0.10494806688767612, 'LMRMIDPOINT': 10.102691871662438, 'LMRMAXDEPTH': 0.1095983356612988}
+2022-06-20 17:32:53,864 INFO     Start experiment
+2022-06-20 18:03:51,679 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:03:51,703 WARNING  Engine engine1 lost on time as White.
+2022-06-20 18:03:51,705 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:03:51,849 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:03:52,203 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:03:52,239 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:03:52,280 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:03:52,441 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:03:52,547 INFO     Experiment finished (1858.682818s elapsed).
+2022-06-20 18:03:52,942 INFO     Got Elo: -111.79612712314851 +- 45.90591445165911
+2022-06-20 18:03:52,943 INFO     Estimated draw rate: 17.39%
+2022-06-20 18:03:52,943 INFO     Updating model
+2022-06-20 18:03:59,039 INFO     GP sampling finished (6.094731s)
+2022-06-20 18:03:59,107 INFO     Starting iteration 77
+2022-06-20 18:04:01,952 INFO     Current optimum:
+{'LMRGRADIENT': 1.3838855213347865, 'LMRMIDPOINT': 0.5517150501791416, 'LMRMAXDEPTH': 0.3379340955855778}
+2022-06-20 18:04:01,953 INFO     Estimated Elo: 7.7749 +- 21.2264
+2022-06-20 18:04:01,955 INFO     90.0% confidence interval of the Elo value: (-27.1394, 42.6893)
+2022-06-20 18:04:02,141 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.22         2.85
+LMRMIDPOINT          0.8         13.2
+LMRMAXDEPTH         0.23         1.06
+
+2022-06-20 18:04:15,122 INFO     Saving a plot to plots\landscapes\landscape-20220620-180402-77.png.
+2022-06-20 18:04:15,921 INFO     Testing {'LMRGRADIENT': 2.9154573983062306, 'LMRMIDPOINT': 10.772737696931781, 'LMRMAXDEPTH': 1.1860407545360414}
+2022-06-20 18:04:15,925 INFO     Start experiment
+2022-06-20 18:28:12,112 WARNING  Engine engine1 lost on time as White.
+2022-06-20 18:28:12,163 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:28:12,504 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:28:12,786 INFO     Experiment finished (1436.857216s elapsed).
+2022-06-20 18:28:13,263 INFO     Got Elo: -293.87422264102133 +- 66.42705292540766
+2022-06-20 18:28:13,265 INFO     Estimated draw rate: 10.87%
+2022-06-20 18:28:13,265 INFO     Updating model
+2022-06-20 18:28:18,494 INFO     GP sampling finished (5.227381s)
+2022-06-20 18:28:18,569 INFO     Starting iteration 78
+2022-06-20 18:28:21,493 INFO     Current optimum:
+{'LMRGRADIENT': 1.3798914565464198, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3387424035961454}
+2022-06-20 18:28:21,498 INFO     Estimated Elo: 8.7068 +- 22.0931
+2022-06-20 18:28:21,499 INFO     90.0% confidence interval of the Elo value: (-27.6331, 45.0466)
+2022-06-20 18:28:21,706 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.8
+LMRMIDPOINT          0.7         13.0
+LMRMAXDEPTH         0.12          0.8
+
+2022-06-20 18:28:37,731 INFO     Saving a plot to plots\landscapes\landscape-20220620-182821-78.png.
+2022-06-20 18:28:38,599 INFO     Testing {'LMRGRADIENT': 0.4922113800460214, 'LMRMIDPOINT': 2.664104130665638, 'LMRMAXDEPTH': 0.4023537610545621}
+2022-06-20 18:28:38,602 INFO     Start experiment
+2022-06-20 18:56:29,666 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:56:29,784 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:56:29,804 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:56:29,814 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:56:29,877 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:56:29,908 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 18:56:29,916 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:56:30,084 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:56:30,161 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:56:30,174 WARNING  Engine engine1 lost on time as White.
+2022-06-20 18:56:30,210 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 18:56:30,218 WARNING  Engine engine1 lost on time as White.
+2022-06-20 18:56:30,358 WARNING  Engine engine2 lost on time as White.
+2022-06-20 18:56:30,381 INFO     Experiment finished (1671.776335s elapsed).
+2022-06-20 18:56:30,766 INFO     Got Elo: -7.722062078154614 +- 42.47787148198912
+2022-06-20 18:56:30,767 INFO     Estimated draw rate: 32.61%
+2022-06-20 18:56:30,767 INFO     Updating model
+2022-06-20 18:56:36,165 INFO     GP sampling finished (5.39522s)
+2022-06-20 18:56:36,241 INFO     Starting iteration 79
+2022-06-20 18:56:39,132 INFO     Current optimum:
+{'LMRGRADIENT': 1.3835735020919915, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3379621021952214}
+2022-06-20 18:56:39,133 INFO     Estimated Elo: 8.5746 +- 21.7851
+2022-06-20 18:56:39,135 INFO     90.0% confidence interval of the Elo value: (-27.2587, 44.4078)
+2022-06-20 18:56:39,326 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.7
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH        0.226        0.974
+
+2022-06-20 18:56:51,260 INFO     Saving a plot to plots\landscapes\landscape-20220620-185639-79.png.
+2022-06-20 18:56:51,981 INFO     Testing {'LMRGRADIENT': 0.1919613164713434, 'LMRMIDPOINT': 11.915415353304661, 'LMRMAXDEPTH': 0.5832329220709033}
+2022-06-20 18:56:51,984 INFO     Start experiment
+2022-06-20 19:24:49,011 WARNING  Engine engine2 lost on time as White.
+2022-06-20 19:24:49,190 WARNING  Engine engine2 lost on time as White.
+2022-06-20 19:24:49,245 WARNING  Engine engine2 lost on time as White.
+2022-06-20 19:24:49,246 WARNING  Engine engine1 lost on time as White.
+2022-06-20 19:24:49,381 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 19:24:49,698 INFO     Experiment finished (1677.713908s elapsed).
+2022-06-20 19:24:50,007 INFO     Got Elo: 7.722062078154653 +- 39.571632697869305
+2022-06-20 19:24:50,007 INFO     Estimated draw rate: 41.30%
+2022-06-20 19:24:50,008 INFO     Updating model
+2022-06-20 19:24:54,924 INFO     GP sampling finished (4.916368s)
+2022-06-20 19:24:54,959 INFO     Starting iteration 80
+2022-06-20 19:24:57,793 INFO     Current optimum:
+{'LMRGRADIENT': 1.3849193908101631, 'LMRMIDPOINT': 0.5, 'LMRMAXDEPTH': 0.3374518441920686}
+2022-06-20 19:24:57,794 INFO     Estimated Elo: 8.442 +- 21.9313
+2022-06-20 19:24:57,794 INFO     90.0% confidence interval of the Elo value: (-27.6318, 44.5157)
+2022-06-20 19:24:57,969 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1          2.9
+LMRMIDPOINT          0.6         12.8
+LMRMAXDEPTH         0.11         0.85
+
+2022-06-20 19:25:09,028 INFO     Saving a plot to plots\landscapes\landscape-20220620-192457-80.png.
+2022-06-20 19:25:09,666 INFO     Testing {'LMRGRADIENT': 0.21556044519109757, 'LMRMIDPOINT': 13.856847415203484, 'LMRMAXDEPTH': 0.26675258103120203}
+2022-06-20 19:25:09,668 INFO     Start experiment
+2022-06-20 19:54:23,390 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 19:54:23,565 WARNING  Engine engine2 lost on time as White.
+2022-06-20 19:54:23,740 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 19:54:23,763 WARNING  Engine engine1 lost on time as White.
+2022-06-20 19:54:23,867 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 19:54:23,938 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 19:54:24,019 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 19:54:24,023 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 19:54:24,088 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 19:54:24,215 WARNING  Engine engine1 lost on time as White.
+2022-06-20 19:54:24,231 INFO     Experiment finished (1754.561558s elapsed).
+2022-06-20 19:54:24,639 INFO     Got Elo: -70.43650362227247 +- 48.94475770575023
+2022-06-20 19:54:24,640 INFO     Estimated draw rate: 15.22%
+2022-06-20 19:54:24,641 INFO     Updating model
+2022-06-20 19:54:30,077 INFO     GP sampling finished (5.435779s)
+2022-06-20 19:54:30,152 INFO     Starting iteration 81
+2022-06-20 19:54:33,146 INFO     Current optimum:
+{'LMRGRADIENT': 1.3821032890000362, 'LMRMIDPOINT': 0.5424992463211709, 'LMRMAXDEPTH': 0.3372432968358161}
+2022-06-20 19:54:33,153 INFO     Estimated Elo: 7.629 +- 21.2367
+2022-06-20 19:54:33,155 INFO     90.0% confidence interval of the Elo value: (-27.3023, 42.5602)
+2022-06-20 19:54:33,349 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1         2.46
+LMRMIDPOINT          0.6         12.0
+LMRMAXDEPTH         0.21         0.84
+
+2022-06-20 19:54:46,665 INFO     Saving a plot to plots\landscapes\landscape-20220620-195433-81.png.
+2022-06-20 19:54:47,376 INFO     Testing {'LMRGRADIENT': 0.20658548961787504, 'LMRMIDPOINT': 10.476441955886793, 'LMRMAXDEPTH': 0.7386542712364036}
+2022-06-20 19:54:47,379 INFO     Start experiment
+2022-06-20 20:21:56,501 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:21:56,542 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 20:21:56,618 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 20:21:56,677 WARNING  Engine engine1 lost on time as White.
+2022-06-20 20:21:56,735 WARNING  Engine engine1 lost on time as White.
+2022-06-20 20:21:56,752 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 20:21:56,778 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:21:56,837 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:21:56,853 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 20:21:57,099 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:21:57,225 INFO     Experiment finished (1629.844133s elapsed).
+2022-06-20 20:21:57,608 INFO     Got Elo: 7.722062078154653 +- 43.9457679170185
+2022-06-20 20:21:57,609 INFO     Estimated draw rate: 36.96%
+2022-06-20 20:21:57,609 INFO     Updating model
+2022-06-20 20:22:02,976 INFO     GP sampling finished (5.365942s)
+2022-06-20 20:22:03,042 INFO     Starting iteration 82
+2022-06-20 20:22:05,751 INFO     Current optimum:
+{'LMRGRADIENT': 0.1, 'LMRMIDPOINT': 12.613257688316008, 'LMRMAXDEPTH': 0.7111354085076658}
+2022-06-20 20:22:05,756 INFO     Estimated Elo: 8.1021 +- 28.1668
+2022-06-20 20:22:05,758 INFO     90.0% confidence interval of the Elo value: (-38.2282, 54.4324)
+2022-06-20 20:22:05,955 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1         2.44
+LMRMIDPOINT          0.8         13.0
+LMRMAXDEPTH         0.24          0.8
+
+2022-06-20 20:22:21,126 INFO     Saving a plot to plots\landscapes\landscape-20220620-202205-82.png.
+2022-06-20 20:22:21,841 INFO     Testing {'LMRGRADIENT': 0.11701393476326391, 'LMRMIDPOINT': 12.093759858498313, 'LMRMAXDEPTH': 0.7533117259983865}
+2022-06-20 20:22:21,844 INFO     Start experiment
+2022-06-20 20:51:02,372 WARNING  Engine engine1 lost on time as White.
+2022-06-20 20:51:02,473 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 20:51:02,484 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:51:02,487 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 20:51:02,673 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:51:02,791 WARNING  Engine engine2 lost on time as White.
+2022-06-20 20:51:02,867 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 20:51:02,869 WARNING  Engine engine1 lost on time as White.
+2022-06-20 20:51:03,004 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 20:51:03,105 INFO     Experiment finished (1721.256839s elapsed).
+2022-06-20 20:51:03,519 INFO     Got Elo: 62.429658213517584 +- 39.21416995910316
+2022-06-20 20:51:03,520 INFO     Estimated draw rate: 39.13%
+2022-06-20 20:51:03,521 INFO     Updating model
+2022-06-20 20:51:08,734 INFO     GP sampling finished (5.210997s)
+2022-06-20 20:51:08,887 INFO     Starting iteration 83
+2022-06-20 20:51:11,751 INFO     Current optimum:
+{'LMRGRADIENT': 0.1, 'LMRMIDPOINT': 12.31395570034187, 'LMRMAXDEPTH': 0.727625070198082}
+2022-06-20 20:51:11,757 INFO     Estimated Elo: 26.4814 +- 22.921
+2022-06-20 20:51:11,758 INFO     90.0% confidence interval of the Elo value: (-11.2203, 64.1831)
+2022-06-20 20:51:11,953 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.11         2.54
+LMRMIDPOINT          1.0         13.0
+LMRMAXDEPTH        0.217        0.783
+
+2022-06-20 20:51:24,032 INFO     Saving a plot to plots\landscapes\landscape-20220620-205111-83.png.
+2022-06-20 20:51:24,678 INFO     Testing {'LMRGRADIENT': 0.21841112183847003, 'LMRMIDPOINT': 11.89812636007601, 'LMRMAXDEPTH': 0.7134893568805813}
+2022-06-20 20:51:24,682 INFO     Start experiment
+2022-06-20 21:18:18,441 WARNING  Engine engine2 lost on time as White.
+2022-06-20 21:18:18,471 WARNING  Engine engine1 lost on time as White.
+2022-06-20 21:18:18,483 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 21:18:18,610 WARNING  Engine engine2 lost on time as White.
+2022-06-20 21:18:18,632 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 21:18:18,698 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 21:18:18,780 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 21:18:18,984 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 21:18:19,013 WARNING  Engine engine2 lost on time as White.
+2022-06-20 21:18:19,084 INFO     Experiment finished (1614.397214s elapsed).
+2022-06-20 21:18:19,520 INFO     Got Elo: 23.196778791074745 +- 37.98255196115489
+2022-06-20 21:18:19,521 INFO     Estimated draw rate: 41.30%
+2022-06-20 21:18:19,522 INFO     Updating model
+2022-06-20 21:18:26,437 INFO     GP sampling finished (6.913792s)
+2022-06-20 21:18:26,562 INFO     Starting iteration 84
+2022-06-20 21:18:30,417 INFO     Current optimum:
+{'LMRGRADIENT': 0.1, 'LMRMIDPOINT': 12.309713642469928, 'LMRMAXDEPTH': 0.7264207764452381}
+2022-06-20 21:18:30,418 INFO     Estimated Elo: 27.2193 +- 20.1678
+2022-06-20 21:18:30,420 INFO     90.0% confidence interval of the Elo value: (-5.9537, 60.3923)
+2022-06-20 21:18:30,623 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT          0.1         2.55
+LMRMIDPOINT          2.0         14.0
+LMRMAXDEPTH        0.293        0.867
+
+2022-06-20 21:18:45,100 INFO     Saving a plot to plots\landscapes\landscape-20220620-211830-84.png.
+2022-06-20 21:18:45,909 INFO     Testing {'LMRGRADIENT': 0.26334552979846954, 'LMRMIDPOINT': 12.00032541994217, 'LMRMAXDEPTH': 0.734116143682414}
+2022-06-20 21:18:45,915 INFO     Start experiment
+2022-06-20 21:44:52,546 WARNING  Engine engine1 lost on time as White.
+2022-06-20 21:44:52,585 WARNING  Engine engine1 lost on time as White.
+2022-06-20 21:44:52,657 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 21:44:52,741 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 21:44:52,794 WARNING  Engine engine1 lost on time as White.
+2022-06-20 21:44:53,055 WARNING  Engine engine2 lost on time as White.
+2022-06-20 21:44:53,104 WARNING  Engine engine1 lost on time as White.
+2022-06-20 21:44:53,122 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 21:44:53,200 WARNING  Engine engine2 lost on time as White.
+2022-06-20 21:44:53,278 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 21:44:53,281 INFO     Experiment finished (1567.363185s elapsed).
+2022-06-20 21:44:53,741 INFO     Got Elo: -54.48789880719554 +- 37.22031002479051
+2022-06-20 21:44:53,742 INFO     Estimated draw rate: 45.65%
+2022-06-20 21:44:53,743 INFO     Updating model
+2022-06-20 21:44:59,475 INFO     GP sampling finished (5.72903s)
+2022-06-20 21:44:59,576 INFO     Starting iteration 85
+2022-06-20 21:45:03,059 INFO     Current optimum:
+{'LMRGRADIENT': 0.1, 'LMRMIDPOINT': 12.631023830253804, 'LMRMAXDEPTH': 0.7237161802134184}
+2022-06-20 21:45:03,060 INFO     Estimated Elo: 13.3876 +- 18.7769
+2022-06-20 21:45:03,061 INFO     90.0% confidence interval of the Elo value: (-17.4977, 44.2728)
+2022-06-20 21:45:03,259 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.17         2.73
+LMRMIDPOINT          0.6         12.8
+LMRMAXDEPTH         0.22         0.87
+
+2022-06-20 21:45:18,925 INFO     Saving a plot to plots\landscapes\landscape-20220620-214503-85.png.
+2022-06-20 21:45:19,997 INFO     Testing {'LMRGRADIENT': 0.13207796217926865, 'LMRMIDPOINT': 11.234499799804484, 'LMRMAXDEPTH': 0.5113830471939169}
+2022-06-20 21:45:20,008 INFO     Start experiment
+2022-06-20 22:14:19,618 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 22:14:19,642 WARNING  Engine engine2 lost on time as White.
+2022-06-20 22:14:20,058 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 22:14:20,063 WARNING  Engine engine1 lost on time as Black.
+2022-06-20 22:14:20,143 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 22:14:20,287 WARNING  Engine engine2 lost on time as White.
+2022-06-20 22:14:20,329 WARNING  Engine engine2 lost on time as White.
+2022-06-20 22:14:20,514 WARNING  Engine engine2 lost on time as Black.
+2022-06-20 22:14:20,516 WARNING  Engine engine2 lost on time as White.
+2022-06-20 22:14:20,573 INFO     Experiment finished (1740.56234s elapsed).
+2022-06-20 22:14:21,004 INFO     Got Elo: 46.60222762857485 +- 41.42979429905091
+2022-06-20 22:14:21,005 INFO     Estimated draw rate: 39.13%
+2022-06-20 22:14:21,006 INFO     Updating model
+2022-06-20 22:14:27,066 INFO     GP sampling finished (6.058685s)
+2022-06-20 22:14:27,167 INFO     Starting iteration 86
+2022-06-20 22:14:30,849 INFO     Current optimum:
+{'LMRGRADIENT': 0.1, 'LMRMIDPOINT': 12.253150323044347, 'LMRMAXDEPTH': 0.6723156771672087}
+2022-06-20 22:14:30,850 INFO     Estimated Elo: 16.6004 +- 20.0858
+2022-06-20 22:14:30,852 INFO     90.0% confidence interval of the Elo value: (-16.4378, 49.6385)
+2022-06-20 22:14:31,045 INFO     90.0% confidence intervals of the parameters:
+Parameter    Lower bound  Upper bound
+-------------------------------------
+LMRGRADIENT         0.11         2.67
+LMRMIDPOINT          1.0         13.6
+LMRMAXDEPTH         0.25          0.8
+
+2022-06-20 22:14:43,393 INFO     Saving a plot to plots\landscapes\landscape-20220620-221431-86.png.
+2022-06-20 22:14:44,356 INFO     Testing {'LMRGRADIENT': 0.18699644497417872, 'LMRMIDPOINT': 12.118387981708775, 'LMRMAXDEPTH': 0.5185365590120309}
+2022-06-20 22:14:44,359 INFO     Start experiment

@@ -19,7 +19,7 @@ use crate::{
         KING, KNIGHT, NO_SQUARE, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR,
     },
     lookups::MVV_LVA_SCORE,
-    opt,
+    macros,
     validate::{piece_valid, square_on_board},
 };
 
@@ -177,7 +177,7 @@ impl Board {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
 
-        let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.ply) };
+        let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.height) };
 
         let score = if killer_entry[0] == m {
             FIRST_ORDER_KILLER_SCORE
@@ -204,7 +204,7 @@ impl Board {
     }
 
     fn is_third_order_killer(&self, m: Move) -> bool {
-        self.ply > 2 && unsafe { self.killer_move_table.get_unchecked(self.ply - 2)[0] == m }
+        self.height > 2 && unsafe { self.killer_move_table.get_unchecked(self.height - 2)[0] == m }
     }
 
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
@@ -394,7 +394,7 @@ impl Board {
 
         if SIDE != WHITE && SIDE != BLACK {
             unsafe {
-                opt::impossible!();
+                macros::impossible!();
             }
         }
 
@@ -528,7 +528,7 @@ impl Board {
 
         if SIDE != WHITE && SIDE != BLACK {
             unsafe {
-                opt::impossible!();
+                macros::impossible!();
             }
         }
 

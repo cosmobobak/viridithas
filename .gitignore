@@ -2,3 +2,8 @@
 *.csv
 *.pgn
 /training_data
+/params/*
+/tuning/plots/*
+*.npz
+*.exe
+*.pkl

@@ -14,7 +14,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{ONE_PAWN, PIECE_VALUES},
+        evaluation::ONE_PAWN,
         movegen::{
             bitboards::{
                 self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop,
@@ -27,7 +27,7 @@ use crate::{
     definitions::{
         colour_of, square_name, type_of, Castling, Colour, Depth, File, Rank, Undo, A1, A8, BB,
         BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, C1, C8, D1, D8, F1, F8, G1,
-        G8, H1, H8, INFINITY, KING, KNIGHT, MAX_DEPTH, MAX_GAME_MOVES, NO_SQUARE, PIECE_EMPTY,
+        G8, H1, H8, INFINITY, KING, KNIGHT, MAX_DEPTH, NO_SQUARE, PIECE_EMPTY,
         RANK_3, RANK_6, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
@@ -35,8 +35,8 @@ use crate::{
         filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
         SQUARE_NAMES,
     },
+    macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
-    opt,
     piecelist::PieceList,
     piecesquaretable::{endgame_pst_value, midgame_pst_value},
     search::alpha_beta,
@@ -56,7 +56,7 @@ pub struct Board {
     side: u8,
     ep_sq: u8,
     fifty_move_counter: u8,
-    ply: usize,
+    height: usize,
     hist_ply: usize,
     key: u64,
     big_piece_counts: [u8; 2],
@@ -76,6 +76,8 @@ pub struct Board {
     tt: DefaultTT,
 
     pst_vals: S,
+
+    eval_params: evaluation::Parameters,
 }
 
 impl PartialEq for Board {
@@ -104,7 +106,7 @@ impl Board {
             side: 0,
             ep_sq: NO_SQUARE,
             fifty_move_counter: 0,
-            ply: 0,
+            height: 0,
             hist_ply: 0,
             key: 0,
             big_piece_counts: [0; 2],
@@ -112,15 +114,16 @@ impl Board {
             minor_piece_counts: [0; 2],
             material: [S(0, 0); 2],
             castle_perm: 0,
-            history: Vec::with_capacity(MAX_GAME_MOVES),
-            repetition_cache: HashSet::with_capacity(MAX_GAME_MOVES),
+            history: Vec::new(),
+            repetition_cache: HashSet::new(),
             piece_lists: [PieceList::new(); 13],
-            principal_variation: Vec::with_capacity(MAX_DEPTH.n_ply()),
+            principal_variation: Vec::new(),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.n_ply()],
             counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
+            eval_params: evaluation::Parameters::default(),
         };
         out.reset();
         out
@@ -128,11 +131,11 @@ impl Board {
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
         self.tt
-            .store(self.key, self.ply, best_move, score, flag, depth);
+            .store(self.key, self.height, best_move, score, flag, depth);
     }
 
     pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        self.tt.probe(self.key, self.ply, alpha, beta, depth)
+        self.tt.probe(self.key, self.height, alpha, beta, depth)
     }
 
     pub fn clear_tt(&mut self) {
@@ -140,8 +143,8 @@ impl Board {
     }
 
     pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH.n_ply());
-        let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.ply) };
+        debug_assert!(self.height < MAX_DEPTH.n_ply());
+        let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.height) };
         entry[1] = entry[0];
         entry[0] = m;
     }
@@ -156,7 +159,7 @@ impl Board {
     }
 
     pub fn insert_countermove(&mut self, m: Move) {
-        debug_assert!(self.ply < MAX_DEPTH.n_ply());
+        debug_assert!(self.height < MAX_DEPTH.n_ply());
         let prev_move = self.history.last().map_or(Move::NULL, |u| u.m);
         if prev_move.is_null() {
             return;
@@ -189,7 +192,7 @@ impl Board {
         let sq = match side {
             WHITE => *self.piece_lists[WK as usize].first().unwrap(),
             BLACK => *self.piece_lists[BK as usize].first().unwrap(),
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         };
         debug_assert!(sq < 64);
         debug_assert_eq!(colour_of(self.piece_at(sq)), side);
@@ -210,11 +213,11 @@ impl Board {
     }
 
     pub fn zero_ply(&mut self) {
-        self.ply = 0;
+        self.height = 0;
     }
 
-    pub const fn ply(&self) -> usize {
-        self.ply
+    pub const fn height(&self) -> usize {
+        self.height
     }
 
     pub const fn turn(&self) -> u8 {
@@ -258,7 +261,7 @@ impl Board {
         self.side = Colour::Both as u8;
         self.ep_sq = NO_SQUARE;
         self.fifty_move_counter = 0;
-        self.ply = 0;
+        self.height = 0;
         self.hist_ply = 0;
         self.castle_perm = 0;
         self.key = 0;
@@ -427,7 +430,7 @@ impl Board {
         fen.push(' ');
         fen.push_str(&format!("{}", self.fifty_move_counter));
         fen.push(' ');
-        fen.push_str(&format!("{}", self.ply / 2 + 1));
+        fen.push_str(&format!("{}", self.height / 2 + 1));
 
         fen
     }
@@ -521,9 +524,9 @@ impl Board {
                     .map_err(|_| {
                         "FEN string is invalid, expected fullmove number part to be a number"
                     })?;
-                self.ply = (fullmove_number - 1) * 2;
+                self.height = (fullmove_number - 1) * 2;
                 if self.side == BLACK {
-                    self.ply += 1;
+                    self.height += 1;
                 }
             }
         }
@@ -581,7 +584,7 @@ impl Board {
             if PIECE_MIN[piece as usize] {
                 min_pce[colour as usize] += 1;
             }
-            material[colour as usize] += PIECE_VALUES[piece as usize];
+            material[colour as usize] += self.eval_params.piece_values[piece as usize];
         }
 
         if piece_num[1..].to_vec()
@@ -836,9 +839,9 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = PIECE_EMPTY;
-        self.material[colour as usize] -= PIECE_VALUES[piece as usize];
-        self.pst_vals.0 -= midgame_pst_value(piece, sq);
-        self.pst_vals.1 -= endgame_pst_value(piece, sq);
+        self.material[colour as usize] -= self.eval_params.piece_values[piece as usize];
+        self.pst_vals.0 -= midgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.pst_vals.1 -= endgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -863,9 +866,9 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.material[colour as usize] += PIECE_VALUES[piece as usize];
-        self.pst_vals.0 += midgame_pst_value(piece, sq);
-        self.pst_vals.1 += endgame_pst_value(piece, sq);
+        self.material[colour as usize] += self.eval_params.piece_values[piece as usize];
+        self.pst_vals.0 += midgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.pst_vals.1 += endgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -896,11 +899,15 @@ impl Board {
         hash_piece(&mut self.key, piece_moved, to);
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
-        self.pst_vals.0 -= midgame_pst_value(piece_moved, from);
-        self.pst_vals.1 -= endgame_pst_value(piece_moved, from);
+        self.pst_vals.0 -=
+            midgame_pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
+        self.pst_vals.1 -=
+            endgame_pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals.0 += midgame_pst_value(piece_moved, to);
-        self.pst_vals.1 += endgame_pst_value(piece_moved, to);
+        self.pst_vals.0 +=
+            midgame_pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
+        self.pst_vals.1 +=
+            endgame_pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
 
         for sq in self.piece_lists[piece_moved as usize].iter_mut() {
             if *sq == from {
@@ -1002,7 +1009,7 @@ impl Board {
         }
 
         self.hist_ply += 1;
-        self.ply += 1;
+        self.height += 1;
 
         if piece == WP || piece == BP {
             self.fifty_move_counter = 0;
@@ -1049,7 +1056,7 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check::<{ Self::US }>());
 
-        self.ply += 1;
+        self.height += 1;
         self.history.push(Undo {
             m: Move::NULL,
             castle_perm: self.castle_perm,
@@ -1076,7 +1083,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        self.ply -= 1;
+        self.height -= 1;
         self.hist_ply -= 1;
 
         let Undo {
@@ -1161,7 +1168,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        self.ply -= 1;
+        self.height -= 1;
         self.hist_ply -= 1;
 
         if self.ep_sq != NO_SQUARE {
@@ -1201,22 +1208,22 @@ impl Board {
         };
         let san_bytes = san.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
-            return Err(InvalidLength);
+            return Err(InvalidLength(san_bytes.len()));
         }
         if !(b'a'..=b'h').contains(&san_bytes[0]) {
-            return Err(InvalidFromSquareFile);
+            return Err(InvalidFromSquareFile(san_bytes[0] as char));
         }
         if !(b'1'..=b'8').contains(&san_bytes[1]) {
-            return Err(InvalidFromSquareRank);
+            return Err(InvalidFromSquareRank(san_bytes[1] as char));
         }
         if !(b'a'..=b'h').contains(&san_bytes[2]) {
-            return Err(InvalidToSquareFile);
+            return Err(InvalidToSquareFile(san_bytes[2] as char));
         }
         if !(b'1'..=b'8').contains(&san_bytes[3]) {
-            return Err(InvalidToSquareRank);
+            return Err(InvalidToSquareRank(san_bytes[3] as char));
         }
         if san_bytes.len() == 5 && ![b'n', b'b', b'r', b'q', b'k'].contains(&san_bytes[4]) {
-            return Err(InvalidPromotionPiece);
+            return Err(InvalidPromotionPiece(san_bytes[4] as char));
         }
 
         let from = filerank_to_square(san_bytes[0] - b'a', san_bytes[1] - b'1');
@@ -1232,7 +1239,7 @@ impl Board {
                     && (san_bytes.len() == 4
                         || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
             })
-            .ok_or(IllegalMove)
+            .ok_or_else(|| IllegalMove(san.to_string()))
     }
 
     pub fn is_repetition(&self) -> bool {
@@ -1240,7 +1247,7 @@ impl Board {
     }
 
     pub fn is_draw(&self) -> bool {
-        (self.fifty_move_counter >= 100 || self.is_repetition()) && self.ply != 0
+        (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
     /// Determines whether a given position is quiescent (no checks or captures).
@@ -1279,7 +1286,7 @@ impl Board {
         self.counter_move_table
             .iter_mut()
             .for_each(|r| r.fill(Move::NULL));
-        self.ply = 0;
+        self.height = 0;
         self.tt.clear_for_search();
     }
 
@@ -1452,7 +1459,7 @@ impl Debug for Board {
         writeln!(f, "ep-square: {}", self.ep_sq)?;
         writeln!(f, "castling: {:b}", self.castle_perm)?;
         writeln!(f, "fifty-move-counter: {}", self.fifty_move_counter)?;
-        writeln!(f, "ply: {}", self.ply)?;
+        writeln!(f, "ply: {}", self.height)?;
         writeln!(f, "hash: {:x}", self.key)?;
         // write_bb(self.pawns[Colour::White as usize], f)?;
         // writeln!(f)?;

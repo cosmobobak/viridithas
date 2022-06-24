@@ -5,7 +5,7 @@ use crate::{
         colour_of, type_of, BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK,
         WB, WHITE, WK, WN, WP, WQ, WR,
     },
-    lookups, magic, opt,
+    lookups, macros, magic,
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
@@ -226,12 +226,12 @@ impl BitBoard {
             BR => self.b_rooks ^= from_to_bb,
             BQ => self.b_queens ^= from_to_bb,
             BK => self.b_king ^= from_to_bb,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         match colour_of(PIECE) {
             WHITE => self.white ^= from_to_bb,
             BLACK => self.black ^= from_to_bb,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         self.occupied ^= from_to_bb;
     }
@@ -250,12 +250,12 @@ impl BitBoard {
             BR => self.b_rooks |= 1u64 << sq,
             BQ => self.b_queens |= 1u64 << sq,
             BK => self.b_king |= 1u64 << sq,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         match colour_of(PIECE) {
             WHITE => self.white |= 1u64 << sq,
             BLACK => self.black |= 1u64 << sq,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         self.occupied |= 1u64 << sq;
     }
@@ -274,12 +274,12 @@ impl BitBoard {
             BR => self.b_rooks &= !(1u64 << sq),
             BQ => self.b_queens &= !(1u64 << sq),
             BK => self.b_king &= !(1u64 << sq),
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         match colour_of(PIECE) {
             WHITE => self.white &= !(1u64 << sq),
             BLACK => self.black &= !(1u64 << sq),
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
         self.occupied &= !(1u64 << sq);
     }
@@ -295,7 +295,7 @@ impl BitBoard {
                 ROOK => self.w_rooks ^= from_to_bb,
                 QUEEN => self.w_queens ^= from_to_bb,
                 KING => self.w_king ^= from_to_bb,
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         } else {
             self.black ^= from_to_bb;
@@ -306,7 +306,7 @@ impl BitBoard {
                 ROOK => self.b_rooks ^= from_to_bb,
                 QUEEN => self.b_queens ^= from_to_bb,
                 KING => self.b_king ^= from_to_bb,
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         }
     }
@@ -322,7 +322,7 @@ impl BitBoard {
                 ROOK => self.w_rooks |= 1u64 << sq,
                 QUEEN => self.w_queens |= 1u64 << sq,
                 KING => self.w_king |= 1u64 << sq,
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         } else {
             self.black |= 1u64 << sq;
@@ -333,7 +333,7 @@ impl BitBoard {
                 ROOK => self.b_rooks |= 1u64 << sq,
                 QUEEN => self.b_queens |= 1u64 << sq,
                 KING => self.b_king |= 1u64 << sq,
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         }
     }
@@ -349,7 +349,7 @@ impl BitBoard {
                 ROOK => self.w_rooks &= !(1u64 << sq),
                 QUEEN => self.w_queens &= !(1u64 << sq),
                 KING => self.w_king &= !(1u64 << sq),
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         } else {
             self.black &= !(1u64 << sq);
@@ -360,7 +360,7 @@ impl BitBoard {
                 ROOK => self.b_rooks &= !(1u64 << sq),
                 QUEEN => self.b_queens &= !(1u64 << sq),
                 KING => self.b_king &= !(1u64 << sq),
-                _ => unsafe { opt::impossible!() },
+                _ => unsafe { macros::impossible!() },
             }
         }
     }
@@ -383,7 +383,7 @@ impl BitBoard {
             BR => self.b_rooks,
             BQ => self.b_queens,
             BK => self.b_king,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
     }
 
@@ -401,7 +401,7 @@ impl BitBoard {
             BR => self.b_rooks,
             BQ => self.b_queens,
             BK => self.b_king,
-            _ => unsafe { opt::impossible!() },
+            _ => unsafe { macros::impossible!() },
         }
     }
 
@@ -435,7 +435,7 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
         QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
         KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
         KING => lookups::get_jumping_piece_attack::<KING>(sq),
-        _ => unsafe { opt::impossible!() },
+        _ => unsafe { macros::impossible!() },
     }
 }
 

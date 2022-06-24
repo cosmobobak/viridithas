@@ -1,0 +1,23 @@
+{
+    "engines": [
+        {
+            "command": "C:\\github\\chess\\virtue\\tuning\\dev.exe"
+        },
+        {
+            "command": "C:\\github\\chess\\virtue\\tuning\\dev-fixed.exe"
+        }
+    ],
+    "parameter_ranges": {
+        "LMRGRADIENT": "Real(0.1, 3.0)",
+        "LMRMIDPOINT": "Real(0.5, 14.0)",
+        "LMRMAXDEPTH": "Real(0.1, 1.5)"
+    },
+    "engine1_tc": "2+1",
+    "engine2_tc": "2+1",
+    "rounds": 20,
+    "plot_every": 1,
+    "plot_path": "plots",
+    "result_every": 1,
+    "opening_file": "C:\\github\\chess\\virtue\\tuning\\Balsa_v500.pgn",
+    "concurrency": 3
+}

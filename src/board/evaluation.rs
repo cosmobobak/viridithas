@@ -2,7 +2,7 @@
 
 use std::{
     iter::Sum,
-    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign}, error::Error, fmt::Display,
 };
 
 use crate::{
@@ -64,6 +64,8 @@ impl Sum for S {
 }
 
 impl S {
+    pub const NULL: Self = Self(0, 0);
+
     pub fn value(self, phase: i32) -> i32 {
         lerp(self.0, self.1, phase)
     }
@@ -116,9 +118,6 @@ pub const QUEEN_OPEN_FILE_BONUS: S = S(ONE_PAWN / 20, 0);
 /// The bonus for having a queen on a semi-open file.
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(ONE_PAWN / 40, 0);
 
-/// The bonus granted for having more pawns when you have knights on the board.
-// pub const KNIGHT_PAWN_BONUS: i32 = PAWN_VALUE / 15;
-
 // Stockfish nonlinear mobility eval tables.
 #[rustfmt::skip]
 const KNIGHT_MOBILITY_BONUS: [S; 9] = 
@@ -139,8 +138,183 @@ const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29,-49), S(-16,-29), S( -8, -8), S( -
       S( 74,147), S( 76,149), S( 90,153), S(104,169), S(105,171), S(106,171),
       S(112,178), S(114,185), S(114,187), S(119,221) ];
 
-/// A threshold over which we will not bother evaluating more than material and PSTs.
-pub const LAZY_THRESHOLD_1: i32 = 14_00;
+/// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
+/// values from VICE.
+pub static PASSED_PAWN_BONUS: [S; 6] = [
+    S(5, 5),
+    S(10, 10),
+    S(20, 20),
+    S(35, 35),
+    S(60, 60),
+    S(100, 100),
+];
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Parameters {
+    pub piece_values: [S; 13],
+    pub isolated_pawn_malus: S,
+    pub doubled_pawn_malus: S,
+    pub bishop_pair_bonus: S,
+    pub rook_open_file_bonus: S,
+    pub rook_half_open_file_bonus: S,
+    pub queen_open_file_bonus: S,
+    pub queen_half_open_file_bonus: S,
+    pub knight_mobility_bonus: [S; 9],
+    pub bishop_mobility_bonus: [S; 14],
+    pub rook_mobility_bonus: [S; 15],
+    pub queen_mobility_bonus: [S; 28],
+    pub passed_pawn_bonus: [S; 6],
+    pub piece_square_tables: [[S; 64]; 13],
+}
+
+impl Default for Parameters {
+    fn default() -> Self {
+        Self {
+            piece_values: PIECE_VALUES,
+            isolated_pawn_malus: ISOLATED_PAWN_MALUS,
+            doubled_pawn_malus: DOUBLED_PAWN_MALUS,
+            bishop_pair_bonus: BISHOP_PAIR_BONUS,
+            rook_open_file_bonus: ROOK_OPEN_FILE_BONUS,
+            rook_half_open_file_bonus: ROOK_HALF_OPEN_FILE_BONUS,
+            queen_open_file_bonus: QUEEN_OPEN_FILE_BONUS,
+            queen_half_open_file_bonus: QUEEN_HALF_OPEN_FILE_BONUS,
+            knight_mobility_bonus: KNIGHT_MOBILITY_BONUS,
+            bishop_mobility_bonus: BISHOP_MOBILITY_BONUS,
+            rook_mobility_bonus: ROOK_MOBILITY_BONUS,
+            queen_mobility_bonus: QUEEN_MOBILITY_BONUS,
+            passed_pawn_bonus: PASSED_PAWN_BONUS,
+            piece_square_tables: crate::piecesquaretable::construct_merged_psts(),
+        }
+    }
+}
+
+impl Display for Parameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        writeln!(f, "Parameters {{")?;
+        writeln!(f, "    piece_values: {:?},", &self.piece_values[1..6])?;
+        writeln!(f, "    isolated_pawn_malus: {:?},", self.isolated_pawn_malus)?;
+        writeln!(f, "    doubled_pawn_malus: {:?},", self.doubled_pawn_malus)?;
+        writeln!(f, "    bishop_pair_bonus: {:?},", self.bishop_pair_bonus)?;
+        writeln!(f, "    rook_open_file_bonus: {:?},", self.rook_open_file_bonus)?;
+        writeln!(f, "    rook_half_open_file_bonus: {:?},", self.rook_half_open_file_bonus)?;
+        writeln!(f, "    queen_open_file_bonus: {:?},", self.queen_open_file_bonus)?;
+        writeln!(f, "    queen_half_open_file_bonus: {:?},", self.queen_half_open_file_bonus)?;
+        writeln!(f, "    knight_mobility_bonus: {:?},", self.knight_mobility_bonus)?;
+        writeln!(f, "    bishop_mobility_bonus: {:?},", self.bishop_mobility_bonus)?;
+        writeln!(f, "    rook_mobility_bonus: {:?},", self.rook_mobility_bonus)?;
+        writeln!(f, "    queen_mobility_bonus: {:?},", self.queen_mobility_bonus)?;
+        writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
+        writeln!(f, "    piece_square_tables: {:?},", &self.piece_square_tables[1..6])?;
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
+impl Parameters {
+    pub const NULL: Self = Self {
+        piece_values: [S::NULL; 13],
+        isolated_pawn_malus: S::NULL,
+        doubled_pawn_malus: S::NULL,
+        bishop_pair_bonus: S::NULL,
+        rook_open_file_bonus: S::NULL,
+        rook_half_open_file_bonus: S::NULL,
+        queen_open_file_bonus: S::NULL,
+        queen_half_open_file_bonus: S::NULL,
+        knight_mobility_bonus: [S::NULL; 9],
+        bishop_mobility_bonus: [S::NULL; 14],
+        rook_mobility_bonus: [S::NULL; 15],
+        queen_mobility_bonus: [S::NULL; 28],
+        passed_pawn_bonus: [S::NULL; 6],
+        piece_square_tables: [[S::NULL; 64]; 13],
+    };
+
+    pub fn vectorise(&self) -> Vec<i32> {
+        let ss = self
+            .piece_values[1..6] // pawn to queen
+            .iter()
+            .copied()
+            .chain(Some(self.isolated_pawn_malus))
+            .chain(Some(self.doubled_pawn_malus))
+            .chain(Some(self.bishop_pair_bonus))
+            .chain(Some(S(self.rook_open_file_bonus.0, self.rook_half_open_file_bonus.0)))
+            .chain(Some(S(self.queen_open_file_bonus.0, self.queen_half_open_file_bonus.0)))
+            .chain(self.knight_mobility_bonus.into_iter())
+            .chain(self.bishop_mobility_bonus.into_iter())
+            .chain(self.rook_mobility_bonus.into_iter())
+            .chain(self.queen_mobility_bonus.into_iter())
+            .chain(self.passed_pawn_bonus.into_iter())
+            .chain(self.piece_square_tables[1..7].iter().flatten().copied());
+        ss.flat_map(|s| [s.0, s.1].into_iter()).collect()
+    }
+
+    pub fn devectorise(data: &[i32]) -> Self {
+        let mut out = Self::NULL;
+        let mut data = data.chunks(2).map(|x| S(x[0], x[1]));
+        for p in 1..6 {
+            let val = data.next().expect("failed to read piece_value term from vector");
+            out.piece_values[p] = val;
+            out.piece_values[p + 6] = val;
+        }
+        out.isolated_pawn_malus = data.next().expect("failed to read isolated_pawn_malus term from vector");
+        out.doubled_pawn_malus = data.next().expect("failed to read doubled_pawn_malus term from vector");
+        out.bishop_pair_bonus = data.next().expect("failed to read bishop_pair_bonus term from vector");
+        let rook_file_bonus = data.next().expect("failed to read rook_file_bonus term from vector");
+        out.rook_open_file_bonus = S(rook_file_bonus.0, 0);
+        out.rook_half_open_file_bonus = S(rook_file_bonus.1, 0);
+        let queen_file_bonus = data.next().expect("failed to read queen_file_bonus term from vector");
+        out.queen_open_file_bonus = S(queen_file_bonus.0, 0);
+        out.queen_half_open_file_bonus = S(queen_file_bonus.1, 0);
+        for knight_mobility_bonus in &mut out.knight_mobility_bonus {
+            *knight_mobility_bonus = data.next().expect("failed to read knight_mobility_bonus term from vector");
+        }
+        for bishop_mobility_bonus in &mut out.bishop_mobility_bonus {
+            *bishop_mobility_bonus = data.next().expect("failed to read bishop_mobility_bonus term from vector");
+        }
+        for rook_mobility_bonus in &mut out.rook_mobility_bonus {
+            *rook_mobility_bonus = data.next().expect("failed to read rook_mobility_bonus term from vector");
+        }
+        for queen_mobility_bonus in &mut out.queen_mobility_bonus {
+            *queen_mobility_bonus = data.next().expect("failed to read queen_mobility_bonus term from vector");
+        }
+        for passed_pawn_bonus in &mut out.passed_pawn_bonus {
+            *passed_pawn_bonus = data.next().expect("failed to read passed_pawn_bonus term from vector");
+        }
+        for pst in 1..7 { // pawn to king
+            for sq in 0..64 {
+                let val = data.next().expect("failed to read piece_square_table term from vector");
+                out.piece_square_tables[pst][sq] = val;
+                out.piece_square_tables[pst + 6][sq ^ 56] = -val;
+            }
+        }
+        assert!(data.next().is_none(), "reading data from a vector of wrong size (too big)");
+        out
+    }
+
+    pub fn save_param_vec(param_vec: &[i32], path: &str) {
+        let mut output = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        for param in param_vec {
+            std::io::Write::write_all(&mut output, format!("{param},").as_bytes()).unwrap();
+        }
+        std::io::Write::flush(&mut output).unwrap();
+    }
+
+    pub fn load_param_vec(path: &str) -> Result<Vec<i32>, Box<dyn Error>> {
+        let mut params = Vec::new();
+        let input = std::io::BufReader::new(std::fs::File::open(path)?);
+        for param in std::io::BufRead::split(input, b',') {
+            let param = param?;
+            let param = String::from_utf8(param)?;
+            let param: i32 = param.parse()?;
+            params.push(param);
+        }
+        Ok(params)
+    }
+
+    pub fn from_file(path: &str) -> Result<Self, Box<dyn Error>> {
+        let vec = Self::load_param_vec(path)?;
+        Ok(Self::devectorise(&vec))
+    }
+}
 
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
@@ -158,19 +332,6 @@ pub static WHITE_PASSED_BB: [u64; 64] = init_passed_isolated_bb().0;
 pub static BLACK_PASSED_BB: [u64; 64] = init_passed_isolated_bb().1;
 
 pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
-
-/// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-/// values from VICE.
-pub static PASSED_PAWN_BONUS: [S; 8] = [
-    S(0, 0), // illegal
-    S(5, 5),
-    S(10, 10),
-    S(20, 20),
-    S(35, 35),
-    S(60, 60),
-    S(100, 100),
-    S(0, 0), // illegal
-];
 
 /// `game_phase` computes a number between 0 and 256, which is the phase of the game.
 /// 0 is the opening, 256 is the endgame.
@@ -197,80 +358,11 @@ pub const fn is_mate_score(score: i32) -> bool {
     score.abs() >= IS_MATE_SCORE
 }
 
-/// A struct that holds all the terms in the evaluation function, intended to be used by the
-/// tuner for optimising the evaluation function.
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EvalVector {
-    /// Whether this position is valid to use for tuning (positions should be quiescent, amongst other considerations).
-    pub valid: bool,
-    /// The aggregated material and PST term, as we do not plan to tune this.
-    pub material_pst: i32,
-    /// The relative bishop pair count. (can only be -1, 0 or 1)
-    pub bishop_pair: i32,
-    /// The relative number of passed pawns by rank.
-    pub passed_pawns_by_rank: [i32; 8],
-    /// The relative number of isolated pawns.
-    pub isolated_pawns: i32,
-    /// The relative number of doubled pawns.
-    pub doubled_pawns: i32,
-    /// The relative knight mobility count.
-    pub knight_mobility: i32,
-    /// The relative bishop mobility count.
-    pub bishop_mobility: i32,
-    /// The relative rook mobility count.
-    pub rook_mobility: i32,
-    /// The relative queen mobility count.
-    pub queen_mobility: i32,
-    /// The relative king mobility count.
-    pub king_mobility: i32,
-    /// The relative shield count.
-    pub pawn_shield: i32,
-    /// The relative number of rooks on open files.
-    pub open_rooks: i32,
-    /// The relative number of rooks on semi-open files.
-    pub half_open_rooks: i32,
-    /// The turn (1 or -1)
-    pub turn: i32,
-}
-
-#[allow(dead_code)]
-impl EvalVector {
-    pub fn csvify(&self) -> String {
-        let csv = format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            self.bishop_pair,
-            self.passed_pawns_by_rank[1],
-            self.passed_pawns_by_rank[2],
-            self.passed_pawns_by_rank[3],
-            self.passed_pawns_by_rank[4],
-            self.passed_pawns_by_rank[5],
-            self.passed_pawns_by_rank[6],
-            self.isolated_pawns,
-            self.doubled_pawns,
-            self.knight_mobility,
-            self.bishop_mobility,
-            self.rook_mobility,
-            self.queen_mobility,
-            self.king_mobility,
-            self.pawn_shield,
-            self.open_rooks,
-            self.half_open_rooks,
-            self.turn
-        );
-        assert_eq!(
-            csv.chars().filter(|&c| c == ',').count(),
-            Self::header().chars().filter(|&c| c == ',').count()
-        );
-        csv
-    }
-
-    pub const fn header() -> &'static str {
-        "bpair,ppr2,ppr3,ppr4,ppr5,ppr6,ppr7,isolated,doubled,n_mob,b_mob,r_mob,q_mob,k_mob,p_shield,turn"
-    }
-}
-
 impl Board {
+    pub fn set_eval_params(&mut self, params: Parameters) {
+        self.eval_params = params;
+    }
+
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
@@ -288,15 +380,6 @@ impl Board {
         let pst = self.pst_vals;
 
         let mut score = material + pst;
-
-        // if the score is already outwith a threshold, we can stop here.
-        if score.0.abs() > LAZY_THRESHOLD_1 {
-            // score = self.clamp_score(score);
-            if self.side == WHITE {
-                return score.value(self.phase());
-            }
-            return -score.value(self.phase());
-        }
 
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
@@ -410,51 +493,51 @@ impl Board {
             return S(0, 0);
         }
         if w_count >= 2 {
-            return BISHOP_PAIR_BONUS;
+            return self.eval_params.bishop_pair_bonus;
         }
         if b_count >= 2 {
-            return -BISHOP_PAIR_BONUS;
+            return -self.eval_params.bishop_pair_bonus;
         }
         S(0, 0)
     }
 
     fn pawn_structure_term(&self) -> S {
-        static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
+        static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5]; // not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
         let mut w_score = S(0, 0);
         let (white_pawns, black_pawns) =
             (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
             if unsafe { *ISOLATED_BB.get_unchecked(white_pawn_loc as usize) } & white_pawns == 0 {
-                w_score -= ISOLATED_PAWN_MALUS;
+                w_score -= self.eval_params.isolated_pawn_malus;
             }
 
             if unsafe { *WHITE_PASSED_BB.get_unchecked(white_pawn_loc as usize) } & black_pawns == 0
             {
                 let rank = rank(white_pawn_loc) as usize;
-                w_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(rank) };
+                w_score += self.eval_params.passed_pawn_bonus[rank - 1];
             }
         }
 
         let mut b_score = S(0, 0);
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
             if unsafe { *ISOLATED_BB.get_unchecked(black_pawn_loc as usize) } & black_pawns == 0 {
-                b_score -= ISOLATED_PAWN_MALUS;
+                b_score -= self.eval_params.isolated_pawn_malus;
             }
 
             if unsafe { *BLACK_PASSED_BB.get_unchecked(black_pawn_loc as usize) } & white_pawns == 0
             {
                 let rank = rank(black_pawn_loc) as usize;
-                b_score += unsafe { *PASSED_PAWN_BONUS.get_unchecked(7 - rank) };
+                b_score += self.eval_params.passed_pawn_bonus[7 - rank - 1];
             }
         }
 
         for &file_mask in &FILE_BB {
             let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
             let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
-            w_score -= DOUBLED_PAWN_MALUS * multiplier;
+            w_score -= self.eval_params.doubled_pawn_malus * multiplier;
             let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
             let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
-            b_score -= DOUBLED_PAWN_MALUS * multiplier;
+            b_score -= self.eval_params.doubled_pawn_malus * multiplier;
         }
 
         w_score - b_score
@@ -481,17 +564,17 @@ impl Board {
         for &rook_sq in self.piece_lists[WR as usize].iter() {
             let file = file(rook_sq);
             if self.is_file_open(file) {
-                score += ROOK_OPEN_FILE_BONUS;
+                score += self.eval_params.rook_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
-                score += ROOK_HALF_OPEN_FILE_BONUS;
+                score += self.eval_params.rook_half_open_file_bonus;
             }
         }
         for &rook_sq in self.piece_lists[BR as usize].iter() {
             let file = file(rook_sq);
             if self.is_file_open(file) {
-                score -= ROOK_OPEN_FILE_BONUS;
+                score -= self.eval_params.rook_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
-                score -= ROOK_HALF_OPEN_FILE_BONUS;
+                score -= self.eval_params.rook_half_open_file_bonus;
             }
         }
         score
@@ -502,17 +585,17 @@ impl Board {
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
             let file = file(queen_sq);
             if self.is_file_open(file) {
-                score += QUEEN_OPEN_FILE_BONUS;
+                score += self.eval_params.queen_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
-                score += QUEEN_HALF_OPEN_FILE_BONUS;
+                score += self.eval_params.queen_half_open_file_bonus;
             }
         }
         for &queen_sq in self.piece_lists[BQ as usize].iter() {
             let file = file(queen_sq);
             if self.is_file_open(file) {
-                score -= QUEEN_OPEN_FILE_BONUS;
+                score -= self.eval_params.queen_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
-                score -= QUEEN_HALF_OPEN_FILE_BONUS;
+                score -= self.eval_params.queen_half_open_file_bonus;
             }
         }
         score
@@ -538,49 +621,49 @@ impl Board {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             let attacks = attacks & attacked_by_black_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score += KNIGHT_MOBILITY_BONUS[attacks];
+            mob_score += self.eval_params.knight_mobility_bonus[attacks];
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             let attacks = attacks & attacked_by_white_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score -= KNIGHT_MOBILITY_BONUS[attacks];
+            mob_score -= self.eval_params.knight_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             let attacks = attacks & attacked_by_black_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score += BISHOP_MOBILITY_BONUS[attacks];
+            mob_score += self.eval_params.bishop_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             let attacks = attacks & attacked_by_white_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score -= BISHOP_MOBILITY_BONUS[attacks];
+            mob_score -= self.eval_params.bishop_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             let attacks = attacks & attacked_by_black_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score += ROOK_MOBILITY_BONUS[attacks];
+            mob_score += self.eval_params.rook_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             let attacks = attacks & attacked_by_white_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score -= ROOK_MOBILITY_BONUS[attacks];
+            mob_score -= self.eval_params.rook_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             let attacks = attacks & attacked_by_black_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score += QUEEN_MOBILITY_BONUS[attacks];
+            mob_score += self.eval_params.queen_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             let attacks = attacks & attacked_by_white_pawns;
             let attacks: usize = attacks.count_ones() as usize;
-            mob_score -= QUEEN_MOBILITY_BONUS[attacks];
+            mob_score -= self.eval_params.queen_mobility_bonus[attacks];
         }
 
         if self.side == WHITE {
@@ -658,5 +741,21 @@ mod tests {
                 .unwrap();
         let pawn_eval = board.pawn_structure_term();
         assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS * 2);
+    }
+
+    #[test]
+    fn params_round_trip() {
+        let params = crate::board::evaluation::Parameters::default();
+        let vec = params.vectorise();
+        let params2 = crate::board::evaluation::Parameters::devectorise(&vec);
+        assert_eq!(params, params2);
+
+        let n_params = vec.len();
+        for _ in 0..100 {
+            let vec = (0..n_params).map(|_| rand::random::<i32>()).collect::<Vec<_>>();
+            let params = crate::board::evaluation::Parameters::devectorise(&vec);
+            let vec2 = params.vectorise();
+            assert_eq!(vec, vec2);
+        }
     }
 }

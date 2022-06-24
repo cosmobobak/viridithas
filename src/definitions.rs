@@ -9,7 +9,7 @@ use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
     lookups::{file, rank, SQUARE_NAMES},
-    opt,
+    macros,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -241,7 +241,7 @@ pub const fn colour_of(piece: u8) -> u8 {
     match piece {
         WP | WN | WB | WR | WQ | WK => WHITE,
         BP | BN | BB | BR | BQ | BK => BLACK,
-        _ => unsafe { opt::impossible!() },
+        _ => unsafe { macros::impossible!() },
     }
 }
 
@@ -257,7 +257,7 @@ pub const fn square_distance(a: u8, b: u8) -> u8 {
     u8max(file(a).abs_diff(file(b)), rank(a).abs_diff(rank(b)))
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum File {
     FileA = 0,
@@ -271,6 +271,26 @@ pub enum File {
     None,
 }
 
+impl Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::FileA => "a",
+                Self::FileB => "b",
+                Self::FileC => "c",
+                Self::FileD => "d",
+                Self::FileE => "e",
+                Self::FileF => "f",
+                Self::FileG => "g",
+                Self::FileH => "h",
+                Self::None => "NO_FILE",
+            }
+        )
+    }
+}
+
 pub const FILE_A: u8 = File::FileA as u8;
 pub const FILE_B: u8 = File::FileB as u8;
 pub const FILE_C: u8 = File::FileC as u8;
@@ -280,7 +300,7 @@ pub const FILE_F: u8 = File::FileF as u8;
 pub const FILE_G: u8 = File::FileG as u8;
 pub const FILE_H: u8 = File::FileH as u8;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Rank {
     Rank1 = 0,
@@ -292,6 +312,26 @@ pub enum Rank {
     Rank7,
     Rank8,
     None,
+}
+
+impl Display for Rank {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Rank1 => "1",
+                Self::Rank2 => "2",
+                Self::Rank3 => "3",
+                Self::Rank4 => "4",
+                Self::Rank5 => "5",
+                Self::Rank6 => "6",
+                Self::Rank7 => "7",
+                Self::Rank8 => "8",
+                Self::None => "NO_RANK",
+            }
+        )
+    }
 }
 
 pub const RANK_1: u8 = Rank::Rank1 as u8;

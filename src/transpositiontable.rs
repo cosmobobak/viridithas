@@ -8,7 +8,7 @@ use crate::{
     board::evaluation::IS_MATE_SCORE,
     chessmove::Move,
     definitions::{CompactDepthStorage, Depth, INFINITY, MAX_DEPTH},
-    opt,
+    macros,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,14 +84,16 @@ pub enum ProbeResult {
 }
 
 impl<const SIZE: usize> TranspositionTable<SIZE> {
-    pub fn new() -> Self {
-        Self {
-            table: vec![Bucket::NULL; SIZE],
-        }
+    pub const fn new() -> Self {
+        Self { table: Vec::new() }
     }
 
     pub fn clear(&mut self) {
-        self.table.fill(Bucket::NULL);
+        if self.table.is_empty() {
+            self.table.resize(SIZE, Bucket::NULL);
+        } else {
+            self.table.fill(Bucket::NULL);
+        }
     }
 
     pub fn store(
@@ -171,7 +173,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 
                 debug_assert!(score >= -INFINITY);
                 match entry.flag {
-                    HFlag::None => unsafe { opt::impossible!() },
+                    HFlag::None => unsafe { macros::impossible!() },
                     HFlag::Alpha => {
                         if score <= alpha {
                             return ProbeResult::Cutoff(alpha);

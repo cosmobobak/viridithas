@@ -1,6 +1,11 @@
 use std::{
+    fmt::Display,
     io::Write,
-    sync::{atomic, mpsc},
+    num::{ParseFloatError, ParseIntError},
+    sync::{
+        atomic::{self, AtomicBool},
+        mpsc,
+    },
 };
 
 use crate::{
@@ -9,28 +14,90 @@ use crate::{
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
+    errors::{FenParseError, MoveParseError},
+    search::{LMRGRADIENT, LMRMAXDEPTH, LMRMIDPOINT, LOGCONSTANT, LOGSCALEFACTOR},
     searchinfo::SearchInfo,
     NAME,
 };
 
+enum UciError {
+    ParseGo(String),
+    ParseOption(String),
+    ParseFen(FenParseError),
+    ParseMove(MoveParseError),
+    UnexpectedCommandTermination(String),
+    InvalidFormat(String),
+    UnknownCommand(String),
+}
+
+impl From<MoveParseError> for UciError {
+    fn from(err: MoveParseError) -> Self {
+        Self::ParseMove(err)
+    }
+}
+
+impl From<FenParseError> for UciError {
+    fn from(err: FenParseError) -> Self {
+        Self::ParseFen(err)
+    }
+}
+
+impl From<ParseFloatError> for UciError {
+    fn from(pfe: ParseFloatError) -> Self {
+        Self::ParseOption(pfe.to_string())
+    }
+}
+
+impl From<ParseIntError> for UciError {
+    fn from(pie: ParseIntError) -> Self {
+        Self::ParseOption(pie.to_string())
+    }
+}
+
+impl Display for UciError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UciError::ParseGo(s) => write!(f, "ParseGo: {}", s),
+            UciError::ParseOption(s) => write!(f, "ParseOption: {}", s),
+            UciError::ParseFen(s) => write!(f, "ParseFen: {}", s),
+            UciError::ParseMove(s) => write!(f, "ParseMove: {}", s),
+            UciError::UnexpectedCommandTermination(s) => {
+                write!(f, "UnexpectedCommandTermination: {}", s)
+            }
+            UciError::InvalidFormat(s) => write!(f, "InvalidFormat: {}", s),
+            UciError::UnknownCommand(s) => write!(f, "UnknownCommand: {}", s),
+        }
+    }
+}
+
 // position fen
 // position startpos
 // ... moves e2e4 e7e5 b7b8q
-fn parse_position(text: &str, pos: &mut Board) {
+fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     let mut parts = text.split_ascii_whitespace();
-    let command = parts.next().expect("No command in parse_position");
-    assert_eq!(command, "position");
-    let determiner = parts.next().expect("No determiner after \"position\"");
+    let command = parts.next().ok_or_else(|| {
+        UciError::UnexpectedCommandTermination("No command in parse_position".into())
+    })?;
+    if command != "position" {
+        return Err(UciError::InvalidFormat("Expected 'position'".into()));
+    }
+    let determiner = parts.next().ok_or_else(|| {
+        UciError::UnexpectedCommandTermination("No determiner after \"position\"".into())
+    })?;
     if determiner == "startpos" {
         pos.set_startpos();
         let moves = parts.next(); // skip "moves"
-        assert!(matches!(moves, Some("moves") | None));
+        if !(matches!(moves, Some("moves") | None)) {
+            return Err(UciError::InvalidFormat(
+                "Expected either \"moves\" or no content to follow \"startpos\".".into(),
+            ));
+        }
     } else {
-        assert_eq!(
-            determiner, "fen",
-            "Unknown term after \"position\": {}",
-            determiner
-        );
+        if determiner != "fen" {
+            return Err(UciError::InvalidFormat(format!(
+                "Unknown term after \"position\": {determiner}"
+            )));
+        }
         let mut fen = String::new();
         for part in &mut parts {
             if part == "moves" {
@@ -39,29 +106,33 @@ fn parse_position(text: &str, pos: &mut Board) {
             fen.push_str(part);
             fen.push(' ');
         }
-        pos.set_from_fen(&fen).unwrap();
+        pos.set_from_fen(&fen)?;
     }
     for san in parts {
-        let m = pos.parse_san(san);
-        let m = m.expect("Invalid move passed in uci");
+        let m = pos.parse_san(san)?;
         pos.make_move(m);
     }
     pos.zero_ply();
     eprintln!("{}", pos);
+    Ok(())
 }
 
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
+fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
-    let mut moves_to_go: Option<usize> = None;
-    let mut movetime: Option<usize> = None;
-    let mut time: Option<usize> = None;
-    let mut inc: Option<usize> = None;
+    let mut moves_to_go: Option<u64> = None;
+    let mut movetime: Option<u64> = None;
+    let mut time: Option<u64> = None;
+    let mut inc: Option<u64> = None;
     info.time_set = false;
 
     let mut parts = text.split_ascii_whitespace();
-    let command = parts.next().expect("No command in parse_go");
-    assert_eq!(command, "go");
+    let command = parts
+        .next()
+        .ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
+    if command != "go" {
+        return Err(UciError::InvalidFormat("Expected \"go\"".into()));
+    }
 
     while let Some(part) = parts.next() {
         match part {
@@ -69,63 +140,85 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
                 depth = Some(
                     parts
                         .next()
-                        .expect("nothing after \"depth\"")
+                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"depth\"".into()))?
                         .parse()
-                        .expect("depth not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!("value for depth is not a number: {e}"))
+                        })?,
                 );
             }
             "movestogo" => {
                 moves_to_go = Some(
                     parts
                         .next()
-                        .expect("nothing after \"movestogo\"")
+                        .ok_or_else(|| {
+                            UciError::InvalidFormat("nothing after \"movestogo\"".into())
+                        })?
                         .parse()
-                        .expect("movestogo not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!(
+                                "value for movestogo is not a number: {e}"
+                            ))
+                        })?,
                 );
             }
             "movetime" => {
                 movetime = Some(
                     parts
                         .next()
-                        .expect("nothing after \"movetime\"")
+                        .ok_or_else(|| {
+                            UciError::InvalidFormat("nothing after \"movetime\"".into())
+                        })?
                         .parse()
-                        .expect("movetime not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!(
+                                "value for movetime is not a number: {e}"
+                            ))
+                        })?,
                 );
             }
             "wtime" if pos.turn() == WHITE => {
                 time = Some(
                     parts
                         .next()
-                        .expect("nothing after \"wtime\"")
+                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"wtime\"".into()))?
                         .parse()
-                        .expect("wtime not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!("value for wtime is not a number: {e}"))
+                        })?,
                 );
             }
             "btime" if pos.turn() == BLACK => {
                 time = Some(
                     parts
                         .next()
-                        .expect("nothing after \"btime\"")
+                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"btime\"".into()))?
                         .parse()
-                        .expect("btime not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!("value for btime is not a number: {e}"))
+                        })?,
                 );
             }
             "winc" if pos.turn() == WHITE => {
                 inc = Some(
                     parts
                         .next()
-                        .expect("nothing after \"winc\"")
+                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"winc\"".into()))?
                         .parse()
-                        .expect("winc not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!("value for winc is not a number: {e}"))
+                        })?,
                 );
             }
             "binc" if pos.turn() == BLACK => {
                 inc = Some(
                     parts
                         .next()
-                        .expect("nothing after \"binc\"")
+                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"binc\"".into()))?
                         .parse()
-                        .expect("binc not a number"),
+                        .map_err(|e| {
+                            UciError::InvalidFormat(format!("value for binc is not a number: {e}"))
+                        })?,
                 );
             }
             "infinite" => info.infinite = true,
@@ -133,24 +226,34 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
         }
     }
 
-    if movetime.is_some() {
-        time = movetime;
-        moves_to_go = Some(1);
+    let search_time_window = match movetime {
+        Some(movetime) => {
+            info.time_set = true;
+            time = Some(movetime);
+            movetime
+        }
+        None => match time {
+            Some(t) => {
+                info.time_set = true;
+                let time = t / moves_to_go.unwrap_or(30) + inc.unwrap_or(0);
+                let time = time.saturating_sub(30);
+                time.min(t)
+            }
+            None => {
+                info.time_set = false;
+                0
+            }
+        },
+    };
+
+    let is_computed_time_window_valid =
+        !info.time_set || search_time_window <= time.unwrap() as u64;
+    if !is_computed_time_window_valid {
+        let time = time.unwrap();
+        return Err(UciError::ParseGo(format!(
+            "search window was {search_time_window}, but time was {time}"
+        )));
     }
-
-    let search_time_window = time.map_or(1, |t| {
-        info.time_set = true;
-        let time = t as u64 / moves_to_go.unwrap_or(30) as u64 + inc.unwrap_or(0) as u64;
-        let time = time.checked_sub(50).unwrap_or(1);
-        std::cmp::min(time, t as u64)
-    });
-
-    assert!(
-        !info.time_set || search_time_window <= time.unwrap() as u64,
-        "search window was {}, but time was {}",
-        search_time_window,
-        time.unwrap()
-    );
 
     info.set_time_window(search_time_window);
 
@@ -166,9 +269,55 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) {
         info.depth.n_ply(),
         info.time_set
     );
+
+    Ok(())
 }
 
-static KEEP_RUNNING: atomic::AtomicBool = atomic::AtomicBool::new(true);
+fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<(), UciError> {
+    use UciError::UnexpectedCommandTermination;
+    let mut parts = text.split_ascii_whitespace();
+    parts.next().unwrap();
+    parts
+        .next()
+        .map(|s| {
+            assert!(
+                s == "name",
+                "unexpected character after \"setoption\", expected \"name\", got {}",
+                s
+            );
+        })
+        .ok_or_else(|| UnexpectedCommandTermination("no name after setoption".into()))?;
+    let opt_name = parts.next().ok_or_else(|| {
+        UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
+    })?;
+    parts.next().map_or_else(|| panic!("no value after \"setoption name {opt_name}\""), |s| assert!(s == "value", "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {}", s));
+    let opt_value = parts.next().ok_or_else(|| {
+        UnexpectedCommandTermination(format!(
+            "no option value given after \"setoption name {opt_name} value\""
+        ))
+    })?;
+    match opt_name {
+        "LMRGRADIENT" => unsafe {
+            LMRGRADIENT = opt_value.parse()?;
+        },
+        "LMRMIDPOINT" => unsafe {
+            LMRMIDPOINT = opt_value.parse()?;
+        },
+        "LMRMAXDEPTH" => unsafe {
+            LMRMAXDEPTH = opt_value.parse()?;
+        },
+        "LOGSCALEFACTOR" => unsafe {
+            LOGSCALEFACTOR = opt_value.parse()?;
+        },
+        "LOGCONSTANT" => unsafe {
+            LOGCONSTANT = opt_value.parse()?;
+        },
+        _ => eprintln!("ignoring option {}", opt_name),
+    }
+    Ok(())
+}
+
+static KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 
 fn stdin_reader() -> mpsc::Receiver<String> {
     let (sender, reciever) = mpsc::channel();
@@ -221,6 +370,9 @@ pub fn main_loop() {
     let mut pos = Board::new();
     let mut info = SearchInfo::default();
 
+    pos.set_eval_params(crate::board::evaluation::Parameters::from_file("C:\\github\\chess\\virtue\\params\\params100K.txt").unwrap());
+    // pos.set_eval_params(crate::board::evaluation::Parameters::from_file("C:\\github\\chess\\virtue\\params\\params8M.txt").unwrap());
+
     let stdin = stdin_reader();
 
     info.set_stdin(&stdin);
@@ -230,28 +382,41 @@ pub fn main_loop() {
         let line = stdin.recv().expect("Couldn't read from stdin");
         let input = line.trim();
 
-        match input {
+        let res = match input {
             "\n" => continue,
             "uci" => {
                 println!("id name {NAME}");
                 println!("id author Cosmo");
                 println!("uciok");
+                Ok(())
             }
-            "isready" => println!("readyok"),
+            "isready" => {
+                println!("readyok");
+                Ok(())
+            }
             "quit" => {
                 info.quit = true;
                 break;
             }
             "ucinewgame" => {
-                parse_position("position startpos\n", &mut pos);
+                let res = parse_position("position startpos\n", &mut pos);
                 pos.clear_tt();
+                res
             }
+            input if input.starts_with("setoption") => parse_setoption(input, &mut info),
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
-                parse_go(input, &mut info, &mut pos);
-                pos.search_position(&mut info);
+                let res = parse_go(input, &mut info, &mut pos);
+                if res.is_ok() {
+                    pos.search_position(&mut info);
+                }
+                res
             }
-            _ => println!("Unknown command: {}", input),
+            _ => Err(UciError::UnknownCommand(input.to_string())),
+        };
+
+        if let Err(e) = res {
+            println!("Error: {}", e);
         }
 
         if info.quit {
