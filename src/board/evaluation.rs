@@ -620,49 +620,49 @@ impl Board {
         for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             let attacks = attacks & safe_white_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.knight_mobility_bonus[attacks];
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             let attacks = attacks & safe_black_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.knight_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             let attacks = attacks & safe_white_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.bishop_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             let attacks = attacks & safe_black_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.bishop_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             let attacks = attacks & safe_white_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.rook_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             let attacks = attacks & safe_black_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.rook_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             let attacks = attacks & safe_white_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.queen_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             let attacks = attacks & safe_black_moves;
-            let attacks: usize = attacks.count_ones() as usize;
+            let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.queen_mobility_bonus[attacks];
         }
         mob_score
