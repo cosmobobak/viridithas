@@ -370,9 +370,6 @@ pub fn main_loop() {
     let mut pos = Board::new();
     let mut info = SearchInfo::default();
 
-    pos.set_eval_params(crate::board::evaluation::Parameters::from_file("C:\\github\\chess\\virtue\\params\\params100K.txt").unwrap());
-    // pos.set_eval_params(crate::board::evaluation::Parameters::from_file("C:\\github\\chess\\virtue\\params\\params8M.txt").unwrap());
-
     let stdin = stdin_reader();
 
     info.set_stdin(&stdin);
