@@ -204,7 +204,7 @@ impl Display for Parameters {
         writeln!(f, "    rook_mobility_bonus: {:?},", self.rook_mobility_bonus)?;
         writeln!(f, "    queen_mobility_bonus: {:?},", self.queen_mobility_bonus)?;
         writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
-        writeln!(f, "    piece_square_tables: {:?},", &self.piece_square_tables[1..6])?;
+        writeln!(f, "    piece_square_tables: {:?},", &self.piece_square_tables[1..7])?;
         write!(f, "}}")?;
         Ok(())
     }

@@ -49,7 +49,7 @@ fn main() {
             println!("TT buckets: {}", transpositiontable::DEFAULT_TABLE_SIZE);
             println!("TT size (kb): {}", std::mem::size_of::<transpositiontable::Bucket>() * transpositiontable::DEFAULT_TABLE_SIZE / 1024);
         }
-        Some("vizparams") => {
+        Some("visparams") => {
             let path: &str = &args[2];
             let params = board::evaluation::Parameters::from_file(path).unwrap();
             println!("{params}");
@@ -61,6 +61,7 @@ fn main() {
             println!(" - perfttest : run the perft test suite");
             println!(" - tune : use texel's tuning method to optimise the evaluation parameters");
             println!(" - info : miscellaneous information about the engine");
+            println!(" - visparams : visualise the evaluation parameters");
         }
     }
 }

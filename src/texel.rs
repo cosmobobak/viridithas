@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -52,7 +54,11 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
 fn compute_mse(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
     #![allow(clippy::cast_precision_loss)]
     let n: f64 = data.len() as f64;
-    total_squared_error(data, params, k) / n
+    let work_splitting_factor = num_cpus::get();
+    data.par_chunks(data.len() / work_splitting_factor)
+        .map(|chunk| total_squared_error(chunk, params, k))
+        .sum::<f64>()
+        / n
 }
 
 fn generate_particles(
@@ -172,7 +178,8 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
         clippy::similar_names,
         clippy::cast_possible_truncation,
         clippy::needless_range_loop,
-        clippy::too_many_arguments
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
     )]
     let n_params = starting_point.len();
     let (mut particles, mut best_loc, mut best_cost) = initialise(
@@ -247,7 +254,10 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
         println!("test score: {test_score}");
         if **best_cost < cost_before {
             iterations_without_progress = 0;
-            println!("{CONTROL_GREEN}best cost decreased by {}!{CONTROL_RESET}", cost_before - **best_cost);
+            println!(
+                "{CONTROL_GREEN}best cost decreased by {}!{CONTROL_RESET}",
+                cost_before - **best_cost
+            );
             println!("saving params to params_{iteration}.txt");
             Parameters::save_param_vec(&best_loc, &format!("params/params_{iteration}.txt"));
         } else {
@@ -274,16 +284,59 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
     (best_loc, best_cost)
 }
 
+fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
+    starting_point: Vec<i32>,
+    cost_function: F1,
+) -> (Vec<i32>, f64) {
+    let adjustment = 1;
+    let n_params = starting_point.len();
+    let mut best_params = starting_point;
+    let mut best_err = cost_function(&best_params);
+    let mut improved = true;
+    let mut iterations = 1;
+    while improved {
+        println!("iteration {iterations}");
+        improved = false;
+
+        for param_idx in 0..n_params {
+            println!("param {param_idx}");
+            let mut new_params = best_params.clone();
+            new_params[param_idx] += adjustment; // try adding 1 to the param
+            let new_err = cost_function(&new_params);
+            if new_err < best_err {
+                best_params = new_params;
+                best_err = new_err;
+                improved = true;
+                println!("{CONTROL_GREEN}improved! (+){CONTROL_RESET}");
+            } else {
+                new_params[param_idx] -= adjustment * 2; // try subtracting 1 from the param
+                let new_err = cost_function(&new_params);
+                if new_err < best_err {
+                    best_params = new_params;
+                    best_err = new_err;
+                    improved = true;
+                    println!("{CONTROL_GREEN}improved! (-){CONTROL_RESET}");
+                } else {
+                    new_params[param_idx] += adjustment; // reset the param.
+                    println!("{CONTROL_RED}no improvement{CONTROL_RESET}");
+                }
+            }
+        }
+        iterations += 1;
+    }
+    (best_params, best_err)
+}
+
 pub fn tune() {
     // hyperparameters
-    let train = 8_000_000; // 8 million is recommended.
+    let train = 100_000; // 8 million is recommended.
     let test = 100_000; // validation set.
-    let n_particles = 100; // No idea what a good value is.
-    let inertia_weight = 0.8; // the inertia of a particle
-    let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
-    let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
-    let particle_distance = 10; // how far away from the default parameters a particle can be
-    let velocity_distance = 3; // how far away from the zero velocity a particle can begin
+    // let n_particles = 100; // No idea what a good value is.
+    // let inertia_weight = 0.8; // the inertia of a particle
+    // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
+    // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
+    // let particle_distance = 10; // how far away from the default parameters a particle can be
+    // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
 
     let data = File::open("../texel_data.txt").unwrap();
 
@@ -318,7 +371,7 @@ pub fn tune() {
 
     assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {}, test = {}, but data has {} examples", train, test, data.len());
     data.truncate(train + test);
-    let test_set = data[train..].to_vec();
+    let _test_set = data[train..].to_vec();
     data.truncate(train);
     let train_set = data;
 
@@ -326,16 +379,23 @@ pub fn tune() {
 
     println!("Optimising...");
     let start_time = Instant::now();
-    particle_swarm_optimise(
-        params.vectorise(),
-        |pvec| compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K),
-        |pvec| compute_mse(&test_set, &Parameters::devectorise(pvec), DEFAULT_K),
-        inertia_weight,
-        cognitive_coeff,
-        social_coeff,
-        n_particles,
-        particle_distance,
-        velocity_distance,
-    );
+    // let (best_params, best_loss) = particle_swarm_optimise(
+    //     params.vectorise(),
+    //     |pvec| compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K),
+    //     |pvec| compute_mse(&test_set, &Parameters::devectorise(pvec), DEFAULT_K),
+    //     inertia_weight,
+    //     cognitive_coeff,
+    //     social_coeff,
+    //     n_particles,
+    //     particle_distance,
+    //     velocity_distance,
+    // );
+    let (best_params, best_loss) = local_search_optimise(params.vectorise(), |pvec| {
+        compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K)
+    });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
+
+    println!("Best loss: {:.6}", best_loss);
+    println!("Saving best parameters...");
+    Parameters::save_param_vec(&best_params, "params/localsearchfinal.txt");
 }

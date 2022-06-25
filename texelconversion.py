@@ -4,7 +4,7 @@ import chess.pgn
 
 PGN = "lichess_elite_2022-03.pgn" # 366,392 games
 N_GAMES = 366392
-MAX_GAMES = 100_000
+MAX_GAMES = 200_000
 
 def main():
     counter = 0
@@ -35,8 +35,9 @@ def main():
                     exit(1)
                 moves = game.mainline_moves()
                 board = chess.Board()
-                for move in moves:
-                    texel_data.write(f"{board.fen()} {result}\n")
+                for i, move in enumerate(moves):
+                    if i >= 8: # only use moves after 8th
+                        texel_data.write(f"{board.fen()} {result}\n")
                     board.push(move)
                 counter += 1
     print(f"Processed {counter} games ({counter / endpoint * 100.0:.2f}% done)")
