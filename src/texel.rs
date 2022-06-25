@@ -285,12 +285,12 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
 }
 
 fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
-    starting_point: Vec<i32>,
+    starting_point: &[i32],
     cost_function: F1,
 ) -> (Vec<i32>, f64) {
     let adjustment = 1;
     let n_params = starting_point.len();
-    let mut best_params = starting_point;
+    let mut best_params = starting_point.to_vec();
     let mut best_err = cost_function(&best_params);
     let mut improved = true;
     let mut iterations = 1;
@@ -299,6 +299,9 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         improved = false;
 
         for param_idx in 0..n_params {
+            if starting_point[param_idx] == 0 {
+                continue;
+            }
             println!("param {param_idx}");
             let mut new_params = best_params.clone();
             new_params[param_idx] += adjustment; // try adding 1 to the param
@@ -390,7 +393,7 @@ pub fn tune() {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(params.vectorise(), |pvec| {
+    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), |pvec| {
         compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K)
     });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
