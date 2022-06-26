@@ -179,7 +179,7 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
         clippy::cast_possible_truncation,
         clippy::needless_range_loop,
         clippy::too_many_arguments,
-        clippy::too_many_lines,
+        clippy::too_many_lines
     )]
     let n_params = starting_point.len();
     let (mut particles, mut best_loc, mut best_cost) = initialise(
@@ -287,15 +287,15 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
 fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
     cost_function: F1,
+    step_size: i32,
 ) -> (Vec<i32>, f64) {
-    let adjustment = 1;
     let n_params = starting_point.len();
     let mut best_params = starting_point.to_vec();
     let mut best_err = cost_function(&best_params);
     let mut improved = true;
-    let mut iterations = 1;
+    let mut iteration = 1;
     while improved {
-        println!("iteration {iterations}");
+        println!("iteration {iteration}");
         improved = false;
 
         for param_idx in 0..n_params {
@@ -304,7 +304,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
             }
             println!("param {param_idx}");
             let mut new_params = best_params.clone();
-            new_params[param_idx] += adjustment; // try adding 1 to the param
+            new_params[param_idx] += step_size; // try adding step_size to the param
             let new_err = cost_function(&new_params);
             if new_err < best_err {
                 best_params = new_params;
@@ -312,7 +312,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                 improved = true;
                 println!("{CONTROL_GREEN}improved! (+){CONTROL_RESET}");
             } else {
-                new_params[param_idx] -= adjustment * 2; // try subtracting 1 from the param
+                new_params[param_idx] -= step_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
                 if new_err < best_err {
                     best_params = new_params;
@@ -320,19 +320,20 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                     improved = true;
                     println!("{CONTROL_GREEN}improved! (-){CONTROL_RESET}");
                 } else {
-                    new_params[param_idx] += adjustment; // reset the param.
+                    new_params[param_idx] += step_size; // reset the param.
                     println!("{CONTROL_RED}no improvement{CONTROL_RESET}");
                 }
             }
         }
-        iterations += 1;
+        // Parameters::save_param_vec(&best_params, &format!("params/localsearch{iteration}.txt"));
+        iteration += 1;
     }
     (best_params, best_err)
 }
 
 pub fn tune() {
     // hyperparameters
-    let train = 100_000; // 8 million is recommended.
+    let train = 12_000_000; // 8 million is recommended.
     let test = 100_000; // validation set.
     // let n_particles = 100; // No idea what a good value is.
     // let inertia_weight = 0.8; // the inertia of a particle
@@ -393,9 +394,11 @@ pub fn tune() {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), |pvec| {
-        compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K)
-    });
+    let (best_params, best_loss) = local_search_optimise(
+        &params.vectorise(),
+        |pvec| compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K),
+        1,
+    );
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Best loss: {:.6}", best_loss);

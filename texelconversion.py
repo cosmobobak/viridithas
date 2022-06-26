@@ -36,7 +36,7 @@ def main():
                 moves = game.mainline_moves()
                 board = chess.Board()
                 for i, move in enumerate(moves):
-                    if i >= 8: # only use moves after 8th
+                    if i >= 5: # only use moves after 5th
                         texel_data.write(f"{board.fen()} {result}\n")
                     board.push(move)
                 counter += 1
