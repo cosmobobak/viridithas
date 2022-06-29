@@ -463,4 +463,8 @@ pub fn square_name(sq: u8) -> Option<&'static str> {
     SQUARE_NAMES.get(sq as usize).copied()
 }
 
+pub const fn flip_rank(sq: u8) -> u8 {
+    sq ^ 56
+}
+
 pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
