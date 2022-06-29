@@ -25,10 +25,11 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        colour_of, square_name, type_of, Castling, Colour, Depth, File, Rank, Undo, A1, A8, BB,
-        BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, C1, C8, D1, D8, F1, F8, G1,
-        G8, H1, H8, INFINITY, KING, KNIGHT, MAX_DEPTH, NO_SQUARE, PIECE_EMPTY,
-        RANK_3, RANK_6, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        colour_of, square_name, type_of, Castling, Colour, Depth, File,
+        Rank::{self, RANK_3, RANK_6},
+        Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
+        Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
+        KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
     lookups::{
@@ -275,8 +276,8 @@ impl Board {
             return Err(format!("FEN string is not ASCII: {}", fen));
         }
 
-        let mut rank = Rank::Rank8 as u8;
-        let mut file = File::FileA as u8;
+        let mut rank = Rank::RANK_8;
+        let mut file = File::FILE_A;
 
         self.reset();
 
@@ -309,7 +310,7 @@ impl Board {
                 }
                 b'/' => {
                     rank -= 1;
-                    file = File::FileA as u8;
+                    file = File::FILE_A;
                     continue;
                 }
                 c => {
@@ -480,10 +481,8 @@ impl Board {
                 }
                 let file = ep_sq[0] as u8 - b'a';
                 let rank = ep_sq[1] as u8 - b'1';
-                if !(file >= File::FileA as u8
-                    && file <= File::FileH as u8
-                    && rank >= Rank::Rank1 as u8
-                    && rank <= Rank::Rank8 as u8)
+                if !((File::FILE_A..=File::FILE_H).contains(&file)
+                    && (Rank::RANK_1..=Rank::RANK_8).contains(&rank))
                 {
                     return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
                 }
@@ -1428,9 +1427,9 @@ impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         writeln!(f, "Game Board:")?;
 
-        for rank in ((Rank::Rank1 as u8)..=(Rank::Rank8 as u8)).rev() {
+        for rank in ((Rank::RANK_1)..=(Rank::RANK_8)).rev() {
             write!(f, "{} ", rank + 1)?;
-            for file in (File::FileA as u8)..=(File::FileH as u8) {
+            for file in (File::FILE_A)..=(File::FILE_H) {
                 let sq = filerank_to_square(file, rank);
                 let piece = self.piece_at(sq);
                 write!(f, "{} ", piece_char(piece).unwrap() as char)?;

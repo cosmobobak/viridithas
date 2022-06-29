@@ -1,31 +1,29 @@
-#![allow(dead_code)]
-
 use crate::{
     definitions::{
-        colour_of, type_of, BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK,
-        WB, WHITE, WK, WN, WP, WQ, WR,
+        colour_of, type_of, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB,
+        WHITE, WK, WN, WP, WQ, WR,
     },
     lookups, macros, magic,
 };
 
-pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
+// pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
 pub const BB_RANK_2: u64 = 0x0000_0000_0000_FF00;
-pub const BB_RANK_3: u64 = 0x0000_0000_00FF_0000;
-pub const BB_RANK_4: u64 = 0x0000_0000_FF00_0000;
-pub const BB_RANK_5: u64 = 0x0000_00FF_0000_0000;
-pub const BB_RANK_6: u64 = 0x0000_FF00_0000_0000;
+// pub const BB_RANK_3: u64 = 0x0000_0000_00FF_0000;
+// pub const BB_RANK_4: u64 = 0x0000_0000_FF00_0000;
+// pub const BB_RANK_5: u64 = 0x0000_00FF_0000_0000;
+// pub const BB_RANK_6: u64 = 0x0000_FF00_0000_0000;
 pub const BB_RANK_7: u64 = 0x00FF_0000_0000_0000;
-pub const BB_RANK_8: u64 = 0xFF00_0000_0000_0000;
+// pub const BB_RANK_8: u64 = 0xFF00_0000_0000_0000;
 pub const BB_FILE_A: u64 = 0x0101_0101_0101_0101;
-pub const BB_FILE_B: u64 = 0x0202_0202_0202_0202;
-pub const BB_FILE_C: u64 = 0x0404_0404_0404_0404;
-pub const BB_FILE_D: u64 = 0x0808_0808_0808_0808;
-pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
-pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
-pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
+// pub const BB_FILE_B: u64 = 0x0202_0202_0202_0202;
+// pub const BB_FILE_C: u64 = 0x0404_0404_0404_0404;
+// pub const BB_FILE_D: u64 = 0x0808_0808_0808_0808;
+// pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
+// pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
+// pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
 pub const BB_FILE_H: u64 = 0x8080_8080_8080_8080;
 pub const BB_NONE: u64 = 0x0000_0000_0000_0000;
-pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+// pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 
 /// least significant bit of a u64
 /// ```
@@ -136,18 +134,8 @@ impl BitBoard {
     }
 
     #[rustfmt::skip]
-    pub const fn enemy_king<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.b_king } else { self.w_king }
-    }
-
-    #[rustfmt::skip]
     pub const fn pawns<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_pawns } else { self.b_pawns }
-    }
-
-    #[rustfmt::skip]
-    pub const fn our_pieces<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.white } else { self.black }
     }
 
     #[rustfmt::skip]
@@ -156,28 +144,13 @@ impl BitBoard {
     }
 
     #[rustfmt::skip]
-    pub const fn enemy_rookqueen<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.b_rooks | self.b_queens } else { self.w_rooks | self.w_queens }
-    }
-
-    #[rustfmt::skip]
     pub const fn rookqueen<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_rooks | self.w_queens } else { self.b_rooks | self.b_queens }
     }
 
     #[rustfmt::skip]
-    pub const fn enemy_bishopqueen<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.b_bishops | self.b_queens } else { self.w_bishops | self.w_queens }
-    }
-
-    #[rustfmt::skip]
     pub const fn bishopqueen<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_bishops | self.w_queens } else { self.b_bishops | self.b_queens }
-    }
-
-    #[rustfmt::skip]
-    pub const fn enemy_or_empty<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { !self.white } else { !self.black }
     }
 
     pub const fn empty(&self) -> u64 {
@@ -210,78 +183,6 @@ impl BitBoard {
 
     pub fn reset(&mut self) {
         *self = Self::NULL;
-    }
-
-    pub fn move_piece_comptime<const PIECE: u8>(&mut self, from_to_bb: u64) {
-        match PIECE {
-            WP => self.w_pawns ^= from_to_bb,
-            WN => self.w_knights ^= from_to_bb,
-            WB => self.w_bishops ^= from_to_bb,
-            WR => self.w_rooks ^= from_to_bb,
-            WQ => self.w_queens ^= from_to_bb,
-            WK => self.w_king ^= from_to_bb,
-            BP => self.b_pawns ^= from_to_bb,
-            BN => self.b_knights ^= from_to_bb,
-            BB => self.b_bishops ^= from_to_bb,
-            BR => self.b_rooks ^= from_to_bb,
-            BQ => self.b_queens ^= from_to_bb,
-            BK => self.b_king ^= from_to_bb,
-            _ => unsafe { macros::impossible!() },
-        }
-        match colour_of(PIECE) {
-            WHITE => self.white ^= from_to_bb,
-            BLACK => self.black ^= from_to_bb,
-            _ => unsafe { macros::impossible!() },
-        }
-        self.occupied ^= from_to_bb;
-    }
-
-    pub fn set_piece_comptime<const PIECE: u8>(&mut self, sq: u8) {
-        match PIECE {
-            WP => self.w_pawns |= 1u64 << sq,
-            WN => self.w_knights |= 1u64 << sq,
-            WB => self.w_bishops |= 1u64 << sq,
-            WR => self.w_rooks |= 1u64 << sq,
-            WQ => self.w_queens |= 1u64 << sq,
-            WK => self.w_king |= 1u64 << sq,
-            BP => self.b_pawns |= 1u64 << sq,
-            BN => self.b_knights |= 1u64 << sq,
-            BB => self.b_bishops |= 1u64 << sq,
-            BR => self.b_rooks |= 1u64 << sq,
-            BQ => self.b_queens |= 1u64 << sq,
-            BK => self.b_king |= 1u64 << sq,
-            _ => unsafe { macros::impossible!() },
-        }
-        match colour_of(PIECE) {
-            WHITE => self.white |= 1u64 << sq,
-            BLACK => self.black |= 1u64 << sq,
-            _ => unsafe { macros::impossible!() },
-        }
-        self.occupied |= 1u64 << sq;
-    }
-
-    pub fn clear_piece_comptime<const PIECE: u8>(&mut self, sq: u8) {
-        match PIECE {
-            WP => self.w_pawns &= !(1u64 << sq),
-            WN => self.w_knights &= !(1u64 << sq),
-            WB => self.w_bishops &= !(1u64 << sq),
-            WR => self.w_rooks &= !(1u64 << sq),
-            WQ => self.w_queens &= !(1u64 << sq),
-            WK => self.w_king &= !(1u64 << sq),
-            BP => self.b_pawns &= !(1u64 << sq),
-            BN => self.b_knights &= !(1u64 << sq),
-            BB => self.b_bishops &= !(1u64 << sq),
-            BR => self.b_rooks &= !(1u64 << sq),
-            BQ => self.b_queens &= !(1u64 << sq),
-            BK => self.b_king &= !(1u64 << sq),
-            _ => unsafe { macros::impossible!() },
-        }
-        match colour_of(PIECE) {
-            WHITE => self.white &= !(1u64 << sq),
-            BLACK => self.black &= !(1u64 << sq),
-            _ => unsafe { macros::impossible!() },
-        }
-        self.occupied &= !(1u64 << sq);
     }
 
     pub fn move_piece(&mut self, from_to_bb: u64, piece: u8) {
@@ -369,24 +270,6 @@ impl BitBoard {
         self.w_pawns | self.b_pawns != 0
     }
 
-    pub const fn piece_bb_comptime<const PIECE: u8>(&self) -> u64 {
-        match PIECE {
-            WP => self.w_pawns,
-            WN => self.w_knights,
-            WB => self.w_bishops,
-            WR => self.w_rooks,
-            WQ => self.w_queens,
-            WK => self.w_king,
-            BP => self.b_pawns,
-            BN => self.b_knights,
-            BB => self.b_bishops,
-            BR => self.b_rooks,
-            BQ => self.b_queens,
-            BK => self.b_king,
-            _ => unsafe { macros::impossible!() },
-        }
-    }
-
     pub const fn piece_bb(&self, piece: u8) -> u64 {
         match piece {
             WP => self.w_pawns,
@@ -439,6 +322,7 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
     }
 }
 
+#[allow(dead_code)]
 pub fn print_bb(bb: u64) {
     for rank in (0..=7).rev() {
         for file in 0..=7 {

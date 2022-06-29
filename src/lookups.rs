@@ -1,7 +1,12 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    definitions::{square_distance, BK, FILE_A, FILE_H, KING, KNIGHT, RANK_1, RANK_8, WP},
+    definitions::{
+        square_distance,
+        File::{FILE_A, FILE_H},
+        Rank::{RANK_1, RANK_8},
+        BK, KING, KNIGHT, WP,
+    },
     rng::XorShiftState,
 };
 

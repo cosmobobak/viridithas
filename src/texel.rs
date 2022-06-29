@@ -335,12 +335,12 @@ pub fn tune() {
     // hyperparameters
     let train = 12_000_000; // 8 million is recommended.
     let test = 100_000; // validation set.
-    // let n_particles = 100; // No idea what a good value is.
-    // let inertia_weight = 0.8; // the inertia of a particle
-    // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
-    // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
-    // let particle_distance = 10; // how far away from the default parameters a particle can be
-    // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
+                        // let n_particles = 100; // No idea what a good value is.
+                        // let inertia_weight = 0.8; // the inertia of a particle
+                        // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
+                        // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
+                        // let particle_distance = 10; // how far away from the default parameters a particle can be
+                        // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
 
     let data = File::open("../texel_data.txt").unwrap();
 

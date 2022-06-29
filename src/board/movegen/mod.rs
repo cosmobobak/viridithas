@@ -15,8 +15,9 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Castling, B1, B8, BB, BISHOP, BLACK, BN, BQ, BR, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8,
-        KING, KNIGHT, NO_SQUARE, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR,
+        Castling,
+        Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
+        BB, BISHOP, BLACK, BN, BQ, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR,
     },
     lookups::MVV_LVA_SCORE,
     macros,

@@ -1,18 +1,11 @@
 pub mod sftables;
 
-use crate::{
-    board::evaluation::S,
-    definitions::A1,
-    lookups::piece_name,
-};
+use crate::{board::evaluation::S, definitions::Square::A1, lookups::piece_name};
 
 pub fn pst_value(piece: u8, sq: u8, pst: &[[S; 64]; 13]) -> S {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
-    unsafe {
-        *pst.get_unchecked(piece as usize)
-            .get_unchecked(sq as usize)
-    }
+    unsafe { *pst.get_unchecked(piece as usize).get_unchecked(sq as usize) }
 }
 
 pub fn _render_pst_table(pst: &[[i32; 64]; 13]) {

@@ -1,8 +1,10 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
 use std::{
+    error::Error,
+    fmt::Display,
     iter::Sum,
-    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign}, error::Error, fmt::Display,
+    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign},
 };
 
 use crate::{
@@ -192,19 +194,59 @@ impl Display for Parameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         writeln!(f, "Parameters {{")?;
         writeln!(f, "    piece_values: {:?},", &self.piece_values[1..6])?;
-        writeln!(f, "    isolated_pawn_malus: {:?},", self.isolated_pawn_malus)?;
+        writeln!(
+            f,
+            "    isolated_pawn_malus: {:?},",
+            self.isolated_pawn_malus
+        )?;
         writeln!(f, "    doubled_pawn_malus: {:?},", self.doubled_pawn_malus)?;
         writeln!(f, "    bishop_pair_bonus: {:?},", self.bishop_pair_bonus)?;
-        writeln!(f, "    rook_open_file_bonus: {:?},", self.rook_open_file_bonus)?;
-        writeln!(f, "    rook_half_open_file_bonus: {:?},", self.rook_half_open_file_bonus)?;
-        writeln!(f, "    queen_open_file_bonus: {:?},", self.queen_open_file_bonus)?;
-        writeln!(f, "    queen_half_open_file_bonus: {:?},", self.queen_half_open_file_bonus)?;
-        writeln!(f, "    knight_mobility_bonus: {:?},", self.knight_mobility_bonus)?;
-        writeln!(f, "    bishop_mobility_bonus: {:?},", self.bishop_mobility_bonus)?;
-        writeln!(f, "    rook_mobility_bonus: {:?},", self.rook_mobility_bonus)?;
-        writeln!(f, "    queen_mobility_bonus: {:?},", self.queen_mobility_bonus)?;
+        writeln!(
+            f,
+            "    rook_open_file_bonus: {:?},",
+            self.rook_open_file_bonus
+        )?;
+        writeln!(
+            f,
+            "    rook_half_open_file_bonus: {:?},",
+            self.rook_half_open_file_bonus
+        )?;
+        writeln!(
+            f,
+            "    queen_open_file_bonus: {:?},",
+            self.queen_open_file_bonus
+        )?;
+        writeln!(
+            f,
+            "    queen_half_open_file_bonus: {:?},",
+            self.queen_half_open_file_bonus
+        )?;
+        writeln!(
+            f,
+            "    knight_mobility_bonus: {:?},",
+            self.knight_mobility_bonus
+        )?;
+        writeln!(
+            f,
+            "    bishop_mobility_bonus: {:?},",
+            self.bishop_mobility_bonus
+        )?;
+        writeln!(
+            f,
+            "    rook_mobility_bonus: {:?},",
+            self.rook_mobility_bonus
+        )?;
+        writeln!(
+            f,
+            "    queen_mobility_bonus: {:?},",
+            self.queen_mobility_bonus
+        )?;
         writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
-        writeln!(f, "    piece_square_tables: {:?},", &self.piece_square_tables[1..7])?;
+        writeln!(
+            f,
+            "    piece_square_tables: {:?},",
+            &self.piece_square_tables[1..7]
+        )?;
         write!(f, "}}")?;
         Ok(())
     }
@@ -229,15 +271,20 @@ impl Parameters {
     };
 
     pub fn vectorise(&self) -> Vec<i32> {
-        let ss = self
-            .piece_values[1..6] // pawn to queen
+        let ss = self.piece_values[1..6] // pawn to queen
             .iter()
             .copied()
             .chain(Some(self.isolated_pawn_malus))
             .chain(Some(self.doubled_pawn_malus))
             .chain(Some(self.bishop_pair_bonus))
-            .chain(Some(S(self.rook_open_file_bonus.0, self.rook_half_open_file_bonus.0)))
-            .chain(Some(S(self.queen_open_file_bonus.0, self.queen_half_open_file_bonus.0)))
+            .chain(Some(S(
+                self.rook_open_file_bonus.0,
+                self.rook_half_open_file_bonus.0,
+            )))
+            .chain(Some(S(
+                self.queen_open_file_bonus.0,
+                self.queen_half_open_file_bonus.0,
+            )))
             .chain(self.knight_mobility_bonus.into_iter())
             .chain(self.bishop_mobility_bonus.into_iter())
             .chain(self.rook_mobility_bonus.into_iter())
@@ -251,42 +298,70 @@ impl Parameters {
         let mut out = Self::NULL;
         let mut data = data.chunks(2).map(|x| S(x[0], x[1]));
         for p in 1..6 {
-            let val = data.next().expect("failed to read piece_value term from vector");
+            let val = data
+                .next()
+                .expect("failed to read piece_value term from vector");
             out.piece_values[p] = val;
             out.piece_values[p + 6] = val;
         }
-        out.isolated_pawn_malus = data.next().expect("failed to read isolated_pawn_malus term from vector");
-        out.doubled_pawn_malus = data.next().expect("failed to read doubled_pawn_malus term from vector");
-        out.bishop_pair_bonus = data.next().expect("failed to read bishop_pair_bonus term from vector");
-        let rook_file_bonus = data.next().expect("failed to read rook_file_bonus term from vector");
+        out.isolated_pawn_malus = data
+            .next()
+            .expect("failed to read isolated_pawn_malus term from vector");
+        out.doubled_pawn_malus = data
+            .next()
+            .expect("failed to read doubled_pawn_malus term from vector");
+        out.bishop_pair_bonus = data
+            .next()
+            .expect("failed to read bishop_pair_bonus term from vector");
+        let rook_file_bonus = data
+            .next()
+            .expect("failed to read rook_file_bonus term from vector");
         out.rook_open_file_bonus = S(rook_file_bonus.0, 0);
         out.rook_half_open_file_bonus = S(rook_file_bonus.1, 0);
-        let queen_file_bonus = data.next().expect("failed to read queen_file_bonus term from vector");
+        let queen_file_bonus = data
+            .next()
+            .expect("failed to read queen_file_bonus term from vector");
         out.queen_open_file_bonus = S(queen_file_bonus.0, 0);
         out.queen_half_open_file_bonus = S(queen_file_bonus.1, 0);
         for knight_mobility_bonus in &mut out.knight_mobility_bonus {
-            *knight_mobility_bonus = data.next().expect("failed to read knight_mobility_bonus term from vector");
+            *knight_mobility_bonus = data
+                .next()
+                .expect("failed to read knight_mobility_bonus term from vector");
         }
         for bishop_mobility_bonus in &mut out.bishop_mobility_bonus {
-            *bishop_mobility_bonus = data.next().expect("failed to read bishop_mobility_bonus term from vector");
+            *bishop_mobility_bonus = data
+                .next()
+                .expect("failed to read bishop_mobility_bonus term from vector");
         }
         for rook_mobility_bonus in &mut out.rook_mobility_bonus {
-            *rook_mobility_bonus = data.next().expect("failed to read rook_mobility_bonus term from vector");
+            *rook_mobility_bonus = data
+                .next()
+                .expect("failed to read rook_mobility_bonus term from vector");
         }
         for queen_mobility_bonus in &mut out.queen_mobility_bonus {
-            *queen_mobility_bonus = data.next().expect("failed to read queen_mobility_bonus term from vector");
+            *queen_mobility_bonus = data
+                .next()
+                .expect("failed to read queen_mobility_bonus term from vector");
         }
         for passed_pawn_bonus in &mut out.passed_pawn_bonus {
-            *passed_pawn_bonus = data.next().expect("failed to read passed_pawn_bonus term from vector");
+            *passed_pawn_bonus = data
+                .next()
+                .expect("failed to read passed_pawn_bonus term from vector");
         }
-        for pst in 1..7 { // pawn to king
+        for pst in 1..7 {
+            // pawn to king
             for sq in 0..64 {
-                let val = data.next().expect("failed to read piece_square_table term from vector");
+                let val = data
+                    .next()
+                    .expect("failed to read piece_square_table term from vector");
                 out.piece_square_tables[pst][sq] = val;
                 out.piece_square_tables[pst + 6][sq ^ 56] = -val;
             }
         }
-        assert!(data.next().is_none(), "reading data from a vector of wrong size (too big)");
+        assert!(
+            data.next().is_none(),
+            "reading data from a vector of wrong size (too big)"
+        );
         out
     }
 
@@ -747,7 +822,9 @@ mod tests {
 
         let n_params = vec.len();
         for _ in 0..100 {
-            let vec = (0..n_params).map(|_| rand::random::<i32>()).collect::<Vec<_>>();
+            let vec = (0..n_params)
+                .map(|_| rand::random::<i32>())
+                .collect::<Vec<_>>();
             let params = crate::board::evaluation::Parameters::devectorise(&vec);
             let vec2 = params.vectorise();
             assert_eq!(vec, vec2);
@@ -756,13 +833,17 @@ mod tests {
 
     #[test]
     fn passers_should_be_pushed() {
-        let mut starting_rank_passer = super::Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
+        let mut starting_rank_passer =
+            super::Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
         let mut end_rank_passer = super::Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
         let starting_rank_eval = starting_rank_passer.evaluate();
         let end_rank_eval = end_rank_passer.evaluate();
 
         // is should be better to have a passer that is more advanced.
-        assert!(end_rank_eval > starting_rank_eval, "end_rank_eval: {end_rank_eval}, starting_rank_eval: {starting_rank_eval}");
+        assert!(
+            end_rank_eval > starting_rank_eval,
+            "end_rank_eval: {end_rank_eval}, starting_rank_eval: {starting_rank_eval}"
+        );
     }
 }
