@@ -13,7 +13,7 @@ use crate::{
         BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP, WQ,
         WR,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, piecesquaretable::PieceSquareTable,
 };
 
 use super::movegen::{bitboards::attacks, BitLoop, BB_NONE};
@@ -436,6 +436,10 @@ pub const fn is_mate_score(score: i32) -> bool {
 impl Board {
     pub fn set_eval_params(&mut self, params: Parameters) {
         self.eval_params = params;
+    }
+
+    pub const fn get_pst(&self) -> &PieceSquareTable {
+        &self.eval_params.piece_square_tables
     }
 
     /// Computes a score for the position, from the point of view of the side to move.

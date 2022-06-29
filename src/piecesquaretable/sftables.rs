@@ -1,8 +1,10 @@
 use crate::{
     board::evaluation::S,
-    definitions::{BLACK, WHITE},
+    definitions::{BLACK, WHITE, flip_rank},
     lookups::{file, rank},
 };
+
+use super::PieceSquareTable;
 
 // Scores are explicit for files A to D, implicitly mirrored for E to H.
 const BONUS: [[[S; 4]; 8]; 7] = [
@@ -78,7 +80,7 @@ const P_BONUS: [[S; 8]; 8] = [
     [ S::NULL; 8 ],
 ];
 
-pub const fn construct_sf_pst() -> [[S; 64]; 13] {
+pub const fn construct_sf_pst() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
     let mut colour = WHITE;
     loop {
@@ -88,10 +90,10 @@ pub const fn construct_sf_pst() -> [[S; 64]; 13] {
         while pieces_idx < 6 {
             let mut pst_idx = 0;
             while pst_idx < 64 {
-                let sq = if colour == BLACK {
+                let sq = if colour == WHITE {
                     pst_idx
                 } else {
-                    pst_idx ^ 56
+                    flip_rank(pst_idx)
                 };
                 let r = rank(pst_idx) as usize;
                 let f = file(pst_idx) as usize;

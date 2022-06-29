@@ -1,22 +1,35 @@
 pub mod sftables;
 
+pub type PieceSquareTable = [[S; 64]; 13];
+
 use crate::{board::evaluation::S, definitions::Square::A1, lookups::piece_name};
 
-pub fn pst_value(piece: u8, sq: u8, pst: &[[S; 64]; 13]) -> S {
+pub fn pst_value(piece: u8, sq: u8, pst: &PieceSquareTable) -> S {
     debug_assert!(crate::validate::piece_valid(piece));
     debug_assert!(crate::validate::square_on_board(sq));
     unsafe { *pst.get_unchecked(piece as usize).get_unchecked(sq as usize) }
 }
 
-pub fn _render_pst_table(pst: &[[i32; 64]; 13]) {
+pub fn _render_pst_table(pst: &PieceSquareTable) {
     #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
     for piece in 0..13 {
         println!("{}", piece_name(piece as u8).unwrap());
-        println!("eval on a1 (bottom left) {}", pst[piece][A1 as usize]);
+        println!("mg eval on a1 (bottom left) {}", pst[piece][A1 as usize].0);
         for row in (0..8).rev() {
+            print!("RANK {}: ", row + 1);
             for col in 0..8 {
                 let sq = row * 8 + col;
-                let pst_val = pst[piece][sq];
+                let pst_val = pst[piece][sq].0;
+                print!("{:>5}", pst_val);
+            }
+            println!();
+        }
+        println!("eg eval on a1 (bottom left) {}", pst[piece][A1 as usize].1);
+        for row in (0..8).rev() {
+            print!("RANK {}: ", row + 1);
+            for col in 0..8 {
+                let sq = row * 8 + col;
+                let pst_val = pst[piece][sq].1;
                 print!("{:>5}", pst_val);
             }
             println!();
