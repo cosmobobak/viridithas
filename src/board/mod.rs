@@ -38,7 +38,7 @@ use crate::{
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
-    piecesquaretable::{endgame_pst_value, midgame_pst_value},
+    piecesquaretable::pst_value,
     search::alpha_beta,
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
@@ -840,8 +840,7 @@ impl Board {
 
         *self.piece_at_mut(sq) = PIECE_EMPTY;
         self.material[colour as usize] -= self.eval_params.piece_values[piece as usize];
-        self.pst_vals.0 -= midgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
-        self.pst_vals.1 -= endgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.pst_vals -= pst_value(piece, sq, &self.eval_params.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -867,8 +866,7 @@ impl Board {
 
         *self.piece_at_mut(sq) = piece;
         self.material[colour as usize] += self.eval_params.piece_values[piece as usize];
-        self.pst_vals.0 += midgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
-        self.pst_vals.1 += endgame_pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.pst_vals += pst_value(piece, sq, &self.eval_params.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -899,15 +897,9 @@ impl Board {
         hash_piece(&mut self.key, piece_moved, to);
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
-        self.pst_vals.0 -=
-            midgame_pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
-        self.pst_vals.1 -=
-            endgame_pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
+        self.pst_vals -= pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals.0 +=
-            midgame_pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
-        self.pst_vals.1 +=
-            endgame_pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
+        self.pst_vals += pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
 
         for sq in self.piece_lists[piece_moved as usize].iter_mut() {
             if *sq == from {

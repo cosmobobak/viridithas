@@ -183,7 +183,7 @@ impl Default for Parameters {
             rook_mobility_bonus: ROOK_MOBILITY_BONUS,
             queen_mobility_bonus: QUEEN_MOBILITY_BONUS,
             passed_pawn_bonus: PASSED_PAWN_BONUS,
-            piece_square_tables: crate::piecesquaretable::construct_merged_psts(),
+            piece_square_tables: crate::piecesquaretable::sftables::construct_sf_pst(),
         }
     }
 }
@@ -752,5 +752,17 @@ mod tests {
             let vec2 = params.vectorise();
             assert_eq!(vec, vec2);
         }
+    }
+
+    #[test]
+    fn passers_should_be_pushed() {
+        let mut starting_rank_passer = super::Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
+        let mut end_rank_passer = super::Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
+
+        let starting_rank_eval = starting_rank_passer.evaluate();
+        let end_rank_eval = end_rank_passer.evaluate();
+
+        // is should be better to have a passer that is more advanced.
+        assert!(end_rank_eval > starting_rank_eval, "end_rank_eval: {end_rank_eval}, starting_rank_eval: {starting_rank_eval}");
     }
 }
