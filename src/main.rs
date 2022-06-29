@@ -58,6 +58,16 @@ fn main() {
             });
             println!("{params}");
         }
+        Some("vispst") => {
+            let path = args.get(2);
+            let pst = path.map_or_else(piecesquaretable::sftables::construct_sf_pst, |path| {
+                let params = board::evaluation::Parameters::from_file(path).unwrap();
+                let mut board = board::Board::new();
+                board.set_eval_params(params);
+                *board.get_pst()
+            });
+            piecesquaretable::_render_pst_table(&pst);
+        }
         Some(unknown) => {
             if unknown != "help" {
                 println!("Unknown command: {}", unknown);
