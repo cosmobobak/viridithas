@@ -10,10 +10,11 @@ use std::{
 use crate::{
     board::Board,
     definitions::{
-        BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP, WQ,
-        WR,
+        flip_file, flip_rank, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, QUEEN,
+        ROOK, WB, WHITE, WK, WN, WP, WQ, WR,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, piecesquaretable::PieceSquareTable,
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    piecesquaretable::PieceSquareTable,
 };
 
 use super::movegen::{bitboards::attacks, BitLoop, BB_NONE};
@@ -134,7 +135,12 @@ const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29, -49), S(-16, -29), S(-22, -22), S
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 /// values from VICE.
 pub static PASSED_PAWN_BONUS: [S; 6] = [
-    S(5, 19), S(14, 24), S(24, 34), S(49, 49), S(74, 74), S(86, 107),
+    S(5, 19),
+    S(14, 24),
+    S(24, 34),
+    S(49, 49),
+    S(74, 74),
+    S(86, 107),
 ];
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -276,7 +282,13 @@ impl Parameters {
             .chain(self.rook_mobility_bonus.into_iter())
             .chain(self.queen_mobility_bonus.into_iter())
             .chain(self.passed_pawn_bonus.into_iter())
-            .chain(self.piece_square_tables[1..7].iter().flatten().copied());
+            // take the left halves of the white piece square tables, except for the pawn table.
+            .chain(self.piece_square_tables[WP as usize].iter().copied())
+            .chain(
+                self.piece_square_tables[(WN as usize)..=(WK as usize)]
+                    .iter()
+                    .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
+            );
         ss.flat_map(|s| [s.0, s.1].into_iter()).collect()
     }
 
@@ -334,14 +346,34 @@ impl Parameters {
                 .next()
                 .expect("failed to read passed_pawn_bonus term from vector");
         }
-        for pst in 1..7 {
-            // pawn to king
+        // load in the pawn table
+        for sq in 0..64 {
+            let val = data
+                .next()
+                .expect("failed to read pawn piece_square_table term from vector");
+            out.piece_square_tables[WP as usize][sq as usize] = val;
+            out.piece_square_tables[BP as usize][flip_rank(sq) as usize] = -val;
+        }
+        // load in the rest of the tables
+        for pt in KNIGHT..=KING {
             for sq in 0..64 {
-                let val = data
-                    .next()
-                    .expect("failed to read piece_square_table term from vector");
-                out.piece_square_tables[pst][sq] = val;
-                out.piece_square_tables[pst + 6][sq ^ 56] = -val;
+                let file = file(sq);
+                if file > 3 {
+                    // load from the other half of the piece-square table.
+                    // the left-hand sides of the tables are loaded first, so we
+                    // can safely load out of LHS to populate RHS.
+                    let mirrored_sq = flip_file(sq);
+                    out.piece_square_tables[pt as usize][sq as usize] =
+                        out.piece_square_tables[pt as usize][mirrored_sq as usize];
+                    out.piece_square_tables[pt as usize + 6][flip_rank(sq) as usize] =
+                        out.piece_square_tables[pt as usize + 6][flip_rank(mirrored_sq) as usize];
+                } else {
+                    let val = data
+                        .next()
+                        .expect("failed to read piece_square_table term from vector");
+                    out.piece_square_tables[pt as usize][sq as usize] = val;
+                    out.piece_square_tables[pt as usize + 6][flip_rank(sq) as usize] = -val;
+                }
             }
         }
         assert!(
@@ -790,24 +822,26 @@ mod tests {
 
     #[test]
     fn double_pawn_eval() {
+        use super::Board;
         use crate::board::evaluation::DOUBLED_PAWN_MALUS;
+
         let board =
-            super::Board::from_fen("rnbqkbnr/pppppppp/8/8/8/5P2/PPPP1PPP/RNBQKBNR w KQkq - 0 1")
-                .unwrap();
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/5P2/PPPP1PPP/RNBQKBNR w KQkq - 0 1").unwrap();
         let pawn_eval = board.pawn_structure_term();
         assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS);
         let board =
-            super::Board::from_fen("rnbqkbnr/pppppppp/8/8/8/2P2P2/PPP2PPP/RNBQKBNR b KQkq - 0 1")
-                .unwrap();
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/2P2P2/PPP2PPP/RNBQKBNR b KQkq - 0 1").unwrap();
         let pawn_eval = board.pawn_structure_term();
         assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS * 2);
     }
 
     #[test]
     fn params_round_trip() {
-        let params = crate::board::evaluation::Parameters::default();
+        use crate::board::evaluation::Parameters;
+
+        let params = Parameters::default();
         let vec = params.vectorise();
-        let params2 = crate::board::evaluation::Parameters::devectorise(&vec);
+        let params2 = Parameters::devectorise(&vec);
         assert_eq!(params, params2);
 
         let n_params = vec.len();
@@ -815,7 +849,7 @@ mod tests {
             let vec = (0..n_params)
                 .map(|_| rand::random::<i32>())
                 .collect::<Vec<_>>();
-            let params = crate::board::evaluation::Parameters::devectorise(&vec);
+            let params = Parameters::devectorise(&vec);
             let vec2 = params.vectorise();
             assert_eq!(vec, vec2);
         }
@@ -823,9 +857,10 @@ mod tests {
 
     #[test]
     fn passers_should_be_pushed() {
-        let mut starting_rank_passer =
-            super::Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
-        let mut end_rank_passer = super::Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
+        use super::Board;
+
+        let mut starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
+        let mut end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
         let starting_rank_eval = starting_rank_passer.evaluate();
         let end_rank_eval = end_rank_passer.evaluate();

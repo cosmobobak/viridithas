@@ -384,10 +384,33 @@ pub fn square_name(sq: u8) -> Option<&'static str> {
     SQUARE_NAMES.get(sq as usize).copied()
 }
 
-#[allow(dead_code)]
 pub const fn flip_rank(sq: u8) -> u8 {
     sq ^ 56
 }
 
+pub const fn flip_file(sq: u8) -> u8 {
+    sq ^ 7
+}
+
 #[allow(dead_code)]
 pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+mod tests {
+    #[test]
+    fn square_flipping() {
+        use super::{
+            flip_file, flip_rank,
+            Square::{A1, A8, H1, H8},
+        };
+
+        assert_eq!(flip_rank(A1), A8);
+        assert_eq!(flip_rank(H1), H8);
+        assert_eq!(flip_rank(A8), A1);
+        assert_eq!(flip_rank(H8), H1);
+
+        assert_eq!(flip_file(A1), H1);
+        assert_eq!(flip_file(H1), A1);
+        assert_eq!(flip_file(A8), H8);
+        assert_eq!(flip_file(H8), A8);
+    }
+}

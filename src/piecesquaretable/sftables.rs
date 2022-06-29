@@ -1,6 +1,6 @@
 use crate::{
     board::evaluation::S,
-    definitions::{BLACK, WHITE, flip_rank},
+    definitions::{flip_rank, BLACK, WHITE},
     lookups::{file, rank},
 };
 
