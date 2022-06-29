@@ -289,20 +289,22 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     cost_function: F1,
     step_size: i32,
 ) -> (Vec<i32>, f64) {
+    let init_start_time = Instant::now();
     let n_params = starting_point.len();
     let mut best_params = starting_point.to_vec();
     let mut best_err = cost_function(&best_params);
     let mut improved = true;
     let mut iteration = 1;
+    println!("Initialised in {:.1}s", init_start_time.elapsed().as_secs_f64());
     while improved {
-        println!("iteration {iteration}");
+        println!("Iteration {iteration}");
         improved = false;
 
         for param_idx in 0..n_params {
             if starting_point[param_idx] == 0 {
                 continue;
             }
-            println!("param {param_idx}");
+            println!("Optimising param {param_idx}");
             let mut new_params = best_params.clone();
             new_params[param_idx] += step_size; // try adding step_size to the param
             let new_err = cost_function(&new_params);
@@ -310,7 +312,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                 best_params = new_params;
                 best_err = new_err;
                 improved = true;
-                println!("{CONTROL_GREEN}improved! (+){CONTROL_RESET}");
+                println!("{CONTROL_GREEN}found improvement! (+){CONTROL_RESET}");
             } else {
                 new_params[param_idx] -= step_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
@@ -318,14 +320,14 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                     best_params = new_params;
                     best_err = new_err;
                     improved = true;
-                    println!("{CONTROL_GREEN}improved! (-){CONTROL_RESET}");
+                    println!("{CONTROL_GREEN}found improvement! (-){CONTROL_RESET}");
                 } else {
                     new_params[param_idx] += step_size; // reset the param.
-                    println!("{CONTROL_RED}no improvement{CONTROL_RESET}");
+                    println!("{CONTROL_RED}no improvement.{CONTROL_RESET}");
                 }
             }
         }
-        // Parameters::save_param_vec(&best_params, &format!("params/localsearch{iteration}.txt"));
+        Parameters::save_param_vec(&best_params, &format!("params/localsearch{iteration}.txt"));
         iteration += 1;
     }
     (best_params, best_err)
@@ -335,12 +337,13 @@ pub fn tune() {
     // hyperparameters
     let train = 12_000_000; // 8 million is recommended.
     let test = 100_000; // validation set.
-                        // let n_particles = 100; // No idea what a good value is.
-                        // let inertia_weight = 0.8; // the inertia of a particle
-                        // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
-                        // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
-                        // let particle_distance = 10; // how far away from the default parameters a particle can be
-                        // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
+
+    // let n_particles = 100; // No idea what a good value is.
+    // let inertia_weight = 0.8; // the inertia of a particle
+    // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
+    // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
+    // let particle_distance = 10; // how far away from the default parameters a particle can be
+    // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
 
     let data = File::open("../texel_data.txt").unwrap();
 
