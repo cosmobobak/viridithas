@@ -103,52 +103,38 @@ pub static PIECE_VALUES: [S; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: S = S(ONE_PAWN / 4, ONE_PAWN / 3);
+pub const ISOLATED_PAWN_MALUS: S = S(22, 19);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(3 * ONE_PAWN / 8, ONE_PAWN / 2);
+pub const DOUBLED_PAWN_MALUS: S = S(23, 36);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(ONE_PAWN / 4, ONE_PAWN / 3);
+pub const BISHOP_PAIR_BONUS: S = S(28, 47);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(ONE_PAWN / 10, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(24, 0);
 /// The bonus for having a rook on a semi-open file.
-pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(ONE_PAWN / 20, 0);
+pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(19, 0);
 /// The bonus for having a queen on an open file.
-pub const QUEEN_OPEN_FILE_BONUS: S = S(ONE_PAWN / 20, 0);
+pub const QUEEN_OPEN_FILE_BONUS: S = S(5, 0);
 /// The bonus for having a queen on a semi-open file.
-pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(ONE_PAWN / 40, 0);
+pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(8, 0);
 
 // Stockfish nonlinear mobility eval tables.
 #[rustfmt::skip]
 const KNIGHT_MOBILITY_BONUS: [S; 9] = 
-    [ S(-62,-79), S(-53,-57), S(-12,-31), S( -3,-17), S(  3,  7), S( 12, 13), // Knight
-      S( 21, 16), S( 28, 21), S( 37, 26) ];
+    [ S(-76, -93), S(-46, -52), S(-5, -42), S(4, -3), S(12, 21), S(8, 27), S(22, 30), S(35, 35), S(42, 40) ];
 #[rustfmt::skip]
-const BISHOP_MOBILITY_BONUS: [S; 14] = [ S(-47,-59), S(-20,-25), S( 14, -8), S( 29, 12), S( 39, 21), S( 53, 40), // Bishop
-      S( 53, 56), S( 60, 58), S( 62, 65), S( 69, 72), S( 78, 78), S( 83, 87),
-      S( 91, 88), S( 96, 98) ];
+const BISHOP_MOBILITY_BONUS: [S; 14] = [ S(-33, -73), S(-10, -16), S(18, -22), S(19, 6), S(28, 17), S(42, 29), S(50, 45), S(57, 62), S(66, 64), S(69, 65), S(78, 68), S(78, 73), S(105, 91), S(83, 84) ];
 #[rustfmt::skip]
-const ROOK_MOBILITY_BONUS: [S; 15] = [ S(-60,-82), S(-24,-15), S(  0, 17) ,S(  3, 43), S(  4, 72), S( 14,100), // Rook
-      S( 20,102), S( 30,122), S( 41,133), S(41 ,139), S( 41,153), S( 45,160),
-      S( 57,165), S( 58,170), S( 67,175) ];
+const ROOK_MOBILITY_BONUS: [S; 15] = [ S(-74, -96), S(-38, -29), S(0, 14), S(-1, 41), S(1, 86), S(8, 91), S(15, 108), S(22, 120), S(29, 120), S(43, 126), S(49, 140), S(59, 154), S(71, 153), S(72, 159), S(65, 176) ];
 #[rustfmt::skip]
-const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29,-49), S(-16,-29), S( -8, -8), S( -8, 17), S( 18, 39), S( 25, 54), // Queen
-      S( 23, 59), S( 37, 73), S( 41, 76), S( 54, 95), S( 65, 95) ,S( 68,101),
-      S( 69,124), S( 70,128), S( 70,132), S( 70,133) ,S( 71,136), S( 72,140),
-      S( 74,147), S( 76,149), S( 90,153), S(104,169), S(105,171), S(106,171),
-      S(112,178), S(114,185), S(114,187), S(119,221) ];
+const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29, -49), S(-16, -29), S(-22, -22), S(6, 16), S(6, 25), S(39, 40), S(37, 67), S(47, 62), S(43, 75), S(45, 105), S(51, 89), S(59, 102), S(67, 119), S(75, 119), S(77, 135), S(83, 142), S(85, 150), S(82, 149), S(86, 161), S(87, 156), S(95, 154), S(106, 155), S(110, 165), S(112, 164), S(124, 172), S(105, 171), S(108, 173), S(110, 207) ];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 /// values from VICE.
 pub static PASSED_PAWN_BONUS: [S; 6] = [
-    S(5, 5),
-    S(10, 10),
-    S(20, 20),
-    S(35, 35),
-    S(60, 60),
-    S(100, 100),
+    S(5, 19), S(14, 24), S(24, 34), S(49, 49), S(74, 74), S(86, 107),
 ];
 
 #[derive(Clone, PartialEq, Eq, Debug)]
