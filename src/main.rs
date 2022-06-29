@@ -34,28 +34,34 @@ fn main() {
     magic::initialise();
 
     match args.get(1).map(std::string::String::as_str) {
-        None | Some("uci") => {
-            uci::main_loop();
-        }
-        Some("perfttest") => {
-            perft::gamut();
-        }
-        Some("tune") => {
-            texel::tune();
-        }
+        None | Some("uci") => uci::main_loop(),
+        Some("perfttest") => perft::gamut(),
+        Some("tune") => texel::tune(),
         Some("info") => {
             println!("{}", NAME);
-            println!("evaluation parameters: {}", board::evaluation::Parameters::default().vectorise().len());
+            println!(
+                "evaluation parameters: {}",
+                board::evaluation::Parameters::default().vectorise().len()
+            );
             println!("TT buckets: {}", transpositiontable::DEFAULT_TABLE_SIZE);
-            println!("TT size (kb): {}", std::mem::size_of::<transpositiontable::Bucket>() * transpositiontable::DEFAULT_TABLE_SIZE / 1024);
+            println!(
+                "TT size (kb): {}",
+                std::mem::size_of::<transpositiontable::Bucket>()
+                    * transpositiontable::DEFAULT_TABLE_SIZE
+                    / 1024
+            );
         }
         Some("visparams") => {
-            let path: &str = &args[2];
-            let params = board::evaluation::Parameters::from_file(path).unwrap();
+            let path = args.get(2);
+            let params = path.map_or_else(board::evaluation::Parameters::default, |path| {
+                board::evaluation::Parameters::from_file(path).unwrap()
+            });
             println!("{params}");
         }
         Some(unknown) => {
-            if unknown != "help" { println!("Unknown command: {}", unknown); }
+            if unknown != "help" {
+                println!("Unknown command: {}", unknown);
+            }
             println!("Available CLI args:");
             println!(" - uci (default) : run the Universal Chess Interface");
             println!(" - perfttest : run the perft test suite");
