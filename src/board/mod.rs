@@ -9,7 +9,7 @@ pub mod movegen;
 
 use std::{
     collections::HashSet,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Display, Formatter, Write},
 };
 
 use crate::{
@@ -381,7 +381,7 @@ impl Board {
     }
 
     pub fn fen(&self) -> String {
-        let mut fen = String::with_capacity(100);
+        let mut fen = String::with_capacity(60);
 
         let mut counter = 0;
         for rank in (0..8).rev() {
@@ -412,13 +412,14 @@ impl Board {
         fen.push(' ');
         if self.castle_perm != 0 {
             #[rustfmt::skip]
-            fen.push_str(&format!(
+            write!(
+                fen,
                 "{}{}{}{}",
                 if self.castle_perm & WKCA != 0 { "K" } else { "" },
                 if self.castle_perm & WQCA != 0 { "Q" } else { "" },
                 if self.castle_perm & BKCA != 0 { "k" } else { "" },
                 if self.castle_perm & BQCA != 0 { "q" } else { "" },
-            ));
+            ).unwrap();
         } else {
             fen.push('-');
         }
@@ -429,9 +430,9 @@ impl Board {
             fen.push('-');
         }
         fen.push(' ');
-        fen.push_str(&format!("{}", self.fifty_move_counter));
+        write!(fen, "{}", self.fifty_move_counter).unwrap();
         fen.push(' ');
-        fen.push_str(&format!("{}", self.height / 2 + 1));
+        write!(fen, "{}", self.height / 2 + 1).unwrap();
 
         fen
     }
