@@ -10,7 +10,7 @@ pub fn pst_value(piece: u8, sq: u8, pst: &PieceSquareTable) -> S {
     unsafe { *pst.get_unchecked(piece as usize).get_unchecked(sq as usize) }
 }
 
-pub fn _render_pst_table(pst: &PieceSquareTable) {
+pub fn render_pst_table(pst: &PieceSquareTable) {
     #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
     for piece in 0..13 {
         println!("{}", piece_name(piece as u8).unwrap());

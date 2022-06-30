@@ -54,8 +54,8 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
 fn compute_mse(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
     #![allow(clippy::cast_precision_loss)]
     let n: f64 = data.len() as f64;
-    let work_splitting_factor = num_cpus::get();
-    data.par_chunks(data.len() / work_splitting_factor)
+    let chunk_size = data.len() / num_cpus::get();
+    data.par_chunks(chunk_size)
         .map(|chunk| total_squared_error(chunk, params, k))
         .sum::<f64>()
         / n
@@ -376,11 +376,9 @@ pub fn tune() {
 
     println!("Splitting data...");
 
-    assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {}, test = {}, but data has {} examples", train, test, data.len());
+    assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {train}, test = {test}, but data has {} examples", data.len());
     data.truncate(train + test);
-    let _test_set = data[train..].to_vec();
-    data.truncate(train);
-    let train_set = data;
+    let (train_set, _test_set) = data.split_at(train);
 
     let params = Parameters::default();
 
@@ -399,12 +397,12 @@ pub fn tune() {
     // );
     let (best_params, best_loss) = local_search_optimise(
         &params.vectorise(),
-        |pvec| compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K),
+        |pvec| compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K),
         1,
     );
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
-    println!("Best loss: {:.6}", best_loss);
+    println!("Best loss: {best_loss:.6}");
     println!("Saving best parameters...");
     Parameters::save_param_vec(&best_params, "params/localsearchfinal.txt");
 }

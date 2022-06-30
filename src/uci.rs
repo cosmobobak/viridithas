@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, MATE_SCORE},
+        evaluation::{is_mate_score, MATE_SCORE, Parameters},
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
@@ -362,13 +362,15 @@ pub fn format_score(score: i32, turn: u8) -> String {
     }
 }
 
-pub fn main_loop() {
+pub fn main_loop(evaluation_parameters: Parameters) {
     println!("id name {NAME}");
     println!("id author Cosmo");
     println!("uciok");
 
     let mut pos = Board::new();
     let mut info = SearchInfo::default();
+
+    pos.set_eval_params(evaluation_parameters);
 
     let stdin = stdin_reader();
 
