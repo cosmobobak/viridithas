@@ -1,3 +1,5 @@
+![build](https://github.com/cosmobobak/virtue/actions/workflows/rust.yml/badge.svg)
+
 # Viridithas II, a UCI chess engine written in Rust.
 
 Viridithas II is a free and open source chess engine and the successor to the original [Viridithas](https://github.com/cosmobobak/viridithas-chess).
