@@ -153,6 +153,7 @@ pub const fn rank(sq: u8) -> u8 {
     sq / 8
 }
 
+/// The square corresponding to the given file and rank.
 pub const fn filerank_to_square(file: u8, rank: u8) -> u8 {
     file + rank * 8
 }
