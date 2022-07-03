@@ -79,6 +79,14 @@ fn main() {
             };
             piecesquaretable::render_pst_table(&pst);
         }
+        Some("gensource") => {
+            let path = args.get(2);
+            let params = path.map_or_else(Parameters::default, |path| {
+                Parameters::from_file(path).unwrap()
+            });
+            println!("PSQT source code:");
+            piecesquaretable::tables::printout_pst_source(&params.piece_square_tables);
+        }
         Some(unknown) => {
             if unknown != "help" {
                 println!("Unknown command: {}", unknown);
@@ -90,6 +98,7 @@ fn main() {
             println!(" - info : miscellaneous information about the engine");
             println!(" - visparams : visualise the evaluation parameters");
             println!(" - vispst : visualise the piece square tables");
+            println!(" - gensource : generate the source code for the piece square tables");
         }
     }
 }

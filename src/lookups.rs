@@ -23,10 +23,6 @@ macro_rules! cfor {
     }
 }
 
-pub const fn filerank_to_square(f: u8, r: u8) -> u8 {
-    f + r * 8
-}
-
 const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
     let mut state = XorShiftState::new();
     let mut piece_keys = [[0; 64]; 13];
@@ -155,6 +151,10 @@ pub const fn file(sq: u8) -> u8 {
 /// The rank that this square is on.
 pub const fn rank(sq: u8) -> u8 {
     sq / 8
+}
+
+pub const fn filerank_to_square(file: u8, rank: u8) -> u8 {
+    file + rank * 8
 }
 
 /// The name of this 64-indexed square.

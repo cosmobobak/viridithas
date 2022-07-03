@@ -65,6 +65,11 @@ impl Sum for S {
         iter.fold(Self(0, 0), |acc, x| acc + x)
     }
 }
+impl Display for S {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "S({}, {})", self.0, self.1)
+    }
+}
 
 impl S {
     pub const NULL: Self = Self(0, 0);
@@ -177,7 +182,7 @@ impl Default for Parameters {
             rook_mobility_bonus: ROOK_MOBILITY_BONUS,
             queen_mobility_bonus: QUEEN_MOBILITY_BONUS,
             passed_pawn_bonus: PASSED_PAWN_BONUS,
-            piece_square_tables: crate::piecesquaretable::sftables::construct_sf_pst(),
+            piece_square_tables: crate::piecesquaretable::tables::construct_piece_square_table(),
         }
     }
 }

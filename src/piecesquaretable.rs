@@ -1,4 +1,4 @@
-pub mod sftables;
+pub mod tables;
 
 pub type PieceSquareTable = [[S; 64]; 13];
 
@@ -43,7 +43,7 @@ mod tests {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
         use super::*;
         use crate::definitions::square_name;
-        let psts = super::sftables::construct_sf_pst();
+        let psts = super::tables::construct_piece_square_table();
         for white_piece in 1..7 {
             let white_pst = &psts[white_piece];
             let black_pst = &psts[white_piece + 6];
