@@ -1,9 +1,6 @@
 // The granularity of evaluation in this engine is going to be thousandths of a pawn.
 
-use std::{
-    error::Error,
-    fmt::Display,
-};
+use std::{error::Error, fmt::Display};
 
 use crate::{
     board::Board,
@@ -69,8 +66,7 @@ pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(7, 0);
 
 // Stockfish nonlinear mobility eval tables.
 #[rustfmt::skip]
-const KNIGHT_MOBILITY_BONUS: [S; 9] = 
-    [S(-103, -120), S(-37, -26), S(3, -24), S(13, 24), S(1, 48), S(-8, 54), S(9, 57), S(25, 62), S(38, 65)];
+const KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-103, -120), S(-37, -26), S(3, -24), S(13, 24), S(1, 48), S(-8, 54), S(9, 57), S(25, 62), S(38, 65)];
 #[rustfmt::skip]
 const BISHOP_MOBILITY_BONUS: [S; 14] = [S(-59, -100), S(-37, -16), S(-3, -45), S(7, 9), S(24, 22), S(36, 35), S(47, 53), S(56, 66), S(62, 73), S(69, 71), S(75, 72), S(89, 50), S(117, 82), S(71, 57)];
 #[rustfmt::skip]
@@ -544,17 +540,17 @@ impl Board {
     }
 
     fn pawn_structure_term(&self) -> S {
-        static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5]; // not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
+        /// not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
+        static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = S(0, 0);
         let (white_pawns, black_pawns) =
             (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-            if unsafe { *ISOLATED_BB.get_unchecked(white_pawn_loc as usize) } & white_pawns == 0 {
+            if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
                 w_score -= self.eval_params.isolated_pawn_malus;
             }
 
-            if unsafe { *WHITE_PASSED_BB.get_unchecked(white_pawn_loc as usize) } & black_pawns == 0
-            {
+            if WHITE_PASSED_BB[white_pawn_loc as usize] & black_pawns == 0 {
                 let rank = rank(white_pawn_loc) as usize;
                 w_score += self.eval_params.passed_pawn_bonus[rank - 1];
             }
@@ -562,12 +558,11 @@ impl Board {
 
         let mut b_score = S(0, 0);
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-            if unsafe { *ISOLATED_BB.get_unchecked(black_pawn_loc as usize) } & black_pawns == 0 {
+            if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
                 b_score -= self.eval_params.isolated_pawn_malus;
             }
 
-            if unsafe { *BLACK_PASSED_BB.get_unchecked(black_pawn_loc as usize) } & white_pawns == 0
-            {
+            if BLACK_PASSED_BB[black_pawn_loc as usize] & white_pawns == 0 {
                 let rank = rank(black_pawn_loc) as usize;
                 b_score += self.eval_params.passed_pawn_bonus[7 - rank - 1];
             }
@@ -575,10 +570,10 @@ impl Board {
 
         for &file_mask in &FILE_BB {
             let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
-            let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
+            let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             w_score -= self.eval_params.doubled_pawn_malus * multiplier;
             let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
-            let multiplier = unsafe { *DOUBLED_PAWN_MAPPING.get_unchecked(pawns_in_file) };
+            let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             b_score -= self.eval_params.doubled_pawn_malus * multiplier;
         }
 

@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, MATE_SCORE, Parameters},
+        evaluation::{is_mate_score, Parameters, MATE_SCORE},
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},

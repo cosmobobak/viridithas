@@ -295,7 +295,10 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     let mut best_err = cost_function(&best_params);
     let mut improved = true;
     let mut iteration = 1;
-    println!("Initialised in {:.1}s", init_start_time.elapsed().as_secs_f64());
+    println!(
+        "Initialised in {:.1}s",
+        init_start_time.elapsed().as_secs_f64()
+    );
     while improved {
         println!("Iteration {iteration}");
         improved = false;
