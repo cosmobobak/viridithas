@@ -1,5 +1,5 @@
 use crate::{
-    board::evaluation::S,
+    board::evaluation::score::S,
     definitions::{flip_rank, BLACK, WHITE, Rank::{RANK_1, RANK_8, RANK_2, RANK_7}, File::{FILE_A, FILE_D, FILE_H}, WN, WK, WP},
     lookups::{file, rank, filerank_to_square},
 };

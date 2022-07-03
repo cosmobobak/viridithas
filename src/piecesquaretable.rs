@@ -1,8 +1,8 @@
 pub mod tables;
 
-pub type PieceSquareTable = [[S; 64]; 13];
+use crate::{board::evaluation::score::S, definitions::Square::A1, lookups::piece_name};
 
-use crate::{board::evaluation::S, definitions::Square::A1, lookups::piece_name};
+pub type PieceSquareTable = [[S; 64]; 13];
 
 pub fn pst_value(piece: u8, sq: u8, pst: &PieceSquareTable) -> S {
     debug_assert!(crate::validate::piece_valid(piece));

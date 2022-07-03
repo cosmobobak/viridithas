@@ -47,7 +47,7 @@ use crate::{
     validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
 };
 
-use self::{evaluation::S, movegen::bitboards::BitBoard};
+use self::{evaluation::score::S, movegen::bitboards::BitBoard};
 
 pub struct Board {
     /// The bitboards of all the pieces on the board.

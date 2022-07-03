@@ -3,8 +3,6 @@
 use std::{
     error::Error,
     fmt::Display,
-    iter::Sum,
-    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign},
 };
 
 use crate::{
@@ -19,72 +17,15 @@ use crate::{
 
 use super::movegen::{bitboards::attacks, BitLoop, BB_NONE};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct S(pub i32, pub i32);
+pub mod score;
 
-impl Add for S {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self {
-        Self(self.0 + rhs.0, self.1 + rhs.1)
-    }
-}
-impl Sub for S {
-    type Output = Self;
-    fn sub(self, rhs: Self) -> Self {
-        Self(self.0 - rhs.0, self.1 - rhs.1)
-    }
-}
-impl AddAssign for S {
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-        self.1 += rhs.1;
-    }
-}
-impl SubAssign for S {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-        self.1 -= rhs.1;
-    }
-}
-impl Neg for S {
-    type Output = Self;
+use score::S;
 
-    fn neg(self) -> Self {
-        Self(-self.0, -self.1)
-    }
-}
-impl Mul<i32> for S {
-    type Output = Self;
-
-    fn mul(self, rhs: i32) -> Self {
-        Self(self.0 * rhs, self.1 * rhs)
-    }
-}
-impl Sum for S {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Self(0, 0), |acc, x| acc + x)
-    }
-}
-impl Display for S {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "S({}, {})", self.0, self.1)
-    }
-}
-
-impl S {
-    pub const NULL: Self = Self(0, 0);
-
-    pub fn value(self, phase: i32) -> i32 {
-        lerp(self.0, self.1, phase)
-    }
-}
-
-// These piece values are taken from PeSTO (which in turn took them from RofChade 1.0).
-pub const PAWN_VALUE: S = S(82, 94);
-pub const KNIGHT_VALUE: S = S(337, 281);
-pub const BISHOP_VALUE: S = S(365, 297);
-pub const ROOK_VALUE: S = S(477, 512);
-pub const QUEEN_VALUE: S = S(1025, 936);
+pub const PAWN_VALUE: S = S(93, 121);
+pub const KNIGHT_VALUE: S = S(358, 308);
+pub const BISHOP_VALUE: S = S(342, 301);
+pub const ROOK_VALUE: S = S(482, 511);
+pub const QUEEN_VALUE: S = S(1052, 957);
 
 pub const ONE_PAWN: i32 = 100;
 
@@ -109,43 +50,42 @@ pub static PIECE_VALUES: [S; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: S = S(22, 19);
+pub const ISOLATED_PAWN_MALUS: S = S(26, 22);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(23, 36);
+pub const DOUBLED_PAWN_MALUS: S = S(29, 9);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(28, 47);
+pub const BISHOP_PAIR_BONUS: S = S(43, 74);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(24, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(51, 0);
 /// The bonus for having a rook on a semi-open file.
-pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(19, 0);
+pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(31, 0);
 /// The bonus for having a queen on an open file.
-pub const QUEEN_OPEN_FILE_BONUS: S = S(5, 0);
+pub const QUEEN_OPEN_FILE_BONUS: S = S(-1, 0);
 /// The bonus for having a queen on a semi-open file.
-pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(8, 0);
+pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(7, 0);
 
 // Stockfish nonlinear mobility eval tables.
 #[rustfmt::skip]
 const KNIGHT_MOBILITY_BONUS: [S; 9] = 
-    [ S(-76, -93), S(-46, -52), S(-5, -42), S(4, -3), S(12, 21), S(8, 27), S(22, 30), S(35, 35), S(42, 40) ];
+    [S(-103, -120), S(-37, -26), S(3, -24), S(13, 24), S(1, 48), S(-8, 54), S(9, 57), S(25, 62), S(38, 65)];
 #[rustfmt::skip]
-const BISHOP_MOBILITY_BONUS: [S; 14] = [ S(-33, -73), S(-10, -16), S(18, -22), S(19, 6), S(28, 17), S(42, 29), S(50, 45), S(57, 62), S(66, 64), S(69, 65), S(78, 68), S(78, 73), S(105, 91), S(83, 84) ];
+const BISHOP_MOBILITY_BONUS: [S; 14] = [S(-59, -100), S(-37, -16), S(-3, -45), S(7, 9), S(24, 22), S(36, 35), S(47, 53), S(56, 66), S(62, 73), S(69, 71), S(75, 72), S(89, 50), S(117, 82), S(71, 57)];
 #[rustfmt::skip]
-const ROOK_MOBILITY_BONUS: [S; 15] = [ S(-74, -96), S(-38, -29), S(0, 14), S(-1, 41), S(1, 86), S(8, 91), S(15, 108), S(22, 120), S(29, 120), S(43, 126), S(49, 140), S(59, 154), S(71, 153), S(72, 159), S(65, 176) ];
+const ROOK_MOBILITY_BONUS: [S; 15] = [S(-101, -123), S(-65, -56), S(0, 13), S(-12, 32), S(-9, 97), S(-1, 90), S(6, 106), S(9, 121), S(14, 127), S(25, 135), S(33, 144), S(49, 149), S(55, 152), S(64, 148), S(39, 180)];
 #[rustfmt::skip]
-const QUEEN_MOBILITY_BONUS: [S; 28] = [ S(-29, -49), S(-16, -29), S(-22, -22), S(6, 16), S(6, 25), S(39, 40), S(37, 67), S(47, 62), S(43, 75), S(45, 105), S(51, 89), S(59, 102), S(67, 119), S(75, 119), S(77, 135), S(83, 142), S(85, 150), S(82, 149), S(86, 161), S(87, 156), S(95, 154), S(106, 155), S(110, 165), S(112, 164), S(124, 172), S(105, 171), S(108, 173), S(110, 207) ];
+const QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-16, -29), S(-49, -49), S(20, 20), S(8, 0), S(48, 16), S(47, 73), S(49, 39), S(46, 78), S(49, 118), S(54, 113), S(65, 117), S(74, 125), S(84, 126), S(84, 150), S(87, 159), S(92, 165), S(85, 163), S(90, 173), S(95, 158), S(101, 153), S(114, 145), S(111, 150), S(121, 144), S(139, 145), S(87, 144), S(111, 150), S(84, 180)];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-/// values from VICE.
 pub static PASSED_PAWN_BONUS: [S; 6] = [
-    S(5, 19),
-    S(14, 24),
-    S(24, 34),
-    S(49, 49),
-    S(74, 74),
-    S(86, 107),
+    S(-11, 18),
+    S(-7, 34),
+    S(-2, 60),
+    S(36, 76),
+    S(101, 101),
+    S(113, 134),
 ];
 
 #[derive(Clone, PartialEq, Eq, Debug)]
