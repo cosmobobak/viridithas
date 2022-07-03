@@ -37,11 +37,9 @@ fn main() {
 
     match args.get(1).map(String::as_str) {
         None | Some("uci") => {
-            let evaluation_parameters = args.get(2).map_or_else(
-                Parameters::default,
-                |path| {
-                    Parameters::from_file(path).unwrap()
-                });
+            let evaluation_parameters = args.get(2).map_or_else(Parameters::default, |path| {
+                Parameters::from_file(path).unwrap()
+            });
             uci::main_loop(evaluation_parameters);
         }
         Some("perfttest") => perft::gamut(),
