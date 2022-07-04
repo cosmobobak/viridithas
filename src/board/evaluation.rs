@@ -1,4 +1,8 @@
-// The granularity of evaluation in this engine is going to be thousandths of a pawn.
+// The granularity of evaluation in this engine is in centipawns.
+
+pub mod score;
+
+use score::S;
 
 use std::{error::Error, fmt::Display};
 
@@ -13,10 +17,6 @@ use crate::{
 };
 
 use super::movegen::{bitboards::attacks, BitLoop, BB_NONE};
-
-pub mod score;
-
-use score::S;
 
 pub const PAWN_VALUE: S = S(93, 121);
 pub const KNIGHT_VALUE: S = S(358, 308);
