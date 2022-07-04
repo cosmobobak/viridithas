@@ -357,19 +357,10 @@ pub mod Square {
     pub const NO_SQUARE: u8 = 64;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Castling {
-    WK = 0b0001,
-    WQ = 0b0010,
-    BK = 0b0100,
-    BQ = 0b1000,
-}
-
-pub const WKCA: u8 = Castling::WK as u8;
-pub const WQCA: u8 = Castling::WQ as u8;
-pub const BKCA: u8 = Castling::BK as u8;
-pub const BQCA: u8 = Castling::BQ as u8;
+pub const WKCA: u8 = 0b0001;
+pub const WQCA: u8 = 0b0010;
+pub const BKCA: u8 = 0b0100;
+pub const BQCA: u8 = 0b1000;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
@@ -377,7 +368,6 @@ pub struct Undo {
     pub castle_perm: u8,
     pub ep_square: u8,
     pub fifty_move_counter: u8,
-    pub position_key: u64,
 }
 
 pub fn square_name(sq: u8) -> Option<&'static str> {

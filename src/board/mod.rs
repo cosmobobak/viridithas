@@ -25,7 +25,7 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        colour_of, square_name, type_of, Castling, Colour, Depth, File,
+        colour_of, square_name, type_of, Colour, Depth, File,
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
@@ -390,7 +390,7 @@ impl Board {
                 let piece = self.piece_at(sq);
                 if piece != PIECE_EMPTY {
                     if counter != 0 {
-                        fen.push_str(&counter.to_string());
+                        write!(fen, "{counter}").unwrap();
                     }
                     counter = 0;
                     fen.push(piece_char(piece).unwrap() as char);
@@ -399,7 +399,7 @@ impl Board {
                 }
             }
             if counter != 0 {
-                fen.push_str(&counter.to_string());
+                write!(fen, "{counter}").unwrap();
             }
             counter = 0;
             if rank != 0 {
@@ -429,17 +429,15 @@ impl Board {
         } else {
             fen.push('-');
         }
-        fen.push(' ');
-        write!(fen, "{}", self.fifty_move_counter).unwrap();
-        fen.push(' ');
-        write!(fen, "{}", self.height / 2 + 1).unwrap();
+        write!(fen, " {}", self.fifty_move_counter).unwrap();
+        write!(fen, " {}", self.height / 2 + 1).unwrap();
 
         fen
     }
 
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
-            None => return Err("FEN string is invalid, expected side part.".to_string()),
+            None => return Err("FEN string is invalid, expected side part.".into()),
             Some([b'w']) => WHITE,
             Some([b'b']) => BLACK,
             Some(other) => {
@@ -454,15 +452,15 @@ impl Board {
 
     fn set_castling(&mut self, castling_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match castling_part {
-            None => return Err("FEN string is invalid, expected castling part.".to_string()),
+            None => return Err("FEN string is invalid, expected castling part.".into()),
             Some([b'-']) => self.castle_perm = 0,
             Some(castling) => {
                 for &c in castling {
                     match c {
-                        b'K' => self.castle_perm |= Castling::WK as u8,
-                        b'Q' => self.castle_perm |= Castling::WQ as u8,
-                        b'k' => self.castle_perm |= Castling::BK as u8,
-                        b'q' => self.castle_perm |= Castling::BQ as u8,
+                        b'K' => self.castle_perm |= WKCA,
+                        b'Q' => self.castle_perm |= WQCA,
+                        b'k' => self.castle_perm |= BKCA,
+                        b'q' => self.castle_perm |= BQCA,
                         _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", std::str::from_utf8(castling).unwrap_or("<invalid utf8>"))),
                     }
                 }
@@ -980,7 +978,6 @@ impl Board {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
-            position_key: saved_key,
         });
         self.repetition_cache.insert(saved_key);
 
@@ -1054,7 +1051,6 @@ impl Board {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
-            position_key: self.key,
         });
 
         if self.ep_sq != NO_SQUARE {
@@ -1083,10 +1079,7 @@ impl Board {
             castle_perm,
             ep_square,
             fifty_move_counter,
-            position_key: r_key,
         } = self.history.pop().expect("No move to unmake!");
-        let something_removed = self.repetition_cache.remove(&r_key);
-        debug_assert!(something_removed);
 
         let from = m.from();
         let to = m.to();
@@ -1152,6 +1145,9 @@ impl Board {
             );
         }
 
+        let something_removed = self.repetition_cache.remove(&self.key);
+        debug_assert!(something_removed);
+
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
     }
@@ -1174,7 +1170,6 @@ impl Board {
             castle_perm,
             ep_square,
             fifty_move_counter,
-            position_key: _, // this is sus.
         } = self.history.pop().expect("No move to unmake!");
 
         self.castle_perm = castle_perm;

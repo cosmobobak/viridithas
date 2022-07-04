@@ -15,9 +15,8 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Castling,
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
-        BB, BISHOP, BLACK, BN, BQ, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR,
+        BB, BISHOP, BLACK, BN, BQ, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR, WKCA, WQCA, BKCA, BQCA,
     },
     lookups::MVV_LVA_SCORE,
     macros,
@@ -631,7 +630,7 @@ impl Board {
 
     fn generate_castling_moves<const SIDE: u8>(&self, move_list: &mut MoveList) {
         if SIDE == WHITE {
-            if (self.castle_perm & Castling::WK as u8) != 0
+            if (self.castle_perm & WKCA) != 0
                 && self.piece_at(F1) == PIECE_EMPTY
                 && self.piece_at(G1) == PIECE_EMPTY
                 && !self.sq_attacked(E1, BLACK)
@@ -643,7 +642,7 @@ impl Board {
                 );
             }
 
-            if (self.castle_perm & Castling::WQ as u8) != 0
+            if (self.castle_perm & WQCA) != 0
                 && self.piece_at(D1) == PIECE_EMPTY
                 && self.piece_at(C1) == PIECE_EMPTY
                 && self.piece_at(B1) == PIECE_EMPTY
@@ -656,7 +655,7 @@ impl Board {
                 );
             }
         } else {
-            if (self.castle_perm & Castling::BK as u8) != 0
+            if (self.castle_perm & BKCA) != 0
                 && self.piece_at(F8) == PIECE_EMPTY
                 && self.piece_at(G8) == PIECE_EMPTY
                 && !self.sq_attacked(E8, WHITE)
@@ -668,7 +667,7 @@ impl Board {
                 );
             }
 
-            if (self.castle_perm & Castling::BQ as u8) != 0
+            if (self.castle_perm & BQCA) != 0
                 && self.piece_at(D8) == PIECE_EMPTY
                 && self.piece_at(C8) == PIECE_EMPTY
                 && self.piece_at(B8) == PIECE_EMPTY
