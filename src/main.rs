@@ -70,12 +70,7 @@ fn main() {
             let params = path.map_or_else(Parameters::default, |path| {
                 Parameters::from_file(path).unwrap()
             });
-            let pst = {
-                let mut board = board::Board::new();
-                board.set_eval_params(params);
-                *board.get_pst()
-            };
-            piecesquaretable::render_pst_table(&pst);
+            piecesquaretable::render_pst_table(&params.piece_square_tables);
         }
         Some("gensource") => {
             let path = args.get(2);

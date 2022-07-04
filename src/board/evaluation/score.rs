@@ -1,22 +1,6 @@
 use super::lerp;
 
-use std;
-
-use std::fmt::Display;
-
-use std::iter::Sum;
-
-use std::ops::Mul;
-
-use std::ops::Neg;
-
-use std::ops::SubAssign;
-
-use std::ops::AddAssign;
-
-use std::ops::Sub;
-
-use std::ops::Add;
+use std::{fmt::Display, iter::Sum, ops::{Mul, Neg, SubAssign, AddAssign, Sub, Add}};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct S(pub i32, pub i32);
