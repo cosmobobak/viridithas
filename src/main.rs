@@ -24,7 +24,7 @@ mod transpositiontable;
 mod uci;
 mod validate;
 
-pub const NAME: &str = "Viridithas 2.1.0dev";
+pub const NAME: &str = "Viridithas 2.1.0";
 
 fn main() {
     #[cfg(debug_assertions)]
