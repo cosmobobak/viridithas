@@ -45,7 +45,7 @@ fn main() {
         Some("perfttest") => perft::gamut(),
         Some("tune") => texel::tune(),
         Some("info") => {
-            println!("{}", NAME);
+            println!("{NAME}");
             println!(
                 "evaluation parameters: {}",
                 Parameters::default().vectorise().len()
@@ -87,16 +87,16 @@ fn main() {
         }
         Some(unknown) => {
             if unknown != "help" {
-                println!("Unknown command: {}", unknown);
+                println!("Unknown command: {unknown}");
             }
             println!("Available CLI args:");
             println!(" - uci (default) : run the Universal Chess Interface");
-            println!(" - perfttest : run the perft test suite");
-            println!(" - tune : use texel's tuning method to optimise the evaluation parameters");
-            println!(" - info : miscellaneous information about the engine");
-            println!(" - visparams : visualise the evaluation parameters");
-            println!(" - vispst : visualise the piece square tables");
-            println!(" - gensource : generate the source code for the piece square tables");
+            println!(" - perfttest     : run the perft test suite");
+            println!(" - tune          : use texel's tuning method to optimise the evaluation parameters");
+            println!(" - info          : miscellaneous information about the engine");
+            println!(" - visparams     : visualise the evaluation parameters");
+            println!(" - vispst        : visualise the piece square tables");
+            println!(" - gensource     : generate the source code for the piece square tables");
         }
     }
 }
