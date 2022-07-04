@@ -16,7 +16,8 @@ use crate::{
     chessmove::Move,
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
-        BB, BISHOP, BLACK, BN, BQ, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE, WN, WQ, WR, WKCA, WQCA, BKCA, BQCA,
+        BB, BISHOP, BKCA, BLACK, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
+        WKCA, WN, WQ, WQCA, WR,
     },
     lookups::MVV_LVA_SCORE,
     macros,

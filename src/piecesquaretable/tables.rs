@@ -86,6 +86,7 @@ const P_BONUS: [[S; 8]; 8] = [
 ];
 
 pub fn printout_pst_source(pst: &PieceSquareTable) {
+    #[rustfmt::skip]
     println!(
 "const BONUS: [[[S; 4]; 8]; 7] = [
     [[S::NULL; 4]; 8],
@@ -108,6 +109,7 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
     }
     println!("];");
     println!();
+    #[rustfmt::skip]
     println!(
 "#[rustfmt::skip]
 const P_BONUS: [[S; 8]; 8] = [

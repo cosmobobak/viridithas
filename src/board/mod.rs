@@ -1434,7 +1434,7 @@ mod tests {
         use super::Board;
 
         crate::magic::initialise();
-        
+
         let mut board_1 = Board::new();
         board_1
             .set_from_fen(Board::STARTING_FEN)
