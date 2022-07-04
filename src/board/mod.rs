@@ -1229,38 +1229,14 @@ impl Board {
             .ok_or_else(|| IllegalMove(san.to_string()))
     }
 
+    /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
         self.repetition_cache.contains(&self.key)
     }
 
+    /// Should we consider the current position a draw?
     pub fn is_draw(&self) -> bool {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
-    }
-
-    /// Determines whether a given position is quiescent (no checks or captures).
-    #[allow(clippy::wrong_self_convention, dead_code)]
-    pub fn is_quiet_position(&mut self) -> bool {
-        if self.in_check::<{ Self::US }>() {
-            return false;
-        }
-        let mut move_list = MoveList::new();
-        self.generate_moves(&mut move_list);
-
-        for m in move_list {
-            if !self.make_move(m) {
-                continue;
-            }
-            if self.in_check::<{ Self::US }>() {
-                self.unmake_move();
-                return false;
-            }
-            self.unmake_move();
-            if m.is_capture() {
-                return false;
-            }
-        }
-
-        true
     }
 
     pub const fn num(&self, piece: u8) -> u8 {
@@ -1448,21 +1424,17 @@ impl Debug for Board {
         writeln!(f, "fifty-move-counter: {}", self.fifty_move_counter)?;
         writeln!(f, "ply: {}", self.height)?;
         writeln!(f, "hash: {:x}", self.key)?;
-        // write_bb(self.pawns[Colour::White as usize], f)?;
-        // writeln!(f)?;
-        // write_bb(self.pawns[Colour::Black as usize], f)?;
-        // writeln!(f)?;
-        // write_bb(self.pawns[Colour::Both as usize], f)?;
         Ok(())
     }
 }
 
 mod tests {
-
     #[test]
     fn read_fen_validity() {
-        use super::*;
+        use super::Board;
+
         crate::magic::initialise();
+        
         let mut board_1 = Board::new();
         board_1
             .set_from_fen(Board::STARTING_FEN)
