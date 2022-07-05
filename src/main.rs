@@ -1,7 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::if_not_else)]
 
-use board::evaluation::Parameters;
+use board::evaluation::parameters::Parameters;
 
 #[macro_use]
 mod macros;

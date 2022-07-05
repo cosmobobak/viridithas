@@ -11,7 +11,7 @@ use rand::{prelude::SliceRandom, Rng};
 use rayon::prelude::*;
 
 use crate::{
-    board::{evaluation::Parameters, Board},
+    board::{evaluation::parameters::Parameters, Board},
     definitions::{INFINITY, WHITE},
     search::quiescence,
     searchinfo::SearchInfo,

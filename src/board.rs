@@ -78,7 +78,7 @@ pub struct Board {
 
     pst_vals: S,
 
-    eval_params: evaluation::Parameters,
+    eval_params: evaluation::parameters::Parameters,
 }
 
 impl PartialEq for Board {
@@ -124,7 +124,7 @@ impl Board {
             counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
-            eval_params: evaluation::Parameters::default(),
+            eval_params: evaluation::parameters::Parameters::default(),
         };
         out.reset();
         out
