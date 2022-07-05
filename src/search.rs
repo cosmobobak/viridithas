@@ -25,11 +25,11 @@ use crate::{
 
 // values taken from MadChess.
 static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
-    100, // 0 moves to the horizon
-    150, // 1 move to the horizon
-    250, // 2 moves to the horizon
-    400, // 3 moves to the horizon
-    600, // 4 moves to the horizon
+    88, // 0 moves to the horizon
+    142, // 1 move to the horizon
+    232, // 2 moves to the horizon
+    358, // 3 moves to the horizon
+    718, // 4 moves to the horizon
 ];
 
 pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
