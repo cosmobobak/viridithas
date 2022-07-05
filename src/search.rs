@@ -23,15 +23,6 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-// values taken from MadChess.
-static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
-    200, // 0 moves to the horizon
-    400, // 1 move to the horizon
-    600, // 2 moves to the horizon
-    800, // 3 moves to the horizon
-    1000, // 4 moves to the horizon
-];
-
 pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -330,6 +321,8 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
     alpha
 }
 
+pub static mut FUTILITY_GRADIENT: i32 = 20;
+pub static mut FUTILITY_INTERCEPT: i32 = 70;
 fn is_move_futile(
     depth: Depth,
     moves_made: usize,
@@ -344,7 +337,8 @@ fn is_move_futile(
     if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
-    #[allow(clippy::cast_sign_loss)]
-    let threshold = FUTILITY_PRUNING_MARGINS[depth.n_ply()];
-    static_eval + threshold < a
+    let grad = unsafe { FUTILITY_GRADIENT };
+    let intercept = unsafe { FUTILITY_INTERCEPT };
+    let margin = grad * (depth.raw_inner() * depth.raw_inner()) / 10000 + intercept;
+    static_eval + margin < a
 }
