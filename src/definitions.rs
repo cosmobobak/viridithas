@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Sub, SubAssign}, str::FromStr,
 };
 
 use crate::{
@@ -165,6 +165,14 @@ impl Display for Depth {
             self.0.abs() / Self::INNER_INCREMENT_PER_PLY,
             self.0.abs() % Self::INNER_INCREMENT_PER_PLY
         )
+    }
+}
+impl FromStr for Depth {
+    type Err = std::num::ParseFloatError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let floating_repr: f32 = s.parse()?;
+        Ok(Self::from(floating_repr))
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

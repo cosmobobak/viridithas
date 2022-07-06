@@ -15,7 +15,7 @@ use crate::{
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
     errors::{FenParseError, MoveParseError},
-    search::{LMRGRADIENT, LMRMAXDEPTH, LMRMIDPOINT, LOGCONSTANT, LOGSCALEFACTOR, FUTILITY_GRADIENT, FUTILITY_INTERCEPT},
+    search::{LMRGRADIENT, LMRMAXDEPTH, LMRMIDPOINT, LOGCONSTANT, LOGSCALEFACTOR, FUTILITY_GRADIENT, FUTILITY_INTERCEPT, NULL_MOVE_REDUCTION},
     searchinfo::SearchInfo,
     NAME,
 };
@@ -317,6 +317,9 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<(), UciError> {
         },
         "FUTILITY_INTERCEPT" => unsafe {
             FUTILITY_INTERCEPT = opt_value.parse()?;
+        },
+        "NULL_MOVE_REDUCTION" => unsafe {
+            NULL_MOVE_REDUCTION = opt_value.parse()?;
         },
         _ => eprintln!("ignoring option {}", opt_name),
     }

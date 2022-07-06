@@ -23,7 +23,7 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const NULL_MOVE_REDUCTION: Depth = Depth::new(3);
+pub static mut NULL_MOVE_REDUCTION: Depth = Depth::new(3);
 
 pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
@@ -152,7 +152,7 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
 
     if !PV && !in_check && !root_node && depth >= 3.into() && pos.zugzwang_unlikely() {
         pos.make_nullmove();
-        let score = -alpha_beta::<false>(pos, info, depth - NULL_MOVE_REDUCTION, -beta, -alpha);
+        let score = -alpha_beta::<false>(pos, info, depth - unsafe { NULL_MOVE_REDUCTION }, -beta, -alpha);
         pos.unmake_nullmove();
         if info.stopped {
             return 0;
