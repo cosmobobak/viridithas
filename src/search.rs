@@ -23,6 +23,8 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
+const NULL_MOVE_REDUCTION: Depth = Depth::new(3);
+
 pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -88,40 +90,9 @@ pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: 
     alpha
 }
 
-pub static mut LMRGRADIENT: f32 = 1.16;
-pub static mut LMRMIDPOINT: f32 = 3.85;
-pub static mut LMRMAXDEPTH: f32 = 0.41;
-#[allow(dead_code)]
-fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
-    #![allow(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
-    let gradient = unsafe { LMRGRADIENT };
-    let midpoint = unsafe { LMRMIDPOINT };
-    let reduction_factor = unsafe { LMRMAXDEPTH };
-    let moves: f32 = moves as f32;
-    let depth: f32 = depth.into();
-    let numerator = reduction_factor * depth - 1.0;
-    let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
-    ((numerator / denominator + 0.5) as i32).into()
-}
-
-pub static mut LOGSCALEFACTOR: f32 = 0.6;
-pub static mut LOGCONSTANT: f32 = 0.8;
-#[allow(dead_code)]
-fn logproduct_lateness_reduction(moves: usize, depth: Depth) -> Depth {
-    let scale = unsafe { LOGSCALEFACTOR };
-    let constant = unsafe { LOGCONSTANT };
-    let r_moves = LOG[moves].mul_add(scale, constant);
-    let r_depth = LOG[depth.n_ply()].mul_add(scale, constant);
-    (r_moves * r_depth).into()
-}
-
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
+pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
@@ -165,8 +136,6 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
         if r_alpha >= r_beta { return r_alpha; }
     }
 
-    let in_pv = beta - alpha > 1;
-
     let pv_move = match pos.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
             return s;
@@ -181,9 +150,9 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
 
     let in_check = pos.in_check::<{ Board::US }>();
 
-    if !in_check && pos.height() != 0 && depth >= 3.into() && pos.zugzwang_unlikely() {
+    if !PV && !in_check && !root_node && depth >= 3.into() && pos.zugzwang_unlikely() {
         pos.make_nullmove();
-        let score = -alpha_beta(pos, info, depth - 3, -beta, -alpha);
+        let score = -alpha_beta::<false>(pos, info, depth - NULL_MOVE_REDUCTION, -beta, -alpha);
         pos.unmake_nullmove();
         if info.stopped {
             return 0;
@@ -221,7 +190,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
         // futility pruning (worth 32 +/- 44 elo)
-        if is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
+        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
             pos.unmake_move();
             continue;
         }
@@ -235,7 +204,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
-            score = -alpha_beta(pos, info, depth + extension - 1, -beta, -alpha);
+            score = -alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -250,17 +219,18 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
             let can_reduce = extension == 0.into()
                 && !is_interesting
                 && depth >= 3.into()
-                && moves_made >= (2 + usize::from(in_pv));
+                && moves_made >= (2 + usize::from(PV));
             let mut r: Depth = 0.into();
             // late move reductions (75 +/- 83 elo)
             if can_reduce {
                 r += logistic_lateness_reduction(moves_made, depth).max(0.into());
             }
             // perform a zero-window search, possibly with a reduction
-            score = -alpha_beta(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
+            score = -alpha_beta::<false>(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
             // if we failed, then full window search
             if score > alpha && score < beta {
-                score = -alpha_beta(pos, info, depth + extension - 1, -beta, -alpha);
+                // this is a new best move, so it *is* PV.
+                score = -alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
             }
         }
         pos.unmake_move();
@@ -273,6 +243,7 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
             best_score = score;
             best_move = m;
             if score > alpha {
+                alpha = score;
                 if score >= beta {
                     // we failed high, so this is a cut-node
                     if moves_made == 1 {
@@ -281,21 +252,13 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
                     info.failhigh += 1.0;
 
                     if !is_capture {
-                        // quiet moves that fail high are killers.
-                        // store the killer move based on this depth.
-                        pos.insert_killer(m);
-                        // store the move as a counter-move based on the previously made move.
-                        pos.insert_countermove(m);
-                        // increase the history score for the move.
-                        pos.add_history(m, history_score);
+                        update_history_metrics(pos, best_move, history_score);
                     }
 
                     pos.tt_store(best_move, beta, HFlag::Beta, depth);
 
                     return beta;
                 }
-                alpha = score;
-                best_move = m;
             }
         }
     }
@@ -315,14 +278,52 @@ pub fn alpha_beta(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alph
         // we raised alpha, and didn't raise beta
         // as if we had, we would have returned early, 
         // so this is a PV-node
+        update_history_metrics(pos, best_move, history_score);
         pos.tt_store(best_move, best_score, HFlag::Exact, depth);
     }
 
     alpha
 }
 
-pub static mut FUTILITY_GRADIENT: i32 = 20;
-pub static mut FUTILITY_INTERCEPT: i32 = 70;
+fn update_history_metrics(pos: &mut Board, best_move: Move, history_score: i32) {
+    pos.insert_killer(best_move);
+    pos.insert_countermove(best_move);
+    pos.add_history(best_move, history_score);
+}
+
+pub static mut LMRGRADIENT: f32 = 0.1;
+pub static mut LMRMIDPOINT: f32 = 11.59;
+pub static mut LMRMAXDEPTH: f32 = 0.55;
+#[allow(dead_code)]
+fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
+    #![allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    let gradient = unsafe { LMRGRADIENT };
+    let midpoint = unsafe { LMRMIDPOINT };
+    let reduction_factor = unsafe { LMRMAXDEPTH };
+    let moves: f32 = moves as f32;
+    let depth: f32 = depth.into();
+    let numerator = reduction_factor * depth - 1.0;
+    let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
+    ((numerator / denominator + 0.5) as i32).into()
+}
+
+pub static mut LOGSCALEFACTOR: f32 = 0.6;
+pub static mut LOGCONSTANT: f32 = 0.8;
+#[allow(dead_code)]
+fn logproduct_lateness_reduction(moves: usize, depth: Depth) -> Depth {
+    let scale = unsafe { LOGSCALEFACTOR };
+    let constant = unsafe { LOGCONSTANT };
+    let r_moves = LOG[moves].mul_add(scale, constant);
+    let r_depth = LOG[depth.n_ply()].mul_add(scale, constant);
+    (r_moves * r_depth).into()
+}
+
+pub static mut FUTILITY_GRADIENT: i32 = 11;
+pub static mut FUTILITY_INTERCEPT: i32 = 54;
 fn is_move_futile(
     depth: Depth,
     moves_made: usize,

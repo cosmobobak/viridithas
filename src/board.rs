@@ -1299,7 +1299,7 @@ impl Board {
         for i_depth in 0..=max_depth {
             let depth = Depth::from(i_depth);
             // main search
-            let mut score = alpha_beta(self, info, depth, alpha, beta);
+            let mut score = alpha_beta::<true>(self, info, depth, alpha, beta);
 
             info.check_up();
             if info.stopped {
@@ -1321,7 +1321,7 @@ impl Board {
                 self.regenerate_pv_line(best_depth);
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
-                score = alpha_beta(self, info, depth, -INFINITY, INFINITY);
+                score = alpha_beta::<true>(self, info, depth, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
                     break;
