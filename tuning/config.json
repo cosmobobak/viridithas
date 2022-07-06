@@ -1,25 +1,22 @@
 {
     "engines": [
         {
-            "command": "C:\\github\\chess\\virtue\\tuning\\dev.exe"
+            "command": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/dev"
         },
         {
-            "command": "C:\\github\\chess\\virtue\\tuning\\dev-fixed.exe"
+            "command": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/dev-fixed"
         }
     ],
     "parameter_ranges": {
-        "LMRGRADIENT": "Real(0.1, 3.0)",
-        "LMRMIDPOINT": "Real(0.5, 14.0)",
-        "LMRMAXDEPTH": "Real(0.1, 1.5)",
-        "FUTILITY_GRADIENT": "Integer(5, 40)",
-        "FUTILITY_INTERCEPT": "Integer(40, 110)"
+        "FUTILITY_GRADIENT": "Integer(0, 60)",
+        "FUTILITY_INTERCEPT": "Integer(0, 150)"
     },
-    "engine1_tc": "2+1",
-    "engine2_tc": "2+1",
-    "rounds": 20,
-    "plot_every": 1,
+    "engine1_tc": "3+0.1",
+    "engine2_tc": "3+0.1",
+    "rounds": 100,
+    "plot_every": 5,
     "plot_path": "plots",
-    "result_every": 1,
-    "opening_file": "C:\\github\\chess\\virtue\\tuning\\Balsa_v500.pgn",
-    "concurrency": 3
+    "result_every": 5,
+    "opening_file": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/Balsa_v500.pgn",
+    "concurrency": 60
 }
