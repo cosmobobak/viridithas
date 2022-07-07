@@ -1,16 +1,16 @@
 // The granularity of evaluation in this engine is in centipawns.
 
-pub mod score;
 pub mod parameters;
+pub mod score;
 
-use score::S;
 use parameters::Parameters;
+use score::S;
 
 use crate::{
     board::Board,
     definitions::{
-        BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN,
-        ROOK, WB, WHITE, WN, WP, WQ, WR,
+        BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP, WQ,
+        WR,
     },
     lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
 };
@@ -82,8 +82,6 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
     S(101, 101),
     S(113, 134),
 ];
-
-
 
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;

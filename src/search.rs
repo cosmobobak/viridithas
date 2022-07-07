@@ -7,7 +7,6 @@ use crate::{
     },
     chessmove::Move,
     definitions::{Depth, INFINITY, MAX_DEPTH},
-    lookups::LOG,
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -23,81 +22,80 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-pub static mut NULL_MOVE_REDUCTION: Depth = Depth::new(3);
+impl Board {
+    pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
+        #[cfg(debug_assertions)]
+        pos.check_validity().unwrap();
 
-pub fn quiescence(pos: &mut Board, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
-    #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-
-    if info.nodes.trailing_zeros() >= 12 {
-        info.check_up();
-        if info.stopped {
-            return 0;
-        }
-    }
-
-    let height: i32 = pos.height().try_into().unwrap();
-    info.nodes += 1;
-    info.seldepth = info.seldepth.max(height.into());
-
-    // check draw
-    if pos.is_draw() {
-        // score fuzzing apparently helps with threefolds.
-        return 1 - (info.nodes & 2) as i32;
-    }
-
-    // are we too deep?
-    if height > (MAX_DEPTH - 1).round() {
-        return pos.evaluate();
-    }
-
-    let stand_pat = pos.evaluate();
-
-    if stand_pat >= beta {
-        return beta;
-    }
-
-    if stand_pat > alpha {
-        alpha = stand_pat;
-    }
-
-    let mut move_list = MoveList::new();
-    pos.generate_captures(&mut move_list);
-
-    let mut moves_made = 0;
-
-    for m in move_list {
-        if !pos.make_move(m) {
-            continue;
-        }
-
-        moves_made += 1;
-        let score = -quiescence(pos, info, -beta, -alpha);
-        pos.unmake_move();
-
-        if score > alpha {
-            if score >= beta {
-                if moves_made == 1 {
-                    info.failhigh_first += 1.0;
-                }
-                info.failhigh += 1.0;
-                return beta;
+        if info.nodes.trailing_zeros() >= 12 {
+            info.check_up();
+            if info.stopped {
+                return 0;
             }
-            alpha = score;
         }
-    }
 
-    alpha
-}
+        let height: i32 = pos.height().try_into().unwrap();
+        info.nodes += 1;
+        info.seldepth = info.seldepth.max(height.into());
+
+        // check draw
+        if pos.is_draw() {
+            // score fuzzing apparently helps with threefolds.
+            return 1 - (info.nodes & 2) as i32;
+        }
+
+        // are we too deep?
+        if height > (MAX_DEPTH - 1).round() {
+            return pos.evaluate();
+        }
+
+        let stand_pat = pos.evaluate();
+
+        if stand_pat >= beta {
+            return beta;
+        }
+
+        if stand_pat > alpha {
+            alpha = stand_pat;
+        }
+
+        let mut move_list = MoveList::new();
+        pos.generate_captures(&mut move_list);
+
+        let mut moves_made = 0;
+
+        for m in move_list {
+            if !pos.make_move(m) {
+                continue;
+            }
+
+            moves_made += 1;
+            let score = -Self::quiescence(pos, info, -beta, -alpha);
+            pos.unmake_move();
+
+            if score > alpha {
+                if score >= beta {
+                    if moves_made == 1 {
+                        info.failhigh_first += 1.0;
+                    }
+                    info.failhigh += 1.0;
+                    return beta;
+                }
+                alpha = score;
+            }
+        }
+
+        alpha
+    }
 
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
+    pub fn alpha_beta<const PV: bool>(pos: &mut Self, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
     if depth <= 0.into() {
-        return quiescence(pos, info, alpha, beta);
+        return Self::quiescence(pos, info, alpha, beta);
     }
 
     if info.nodes.trailing_zeros() >= 12 {
@@ -148,11 +146,12 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
         }
     };
 
-    let in_check = pos.in_check::<{ Board::US }>();
+    let in_check = pos.in_check::<{ Self::US }>();
 
     if !PV && !in_check && !root_node && depth >= 3.into() && pos.zugzwang_unlikely() {
         pos.make_nullmove();
-        let score = -alpha_beta::<false>(pos, info, depth - unsafe { NULL_MOVE_REDUCTION }, -beta, -alpha);
+        let nmr = pos.search_params.null_move_reduction;
+        let score = -Self::alpha_beta::<false>(pos, info, depth - nmr, -beta, -alpha);
         pos.unmake_nullmove();
         if info.stopped {
             return 0;
@@ -184,13 +183,13 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
         moves_made += 1;
 
         let is_capture = m.is_capture();
-        let gives_check = pos.in_check::<{ Board::US }>();
+        let gives_check = pos.in_check::<{ Self::US }>();
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
         // futility pruning (worth 32 +/- 44 elo)
-        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
+        if !PV && Self::is_move_futile(pos, depth, moves_made, is_interesting, static_eval, alpha, beta) {
             pos.unmake_move();
             continue;
         }
@@ -204,7 +203,7 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
-            score = -alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
+            score = -Self::alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -223,14 +222,14 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
             let mut r: Depth = 0.into();
             // late move reductions (75 +/- 83 elo)
             if can_reduce {
-                r += logistic_lateness_reduction(moves_made, depth).max(0.into());
+                r += Self::logistic_lateness_reduction(pos, moves_made, depth).max(0.into());
             }
             // perform a zero-window search, possibly with a reduction
-            score = -alpha_beta::<false>(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
+            score = -Self::alpha_beta::<false>(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
             // if we failed, then full window search
             if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
-                score = -alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
+                score = -Self::alpha_beta::<true>(pos, info, depth + extension - 1, -beta, -alpha);
             }
         }
         pos.unmake_move();
@@ -252,7 +251,7 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
                     info.failhigh += 1.0;
 
                     if !is_capture {
-                        update_history_metrics(pos, best_move, history_score);
+                        pos.update_history_metrics(best_move, history_score);
                     }
 
                     pos.tt_store(best_move, beta, HFlag::Beta, depth);
@@ -278,68 +277,75 @@ pub fn alpha_beta<const PV: bool>(pos: &mut Board, info: &mut SearchInfo, depth:
         // we raised alpha, and didn't raise beta
         // as if we had, we would have returned early, 
         // so this is a PV-node
-        update_history_metrics(pos, best_move, history_score);
+        pos.update_history_metrics(best_move, history_score);
         pos.tt_store(best_move, best_score, HFlag::Exact, depth);
     }
 
     alpha
 }
 
-fn update_history_metrics(pos: &mut Board, best_move: Move, history_score: i32) {
-    pos.insert_killer(best_move);
-    pos.insert_countermove(best_move);
-    pos.add_history(best_move, history_score);
-}
-
-pub static mut LMRGRADIENT: f32 = 0.1;
-pub static mut LMRMIDPOINT: f32 = 11.59;
-pub static mut LMRMAXDEPTH: f32 = 0.55;
-#[allow(dead_code)]
-fn logistic_lateness_reduction(moves: usize, depth: Depth) -> Depth {
-    #![allow(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
-    let gradient = unsafe { LMRGRADIENT };
-    let midpoint = unsafe { LMRMIDPOINT };
-    let reduction_factor = unsafe { LMRMAXDEPTH };
-    let moves: f32 = moves as f32;
-    let depth: f32 = depth.into();
-    let numerator = reduction_factor * depth - 1.0;
-    let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
-    ((numerator / denominator + 0.5) as i32).into()
-}
-
-pub static mut LOGSCALEFACTOR: f32 = 0.6;
-pub static mut LOGCONSTANT: f32 = 0.8;
-#[allow(dead_code)]
-fn logproduct_lateness_reduction(moves: usize, depth: Depth) -> Depth {
-    let scale = unsafe { LOGSCALEFACTOR };
-    let constant = unsafe { LOGCONSTANT };
-    let r_moves = LOG[moves].mul_add(scale, constant);
-    let r_depth = LOG[depth.n_ply()].mul_add(scale, constant);
-    (r_moves * r_depth).into()
-}
-
-pub static mut FUTILITY_GRADIENT: i32 = 11;
-pub static mut FUTILITY_INTERCEPT: i32 = 54;
-fn is_move_futile(
-    depth: Depth,
-    moves_made: usize,
-    interesting: bool,
-    static_eval: i32,
-    a: i32,
-    b: i32,
-) -> bool {
-    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
-        return false;
+    fn update_history_metrics(&mut self, best_move: Move, history_score: i32) {
+        self.insert_killer(best_move);
+        self.insert_countermove(best_move);
+        self.add_history(best_move, history_score);
     }
-    if is_mate_score(a) || is_mate_score(b) {
-        return false;
+
+    fn logistic_lateness_reduction(&self, moves: usize, depth: Depth) -> Depth {
+        #![allow(
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation
+        )]
+        let gradient = self.search_params.lmr_gradient;
+        let midpoint = self.search_params.lmr_midpoint;
+        let reduction_factor = self.search_params.lmr_max_depth;
+        let moves: f32 = moves as f32;
+        let depth: f32 = depth.into();
+        let numerator = reduction_factor * depth - 1.0;
+        let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
+        ((numerator / denominator + 0.5) as i32).into()
     }
-    let grad = unsafe { FUTILITY_GRADIENT };
-    let intercept = unsafe { FUTILITY_INTERCEPT };
-    let margin = grad * (depth.raw_inner() * depth.raw_inner()) / 10000 + intercept;
-    static_eval + margin < a
+
+    fn is_move_futile(
+        &self,
+        depth: Depth,
+        moves_made: usize,
+        interesting: bool,
+        static_eval: i32,
+        a: i32,
+        b: i32,
+    ) -> bool {
+        if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
+            return false;
+        }
+        if is_mate_score(a) || is_mate_score(b) {
+            return false;
+        }
+        let grad = self.search_params.futility_gradient;
+        let intercept = self.search_params.futility_intercept;
+        let margin = grad * (depth.raw_inner() * depth.raw_inner()) / 10000 + intercept;
+        static_eval + margin < a
+    }
+}
+
+pub struct Config {
+    pub null_move_reduction: Depth,
+    pub futility_gradient: i32,
+    pub futility_intercept: i32,
+    pub lmr_gradient: f32,
+    pub lmr_midpoint: f32,
+    pub lmr_max_depth: f32,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            null_move_reduction: 3.into(),
+            futility_gradient: 11,
+            futility_intercept: 54,
+            lmr_gradient: 0.1,
+            lmr_midpoint: 11.59,
+            lmr_max_depth: 0.55,
+        }
+    }
 }

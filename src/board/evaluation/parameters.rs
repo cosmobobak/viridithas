@@ -1,8 +1,16 @@
-use std::{fmt::Display, error::Error};
+use std::{error::Error, fmt::Display};
 
-use crate::{definitions::{WP, WN, WK, flip_rank, BP, KING, KNIGHT, flip_file}, lookups::file};
+use crate::{
+    definitions::{flip_file, flip_rank, BP, KING, KNIGHT, WK, WN, WP},
+    lookups::file,
+};
 
-use super::{score::S, PIECE_VALUES, ISOLATED_PAWN_MALUS, DOUBLED_PAWN_MALUS, BISHOP_PAIR_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, QUEEN_OPEN_FILE_BONUS, QUEEN_HALF_OPEN_FILE_BONUS, KNIGHT_MOBILITY_BONUS, BISHOP_MOBILITY_BONUS, ROOK_MOBILITY_BONUS, QUEEN_MOBILITY_BONUS, PASSED_PAWN_BONUS};
+use super::{
+    score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
+    KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
+    QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
+    ROOK_OPEN_FILE_BONUS,
+};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Parameters {

@@ -13,7 +13,6 @@ use rayon::prelude::*;
 use crate::{
     board::{evaluation::parameters::Parameters, Board},
     definitions::{INFINITY, WHITE},
-    search::quiescence,
     searchinfo::SearchInfo,
 };
 
@@ -39,7 +38,7 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
     data.iter()
         .map(|TrainingExample { fen, outcome }| {
             pos.set_from_fen(fen).unwrap();
-            let pov_score = quiescence(&mut pos, &mut info, -INFINITY, INFINITY);
+            let pov_score = Board::quiescence(&mut pos, &mut info, -INFINITY, INFINITY);
             let score = if pos.turn() == WHITE {
                 pov_score
             } else {

@@ -40,7 +40,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::alpha_beta,
+    search,
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
@@ -79,6 +79,7 @@ pub struct Board {
     pst_vals: S,
 
     eval_params: evaluation::parameters::Parameters,
+    pub search_params: search::Config,
 }
 
 impl PartialEq for Board {
@@ -125,9 +126,14 @@ impl Board {
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
             eval_params: evaluation::parameters::Parameters::default(),
+            search_params: search::Config::default(),
         };
         out.reset();
         out
+    }
+
+    pub fn set_search_config(&mut self, config: search::Config) {
+        self.search_params = config;
     }
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
@@ -1299,7 +1305,7 @@ impl Board {
         for i_depth in 0..=max_depth {
             let depth = Depth::from(i_depth);
             // main search
-            let mut score = alpha_beta::<true>(self, info, depth, alpha, beta);
+            let mut score = Self::alpha_beta::<true>(self, info, depth, alpha, beta);
 
             info.check_up();
             if info.stopped {
@@ -1321,7 +1327,7 @@ impl Board {
                 self.regenerate_pv_line(best_depth);
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
-                score = alpha_beta::<true>(self, info, depth, -INFINITY, INFINITY);
+                score = Self::alpha_beta::<true>(self, info, depth, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
                     break;

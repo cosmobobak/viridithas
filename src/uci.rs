@@ -15,7 +15,7 @@ use crate::{
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
     errors::{FenParseError, MoveParseError},
-    search::{LMRGRADIENT, LMRMAXDEPTH, LMRMIDPOINT, LOGCONSTANT, LOGSCALEFACTOR, FUTILITY_GRADIENT, FUTILITY_INTERCEPT, NULL_MOVE_REDUCTION},
+    search,
     searchinfo::SearchInfo,
     NAME,
 };
@@ -273,7 +273,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     Ok(())
 }
 
-fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<(), UciError> {
+fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     parts.next().unwrap();
@@ -296,34 +296,17 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<(), UciError> {
             "no option value given after \"setoption name {opt_name} value\""
         ))
     })?;
+    let mut config = search::Config::default();
     match opt_name {
-        "LMRGRADIENT" => unsafe {
-            LMRGRADIENT = opt_value.parse()?;
-        },
-        "LMRMIDPOINT" => unsafe {
-            LMRMIDPOINT = opt_value.parse()?;
-        },
-        "LMRMAXDEPTH" => unsafe {
-            LMRMAXDEPTH = opt_value.parse()?;
-        },
-        "LOGSCALEFACTOR" => unsafe {
-            LOGSCALEFACTOR = opt_value.parse()?;
-        },
-        "LOGCONSTANT" => unsafe {
-            LOGCONSTANT = opt_value.parse()?;
-        },
-        "FUTILITY_GRADIENT" => unsafe {
-            FUTILITY_GRADIENT = opt_value.parse()?;
-        },
-        "FUTILITY_INTERCEPT" => unsafe {
-            FUTILITY_INTERCEPT = opt_value.parse()?;
-        },
-        "NULL_MOVE_REDUCTION" => unsafe {
-            NULL_MOVE_REDUCTION = opt_value.parse()?;
-        },
+        "LMRGRADIENT" => config.lmr_gradient = opt_value.parse()?,
+        "LMRMIDPOINT" => config.lmr_midpoint = opt_value.parse()?,
+        "LMRMAXDEPTH" => config.lmr_max_depth = opt_value.parse()?,
+        "FUTILITY_GRADIENT" => config.futility_gradient = opt_value.parse()?,
+        "FUTILITY_INTERCEPT" => config.futility_intercept = opt_value.parse()?,
+        "NULL_MOVE_REDUCTION" => config.null_move_reduction = opt_value.parse()?,
         _ => eprintln!("ignoring option {}", opt_name),
     }
-    Ok(())
+    Ok(config)
 }
 
 static KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
@@ -411,7 +394,11 @@ pub fn main_loop(evaluation_parameters: Parameters) {
                 pos.clear_tt();
                 res
             }
-            input if input.starts_with("setoption") => parse_setoption(input, &mut info),
+            input if input.starts_with("setoption") => {
+                parse_setoption(input, &mut info).map(|config| {
+                    pos.set_search_config(config);
+                })
+            }
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);

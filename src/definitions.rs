@@ -1,13 +1,13 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Sub, SubAssign}, str::FromStr,
+    ops::{Add, AddAssign, Sub, SubAssign},
+    str::FromStr,
 };
 
 use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
     lookups::{file, rank, SQUARE_NAMES},
-    macros,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -244,8 +244,7 @@ pub const fn type_of(piece: u8) -> u8 {
 pub const fn colour_of(piece: u8) -> u8 {
     match piece {
         WP | WN | WB | WR | WQ | WK => WHITE,
-        BP | BN | BB | BR | BQ | BK => BLACK,
-        _ => unsafe { macros::impossible!() },
+        _ => BLACK,
     }
 }
 
