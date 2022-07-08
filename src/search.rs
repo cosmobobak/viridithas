@@ -341,11 +341,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             null_move_reduction: 3.into(),
-            futility_gradient: 11,
-            futility_intercept: 54,
-            lmr_gradient: 0.1,
-            lmr_midpoint: 11.59,
-            lmr_max_depth: 0.55,
+            futility_gradient: 41,
+            futility_intercept: 51,
+            lmr_gradient: 0.12,
+            lmr_midpoint: 8.06,
+            lmr_max_depth: 0.65,
         }
     }
 }
