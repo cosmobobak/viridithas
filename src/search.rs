@@ -189,7 +189,7 @@ impl Board {
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
         // futility pruning (worth 32 +/- 44 elo)
-        if !PV && Self::is_move_futile(pos, depth, moves_made, is_interesting, static_eval, alpha, beta) {
+        if !PV && Self::is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
             pos.unmake_move();
             continue;
         }
@@ -308,7 +308,6 @@ impl Board {
     }
 
     fn is_move_futile(
-        &self,
         depth: Depth,
         moves_made: usize,
         interesting: bool,
@@ -322,16 +321,20 @@ impl Board {
         if is_mate_score(a) || is_mate_score(b) {
             return false;
         }
-        let grad = self.search_params.futility_gradient;
-        let intercept = self.search_params.futility_intercept;
-        // the margin is a quadratic function of the depth. (M(d) = grad * d^2 + intercept)
-        let margin = (grad * depth.raw_inner() * depth.raw_inner())
-            / (Depth::ONE_PLY * Depth::ONE_PLY)
-            + intercept;
-        // if the static eval plus the margin is less than alpha, then this move is futile.
-        static_eval + margin < a
+        #[allow(clippy::cast_sign_loss)]
+        let threshold = FUTILITY_PRUNING_MARGINS[depth.n_ply()];
+        static_eval + threshold < a
     }
 }
+
+// values taken from MadChess.
+static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
+    100, // 0 moves to the horizon
+    150, // 1 move to the horizon
+    250, // 2 moves to the horizon
+    400, // 3 moves to the horizon
+    600, // 4 moves to the horizon
+];
 
 #[derive(Debug)]
 pub struct Config {
