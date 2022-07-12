@@ -109,11 +109,12 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
         pos.set_from_fen(&fen)?;
     }
     for san in parts {
+        pos.zero_height(); // stuff breaks really hard without this lmao
         let m = pos.parse_san(san)?;
         pos.make_move(m);
     }
-    pos.zero_ply();
-    eprintln!("{}", pos);
+    pos.zero_height();
+    // eprintln!("{}", pos);
     Ok(())
 }
 
@@ -222,7 +223,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
                 );
             }
             "infinite" => info.infinite = true,
-            _ => eprintln!("ignoring term in parse_go: {}", part),
+            _ => ()//eprintln!("ignoring term in parse_go: {}", part),
         }
     }
 
@@ -263,12 +264,12 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         info.depth = MAX_DEPTH;
     }
 
-    println!(
-        "time: {}, depth: {}, timeset: {}",
-        info.stop_time.duration_since(info.start_time).as_millis(),
-        info.depth.n_ply(),
-        info.time_set
-    );
+    // println!(
+    //     "time: {}, depth: {}, timeset: {}",
+    //     info.stop_time.duration_since(info.start_time).as_millis(),
+    //     info.depth.n_ply(),
+    //     info.time_set
+    // );
 
     Ok(())
 }
