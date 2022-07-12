@@ -67,6 +67,7 @@ mod tests {
         use crate::board::movegen::MoveVecWrapper;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
@@ -91,6 +92,7 @@ mod tests {
         use super::*;
         use crate::board::movegen::MoveVecWrapper;
         let mut pos = Board::new();
+        std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             let mut ml = MoveList::new();

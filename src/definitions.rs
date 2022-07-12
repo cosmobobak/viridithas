@@ -7,7 +7,7 @@ use std::{
 use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
-    lookups::{file, rank, SQUARE_NAMES},
+    lookups::{file, rank, SQUARE_NAMES}, macros,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -18,10 +18,10 @@ pub const INFINITY: i32 = MATE_SCORE * 2;
 pub struct Depth(i32);
 
 impl Depth {
-    const INNER_INCREMENT_PER_PLY: i32 = 100;
+    pub const ONE_PLY: i32 = 100;
 
     pub const fn new(depth: i32) -> Self {
-        Self(depth * Self::INNER_INCREMENT_PER_PLY)
+        Self(depth * Self::ONE_PLY)
     }
 
     pub const fn from_raw(raw: i32) -> Self {
@@ -33,22 +33,22 @@ impl Depth {
         if self.0 <= 0 {
             0
         } else {
-            (self.0 / Self::INNER_INCREMENT_PER_PLY) as usize
+            (self.0 / Self::ONE_PLY) as usize
         }
     }
 
     pub const fn round(self) -> i32 {
-        self.0 / Self::INNER_INCREMENT_PER_PLY
+        self.0 / Self::ONE_PLY
     }
 
     pub const fn nearest_full_ply(self) -> Self {
         let x = self.0;
-        let x = x + Self::INNER_INCREMENT_PER_PLY / 2;
-        Self(x - x % Self::INNER_INCREMENT_PER_PLY)
+        let x = x + Self::ONE_PLY / 2;
+        Self(x - x % Self::ONE_PLY)
     }
 
     pub const fn is_exact_ply(self) -> bool {
-        self.0 % Self::INNER_INCREMENT_PER_PLY == 0
+        self.0 % Self::ONE_PLY == 0
     }
 
     pub const fn raw_inner(self) -> i32 {
@@ -59,12 +59,6 @@ impl Depth {
 impl Add<Self> for Depth {
     type Output = Self;
     fn add(self, other: Self) -> Self::Output {
-        debug_assert!(
-            self.is_exact_ply() && other.is_exact_ply(),
-            "Depth::add: only exact ply allowed, got {} and {}",
-            self,
-            other
-        );
         Self(self.0 + other.0)
     }
 }
@@ -76,12 +70,7 @@ impl AddAssign<Self> for Depth {
 impl Add<i32> for Depth {
     type Output = Self;
     fn add(self, other: i32) -> Self::Output {
-        debug_assert!(
-            self.is_exact_ply(),
-            "Depth::add: only exact ply allowed, got {}",
-            self
-        );
-        Self(self.0 + other * Self::INNER_INCREMENT_PER_PLY)
+        Self(self.0 + other * Self::ONE_PLY)
     }
 }
 impl AddAssign<i32> for Depth {
@@ -92,12 +81,6 @@ impl AddAssign<i32> for Depth {
 impl Sub<Self> for Depth {
     type Output = Self;
     fn sub(self, other: Self) -> Self::Output {
-        debug_assert!(
-            self.is_exact_ply() && other.is_exact_ply(),
-            "Depth::sub: only exact ply allowed, got {} and {}",
-            self,
-            other
-        );
         Self(self.0 - other.0)
     }
 }
@@ -109,12 +92,7 @@ impl SubAssign<Self> for Depth {
 impl Sub<i32> for Depth {
     type Output = Self;
     fn sub(self, other: i32) -> Self::Output {
-        debug_assert!(
-            self.is_exact_ply(),
-            "Depth::sub: only exact ply allowed, got {}",
-            self
-        );
-        Self(self.0 - other * Self::INNER_INCREMENT_PER_PLY)
+        Self(self.0 - other * Self::ONE_PLY)
     }
 }
 impl SubAssign<i32> for Depth {
@@ -130,14 +108,14 @@ impl From<i32> for Depth {
 impl From<f32> for Depth {
     fn from(depth: f32) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        let inner_depth = depth * Self::INNER_INCREMENT_PER_PLY as f32;
+        let inner_depth = depth * Self::ONE_PLY as f32;
         Self::from_raw(inner_depth as i32)
     }
 }
 impl From<Depth> for f32 {
     fn from(depth: Depth) -> Self {
         #![allow(clippy::cast_precision_loss)]
-        depth.0 as Self / Depth::INNER_INCREMENT_PER_PLY as Self
+        depth.0 as Self / Depth::ONE_PLY as Self
     }
 }
 impl TryFrom<Depth> for i16 {
@@ -162,8 +140,8 @@ impl Display for Depth {
             f,
             "{}{}.{}",
             sign,
-            self.0.abs() / Self::INNER_INCREMENT_PER_PLY,
-            self.0.abs() % Self::INNER_INCREMENT_PER_PLY
+            self.0.abs() / Self::ONE_PLY,
+            self.0.abs() % Self::ONE_PLY
         )
     }
 }
@@ -238,6 +216,18 @@ pub const fn type_of(piece: u8) -> u8 {
         WQ | BQ => QUEEN,
         WK | BK => KING,
         _ => PIECE_EMPTY,
+    }
+}
+
+pub const fn piece_index(piece: u8) -> usize {
+    match piece {
+        WP | BP => 0,
+        WN | BN => 1,
+        WB | BB => 2,
+        WR | BR => 3,
+        WQ | BQ => 4,
+        WK | BK => 5,
+        _ => unsafe { macros::impossible!() },
     }
 }
 
@@ -369,7 +359,7 @@ pub const WQCA: u8 = 0b0010;
 pub const BKCA: u8 = 0b0100;
 pub const BQCA: u8 = 0b1000;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
     pub m: Move,
     pub castle_perm: u8,

@@ -6,6 +6,7 @@
 
 pub mod evaluation;
 pub mod movegen;
+mod history;
 
 use std::{
     collections::HashSet,
@@ -58,7 +59,7 @@ pub struct Board {
     ep_sq: u8,
     fifty_move_counter: u8,
     height: usize,
-    hist_ply: usize,
+    ply: usize,
     key: u64,
     big_piece_counts: [u8; 2],
     major_piece_counts: [u8; 2],
@@ -73,13 +74,34 @@ pub struct Board {
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
     killer_move_table: [[Move; 2]; MAX_DEPTH.n_ply()],
-    counter_move_table: [[Move; BOARD_N_SQUARES]; 13],
+    countermove_history: Box<[[[[i32; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]]>,
+    followup_history: Box<[[[[i32; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]]>,
     tt: DefaultTT,
 
     pst_vals: S,
 
     eval_params: evaluation::parameters::Parameters,
     pub search_params: search::Config,
+}
+
+impl Debug for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Board")
+            .field("piece_array", &self.piece_array)
+            .field("side", &self.side)
+            .field("ep_sq", &self.ep_sq)
+            .field("fifty_move_counter", &self.fifty_move_counter)
+            .field("height", &self.height)
+            .field("ply", &self.ply)
+            .field("key", &self.key)
+            .field("big_piece_counts", &self.big_piece_counts)
+            .field("major_piece_counts", &self.major_piece_counts)
+            .field("minor_piece_counts", &self.minor_piece_counts)
+            .field("material", &self.material)
+            .field("castle_perm", &self.castle_perm)
+            .field("pst_vals", &self.pst_vals)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PartialEq for Board {
@@ -109,7 +131,7 @@ impl Board {
             ep_sq: NO_SQUARE,
             fifty_move_counter: 0,
             height: 0,
-            hist_ply: 0,
+            ply: 0,
             key: 0,
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
@@ -122,7 +144,8 @@ impl Board {
             principal_variation: Vec::new(),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.n_ply()],
-            counter_move_table: [[Move::NULL; BOARD_N_SQUARES]; 13],
+            countermove_history: vec![[[[0; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]; 6].into_boxed_slice(),
+            followup_history: vec![[[[0; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]; 6].into_boxed_slice(),
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
             eval_params: evaluation::parameters::Parameters::default(),
@@ -147,47 +170,6 @@ impl Board {
 
     pub fn clear_tt(&mut self) {
         self.tt.clear();
-    }
-
-    pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.height < MAX_DEPTH.n_ply());
-        let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.height) };
-        entry[1] = entry[0];
-        entry[0] = m;
-    }
-
-    pub fn add_history(&mut self, m: Move, score: i32) {
-        let piece_moved = self.moved_piece(m) as usize;
-        let history_board = unsafe { self.history_table.get_unchecked_mut(piece_moved) };
-        let to = m.to() as usize;
-        unsafe {
-            *history_board.get_unchecked_mut(to) += score;
-        }
-    }
-
-    pub fn insert_countermove(&mut self, m: Move) {
-        debug_assert!(self.height < MAX_DEPTH.n_ply());
-        let prev_move = self.history.last().map_or(Move::NULL, |u| u.m);
-        if prev_move.is_null() {
-            return;
-        }
-        let prev_to = prev_move.to();
-        let prev_piece = self.piece_at(prev_to);
-        self.counter_move_table[prev_piece as usize][prev_to as usize] = m;
-    }
-
-    pub fn is_countermove(&self, m: Move) -> bool {
-        let prev_move = self.history.last().map(|u| u.m);
-        if let Some(prev_move) = prev_move {
-            if prev_move.is_null() {
-                return false;
-            }
-            let prev_to = prev_move.to();
-            let prev_piece = self.piece_at(prev_to);
-            self.counter_move_table[prev_piece as usize][prev_to as usize] == m
-        } else {
-            false
-        }
     }
 
     pub fn king_sq(&self, side: u8) -> u8 {
@@ -219,7 +201,7 @@ impl Board {
         }
     }
 
-    pub fn zero_ply(&mut self) {
+    pub fn zero_height(&mut self) {
         self.height = 0;
     }
 
@@ -269,7 +251,7 @@ impl Board {
         self.ep_sq = NO_SQUARE;
         self.fifty_move_counter = 0;
         self.height = 0;
-        self.hist_ply = 0;
+        self.ply = 0;
         self.castle_perm = 0;
         self.key = 0;
         self.pst_vals = S(0, 0);
@@ -436,7 +418,7 @@ impl Board {
             fen.push('-');
         }
         write!(fen, " {}", self.fifty_move_counter).unwrap();
-        write!(fen, " {}", self.height / 2 + 1).unwrap();
+        write!(fen, " {}", self.ply / 2 + 1).unwrap();
 
         fen
     }
@@ -528,9 +510,9 @@ impl Board {
                     .map_err(|_| {
                         "FEN string is invalid, expected fullmove number part to be a number"
                     })?;
-                self.height = (fullmove_number - 1) * 2;
+                self.ply = (fullmove_number - 1) * 2;
                 if self.side == BLACK {
-                    self.height += 1;
+                    self.ply += 1;
                 }
             }
         }
@@ -922,16 +904,19 @@ impl Board {
         }
     }
 
+    /// Gets the piece that will be moved by the given move.
     pub fn moved_piece(&self, m: Move) -> u8 {
         debug_assert!(square_on_board(m.from()));
         unsafe { *self.piece_array.get_unchecked(m.from() as usize) }
     }
 
+    /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: u8) -> u8 {
         debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { *self.piece_array.get_unchecked(sq as usize) }
     }
 
+    /// Gets a mutable reference to the piece at the given square.
     pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
         debug_assert!((sq as usize) < BOARD_N_SQUARES);
         unsafe { self.piece_array.get_unchecked_mut(sq as usize) }
@@ -1003,7 +988,7 @@ impl Board {
             self.fifty_move_counter = 0;
         }
 
-        self.hist_ply += 1;
+        self.ply += 1;
         self.height += 1;
 
         if piece == WP || piece == BP {
@@ -1051,7 +1036,6 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check::<{ Self::US }>());
 
-        self.height += 1;
         self.history.push(Undo {
             m: Move::NULL,
             castle_perm: self.castle_perm,
@@ -1066,7 +1050,8 @@ impl Board {
         self.ep_sq = NO_SQUARE;
 
         self.side ^= 1;
-        self.hist_ply += 1;
+        self.ply += 1;
+        self.height += 1;
         hash_side(&mut self.key);
 
         #[cfg(debug_assertions)]
@@ -1078,7 +1063,7 @@ impl Board {
         self.check_validity().unwrap();
 
         self.height -= 1;
-        self.hist_ply -= 1;
+        self.ply -= 1;
 
         let Undo {
             m,
@@ -1163,7 +1148,7 @@ impl Board {
         self.check_validity().unwrap();
 
         self.height -= 1;
-        self.hist_ply -= 1;
+        self.ply -= 1;
 
         if self.ep_sq != NO_SQUARE {
             // this might be unreachable, but that's ok.
@@ -1223,7 +1208,8 @@ impl Board {
         let to = filerank_to_square(san_bytes[2] - b'a', san_bytes[3] - b'1');
 
         let mut list = MoveList::new();
-        self.generate_moves(&mut list);
+        // nasty hack: we can't do movegen when
+        self.generate_moves(&mut list); 
 
         list.into_iter()
             .find(|&m| {
@@ -1252,9 +1238,16 @@ impl Board {
     fn clear_for_search(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.counter_move_table
+        self.countermove_history
             .iter_mut()
-            .for_each(|r| r.fill(Move::NULL));
+            .flatten()
+            .flatten()
+            .for_each(|h| h.fill(0));
+        self.followup_history
+            .iter_mut()
+            .flatten()
+            .flatten()
+            .for_each(|h| h.fill(0));
         self.height = 0;
         self.tt.clear_for_search();
     }
@@ -1305,6 +1298,7 @@ impl Board {
         for i_depth in 0..=max_depth {
             let depth = Depth::from(i_depth);
             // main search
+            assert!(self.height == 0, "height != 0 before aspiration search");
             let mut score = Self::alpha_beta::<true>(self, info, depth, alpha, beta);
 
             info.check_up();
@@ -1327,6 +1321,7 @@ impl Board {
                 self.regenerate_pv_line(best_depth);
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
+                assert!(self.height == 0, "height != 0 before fullwindow search");
                 score = Self::alpha_beta::<true>(self, info, depth, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
@@ -1418,18 +1413,6 @@ impl Display for Board {
         writeln!(f, "  a b c d e f g h")?;
         writeln!(f, "FEN: {}", self.fen())?;
 
-        Ok(())
-    }
-}
-
-impl Debug for Board {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", self)?;
-        writeln!(f, "ep-square: {}", self.ep_sq)?;
-        writeln!(f, "castling: {:b}", self.castle_perm)?;
-        writeln!(f, "fifty-move-counter: {}", self.fifty_move_counter)?;
-        writeln!(f, "ply: {}", self.height)?;
-        writeln!(f, "hash: {:x}", self.key)?;
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use crate::definitions::square_name;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct PieceList {
     data: [u8; 10],
     len: u8,

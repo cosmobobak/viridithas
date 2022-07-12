@@ -107,7 +107,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
     ) {
         let index = (key % SIZE as u64) as usize;
 
-        debug_assert!((1i32.into()..=MAX_DEPTH).contains(&depth));
+        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.n_ply()).contains(&ply));
 
@@ -145,7 +145,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
     ) -> ProbeResult {
         let index = (key % (SIZE as u64)) as usize;
 
-        debug_assert!((1i32.into()..=MAX_DEPTH).contains(&depth));
+        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);
         debug_assert!(alpha >= -INFINITY);
         debug_assert!(beta >= -INFINITY);
@@ -160,7 +160,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
             let m = entry.m;
             let e_depth = entry.depth.into();
             if e_depth >= depth {
-                debug_assert!((1i32.into()..=MAX_DEPTH).contains(&e_depth));
+                debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {}", e_depth);
 
                 // we can't store the score in a tagged union,
                 // because we need to do mate score preprocessing.

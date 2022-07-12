@@ -27,7 +27,6 @@ use crate::{
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
-const COUNTERMOVE_SCORE: i32 = 2_000_000;
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
@@ -174,38 +173,25 @@ impl Display for MoveVecWrapper {
 
 impl Board {
     fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
-        let _ = self;
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
 
-        let killer_entry = unsafe { self.killer_move_table.get_unchecked(self.height) };
+        let killer_entry = self.killer_move_table[self.height];
 
         let score = if killer_entry[0] == m {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
+        } else if self.is_third_order_killer(m) {
+            THIRD_ORDER_KILLER_SCORE
         } else {
-            if self.is_countermove(m) {
-                COUNTERMOVE_SCORE
-            } else if self.is_third_order_killer(m) {
-                THIRD_ORDER_KILLER_SCORE
-            } else {
-                let piece_moved = self.moved_piece(m) as usize;
-                let to = m.to() as usize;
-                unsafe {
-                    *self
-                        .history_table
-                        .get_unchecked(piece_moved)
-                        .get_unchecked(to)
-                }
-            }
+            let history = self.history_score(m);
+            let countermove_history = self.countermove_history_score(m);
+            let followup_history = self.followup_history_score(m);
+            history + countermove_history + followup_history
         };
 
         move_list.push(m, score);
-    }
-
-    fn is_third_order_killer(&self, m: Move) -> bool {
-        self.height > 2 && unsafe { self.killer_move_table.get_unchecked(self.height - 2)[0] == m }
     }
 
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {

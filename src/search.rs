@@ -122,7 +122,7 @@ impl Board {
         }
 
         // are we too deep?
-        if height > MAX_DEPTH.round() - 1 {
+        if pos.height() >= MAX_DEPTH.n_ply() - 1 {
             return static_eval;
         }
 
@@ -251,6 +251,7 @@ impl Board {
                     info.failhigh += 1.0;
 
                     if !is_capture {
+                        pos.insert_killer(best_move);
                         pos.update_history_metrics(best_move, history_score);
                     }
 
@@ -285,9 +286,9 @@ impl Board {
 }
 
     fn update_history_metrics(&mut self, best_move: Move, history_score: i32) {
-        self.insert_killer(best_move);
-        self.insert_countermove(best_move);
         self.add_history(best_move, history_score);
+        self.add_countermove_history(best_move, history_score);
+        self.add_followup_history(best_move, history_score);
     }
 
     fn logistic_lateness_reduction(&self, moves: usize, depth: Depth) -> Depth {
@@ -323,11 +324,16 @@ impl Board {
         }
         let grad = self.search_params.futility_gradient;
         let intercept = self.search_params.futility_intercept;
-        let margin = grad * (depth.raw_inner() * depth.raw_inner()) / 10000 + intercept;
+        // the margin is a quadratic function of the depth. (M(d) = grad * d^2 + intercept)
+        let margin = (grad * depth.raw_inner() * depth.raw_inner())
+            / (Depth::ONE_PLY * Depth::ONE_PLY)
+            + intercept;
+        // if the static eval plus the margin is less than alpha, then this move is futile.
         static_eval + margin < a
     }
 }
 
+#[derive(Debug)]
 pub struct Config {
     pub null_move_reduction: Depth,
     pub futility_gradient: i32,

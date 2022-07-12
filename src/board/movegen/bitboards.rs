@@ -65,7 +65,7 @@ impl Iterator for BitLoop {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BitBoard {
     w_pawns: u64,
     w_knights: u64,
