@@ -82,6 +82,7 @@ pub struct Board {
 
     eval_params: evaluation::parameters::Parameters,
     pub search_params: search::Config,
+    pub lmr_table: search::LMRTable,
 }
 
 impl Debug for Board {
@@ -150,6 +151,7 @@ impl Board {
             tt: DefaultTT::new(),
             eval_params: evaluation::parameters::Parameters::default(),
             search_params: search::Config::default(),
+            lmr_table: search::LMRTable::new(&search::Config::default()),
         };
         out.reset();
         out
@@ -157,6 +159,7 @@ impl Board {
 
     pub fn set_search_config(&mut self, config: search::Config) {
         self.search_params = config;
+        self.lmr_table = search::LMRTable::new(&self.search_params);
     }
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {

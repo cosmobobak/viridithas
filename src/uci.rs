@@ -299,12 +299,12 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config,
     })?;
     let mut config = search::Config::default();
     match opt_name {
-        "LMRGRADIENT" => config.lmr_gradient = opt_value.parse()?,
-        "LMRMIDPOINT" => config.lmr_midpoint = opt_value.parse()?,
-        "LMRMAXDEPTH" => config.lmr_max_depth = opt_value.parse()?,
+        "LMRBASE" => config.lmr_base = opt_value.parse()?,
+        "LMRDIVISION" => config.lmr_division = opt_value.parse()?,
         "FUTILITY_GRADIENT" => config.futility_gradient = opt_value.parse()?,
         "FUTILITY_INTERCEPT" => config.futility_intercept = opt_value.parse()?,
         "NULL_MOVE_REDUCTION" => config.null_move_reduction = opt_value.parse()?,
+        "HISTORY_MODE" => config.history_mode = opt_value.parse()?,
         _ => eprintln!("ignoring option {}", opt_name),
     }
     Ok(config)

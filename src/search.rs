@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     board::movegen::MoveList,
     board::{
@@ -134,12 +136,12 @@ impl Board {
         if r_alpha >= r_beta { return r_alpha; }
     }
 
-    let pv_move = match pos.tt_probe(alpha, beta, depth) {
+    let tt_move = match pos.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
             return s;
         }
-        ProbeResult::BestMove(pv_move) => {
-            Some(pv_move)
+        ProbeResult::BestMove(tt_move) => {
+            Some(tt_move)
         }
         ProbeResult::Nothing => {
             None
@@ -164,16 +166,19 @@ impl Board {
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
 
-    let history_score = depth.round() * depth.round();
+    let history_score = match pos.search_params.history_mode {
+        HistoryMode::Constant => 1,
+        HistoryMode::Linear => depth.round(),
+        HistoryMode::Quadratic => depth.round() * depth.round()
+    };
     let original_alpha = alpha;
     let mut moves_made = 0;
     let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
 
-    if let Some(pv_move) = pv_move {
-        if let Some(movelist_entry) = move_list.lookup_by_move(pv_move) {
-            movelist_entry.score = TT_MOVE_SCORE;
-        }
+    let tt_move = tt_move.unwrap_or(Move::NULL);
+    if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
+        movelist_entry.score = TT_MOVE_SCORE;
     }
 
     for m in move_list {
@@ -194,8 +199,8 @@ impl Board {
             continue;
         }
 
-        let extension: Depth = if gives_check {
-            0.8.into()
+        let extension: Depth = if !root_node && gives_check {
+            1.into()
         } else {
             0.into()
         };
@@ -219,11 +224,13 @@ impl Board {
                 && !is_interesting
                 && depth >= 3.into()
                 && moves_made >= (2 + usize::from(PV));
-            let mut r: Depth = 0.into();
-            // late move reductions (75 +/- 83 elo)
-            if can_reduce {
-                r += Self::logistic_lateness_reduction(pos, moves_made, depth).max(0.into());
-            }
+            let r = if can_reduce {
+                let mut r = pos.lmr_table.get(depth, moves_made);
+                r += i32::from(!PV);
+                Depth::new(r).clamp(1.into(), depth - 1)
+            } else {
+                0.into()
+            };
             // perform a zero-window search, possibly with a reduction
             score = -Self::alpha_beta::<false>(pos, info, depth + extension - r - 1, -alpha - 1, -alpha);
             // if we failed, then full window search
@@ -291,22 +298,6 @@ impl Board {
         self.add_followup_history(best_move, history_score);
     }
 
-    fn logistic_lateness_reduction(&self, moves: usize, depth: Depth) -> Depth {
-        #![allow(
-            clippy::cast_precision_loss,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_truncation
-        )]
-        let gradient = self.search_params.lmr_gradient;
-        let midpoint = self.search_params.lmr_midpoint;
-        let reduction_factor = self.search_params.lmr_max_depth;
-        let moves: f32 = moves as f32;
-        let depth: f32 = depth.into();
-        let numerator = reduction_factor * depth - 1.0;
-        let denominator = 1.0 + f32::exp(-gradient * (moves - midpoint));
-        ((numerator / denominator + 0.5) as i32).into()
-    }
-
     fn is_move_futile(
         depth: Depth,
         moves_made: usize,
@@ -337,13 +328,34 @@ static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
 ];
 
 #[derive(Debug)]
+pub enum HistoryMode {
+    Constant = 0,
+    Linear = 1,
+    Quadratic = 2,
+}
+
+impl FromStr for HistoryMode {
+    type Err = <u8 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let i = u8::from_str(s)?;
+        match i {
+            0 => Ok(Self::Constant),
+            1 => Ok(Self::Linear),
+            2 => Ok(Self::Quadratic),
+            _ => Err(u8::from_str("257").unwrap_err()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub null_move_reduction: Depth,
     pub futility_gradient: i32,
     pub futility_intercept: i32,
-    pub lmr_gradient: f32,
-    pub lmr_midpoint: f32,
-    pub lmr_max_depth: f32,
+    pub lmr_base: f64,
+    pub lmr_division: f64,
+    pub history_mode: HistoryMode,
 }
 
 impl Default for Config {
@@ -352,9 +364,36 @@ impl Default for Config {
             null_move_reduction: 3.into(),
             futility_gradient: 41,
             futility_intercept: 51,
-            lmr_gradient: 0.12,
-            lmr_midpoint: 8.06,
-            lmr_max_depth: 0.65,
+            lmr_base: 0.75,
+            lmr_division: 2.25,
+            history_mode: HistoryMode::Quadratic,
         }
+    }
+}
+
+pub struct LMRTable {
+    table: [[i32; 64]; 64],
+}
+
+impl LMRTable {
+    pub fn new(config: &Config) -> Self {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let mut out = Self {
+            table: [[0; 64]; 64],
+        };
+        for depth in 1..64 {
+            for played in 1..64 {
+                let ld = f64::ln(depth as f64);
+                let lp = f64::ln(played as f64);
+                out.table[depth][played] = (config.lmr_base + ld * lp / config.lmr_division) as i32;
+            }
+        }
+        out
+    }
+
+    pub fn get(&self, depth: Depth, moves_made: usize) -> i32 {
+        let depth = depth.n_ply().min(63);
+        let played = moves_made.min(63);
+        self.table[depth][played]
     }
 }
