@@ -258,6 +258,9 @@ impl Board {
                     info.failhigh += 1.0;
 
                     if !is_capture {
+                        // IDEA: if the cutoff move wasn't the first, i.e.
+                        // moves_made != 1, then we should decrease the history
+                        // scores of the moves that we've already searched.
                         pos.insert_killer(best_move);
                         pos.update_history_metrics(best_move, history_score);
                     }
