@@ -21,7 +21,7 @@ use crate::{
     },
     lookups::MVV_LVA_SCORE,
     macros,
-    validate::{piece_valid, square_on_board},
+    validate::{piece_valid, square_on_board}, magic::MAGICS_READY,
 };
 
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
@@ -366,16 +366,18 @@ impl Board {
     }
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
+        debug_assert!(self.movegen_ready);
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         if self.side == WHITE {
-            self.generate_moves_comptime::<WHITE>(move_list);
+            self.generate_moves_for::<WHITE>(move_list);
         } else {
-            self.generate_moves_comptime::<BLACK>(move_list);
+            self.generate_moves_for::<BLACK>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     #[inline(never)]
-    pub fn generate_moves_comptime<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    pub fn generate_moves_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 

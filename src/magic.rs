@@ -1,4 +1,8 @@
+use std::sync::atomic::AtomicBool;
+
 use crate::{macros, rng::XorShiftState};
+
+pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -343,18 +347,24 @@ pub fn init_magics() {
     println!("Done!");
 }
 
-unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
+fn init_sliders_attacks<const IS_BISHOP: bool>() {
+    // SAFETY: this is the only place that these arrays get mutated,
+    // and while we could technically cause UB by calling this from a bunch of threads,
+    // we don't care about that, since this is only called once at startup.
+    // sue me.
     for square in 0..64 {
         // init masks
-        BISHOP_MASKS[square] = mask_bishop_attacks(square.try_into().unwrap());
-        ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
+        unsafe {
+            BISHOP_MASKS[square] = mask_bishop_attacks(square.try_into().unwrap());
+            ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
+        }
 
         // init the current mask
-        let mask = if IS_BISHOP {
+        let mask = unsafe { if IS_BISHOP {
             BISHOP_MASKS[square]
         } else {
             ROOK_MASKS[square]
-        };
+        }};
 
         // count attack mask bits
         let bit_count = mask.count_ones();
@@ -369,20 +379,23 @@ unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
 
             if IS_BISHOP {
                 let magic_index: usize = ((occupancy.wrapping_mul(BISHOP_MAGICS[square])) >> (64 - BISHOP_REL_BITS[square])).try_into().unwrap();
-                BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
+                unsafe { 
+                    BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
+                }
             } else {
                 let magic_index: usize = ((occupancy.wrapping_mul(ROOK_MAGICS[square])) >> (64 - ROOK_REL_BITS[square])).try_into().unwrap();
-                ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
+                unsafe { 
+                    ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
+                }
             }
         });
     }
 }
 
 pub fn initialise() {
-    unsafe {
-        init_sliders_attacks::<true>();
-        init_sliders_attacks::<false>();
-    }
+    init_sliders_attacks::<true>();
+    init_sliders_attacks::<false>();
+    MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 static mut BISHOP_MASKS: [u64; 64] = [0; 64];

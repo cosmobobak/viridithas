@@ -45,7 +45,7 @@ use crate::{
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::HistoryTable,
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -74,8 +74,8 @@ pub struct Board {
 
     history_table: [[i32; BOARD_N_SQUARES]; 13],
     killer_move_table: [[Move; 2]; MAX_DEPTH.n_ply()],
-    countermove_history: Box<[[[[i32; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]]>,
-    followup_history: Box<[[[[i32; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]]>,
+    countermove_history: HistoryTable,
+    followup_history: HistoryTable,
     tt: DefaultTT,
 
     pst_vals: S,
@@ -83,6 +83,8 @@ pub struct Board {
     eval_params: evaluation::parameters::Parameters,
     pub search_params: search::Config,
     pub lmr_table: search::LMRTable,
+
+    movegen_ready: bool,
 }
 
 impl Debug for Board {
@@ -145,13 +147,14 @@ impl Board {
             principal_variation: Vec::new(),
             history_table: [[0; BOARD_N_SQUARES]; 13],
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.n_ply()],
-            countermove_history: vec![[[[0; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]; 6].into_boxed_slice(),
-            followup_history: vec![[[[0; BOARD_N_SQUARES]; 6]; BOARD_N_SQUARES]; 6].into_boxed_slice(),
+            countermove_history: HistoryTable::new(),
+            followup_history: HistoryTable::new(),
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
             eval_params: evaluation::parameters::Parameters::default(),
             search_params: search::Config::default(),
             lmr_table: search::LMRTable::new(&search::Config::default()),
+            movegen_ready: false,
         };
         out.reset();
         out
@@ -1238,21 +1241,14 @@ impl Board {
         self.piece_lists[piece as usize].len()
     }
 
-    fn clear_for_search(&mut self) {
+    pub fn reset_tables(&mut self) {
         self.history_table.iter_mut().for_each(|h| h.fill(0));
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.countermove_history
-            .iter_mut()
-            .flatten()
-            .flatten()
-            .for_each(|h| h.fill(0));
-        self.followup_history
-            .iter_mut()
-            .flatten()
-            .flatten()
-            .for_each(|h| h.fill(0));
+        self.countermove_history.clear();
+        self.followup_history.clear();
         self.height = 0;
         self.tt.clear_for_search();
+        self.movegen_ready = true;
     }
 
     fn regenerate_pv_line(&mut self, depth: i32) {
@@ -1288,7 +1284,7 @@ impl Board {
 
     /// Performs the root search. Returns the score of the position, from white's perspective.
     pub fn search_position(&mut self, info: &mut SearchInfo) -> i32 {
-        self.clear_for_search();
+        self.reset_tables();
         info.clear_for_search();
 
         let first_legal = self.get_first_legal_move().unwrap_or(Move::NULL);

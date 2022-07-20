@@ -7,7 +7,7 @@ use std::{
 use crate::{
     board::evaluation::MATE_SCORE,
     chessmove::Move,
-    lookups::{file, rank, SQUARE_NAMES}, macros,
+    lookups::{file, rank, SQUARE_NAMES},
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -219,7 +219,7 @@ pub const fn type_of(piece: u8) -> u8 {
     }
 }
 
-pub const fn piece_index(piece: u8) -> usize {
+pub fn piece_index(piece: u8) -> u8 {
     match piece {
         WP | BP => 0,
         WN | BN => 1,
@@ -227,7 +227,7 @@ pub const fn piece_index(piece: u8) -> usize {
         WR | BR => 3,
         WQ | BQ => 4,
         WK | BK => 5,
-        _ => unsafe { macros::impossible!() },
+        p => panic!("Invalid piece: {p}"),
     }
 }
 

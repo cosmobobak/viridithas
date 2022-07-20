@@ -436,6 +436,8 @@ impl Board {
 }
 
 mod tests {
+
+
     #[test]
     fn unwinnable() {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
@@ -471,6 +473,31 @@ mod tests {
     fn startpos_eval_equality() {
         let mut board = super::Board::default();
         assert_eq!(board.evaluate(), 0);
+    }
+
+    #[test]
+    fn startpos_bits_equality() {
+        use crate::board::evaluation::score::S;
+
+        crate::magic::initialise();
+
+        let mut board = super::Board::default();
+
+        let material = board.material[crate::definitions::WHITE as usize] - board.material[crate::definitions::BLACK as usize];
+        let pst = board.pst_vals;
+        let pawn_val = board.pawn_structure_term();
+        let bishop_pair_val = board.bishop_pair_term();
+        let mobility_val = board.mobility();
+        let rook_open_file_val = board.rook_open_file_term();
+        let queen_open_file_val = board.queen_open_file_term();
+
+        assert_eq!(material, S(0, 0));
+        assert_eq!(pst, S(0, 0));
+        assert_eq!(pawn_val, S(0, 0));
+        assert_eq!(bishop_pair_val, S(0, 0));
+        assert_eq!(mobility_val, S(0, 0));
+        assert_eq!(rook_open_file_val, S(0, 0));
+        assert_eq!(queen_open_file_val, S(0, 0));
     }
 
     #[test]

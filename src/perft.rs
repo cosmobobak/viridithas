@@ -34,6 +34,7 @@ pub fn gamut() {
     // open perftsuite.epd
     let f = File::open("perftsuite.epd").unwrap();
     let mut pos = Board::new();
+    pos.reset_tables();
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
         let mut parts = line.split(';');
@@ -69,6 +70,7 @@ mod tests {
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
+        pos.reset_tables();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             let mut ml = MoveList::new();
@@ -92,6 +94,7 @@ mod tests {
         use super::*;
         use crate::board::movegen::MoveVecWrapper;
         let mut pos = Board::new();
+        pos.reset_tables();
         std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
@@ -116,6 +119,7 @@ mod tests {
         use super::*;
         use crate::board::movegen::MoveVecWrapper;
         let mut pos = Board::new();
+        pos.reset_tables();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             let mut ml = MoveList::new();

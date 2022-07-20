@@ -44,11 +44,8 @@ impl Board {
         // because the size information is erased only from the
         // top-level array type.
         debug_assert!(prev_piece_t < 6);
-        let table_by_prev_pt = unsafe {
-            self.countermove_history
-                .get_unchecked_mut(prev_piece_t)
-        };
-        table_by_prev_pt[prev_to as usize][piece_t][to as usize] += score;
+        self.countermove_history
+            .add(prev_piece_t, prev_to, piece_t, to, score);
     }
 
     /// Get the countermove history score for a move.
@@ -69,11 +66,8 @@ impl Board {
         // because the size information is erased only from the
         // top-level array type.
         debug_assert!(prev_piece_t < 6);
-        let table_by_prev_pt = unsafe {
-            self.countermove_history
-                .get_unchecked(prev_piece_t)
-        };
-        table_by_prev_pt[prev_to as usize][piece_t][to as usize]
+        self.countermove_history
+            .get(prev_piece_t, prev_to, piece_t, to)
     }
 
     /// Add a move to the follow-up history table.
@@ -112,11 +106,8 @@ impl Board {
         // because the size information is erased only from the
         // top-level array type.
         debug_assert!(tpa_piece_t < 6);
-        let table_by_tpa_pt = unsafe {
-            self.followup_history
-                .get_unchecked_mut(tpa_piece_t)
-        };
-        table_by_tpa_pt[tpa_to as usize][piece_t][to as usize] += score;
+        self.followup_history
+            .add(tpa_piece_t, tpa_to, piece_t, to, score);
     }
 
     /// Get the follow-up history score for a move.
@@ -154,11 +145,8 @@ impl Board {
         // because the size information is erased only from the
         // top-level array type.
         debug_assert!(tpa_piece_t < 6);
-        let table_by_tpa_pt = unsafe {
-            self.followup_history
-                .get_unchecked(tpa_piece_t)
-        };
-        table_by_tpa_pt[tpa_to as usize][piece_t][to as usize]
+        self.followup_history
+            .get(tpa_piece_t, tpa_to, piece_t, to)
     }
 
     /// Add a killer move.

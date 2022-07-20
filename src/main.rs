@@ -23,6 +23,7 @@ mod texel;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod historytable;
 
 pub const NAME: &str = "Viridithas 2.2.0dev";
 
