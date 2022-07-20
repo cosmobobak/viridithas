@@ -304,7 +304,6 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config,
         "FUTILITY_GRADIENT" => config.futility_gradient = opt_value.parse()?,
         "FUTILITY_INTERCEPT" => config.futility_intercept = opt_value.parse()?,
         "NULL_MOVE_REDUCTION" => config.null_move_reduction = opt_value.parse()?,
-        "HISTORY_MODE" => config.history_mode = opt_value.parse()?,
         _ => eprintln!("ignoring option {}", opt_name),
     }
     Ok(config)
@@ -346,12 +345,12 @@ pub fn format_score(score: i32, turn: u8) -> String {
         let plies_to_mate = MATE_SCORE - score.abs();
         let moves_to_mate = (plies_to_mate + 1) / 2;
         if score > 0 {
-            format!("mate {}", moves_to_mate)
+            format!("mate {moves_to_mate}")
         } else {
-            format!("mate -{}", moves_to_mate)
+            format!("mate -{moves_to_mate}")
         }
     } else {
-        format!("cp {}", score)
+        format!("cp {score}")
     }
 }
 
@@ -412,7 +411,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
         };
 
         if let Err(e) = res {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
 
         if info.quit {

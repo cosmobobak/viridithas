@@ -10,7 +10,6 @@
     "parameter_ranges": {
         "LMRBASE": "Real(0.0, 3.0)",
         "LMRDIVISION": "Real(0.0, 6.0)",
-        "HISTORY_MODE": "Integer(0, 2)",
         "FUTILITY_GRADIENT": "Integer(0, 60)",
         "FUTILITY_INTERCEPT": "Integer(0, 150)"
     },

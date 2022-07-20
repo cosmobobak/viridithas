@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     board::movegen::MoveList,
     board::{
@@ -166,11 +164,8 @@ impl Board {
     let mut move_list = MoveList::new();
     pos.generate_moves(&mut move_list);
 
-    let history_score = match pos.search_params.history_mode {
-        HistoryMode::Constant => 1,
-        HistoryMode::Linear => depth.round(),
-        HistoryMode::Quadratic => depth.round() * depth.round()
-    };
+    let history_score = depth.round() * depth.round();
+
     let original_alpha = alpha;
     let mut moves_made = 0;
     let mut best_move = Move::NULL;
@@ -331,34 +326,12 @@ static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
 ];
 
 #[derive(Debug)]
-pub enum HistoryMode {
-    Constant = 0,
-    Linear = 1,
-    Quadratic = 2,
-}
-
-impl FromStr for HistoryMode {
-    type Err = <u8 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let i = u8::from_str(s)?;
-        match i {
-            0 => Ok(Self::Constant),
-            1 => Ok(Self::Linear),
-            2 => Ok(Self::Quadratic),
-            _ => Err(u8::from_str("257").unwrap_err()),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Config {
     pub null_move_reduction: Depth,
     pub futility_gradient: i32,
     pub futility_intercept: i32,
     pub lmr_base: f64,
     pub lmr_division: f64,
-    pub history_mode: HistoryMode,
 }
 
 impl Default for Config {
@@ -369,7 +342,6 @@ impl Default for Config {
             futility_intercept: 51,
             lmr_base: 0.75,
             lmr_division: 2.25,
-            history_mode: HistoryMode::Quadratic,
         }
     }
 }
