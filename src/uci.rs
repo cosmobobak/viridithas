@@ -137,93 +137,15 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
 
     while let Some(part) = parts.next() {
         match part {
-            "depth" => {
-                depth = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"depth\"".into()))?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!("value for depth is not a number: {e}"))
-                        })?,
-                );
-            }
-            "movestogo" => {
-                moves_to_go = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| {
-                            UciError::InvalidFormat("nothing after \"movestogo\"".into())
-                        })?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!(
-                                "value for movestogo is not a number: {e}"
-                            ))
-                        })?,
-                );
-            }
-            "movetime" => {
-                movetime = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| {
-                            UciError::InvalidFormat("nothing after \"movetime\"".into())
-                        })?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!(
-                                "value for movetime is not a number: {e}"
-                            ))
-                        })?,
-                );
-            }
-            "wtime" if pos.turn() == WHITE => {
-                time = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"wtime\"".into()))?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!("value for wtime is not a number: {e}"))
-                        })?,
-                );
-            }
-            "btime" if pos.turn() == BLACK => {
-                time = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"btime\"".into()))?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!("value for btime is not a number: {e}"))
-                        })?,
-                );
-            }
-            "winc" if pos.turn() == WHITE => {
-                inc = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"winc\"".into()))?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!("value for winc is not a number: {e}"))
-                        })?,
-                );
-            }
-            "binc" if pos.turn() == BLACK => {
-                inc = Some(
-                    parts
-                        .next()
-                        .ok_or_else(|| UciError::InvalidFormat("nothing after \"binc\"".into()))?
-                        .parse()
-                        .map_err(|e| {
-                            UciError::InvalidFormat(format!("value for binc is not a number: {e}"))
-                        })?,
-                );
-            }
+            "depth" => part_parse("depth", &mut depth, &mut parts)?,
+            "movestogo" => part_parse("movestogo", &mut moves_to_go, &mut parts)?,
+            "movetime" => part_parse("movetime", &mut movetime, &mut parts)?,
+            "wtime" if pos.turn() == WHITE => part_parse("wtime", &mut time, &mut parts)?,
+            "btime" if pos.turn() == BLACK => part_parse("btime", &mut time, &mut parts)?,
+            "winc" if pos.turn() == WHITE => part_parse("winc", &mut inc, &mut parts)?,
+            "binc" if pos.turn() == BLACK => part_parse("binc", &mut inc, &mut parts)?,
             "infinite" => info.infinite = true,
-            _ => ()//eprintln!("ignoring term in parse_go: {}", part),
+            _ => (), //eprintln!("ignoring term in parse_go: {}", part),
         }
     }
 
@@ -271,6 +193,27 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     //     info.time_set
     // );
 
+    Ok(())
+}
+
+fn part_parse<T>(
+    target: &str,
+    write_target: &mut Option<T>,
+    parts: &mut std::str::SplitAsciiWhitespace,
+) -> Result<(), UciError>
+where
+    T: std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    *write_target = Some(
+        parts
+            .next()
+            .ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?
+            .parse()
+            .map_err(|e| {
+                UciError::InvalidFormat(format!("value for {target} is not a number: {e}"))
+            })?,
+    );
     Ok(())
 }
 
@@ -360,6 +303,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
     println!("uciok");
 
     let mut pos = Board::new();
+    pos.reset_tables();
     let mut info = SearchInfo::default();
 
     pos.set_eval_params(evaluation_parameters);
