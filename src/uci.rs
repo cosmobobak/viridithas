@@ -350,7 +350,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
         };
 
         if let Err(e) = res {
-            println!("Error: {e}");
+            eprintln!("Error: {e}");
         }
 
         if info.quit {
