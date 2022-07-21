@@ -63,7 +63,7 @@ pub const QUEEN_OPEN_FILE_BONUS: S = S(-1, 0);
 /// The bonus for having a queen on a semi-open file.
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(7, 0);
 
-// Stockfish nonlinear mobility eval tables.
+// nonlinear mobility eval tables.
 #[rustfmt::skip]
 const KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-103, -120), S(-37, -26), S(3, -24), S(13, 24), S(1, 48), S(-8, 54), S(9, 57), S(25, 62), S(38, 65)];
 #[rustfmt::skip]
@@ -465,12 +465,14 @@ mod tests {
     #[test]
     fn startpos_mobility_equality() {
         use crate::board::evaluation::S;
+        crate::magic::initialise();
         let mut board = super::Board::default();
         assert_eq!(board.mobility(), S(0, 0));
     }
 
     #[test]
     fn startpos_eval_equality() {
+        crate::magic::initialise();
         let mut board = super::Board::default();
         assert_eq!(board.evaluate(), 0);
     }
@@ -503,6 +505,7 @@ mod tests {
     #[test]
     fn startpos_pawn_structure_equality() {
         use crate::board::evaluation::S;
+        crate::magic::initialise();
         let board = super::Board::default();
         assert_eq!(board.pawn_structure_term(), S(0, 0));
     }
@@ -510,6 +513,7 @@ mod tests {
     #[test]
     fn startpos_open_file_equality() {
         use crate::board::evaluation::S;
+        crate::magic::initialise();
         let board = super::Board::default();
         let rook_points = board.rook_open_file_term();
         let queen_points = board.queen_open_file_term();
