@@ -45,7 +45,7 @@ use crate::{
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::HistoryTable,
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::{DoubleHistoryTable, HistoryTable},
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -72,10 +72,10 @@ pub struct Board {
 
     principal_variation: Vec<Move>,
 
-    history_table: [[i32; BOARD_N_SQUARES]; 13],
-    killer_move_table: [[Move; 2]; MAX_DEPTH.n_ply()],
-    countermove_history: HistoryTable,
-    followup_history: HistoryTable,
+    history_table: HistoryTable,
+    killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
+    countermove_history: DoubleHistoryTable,
+    followup_history: DoubleHistoryTable,
     tt: DefaultTT,
 
     pst_vals: S,
@@ -145,10 +145,10 @@ impl Board {
             repetition_cache: HashSet::new(),
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::new(),
-            history_table: [[0; BOARD_N_SQUARES]; 13],
-            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.n_ply()],
-            countermove_history: HistoryTable::new(),
-            followup_history: HistoryTable::new(),
+            history_table: HistoryTable::new(),
+            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
+            countermove_history: DoubleHistoryTable::new(),
+            followup_history: DoubleHistoryTable::new(),
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
             eval_params: evaluation::parameters::Parameters::default(),
@@ -891,8 +891,8 @@ impl Board {
         hash_piece(&mut self.key, piece_moved, to);
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
-        self.pst_vals -= pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
         *self.piece_at_mut(to) = piece_moved;
+        self.pst_vals -= pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
         self.pst_vals += pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
 
         for sq in self.piece_lists[piece_moved as usize].iter_mut() {
@@ -1244,7 +1244,7 @@ impl Board {
     }
 
     pub fn reset_tables(&mut self) {
-        self.history_table.iter_mut().for_each(|h| h.fill(0));
+        self.history_table.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.countermove_history.clear();
         self.followup_history.clear();
@@ -1315,7 +1315,7 @@ impl Board {
                     score_string,
                     boundstr,
                     i_depth,
-                    info.seldepth.n_ply(),
+                    info.seldepth.ply_to_horizon(),
                     info.nodes,
                     info.start_time.elapsed().as_millis()
                 );
@@ -1350,7 +1350,7 @@ impl Board {
                 "info score {} depth {} seldepth {} nodes {} time {} pv ",
                 score_string,
                 i_depth,
-                info.seldepth.n_ply(),
+                info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
@@ -1361,7 +1361,7 @@ impl Board {
             "info score {} depth {} seldepth {} nodes {} time {} pv ",
             score_string,
             best_depth,
-            info.seldepth.n_ply(),
+            info.seldepth.ply_to_horizon(),
             info.nodes,
             info.start_time.elapsed().as_millis()
         );

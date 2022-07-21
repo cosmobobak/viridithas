@@ -117,7 +117,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH.n_ply()).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         let mut score = score;
         if score > IS_MATE_SCORE {
@@ -157,7 +157,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         debug_assert!(alpha < beta);
         debug_assert!(alpha >= -INFINITY);
         debug_assert!(beta >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH.n_ply()).contains(&ply));
+        debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         let slot = &self.table[index];
         let e1 = &slot.depth_preferred;

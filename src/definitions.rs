@@ -28,7 +28,7 @@ impl Depth {
         Self(raw)
     }
 
-    pub const fn n_ply(self) -> usize {
+    pub const fn ply_to_horizon(self) -> usize {
         #![allow(clippy::cast_sign_loss)]
         if self.0 <= 0 {
             0
@@ -216,18 +216,6 @@ pub const fn type_of(piece: u8) -> u8 {
         WQ | BQ => QUEEN,
         WK | BK => KING,
         _ => PIECE_EMPTY,
-    }
-}
-
-pub fn piece_index(piece: u8) -> u8 {
-    match piece {
-        WP | BP => 0,
-        WN | BN => 1,
-        WB | BB => 2,
-        WR | BR => 3,
-        WQ | BQ => 4,
-        WK | BK => 5,
-        p => panic!("Invalid piece: {p}"),
     }
 }
 

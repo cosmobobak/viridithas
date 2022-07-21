@@ -33,7 +33,7 @@ pub const MATE_SCORE: i32 = 3_000_000;
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation)]
-pub const IS_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.n_ply() as i32;
+pub const IS_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
 
 /// The value of a draw.
 pub const DRAW_SCORE: i32 = 0;

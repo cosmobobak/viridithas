@@ -122,7 +122,7 @@ impl Board {
         }
 
         // are we too deep?
-        if pos.height() >= MAX_DEPTH.n_ply() - 1 {
+        if pos.height() >= MAX_DEPTH.ply_to_horizon() - 1 {
             return static_eval;
         }
 
@@ -304,14 +304,13 @@ impl Board {
         a: i32,
         b: i32,
     ) -> bool {
-        if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
+        if depth > 4.into() || interesting || moves_made == 1 {
             return false;
         }
         if is_mate_score(a) || is_mate_score(b) {
             return false;
         }
-        #[allow(clippy::cast_sign_loss)]
-        let threshold = FUTILITY_PRUNING_MARGINS[depth.n_ply()];
+        let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
         static_eval + threshold < a
     }
 }
@@ -367,7 +366,7 @@ impl LMRTable {
     }
 
     pub fn get(&self, depth: Depth, moves_made: usize) -> i32 {
-        let depth = depth.n_ply().min(63);
+        let depth = depth.ply_to_horizon().min(63);
         let played = moves_made.min(63);
         self.table[depth][played]
     }
