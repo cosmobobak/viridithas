@@ -182,7 +182,7 @@ impl Board {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
-        } else if self.is_third_order_killer(m) {
+        } else if self.is_third_order_killer(m) { // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {
             let history = self.history_score(m);

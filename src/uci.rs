@@ -298,7 +298,9 @@ pub fn main_loop(evaluation_parameters: Parameters) {
     println!("uciok");
 
     let mut pos = Board::new();
+
     pos.reset_tables();
+
     let mut info = SearchInfo::default();
 
     pos.set_eval_params(evaluation_parameters);
