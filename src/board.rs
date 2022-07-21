@@ -174,6 +174,8 @@ impl Board {
         self.tt.probe(self.key, self.height, alpha, beta, depth)
     }
 
+    /// Nuke the transposition table.
+    /// This wipes all entries in the table, don't call it during a search.
     pub fn clear_tt(&mut self) {
         self.tt.clear();
     }

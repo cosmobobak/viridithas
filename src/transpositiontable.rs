@@ -96,6 +96,14 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         }
     }
 
+    pub fn clear_for_search(&mut self) {
+        if self.table.is_empty() {
+            self.table.resize(SIZE, Bucket::NULL);
+        } else {
+            // do nothing.
+        }
+    }
+
     pub fn store(
         &mut self,
         key: u64,
@@ -193,9 +201,5 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         }
 
         ProbeResult::Nothing
-    }
-
-    pub fn clear_for_search(&mut self) {
-        let _ = self;
     }
 }
