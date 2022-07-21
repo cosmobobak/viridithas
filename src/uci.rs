@@ -134,16 +134,16 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     if command != "go" {
         return Err(UciError::InvalidFormat("Expected \"go\"".into()));
     }
-
+    
     while let Some(part) = parts.next() {
         match part {
-            "depth" => part_parse("depth", &mut depth, &mut parts)?,
-            "movestogo" => part_parse("movestogo", &mut moves_to_go, &mut parts)?,
-            "movetime" => part_parse("movetime", &mut movetime, &mut parts)?,
-            "wtime" if pos.turn() == WHITE => part_parse("wtime", &mut time, &mut parts)?,
-            "btime" if pos.turn() == BLACK => part_parse("btime", &mut time, &mut parts)?,
-            "winc" if pos.turn() == WHITE => part_parse("winc", &mut inc, &mut parts)?,
-            "binc" if pos.turn() == BLACK => part_parse("binc", &mut inc, &mut parts)?,
+            "depth" => depth = Some(part_parse("depth", parts.next())?),
+            "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
+            "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
+            "wtime" if pos.turn() == WHITE => time = Some(part_parse("wtime", parts.next())?),
+            "btime" if pos.turn() == BLACK => time = Some(part_parse("btime", parts.next())?),
+            "winc" if pos.turn() == WHITE => inc = Some(part_parse("winc", parts.next())?),
+            "binc" if pos.turn() == BLACK => inc = Some(part_parse("binc", parts.next())?),
             "infinite" => info.infinite = true,
             _ => (), //eprintln!("ignoring term in parse_go: {}", part),
         }
@@ -198,23 +198,18 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
 
 fn part_parse<T>(
     target: &str,
-    write_target: &mut Option<T>,
-    parts: &mut std::str::SplitAsciiWhitespace,
-) -> Result<(), UciError>
+    next_part: Option<&str>,
+) -> Result<T, UciError>
 where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
-    *write_target = Some(
-        parts
-            .next()
-            .ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?
-            .parse()
-            .map_err(|e| {
-                UciError::InvalidFormat(format!("value for {target} is not a number: {e}"))
-            })?,
-    );
-    Ok(())
+    next_part
+        .ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?
+        .parse()
+        .map_err(|e| {
+            UciError::InvalidFormat(format!("value for {target} is not a number: {e}"))
+        })
 }
 
 fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config, UciError> {
