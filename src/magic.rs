@@ -2,8 +2,6 @@ use std::sync::atomic::AtomicBool;
 
 use crate::{macros, rng::XorShiftState};
 
-pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
-
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
         {
@@ -347,24 +345,19 @@ pub fn init_magics() {
     println!("Done!");
 }
 
-fn init_sliders_attacks<const IS_BISHOP: bool>() {
-    // SAFETY: this is the only place that these arrays get mutated,
-    // and while we could technically cause UB by calling this from a bunch of threads,
-    // we don't care about that, since this is only called once at startup.
-    // sue me.
+unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
+    // CONTRACT: take a lock before calling this function.
     for square in 0..64 {
         // init masks
-        unsafe {
-            BISHOP_MASKS[square] = mask_bishop_attacks(square.try_into().unwrap());
-            ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
-        }
+        BISHOP_MASKS[square] = mask_bishop_attacks(square.try_into().unwrap());
+        ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
 
         // init the current mask
-        let mask = unsafe { if IS_BISHOP {
+        let mask = if IS_BISHOP {
             BISHOP_MASKS[square]
         } else {
             ROOK_MASKS[square]
-        }};
+        };
 
         // count attack mask bits
         let bit_count = mask.count_ones();
@@ -379,22 +372,29 @@ fn init_sliders_attacks<const IS_BISHOP: bool>() {
 
             if IS_BISHOP {
                 let magic_index: usize = ((occupancy.wrapping_mul(BISHOP_MAGICS[square])) >> (64 - BISHOP_REL_BITS[square])).try_into().unwrap();
-                unsafe { 
-                    BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
-                }
+                BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
             } else {
                 let magic_index: usize = ((occupancy.wrapping_mul(ROOK_MAGICS[square])) >> (64 - ROOK_REL_BITS[square])).try_into().unwrap();
-                unsafe { 
-                    ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
-                }
+                ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
             }
         });
     }
 }
 
+// this function is super-duper thread safe.
+pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
 pub fn initialise() {
-    init_sliders_attacks::<true>();
-    init_sliders_attacks::<false>();
+    // static INIT_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    // let _guard = INIT_MUTEX.lock();
+    if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    unsafe { init_sliders_attacks::<true>(); }
+    unsafe { init_sliders_attacks::<false>(); }
     MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
