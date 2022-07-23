@@ -545,7 +545,7 @@ pub fn get_bishop_attacks(sq: u8, blockers: u64) -> u64 {
     if sq >= 64 {
         unsafe {
             // assert to the compiler that it's chill not to bounds-check
-            macros::impossible!();
+            macros::inconceivable!();
         }
     }
     let relevant_blockers = blockers & unsafe { BISHOP_MASKS[sq] };
@@ -554,7 +554,7 @@ pub fn get_bishop_attacks(sq: u8, blockers: u64) -> u64 {
     unsafe {
         if idx >= BISHOP_ATTACKS[sq].len() {
             // assert to the compiler that it's chill not to bounds-check
-            macros::impossible!();
+            macros::inconceivable!();
         }
         BISHOP_ATTACKS[sq][idx]
     }
@@ -566,7 +566,7 @@ pub fn get_rook_attacks(sq: u8, blockers: u64) -> u64 {
     if sq >= 64 {
         unsafe {
             // assert to the compiler that it's chill not to bounds-check
-            macros::impossible!();
+            macros::inconceivable!();
         }
     }
     let relevant_blockers = blockers & unsafe { ROOK_MASKS[sq] };
@@ -575,7 +575,7 @@ pub fn get_rook_attacks(sq: u8, blockers: u64) -> u64 {
     unsafe {
         if idx >= ROOK_ATTACKS[sq].len() {
             // assert to the compiler that it's chill not to bounds-check
-            macros::impossible!();
+            macros::inconceivable!();
         }
         ROOK_ATTACKS[sq][idx]
     }

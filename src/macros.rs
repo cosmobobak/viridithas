@@ -1,10 +1,10 @@
 #![allow(clippy::redundant_pub_crate)]
 
-macro_rules! impossible {
+macro_rules! inconceivable {
     () => {{
         #[cfg(debug_assertions)]
         {
-            panic!("entered an impossible branch!");
+            panic!("That word you use - I do not think it means what you think it means.");
         }
         #[allow(unreachable_code)]
         {
@@ -13,4 +13,4 @@ macro_rules! impossible {
     }};
 }
 
-pub(crate) use impossible;
+pub(crate) use inconceivable;

@@ -189,7 +189,7 @@ impl Board {
         let sq = match side {
             WHITE => *self.piece_lists[WK as usize].first().unwrap(),
             BLACK => *self.piece_lists[BK as usize].first().unwrap(),
-            _ => unsafe { macros::impossible!() },
+            _ => unsafe { macros::inconceivable!() },
         };
         debug_assert!(sq < 64);
         debug_assert_eq!(colour_of(self.piece_at(sq)), side);

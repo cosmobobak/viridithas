@@ -385,7 +385,7 @@ impl Board {
 
         if SIDE != WHITE && SIDE != BLACK {
             unsafe {
-                macros::impossible!();
+                macros::inconceivable!();
             }
         }
 
@@ -519,7 +519,7 @@ impl Board {
 
         if SIDE != WHITE && SIDE != BLACK {
             unsafe {
-                macros::impossible!();
+                macros::inconceivable!();
             }
         }
 

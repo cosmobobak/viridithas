@@ -181,7 +181,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 
                 debug_assert!(score >= -INFINITY);
                 match entry.flag {
-                    HFlag::None => unsafe { macros::impossible!() },
+                    HFlag::None => unsafe { macros::inconceivable!() },
                     HFlag::Alpha => {
                         if score <= alpha {
                             return ProbeResult::Cutoff(alpha);
