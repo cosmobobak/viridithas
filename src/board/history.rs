@@ -18,7 +18,7 @@ impl Board {
     }
 
     /// Add a move to the countermove history table.
-    pub fn add_counter_move(&mut self, m: Move) {
+    pub fn insert_countermove(&mut self, m: Move) {
         debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
         let prev_move = if let Some(undo) = self.history.last() {
             undo.m

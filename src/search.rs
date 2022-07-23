@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE},
+        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
         movegen::TT_MOVE_SCORE,
         Board,
     },
@@ -134,6 +134,8 @@ impl Board {
         if r_alpha >= r_beta { return r_alpha; }
     }
 
+    debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
+
     let tt_move = match self.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
             return s;
@@ -151,8 +153,7 @@ impl Board {
     // TEST: pv nullmove pruning
     if !PV && !in_check && !root_node && depth >= 3.into() && self.zugzwang_unlikely() {
         self.make_nullmove();
-        let nmr = self.search_params.null_move_reduction;
-        let score = -self.alpha_beta::<false>(info, depth - nmr, -beta, -alpha);
+        let score = -self.alpha_beta::<PV>(info, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
         if info.stopped {
             return 0;
@@ -192,17 +193,10 @@ impl Board {
 
         // futility pruning (worth 32 +/- 44 elo)
         // if the static eval is too low, we might just skip the move.
-        // if !PV && Self::is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
-        //     pos.unmake_move();
-        //     continue;
-        // }
-
-        // reverse futility pruning
-        // if the static eval is too high, we might just skip the move.
-        // if Self::is_move_reverse_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
-        //     pos.unmake_move();
-        //     continue;
-        // }
+        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
+            self.unmake_move();
+            continue;
+        }
 
         let extension: Depth = if gives_check {
             0.8.into()
@@ -213,7 +207,7 @@ impl Board {
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
-            score = -self.alpha_beta::<true>(info, depth + extension - 1, -beta, -alpha);
+            score = -self.alpha_beta::<PV>(info, depth + extension - 1, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -241,7 +235,7 @@ impl Board {
             // if we failed, then full window search
             if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
-                score = -self.alpha_beta::<true>(info, depth + extension - 1, -beta, -alpha);
+                score = -self.alpha_beta::<PV>(info, depth + extension - 1, -beta, -alpha);
             }
         }
         self.unmake_move();
@@ -267,7 +261,7 @@ impl Board {
                         // moves_made != 1, then we should decrease the history
                         // scores of the moves that we've already searched.
                         self.insert_killer(best_move);
-                        self.add_counter_move(best_move);
+                        self.insert_countermove(best_move);
                         self.update_history_metrics(best_move, history_score);
                     }
 
@@ -275,13 +269,14 @@ impl Board {
 
                     return beta;
                 }
+                assert_eq!(alpha, score);
+                assert_eq!(best_move, m);
             }
         }
     }
 
     if moves_made == 0 {
         if in_check {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             return -MATE_SCORE + height;
         }
         return DRAW_SCORE;
@@ -295,7 +290,7 @@ impl Board {
         // as if we had, we would have returned early, 
         // so this is a PV-node
         self.insert_killer(best_move);
-        self.add_counter_move(best_move);
+        self.insert_countermove(best_move);
         self.update_history_metrics(best_move, history_score);
         self.tt_store(best_move, best_score, HFlag::Exact, depth);
     }
@@ -308,6 +303,32 @@ impl Board {
         self.add_followup_history(best_move, history_score);
     }
 }
+
+fn is_move_futile(
+    depth: Depth,
+    moves_made: usize,
+    interesting: bool,
+    static_eval: i32,
+    a: i32,
+    b: i32,
+) -> bool {
+    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
+        return false;
+    }
+    if is_mate_score(a) || is_mate_score(b) {
+        return false;
+    }
+    let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
+    static_eval + threshold < a
+}
+
+static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
+    100, // 0 moves to the horizon
+    150, // 1 move to the horizon
+    250, // 2 moves to the horizon
+    400, // 3 moves to the horizon
+    600, // 4 moves to the horizon
+];
 
 #[derive(Debug)]
 pub struct Config {
