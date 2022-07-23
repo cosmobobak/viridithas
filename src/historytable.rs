@@ -1,4 +1,4 @@
-use crate::{definitions::BOARD_N_SQUARES, validate::piece_valid};
+use crate::{definitions::BOARD_N_SQUARES, validate::piece_valid, chessmove::Move};
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
 
@@ -59,7 +59,9 @@ impl HistoryTable {
         self.table[pt as usize][sq as usize]
     }
 
+    #[allow(dead_code)]
     pub fn print_stats(&self) {
+        #![allow(clippy::cast_precision_loss)]
         let sum = self.table
             .iter()
             .flatten()
@@ -141,7 +143,9 @@ impl DoubleHistoryTable {
         self.table[idx]
     }
 
+    #[allow(dead_code)]
     pub fn print_stats(&self) {
+        #![allow(clippy::cast_precision_loss)]
         let sum = self.table
             .iter()
             .map(|x| i64::from(*x))
@@ -177,5 +181,37 @@ impl DoubleHistoryTable {
             / (nonzero.len() as f64);
         println!("nz mean: {}", nz_mean);
         println!("nz stdev: {}", nz_stdev);
+    }
+}
+
+pub struct MoveTable {
+    table: Vec<Move>
+}
+
+impl MoveTable {
+    pub const fn new() -> Self {
+        Self {
+            table: Vec::new()
+        }
+    }
+
+    pub fn clear(&mut self) {
+        if self.table.is_empty() {
+            self.table.resize(BOARD_N_SQUARES * pslots(), Move::NULL);
+        } else {
+            self.table.fill(Move::NULL);
+        }
+    }
+
+    pub fn add(&mut self, piece: u8, sq: u8, move_: Move) {
+        let pt = piece_index(piece) as usize;
+        let sq = sq as usize;
+        self.table[pt * BOARD_N_SQUARES + sq] = move_;
+    }
+
+    pub fn get(&self, piece: u8, sq: u8) -> Move {
+        let pt = piece_index(piece) as usize;
+        let sq = sq as usize;
+        self.table[pt * BOARD_N_SQUARES + sq]
     }
 }

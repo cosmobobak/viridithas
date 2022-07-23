@@ -45,7 +45,7 @@ use crate::{
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::{DoubleHistoryTable, HistoryTable},
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -74,7 +74,7 @@ pub struct Board {
 
     history_table: HistoryTable,
     killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
-    countermove_history: DoubleHistoryTable,
+    counter_move_table: MoveTable,
     followup_history: DoubleHistoryTable,
     tt: DefaultTT,
 
@@ -147,7 +147,7 @@ impl Board {
             principal_variation: Vec::new(),
             history_table: HistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
-            countermove_history: DoubleHistoryTable::new(),
+            counter_move_table: MoveTable::new(),
             followup_history: DoubleHistoryTable::new(),
             pst_vals: S(0, 0),
             tt: DefaultTT::new(),
@@ -1246,7 +1246,7 @@ impl Board {
     pub fn reset_tables(&mut self) {
         self.history_table.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.countermove_history.clear();
+        self.counter_move_table.clear();
         self.followup_history.clear();
         self.height = 0;
         self.tt.clear_for_search();

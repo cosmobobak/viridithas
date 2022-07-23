@@ -24,10 +24,11 @@ use crate::{
     validate::{piece_valid, square_on_board}, magic::MAGICS_READY,
 };
 
+pub const TT_MOVE_SCORE: i32 = 20_000_000;
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
+const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
-pub const TT_MOVE_SCORE: i32 = 20_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -182,13 +183,14 @@ impl Board {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
+        } else if self.is_countermove(m) { // move that refuted the previous move
+            COUNTER_MOVE_SCORE
         } else if self.is_third_order_killer(m) { // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {
             let history = self.history_score(m);
-            let countermove_history = self.countermove_history_score(m);
             let followup_history = self.followup_history_score(m);
-            history + countermove_history + followup_history
+            history + 2 * followup_history
         };
 
         move_list.push(m, score);

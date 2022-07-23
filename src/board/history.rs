@@ -18,7 +18,7 @@ impl Board {
     }
 
     /// Add a move to the countermove history table.
-    pub fn add_countermove_history(&mut self, m: Move, score: i32) {
+    pub fn add_counter_move(&mut self, m: Move) {
         debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
         let prev_move = if let Some(undo) = self.history.last() {
             undo.m
@@ -30,30 +30,24 @@ impl Board {
         }
         let prev_to = prev_move.to();
         let prev_piece = self.piece_at(prev_to);
-        let to = m.to();
-        let piece = self.moved_piece(m);
         
-        self.countermove_history
-            .add(prev_piece, prev_to, piece, to, score);
+        self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
     /// Get the countermove history score for a move.
-    pub(super) fn countermove_history_score(&self, m: Move) -> i32 {
+    pub(super) fn is_countermove(&self, m: Move) -> bool {
         let prev_move = if let Some(undo) = self.history.last() {
             undo.m
         } else {
-            return 0;
+            return false;
         };
         if prev_move == Move::NULL {
-            return 0;
+            return false;
         }
         let prev_to = prev_move.to();
         let prev_piece = self.piece_at(prev_to);
-        let to = m.to();
-        let piece = self.moved_piece(m);
-
-        self.countermove_history
-            .get(prev_piece, prev_to, piece, to)
+        
+        self.counter_move_table.get(prev_piece, prev_to) == m
     }
 
     /// Add a move to the follow-up history table.
