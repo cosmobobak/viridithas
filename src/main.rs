@@ -25,7 +25,7 @@ mod uci;
 mod validate;
 mod historytable;
 
-pub const NAME: &str = "Viridithas 2.2.1";
+pub const NAME: &str = "Viridithas 2.2.0";
 
 fn main() {
     #[cfg(debug_assertions)]
