@@ -18,10 +18,11 @@ pub const INFINITY: i32 = MATE_SCORE * 2;
 pub struct Depth(i32);
 
 impl Depth {
-    pub const ONE_PLY: i32 = 100;
+    const INNER_INCR_BY_PLY: i32 = 100;
+    pub const ONE_PLY: Self = Self::new(1);
 
     pub const fn new(depth: i32) -> Self {
-        Self(depth * Self::ONE_PLY)
+        Self(depth * Self::INNER_INCR_BY_PLY)
     }
 
     pub const fn from_raw(raw: i32) -> Self {
@@ -33,22 +34,22 @@ impl Depth {
         if self.0 <= 0 {
             0
         } else {
-            (self.0 / Self::ONE_PLY) as usize
+            (self.0 / Self::INNER_INCR_BY_PLY) as usize
         }
     }
 
     pub const fn round(self) -> i32 {
-        self.0 / Self::ONE_PLY
+        self.0 / Self::INNER_INCR_BY_PLY
     }
 
     pub const fn nearest_full_ply(self) -> Self {
         let x = self.0;
-        let x = x + Self::ONE_PLY / 2;
-        Self(x - x % Self::ONE_PLY)
+        let x = x + Self::INNER_INCR_BY_PLY / 2;
+        Self(x - x % Self::INNER_INCR_BY_PLY)
     }
 
     pub const fn is_exact_ply(self) -> bool {
-        self.0 % Self::ONE_PLY == 0
+        self.0 % Self::INNER_INCR_BY_PLY == 0
     }
 
     pub const fn raw_inner(self) -> i32 {
@@ -70,7 +71,7 @@ impl AddAssign<Self> for Depth {
 impl Add<i32> for Depth {
     type Output = Self;
     fn add(self, other: i32) -> Self::Output {
-        Self(self.0 + other * Self::ONE_PLY)
+        Self(self.0 + other * Self::INNER_INCR_BY_PLY)
     }
 }
 impl AddAssign<i32> for Depth {
@@ -92,7 +93,7 @@ impl SubAssign<Self> for Depth {
 impl Sub<i32> for Depth {
     type Output = Self;
     fn sub(self, other: i32) -> Self::Output {
-        Self(self.0 - other * Self::ONE_PLY)
+        Self(self.0 - other * Self::INNER_INCR_BY_PLY)
     }
 }
 impl SubAssign<i32> for Depth {
@@ -108,14 +109,14 @@ impl From<i32> for Depth {
 impl From<f32> for Depth {
     fn from(depth: f32) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        let inner_depth = depth * Self::ONE_PLY as f32;
+        let inner_depth = depth * Self::INNER_INCR_BY_PLY as f32;
         Self::from_raw(inner_depth as i32)
     }
 }
 impl From<Depth> for f32 {
     fn from(depth: Depth) -> Self {
         #![allow(clippy::cast_precision_loss)]
-        depth.0 as Self / Depth::ONE_PLY as Self
+        depth.0 as Self / Depth::INNER_INCR_BY_PLY as Self
     }
 }
 impl TryFrom<Depth> for i16 {
@@ -140,8 +141,8 @@ impl Display for Depth {
             f,
             "{}{}.{}",
             sign,
-            self.0.abs() / Self::ONE_PLY,
-            self.0.abs() % Self::ONE_PLY
+            self.0.abs() / Self::INNER_INCR_BY_PLY,
+            self.0.abs() % Self::INNER_INCR_BY_PLY
         )
     }
 }

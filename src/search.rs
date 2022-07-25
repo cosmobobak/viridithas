@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
+        evaluation::{DRAW_SCORE, MATE_SCORE},
         movegen::TT_MOVE_SCORE,
         Board,
     },
@@ -150,8 +150,7 @@ impl Board {
 
     let in_check = self.in_check::<{ Self::US }>();
 
-    // TEST: pv nullmove pruning
-    if !PV && !in_check && !root_node && depth >= 3.into() && self.zugzwang_unlikely() {
+    if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() {
         self.make_nullmove();
         let score = -self.alpha_beta::<PV>(info, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
@@ -191,13 +190,6 @@ impl Board {
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
-        // futility pruning (worth 32 +/- 44 elo)
-        // if the static eval is too low, we might just skip the move.
-        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
-            self.unmake_move();
-            continue;
-        }
-
         let extension: Depth = if gives_check {
             0.8.into()
         } else {
@@ -226,9 +218,9 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
-                Depth::new(r).clamp(1.into(), depth - 1)
+                Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
             } else {
-                1.into()
+                Depth::ONE_PLY
             };
             // perform a zero-window search
             score = -self.alpha_beta::<false>(info, depth + extension - r, -alpha - 1, -alpha);
@@ -269,8 +261,6 @@ impl Board {
 
                     return beta;
                 }
-                assert_eq!(alpha, score);
-                assert_eq!(best_move, m);
             }
         }
     }
@@ -303,32 +293,6 @@ impl Board {
         self.add_followup_history(best_move, history_score);
     }
 }
-
-fn is_move_futile(
-    depth: Depth,
-    moves_made: usize,
-    interesting: bool,
-    static_eval: i32,
-    a: i32,
-    b: i32,
-) -> bool {
-    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
-        return false;
-    }
-    if is_mate_score(a) || is_mate_score(b) {
-        return false;
-    }
-    let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
-    static_eval + threshold < a
-}
-
-static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
-    100, // 0 moves to the horizon
-    150, // 1 move to the horizon
-    250, // 2 moves to the horizon
-    400, // 3 moves to the horizon
-    600, // 4 moves to the horizon
-];
 
 #[derive(Debug)]
 pub struct Config {

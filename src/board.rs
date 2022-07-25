@@ -1297,7 +1297,7 @@ impl Board {
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         for i_depth in 0..=max_depth {
-            let depth = Depth::from(i_depth);
+            let depth = Depth::new(i_depth);
             // main search
             assert!(self.height == 0, "height != 0 before aspiration search");
             let mut score = Self::alpha_beta::<true>(self, info, depth, alpha, beta);
@@ -1311,10 +1311,7 @@ impl Board {
                 let score_string = format_score(score, self.turn());
                 let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
                 print!(
-                    "info score {} {} depth {} seldepth {} nodes {} time {} pv ",
-                    score_string,
-                    boundstr,
-                    i_depth,
+                    "info score {score_string} {boundstr} depth {i_depth} seldepth {} nodes {} time {} pv ",
                     info.seldepth.ply_to_horizon(),
                     info.nodes,
                     info.start_time.elapsed().as_millis()
@@ -1347,9 +1344,7 @@ impl Board {
 
             let score_string = format_score(most_recent_score, self.turn());
             print!(
-                "info score {} depth {} seldepth {} nodes {} time {} pv ",
-                score_string,
-                i_depth,
+                "info score {score_string} depth {i_depth} seldepth {} nodes {} time {} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
@@ -1358,16 +1353,14 @@ impl Board {
         }
         let score_string = format_score(most_recent_score, self.turn());
         print!(
-            "info score {} depth {} seldepth {} nodes {} time {} pv ",
-            score_string,
-            best_depth,
+            "info score {score_string} depth {best_depth} seldepth {} nodes {} time {} pv ",
             info.seldepth.ply_to_horizon(),
             info.nodes,
             info.start_time.elapsed().as_millis()
         );
         self.regenerate_pv_line(best_depth);
         self.print_pv();
-        println!("bestmove {}", most_recent_move);
+        println!("bestmove {most_recent_move}");
         if self.side == WHITE {
             most_recent_score
         } else {

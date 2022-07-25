@@ -1,5 +1,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::if_not_else)]
+#![deny(missing_docs)]
+
+//! Viridithas II, a UCI chess engine written in Rust.
 
 use board::evaluation::parameters::Parameters;
 
@@ -25,6 +28,7 @@ mod uci;
 mod validate;
 mod historytable;
 
+/// The name of the engine.
 pub const NAME: &str = "Viridithas 2.2.0";
 
 fn main() {

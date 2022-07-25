@@ -51,7 +51,8 @@ impl HistoryTable {
     #[allow(clippy::only_used_in_recursion)] // wtf??
     pub fn add(&mut self, piece: u8, sq: u8, score: i32) {
         let pt = piece_index(piece);
-        self.table[pt as usize][sq as usize] += score;
+        let slot = &mut self.table[pt as usize][sq as usize];
+        *slot = slot.saturating_add(score);
     }
 
     pub const fn get(&self, piece: u8, sq: u8) -> i32 {
@@ -131,7 +132,7 @@ impl DoubleHistoryTable {
         let sq1 = sq1 as usize;
         let sq2 = sq2 as usize;
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
-        self.table[idx] += score;
+        self.table[idx] = self.table[idx].saturating_add(score);
     }
 
     pub fn get(&self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> i32 {

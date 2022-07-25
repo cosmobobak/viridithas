@@ -303,9 +303,9 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         improved = false;
 
         for param_idx in 0..n_params {
-            if starting_point[param_idx] == 0 {
-                continue;
-            }
+            // if starting_point[param_idx] == 0 {
+            //     continue;
+            // }
             println!("Optimising param {param_idx}");
             let mut new_params = best_params.clone();
             new_params[param_idx] += step_size; // try adding step_size to the param
