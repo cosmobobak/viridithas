@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Sub, SubAssign, Mul},
     str::FromStr,
 };
 
@@ -99,6 +99,12 @@ impl Sub<i32> for Depth {
 impl SubAssign<i32> for Depth {
     fn sub_assign(&mut self, other: i32) {
         *self = *self - other;
+    }
+}
+impl Mul<i32> for Depth {
+    type Output = Self;
+    fn mul(self, other: i32) -> Self::Output {
+        Self(self.0 * other)
     }
 }
 impl From<i32> for Depth {

@@ -13,11 +13,24 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HFlag {
-    None,
-    Alpha,
-    Beta,
-    Exact,
+    None = 0,
+    Alpha = 1,
+    Beta = 2,
+    Exact = 3,
 }
+
+macro_rules! from_hflag {
+    ($t:ty) => {
+        impl From<HFlag> for $t {
+            fn from(hflag: HFlag) -> Self {
+                hflag as Self
+            }
+        }
+    };
+}
+
+from_hflag!(u8);
+from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TTEntry {
@@ -38,23 +51,10 @@ impl TTEntry {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Bucket {
-    pub depth_preferred: TTEntry,
-    pub always_replace: TTEntry,
-}
-
-impl Bucket {
-    pub const NULL: Self = Self {
-        depth_preferred: TTEntry::NULL,
-        always_replace: TTEntry::NULL,
-    };
-}
-
 const TASTY_PRIME_NUMBER: usize = 12_582_917;
 
 const MEGABYTE: usize = 1024 * 1024;
-const TT_ENTRY_SIZE: usize = std::mem::size_of::<Bucket>();
+const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 /// One option is to use 4MB of memory for the hashtable,
 /// as my i5 has 6mb of L3 cache, so this endeavours to keep the
@@ -68,11 +68,11 @@ pub const MEDIUM_TABLE_SIZE: usize = MEGABYTE * 512 / TT_ENTRY_SIZE;
 /// Prime sized table that's around 256-512 megabytes.
 pub const PRIME_TABLE_SIZE: usize = TASTY_PRIME_NUMBER;
 
-pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE;
+pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE * 2;
 
 #[derive(Debug)]
 pub struct TranspositionTable<const SIZE: usize> {
-    table: Vec<Bucket>,
+    table: Vec<TTEntry>,
 }
 
 pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE>;
@@ -90,15 +90,15 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 
     pub fn clear(&mut self) {
         if self.table.is_empty() {
-            self.table.resize(SIZE, Bucket::NULL);
+            self.table.resize(SIZE, TTEntry::NULL);
         } else {
-            self.table.fill(Bucket::NULL);
+            self.table.fill(TTEntry::NULL);
         }
     }
 
     pub fn clear_for_search(&mut self) {
         if self.table.is_empty() {
-            self.table.resize(SIZE, Bucket::NULL);
+            self.table.resize(SIZE, TTEntry::NULL);
         } else {
             // do nothing.
         }
@@ -113,20 +113,16 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         flag: HFlag,
         depth: Depth,
     ) {
-        let index = (key % SIZE as u64) as usize;
+        use HFlag::Exact;
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let mut score = score;
-        if score > IS_MATE_SCORE {
-            score += ply as i32;
-        } else if score < -IS_MATE_SCORE {
-            score -= ply as i32;
-        }
-
+        let index = (key % SIZE as u64) as usize;
         let slot = &mut self.table[index];
+
+        let score = normalise_mate_score(score, ply);
 
         let entry = TTEntry {
             key,
@@ -136,10 +132,16 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
             flag,
         };
 
-        if depth >= slot.depth_preferred.depth.into() {
-            slot.depth_preferred = entry;
-        } else {
-            slot.always_replace = entry;
+        let record_depth: Depth = slot.depth.into();
+
+        let insert_flag_bonus = i32::from(flag);
+        let record_flag_bonus = i32::from(slot.flag);
+
+        let insert_depth = depth + insert_flag_bonus;
+        let record_depth = record_depth + record_flag_bonus;
+
+        if flag == Exact && slot.flag != Exact || insert_depth * 3 >= record_depth * 2 {
+            *slot = entry;
         }
     }
 
@@ -159,47 +161,63 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         debug_assert!(beta >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let slot = &self.table[index];
-        let e1 = &slot.depth_preferred;
-        let e2 = &slot.always_replace;
+        let entry = &self.table[index];
 
-        if e1.key == key || e2.key == key {
-            let entry = if e1.key == key { e1 } else { e2 };
-            let m = entry.m;
-            let e_depth = entry.depth.into();
-            if e_depth >= depth {
-                debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {}", e_depth);
+        if entry.key != key { 
+            return ProbeResult::Nothing;
+        }
 
-                // we can't store the score in a tagged union,
-                // because we need to do mate score preprocessing.
-                let mut score = entry.score;
-                if score > IS_MATE_SCORE {
-                    score -= ply as i32;
-                } else if score < -IS_MATE_SCORE {
-                    score += ply as i32;
-                }
+        let m = entry.m;
+        let e_depth = entry.depth.into();
 
-                debug_assert!(score >= -INFINITY);
-                match entry.flag {
-                    HFlag::None => unsafe { macros::inconceivable!() },
-                    HFlag::Alpha => {
-                        if score <= alpha {
-                            return ProbeResult::Cutoff(alpha);
-                        }
-                    }
-                    HFlag::Beta => {
-                        if score >= beta {
-                            return ProbeResult::Cutoff(beta);
-                        }
-                    }
-                    HFlag::Exact => {
-                        return ProbeResult::Cutoff(score);
-                    }
-                }
-            }
+        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
+
+        if e_depth < depth {
             return ProbeResult::BestMove(m);
         }
 
-        ProbeResult::Nothing
+        // we can't store the score in a tagged union,
+        // because we need to do mate score preprocessing.
+        let score = reconstruct_mate_score(entry.score, ply);
+
+        debug_assert!(score >= -INFINITY);
+        match entry.flag {
+            HFlag::None => unsafe { macros::inconceivable!() },
+            HFlag::Alpha => {
+                if score <= alpha {
+                    ProbeResult::Cutoff(alpha)
+                } else {
+                    ProbeResult::BestMove(m)
+                }
+            }
+            HFlag::Beta => {
+                if score >= beta {
+                    ProbeResult::Cutoff(beta)
+                } else {
+                    ProbeResult::BestMove(m)
+                }
+            }
+            HFlag::Exact => {
+                ProbeResult::Cutoff(score)
+            }
+        }
     }
+}
+
+const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
+    if score > IS_MATE_SCORE {
+        score += ply as i32;
+    } else if score < -IS_MATE_SCORE {
+        score -= ply as i32;
+    }
+    score
+}
+
+const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
+    if score > IS_MATE_SCORE {
+        score -= ply as i32;
+    } else if score < -IS_MATE_SCORE {
+        score += ply as i32;
+    }
+    score
 }

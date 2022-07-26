@@ -1,5 +1,4 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(clippy::if_not_else)]
 #![deny(missing_docs)]
 
 //! Viridithas II, a UCI chess engine written in Rust.
@@ -58,7 +57,7 @@ fn main() {
             println!("TT buckets: {}", transpositiontable::DEFAULT_TABLE_SIZE);
             println!(
                 "TT size (kb): {}",
-                std::mem::size_of::<transpositiontable::Bucket>()
+                std::mem::size_of::<transpositiontable::TTEntry>()
                     * transpositiontable::DEFAULT_TABLE_SIZE
                     / 1024
             );

@@ -7,7 +7,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH},
+    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -226,6 +226,7 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
+                r -= i32::from(m.promotion() == QUEEN);
                 Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
             } else {
                 Depth::ONE_PLY
