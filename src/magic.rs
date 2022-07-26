@@ -58,10 +58,10 @@ pub fn print_bitboard_maksim(bb: u64) {
             if file == 0 {
                 print!("  {} ", 8 - rank);
             }
-            if (bb & (1 << square)) != 0 {
-                print!(" X");
-            } else {
+            if (bb & (1 << square)) == 0 {
                 print!(" .");
+            } else {
+                print!(" X");
             }
         }
         println!();

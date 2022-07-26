@@ -384,14 +384,14 @@ impl Board {
             for file in 0..8 {
                 let sq = rank * 8 + file;
                 let piece = self.piece_at(sq);
-                if piece != PIECE_EMPTY {
+                if piece == PIECE_EMPTY {
+                    counter += 1;
+                } else {
                     if counter != 0 {
                         write!(fen, "{counter}").unwrap();
                     }
                     counter = 0;
                     fen.push(piece_char(piece).unwrap() as char);
-                } else {
-                    counter += 1;
                 }
             }
             if counter != 0 {
@@ -406,24 +406,24 @@ impl Board {
         fen.push(' ');
         fen.push(if self.side == WHITE { 'w' } else { 'b' });
         fen.push(' ');
-        if self.castle_perm != 0 {
+        if self.castle_perm == 0 {
+            fen.push('-');
+        } else {
             #[rustfmt::skip]
             write!(
                 fen,
                 "{}{}{}{}",
-                if self.castle_perm & WKCA != 0 { "K" } else { "" },
-                if self.castle_perm & WQCA != 0 { "Q" } else { "" },
-                if self.castle_perm & BKCA != 0 { "k" } else { "" },
-                if self.castle_perm & BQCA != 0 { "q" } else { "" },
+                if self.castle_perm & WKCA == 0 { "" } else { "K" },
+                if self.castle_perm & WQCA == 0 { "" } else { "Q" },
+                if self.castle_perm & BKCA == 0 { "" } else { "k" },
+                if self.castle_perm & BQCA == 0 { "" } else { "q" },
             ).unwrap();
-        } else {
-            fen.push('-');
         }
         fen.push(' ');
-        if self.ep_sq != NO_SQUARE {
-            fen.push_str(SQUARE_NAMES[self.ep_sq as usize]);
-        } else {
+        if self.ep_sq == NO_SQUARE {
             fen.push('-');
+        } else {
+            fen.push_str(SQUARE_NAMES[self.ep_sq as usize]);
         }
         write!(fen, " {}", self.fifty_move_counter).unwrap();
         write!(fen, " {}", self.ply / 2 + 1).unwrap();

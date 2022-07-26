@@ -335,10 +335,10 @@ pub fn print_bb(bb: u64) {
                 file,
                 rank
             );
-            if bb & (1 << sq) != 0 {
-                print!(" X");
-            } else {
+            if bb & (1 << sq) == 0 {
                 print!(" .");
+            } else {
+                print!(" X");
             }
         }
         println!();
