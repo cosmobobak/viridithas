@@ -1,6 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
+        self,
         evaluation::{DRAW_SCORE, MATE_SCORE},
         movegen::TT_MOVE_SCORE,
         Board,
@@ -190,6 +191,13 @@ impl Board {
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
+        // futility pruning (worth 32 +/- 44 elo)
+        // if the static eval is too low, we might just skip the move.
+        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
+            self.unmake_move();
+            continue;
+        }
+
         let extension: Depth = if gives_check {
             0.8.into()
         } else {
@@ -293,6 +301,32 @@ impl Board {
         self.add_followup_history(best_move, history_score);
     }
 }
+
+fn is_move_futile(
+    depth: Depth,
+    moves_made: usize,
+    interesting: bool,
+    static_eval: i32,
+    a: i32,
+    b: i32,
+) -> bool {
+    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
+        return false;
+    }
+    if board::evaluation::is_mate_score(a) || board::evaluation::is_mate_score(b) {
+        return false;
+    }
+    let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
+    static_eval + threshold < a
+}
+
+static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
+    100, // 0 moves to the horizon
+    150, // 1 move to the horizon
+    250, // 2 moves to the horizon
+    400, // 3 moves to the horizon
+    600, // 4 moves to the horizon
+];
 
 #[derive(Debug)]
 pub struct Config {
