@@ -23,6 +23,8 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
+pub const ASPIRATION_WINDOW: i32 = 25;
+
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
         #[cfg(debug_assertions)]
@@ -179,7 +181,8 @@ impl Board {
         }
     }
 
-    for m in move_list {
+    let mut move_list_iterator = move_list.into_iter();
+    while let Some(m) = move_list_iterator.next() {
         if !self.make_move(m) {
             continue;
         }
@@ -227,6 +230,8 @@ impl Board {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
                 r -= i32::from(m.promotion() == QUEEN);
+                // IDEA: reduce killers and countermoves less.
+                // r -= i32::from(m.is_killer());
                 Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
             } else {
                 Depth::ONE_PLY
@@ -258,12 +263,15 @@ impl Board {
                     info.failhigh += 1.0;
 
                     if !is_capture {
-                        // IDEA (todo): if the cutoff move wasn't the first, i.e.
-                        // moves_made != 1, then we should decrease the history
-                        // scores of the moves that we've already searched.
                         self.insert_killer(best_move);
                         self.insert_countermove(best_move);
                         self.update_history_metrics(best_move, history_score);
+                    }
+
+                    // decrease the history of the non-capture moves that came before the cutoff move.
+                    let ms = move_list_iterator.moves_made();
+                    for m in ms.iter().filter(|e| !e.entry.is_capture()) {
+                        self.update_history_metrics(m.entry, -history_score);
                     }
 
                     self.tt_store(best_move, beta, HFlag::Beta, depth);
@@ -288,9 +296,18 @@ impl Board {
         // we raised alpha, and didn't raise beta
         // as if we had, we would have returned early, 
         // so this is a PV-node
-        self.insert_killer(best_move);
-        self.insert_countermove(best_move);
-        self.update_history_metrics(best_move, history_score);
+        if !best_move.is_capture() {
+            self.insert_killer(best_move);
+            self.insert_countermove(best_move);
+            self.update_history_metrics(best_move, history_score);
+        }
+
+        // decrease the history of the non-capture moves that came before the cutoff move.
+        let ms = move_list_iterator.moves_made();
+        for m in ms.iter().take_while(|m| m.entry != best_move).filter(|e| !e.entry.is_capture()) {
+            self.update_history_metrics(m.entry, -history_score);
+        }
+
         self.tt_store(best_move, best_score, HFlag::Exact, depth);
     }
 
