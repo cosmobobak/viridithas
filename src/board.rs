@@ -14,16 +14,13 @@ use std::{
 };
 
 use crate::{
-    board::{
-        evaluation::ONE_PAWN,
-        movegen::{
+    board::movegen::{
             bitboards::{
                 self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop,
                 BB_NONE,
             },
             MoveList,
         },
-    },
     chessmove::Move,
     definitions::{
         colour_of, square_name, type_of, Colour, Depth, File,
@@ -41,7 +38,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search,
+    search::{self, ASPIRATION_WINDOW},
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
@@ -1330,8 +1327,8 @@ impl Board {
             most_recent_score = score;
             best_depth = i_depth;
             if !evaluation::is_mate_score(score) && i_depth > 4 {
-                alpha = score - ONE_PAWN / 4;
-                beta = score + ONE_PAWN / 4;
+                alpha = score - ASPIRATION_WINDOW;
+                beta = score + ASPIRATION_WINDOW;
             } else {
                 alpha = -INFINITY;
                 beta = INFINITY;
