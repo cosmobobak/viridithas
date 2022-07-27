@@ -19,7 +19,7 @@ pub enum HFlag {
     Exact = 3,
 }
 
-macro_rules! from_hflag {
+macro_rules! impl_from_hflag {
     ($t:ty) => {
         impl From<HFlag> for $t {
             fn from(hflag: HFlag) -> Self {
@@ -29,8 +29,8 @@ macro_rules! from_hflag {
     };
 }
 
-from_hflag!(u8);
-from_hflag!(i32);
+impl_from_hflag!(u8);
+impl_from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TTEntry {
