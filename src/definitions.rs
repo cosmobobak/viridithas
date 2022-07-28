@@ -107,6 +107,12 @@ impl Mul<i32> for Depth {
         Self(self.0 * other)
     }
 }
+impl Mul<Depth> for i32 {
+    type Output = Self;
+    fn mul(self, other: Depth) -> Self::Output {
+        self * other.0 / Depth::INNER_INCR_BY_PLY
+    }
+}
 impl From<i32> for Depth {
     fn from(depth: i32) -> Self {
         Self::new(depth)

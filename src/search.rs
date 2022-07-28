@@ -24,6 +24,8 @@ use crate::{
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 25;
+pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
+pub const BETA_PRUNING_MARGIN: i32 = 125;
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -152,6 +154,11 @@ impl Board {
     };
 
     let in_check = self.in_check::<{ Self::US }>();
+
+    // beta-pruning. (reverse futility pruning)
+    if !PV && !in_check && depth <= BETA_PRUNING_DEPTH && static_eval - BETA_PRUNING_MARGIN * depth > beta {
+        return static_eval;
+    }
 
     if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() {
         self.make_nullmove();
