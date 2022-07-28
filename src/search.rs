@@ -270,8 +270,8 @@ impl Board {
 
                     // decrease the history of the non-capture moves that came before the cutoff move.
                     let ms = move_list_iterator.moves_made();
-                    for m in ms.iter().filter(|e| !e.entry.is_capture()) {
-                        self.update_history_metrics(m.entry, -history_score);
+                    for e in ms.iter().filter(|e| !e.entry.is_capture()) {
+                        self.update_history_metrics(e.entry, -history_score);
                     }
 
                     self.tt_store(best_move, beta, HFlag::Beta, depth);
@@ -302,10 +302,10 @@ impl Board {
             self.update_history_metrics(best_move, history_score);
         }
 
-        // decrease the history of the non-capture moves that came before the cutoff move.
+        // decrease the history of the non-capture moves that came before the best move.
         let ms = move_list_iterator.moves_made();
-        for m in ms.iter().take_while(|m| m.entry != best_move).filter(|e| !e.entry.is_capture()) {
-            self.update_history_metrics(m.entry, -history_score);
+        for e in ms.iter().take_while(|m| m.entry != best_move).filter(|e| !e.entry.is_capture()) {
+            self.update_history_metrics(e.entry, -history_score);
         }
 
         self.tt_store(best_move, best_score, HFlag::Exact, depth);
@@ -314,9 +314,9 @@ impl Board {
     alpha
 }
 
-    fn update_history_metrics(&mut self, best_move: Move, history_score: i32) {
-        self.add_history(best_move, history_score);
-        self.add_followup_history(best_move, history_score);
+    fn update_history_metrics(&mut self, m: Move, history_score: i32) {
+        self.add_history(m, history_score);
+        self.add_followup_history(m, history_score);
     }
 }
 

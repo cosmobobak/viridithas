@@ -96,6 +96,12 @@ impl IntoIterator for MoveList {
     }
 }
 
+impl MoveListIter {
+    pub fn moves_made(&self) -> &[MoveListEntry] {
+        &self.moves[..self.index]
+    }
+}
+
 impl Iterator for MoveListIter {
     type Item = Move;
 
