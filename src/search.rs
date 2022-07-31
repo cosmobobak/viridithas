@@ -7,7 +7,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN},
+    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN, MAX_PLY},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -26,6 +26,7 @@ use crate::{
 pub const ASPIRATION_WINDOW: i32 = 25;
 pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
 pub const BETA_PRUNING_MARGIN: i32 = 125;
+pub const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
 pub const LMP_DEPTH: Depth = Depth::new(3);
 pub const LMP_BASE_MOVES: i32 = 3;
 
@@ -97,7 +98,7 @@ impl Board {
 
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
+    pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     self.check_validity().unwrap();
 
@@ -119,8 +120,6 @@ impl Board {
     info.nodes += 1;
     info.seldepth = if root_node { 0.into() } else { info.seldepth.max(height.into()) };
 
-    let static_eval = self.evaluate();
-
     if !root_node {
         // check draw
         if self.is_draw() {
@@ -130,7 +129,7 @@ impl Board {
 
         // are we too deep?
         if height > MAX_DEPTH.round() - 1 {
-            return static_eval;
+            return self.evaluate();
         }
 
         // mate-distance pruning.
@@ -155,16 +154,22 @@ impl Board {
         }
     };
 
+    let static_eval = self.evaluate();
+
+    ss.evals[self.height()] = static_eval;
+
+    let improving = self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
+
     let in_check = self.in_check::<{ Self::US }>();
 
     // beta-pruning. (reverse futility pruning)
-    if !PV && !in_check && depth <= BETA_PRUNING_DEPTH && static_eval - BETA_PRUNING_MARGIN * depth > beta {
+    if !PV && !in_check && depth <= BETA_PRUNING_DEPTH && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
         return static_eval;
     }
 
     if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() {
         self.make_nullmove();
-        let score = -self.alpha_beta::<PV>(info, depth - 3, -beta, -alpha);
+        let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
         if info.stopped {
             return 0;
@@ -229,7 +234,7 @@ impl Board {
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
-            score = -self.alpha_beta::<PV>(info, depth + extension - 1, -beta, -alpha);
+            score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
         } else {
             // nullwindow searches to prove PV.
             // we only do late move reductions when a set of conditions are true:
@@ -256,11 +261,11 @@ impl Board {
                 Depth::ONE_PLY
             };
             // perform a zero-window search
-            score = -self.alpha_beta::<false>(info, depth + extension - r, -alpha - 1, -alpha);
+            score = -self.alpha_beta::<false>(info, ss, depth + extension - r, -alpha - 1, -alpha);
             // if we failed, then full window search
             if score > alpha && score < beta {
                 // this is a new best move, so it *is* PV.
-                score = -self.alpha_beta::<PV>(info, depth + extension - 1, -beta, -alpha);
+                score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
             }
         }
         self.unmake_move();
@@ -410,5 +415,17 @@ impl LMRTable {
         let depth = depth.ply_to_horizon().min(63);
         let played = moves_made.min(63);
         self.table[depth][played]
+    }
+}
+
+pub struct Stack {
+    evals: [i32; MAX_PLY],
+}
+
+impl Stack {
+    pub const fn new() -> Self {
+        Self {
+            evals: [0; MAX_PLY],
+        }
     }
 }

@@ -38,7 +38,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, ASPIRATION_WINDOW},
+    search::{self, ASPIRATION_WINDOW, Stack},
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult},
     uci::format_score,
@@ -1297,7 +1297,7 @@ impl Board {
             let depth = Depth::new(i_depth);
             // main search
             assert!(self.height == 0, "height != 0 before aspiration search");
-            let mut score = Self::alpha_beta::<true>(self, info, depth, alpha, beta);
+            let mut score = Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, alpha, beta);
 
             info.check_up();
             if info.stopped {
@@ -1317,7 +1317,7 @@ impl Board {
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
                 assert!(self.height == 0, "height != 0 before fullwindow search");
-                score = Self::alpha_beta::<true>(self, info, depth, -INFINITY, INFINITY);
+                score = Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, -INFINITY, INFINITY);
                 info.check_up();
                 if info.stopped {
                     break;
