@@ -152,6 +152,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         alpha: i32,
         beta: i32,
         depth: Depth,
+        tt_eval: &mut i32,
     ) -> ProbeResult {
         let index = (key % (SIZE as u64)) as usize;
 
@@ -166,6 +167,8 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         if entry.key != key { 
             return ProbeResult::Nothing;
         }
+
+        *tt_eval = entry.score;
 
         let m = entry.m;
         let e_depth = entry.depth.into();

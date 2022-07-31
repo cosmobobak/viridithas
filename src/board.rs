@@ -167,8 +167,8 @@ impl Board {
             .store(self.key, self.height, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        self.tt.probe(self.key, self.height, alpha, beta, depth)
+    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth, tt_eval: &mut i32) -> ProbeResult {
+        self.tt.probe(self.key, self.height, alpha, beta, depth, tt_eval)
     }
 
     /// Nuke the transposition table.
@@ -1261,7 +1261,7 @@ impl Board {
     fn regenerate_pv_line(&mut self, depth: i32) {
         self.principal_variation.clear();
 
-        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
+        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH, &mut 0) {
             if self.principal_variation.len() < depth as usize
                 && self.is_legal(pv_move)
                 && !self.is_draw()

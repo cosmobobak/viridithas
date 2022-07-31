@@ -143,7 +143,8 @@ impl Board {
 
     debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
 
-    let tt_move = match self.tt_probe(alpha, beta, depth) {
+    let mut tt_eval = INFINITY;
+    let tt_move = match self.tt_probe(alpha, beta, depth, &mut tt_eval) {
         ProbeResult::Cutoff(s) => {
             return s;
         }
@@ -156,13 +157,20 @@ impl Board {
         }
     };
 
-    let static_eval = self.evaluate();
+    let in_check = self.in_check::<{ Self::US }>();
+
+    let static_eval = if in_check { 
+        INFINITY 
+    } else { 
+        match tt_eval {
+            INFINITY => self.evaluate(),
+            _ => tt_eval,
+        }
+    };
 
     ss.evals[self.height()] = static_eval;
 
-    let improving = self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
-
-    let in_check = self.in_check::<{ Self::US }>();
+    let improving = !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
     // beta-pruning. (reverse futility pruning)
     if !PV && !in_check && depth <= BETA_PRUNING_DEPTH && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
@@ -255,7 +263,7 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
-                r += i32::from(!improving);
+                // r += i32::from(!improving);
                 r -= i32::from(m.promotion() == QUEEN);
                 
                 Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
