@@ -143,8 +143,8 @@ impl Board {
 
     debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
 
-    let mut tt_eval = INFINITY;
-    let tt_move = match self.tt_probe(alpha, beta, depth, &mut tt_eval) {
+    let mut tt_value = INFINITY;
+    let tt_move = match self.tt_probe(alpha, beta, depth, &mut tt_value) {
         ProbeResult::Cutoff(s) => {
             return s;
         }
@@ -174,7 +174,14 @@ impl Board {
         return static_eval;
     }
 
-    if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() && !self.last_move_was_nullmove() {
+    if !PV 
+    && !in_check 
+    && !root_node 
+    && static_eval >= beta 
+    && depth >= 3.into() 
+    && self.zugzwang_unlikely() 
+    && !self.last_move_was_nullmove() 
+    && tt_value >= beta {
         self.make_nullmove();
         let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
