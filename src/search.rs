@@ -23,11 +23,11 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-pub const ASPIRATION_WINDOW: i32 = 12;
+pub const ASPIRATION_WINDOW: i32 = 25;
 pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
 pub const BETA_PRUNING_MARGIN: i32 = 125;
 pub const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
-pub const LMP_DEPTH: Depth = Depth::new(3);
+pub const LMP_MAX_DEPTH: Depth = Depth::new(3);
 pub const LMP_BASE_MOVES: i32 = 3;
 pub const TT_FAIL_REDUCTION_MINDEPTH: Depth = Depth::new(5);
 
@@ -193,7 +193,7 @@ impl Board {
     let mut best_score = -INFINITY;
 
     let lmp_threshold = LMP_BASE_MOVES + depth.squared();
-    let do_lmp = !PV && !root_node && depth <= LMP_DEPTH && !in_check;
+    let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
 
     if let Some(tt_move) = tt_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
