@@ -23,7 +23,7 @@ use crate::{
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-pub const ASPIRATION_WINDOW: i32 = 25;
+pub const ASPIRATION_WINDOW: i32 = 12;
 pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
 pub const BETA_PRUNING_MARGIN: i32 = 125;
 pub const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
