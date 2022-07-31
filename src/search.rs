@@ -162,10 +162,7 @@ impl Board {
     let static_eval = if in_check { 
         INFINITY 
     } else { 
-        match tt_eval {
-            INFINITY => self.evaluate(),
-            _ => tt_eval,
-        }
+        self.evaluate()
     };
 
     ss.evals[self.height()] = static_eval;
