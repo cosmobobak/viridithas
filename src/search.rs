@@ -29,6 +29,7 @@ pub const BETA_PRUNING_MARGIN: i32 = 125;
 pub const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
 pub const LMP_DEPTH: Depth = Depth::new(3);
 pub const LMP_BASE_MOVES: i32 = 3;
+pub const TT_FAIL_REDUCTION_MINDEPTH: Depth = Depth::new(5);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -98,7 +99,7 @@ impl Board {
 
 #[rustfmt::skip]
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, depth: Depth, mut alpha: i32, beta: i32) -> i32 {
+    pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, mut depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     self.check_validity().unwrap();
 
@@ -150,6 +151,7 @@ impl Board {
             Some(tt_move)
         }
         ProbeResult::Nothing => {
+            if PV && depth >= TT_FAIL_REDUCTION_MINDEPTH { depth -= 1; }
             None
         }
     };
