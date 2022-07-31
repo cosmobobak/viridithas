@@ -1063,6 +1063,14 @@ impl Board {
         self.check_validity().unwrap();
     }
 
+    pub fn last_move_was_nullmove(&self) -> bool {
+        if let Some(Undo { m, .. }) = self.history.last() {
+            *m == Move::NULL
+        } else {
+            false
+        }
+    }
+
     pub fn unmake_move(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();

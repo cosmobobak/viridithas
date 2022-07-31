@@ -169,7 +169,7 @@ impl Board {
         return static_eval;
     }
 
-    if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() {
+    if !PV && !in_check && !root_node && static_eval >= beta && depth >= 3.into() && self.zugzwang_unlikely() && !self.last_move_was_nullmove() {
         self.make_nullmove();
         let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
