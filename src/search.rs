@@ -257,8 +257,7 @@ impl Board {
                 r += i32::from(!PV);
                 r += i32::from(!improving);
                 r -= i32::from(m.promotion() == QUEEN);
-                // IDEA: reduce killers and countermoves less.
-                // r -= i32::from(m.is_killer());
+                
                 Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
             } else {
                 Depth::ONE_PLY

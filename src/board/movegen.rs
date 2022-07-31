@@ -44,7 +44,7 @@ pub struct MoveList {
     count: usize,
 }
 
-pub struct MoveListIter {
+pub struct MovePicker {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
     index: usize,
@@ -85,10 +85,10 @@ impl MoveList {
 
 impl IntoIterator for MoveList {
     type Item = Move;
-    type IntoIter = MoveListIter;
+    type IntoIter = MovePicker;
 
     fn into_iter(self) -> Self::IntoIter {
-        MoveListIter {
+        MovePicker {
             moves: self.moves,
             count: self.count,
             index: 0,
@@ -96,13 +96,13 @@ impl IntoIterator for MoveList {
     }
 }
 
-impl MoveListIter {
+impl MovePicker {
     pub fn moves_made(&self) -> &[MoveListEntry] {
         &self.moves[..self.index]
     }
 }
 
-impl Iterator for MoveListIter {
+impl Iterator for MovePicker {
     type Item = Move;
 
     fn next(&mut self) -> Option<Move> {
