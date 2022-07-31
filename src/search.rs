@@ -2,7 +2,7 @@ use crate::{
     board::movegen::MoveList,
     board::{
         self,
-        evaluation::{DRAW_SCORE, MATE_SCORE},
+        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
         movegen::TT_MOVE_SCORE,
         Board,
     },
@@ -170,7 +170,11 @@ impl Board {
     let improving = !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
     // beta-pruning. (reverse futility pruning)
-    if !PV && !in_check && depth <= BETA_PRUNING_DEPTH && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
+    if !PV 
+    && !in_check 
+    && !is_mate_score(beta) 
+    && depth <= BETA_PRUNING_DEPTH 
+    && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
         return static_eval;
     }
 
