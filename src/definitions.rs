@@ -55,6 +55,10 @@ impl Depth {
     pub const fn raw_inner(self) -> i32 {
         self.0
     }
+
+    pub const fn squared(self) -> i32 {
+        self.0 * self.0 / Self::INNER_INCR_BY_PLY / Self::INNER_INCR_BY_PLY
+    }
 }
 
 impl Add<Self> for Depth {

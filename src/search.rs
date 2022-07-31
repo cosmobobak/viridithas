@@ -26,6 +26,8 @@ use crate::{
 pub const ASPIRATION_WINDOW: i32 = 25;
 pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
 pub const BETA_PRUNING_MARGIN: i32 = 125;
+pub const LMP_DEPTH: Depth = Depth::new(3);
+pub const LMP_BASE_MOVES: i32 = 3;
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -175,12 +177,16 @@ impl Board {
     let mut move_list = MoveList::new();
     self.generate_moves(&mut move_list);
 
-    let history_score = depth.round() * depth.round();
+    let history_score = depth.squared();
 
     let original_alpha = alpha;
     let mut moves_made = 0;
+    let mut quiet_moves_made = 0;
     let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
+
+    let lmp_threshold = LMP_BASE_MOVES + depth.squared();
+    let do_lmp = !PV && !root_node && depth <= LMP_DEPTH && !in_check;
 
     if let Some(tt_move) = tt_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
@@ -200,6 +206,12 @@ impl Board {
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
+        quiet_moves_made += i32::from(!is_interesting);
+
+        if do_lmp && quiet_moves_made >= lmp_threshold {
+            self.unmake_move();
+            break; // okay to break because captures are ordered first.
+        }
 
         // futility pruning (worth 32 +/- 44 elo)
         // if the static eval is too low, we might just skip the move.
