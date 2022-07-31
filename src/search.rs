@@ -255,6 +255,7 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
+                r += i32::from(!improving);
                 r -= i32::from(m.promotion() == QUEEN);
                 // IDEA: reduce killers and countermoves less.
                 // r -= i32::from(m.is_killer());
