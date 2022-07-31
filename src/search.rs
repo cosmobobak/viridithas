@@ -182,7 +182,7 @@ impl Board {
     && self.zugzwang_unlikely() 
     && !self.last_move_was_nullmove() {
         self.make_nullmove();
-        let score = -self.alpha_beta::<false>(info, ss, depth - 3, -beta, -beta + 1);
+        let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
         self.unmake_nullmove();
         if info.stopped {
             return 0;
