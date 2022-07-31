@@ -6,6 +6,7 @@ impl Board {
     /// Add a move to the history table.
     pub fn add_history(&mut self, m: Move, score: i32) {
         let piece_moved = self.moved_piece(m);
+        debug_assert!(crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY, "Invalid piece moved by move {m} in position \n{self}");
         let to = m.to();
         self.history_table.add(piece_moved, to, score);
     }

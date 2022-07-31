@@ -1,4 +1,4 @@
-use crate::{definitions::BOARD_N_SQUARES, validate::piece_valid, chessmove::Move};
+use crate::{definitions::{BOARD_N_SQUARES, PIECE_EMPTY}, validate::piece_valid, chessmove::Move};
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
 
@@ -19,7 +19,7 @@ const fn coloured_piece_index(piece: u8) -> u8 {
 }
 
 const fn piece_index(piece: u8) -> u8 {
-    debug_assert!(piece_valid(piece));
+    debug_assert!(piece_valid(piece) && piece != PIECE_EMPTY);
     if DO_COLOUR_DIFFERENTIATION {
         coloured_piece_index(piece)
     } else {
