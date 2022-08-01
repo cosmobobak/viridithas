@@ -153,6 +153,7 @@ impl Board {
             Some(tt_move)
         }
         ProbeResult::Nothing => {
+            // TT-reduction.
             if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 1; }
             None
         }
