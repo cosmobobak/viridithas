@@ -1,7 +1,6 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        self,
         evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
         movegen::TT_MOVE_SCORE,
         Board,
@@ -160,13 +159,15 @@ impl Board {
     let in_check = self.in_check::<{ Self::US }>();
 
     let static_eval = if in_check { 
-        INFINITY 
+        INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
     } else { 
         self.evaluate()
     };
 
     ss.evals[self.height()] = static_eval;
 
+    // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
+    // it is used to make beta-pruning more aggressive when the position is getting better.
     let improving = !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
     // beta-pruning. (reverse futility pruning)
@@ -178,6 +179,7 @@ impl Board {
         return static_eval;
     }
 
+    // null-move pruning.
     if !PV 
     && !in_check 
     && !root_node 
@@ -199,6 +201,7 @@ impl Board {
     let mut move_list = MoveList::new();
     self.generate_moves(&mut move_list);
 
+    // moves closer to the root (higher depth) should affect the history counters more.
     let history_score = depth.squared();
 
     let original_alpha = alpha;
@@ -207,11 +210,14 @@ impl Board {
     let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
 
+    // number of quiet moves to try before we start pruning
     let lmp_threshold = LMP_BASE_MOVES + depth.squared();
+    // whether late move pruning is sound in this position.
     let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
 
     if let Some(tt_move) = tt_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
+            // set the move-ordering score of the TT-move to a very high value.
             movelist_entry.score = TT_MOVE_SCORE;
         }
     }
@@ -270,9 +276,7 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
-                // r += i32::from(!improving);
                 r -= i32::from(m.promotion() == QUEEN);
-                
                 Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
             } else {
                 Depth::ONE_PLY
@@ -372,7 +376,7 @@ fn is_move_futile(
     if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
         return false;
     }
-    if board::evaluation::is_mate_score(a) || board::evaluation::is_mate_score(b) {
+    if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
     let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
