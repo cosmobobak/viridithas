@@ -244,7 +244,7 @@ impl Board {
 
         // futility pruning (worth 32 +/- 44 elo)
         // if the static eval is too low, we might just skip the move.
-        if !PV && is_move_futile(depth, moves_made, is_interesting, static_eval, alpha, beta) {
+        if !PV && !is_interesting && is_move_futile(depth, moves_made, static_eval, alpha, beta) {
             self.unmake_move();
             continue;
         }
@@ -366,15 +366,8 @@ impl Board {
     }
 }
 
-fn is_move_futile(
-    depth: Depth,
-    moves_made: usize,
-    interesting: bool,
-    static_eval: i32,
-    a: i32,
-    b: i32,
-) -> bool {
-    if depth > FUTILITY_MAX_DEPTH || interesting || moves_made == 1 {
+fn is_move_futile(depth: Depth, moves_made: usize, static_eval: i32, a: i32, b: i32) -> bool {
+    if depth > FUTILITY_MAX_DEPTH || moves_made == 1 {
         return false;
     }
     if is_mate_score(a) || is_mate_score(b) {
