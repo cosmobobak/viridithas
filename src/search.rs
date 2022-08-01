@@ -380,7 +380,8 @@ fn is_move_futile(
     if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
-    let margin = depth.squared() * 25 + depth.round() * 25 + 100;
+    let depth = depth.round();
+    let margin = depth * depth * 25 + depth * 25 + 100;
     static_eval + margin < a
 }
 
