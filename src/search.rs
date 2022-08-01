@@ -380,17 +380,9 @@ fn is_move_futile(
     if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
-    static_eval + depth.squared() * 50 + 100 < a
+    let margin = depth.squared() * 25 + depth.round() * 25 + 100;
+    static_eval + margin < a
 }
-
-#[allow(dead_code)]
-static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
-    100, // 0 moves to the horizon
-    150, // 1 move to the horizon
-    250, // 2 moves to the horizon
-    400, // 3 moves to the horizon
-    600, // 4 moves to the horizon
-];
 
 #[derive(Debug)]
 pub struct Config {
