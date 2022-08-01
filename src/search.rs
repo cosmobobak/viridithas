@@ -215,6 +215,7 @@ impl Board {
     let lmp_threshold = LMP_BASE_MOVES + depth.squared();
     // whether late move pruning is sound in this position.
     let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
+    let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
     if let Some(tt_move) = tt_move {
         if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
@@ -242,9 +243,9 @@ impl Board {
             break; // okay to break because captures are ordered first.
         }
 
-        // futility pruning (worth 32 +/- 44 elo)
+        // futility pruning
         // if the static eval is too low, we might just skip the move.
-        if !PV && !is_interesting && is_move_futile(depth, moves_made, static_eval, alpha, beta) {
+        if !PV && !is_interesting && moves_made > 1 && do_fut_pruning {
             self.unmake_move();
             continue;
         }
@@ -366,8 +367,8 @@ impl Board {
     }
 }
 
-fn is_move_futile(depth: Depth, moves_made: usize, static_eval: i32, a: i32, b: i32) -> bool {
-    if depth > FUTILITY_MAX_DEPTH || moves_made == 1 || is_mate_score(a) || is_mate_score(b) {
+fn do_futility_pruning(depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
+    if depth > FUTILITY_MAX_DEPTH || is_mate_score(a) || is_mate_score(b) {
         return false;
     }
     let depth = depth.round();
