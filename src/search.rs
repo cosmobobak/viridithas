@@ -215,6 +215,7 @@ impl Board {
     let lmp_threshold = LMP_BASE_MOVES + depth.squared();
     // whether late move pruning is sound in this position.
     let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
+    // whether to skip quiet moves (as they would be futile).
     let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
     if let Some(tt_move) = tt_move {
