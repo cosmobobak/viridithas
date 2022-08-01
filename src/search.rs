@@ -23,12 +23,13 @@ use crate::{
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 25;
-pub const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
-pub const BETA_PRUNING_MARGIN: i32 = 125;
-pub const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
-pub const LMP_MAX_DEPTH: Depth = Depth::new(3);
-pub const LMP_BASE_MOVES: i32 = 3;
-pub const TT_FAIL_REDUCTION_MINDEPTH: Depth = Depth::new(5);
+const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
+const BETA_PRUNING_MARGIN: i32 = 125;
+const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
+const LMP_MAX_DEPTH: Depth = Depth::new(3);
+const LMP_BASE_MOVES: i32 = 3;
+const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
+const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -151,7 +152,7 @@ impl Board {
             Some(tt_move)
         }
         ProbeResult::Nothing => {
-            if PV && depth >= TT_FAIL_REDUCTION_MINDEPTH { depth -= 1; }
+            if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 1; }
             None
         }
     };
@@ -373,16 +374,16 @@ fn is_move_futile(
     a: i32,
     b: i32,
 ) -> bool {
-    if !(1.into()..=4.into()).contains(&depth) || interesting || moves_made == 1 {
+    if depth <= FUTILITY_MAX_DEPTH || interesting || moves_made == 1 {
         return false;
     }
     if is_mate_score(a) || is_mate_score(b) {
         return false;
     }
-    let threshold = FUTILITY_PRUNING_MARGINS[depth.ply_to_horizon()];
-    static_eval + threshold < a
+    static_eval + depth.squared() * 50 + 100 < a
 }
 
+#[allow(dead_code)]
 static FUTILITY_PRUNING_MARGINS: [i32; 5] = [
     100, // 0 moves to the horizon
     150, // 1 move to the horizon
