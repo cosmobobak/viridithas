@@ -28,7 +28,7 @@ mod validate;
 mod historytable;
 
 /// The name of the engine.
-pub const NAME: &str = "Viridithas 2.2.0";
+pub const NAME: &str = "Viridithas 2.3.0";
 
 fn main() {
     #[cfg(debug_assertions)]
