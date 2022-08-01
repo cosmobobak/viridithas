@@ -374,7 +374,7 @@ fn is_move_futile(
     a: i32,
     b: i32,
 ) -> bool {
-    if depth <= FUTILITY_MAX_DEPTH || interesting || moves_made == 1 {
+    if depth > FUTILITY_MAX_DEPTH || interesting || moves_made == 1 {
         return false;
     }
     if is_mate_score(a) || is_mate_score(b) {
