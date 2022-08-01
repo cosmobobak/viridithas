@@ -73,7 +73,8 @@ impl Board {
 
         let mut moves_made = 0;
 
-        for m in move_list {
+        let move_picker = move_list.init_movepicker();
+        while let Some(m) = move_picker.next() {
             if !pos.make_move(m) {
                 continue;
             }
@@ -225,8 +226,8 @@ impl Board {
         }
     }
 
-    let mut move_list_iterator = move_list.into_iter();
-    while let Some(m) = move_list_iterator.next() {
+    let mut move_picker = move_list.init_movepicker();
+    while let Some(m) = move_picker.next() {
         if !self.make_move(m) {
             continue;
         }
@@ -317,7 +318,7 @@ impl Board {
                     }
 
                     // decrease the history of the non-capture moves that came before the cutoff move.
-                    let ms = move_list_iterator.moves_made();
+                    let ms = move_picker.moves_made();
                     for e in ms.iter().filter(|e| !e.entry.is_capture()) {
                         self.update_history_metrics(e.entry, -history_score);
                     }
@@ -351,7 +352,7 @@ impl Board {
         }
 
         // decrease the history of the non-capture moves that came before the best move.
-        let ms = move_list_iterator.moves_made();
+        let ms = move_picker.moves_made();
         for e in ms.iter().take_while(|m| m.entry != best_move).filter(|e| !e.entry.is_capture()) {
             self.update_history_metrics(e.entry, -history_score);
         }

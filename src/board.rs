@@ -803,7 +803,7 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
-        for m in list {
+        for &m in list.iter() {
             if !self.make_move(m) {
                 continue;
             }
@@ -1224,7 +1224,8 @@ impl Board {
         // nasty hack: we can't do movegen when
         self.generate_moves(&mut list); 
 
-        list.into_iter()
+        list.iter()
+            .copied()
             .find(|&m| {
                 m.from() == from
                     && m.to() == to
@@ -1377,7 +1378,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut first_legal = None;
-        for m in move_list {
+        for &m in move_list.iter() {
             if self.make_move(m) {
                 self.unmake_move();
                 first_legal = Some(m);

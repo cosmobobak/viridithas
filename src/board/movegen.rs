@@ -81,13 +81,12 @@ impl MoveList {
         }
         self.count += 1;
     }
-}
 
-impl IntoIterator for MoveList {
-    type Item = Move;
-    type IntoIter = MovePicker;
+    pub fn iter(&self) -> impl Iterator<Item = &Move> {
+        self.moves[..self.count].iter().map(|e| &e.entry)
+    }
 
-    fn into_iter(self) -> Self::IntoIter {
+    pub fn init_movepicker(self) -> MovePicker {
         MovePicker {
             moves: self.moves,
             count: self.count,
@@ -102,10 +101,8 @@ impl MovePicker {
     }
 }
 
-impl Iterator for MovePicker {
-    type Item = Move;
-
-    fn next(&mut self) -> Option<Move> {
+impl MovePicker {
+    pub fn next(&mut self) -> Option<Move> {
         if self.index == self.count {
             return None;
         }
