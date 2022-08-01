@@ -86,7 +86,7 @@ impl MoveList {
         self.moves[..self.count].iter().map(|e| &e.entry)
     }
 
-    pub fn init_movepicker(self) -> MovePicker {
+    pub const fn init_movepicker(self) -> MovePicker {
         MovePicker {
             moves: self.moves,
             count: self.count,

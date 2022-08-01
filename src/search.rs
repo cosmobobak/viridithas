@@ -73,7 +73,7 @@ impl Board {
 
         let mut moves_made = 0;
 
-        let move_picker = move_list.init_movepicker();
+        let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if !pos.make_move(m) {
                 continue;

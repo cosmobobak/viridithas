@@ -18,7 +18,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
-    for m in ml {
+    for &m in ml.iter() {
         if !pos.make_move(m) {
             continue;
         }
@@ -76,7 +76,7 @@ mod tests {
             let mut ml = MoveList::new();
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
-            for m in ml {
+            for &m in ml.iter() {
                 if pos.make_move(m) {
                     legal.push(m);
                     pos.unmake_move();
@@ -101,7 +101,7 @@ mod tests {
             let mut ml = MoveList::new();
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
-            for m in ml {
+            for &m in ml.iter() {
                 if pos.make_move(m) {
                     legal.push(m);
                     pos.unmake_move();
@@ -125,7 +125,7 @@ mod tests {
             let mut ml = MoveList::new();
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
-            for m in ml {
+            for &m in ml.iter() {
                 if pos.make_move(m) {
                     legal.push(m);
                     pos.unmake_move();

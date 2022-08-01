@@ -1224,7 +1224,7 @@ impl Board {
         // nasty hack: we can't do movegen when
         self.generate_moves(&mut list); 
 
-        list.iter()
+        let res = list.iter()
             .copied()
             .find(|&m| {
                 m.from() == from
@@ -1232,7 +1232,9 @@ impl Board {
                     && (san_bytes.len() == 4
                         || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
             })
-            .ok_or_else(|| IllegalMove(san.to_string()))
+            .ok_or_else(|| IllegalMove(san.to_string()));
+
+        res
     }
 
     /// Has the current position occurred before in the current game?
