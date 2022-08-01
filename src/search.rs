@@ -367,10 +367,7 @@ impl Board {
 }
 
 fn is_move_futile(depth: Depth, moves_made: usize, static_eval: i32, a: i32, b: i32) -> bool {
-    if depth > FUTILITY_MAX_DEPTH || moves_made == 1 {
-        return false;
-    }
-    if is_mate_score(a) || is_mate_score(b) {
+    if depth > FUTILITY_MAX_DEPTH || moves_made == 1 || is_mate_score(a) || is_mate_score(b) {
         return false;
     }
     let depth = depth.round();
