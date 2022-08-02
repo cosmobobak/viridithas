@@ -145,17 +145,23 @@ impl Board {
 
     debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
-    let tt_hit = match self.tt_probe(alpha, beta, depth) {
-        ProbeResult::Cutoff(s) => {
-            return s;
-        }
-        ProbeResult::Hit(tt_hit) => {
-            Some(tt_hit)
-        }
-        ProbeResult::Nothing => {
-            // TT-reduction.
-            if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 1; }
-            None
+    let excluded = ss.excluded[self.height()];
+
+    let tt_hit = if excluded.is_null() { 
+        None // do not probe the TT if we're in a singular-verification search.
+    } else {
+        match self.tt_probe(alpha, beta, depth) {
+            ProbeResult::Cutoff(s) => {
+                return s;
+            }
+            ProbeResult::Hit(tt_hit) => {
+                Some(tt_hit)
+            }
+            ProbeResult::Nothing => {
+                // TT-reduction.
+                if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 1; }
+                None
+            }
         }
     };
 
@@ -175,6 +181,8 @@ impl Board {
     // beta-pruning. (reverse futility pruning)
     if !PV 
     && !in_check 
+    && !root_node 
+    && excluded.is_null()
     && !is_mate_score(beta) 
     && depth <= BETA_PRUNING_DEPTH 
     && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
@@ -185,6 +193,7 @@ impl Board {
     if !PV 
     && !in_check 
     && !root_node 
+    && excluded.is_null()
     && static_eval >= beta 
     && depth >= 3.into() 
     && self.zugzwang_unlikely() 
@@ -227,7 +236,6 @@ impl Board {
     }
 
     let mut move_picker = move_list.init_movepicker();
-    let excluded = ss.excluded[self.height()];
     while let Some(m) = move_picker.next() {
         if !self.make_move(m) {
             continue;
@@ -268,8 +276,8 @@ impl Board {
 
         let extension = if maybe_singular {
             // SAFETY: if maybe_singular is true, then tt_hit is Some.
-            let tt_hit = unsafe { tt_hit.as_ref().unwrap_unchecked() };
-            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth))
+            let tt_hit = tt_hit.as_ref().unwrap();
+            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth) || gives_check)
         } else {
             Depth::from(gives_check)
         };
@@ -327,7 +335,9 @@ impl Board {
                         self.update_history_metrics(e.entry, -history_score);
                     }
 
-                    self.tt_store(best_move, beta, HFlag::Beta, depth);
+                    if !excluded.is_null() {
+                        self.tt_store(best_move, beta, HFlag::Beta, depth);
+                    }
 
                     return beta;
                 }
@@ -344,7 +354,9 @@ impl Board {
 
     if alpha == original_alpha {
         // we didn't raise alpha, so this is an all-node
-        self.tt_store(best_move, alpha, HFlag::Alpha, depth);
+        if !excluded.is_null() {
+            self.tt_store(best_move, alpha, HFlag::Alpha, depth);
+        }
     } else {
         // we raised alpha, and didn't raise beta
         // as if we had, we would have returned early, 
@@ -361,7 +373,9 @@ impl Board {
             self.update_history_metrics(e.entry, -history_score);
         }
 
-        self.tt_store(best_move, best_score, HFlag::Exact, depth);
+        if !excluded.is_null() {
+            self.tt_store(best_move, best_score, HFlag::Exact, depth);
+        }
     }
 
     alpha
