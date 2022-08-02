@@ -267,11 +267,13 @@ impl Board {
 
         let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
             !root_node
+            && moves_made == 1
             && depth >= SINGULARITY_MIN_DEPTH
             && excluded.is_null() // don't recursively search the singular move.
+            && !is_mate_score(tt_hit.tt_value)
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
-            && tt_hit.tt_bound == HFlag::Beta
+            && matches!(tt_hit.tt_bound, HFlag::Beta | HFlag::Exact)
         });
 
         let extension = if maybe_singular {
@@ -391,7 +393,7 @@ impl Board {
 
     fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, tt_value: i32, depth: Depth) -> bool {
         let reduced_beta = tt_value - 3 * depth.round();
-        let reduced_depth = (depth - 1) / 2;
+        let reduced_depth = depth / 2;
         self.unmake_move(); // undo the singular move so we can search the position that it exists in.
         ss.excluded[self.height()] = m;
         let value = self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
