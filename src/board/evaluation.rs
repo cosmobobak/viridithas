@@ -394,7 +394,7 @@ impl Board {
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
-            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -406,7 +406,7 @@ impl Board {
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
-            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -418,7 +418,7 @@ impl Board {
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
-            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -430,7 +430,7 @@ impl Board {
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
-            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -442,7 +442,7 @@ impl Board {
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 3;
-            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 3;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -454,7 +454,7 @@ impl Board {
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 3;
-            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 3;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -466,7 +466,7 @@ impl Board {
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 5;
-            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 5;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -478,7 +478,7 @@ impl Board {
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 5;
-            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 5;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
