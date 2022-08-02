@@ -505,7 +505,7 @@ impl KingDangerInfo {
         let black_multiplier = ATTACKING_PIECE_COUNT_MULTIPLIERS[self.attacking_pieces.1];
         let white_weight = self.weight.0 * white_multiplier / 100;
         let black_weight = self.weight.1 * black_multiplier / 100;
-        let relscore = white_weight - black_weight;
+        let relscore = black_weight - white_weight;
         S(relscore, relscore)
     }
 }
