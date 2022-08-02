@@ -262,20 +262,8 @@ impl Board {
             // first move (presumably the PV-move)
             score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
         } else {
-            // nullwindow searches to prove PV.
-            // we only do late move reductions when a set of conditions are true:
-            // 1. the move we're about to make isn't "interesting" (i.e. it's not a capture, a promotion, or a check)
-            // RATIONALE: captures, promotions, and checks are likely to be very important moves to search.
-            // 2. we're at a depth >= 3.
-            // RATIONALE: depth < 3 is cheap as hell already.
-            // 3. we're not already extending the search.
-            // RATIONALE: if this search is extended, we explicitly don't want to reduce it.
-            // 4. we've tried at least two moves at full depth, or three if we're in a PV-node.
-            // RATIONALE: we should be trying at least some moves with full effort, and moves in PV nodes are more important.
-            let can_reduce = extension == 0.into()
-                && !is_interesting
-                && depth >= 3.into()
-                && moves_made >= (2 + usize::from(PV));
+            // calculation of LMR stuff
+            let can_reduce = extension == 0.into() && !is_interesting && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
