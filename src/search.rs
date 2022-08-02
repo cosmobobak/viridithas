@@ -143,7 +143,7 @@ impl Board {
         if r_alpha >= r_beta { return r_alpha; }
     }
 
-    debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
+    debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
     let tt_hit = match self.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
