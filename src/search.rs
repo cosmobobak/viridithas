@@ -148,8 +148,6 @@ impl Board {
     let excluded = ss.excluded[self.height()];
 
     let tt_hit = if excluded.is_null() { 
-        None // do not probe the TT if we're in a singular-verification search.
-    } else {
         match self.tt_probe(alpha, beta, depth) {
             ProbeResult::Cutoff(s) => {
                 return s;
@@ -163,6 +161,8 @@ impl Board {
                 None
             }
         }
+    } else {
+        None // do not probe the TT if we're in a singular-verification search.
     };
 
     let in_check = self.in_check::<{ Self::US }>();
@@ -268,7 +268,7 @@ impl Board {
         let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
             !root_node
             && depth >= SINGULARITY_MIN_DEPTH + Depth::from(PV && tt_hit.tt_bound == HFlag::Exact) * 2
-            && excluded == Move::NULL // don't recursively search the singular move.
+            && excluded.is_null() // don't recursively search the singular move.
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
             && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Alpha)
@@ -335,7 +335,7 @@ impl Board {
                         self.update_history_metrics(e.entry, -history_score);
                     }
 
-                    if !excluded.is_null() {
+                    if excluded.is_null() {
                         self.tt_store(best_move, beta, HFlag::Beta, depth);
                     }
 
@@ -354,7 +354,7 @@ impl Board {
 
     if alpha == original_alpha {
         // we didn't raise alpha, so this is an all-node
-        if !excluded.is_null() {
+        if excluded.is_null() {
             self.tt_store(best_move, alpha, HFlag::Alpha, depth);
         }
     } else {
@@ -373,7 +373,7 @@ impl Board {
             self.update_history_metrics(e.entry, -history_score);
         }
 
-        if !excluded.is_null() {
+        if excluded.is_null() {
             self.tt_store(best_move, best_score, HFlag::Exact, depth);
         }
     }
