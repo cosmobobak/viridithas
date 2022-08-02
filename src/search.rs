@@ -169,7 +169,6 @@ impl Board {
     ss.evals[self.height()] = static_eval;
 
     // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
-    // it is used to make beta-pruning more aggressive when the position is getting better.
     let improving = !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
     // beta-pruning. (reverse futility pruning)
