@@ -392,7 +392,9 @@ impl Board {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as usize * 2;
+            let defense_of_white_king = attacks & white_king_area;
+            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -402,7 +404,9 @@ impl Board {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as usize * 2;
+            let defense_of_black_king = attacks & black_king_area;
+            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -412,7 +416,9 @@ impl Board {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as usize * 2;
+            let defense_of_white_king = attacks & white_king_area;
+            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -422,7 +428,9 @@ impl Board {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as usize * 2;
+            let defense_of_black_king = attacks & black_king_area;
+            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -432,7 +440,9 @@ impl Board {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as usize * 3;
+            let defense_of_white_king = attacks & white_king_area;
+            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 3;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 3;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -442,7 +452,9 @@ impl Board {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as usize * 3;
+            let defense_of_black_king = attacks & black_king_area;
+            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 3;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 3;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -452,7 +464,9 @@ impl Board {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as usize * 5;
+            let defense_of_white_king = attacks & white_king_area;
+            king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 5;
+            king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 5;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -462,7 +476,9 @@ impl Board {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as usize * 5;
+            let defense_of_black_king = attacks & black_king_area;
+            king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 5;
+            king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 5;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -483,8 +499,8 @@ pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
 }
 
 struct KingDangerInfo {
-    attack_units_on_white: usize,
-    attack_units_on_black: usize,
+    attack_units_on_white: i32,
+    attack_units_on_black: i32,
 }
 
 impl KingDangerInfo {
@@ -502,8 +518,8 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.min(99)];
-        let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.min(99)];
+        let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
+        let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore)
     }
