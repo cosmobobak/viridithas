@@ -30,7 +30,7 @@ const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
-const CHECK_EXTENSION_DEPTH: Depth = Depth::from_raw(ONE_PLY.raw_inner() * 4 / 5);
+const CHECK_EXTENSION_DEPTH: Depth = ONE_PLY;
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
