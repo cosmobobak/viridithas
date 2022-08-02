@@ -229,7 +229,11 @@ impl Board {
     let mut move_picker = move_list.init_movepicker();
     let excluded = ss.excluded[self.height()];
     while let Some(m) = move_picker.next() {
-        if !self.make_move(m) || excluded == m {
+        if !self.make_move(m) {
+            continue;
+        }
+        if excluded == m {
+            self.unmake_move();
             continue;
         }
         moves_made += 1;
