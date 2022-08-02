@@ -157,7 +157,7 @@ impl Board {
         score += mobility_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        // score += danger_info.score();
+        score += danger_info.score();
 
         let score = score.value(self.phase());
 
@@ -518,8 +518,10 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
-        let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
+        fn score(au: i32) -> i32 { (au * au * 17 / 100).min(500) }
+
+        let white_attack_strength = score(self.attack_units_on_black.clamp(0, 99));
+        let black_attack_strength = score(self.attack_units_on_white.clamp(0, 99));
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
     }
