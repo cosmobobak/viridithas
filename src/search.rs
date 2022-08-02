@@ -262,7 +262,7 @@ impl Board {
         });
 
         let extension = if maybe_singular {
-            Depth::from(self.is_singular::<PV>(info, ss, m, depth, beta))
+            Depth::from(self.is_singular(info, ss, m, depth, beta))
         } else {
             Depth::from(gives_check)
         };
@@ -365,11 +365,11 @@ impl Board {
         self.add_followup_history(m, history_score);
     }
 
-    fn is_singular<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, depth: Depth, beta: i32) -> bool {
+    fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, depth: Depth, beta: i32) -> bool {
         let reduced_beta = (beta - depth.round()).max(-MATE_SCORE); // beta should not drop below the mate score.
         self.unmake_move(); // undo the singular move so we can search the position that it exists in.
         ss.excluded[self.height()] = m;
-        let value = self.alpha_beta::<PV>(info, ss, (depth - 1) / 2, reduced_beta - 1, reduced_beta);
+        let value = self.alpha_beta::<false>(info, ss, (depth - 1) / 2, reduced_beta - 1, reduced_beta);
         ss.excluded[self.height()] = Move::NULL;
         self.make_move(m); // re-make the singular move.
         value < reduced_beta
