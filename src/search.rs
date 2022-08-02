@@ -271,7 +271,7 @@ impl Board {
             && excluded.is_null() // don't recursively search the singular move.
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
-            && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Alpha)
+            && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Beta)
         });
 
         let extension = if maybe_singular {
