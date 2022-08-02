@@ -518,7 +518,7 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        fn score(au: i32) -> i32 { (au * au * 17 / 100).min(500) }
+        fn score(au: i32) -> i32 { (au * au * 15 / 100).min(500) }
 
         let white_attack_strength = score(self.attack_units_on_black.clamp(0, 99));
         let black_attack_strength = score(self.attack_units_on_white.clamp(0, 99));
