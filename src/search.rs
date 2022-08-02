@@ -260,13 +260,16 @@ impl Board {
         let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
             !root_node
             && depth >= SINGULARITY_MIN_DEPTH
+            && excluded == Move::NULL // don't recursively search the singular move.
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
             && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Alpha)
         });
 
         let extension = if maybe_singular {
-            Depth::from(self.is_singular(info, ss, m, depth, beta))
+            // SAFETY: if maybe_singular is true, then tt_hit is Some.
+            let tt_hit = unsafe { tt_hit.as_ref().unwrap_unchecked() };
+            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth))
         } else {
             Depth::from(gives_check)
         };
@@ -369,8 +372,8 @@ impl Board {
         self.add_followup_history(m, history_score);
     }
 
-    fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, depth: Depth, beta: i32) -> bool {
-        let reduced_beta = (beta - depth.round()).max(-MATE_SCORE); // beta should not drop below the mate score.
+    fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, tt_value: i32, depth: Depth) -> bool {
+        let reduced_beta = (tt_value - depth.round()).max(-MATE_SCORE); // beta should not drop below the mate score.
         self.unmake_move(); // undo the singular move so we can search the position that it exists in.
         ss.excluded[self.height()] = m;
         let value = self.alpha_beta::<false>(info, ss, (depth - 1) / 2, reduced_beta - 1, reduced_beta);
