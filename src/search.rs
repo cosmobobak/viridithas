@@ -6,7 +6,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN, MAX_PLY},
+    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN, MAX_PLY, ONE_PLY, ZERO_PLY},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -30,6 +30,7 @@ const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
+const CHECK_EXTENSION_DEPTH: Depth = Depth::from_raw(ONE_PLY.raw_inner() * 4 / 5);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -104,7 +105,7 @@ impl Board {
     #[cfg(debug_assertions)]
     self.check_validity().unwrap();
 
-    if depth <= 0.into() {
+    if depth <= ZERO_PLY {
         return Self::quiescence(self, info, alpha, beta);
     }
 
@@ -120,7 +121,7 @@ impl Board {
     let root_node = height == 0;
 
     info.nodes += 1;
-    info.seldepth = if root_node { 0.into() } else { info.seldepth.max(height.into()) };
+    info.seldepth = if root_node { ZERO_PLY } else { info.seldepth.max(height.into()) };
 
     if !root_node {
         // check draw
@@ -252,9 +253,9 @@ impl Board {
         }
 
         let extension: Depth = if gives_check {
-            0.8.into()
+            CHECK_EXTENSION_DEPTH
         } else {
-            0.into()
+            ZERO_PLY
         };
 
         let mut score;
@@ -263,14 +264,14 @@ impl Board {
             score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
         } else {
             // calculation of LMR stuff
-            let can_reduce = extension == 0.into() && !is_interesting && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
+            let can_reduce = extension == ZERO_PLY && !is_interesting && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
                 r -= i32::from(m.promotion() == QUEEN);
-                Depth::new(r).clamp(Depth::ONE_PLY, depth - 1)
+                Depth::new(r).clamp(ONE_PLY, depth - 1)
             } else {
-                Depth::ONE_PLY
+                ONE_PLY
             };
             // perform a zero-window search
             score = -self.alpha_beta::<false>(info, ss, depth + extension - r, -alpha - 1, -alpha);

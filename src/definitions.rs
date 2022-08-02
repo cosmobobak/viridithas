@@ -18,9 +18,11 @@ pub const INFINITY: i32 = MATE_SCORE * 2;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Depth(i32);
 
+pub const ONE_PLY: Depth = Depth::new(1);
+pub const ZERO_PLY: Depth = Depth::new(0);
+
 impl Depth {
     const INNER_INCR_BY_PLY: i32 = 100;
-    pub const ONE_PLY: Self = Self::new(1);
 
     pub const fn new(depth: i32) -> Self {
         Self(depth * Self::INNER_INCR_BY_PLY)
