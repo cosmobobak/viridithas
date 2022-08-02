@@ -157,7 +157,7 @@ impl Board {
         score += mobility_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        score += danger_info.score(self);
+        score += danger_info.score();
 
         let score = score.value(self.phase());
 
@@ -504,7 +504,7 @@ struct KingDangerInfo {
 }
 
 impl KingDangerInfo {
-    fn score(mut self, board: &Board) -> S {
+    fn score(self) -> S {
         static KING_DANGER_VALUES: [i32; 100] = [
             0,  0,   1,   2,   3,   5,   7,   9,  12,  15,
             18,  22,  26,  30,  35,  39,  44,  50,  56,  62,
@@ -518,22 +518,6 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        let white_king_ring = attacks::<KING>(board.king_sq(WHITE), BB_NONE);
-        let black_king_ring = attacks::<KING>(board.king_sq(BLACK), BB_NONE);
-        let queens_in_white_king_ring = white_king_ring & board.pieces.queens::<false>();
-        let queens_in_black_king_ring = black_king_ring & board.pieces.queens::<true>();
-        for queen_loc in BitLoop::new(queens_in_white_king_ring) {
-            let is_protected = board.sq_attacked(queen_loc, BLACK);
-            if is_protected {
-                self.attack_units_on_white += 6;
-            }
-        }
-        for queen_loc in BitLoop::new(queens_in_black_king_ring) {
-            let is_protected = board.sq_attacked(queen_loc, WHITE);
-            if is_protected {
-                self.attack_units_on_black += 6;
-            }
-        }
         let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
         let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
         let relscore = white_attack_strength - black_attack_strength;
