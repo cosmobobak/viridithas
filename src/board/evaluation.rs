@@ -148,20 +148,20 @@ impl Board {
 
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
-        let (mobility_val, danger_info) = self.mobility();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
+        let (mobility_val, danger_info) = self.mobility();
 
         score += pawn_val;
         score += bishop_pair_val;
-        score += mobility_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
+        score += mobility_val;
         score += danger_info.score();
 
         let score = score.value(self.phase());
 
-        let score = self.clamp_score(score);
+        let score = self.preprocess_drawish_scores(score);
 
         if self.side == WHITE {
             score
@@ -236,7 +236,7 @@ impl Board {
         false
     }
 
-    fn clamp_score(&mut self, score: i32) -> i32 {
+    fn preprocess_drawish_scores(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
         if score > 0 && self.unwinnable_for::<{ WHITE }>()
             || score < 0 && self.unwinnable_for::<{ BLACK }>()
