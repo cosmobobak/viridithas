@@ -377,14 +377,11 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
-    #[allow(clippy::too_many_lines)]
     fn mobility(&mut self) -> (S, KingDangerInfo) {
         let mut king_danger_info = KingDangerInfo {
             attack_units_on_white: 0,
             attack_units_on_black: 0,
         };
-        let mut times_white_attacked = 0;
-        let mut times_black_attacked = 0;
         let white_king_area = king_area::<true>(self.king_sq(WHITE));
         let black_king_area = king_area::<false>(self.king_sq(BLACK));
         let mut mob_score = S(0, 0);
@@ -395,7 +392,6 @@ impl Board {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            times_black_attacked += i32::from(attacks_on_black_king != 0);
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
@@ -408,7 +404,6 @@ impl Board {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            times_white_attacked += i32::from(attacks_on_white_king != 0);
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
@@ -421,7 +416,6 @@ impl Board {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            times_black_attacked += i32::from(attacks_on_black_king != 0);
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
@@ -434,7 +428,6 @@ impl Board {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            times_white_attacked += i32::from(attacks_on_white_king != 0);
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
@@ -447,7 +440,6 @@ impl Board {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            times_black_attacked += i32::from(attacks_on_black_king != 0);
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 3;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
@@ -460,7 +452,6 @@ impl Board {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            times_white_attacked += i32::from(attacks_on_white_king != 0);
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 3;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
@@ -473,7 +464,6 @@ impl Board {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             // extracting kingsafety
             let attacks_on_black_king = attacks & black_king_area;
-            times_black_attacked += i32::from(attacks_on_black_king != 0);
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 5;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32 * 2;
@@ -486,7 +476,6 @@ impl Board {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
             // extracting kingsafety
             let attacks_on_white_king = attacks & white_king_area;
-            times_white_attacked += i32::from(attacks_on_white_king != 0);
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 5;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32 * 2;
@@ -495,8 +484,6 @@ impl Board {
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.queen_mobility_bonus[attacks];
         }
-        king_danger_info.attack_units_on_black *= i32::from(times_black_attacked > 1);
-        king_danger_info.attack_units_on_white *= i32::from(times_white_attacked > 1);
         (mob_score, king_danger_info)
     }
 }
