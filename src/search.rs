@@ -30,7 +30,7 @@ const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
-const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
+const SINGULARITY_MIN_DEPTH: Depth = Depth::new(4);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -259,7 +259,7 @@ impl Board {
 
         let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
             !root_node
-            && depth >= SINGULARITY_MIN_DEPTH
+            && depth >= SINGULARITY_MIN_DEPTH + Depth::from(PV && tt_hit.tt_bound == HFlag::Exact) * 2
             && excluded == Move::NULL // don't recursively search the singular move.
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
@@ -373,10 +373,11 @@ impl Board {
     }
 
     fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, tt_value: i32, depth: Depth) -> bool {
-        let reduced_beta = (tt_value - depth.round()).max(-MATE_SCORE); // beta should not drop below the mate score.
+        let reduced_beta = tt_value - 3 * depth.round();
+        let reduced_depth = (depth - 1) / 2;
         self.unmake_move(); // undo the singular move so we can search the position that it exists in.
         ss.excluded[self.height()] = m;
-        let value = self.alpha_beta::<false>(info, ss, (depth - 1) / 2, reduced_beta - 1, reduced_beta);
+        let value = self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
         ss.excluded[self.height()] = Move::NULL;
         self.make_move(m); // re-make the singular move.
         value < reduced_beta
