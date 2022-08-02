@@ -30,7 +30,7 @@ const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
-const SINGULARITY_MIN_DEPTH: Depth = Depth::new(4);
+const SINGULARITY_MIN_DEPTH: Depth = Depth::new(6);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -267,11 +267,11 @@ impl Board {
 
         let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
             !root_node
-            && depth >= SINGULARITY_MIN_DEPTH + Depth::from(PV && tt_hit.tt_bound == HFlag::Exact) * 2
+            && depth >= SINGULARITY_MIN_DEPTH
             && excluded.is_null() // don't recursively search the singular move.
             && tt_hit.tt_move == m 
             && tt_hit.tt_depth >= depth - 3
-            && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Beta)
+            && tt_hit.tt_bound == HFlag::Beta
         });
 
         let extension = if maybe_singular {
