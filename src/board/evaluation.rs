@@ -518,18 +518,14 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        fn score(au: i32) -> i32 { (au * au * 15 / 100).min(500) }
-
-        let white_attack_strength = score(self.attack_units_on_black.clamp(0, 99));
-        let black_attack_strength = score(self.attack_units_on_white.clamp(0, 99));
+        let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
+        let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
     }
 }
 
 mod tests {
-
-
     #[test]
     fn unwinnable() {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
