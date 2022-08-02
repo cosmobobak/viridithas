@@ -144,8 +144,7 @@ impl Board {
 
     debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
 
-    let mut tt_value = INFINITY;
-    let tt_move = match self.tt_probe(alpha, beta, depth, &mut tt_value) {
+    let tt_move = match self.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
             return s;
         }
