@@ -40,7 +40,7 @@ use crate::{
     piecesquaretable::pst_value,
     search::{self, ASPIRATION_WINDOW, Stack},
     searchinfo::SearchInfo,
-    transpositiontable::{DefaultTT, HFlag, ProbeResult},
+    transpositiontable::{DefaultTT, HFlag, ProbeResult, TTHit},
     uci::format_score,
     validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
 };
@@ -1264,13 +1264,13 @@ impl Board {
     fn regenerate_pv_line(&mut self, depth: i32) {
         self.principal_variation.clear();
 
-        while let ProbeResult::BestMove(pv_move) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
+        while let ProbeResult::Hit(TTHit{ tt_move, .. }) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
             if self.principal_variation.len() < depth as usize
-                && self.is_legal(pv_move)
+                && self.is_legal(tt_move)
                 && !self.is_draw()
             {
-                self.make_move(pv_move);
-                self.principal_variation.push(pv_move);
+                self.make_move(tt_move);
+                self.principal_variation.push(tt_move);
             } else {
                 break;
             }

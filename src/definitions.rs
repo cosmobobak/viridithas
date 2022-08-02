@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Sub, SubAssign, Mul},
+    ops::{Add, AddAssign, Sub, SubAssign, Mul, Div},
     str::FromStr,
 };
 
@@ -114,6 +114,12 @@ impl Mul<i32> for Depth {
         Self(self.0 * other)
     }
 }
+impl Div<i32> for Depth {
+    type Output = Self;
+    fn div(self, other: i32) -> Self::Output {
+        Self(self.0 / other)
+    }
+}
 impl Mul<Depth> for i32 {
     type Output = Self;
     fn mul(self, other: Depth) -> Self::Output {
@@ -123,6 +129,15 @@ impl Mul<Depth> for i32 {
 impl From<i32> for Depth {
     fn from(depth: i32) -> Self {
         Self::new(depth)
+    }
+}
+impl From<bool> for Depth {
+    fn from(depth: bool) -> Self {
+        if depth {
+            ONE_PLY
+        } else {
+            ZERO_PLY
+        }
     }
 }
 impl From<f32> for Depth {

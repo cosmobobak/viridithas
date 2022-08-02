@@ -77,9 +77,11 @@ pub struct TranspositionTable<const SIZE: usize> {
 
 pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE>;
 
+pub struct TTHit { pub tt_move: Move, pub tt_depth: Depth, pub tt_bound: HFlag, pub tt_value: i32 }
+
 pub enum ProbeResult {
     Cutoff(i32),
-    BestMove(Move),
+    Hit(TTHit),
     Nothing,
 }
 
@@ -173,7 +175,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
 
         if e_depth < depth {
-            return ProbeResult::BestMove(m);
+            return ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: entry.flag, tt_value: entry.score });
         }
 
         // we can't store the score in a tagged union,
@@ -187,14 +189,14 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
                 if score <= alpha {
                     ProbeResult::Cutoff(alpha)
                 } else {
-                    ProbeResult::BestMove(m)
+                    ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: HFlag::Alpha, tt_value: entry.score })
                 }
             }
             HFlag::Beta => {
                 if score >= beta {
                     ProbeResult::Cutoff(beta)
                 } else {
-                    ProbeResult::BestMove(m)
+                    ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: HFlag::Beta, tt_value: entry.score })
                 }
             }
             HFlag::Exact => {

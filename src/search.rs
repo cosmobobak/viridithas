@@ -30,7 +30,7 @@ const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
-const CHECK_EXTENSION_DEPTH: Depth = ONE_PLY;
+const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -145,12 +145,12 @@ impl Board {
 
     debug_assert_eq!(PV, beta - alpha > 1, "PV must be true if the alpha-beta window is larger than 1");
 
-    let tt_move = match self.tt_probe(alpha, beta, depth) {
+    let tt_hit = match self.tt_probe(alpha, beta, depth) {
         ProbeResult::Cutoff(s) => {
             return s;
         }
-        ProbeResult::BestMove(tt_move) => {
-            Some(tt_move)
+        ProbeResult::Hit(tt_hit) => {
+            Some(tt_hit)
         }
         ProbeResult::Nothing => {
             // TT-reduction.
@@ -219,16 +219,17 @@ impl Board {
     // whether to skip quiet moves (as they would be futile).
     let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
-    if let Some(tt_move) = tt_move {
-        if let Some(movelist_entry) = move_list.lookup_by_move(tt_move) {
+    if let Some(tt_hit) = &tt_hit {
+        if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
             // set the move-ordering score of the TT-move to a very high value.
             movelist_entry.score = TT_MOVE_SCORE;
         }
     }
 
     let mut move_picker = move_list.init_movepicker();
+    let excluded = ss.excluded[self.height()];
     while let Some(m) = move_picker.next() {
-        if !self.make_move(m) {
+        if !self.make_move(m) || excluded == m {
             continue;
         }
         moves_made += 1;
@@ -252,10 +253,18 @@ impl Board {
             continue;
         }
 
-        let extension: Depth = if gives_check {
-            CHECK_EXTENSION_DEPTH
+        let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
+            !root_node
+            && depth >= SINGULARITY_MIN_DEPTH
+            && tt_hit.tt_move == m 
+            && tt_hit.tt_depth >= depth - 3
+            && (tt_hit.tt_bound == HFlag::Exact || tt_hit.tt_bound == HFlag::Alpha)
+        });
+
+        let extension = if maybe_singular {
+            Depth::from(self.is_singular::<PV>(info, ss, m, depth, beta))
         } else {
-            ZERO_PLY
+            Depth::from(gives_check)
         };
 
         let mut score;
@@ -355,6 +364,16 @@ impl Board {
         self.add_history(m, history_score);
         self.add_followup_history(m, history_score);
     }
+
+    fn is_singular<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, depth: Depth, beta: i32) -> bool {
+        let reduced_beta = (beta - depth.round()).max(-MATE_SCORE); // beta should not drop below the mate score.
+        self.unmake_move(); // undo the singular move so we can search the position that it exists in.
+        ss.excluded[self.height()] = m;
+        let value = self.alpha_beta::<PV>(info, ss, (depth - 1) / 2, reduced_beta - 1, reduced_beta);
+        ss.excluded[self.height()] = Move::NULL;
+        self.make_move(m); // re-make the singular move.
+        value < reduced_beta
+    }
 }
 
 fn do_futility_pruning(depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
@@ -416,12 +435,14 @@ impl LMRTable {
 
 pub struct Stack {
     evals: [i32; MAX_PLY],
+    excluded: [Move; MAX_PLY],
 }
 
 impl Stack {
     pub const fn new() -> Self {
         Self {
             evals: [0; MAX_PLY],
+            excluded: [Move::NULL; MAX_PLY],
         }
     }
 }
