@@ -309,6 +309,18 @@ pub const fn south_west_one(b: u64) -> u64 {
 pub const fn north_west_one(b: u64) -> u64 {
     (b << 7) & !BB_FILE_H
 }
+#[allow(dead_code)] pub const fn west_one(b: u64) -> u64 {
+    (b << 1) & !BB_FILE_H
+}
+#[allow(dead_code)] pub const fn east_one(b: u64) -> u64 {
+    (b >> 1) & !BB_FILE_A
+}
+pub const fn north_one(b: u64) -> u64 {
+    b << 8
+}
+pub const fn south_one(b: u64) -> u64 {
+    b >> 8
+}
 
 pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
     debug_assert!(PIECE_TYPE != PAWN);

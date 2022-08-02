@@ -10,12 +10,12 @@ use crate::{
     board::Board,
     definitions::{
         BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP, WQ,
-        WR,
+        WR, KING,
     },
     lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
 };
 
-use super::movegen::{bitboards::attacks, BitLoop, BB_NONE};
+use super::movegen::{bitboards::{attacks, north_one, south_one}, BitLoop, BB_NONE};
 
 pub const PAWN_VALUE: S = S(93, 121);
 pub const KNIGHT_VALUE: S = S(358, 308);
@@ -148,7 +148,7 @@ impl Board {
 
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
-        let mobility_val = self.mobility();
+        let (mobility_val, danger_info) = self.mobility();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
 
@@ -157,6 +157,7 @@ impl Board {
         score += mobility_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
+        score += danger_info.score();
 
         let score = score.value(self.phase());
 
@@ -376,63 +377,147 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
-    fn mobility(&mut self) -> S {
+    fn mobility(&mut self) -> (S, KingDangerInfo) {
+        let mut king_danger_info = KingDangerInfo {
+            attacking_pieces: (0, 0),
+            weight: (0, 0),
+        };
+        let white_king_area = king_area::<true>(self.king_sq(WHITE));
+        let black_king_area = king_area::<false>(self.king_sq(BLACK));
         let mut mob_score = S(0, 0);
         let safe_white_moves = !self.pieces.pawn_attacks::<false>();
         let safe_black_moves = !self.pieces.pawn_attacks::<true>();
         let blockers = self.pieces.occupied();
         for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            // extracting kingsafety
+            let attacks_on_black_king = attacks & black_king_area;
+            king_danger_info.attacking_pieces.1 += usize::from(attacks_on_black_king != 0);
+            king_danger_info.weight.1 += PIECE_DANGER_WEIGHTS[KNIGHT as usize] * attacks_on_black_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.knight_mobility_bonus[attacks];
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            // extracting kingsafety
+            let attacks_on_white_king = attacks & white_king_area;
+            king_danger_info.attacking_pieces.0 += usize::from(attacks_on_white_king != 0);
+            king_danger_info.weight.0 += PIECE_DANGER_WEIGHTS[KNIGHT as usize] * attacks_on_white_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.knight_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_black_king = attacks & black_king_area;
+            king_danger_info.attacking_pieces.1 += usize::from(attacks_on_black_king != 0);
+            king_danger_info.weight.1 += PIECE_DANGER_WEIGHTS[BISHOP as usize] * attacks_on_black_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.bishop_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_white_king = attacks & white_king_area;
+            king_danger_info.attacking_pieces.0 += usize::from(attacks_on_white_king != 0);
+            king_danger_info.weight.0 += PIECE_DANGER_WEIGHTS[BISHOP as usize] * attacks_on_white_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.bishop_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_black_king = attacks & black_king_area;
+            king_danger_info.attacking_pieces.1 += usize::from(attacks_on_black_king != 0);
+            king_danger_info.weight.1 += PIECE_DANGER_WEIGHTS[ROOK as usize] * attacks_on_black_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.rook_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_white_king = attacks & white_king_area;
+            king_danger_info.attacking_pieces.0 += usize::from(attacks_on_white_king != 0);
+            king_danger_info.weight.0 += PIECE_DANGER_WEIGHTS[ROOK as usize] * attacks_on_white_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.rook_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_black_king = attacks & black_king_area;
+            king_danger_info.attacking_pieces.1 += usize::from(attacks_on_black_king != 0);
+            king_danger_info.weight.1 += PIECE_DANGER_WEIGHTS[QUEEN as usize] * attacks_on_black_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score += self.eval_params.queen_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            // extracting kingsafety
+            let attacks_on_white_king = attacks & white_king_area;
+            king_danger_info.attacking_pieces.0 += usize::from(attacks_on_white_king != 0);
+            king_danger_info.weight.0 += PIECE_DANGER_WEIGHTS[QUEEN as usize] * attacks_on_white_king.count_ones() as i32;
+            // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.queen_mobility_bonus[attacks];
         }
-        mob_score
+        (mob_score, king_danger_info)
     }
 }
 
+pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
+    let king_attacks = attacks::<KING>(king_sq, BB_NONE);
+    let forward_area = if IS_WHITE {
+        north_one(king_attacks)
+    } else {
+        south_one(king_attacks)
+    };
+    king_attacks | forward_area
+}
+
+struct KingDangerInfo {
+    attacking_pieces: (usize, usize),
+    weight: (i32, i32),
+}
+
+impl KingDangerInfo {
+    fn score(self) -> S {
+        static ATTACKING_PIECE_COUNT_MULTIPLIERS: [i32; 8] = [
+            0, 0, 50, 75, 88, 94, 97, 99,
+        ];
+
+        let white_multiplier = ATTACKING_PIECE_COUNT_MULTIPLIERS[self.attacking_pieces.0];
+        let black_multiplier = ATTACKING_PIECE_COUNT_MULTIPLIERS[self.attacking_pieces.1];
+        let white_weight = self.weight.0 * white_multiplier / 100;
+        let black_weight = self.weight.1 * black_multiplier / 100;
+        let relscore = white_weight - black_weight;
+        S(relscore, relscore)
+    }
+}
+
+static PIECE_DANGER_WEIGHTS: [i32; 6] = [
+    0, // NO_PIECE
+    0, // pawn (unused)
+    20, // knight
+    20, // bishop
+    40, // rook
+    80, // queen
+];
 mod tests {
 
 
@@ -465,7 +550,7 @@ mod tests {
         use crate::board::evaluation::S;
         crate::magic::initialise();
         let mut board = super::Board::default();
-        assert_eq!(board.mobility(), S(0, 0));
+        assert_eq!(board.mobility().0, S(0, 0));
     }
 
     #[test]
@@ -487,7 +572,7 @@ mod tests {
         let pst = board.pst_vals;
         let pawn_val = board.pawn_structure_term();
         let bishop_pair_val = board.bishop_pair_term();
-        let mobility_val = board.mobility();
+        let mobility_val = board.mobility().0;
         let rook_open_file_val = board.rook_open_file_term();
         let queen_open_file_val = board.queen_open_file_term();
 
