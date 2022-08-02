@@ -157,7 +157,7 @@ impl Board {
         score += mobility_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
-        score += danger_info.score() * 2;
+        // score += danger_info.score();
 
         let score = score.value(self.phase());
 
