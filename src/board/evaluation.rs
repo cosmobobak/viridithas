@@ -521,7 +521,7 @@ impl KingDangerInfo {
         let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
         let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
         let relscore = white_attack_strength - black_attack_strength;
-        S(relscore, relscore)
+        S(relscore, relscore / 2)
     }
 }
 
