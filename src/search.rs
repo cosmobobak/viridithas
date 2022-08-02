@@ -346,6 +346,9 @@ impl Board {
     }
 
     if moves_made == 0 {
+        if !excluded.is_null() {
+            return alpha;
+        }
         if in_check {
             return -MATE_SCORE + height;
         }
