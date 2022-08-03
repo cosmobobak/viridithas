@@ -490,21 +490,10 @@ impl Board {
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
         #![allow(clippy::unused_self)]
-        static KING_DANGER_VALUES: [i32; 100] = [
-            0,  0,   1,   2,   3,   5,   7,   9,  12,  15,
-            18,  22,  26,  30,  35,  39,  44,  50,  56,  62,
-            68,  75,  82,  85,  89,  97, 105, 113, 122, 131,
-            140, 150, 169, 180, 191, 202, 213, 225, 237, 248,
-            260, 272, 283, 295, 307, 319, 330, 342, 354, 366,
-            377, 389, 401, 412, 424, 436, 448, 459, 471, 483,
-            494, 500, 500, 500, 500, 500, 500, 500, 500, 500,
-            500, 500, 500, 500, 500, 500, 500, 500, 500, 500,
-            500, 500, 500, 500, 500, 500, 500, 500, 500, 500,
-            500, 500, 500, 500, 500, 500, 500, 500, 500, 500
-        ];
+        const fn kd_formula(au: i32) -> i32 { 12 * au * au + 156 * au - 763 }
 
-        let white_attack_strength = KING_DANGER_VALUES[kd.attack_units_on_black.clamp(0, 99) as usize];
-        let black_attack_strength = KING_DANGER_VALUES[kd.attack_units_on_white.clamp(0, 99) as usize];
+        let white_attack_strength = kd_formula(kd.attack_units_on_black.clamp(0, 99)).min(500);
+        let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
     }
