@@ -294,7 +294,6 @@ impl Board {
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
-                r -= i32::from(m.promotion() == QUEEN);
                 Depth::new(r).clamp(ONE_PLY, depth - 1)
             } else {
                 ONE_PLY
