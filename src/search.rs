@@ -31,7 +31,6 @@ const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(6);
-const CHECK_EXTENSION_MIN_DEPTH: Depth = Depth::new(4);
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -280,9 +279,9 @@ impl Board {
         let extension = if maybe_singular {
             // SAFETY: if maybe_singular is true, then tt_hit is Some.
             let tt_hit = tt_hit.as_ref().unwrap();
-            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth) || depth > CHECK_EXTENSION_MIN_DEPTH && gives_check)
+            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth))
         } else {
-            Depth::from(depth > CHECK_EXTENSION_MIN_DEPTH && gives_check)
+            Depth::from(gives_check)
         };
 
         let mut score;

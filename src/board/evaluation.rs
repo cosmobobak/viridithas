@@ -489,6 +489,7 @@ impl Board {
     }
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
+        #![allow(clippy::unused_self)]
         static KING_DANGER_VALUES: [i32; 100] = [
             0,  0,   1,   2,   3,   5,   7,   9,  12,  15,
             18,  22,  26,  30,  35,  39,  44,  50,  56,  62,
