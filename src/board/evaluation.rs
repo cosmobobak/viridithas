@@ -144,20 +144,21 @@ impl Board {
         let material = self.material[WHITE as usize] - self.material[BLACK as usize];
         let pst = self.pst_vals;
 
-        let mut score = material + pst;
-
         let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
         let bishop_pair_val = self.bishop_pair_term();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
         let (mobility_val, danger_info) = self.mobility();
+        let king_danger = self.score_kingdanger(danger_info);
 
+        let mut score = material;
+        score += pst;
         score += pawn_val;
         score += bishop_pair_val;
         score += rook_open_file_val;
         score += queen_open_file_val;
         score += mobility_val;
-        score += danger_info.score();
+        score += king_danger;
 
         let score = score.value(self.phase());
 
@@ -486,25 +487,8 @@ impl Board {
         }
         (mob_score, king_danger_info)
     }
-}
 
-pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
-    let king_attacks = attacks::<KING>(king_sq, BB_NONE);
-    let forward_area = if IS_WHITE {
-        north_one(king_attacks)
-    } else {
-        south_one(king_attacks)
-    };
-    king_attacks | forward_area
-}
-
-struct KingDangerInfo {
-    attack_units_on_white: i32,
-    attack_units_on_black: i32,
-}
-
-impl KingDangerInfo {
-    fn score(self) -> S {
+    fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
         static KING_DANGER_VALUES: [i32; 100] = [
             0,  0,   1,   2,   3,   5,   7,   9,  12,  15,
             18,  22,  26,  30,  35,  39,  44,  50,  56,  62,
@@ -518,11 +502,27 @@ impl KingDangerInfo {
             500, 500, 500, 500, 500, 500, 500, 500, 500, 500
         ];
 
-        let white_attack_strength = KING_DANGER_VALUES[self.attack_units_on_black.clamp(0, 99) as usize];
-        let black_attack_strength = KING_DANGER_VALUES[self.attack_units_on_white.clamp(0, 99) as usize];
+        let white_attack_strength = KING_DANGER_VALUES[kd.attack_units_on_black.clamp(0, 99) as usize];
+        let black_attack_strength = KING_DANGER_VALUES[kd.attack_units_on_white.clamp(0, 99) as usize];
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
     }
+}
+
+pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
+    let king_attacks = attacks::<KING>(king_sq, BB_NONE);
+    let forward_area = if IS_WHITE {
+        north_one(king_attacks)
+    } else {
+        south_one(king_attacks)
+    };
+    king_attacks | forward_area
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct KingDangerInfo {
+    attack_units_on_white: i32,
+    attack_units_on_black: i32,
 }
 
 mod tests {
