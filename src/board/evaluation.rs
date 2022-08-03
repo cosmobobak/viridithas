@@ -89,6 +89,8 @@ const QUEEN_PHASE: i32 = 40;
 const TOTAL_PHASE: i32 =
     16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
 
+const KING_DANGER_COEFFS: [i32; 3] = [12, 156, -763];
+
 #[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
 pub static FILE_BB: [u64; 8] = init_eval_masks().1;
@@ -490,7 +492,8 @@ impl Board {
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
         #![allow(clippy::unused_self)]
-        const fn kd_formula(au: i32) -> i32 { (12 * au * au + 156 * au - 763) / 100 }
+        let [a, b, c] = self.eval_params.king_danger_coeffs;
+        let kd_formula = |au| { (a * au * au + b * au + c) / 100 };
 
         let white_attack_strength = kd_formula(kd.attack_units_on_black.clamp(0, 99)).min(500);
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
@@ -611,26 +614,6 @@ mod tests {
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/2P2P2/PPP2PPP/RNBQKBNR b KQkq - 0 1").unwrap();
         let pawn_eval = board.pawn_structure_term();
         assert_eq!(pawn_eval, -DOUBLED_PAWN_MALUS * 2);
-    }
-
-    #[test]
-    fn params_round_trip() {
-        use crate::board::evaluation::Parameters;
-
-        let params = Parameters::default();
-        let vec = params.vectorise();
-        let params2 = Parameters::devectorise(&vec);
-        assert_eq!(params, params2);
-
-        let n_params = vec.len();
-        for _ in 0..100 {
-            let vec = (0..n_params)
-                .map(|_| rand::random::<i32>())
-                .collect::<Vec<_>>();
-            let params = Parameters::devectorise(&vec);
-            let vec2 = params.vectorise();
-            assert_eq!(vec, vec2);
-        }
     }
 
     #[test]

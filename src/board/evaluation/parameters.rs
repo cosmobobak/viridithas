@@ -9,7 +9,7 @@ use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
     KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
     QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
-    ROOK_OPEN_FILE_BONUS,
+    ROOK_OPEN_FILE_BONUS, KING_DANGER_COEFFS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -28,6 +28,7 @@ pub struct Parameters {
     pub queen_mobility_bonus: [S; 28],
     pub passed_pawn_bonus: [S; 6],
     pub piece_square_tables: [[S; 64]; 13],
+    pub king_danger_coeffs: [i32; 3],
 }
 
 impl Default for Parameters {
@@ -47,6 +48,7 @@ impl Default for Parameters {
             queen_mobility_bonus: QUEEN_MOBILITY_BONUS,
             passed_pawn_bonus: PASSED_PAWN_BONUS,
             piece_square_tables: crate::piecesquaretable::tables::construct_piece_square_table(),
+            king_danger_coeffs: KING_DANGER_COEFFS,
         }
     }
 }
@@ -108,6 +110,7 @@ impl Display for Parameters {
             "    piece_square_tables: {:?},",
             &self.piece_square_tables[1..7]
         )?;
+        writeln!(f, "    king_danger_formula: {:?},", self.king_danger_coeffs)?;
         write!(f, "}}")?;
         Ok(())
     }
@@ -129,6 +132,7 @@ impl Parameters {
         queen_mobility_bonus: [S::NULL; 28],
         passed_pawn_bonus: [S::NULL; 6],
         piece_square_tables: [[S::NULL; 64]; 13],
+        king_danger_coeffs: [0; 3],
     };
 
     pub fn vectorise(&self) -> Vec<i32> {
@@ -158,66 +162,69 @@ impl Parameters {
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
             );
-        ss.flat_map(|s| [s.0, s.1].into_iter()).collect()
+        ss
+            .flat_map(|s| [s.0, s.1].into_iter())
+            .chain(self.king_danger_coeffs.iter().copied())
+            .collect()
     }
 
     pub fn devectorise(data: &[i32]) -> Self {
         let mut out = Self::NULL;
-        let mut data = data.chunks(2).map(|x| S(x[0], x[1]));
+        let mut s_iter = data[..data.len() - 3].chunks(2).map(|x| S(x[0], x[1]));
         for p in 1..6 {
-            let val = data
+            let val = s_iter
                 .next()
                 .expect("failed to read piece_value term from vector");
             out.piece_values[p] = val;
             out.piece_values[p + 6] = val;
         }
-        out.isolated_pawn_malus = data
+        out.isolated_pawn_malus = s_iter
             .next()
             .expect("failed to read isolated_pawn_malus term from vector");
-        out.doubled_pawn_malus = data
+        out.doubled_pawn_malus = s_iter
             .next()
             .expect("failed to read doubled_pawn_malus term from vector");
-        out.bishop_pair_bonus = data
+        out.bishop_pair_bonus = s_iter
             .next()
             .expect("failed to read bishop_pair_bonus term from vector");
-        let rook_file_bonus = data
+        let rook_file_bonus = s_iter
             .next()
             .expect("failed to read rook_file_bonus term from vector");
         out.rook_open_file_bonus = S(rook_file_bonus.0, 0);
         out.rook_half_open_file_bonus = S(rook_file_bonus.1, 0);
-        let queen_file_bonus = data
+        let queen_file_bonus = s_iter
             .next()
             .expect("failed to read queen_file_bonus term from vector");
         out.queen_open_file_bonus = S(queen_file_bonus.0, 0);
         out.queen_half_open_file_bonus = S(queen_file_bonus.1, 0);
         for knight_mobility_bonus in &mut out.knight_mobility_bonus {
-            *knight_mobility_bonus = data
+            *knight_mobility_bonus = s_iter
                 .next()
                 .expect("failed to read knight_mobility_bonus term from vector");
         }
         for bishop_mobility_bonus in &mut out.bishop_mobility_bonus {
-            *bishop_mobility_bonus = data
+            *bishop_mobility_bonus = s_iter
                 .next()
                 .expect("failed to read bishop_mobility_bonus term from vector");
         }
         for rook_mobility_bonus in &mut out.rook_mobility_bonus {
-            *rook_mobility_bonus = data
+            *rook_mobility_bonus = s_iter
                 .next()
                 .expect("failed to read rook_mobility_bonus term from vector");
         }
         for queen_mobility_bonus in &mut out.queen_mobility_bonus {
-            *queen_mobility_bonus = data
+            *queen_mobility_bonus = s_iter
                 .next()
                 .expect("failed to read queen_mobility_bonus term from vector");
         }
         for passed_pawn_bonus in &mut out.passed_pawn_bonus {
-            *passed_pawn_bonus = data
+            *passed_pawn_bonus = s_iter
                 .next()
                 .expect("failed to read passed_pawn_bonus term from vector");
         }
         // load in the pawn table
         for sq in 0..64 {
-            let val = data
+            let val = s_iter
                 .next()
                 .expect("failed to read pawn piece_square_table term from vector");
             out.piece_square_tables[WP as usize][sq as usize] = val;
@@ -237,7 +244,7 @@ impl Parameters {
                     out.piece_square_tables[pt as usize + 6][flip_rank(sq) as usize] =
                         out.piece_square_tables[pt as usize + 6][flip_rank(mirrored_sq) as usize];
                 } else {
-                    let val = data
+                    let val = s_iter
                         .next()
                         .expect("failed to read piece_square_table term from vector");
                     out.piece_square_tables[pt as usize][sq as usize] = val;
@@ -246,9 +253,12 @@ impl Parameters {
             }
         }
         assert!(
-            data.next().is_none(),
+            s_iter.next().is_none(),
             "reading data from a vector of wrong size (too big)"
         );
+        for (coeff_out, coeff_in) in out.king_danger_coeffs.iter_mut().zip(data[data.len() - 3..].iter()) {
+            *coeff_out = *coeff_in;
+        }
         out
     }
 
@@ -275,5 +285,43 @@ impl Parameters {
     pub fn from_file(path: &str) -> Result<Self, Box<dyn Error>> {
         let vec = Self::load_param_vec(path)?;
         Ok(Self::devectorise(&vec))
+    }
+}
+
+mod tests {
+    #[test]
+    fn params_round_trip() {
+        use crate::board::evaluation::Parameters;
+
+        let params = Parameters::default();
+        let vec = params.vectorise();
+        let params2 = Parameters::devectorise(&vec);
+        assert_eq!(params, params2);
+
+        let n_params = vec.len();
+        for _ in 0..100 {
+            let vec = (0..n_params)
+                .map(|_| rand::random::<i32>())
+                .collect::<Vec<_>>();
+            let params = Parameters::devectorise(&vec);
+            let vec2 = params.vectorise();
+            assert_eq!(vec, vec2);
+        }
+    }
+
+    #[test]
+    fn params_round_trip_fuzz() {
+        use crate::board::evaluation::Parameters;
+
+        let n_params = Parameters::default().vectorise().len();
+        
+        for _ in 1..100 {
+            let vec = (0..n_params)
+                .map(|_| rand::random::<i32>())
+                .collect::<Vec<_>>();
+            let params = Parameters::devectorise(&vec);
+            let vec2 = params.vectorise();
+            assert_eq!(vec, vec2);
+        }
     }
 }

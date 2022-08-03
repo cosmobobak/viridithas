@@ -385,6 +385,7 @@ pub fn tune() {
     let params = Parameters::default();
 
     println!("Optimising...");
+    println!("There are {} parameters to optimise", params.vectorise().len());
     let start_time = Instant::now();
     // let (best_params, best_loss) = particle_swarm_optimise(
     //     params.vectorise(),
