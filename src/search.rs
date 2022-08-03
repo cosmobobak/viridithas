@@ -6,7 +6,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH, QUEEN, MAX_PLY, ONE_PLY, ZERO_PLY},
+    definitions::{Depth, INFINITY, MAX_DEPTH, MAX_PLY, ONE_PLY, ZERO_PLY},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };

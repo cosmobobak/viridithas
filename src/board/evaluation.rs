@@ -490,7 +490,7 @@ impl Board {
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
         #![allow(clippy::unused_self)]
-        const fn kd_formula(au: i32) -> i32 { 12 * au * au + 156 * au - 763 }
+        const fn kd_formula(au: i32) -> i32 { (12 * au * au + 156 * au - 763) / 100 }
 
         let white_attack_strength = kd_formula(kd.attack_units_on_black.clamp(0, 99)).min(500);
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
