@@ -277,9 +277,9 @@ impl Board {
         });
 
         let extension = if maybe_singular {
-            // SAFETY: if maybe_singular is true, then tt_hit is Some.
             let tt_hit = tt_hit.as_ref().unwrap();
-            Depth::from(self.is_singular(info, ss, m, tt_hit.tt_value, depth))
+            let is_singular = self.is_singular(info, ss, m, tt_hit.tt_value, depth);
+            Depth::from(is_singular)
         } else {
             Depth::from(gives_check)
         };
