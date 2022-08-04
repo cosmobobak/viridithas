@@ -14,13 +14,13 @@ use std::{
 };
 
 use crate::{
-    board::movegen::{
+    board::{movegen::{
             bitboards::{
                 self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop,
                 BB_NONE,
             },
             MoveList,
-        },
+        }, evaluation::is_mate_score},
     chessmove::Move,
     definitions::{
         colour_of, square_name, type_of, Colour, Depth, File,
@@ -1302,6 +1302,7 @@ impl Board {
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;
         let mut best_depth = 1;
+        let mut n_depths_with_mate_score = 0;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         for i_depth in 0..=max_depth {
@@ -1358,6 +1359,16 @@ impl Board {
                 info.start_time.elapsed().as_millis()
             );
             self.print_pv();
+
+            // if you find a checkmate, stop early to not lose on time.
+            if is_mate_score(score) {
+                n_depths_with_mate_score += 1;
+                if n_depths_with_mate_score >= 2 {
+                    break;
+                }
+            } else {
+                n_depths_with_mate_score = 0;
+            }
         }
         let score_string = format_score(most_recent_score, self.turn());
         print!(
