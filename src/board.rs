@@ -1360,14 +1360,9 @@ impl Board {
             );
             self.print_pv();
 
-            // if you find a checkmate, stop early to not lose on time.
-            if is_mate_score(score) {
-                n_depths_with_mate_score += 1;
-                if n_depths_with_mate_score >= 2 {
-                    break;
-                }
-            } else {
-                n_depths_with_mate_score = 0;
+            info.check_up();
+            if info.stopped {
+                break;
             }
         }
         let score_string = format_score(most_recent_score, self.turn());
