@@ -5,8 +5,8 @@
 )]
 
 pub mod evaluation;
-pub mod movegen;
 mod history;
+pub mod movegen;
 
 use std::{
     collections::HashSet,
@@ -14,13 +14,12 @@ use std::{
 };
 
 use crate::{
-    board::{movegen::{
-            bitboards::{
-                self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop,
-                BB_NONE,
-            },
-            MoveList,
-        }, evaluation::is_mate_score},
+    board::movegen::{
+        bitboards::{
+            self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE,
+        },
+        MoveList,
+    },
     chessmove::Move,
     definitions::{
         colour_of, square_name, type_of, Colour, Depth, File,
@@ -30,6 +29,7 @@ use crate::{
         KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError, PositionValidityError},
+    historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
         filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
         SQUARE_NAMES,
@@ -38,11 +38,11 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, ASPIRATION_WINDOW, Stack},
+    search::{self, Stack, ASPIRATION_WINDOW},
     searchinfo::SearchInfo,
     transpositiontable::{DefaultTT, HFlag, ProbeResult, TTHit},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -1222,9 +1222,10 @@ impl Board {
 
         let mut list = MoveList::new();
         // nasty hack: we can't do movegen when
-        self.generate_moves(&mut list); 
+        self.generate_moves(&mut list);
 
-        let res = list.iter()
+        let res = list
+            .iter()
             .copied()
             .find(|&m| {
                 m.from() == from
@@ -1264,7 +1265,9 @@ impl Board {
     fn regenerate_pv_line(&mut self, depth: i32) {
         self.principal_variation.clear();
 
-        while let ProbeResult::Hit(TTHit{ tt_move, .. }) = self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH) {
+        while let ProbeResult::Hit(TTHit { tt_move, .. }) =
+            self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH)
+        {
             if self.principal_variation.len() < depth as usize
                 && self.is_legal(tt_move)
                 && !self.is_draw()
@@ -1302,14 +1305,14 @@ impl Board {
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;
         let mut best_depth = 1;
-        let mut n_depths_with_mate_score = 0;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         for i_depth in 0..=max_depth {
             let depth = Depth::new(i_depth);
             // main search
             assert!(self.height == 0, "height != 0 before aspiration search");
-            let mut score = Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, alpha, beta);
+            let mut score =
+                Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, alpha, beta);
 
             info.check_up();
             if info.stopped {
@@ -1329,7 +1332,14 @@ impl Board {
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
                 assert!(self.height == 0, "height != 0 before fullwindow search");
-                score = Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, -INFINITY, INFINITY);
+                score = Self::alpha_beta::<true>(
+                    self,
+                    info,
+                    &mut Stack::new(),
+                    depth,
+                    -INFINITY,
+                    INFINITY,
+                );
                 info.check_up();
                 if info.stopped {
                     break;
