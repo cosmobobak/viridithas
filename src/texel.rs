@@ -37,7 +37,9 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
     pos.set_eval_params(params.clone());
     data.iter()
         .map(|TrainingExample { fen, outcome }| {
+            // set_from_fen does not allocate, so it should be pretty fast.
             pos.set_from_fen(fen).unwrap();
+            // quiescence is likely the source of all computation time.
             let pov_score = Board::quiescence(&mut pos, &mut info, -INFINITY, INFINITY);
             let score = if pos.turn() == WHITE {
                 pov_score
@@ -162,7 +164,7 @@ fn initialise<F1: Fn(&[i32]) -> f64 + Sync>(
     (particles, best_loc, best_cost)
 }
 
-fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 + Sync>(
+fn particle_swarm_optimise<F1, F2>(
     starting_point: Vec<i32>,
     cost_function: F1,
     test_function: F2,
@@ -172,7 +174,11 @@ fn particle_swarm_optimise<F1: Fn(&[i32]) -> f64 + Sync, F2: Fn(&[i32]) -> f64 +
     n_particles: usize,
     particle_distance: i32,
     velocity_distance: i32,
-) -> (Vec<i32>, f64) {
+) -> (Vec<i32>, f64)
+where
+    F1: Fn(&[i32]) -> f64 + Sync,
+    F2: Fn(&[i32]) -> f64 + Sync,
+{
     #![allow(
         clippy::similar_names,
         clippy::cast_possible_truncation,
@@ -334,46 +340,6 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-fn randvec_tune<F1: Fn(&[i32]) -> f64 + Sync>(
-    starting_point: &[i32],
-    cost_function: F1,
-) -> (Vec<i32>, f64) {
-    let init_start_time = Instant::now();
-    let mut best_params = starting_point.to_vec();
-    let mut best_err = cost_function(&best_params);
-    let mut improved = true;
-    let mut iteration = 1;
-    println!(
-        "Initialised in {:.1}s",
-        init_start_time.elapsed().as_secs_f64()
-    );
-    let mut rng = rand::thread_rng();
-    while improved {
-        println!("Iteration {iteration}");
-        improved = false;
-
-        for _ in 0..10 {
-            let new_params = best_params.iter().map(|x| x + rng.gen_range(-3..=3)).collect::<Vec<_>>();
-
-            let new_err = cost_function(&new_params);
-
-            if new_err < best_err {
-                best_params = new_params;
-                best_err = new_err;
-                improved = true;
-                println!("{CONTROL_GREEN}found improvement! (+){CONTROL_RESET}");
-            } else {
-                println!("{CONTROL_RED}no improvement.{CONTROL_RESET}");
-            }
-        }
-
-        Parameters::save_param_vec(&best_params, &format!("params/randvec{iteration}.txt"));
-        iteration += 1;
-    }
-
-    (best_params, best_err)
-}
-
 pub fn tune() {
     // hyperparameters
     let train = 12_000_000; // 8 million is recommended.
@@ -424,7 +390,10 @@ pub fn tune() {
     let params = Parameters::default();
 
     println!("Optimising...");
-    println!("There are {} parameters to optimise", params.vectorise().len());
+    println!(
+        "There are {} parameters to optimise",
+        params.vectorise().len()
+    );
     let start_time = Instant::now();
     // let (best_params, best_loss) = particle_swarm_optimise(
     //     params.vectorise(),
@@ -437,10 +406,9 @@ pub fn tune() {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(
-        &params.vectorise(),
-        |pvec| compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K),
-    );
+    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), |pvec| {
+        compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
+    });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Best loss: {best_loss:.6}");
