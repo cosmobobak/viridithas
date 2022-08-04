@@ -1395,14 +1395,13 @@ impl Board {
     fn get_first_legal_move(&mut self) -> Option<Move> {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
-        let mut first_legal = None;
         for &m in move_list.iter() {
             if self.make_move(m) {
                 self.unmake_move();
-                first_legal = Some(m);
+                return Some(m);
             }
         }
-        first_legal
+        None
     }
 }
 
