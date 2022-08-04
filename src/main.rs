@@ -89,13 +89,13 @@ fn main() {
                 println!("Unknown command: {unknown}");
             }
             println!("Available CLI args:");
-            println!(" - uci (default) : run the Universal Chess Interface");
-            println!(" - perfttest     : run the perft test suite");
-            println!(" - tune          : use texel's tuning method to optimise the evaluation parameters");
-            println!(" - info          : miscellaneous information about the engine");
-            println!(" - visparams     : visualise the evaluation parameters");
-            println!(" - vispst        : visualise the piece square tables");
-            println!(" - gensource     : generate the source code for the piece square tables");
+            println!(" - uci [optional eval param path] : run the Universal Chess Interface");
+            println!(" - perfttest                      : run the perft test suite");
+            println!(" - info                           : miscellaneous information about the engine");
+            println!(" - tune                           : use texel's tuning method to optimise the evaluation parameters");
+            println!(" - visparams                      : visualise the evaluation parameters");
+            println!(" - vispst                         : visualise the piece square tables");
+            println!(" - gensource                      : generate the source code for the piece square tables");
         }
     }
 }
