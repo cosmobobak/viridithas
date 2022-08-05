@@ -29,7 +29,7 @@ const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
 const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
-const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
+const FUTILITY_MAX_DEPTH: Depth = Depth::new(5);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(6);
 
 impl Board {
