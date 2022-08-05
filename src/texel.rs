@@ -334,7 +334,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                 }
             }
         }
-        Parameters::save_param_vec(&best_params, &format!("params/localsearch{iteration}.txt"));
+        Parameters::save_param_vec(&best_params, &format!("params/localsearch{iteration:0>3}.txt"));
         iteration += 1;
     }
     (best_params, best_err)

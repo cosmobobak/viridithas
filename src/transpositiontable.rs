@@ -5,7 +5,7 @@
 )]
 
 use crate::{
-    board::evaluation::IS_MATE_SCORE,
+    board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
     definitions::{CompactDepthStorage, Depth, INFINITY, MAX_DEPTH},
     macros,
@@ -207,18 +207,18 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
 }
 
 const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
-    if score > IS_MATE_SCORE {
+    if score > MINIMUM_MATE_SCORE {
         score += ply as i32;
-    } else if score < -IS_MATE_SCORE {
+    } else if score < -MINIMUM_MATE_SCORE {
         score -= ply as i32;
     }
     score
 }
 
 const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
-    if score > IS_MATE_SCORE {
+    if score > MINIMUM_MATE_SCORE {
         score -= ply as i32;
-    } else if score < -IS_MATE_SCORE {
+    } else if score < -MINIMUM_MATE_SCORE {
         score += ply as i32;
     }
     score

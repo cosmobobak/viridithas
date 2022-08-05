@@ -31,7 +31,7 @@ pub const MATE_SCORE: i32 = 3_000_000;
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation)]
-pub const IS_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
+pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
 
 /// The value of a draw.
 pub const DRAW_SCORE: i32 = 0;
@@ -117,7 +117,7 @@ pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
 }
 
 pub const fn is_mate_score(score: i32) -> bool {
-    score.abs() >= IS_MATE_SCORE
+    score.abs() >= MINIMUM_MATE_SCORE
 }
 
 impl Board {
