@@ -293,6 +293,8 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
     cost_function: F1,
 ) -> (Vec<i32>, f64) {
+    #[allow(clippy::cast_possible_truncation)]
+    fn nudge_size(iteration: i32) -> i32 { ((1.0 / f64::from(iteration) * 10.0) as i32).max(1) }
     let init_start_time = Instant::now();
     let n_params = starting_point.len();
     let mut best_params = starting_point.to_vec();
@@ -303,12 +305,10 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         "Initialised in {:.1}s",
         init_start_time.elapsed().as_secs_f64()
     );
-    while improved {
+    while improved || iteration <= 10 {
         println!("Iteration {iteration}");
         improved = false;
-        let nudge_size = 1.0 / f64::from(iteration) * 10.0;
-        #[allow(clippy::cast_possible_truncation)]
-        let nudge_size = (nudge_size as i32).max(1);
+        let nudge_size = nudge_size(iteration);
 
         for param_idx in 0..n_params {
             println!("Optimising param {param_idx}");
