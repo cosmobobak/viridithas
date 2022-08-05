@@ -319,7 +319,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                 best_params = new_params;
                 best_err = new_err;
                 improved = true;
-                println!("{CONTROL_GREEN}found improvement! (+){CONTROL_RESET}");
+                println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET}");
             } else {
                 new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
@@ -327,7 +327,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                     best_params = new_params;
                     best_err = new_err;
                     improved = true;
-                    println!("{CONTROL_GREEN}found improvement! (-){CONTROL_RESET}");
+                    println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET}");
                 } else {
                     new_params[param_idx] += nudge_size; // reset the param.
                     println!("{CONTROL_RED}no improvement.{CONTROL_RESET}");
