@@ -1,5 +1,5 @@
 [package]
-name = "virtue"
+name = "viridithas"
 version = "2.3.0"
 edition = "2021"
 
@@ -9,6 +9,7 @@ edition = "2021"
 rand = "0.8.5"
 rayon = "1.5.3"
 num_cpus = "1.13.1"
+clap = { version = "3.2.16", features = ["derive"] }
 
 [profile.release]
 lto = "thin"

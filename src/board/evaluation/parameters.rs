@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, path::Path};
 
 use crate::{
     definitions::{flip_file, flip_rank, BP, KING, KNIGHT, WK, WN, WP},
@@ -270,7 +270,7 @@ impl Parameters {
         std::io::Write::flush(&mut output).unwrap();
     }
 
-    pub fn load_param_vec(path: &str) -> Result<Vec<i32>, Box<dyn Error>> {
+    pub fn load_param_vec<P: AsRef<Path>>(path: P) -> Result<Vec<i32>, Box<dyn Error>> {
         let mut params = Vec::new();
         let input = std::io::BufReader::new(std::fs::File::open(path)?);
         for param in std::io::BufRead::split(input, b',') {
@@ -282,7 +282,7 @@ impl Parameters {
         Ok(params)
     }
 
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let vec = Self::load_param_vec(path)?;
         Ok(Self::devectorise(&vec))
     }
