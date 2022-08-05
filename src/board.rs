@@ -1307,7 +1307,7 @@ impl Board {
         let mut best_depth = 1;
         let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
-        for i_depth in 0..=max_depth {
+        for i_depth in 1..=max_depth {
             let depth = Depth::new(i_depth);
             // main search
             assert!(self.height == 0, "height != 0 before aspiration search");
@@ -1328,7 +1328,13 @@ impl Board {
                     info.nodes,
                     info.start_time.elapsed().as_millis()
                 );
+                most_recent_score = score;
+                best_depth = i_depth;
                 self.regenerate_pv_line(best_depth);
+                most_recent_move = *self
+                    .principal_variation
+                    .first()
+                    .unwrap_or(&most_recent_move);
                 self.print_pv();
                 // recalculate the score with a full window, as we failed either low or high.
                 assert!(self.height == 0, "height != 0 before fullwindow search");
