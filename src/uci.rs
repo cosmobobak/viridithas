@@ -18,6 +18,7 @@ use crate::{
     search,
     searchinfo::SearchInfo,
     NAME,
+    VERSION,
 };
 
 enum UciError {
@@ -293,7 +294,7 @@ pub fn format_score(score: i32, turn: u8) -> String {
 }
 
 pub fn main_loop(evaluation_parameters: Parameters) {
-    println!("id name {NAME}");
+    println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("uciok");
 

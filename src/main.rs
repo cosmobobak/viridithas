@@ -27,7 +27,9 @@ mod uci;
 mod validate;
 
 /// The name of the engine.
-pub const NAME: &str = "Viridithas 2.3.0";
+pub static NAME: &str = "Viridithas";
+/// The version of the engine.
+pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     #[cfg(debug_assertions)]
@@ -61,9 +63,10 @@ fn main() {
     }
 
     if cli.info {
-        println!("{NAME}");
+        println!("name: {NAME}");
+        println!("version: {VERSION}");
         println!(
-            "evaluation parameters: {}",
+            "number of evaluation parameters: {}",
             board::evaluation::parameters::Parameters::default()
                 .vectorise()
                 .len()
