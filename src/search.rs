@@ -250,7 +250,7 @@ impl Board {
         let gives_check = self.in_check::<{ Self::US }>();
         let is_promotion = m.is_promo();
 
-        let is_interesting = is_capture || is_promotion || gives_check;
+        let is_interesting = is_capture || is_promotion || gives_check || in_check;
         quiet_moves_made += i32::from(!is_interesting);
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
@@ -260,7 +260,7 @@ impl Board {
 
         // futility pruning
         // if the static eval is too low, we might just skip the move.
-        if !PV && !is_interesting && moves_made > 1 && do_fut_pruning {
+        if !(PV || gives_check || is_capture || is_promotion || moves_made <= 1) && do_fut_pruning {
             self.unmake_move();
             continue;
         }
