@@ -221,8 +221,9 @@ impl Board {
     let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
 
+    let imp_2x = 1 + i32::from(improving);
     // number of quiet moves to try before we start pruning
-    let lmp_threshold = LMP_BASE_MOVES + depth.squared();
+    let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
     // whether late move pruning is sound in this position.
     let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
     // whether to skip quiet moves (as they would be futile).
