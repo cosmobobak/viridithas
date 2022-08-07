@@ -250,7 +250,7 @@ impl Board {
         let gives_check = self.in_check::<{ Self::US }>();
         let is_promotion = m.is_promo();
 
-        let is_interesting = is_capture || is_promotion || gives_check || in_check;
+        let is_interesting = is_capture || is_promotion || gives_check;
         quiet_moves_made += i32::from(!is_interesting);
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
