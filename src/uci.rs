@@ -318,7 +318,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
         let res = match input {
             "\n" => continue,
             "uci" => {
-                println!("id name {NAME}");
+                println!("id name {NAME} {VERSION}");
                 println!("id author Cosmo");
                 println!("uciok");
                 Ok(())
