@@ -8,7 +8,7 @@ pub struct Cli {
     #[clap(long, value_parser, value_name = "PATH")]
     pub params: Option<std::path::PathBuf>,
     /// Generate source code for PSQTs based on the evaluation parameters
-    #[clap(long, value_parser, value_name = "PATH")]
+    #[clap(long)]
     pub gensource: bool,
     /// Run the perft test suite
     #[clap(long)]
