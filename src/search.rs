@@ -220,7 +220,6 @@ impl Board {
     let mut quiet_moves_made = 0;
     let mut best_move = Move::NULL;
     let mut best_score = -INFINITY;
-    let mut moves_skipped = false;
 
     // number of quiet moves to try before we start pruning
     let lmp_threshold = LMP_BASE_MOVES + depth.squared();
@@ -256,15 +255,13 @@ impl Board {
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
             self.unmake_move();
-            moves_skipped = true;
             break; // okay to break because captures are ordered first.
         }
 
         // futility pruning
         // if the static eval is too low, we might just skip the move.
-        if !(PV || gives_check || is_capture || is_promotion || moves_made <= 1) && do_fut_pruning {
+        if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning {
             self.unmake_move();
-            moves_skipped = true;
             continue;
         }
 
@@ -350,7 +347,7 @@ impl Board {
     }
 
     if moves_made == 0 {
-        if !excluded.is_null() || moves_skipped {
+        if !excluded.is_null() {
             return alpha;
         }
         if in_check {
