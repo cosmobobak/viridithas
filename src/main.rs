@@ -71,13 +71,6 @@ fn main() {
                 .vectorise()
                 .len()
         );
-        println!("TT buckets: {}", transpositiontable::DEFAULT_TABLE_SIZE);
-        println!(
-            "TT size (kb): {}",
-            std::mem::size_of::<transpositiontable::TTEntry>()
-                * transpositiontable::DEFAULT_TABLE_SIZE
-                / 1024
-        );
         return;
     }
 

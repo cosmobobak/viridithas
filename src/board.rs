@@ -40,7 +40,7 @@ use crate::{
     piecesquaretable::pst_value,
     search::{self, Stack, ASPIRATION_WINDOW},
     searchinfo::SearchInfo,
-    transpositiontable::{DefaultTT, HFlag, ProbeResult, TTHit},
+    transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
     validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
 };
@@ -73,7 +73,8 @@ pub struct Board {
     killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
     counter_move_table: MoveTable,
     followup_history: DoubleHistoryTable,
-    tt: DefaultTT,
+    tt: TranspositionTable,
+    hash_mb: usize,
 
     pst_vals: S,
 
@@ -147,7 +148,8 @@ impl Board {
             counter_move_table: MoveTable::new(),
             followup_history: DoubleHistoryTable::new(),
             pst_vals: S(0, 0),
-            tt: DefaultTT::new(),
+            tt: TranspositionTable::new(),
+            hash_mb: 4,
             eval_params: evaluation::parameters::Parameters::default(),
             search_params: search::Config::default(),
             lmr_table: search::LMRTable::new(&search::Config::default()),
@@ -174,7 +176,12 @@ impl Board {
     /// Nuke the transposition table.
     /// This wipes all entries in the table, don't call it during a search.
     pub fn clear_tt(&mut self) {
-        self.tt.clear();
+        self.tt.resize(self.hash_mb);
+    }
+
+    pub fn set_hash_size(&mut self, mb: usize) {
+        self.hash_mb = mb;
+        self.clear_tt();
     }
 
     pub fn king_sq(&self, side: u8) -> u8 {
@@ -1258,7 +1265,7 @@ impl Board {
         self.counter_move_table.clear();
         self.followup_history.clear();
         self.height = 0;
-        self.tt.clear_for_search();
+        self.tt.clear_for_search(self.hash_mb);
         self.movegen_ready = true;
     }
 

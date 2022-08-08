@@ -1,7 +1,6 @@
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
-    dead_code
 )]
 
 use crate::{
@@ -51,31 +50,13 @@ impl TTEntry {
     };
 }
 
-const TASTY_PRIME_NUMBER: usize = 12_582_917;
-
 const MEGABYTE: usize = 1024 * 1024;
 const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
-/// One option is to use 4MB of memory for the hashtable,
-/// as my i5 has 6mb of L3 cache, so this endeavours to keep the
-/// entire hashtable in L3 cache.
-pub const IN_CACHE_TABLE_SIZE: usize = MEGABYTE * 4 / TT_ENTRY_SIZE;
-/// Another option is just to use a ton of memory,
-/// wahoooooooo
-pub const BIG_TABLE_SIZE: usize = MEGABYTE * 4096 / TT_ENTRY_SIZE;
-/// Middle-ground between the two.
-pub const MEDIUM_TABLE_SIZE: usize = MEGABYTE * 512 / TT_ENTRY_SIZE;
-/// Prime sized table that's around 256-512 megabytes.
-pub const PRIME_TABLE_SIZE: usize = TASTY_PRIME_NUMBER;
-
-pub const DEFAULT_TABLE_SIZE: usize = PRIME_TABLE_SIZE * 2;
-
 #[derive(Debug)]
-pub struct TranspositionTable<const SIZE: usize> {
+pub struct TranspositionTable {
     table: Vec<TTEntry>,
 }
-
-pub type DefaultTT = TranspositionTable<DEFAULT_TABLE_SIZE>;
 
 pub struct TTHit { pub tt_move: Move, pub tt_depth: Depth, pub tt_bound: HFlag, pub tt_value: i32 }
 
@@ -85,25 +66,22 @@ pub enum ProbeResult {
     Nothing,
 }
 
-impl<const SIZE: usize> TranspositionTable<SIZE> {
+impl TranspositionTable {
     pub const fn new() -> Self {
         Self { table: Vec::new() }
     }
 
-    pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table.resize(SIZE, TTEntry::NULL);
-        } else {
-            self.table.fill(TTEntry::NULL);
-        }
+    pub fn resize(&mut self, megabytes: usize) {
+        let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
+        self.table.resize(new_len, TTEntry::NULL);
     }
 
-    pub fn clear_for_search(&mut self) {
-        if self.table.is_empty() {
-            self.table.resize(SIZE, TTEntry::NULL);
-        } else {
-            // do nothing.
+    pub fn clear_for_search(&mut self, megabytes: usize) {
+        let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
+        if self.table.len() != new_len {
+            self.table.resize(new_len, TTEntry::NULL);
         }
+        // else do nothing.
     }
 
     pub fn store(
@@ -121,7 +99,7 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let index = (key % SIZE as u64) as usize;
+        let index = (key % self.table.len() as u64) as usize;
         let slot = &mut self.table[index];
 
         let score = normalise_mate_score(score, ply);
@@ -148,14 +126,14 @@ impl<const SIZE: usize> TranspositionTable<SIZE> {
     }
 
     pub fn probe(
-        &mut self,
+        &self,
         key: u64,
         ply: usize,
         alpha: i32,
         beta: i32,
         depth: Depth,
     ) -> ProbeResult {
-        let index = (key % (SIZE as u64)) as usize;
+        let index = (key % (self.table.len() as u64)) as usize;
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);

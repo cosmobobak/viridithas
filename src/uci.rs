@@ -213,7 +213,12 @@ where
         })
 }
 
-fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config, UciError> {
+struct SetOptions {
+    pub search_config: search::Config,
+    pub hash_mb: Option<usize>,
+}
+
+fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     parts.next().unwrap();
@@ -236,16 +241,17 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<search::Config,
             "no option value given after \"setoption name {opt_name} value\""
         ))
     })?;
-    let mut config = search::Config::default();
+    let mut out = SetOptions { search_config: search::Config::default(), hash_mb: None };
     match opt_name {
-        "LMRBASE" => config.lmr_base = opt_value.parse()?,
-        "LMRDIVISION" => config.lmr_division = opt_value.parse()?,
-        "FUTILITY_GRADIENT" => config.futility_gradient = opt_value.parse()?,
-        "FUTILITY_INTERCEPT" => config.futility_intercept = opt_value.parse()?,
-        "NULL_MOVE_REDUCTION" => config.null_move_reduction = opt_value.parse()?,
+        "LMRBASE" => out.search_config.lmr_base = opt_value.parse()?,
+        "LMRDIVISION" => out.search_config.lmr_division = opt_value.parse()?,
+        "FUTILITY_GRADIENT" => out.search_config.futility_gradient = opt_value.parse()?,
+        "FUTILITY_INTERCEPT" => out.search_config.futility_intercept = opt_value.parse()?,
+        "NULL_MOVE_REDUCTION" => out.search_config.null_move_reduction = opt_value.parse()?,
+        "Hash" => out.hash_mb = Some(opt_value.parse()?),
         _ => eprintln!("ignoring option {}", opt_name),
     }
-    Ok(config)
+    Ok(out)
 }
 
 static KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
@@ -293,10 +299,15 @@ pub fn format_score(score: i32, turn: u8) -> String {
     }
 }
 
-pub fn main_loop(evaluation_parameters: Parameters) {
+fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("uciok");
+    println!("option name Hash type spin default 4 min 1 max 1024");
+}
+
+pub fn main_loop(evaluation_parameters: Parameters) {
+    print_uci_response();
 
     let mut pos = Board::new();
 
@@ -318,9 +329,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
         let res = match input {
             "\n" => continue,
             "uci" => {
-                println!("id name {NAME} {VERSION}");
-                println!("id author Cosmo");
-                println!("uciok");
+                print_uci_response();
                 Ok(())
             }
             "isready" => {
@@ -338,7 +347,10 @@ pub fn main_loop(evaluation_parameters: Parameters) {
             }
             input if input.starts_with("setoption") => {
                 parse_setoption(input, &mut info).map(|config| {
-                    pos.set_search_config(config);
+                    pos.set_search_config(config.search_config);
+                    if let Some(hash_mb) = config.hash_mb {
+                        pos.set_hash_size(hash_mb);
+                    }
                 })
             }
             input if input.starts_with("position") => parse_position(input, &mut pos),
