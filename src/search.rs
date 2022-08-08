@@ -252,7 +252,7 @@ impl Board {
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
-        quiet_moves_made += i32::from(!is_capture);
+        quiet_moves_made += i32::from(!is_interesting);
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
             self.unmake_move();
@@ -348,7 +348,7 @@ impl Board {
     }
 
     if moves_made == 0 {
-        if !excluded.is_null() || do_lmp {
+        if !excluded.is_null() {
             return alpha;
         }
         if in_check {
