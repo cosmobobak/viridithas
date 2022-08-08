@@ -252,7 +252,7 @@ impl Board {
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
-        quiet_moves_made += i32::from(!is_interesting);
+        quiet_moves_made += i32::from(!is_capture);
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
             self.unmake_move();
@@ -278,8 +278,8 @@ impl Board {
         });
 
         let extension = if maybe_singular {
-            let tt_hit = tt_hit.as_ref().unwrap();
-            let is_singular = self.is_singular(info, ss, m, tt_hit.tt_value, depth);
+            let tt_value = tt_hit.as_ref().unwrap().tt_value;
+            let is_singular = self.is_singular(info, ss, m, tt_value, depth);
             Depth::from(is_singular)
         } else {
             Depth::from(gives_check)
@@ -348,7 +348,7 @@ impl Board {
     }
 
     if moves_made == 0 {
-        if !excluded.is_null() {
+        if !excluded.is_null() || do_lmp {
             return alpha;
         }
         if in_check {
