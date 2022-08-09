@@ -74,12 +74,14 @@ impl TranspositionTable {
     pub fn resize(&mut self, megabytes: usize) {
         let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
         self.table.resize(new_len, TTEntry::NULL);
+        self.table.shrink_to_fit();
     }
 
     pub fn clear_for_search(&mut self, megabytes: usize) {
         let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
         if self.table.len() != new_len {
             self.table.resize(new_len, TTEntry::NULL);
+            self.table.shrink_to_fit();
         }
         // else do nothing.
     }
