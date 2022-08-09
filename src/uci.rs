@@ -302,8 +302,8 @@ pub fn format_score(score: i32, turn: u8) -> String {
 fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
-    println!("uciok");
     println!("option name Hash type spin default 4 min 1 max 1024");
+    println!("uciok");
 }
 
 pub fn main_loop(evaluation_parameters: Parameters) {
