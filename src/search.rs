@@ -6,7 +6,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH, MAX_PLY, ONE_PLY, ZERO_PLY},
+    definitions::{Depth, INFINITY, MAX_DEPTH, MAX_PLY, ONE_PLY, ZERO_PLY, QUEEN},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -100,7 +100,7 @@ impl Board {
     }
 
 #[rustfmt::skip]
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::similar_names)]
     pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, mut depth: Depth, mut alpha: i32, beta: i32) -> i32 {
     #[cfg(debug_assertions)]
     self.check_validity().unwrap();
@@ -252,6 +252,7 @@ impl Board {
         let is_promotion = m.is_promo();
 
         let is_interesting = is_capture || is_promotion || gives_check || in_check;
+        let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
         quiet_moves_made += i32::from(!is_interesting);
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
@@ -291,7 +292,7 @@ impl Board {
             score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
         } else {
             // calculation of LMR stuff
-            let can_reduce = extension == ZERO_PLY && !is_interesting && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
+            let can_reduce = extension == ZERO_PLY && do_lmr && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
             let r = if can_reduce {
                 let mut r = self.lmr_table.get(depth, moves_made);
                 r += i32::from(!PV);
