@@ -1,6 +1,6 @@
 use std::{path::Path, io::BufRead};
 
-use crate::{board::{evaluation::parameters::Parameters, Board}, searchinfo::SearchInfo, chessmove::Move};
+use crate::{board::{evaluation::parameters::Parameters, Board, movegen::MoveVecWrapper}, searchinfo::SearchInfo, chessmove::Move};
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
 const CONTROL_RED: &str = "\u{001b}[31m";
@@ -70,7 +70,8 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: Parameters, time: u64) {
         } else {
             format!(", program chose {bm}")
         };
-        println!("{id} {color}{}{CONTROL_RESET}{fen} {best_moves:?}{failinfo}", if passed { "PASS " } else { "FAIL " });
+        let d_best_moves = MoveVecWrapper(best_moves.clone());
+        println!("{id} {color}{}{CONTROL_RESET}{fen} {d_best_moves}{failinfo}", if passed { "PASS " } else { "FAIL " });
         if passed {
             successes += 1;
         } else {
@@ -83,7 +84,8 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: Parameters, time: u64) {
     if !failed_positions.is_empty() {
         println!("failed positions:");
         for position in failed_positions {
-            println!("{:?} in {}", position.best_moves, position.fen);
+            let d_best_moves = MoveVecWrapper(position.best_moves);
+            println!("{d_best_moves} in {}", position.fen);
         }
     }
 }
