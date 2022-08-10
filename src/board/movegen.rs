@@ -164,13 +164,13 @@ pub struct MoveVecWrapper(pub Vec<Move>);
 impl Display for MoveVecWrapper {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         if self.0.is_empty() {
-            return write!(f, "MoveList: (0) []");
+            return write!(f, "[]");
         }
-        writeln!(f, "MoveList: ({}) [", self.0.len())?;
+        write!(f, "[")?;
         for m in &self.0[..self.0.len() - 1] {
-            writeln!(f, "  {},", m)?;
+            write!(f, "{}, ", m)?;
         }
-        writeln!(f, "  {}", self.0.last().unwrap())?;
+        write!(f, "{}", self.0.last().unwrap())?;
         write!(f, "]")
     }
 }
