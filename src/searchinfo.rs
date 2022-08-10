@@ -31,6 +31,9 @@ pub struct SearchInfo<'a> {
 
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
+
+    /// Whether to print the search info to stdout.
+    pub print_to_stdout: bool,
 }
 
 impl Default for SearchInfo<'_> {
@@ -49,6 +52,7 @@ impl Default for SearchInfo<'_> {
             failhigh_first: 0.0,
             seldepth: 0.into(),
             stdin_rx: None,
+            print_to_stdout: true,
         }
     }
 }

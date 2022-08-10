@@ -25,6 +25,7 @@ mod texel;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod epd;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -81,6 +82,11 @@ fn main() {
 
     if cli.vispsqt {
         piecesquaretable::render_pst_table(&params.piece_square_tables);
+        return;
+    }
+
+    if let Some(epd_path) = cli.epdpath {
+        epd::gamut(epd_path, params, cli.epdtime);
         return;
     }
 

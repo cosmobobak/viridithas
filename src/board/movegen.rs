@@ -504,19 +504,19 @@ impl Board {
             }
         }
 
-        self.generate_castling_moves::<SIDE>(move_list);
+        self.generate_castling_moves_for::<SIDE>(move_list);
     }
 
     pub fn generate_captures(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_captures_comptime::<WHITE>(move_list);
+            self.generate_captures_for::<WHITE>(move_list);
         } else {
-            self.generate_captures_comptime::<BLACK>(move_list);
+            self.generate_captures_for::<BLACK>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_comptime<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -622,7 +622,15 @@ impl Board {
         }
     }
 
-    fn generate_castling_moves<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
+        if self.side == WHITE {
+            self.generate_castling_moves_for::<WHITE>(move_list);
+        } else {
+            self.generate_castling_moves_for::<BLACK>(move_list);
+        }
+    }
+
+    pub fn generate_castling_moves_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
         if SIDE == WHITE {
             if (self.castle_perm & WKCA) != 0
                 && self.piece_at(F1) == PIECE_EMPTY

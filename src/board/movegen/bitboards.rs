@@ -6,24 +6,46 @@ use crate::{
     lookups, macros, magic,
 };
 
-// pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
+pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
 pub const BB_RANK_2: u64 = 0x0000_0000_0000_FF00;
-// pub const BB_RANK_3: u64 = 0x0000_0000_00FF_0000;
-// pub const BB_RANK_4: u64 = 0x0000_0000_FF00_0000;
-// pub const BB_RANK_5: u64 = 0x0000_00FF_0000_0000;
-// pub const BB_RANK_6: u64 = 0x0000_FF00_0000_0000;
+pub const BB_RANK_3: u64 = 0x0000_0000_00FF_0000;
+pub const BB_RANK_4: u64 = 0x0000_0000_FF00_0000;
+pub const BB_RANK_5: u64 = 0x0000_00FF_0000_0000;
+pub const BB_RANK_6: u64 = 0x0000_FF00_0000_0000;
 pub const BB_RANK_7: u64 = 0x00FF_0000_0000_0000;
-// pub const BB_RANK_8: u64 = 0xFF00_0000_0000_0000;
+pub const BB_RANK_8: u64 = 0xFF00_0000_0000_0000;
 pub const BB_FILE_A: u64 = 0x0101_0101_0101_0101;
-// pub const BB_FILE_B: u64 = 0x0202_0202_0202_0202;
-// pub const BB_FILE_C: u64 = 0x0404_0404_0404_0404;
-// pub const BB_FILE_D: u64 = 0x0808_0808_0808_0808;
-// pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
-// pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
-// pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
+pub const BB_FILE_B: u64 = 0x0202_0202_0202_0202;
+pub const BB_FILE_C: u64 = 0x0404_0404_0404_0404;
+pub const BB_FILE_D: u64 = 0x0808_0808_0808_0808;
+pub const BB_FILE_E: u64 = 0x1010_1010_1010_1010;
+pub const BB_FILE_F: u64 = 0x2020_2020_2020_2020;
+pub const BB_FILE_G: u64 = 0x4040_4040_4040_4040;
 pub const BB_FILE_H: u64 = 0x8080_8080_8080_8080;
 pub const BB_NONE: u64 = 0x0000_0000_0000_0000;
-// pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+
+pub static BB_RANKS: [u64; 8] = [
+    BB_RANK_1,
+    BB_RANK_2,
+    BB_RANK_3,
+    BB_RANK_4,
+    BB_RANK_5,
+    BB_RANK_6,
+    BB_RANK_7,
+    BB_RANK_8,
+];
+
+pub static BB_FILES: [u64; 8] = [
+    BB_FILE_A,
+    BB_FILE_B,
+    BB_FILE_C,
+    BB_FILE_D,
+    BB_FILE_E,
+    BB_FILE_F,
+    BB_FILE_G,
+    BB_FILE_H,
+];
 
 /// least significant bit of a u64
 /// ```

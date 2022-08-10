@@ -10,13 +10,15 @@ pub mod movegen;
 
 use std::{
     collections::HashSet,
-    fmt::{Debug, Display, Formatter, Write},
+    fmt::{Debug, Display, Formatter, Write}, sync::Once,
 };
+
+use regex::Regex;
 
 use crate::{
     board::movegen::{
         bitboards::{
-            self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE,
+            self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE, BB_ALL, BB_RANK_7, BB_RANK_2, BB_FILES, BB_RANKS,
         },
         MoveList,
     },
@@ -32,7 +34,7 @@ use crate::{
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
         filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
-        SQUARE_NAMES,
+        SQUARE_NAMES, file,
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
@@ -46,6 +48,17 @@ use crate::{
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
+
+static SAN_REGEX_INIT: Once = Once::new();
+static mut SAN_REGEX: Option<Regex> = None;
+fn get_san_regex() -> &'static Regex {
+    unsafe {
+        SAN_REGEX_INIT.call_once(|| {
+            SAN_REGEX = Some(Regex::new(r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$").unwrap());
+        });
+        SAN_REGEX.as_ref().unwrap()
+    }
+}
 
 pub struct Board {
     /// The bitboards of all the pieces on the board.
@@ -285,7 +298,7 @@ impl Board {
         let split_idx = fen_chars
             .iter()
             .position(|&c| c == b' ')
-            .ok_or_else(|| format!("FEN string is missing space: {}", fen))?;
+            .ok_or_else(|| format!("FEN string is missing space: {fen}"))?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -501,8 +514,8 @@ impl Board {
                         "FEN string is invalid, expected halfmove clock part to be valid UTF-8"
                     })?
                     .parse::<u8>()
-                    .map_err(|_| {
-                        "FEN string is invalid, expected halfmove clock part to be a number"
+                    .map_err(|err| {
+                        format!("FEN string is invalid, expected halfmove clock part to be a number, got \"{}\", {err}", std::str::from_utf8(halfmove_clock).unwrap_or("<invalid utf8>"))
                     })?;
             }
         }
@@ -1198,13 +1211,13 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    /// Parses Standard Algebraic Notation (SAN) and returns a move or a reason why it couldn't be parsed.
-    pub fn parse_san(&self, san: &str) -> Result<Move, MoveParseError> {
+    /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
+    pub fn parse_uci(&self, uci: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{
             IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
             InvalidPromotionPiece, InvalidToSquareFile, InvalidToSquareRank,
         };
-        let san_bytes = san.as_bytes();
+        let san_bytes = uci.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
             return Err(InvalidLength(san_bytes.len()));
         }
@@ -1228,7 +1241,6 @@ impl Board {
         let to = filerank_to_square(san_bytes[2] - b'a', san_bytes[3] - b'1');
 
         let mut list = MoveList::new();
-        // nasty hack: we can't do movegen when
         self.generate_moves(&mut list);
 
         let res = list
@@ -1240,9 +1252,117 @@ impl Board {
                     && (san_bytes.len() == 4
                         || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
             })
-            .ok_or_else(|| IllegalMove(san.to_string()));
+            .ok_or_else(|| IllegalMove(uci.to_string()));
 
         res
+    }
+
+    pub fn parse_san(&mut self, san: &str) -> Result<Move, MoveParseError> {
+        use crate::errors::MoveParseError::{
+            IllegalMove, InvalidSAN, AmbiguousSAN,
+        };
+
+        if ["O-O", "O-O+", "O-O#", "0-0", "0-0+", "0-0#"].contains(&san) {
+            let mut ml = MoveList::new();
+            self.generate_castling_moves(&mut ml);
+            let m = ml
+                .iter()
+                .copied()
+                .find(|&m| m.is_kingside_castling())
+                .ok_or_else(|| IllegalMove(san.to_string()));
+            return m;
+        }
+        if ["O-O-O", "O-O-O+", "O-O-O#", "0-0-0", "0-0-0+", "0-0-0#"].contains(&san) {
+            let mut ml = MoveList::new();
+            self.generate_castling_moves(&mut ml);
+            let m = ml
+                .iter()
+                .copied()
+                .find(|&m| m.is_queenside_castling())
+                .ok_or_else(|| IllegalMove(san.to_string()));
+            return m;
+        }
+
+        let regex = get_san_regex();
+        let reg_match = regex.captures(san);
+        if reg_match.is_none() {
+            if ["--", "Z0", "0000", "@@@@"].contains(&san) {
+                return Ok(Move::NULL);
+            }
+            return Err(InvalidSAN(san.to_string()));
+        }
+        let reg_match = reg_match.unwrap();
+
+        let to_sq_name = reg_match.get(4).unwrap().as_str();
+        let to_square = SQUARE_NAMES.iter().position(|&sq| sq == to_sq_name).unwrap();
+        let to_bb = 1 << to_square;
+        let mut from_bb = BB_ALL;
+
+        let promo = reg_match
+            .get(5)
+            .map(|promo| b"pnbrqk".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap());
+        if promo.is_some() {
+            let legal_mask = if self.side == WHITE {
+                BB_RANK_7
+            } else {
+                BB_RANK_2
+            };
+            from_bb &= legal_mask;
+        }
+
+        if let Some(file) = reg_match.get(2) {
+            let fname = file.as_str().as_bytes()[0];
+            let file = b"abcdefgh".iter().position(|&c| c == fname).unwrap();
+            from_bb &= BB_FILES[file];
+        }
+
+        if let Some(rank) = reg_match.get(3) {
+            let rname = rank.as_str().as_bytes()[0];
+            let rank = b"12345678".iter().position(|&c| c == rname).unwrap();
+            from_bb &= BB_RANKS[rank];
+        }
+
+        if let Some(piece) = reg_match.get(1) {
+            let piece = piece.as_str().as_bytes()[0];
+            let piece: u8 = b".PNBRQK".iter().position(|&c| c == piece).unwrap().try_into().unwrap();
+            let whitepbb = self.pieces.piece_bb(piece);
+            let blackpbb = self.pieces.piece_bb(piece + 6);
+            from_bb &= whitepbb | blackpbb;
+        } else {
+            from_bb &= self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
+            if reg_match.get(2).is_none() {
+                from_bb &= BB_FILES[file(to_square.try_into().unwrap()) as usize];
+            }
+        }
+
+        if from_bb == 0 {
+            return Err(IllegalMove(san.to_string()));
+        }
+
+        let mut ml = MoveList::new();
+        self.generate_moves(&mut ml);
+
+        let mut legal_move = None;
+        for &m in ml.iter() {
+            if !self.make_move(m) {
+                continue;
+            }
+            self.unmake_move();
+            if m.promotion() as usize != promo.unwrap_or(0) {
+                continue;
+            }
+
+            let m_from_bb = 1 << m.from();
+            let m_to_bb: u64 = 1 << m.to();
+
+            if (m_from_bb & from_bb) != 0 && (m_to_bb & to_bb) != 0 {
+                if legal_move.is_some() {
+                    return Err(AmbiguousSAN(san.to_string()));
+                }
+                legal_move = Some(m);
+            }
+        }
+        legal_move.ok_or_else(|| IllegalMove(san.to_string()))
     }
 
     /// Has the current position occurred before in the current game?
@@ -1302,8 +1422,8 @@ impl Board {
         println!();
     }
 
-    /// Performs the root search. Returns the score of the position, from white's perspective.
-    pub fn search_position(&mut self, info: &mut SearchInfo) -> i32 {
+    /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
+    pub fn search_position(&mut self, info: &mut SearchInfo) -> (i32, Move) {
         self.reset_tables();
         info.clear_for_search();
 
@@ -1329,12 +1449,14 @@ impl Board {
             if score <= alpha || score >= beta {
                 let score_string = format_score(score, self.turn());
                 let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
-                print!(
-                    "info score {score_string} {boundstr} depth {i_depth} seldepth {} nodes {} time {} pv ",
-                    info.seldepth.ply_to_horizon(),
-                    info.nodes,
-                    info.start_time.elapsed().as_millis()
-                );
+                if info.print_to_stdout {
+                    print!(
+                        "info score {score_string} {boundstr} depth {i_depth} seldepth {} nodes {} time {} pv ",
+                        info.seldepth.ply_to_horizon(),
+                        info.nodes,
+                        info.start_time.elapsed().as_millis()
+                    );
+                }
                 most_recent_score = score;
                 best_depth = i_depth;
                 self.regenerate_pv_line(best_depth);
@@ -1342,7 +1464,7 @@ impl Board {
                     .principal_variation
                     .first()
                     .unwrap_or(&most_recent_move);
-                self.print_pv();
+                if info.print_to_stdout { self.print_pv(); }
                 // recalculate the score with a full window, as we failed either low or high.
                 assert!(self.height == 0, "height != 0 before fullwindow search");
                 score = Self::alpha_beta::<true>(
@@ -1375,13 +1497,15 @@ impl Board {
                 .unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score, self.turn());
-            print!(
-                "info score {score_string} depth {i_depth} seldepth {} nodes {} time {} pv ",
-                info.seldepth.ply_to_horizon(),
-                info.nodes,
-                info.start_time.elapsed().as_millis()
-            );
-            self.print_pv();
+            if info.print_to_stdout {
+                print!(
+                    "info score {score_string} depth {i_depth} seldepth {} nodes {} time {} pv ",
+                    info.seldepth.ply_to_horizon(),
+                    info.nodes,
+                    info.start_time.elapsed().as_millis()
+                );
+                self.print_pv();
+            }
 
             info.check_up();
             if info.stopped {
@@ -1389,20 +1513,22 @@ impl Board {
             }
         }
         let score_string = format_score(most_recent_score, self.turn());
-        print!(
-            "info score {score_string} depth {best_depth} seldepth {} nodes {} time {} pv ",
-            info.seldepth.ply_to_horizon(),
-            info.nodes,
-            info.start_time.elapsed().as_millis()
-        );
         self.regenerate_pv_line(best_depth);
-        self.print_pv();
-        println!("bestmove {most_recent_move}");
-        if self.side == WHITE {
+        if info.print_to_stdout {
+            print!(
+                "info score {score_string} depth {best_depth} seldepth {} nodes {} time {} pv ",
+                info.seldepth.ply_to_horizon(),
+                info.nodes,
+                info.start_time.elapsed().as_millis()
+            );
+            self.print_pv();
+            println!("bestmove {most_recent_move}");
+        }
+        (if self.side == WHITE {
             most_recent_score
         } else {
             -most_recent_score
-        }
+        }, most_recent_move)
     }
 
     fn get_first_legal_move(&mut self) -> Option<Move> {
