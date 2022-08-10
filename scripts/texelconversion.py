@@ -1,6 +1,7 @@
 import sys
 import chess
 import chess.pgn
+from tqdm import tqdm
 
 PGN = "lichess_elite_2022-03.pgn" # 366,392 games
 N_GAMES = 366392
