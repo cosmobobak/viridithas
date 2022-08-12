@@ -3,15 +3,15 @@ import chess
 import chess.pgn
 from tqdm import tqdm
 
-PGN = "lichess_elite_2022-03.pgn" # 366,392 games
-N_GAMES = 366392
-MAX_GAMES = 200_000
+PGN = "selfplay.pgn" # 366,392 games
+N_GAMES = 500_000
+MAX_GAMES = 1_000_000
 
 def main():
     counter = 0
     wins, draws, losses = 0, 0, 0
     endpoint = min(N_GAMES, MAX_GAMES)
-    with open(f"../{PGN}", "r") as pgn:
+    with open(f"{PGN}", "r") as pgn:
         with open("../texel_data.txt", "w") as texel_data:
             while counter < MAX_GAMES:
                 if counter & 0xFF == 0:
@@ -34,12 +34,13 @@ def main():
                 else:
                     print(f"Unknown result: {result}")
                     exit(1)
-                moves = game.mainline_moves()
-                board = chess.Board()
-                for i, move in enumerate(moves):
-                    if i >= 5: # only use moves after 5th
-                        texel_data.write(f"{board.fen()} {result}\n")
-                    board.push(move)
+                nodes = game.mainline()
+                for node in nodes:
+                    evaluation = node.comment
+                    if "book" in evaluation or "M" in evaluation:
+                        continue
+                    board = node.board()
+                    texel_data.write(f"{board.fen()};{result}\n")
                 counter += 1
     print(f"Processed {counter} games ({counter / endpoint * 100.0:.2f}% done)")
     print(f"Wins:   {wins}")

@@ -342,7 +342,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
 
 pub fn tune() {
     // hyperparameters
-    let train = 12_000_000; // 8 million is recommended.
+    let train = 16_000_000; // 8 million is recommended.
     let test = 100_000; // validation set.
 
     // let n_particles = 100; // No idea what a good value is.
