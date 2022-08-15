@@ -343,7 +343,7 @@ impl Board {
                         self.tt_store(best_move, beta, HFlag::Beta, depth);
                     }
 
-                    return beta;
+                    return score;
                 }
             }
         }
@@ -385,7 +385,7 @@ impl Board {
         }
     }
 
-    alpha
+    best_score
 }
 
     fn update_history_metrics(&mut self, m: Move, history_score: i32) {
