@@ -192,10 +192,6 @@ impl Board {
         self.tt.resize(self.hash_mb);
     }
 
-    pub const fn rule50_count(&self) -> u8 {
-        self.fifty_move_counter
-    }
-
     pub fn set_hash_size(&mut self, mb: usize) {
         self.hash_mb = mb;
         self.clear_tt();

@@ -112,9 +112,7 @@ impl Board {
     self.check_validity().unwrap();
 
     if depth <= ZERO_PLY {
-        let q_val = Self::quiescence(self, info, alpha, beta);
-        let rule50_count: i32 = self.rule50_count().into();
-        return scale_down_near_draws(q_val, rule50_count);
+        return Self::quiescence(self, info, alpha, beta);
     }
 
     if info.nodes.trailing_zeros() >= 12 {
@@ -481,8 +479,4 @@ impl Stack {
             excluded: [Move::NULL; MAX_PLY],
         }
     }
-}
-
-const fn scale_down_near_draws(eval: i32, rule50_count: i32) -> i32 {
-    eval * (300 - rule50_count) / 300
 }
