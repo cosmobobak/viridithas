@@ -158,7 +158,7 @@ impl Board {
             }
             ProbeResult::Nothing => {
                 // TT-reduction.
-                if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 2; }
+                if PV { depth -= 1; }
                 if depth <= ZERO_PLY { return Self::quiescence(self, info, alpha, beta); }
                 None
             }
