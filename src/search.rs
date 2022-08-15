@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score, QUEEN_VALUE},
+        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
         movegen::TT_MOVE_SCORE,
         Board,
     },
@@ -112,7 +112,10 @@ impl Board {
     self.check_validity().unwrap();
 
     if depth <= ZERO_PLY {
-        return Self::quiescence(self, info, alpha, beta);
+        let q_score = Self::quiescence(self, info, alpha, beta);
+        let moves_since_zeroing = self.moves_since_zeroing();
+        let scaled = lerp_50mr(q_score, moves_since_zeroing);
+        return scaled;
     }
 
     if info.nodes.trailing_zeros() >= 12 {
@@ -479,4 +482,8 @@ impl Stack {
             excluded: [Move::NULL; MAX_PLY],
         }
     }
+}
+
+const fn lerp_50mr(eval: i32, moves_since_zeroing: i32) -> i32 {
+    eval * (150 - moves_since_zeroing) / 150
 }
