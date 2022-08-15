@@ -483,10 +483,6 @@ impl Stack {
     }
 }
 
-fn scale_down_near_draws(eval: i32, rule50_count: i32) -> i32 {
-    if eval > 0 {
-        (eval - rule50_count / 5).max(0)
-    } else {
-        (eval + rule50_count / 5).min(0)
-    }
+const fn scale_down_near_draws(eval: i32, rule50_count: i32) -> i32 {
+    eval * (300 - rule50_count) / 300
 }
