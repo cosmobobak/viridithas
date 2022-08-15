@@ -159,6 +159,7 @@ impl Board {
             ProbeResult::Nothing => {
                 // TT-reduction.
                 if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 2; }
+                if depth <= ZERO_PLY { return Self::quiescence(self, info, alpha, beta); }
                 None
             }
         }
@@ -195,7 +196,7 @@ impl Board {
     && !in_check 
     && !root_node 
     && excluded.is_null()
-    && static_eval >= beta
+    && static_eval >= beta// - i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN
     && depth >= 3.into() 
     && self.zugzwang_unlikely() 
     && !self.last_move_was_nullmove() {
