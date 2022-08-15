@@ -1,7 +1,7 @@
-import sys
+
 import chess
 import chess.pgn
-from tqdm import tqdm
+import tqdm
 
 PGN = "selfplay.pgn" # 366,392 games
 N_GAMES = 500_000
@@ -11,13 +11,12 @@ def main():
     counter = 0
     wins, draws, losses = 0, 0, 0
     endpoint = min(N_GAMES, MAX_GAMES)
+    pbar = tqdm.tqdm()
     with open(f"{PGN}", "r") as pgn:
         with open("../texel_data.txt", "w") as texel_data:
             while counter < MAX_GAMES:
                 if counter & 0xFF == 0:
-                    print(f"Processed {counter} games ({counter / endpoint * 100.0:.2f}% done)        \r", end="")
-                    # flush stdout
-                    sys.stdout.flush()
+                    pbar.update(0xFF)
                 game = chess.pgn.read_game(pgn)
                 if game is None: # EOF
                     break
@@ -42,6 +41,7 @@ def main():
                     board = node.board()
                     texel_data.write(f"{board.fen()};{result}\n")
                 counter += 1
+    pbar.close()
     print(f"Processed {counter} games ({counter / endpoint * 100.0:.2f}% done)")
     print(f"Wins:   {wins}")
     print(f"Draws:  {draws}")
