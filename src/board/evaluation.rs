@@ -269,8 +269,10 @@ impl Board {
         /// not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
         static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = S(0, 0);
-        let (white_pawns, black_pawns) =
-            (self.pieces.pawns::<true>(), self.pieces.pawns::<false>());
+        let mut b_score = S(0, 0);
+        let white_pawns = self.pieces.pawns::<true>();
+        let black_pawns = self.pieces.pawns::<false>();
+
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
             if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
                 w_score -= self.eval_params.isolated_pawn_malus;
@@ -282,7 +284,6 @@ impl Board {
             }
         }
 
-        let mut b_score = S(0, 0);
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
             if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
                 b_score -= self.eval_params.isolated_pawn_malus;
