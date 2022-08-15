@@ -312,6 +312,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
 
         for param_idx in 0..n_params {
             println!("Optimising param {param_idx}");
+            let start = Instant::now();
             let mut new_params = best_params.clone();
             new_params[param_idx] += nudge_size; // try adding step_size to the param
             let new_err = cost_function(&new_params);
@@ -319,7 +320,8 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                 best_params = new_params;
                 best_err = new_err;
                 improved = true;
-                println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET}");
+                let time_taken = start.elapsed().as_secs_f64();
+                println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
             } else {
                 new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
@@ -327,10 +329,12 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
                     best_params = new_params;
                     best_err = new_err;
                     improved = true;
-                    println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET}");
+                    let time_taken = start.elapsed().as_secs_f64();
+                    println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
                 } else {
                     new_params[param_idx] += nudge_size; // reset the param.
-                    println!("{CONTROL_RED}no improvement.{CONTROL_RESET}");
+                    let time_taken = start.elapsed().as_secs_f64();
+                    println!("{CONTROL_RED}no improvement.{CONTROL_RESET} ({time_taken:.2}s)");
                 }
             }
         }
