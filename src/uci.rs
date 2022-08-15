@@ -306,7 +306,7 @@ fn print_uci_response() {
     println!("uciok");
 }
 
-pub fn main_loop(evaluation_parameters: Parameters) {
+pub fn main_loop(params: Parameters) {
     print_uci_response();
 
     let mut pos = Board::new();
@@ -315,7 +315,7 @@ pub fn main_loop(evaluation_parameters: Parameters) {
 
     let mut info = SearchInfo::default();
 
-    pos.set_eval_params(evaluation_parameters);
+    pos.set_eval_params(params);
 
     let stdin = stdin_reader();
 
