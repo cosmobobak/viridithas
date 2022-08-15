@@ -196,11 +196,7 @@ impl Board {
         self.hash_mb = mb;
         self.clear_tt();
     }
-
-    pub fn moves_since_zeroing(&self) -> i32 {
-        i32::from(self.fifty_move_counter)
-    }
-
+    
     pub fn king_sq(&self, side: u8) -> u8 {
         debug_assert!(side == WHITE || side == BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);

@@ -112,10 +112,7 @@ impl Board {
     self.check_validity().unwrap();
 
     if depth <= ZERO_PLY {
-        let q_score = Self::quiescence(self, info, alpha, beta);
-        let moves_since_zeroing = self.moves_since_zeroing();
-        let scaled = lerp_50mr(q_score, moves_since_zeroing);
-        return scaled;
+        return Self::quiescence(self, info, alpha, beta);
     }
 
     if info.nodes.trailing_zeros() >= 12 {
@@ -284,7 +281,7 @@ impl Board {
             && excluded.is_null() // don't recursively search the singular move.
             && !is_mate_score(tt_hit.tt_value)
             && tt_hit.tt_depth >= depth - 3
-            && matches!(tt_hit.tt_bound, HFlag::Beta | HFlag::Exact)
+            && tt_hit.tt_bound == HFlag::Beta
         });
 
         let extension = if maybe_singular {
@@ -482,8 +479,4 @@ impl Stack {
             excluded: [Move::NULL; MAX_PLY],
         }
     }
-}
-
-const fn lerp_50mr(eval: i32, moves_since_zeroing: i32) -> i32 {
-    eval * (150 - moves_since_zeroing) / 150
 }
