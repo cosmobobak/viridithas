@@ -26,6 +26,7 @@ pub const ASPIRATION_WINDOW: i32 = 25;
 const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
 const BETA_PRUNING_MARGIN: i32 = 125;
 const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
+const NULLMOVE_PRUNING_IMPROVING_MARGIN: i32 = 80;
 const LMP_MAX_DEPTH: Depth = Depth::new(3);
 const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
@@ -194,7 +195,7 @@ impl Board {
     && !in_check 
     && !root_node 
     && excluded.is_null()
-    && static_eval >= beta 
+    && static_eval >= beta + i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN
     && depth >= 3.into() 
     && self.zugzwang_unlikely() 
     && !self.last_move_was_nullmove() {
