@@ -91,7 +91,7 @@ impl Board {
                         info.failhigh_first += 1.0;
                     }
                     info.failhigh += 1.0;
-                    return score;
+                    return beta;
                 }
                 alpha = score;
             }
@@ -238,7 +238,6 @@ impl Board {
     }
 
     let mut move_picker = move_list.init_movepicker();
-    let mut moves_skipped = false;
     while let Some(m) = move_picker.next() {
         if !self.make_move(m) {
             continue;
@@ -259,7 +258,6 @@ impl Board {
 
         if do_lmp && quiet_moves_made >= lmp_threshold {
             self.unmake_move();
-            moves_skipped = true;
             break; // okay to break because captures are ordered first.
         }
 
@@ -267,7 +265,6 @@ impl Board {
         // if the static eval is too low, we might just skip the move.
         if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning {
             self.unmake_move();
-            moves_skipped = true;
             continue;
         }
 
@@ -346,14 +343,14 @@ impl Board {
                         self.tt_store(best_move, beta, HFlag::Beta, depth);
                     }
 
-                    return score;
+                    return beta;
                 }
             }
         }
     }
 
     if moves_made == 0 {
-        if !excluded.is_null() || moves_skipped {
+        if !excluded.is_null() {
             return alpha;
         }
         if in_check {
@@ -388,7 +385,7 @@ impl Board {
         }
     }
 
-    if moves_skipped { alpha } else { best_score }
+    alpha
 }
 
     fn update_history_metrics(&mut self, m: Move, history_score: i32) {
