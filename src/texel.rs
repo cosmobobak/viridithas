@@ -360,7 +360,7 @@ pub fn tune() {
         .lines()
         .map(|line| {
             let line = line.unwrap();
-            let (fen, outcome) = line.rsplit_once(' ').unwrap();
+            let (fen, outcome) = line.rsplit_once(';').unwrap();
             let outcome = outcome.parse::<f64>().unwrap();
             let fen = fen.to_owned();
             TrainingExample { fen, outcome }
