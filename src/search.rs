@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
+        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score, QUEEN_VALUE},
         movegen::TT_MOVE_SCORE,
         Board,
     },
@@ -32,6 +32,7 @@ const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
+const DELTA_PRUNING_MARGIN: i32 = 950;
 
 impl Board {
     pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -64,6 +65,10 @@ impl Board {
 
         if stand_pat >= beta {
             return beta;
+        }
+
+        if stand_pat < alpha - DELTA_PRUNING_MARGIN {
+            return alpha;
         }
 
         if stand_pat > alpha {
