@@ -91,7 +91,7 @@ impl Board {
                         info.failhigh_first += 1.0;
                     }
                     info.failhigh += 1.0;
-                    return beta;
+                    return score;
                 }
                 alpha = score;
             }
