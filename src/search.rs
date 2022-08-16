@@ -47,7 +47,6 @@ impl Board {
         }
 
         let height: i32 = self.height().try_into().unwrap();
-        info.nodes += 1;
         info.seldepth = info.seldepth.max(height.into());
 
         // check draw
@@ -75,24 +74,16 @@ impl Board {
             alpha = stand_pat;
         }
 
-        let in_check = self.in_check::<{ Self::US }>();
-
         let mut move_list = MoveList::new();
-        if in_check {
-            self.generate_moves(&mut move_list);
-        } else {
-            self.generate_captures(&mut move_list);
-        }
-
-        let mut moves_made = 0;
+        self.generate_captures(&mut move_list);
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if !self.make_move(m) {
                 continue;
             }
+            info.nodes += 1;
 
-            moves_made += 1;
             let score = -self.quiescence(info, -beta, -alpha);
             self.unmake_move();
 
@@ -102,10 +93,6 @@ impl Board {
                 }
                 alpha = score;
             }
-        }
-
-        if in_check && moves_made == 0 {
-            return -MATE_SCORE + height;
         }
 
         alpha
@@ -144,7 +131,6 @@ impl Board {
 
         let root_node = height == 0;
 
-        info.nodes += 1;
         info.seldepth = if root_node {
             ZERO_PLY
         } else {
@@ -285,6 +271,7 @@ impl Board {
             if !self.make_move(m) {
                 continue;
             }
+            info.nodes += 1;
             if excluded == m {
                 self.unmake_move();
                 continue;
