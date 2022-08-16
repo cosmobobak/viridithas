@@ -10,6 +10,7 @@ mod board;
 mod chessmove;
 mod cli;
 mod definitions;
+mod epd;
 mod errors;
 mod historytable;
 mod lookups;
@@ -25,7 +26,6 @@ mod texel;
 mod transpositiontable;
 mod uci;
 mod validate;
-mod epd;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";

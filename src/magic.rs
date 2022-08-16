@@ -393,8 +393,12 @@ pub fn initialise() {
     if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
-    unsafe { init_sliders_attacks::<true>(); }
-    unsafe { init_sliders_attacks::<false>(); }
+    unsafe {
+        init_sliders_attacks::<true>();
+    }
+    unsafe {
+        init_sliders_attacks::<false>();
+    }
     MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 

@@ -1,16 +1,11 @@
-#![allow(
-    clippy::collapsible_else_if,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
-)]
-
 pub mod evaluation;
 mod history;
 pub mod movegen;
 
 use std::{
     collections::HashSet,
-    fmt::{Debug, Display, Formatter, Write}, sync::Once,
+    fmt::{Debug, Display, Formatter, Write},
+    sync::Once,
 };
 
 use regex::Regex;
@@ -18,7 +13,7 @@ use regex::Regex;
 use crate::{
     board::movegen::{
         bitboards::{
-            self, north_east_one, north_west_one, south_east_one, south_west_one, BitLoop, BB_NONE, BB_ALL, BB_RANK_7, BB_RANK_2, BB_FILES, BB_RANKS,
+            self, BitLoop, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
         },
         MoveList,
     },
@@ -33,8 +28,8 @@ use crate::{
     errors::{FenParseError, MoveParseError, PositionValidityError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
-        filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, PROMO_CHAR_LOOKUP,
-        SQUARE_NAMES, file,
+        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN,
+        PROMO_CHAR_LOOKUP, SQUARE_NAMES,
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
@@ -54,7 +49,12 @@ static mut SAN_REGEX: Option<Regex> = None;
 fn get_san_regex() -> &'static Regex {
     unsafe {
         SAN_REGEX_INIT.call_once(|| {
-            SAN_REGEX = Some(Regex::new(r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$").unwrap());
+            SAN_REGEX = Some(
+                Regex::new(
+                    r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$",
+                )
+                .unwrap(),
+            );
         });
         SAN_REGEX.as_ref().unwrap()
     }
@@ -748,16 +748,16 @@ impl Board {
         // pawns
         if side == WHITE {
             let our_pawns = self.pieces.pawns::<true>();
-            let west_attacks = north_west_one(our_pawns);
-            let east_attacks = north_east_one(our_pawns);
+            let west_attacks = our_pawns.north_west_one();
+            let east_attacks = our_pawns.north_east_one();
             let attacks = west_attacks | east_attacks;
             if attacks & (1 << sq) != 0 {
                 return true;
             }
         } else {
             let our_pawns = self.pieces.pawns::<false>();
-            let west_attacks = south_west_one(our_pawns);
-            let east_attacks = south_east_one(our_pawns);
+            let west_attacks = our_pawns.south_west_one();
+            let east_attacks = our_pawns.south_east_one();
             let attacks = west_attacks | east_attacks;
             if attacks & (1 << sq) != 0 {
                 return true;
@@ -1258,9 +1258,7 @@ impl Board {
     }
 
     pub fn parse_san(&mut self, san: &str) -> Result<Move, MoveParseError> {
-        use crate::errors::MoveParseError::{
-            IllegalMove, InvalidSAN, AmbiguousSAN,
-        };
+        use crate::errors::MoveParseError::{AmbiguousSAN, IllegalMove, InvalidSAN};
 
         if ["O-O", "O-O+", "O-O#", "0-0", "0-0+", "0-0#"].contains(&san) {
             let mut ml = MoveList::new();
@@ -1294,13 +1292,19 @@ impl Board {
         let reg_match = reg_match.unwrap();
 
         let to_sq_name = reg_match.get(4).unwrap().as_str();
-        let to_square = SQUARE_NAMES.iter().position(|&sq| sq == to_sq_name).unwrap();
+        let to_square = SQUARE_NAMES
+            .iter()
+            .position(|&sq| sq == to_sq_name)
+            .unwrap();
         let to_bb = 1 << to_square;
         let mut from_bb = BB_ALL;
 
-        let promo = reg_match
-            .get(5)
-            .map(|promo| b"pnbrqk".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap());
+        let promo = reg_match.get(5).map(|promo| {
+            b"pnbrqk"
+                .iter()
+                .position(|&c| c == *promo.as_str().as_bytes().last().unwrap())
+                .unwrap()
+        });
         if promo.is_some() {
             let legal_mask = if self.side == WHITE {
                 BB_RANK_7
@@ -1324,7 +1328,12 @@ impl Board {
 
         if let Some(piece) = reg_match.get(1) {
             let piece = piece.as_str().as_bytes()[0];
-            let piece: u8 = b".PNBRQK".iter().position(|&c| c == piece).unwrap().try_into().unwrap();
+            let piece: u8 = b".PNBRQK"
+                .iter()
+                .position(|&c| c == piece)
+                .unwrap()
+                .try_into()
+                .unwrap();
             let whitepbb = self.pieces.piece_bb(piece);
             let blackpbb = self.pieces.piece_bb(piece + 6);
             from_bb &= whitepbb | blackpbb;
@@ -1395,7 +1404,7 @@ impl Board {
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
             self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH)
         {
-            if self.principal_variation.len() < depth as usize
+            if self.principal_variation.len() < depth.try_into().unwrap()
                 && self.is_legal(tt_move)
                 && !self.is_draw()
             {
@@ -1464,7 +1473,9 @@ impl Board {
                     .principal_variation
                     .first()
                     .unwrap_or(&most_recent_move);
-                if info.print_to_stdout { self.print_pv(); }
+                if info.print_to_stdout {
+                    self.print_pv();
+                }
                 // recalculate the score with a full window, as we failed either low or high.
                 assert!(self.height == 0, "height != 0 before fullwindow search");
                 score = Self::alpha_beta::<true>(
@@ -1524,11 +1535,14 @@ impl Board {
             self.print_pv();
             println!("bestmove {most_recent_move}");
         }
-        (if self.side == WHITE {
-            most_recent_score
-        } else {
-            -most_recent_score
-        }, most_recent_move)
+        (
+            if self.side == WHITE {
+                most_recent_score
+            } else {
+                -most_recent_score
+            },
+            most_recent_move,
+        )
     }
 
     fn get_first_legal_move(&mut self) -> Option<Move> {

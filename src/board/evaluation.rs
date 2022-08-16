@@ -9,13 +9,16 @@ use score::S;
 use crate::{
     board::Board,
     definitions::{
-        BB, BISHOP, BLACK, BN, BP, BQ, BR, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP, WQ,
-        WR, KING,
+        BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP,
+        WQ, WR,
     },
     lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
 };
 
-use super::movegen::{bitboards::{attacks, north_one, south_one}, BitLoop, BB_NONE};
+use super::movegen::{
+    bitboards::{attacks, BitShiftExt},
+    BitLoop, BB_NONE,
+};
 
 pub const PAWN_VALUE: S = S(87, 155);
 pub const KNIGHT_VALUE: S = S(360, 343);
@@ -30,7 +33,7 @@ pub const QUEEN_VALUE: S = S(1087, 992);
 pub const MATE_SCORE: i32 = 3_000_000;
 
 /// A threshold over which scores must be mate.
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
 
 /// The value of a draw.
@@ -73,7 +76,12 @@ const QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-16, -29), S(-84, -84), S(
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [S; 6] = [
-    S(-17, -1), S(-23, 21), S(-15, 51), S(14, 82), S(81, 110), S(138, 169)
+    S(-17, -1),
+    S(-23, 21),
+    S(-15, 51),
+    S(14, 82),
+    S(81, 110),
+    S(138, 169),
 ];
 
 const PAWN_PHASE: i32 = 1;
@@ -184,7 +192,6 @@ impl Board {
             if self.num(WP) != 0 {
                 return false;
             }
-            true
         } else {
             if self.major_piece_counts[BLACK as usize] != 0 {
                 return false;
@@ -195,8 +202,9 @@ impl Board {
             if self.num(BP) != 0 {
                 return false;
             }
-            true
         }
+
+        true
     }
 
     const fn is_material_draw(&self) -> bool {
@@ -377,6 +385,7 @@ impl Board {
     }
 
     fn mobility(&mut self) -> (S, KingDangerInfo) {
+        #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
         let mut king_danger_info = KingDangerInfo {
             attack_units_on_white: 0,
             attack_units_on_black: 0,
@@ -489,7 +498,7 @@ impl Board {
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
         #![allow(clippy::unused_self)]
         let [a, b, c] = self.eval_params.king_danger_coeffs;
-        let kd_formula = |au| { (a * au * au + b * au + c) / 100 };
+        let kd_formula = |au| (a * au * au + b * au + c) / 100;
 
         let white_attack_strength = kd_formula(kd.attack_units_on_black.clamp(0, 99)).min(500);
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
@@ -501,9 +510,9 @@ impl Board {
 pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
     let king_attacks = attacks::<KING>(king_sq, BB_NONE);
     let forward_area = if IS_WHITE {
-        north_one(king_attacks)
+        king_attacks.north_one()
     } else {
-        south_one(king_attacks)
+        king_attacks.south_one()
     };
     king_attacks | forward_area
 }
@@ -562,7 +571,8 @@ mod tests {
 
         let mut board = super::Board::default();
 
-        let material = board.material[crate::definitions::WHITE as usize] - board.material[crate::definitions::BLACK as usize];
+        let material = board.material[crate::definitions::WHITE as usize]
+            - board.material[crate::definitions::BLACK as usize];
         let pst = board.pst_vals;
         let pawn_val = board.pawn_structure_term();
         let bishop_pair_val = board.bishop_pair_term();

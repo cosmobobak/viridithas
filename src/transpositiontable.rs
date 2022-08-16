@@ -1,7 +1,4 @@
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-)]
+#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 
 use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
@@ -58,7 +55,12 @@ pub struct TranspositionTable {
     table: Vec<TTEntry>,
 }
 
-pub struct TTHit { pub tt_move: Move, pub tt_depth: Depth, pub tt_bound: HFlag, pub tt_value: i32 }
+pub struct TTHit {
+    pub tt_move: Move,
+    pub tt_depth: Depth,
+    pub tt_bound: HFlag,
+    pub tt_value: i32,
+}
 
 pub enum ProbeResult {
     Cutoff(i32),
@@ -127,14 +129,7 @@ impl TranspositionTable {
         }
     }
 
-    pub fn probe(
-        &self,
-        key: u64,
-        ply: usize,
-        alpha: i32,
-        beta: i32,
-        depth: Depth,
-    ) -> ProbeResult {
+    pub fn probe(&self, key: u64, ply: usize, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
         let index = (key % (self.table.len() as u64)) as usize;
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
@@ -145,17 +140,25 @@ impl TranspositionTable {
 
         let entry = &self.table[index];
 
-        if entry.key != key { 
+        if entry.key != key {
             return ProbeResult::Nothing;
         }
 
         let m = entry.m;
         let e_depth = entry.depth.into();
 
-        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
+        debug_assert!(
+            (0i32.into()..=MAX_DEPTH).contains(&e_depth),
+            "depth: {e_depth}"
+        );
 
         if e_depth < depth {
-            return ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: entry.flag, tt_value: entry.score });
+            return ProbeResult::Hit(TTHit {
+                tt_move: m,
+                tt_depth: e_depth,
+                tt_bound: entry.flag,
+                tt_value: entry.score,
+            });
         }
 
         // we can't store the score in a tagged union,
@@ -169,19 +172,27 @@ impl TranspositionTable {
                 if score <= alpha {
                     ProbeResult::Cutoff(alpha)
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: HFlag::Alpha, tt_value: entry.score })
+                    ProbeResult::Hit(TTHit {
+                        tt_move: m,
+                        tt_depth: e_depth,
+                        tt_bound: HFlag::Alpha,
+                        tt_value: entry.score,
+                    })
                 }
             }
             HFlag::Beta => {
                 if score >= beta {
                     ProbeResult::Cutoff(beta)
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move: m, tt_depth: e_depth, tt_bound: HFlag::Beta, tt_value: entry.score })
+                    ProbeResult::Hit(TTHit {
+                        tt_move: m,
+                        tt_depth: e_depth,
+                        tt_bound: HFlag::Beta,
+                        tt_value: entry.score,
+                    })
                 }
             }
-            HFlag::Exact => {
-                ProbeResult::Cutoff(score)
-            }
+            HFlag::Exact => ProbeResult::Cutoff(score),
         }
     }
 }

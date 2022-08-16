@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Sub, SubAssign, Mul, Div},
+    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
     str::FromStr,
 };
 
