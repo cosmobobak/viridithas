@@ -1257,6 +1257,7 @@ impl Board {
         res
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn parse_san(&mut self, san: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{AmbiguousSAN, IllegalMove, InvalidSAN};
 
@@ -1360,10 +1361,8 @@ impl Board {
             if m.promotion() as usize != promo.unwrap_or(0) {
                 continue;
             }
-
             let m_from_bb = 1 << m.from();
             let m_to_bb: u64 = 1 << m.to();
-
             if (m_from_bb & from_bb) != 0 && (m_to_bb & to_bb) != 0 {
                 if legal_move.is_some() {
                     return Err(AmbiguousSAN(san.to_string()));
@@ -1432,6 +1431,7 @@ impl Board {
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
+    #[allow(clippy::too_many_lines)]
     pub fn search_position(&mut self, info: &mut SearchInfo) -> (i32, Move) {
         self.reset_tables();
         info.clear_for_search();
