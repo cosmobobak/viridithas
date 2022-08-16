@@ -33,7 +33,6 @@ const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
 const DELTA_PRUNING_MARGIN: i32 = 950;
-const RAZORING_MAX_DEPTH: Depth = Depth::new(7);
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -93,10 +92,6 @@ impl Board {
 
             if score > alpha {
                 if score >= beta {
-                    if moves_made == 1 {
-                        info.failhigh_first += 1.0;
-                    }
-                    info.failhigh += 1.0;
                     return beta;
                 }
                 alpha = score;
@@ -315,7 +310,7 @@ impl Board {
                     && excluded.is_null()
                     && !is_mate_score(tt_hit.tt_value)
                     && tt_hit.tt_depth >= depth - 3
-                    && tt_hit.tt_bound == HFlag::Beta
+                    && tt_hit.tt_bound == HFlag::LowerBound
             });
 
             let extension = if maybe_singular {
@@ -365,10 +360,6 @@ impl Board {
                     alpha = score;
                     if score >= beta {
                         // we failed high, so this is a cut-node
-                        if moves_made == 1 {
-                            info.failhigh_first += 1.0;
-                        }
-                        info.failhigh += 1.0;
 
                         if !is_capture {
                             self.insert_killer(best_move);
@@ -383,7 +374,7 @@ impl Board {
                         }
 
                         if excluded.is_null() {
-                            self.tt_store(best_move, beta, HFlag::Beta, depth);
+                            self.tt_store(best_move, beta, HFlag::LowerBound, depth);
                         }
 
                         return beta;
@@ -405,7 +396,7 @@ impl Board {
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
-                self.tt_store(best_move, alpha, HFlag::Alpha, depth);
+                self.tt_store(best_move, alpha, HFlag::UpperBound, depth);
             }
         } else {
             // we raised alpha, and didn't raise beta

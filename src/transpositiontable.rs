@@ -10,8 +10,8 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HFlag {
     None = 0,
-    Alpha = 1,
-    Beta = 2,
+    UpperBound = 1,
+    LowerBound = 2,
     Exact = 3,
 }
 
@@ -168,26 +168,26 @@ impl TranspositionTable {
         debug_assert!(score >= -INFINITY);
         match entry.flag {
             HFlag::None => unsafe { macros::inconceivable!() },
-            HFlag::Alpha => {
+            HFlag::UpperBound => {
                 if score <= alpha {
                     ProbeResult::Cutoff(alpha)
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
-                        tt_bound: HFlag::Alpha,
+                        tt_bound: HFlag::UpperBound,
                         tt_value: entry.score,
                     })
                 }
             }
-            HFlag::Beta => {
+            HFlag::LowerBound => {
                 if score >= beta {
                     ProbeResult::Cutoff(beta)
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
-                        tt_bound: HFlag::Beta,
+                        tt_bound: HFlag::LowerBound,
                         tt_value: entry.score,
                     })
                 }
