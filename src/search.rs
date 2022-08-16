@@ -235,8 +235,9 @@ impl Board {
             && self.zugzwang_unlikely()
             && !self.last_move_was_nullmove()
         {
+            let nm_depth = (depth - 3) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
+            let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -alpha);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
