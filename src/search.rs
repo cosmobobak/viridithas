@@ -33,11 +33,12 @@ const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
 const DELTA_PRUNING_MARGIN: i32 = 950;
+const RAZORING_MAX_DEPTH: Depth = Depth::new(7);
 
 impl Board {
-    pub fn quiescence(pos: &mut Self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
+    pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
         #[cfg(debug_assertions)]
-        pos.check_validity().unwrap();
+        self.check_validity().unwrap();
 
         if info.nodes.trailing_zeros() >= 12 {
             info.check_up();
@@ -46,22 +47,22 @@ impl Board {
             }
         }
 
-        let height: i32 = pos.height().try_into().unwrap();
+        let height: i32 = self.height().try_into().unwrap();
         info.nodes += 1;
         info.seldepth = info.seldepth.max(height.into());
 
         // check draw
-        if pos.is_draw() {
+        if self.is_draw() {
             // score fuzzing apparently helps with threefolds.
             return 1 - (info.nodes & 2) as i32;
         }
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return pos.evaluate();
+            return self.evaluate();
         }
 
-        let stand_pat = pos.evaluate();
+        let stand_pat = self.evaluate();
 
         if stand_pat >= beta {
             return beta;
@@ -76,19 +77,19 @@ impl Board {
         }
 
         let mut move_list = MoveList::new();
-        pos.generate_captures(&mut move_list);
+        self.generate_captures(&mut move_list);
 
         let mut moves_made = 0;
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
-            if !pos.make_move(m) {
+            if !self.make_move(m) {
                 continue;
             }
 
             moves_made += 1;
-            let score = -Self::quiescence(pos, info, -beta, -alpha);
-            pos.unmake_move();
+            let score = -self.quiescence(info, -beta, -alpha);
+            self.unmake_move();
 
             if score > alpha {
                 if score >= beta {
@@ -124,7 +125,7 @@ impl Board {
         self.check_validity().unwrap();
 
         if depth <= ZERO_PLY {
-            return Self::quiescence(self, info, alpha, beta);
+            return self.quiescence(info, alpha, beta);
         }
 
         if info.nodes.trailing_zeros() >= 12 {
@@ -210,6 +211,16 @@ impl Board {
         // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
         let improving =
             !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
+
+        // razoring
+        if !PV
+            && depth <= RAZORING_MAX_DEPTH
+            && static_eval < alpha - 350 - 250 * depth.squared() {
+            let value = self.quiescence(info, alpha - 1, alpha);
+            if value < alpha {
+                return value;
+            }
+        }
 
         // beta-pruning. (reverse futility pruning)
         if !PV
