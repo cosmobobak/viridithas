@@ -1,4 +1,7 @@
-use crate::{chessmove::Move, definitions::{MAX_DEPTH, PIECE_EMPTY}};
+use crate::{
+    chessmove::Move,
+    definitions::{MAX_DEPTH, PIECE_EMPTY},
+};
 
 use super::Board;
 
@@ -6,7 +9,10 @@ impl Board {
     /// Add a move to the history table.
     pub fn add_history(&mut self, m: Move, score: i32) {
         let piece_moved = self.moved_piece(m);
-        debug_assert!(crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY, "Invalid piece moved by move {m} in position \n{self}");
+        debug_assert!(
+            crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY,
+            "Invalid piece moved by move {m} in position \n{self}"
+        );
         let to = m.to();
         self.history_table.add(piece_moved, to, score);
     }
@@ -31,7 +37,7 @@ impl Board {
         }
         let prev_to = prev_move.to();
         let prev_piece = self.piece_at(prev_to);
-        
+
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
@@ -47,7 +53,7 @@ impl Board {
         }
         let prev_to = prev_move.to();
         let prev_piece = self.piece_at(prev_to);
-        
+
         self.counter_move_table.get(prev_piece, prev_to) == m
     }
 
@@ -66,7 +72,7 @@ impl Board {
         let tpa_to = move_to_follow_up.to();
         // getting the previous piece type is a little awkward,
         // because follow-up history looks two ply into the past,
-        // meaning that the piece on the target square of the move 
+        // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
             let capture = prev_move.capture();
@@ -83,7 +89,7 @@ impl Board {
         };
         let to = m.to();
         let piece = self.moved_piece(m);
-        
+
         self.followup_history
             .add(tpa_piece, tpa_to, piece, to, score);
     }
@@ -102,7 +108,7 @@ impl Board {
         let tpa_to = move_to_follow_up.to();
         // getting the previous piece type is a little awkward,
         // because follow-up history looks two ply into the past,
-        // meaning that the piece on the target square of the move 
+        // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
             let capture = prev_move.capture();
@@ -119,9 +125,8 @@ impl Board {
         };
         let to = m.to();
         let piece = self.moved_piece(m);
-        
-        self.followup_history
-            .get(tpa_piece, tpa_to, piece, to)
+
+        self.followup_history.get(tpa_piece, tpa_to, piece, to)
     }
 
     /// Add a killer move.

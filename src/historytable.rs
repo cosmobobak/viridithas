@@ -1,4 +1,8 @@
-use crate::{definitions::{BOARD_N_SQUARES, PIECE_EMPTY}, validate::piece_valid, chessmove::Move};
+use crate::{
+    chessmove::Move,
+    definitions::{BOARD_N_SQUARES, PIECE_EMPTY},
+    validate::piece_valid,
+};
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
 
@@ -29,7 +33,7 @@ const fn piece_index(piece: u8) -> u8 {
 
 #[derive(Default)]
 pub struct HistoryTable {
-    table: Box<[[i32; BOARD_N_SQUARES]]>
+    table: Box<[[i32; BOARD_N_SQUARES]]>,
 }
 
 impl HistoryTable {
@@ -41,10 +45,7 @@ impl HistoryTable {
         if self.table.is_empty() {
             self.table = vec![[0; BOARD_N_SQUARES]; pslots()].into_boxed_slice();
         } else {
-            self.table
-                .iter_mut()
-                .flatten()
-                .for_each(|x| *x = 0);
+            self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
     }
 
@@ -63,13 +64,15 @@ impl HistoryTable {
     #[allow(dead_code)]
     pub fn print_stats(&self) {
         #![allow(clippy::cast_precision_loss)]
-        let sum = self.table
+        let sum = self
+            .table
             .iter()
             .flatten()
             .map(|x| i64::from(*x))
             .sum::<i64>();
         let mean = sum as f64 / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        let stdev = self.table
+        let stdev = self
+            .table
             .iter()
             .flatten()
             .map(|x| i64::from(*x))
@@ -79,19 +82,20 @@ impl HistoryTable {
             / (BOARD_N_SQUARES as f64 * pslots() as f64);
         println!("mean: {}", mean);
         println!("stdev: {}", stdev);
-        println!("max: {}", self.table.iter().flatten().copied().max().unwrap());
-        let nonzero = self.table
+        println!(
+            "max: {}",
+            self.table.iter().flatten().copied().max().unwrap()
+        );
+        let nonzero = self
+            .table
             .iter()
             .flatten()
             .copied()
             .filter(|x| *x != 0)
             .collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
-        let nz_mean = nonzero
-            .iter()
-            .map(|x| i64::from(*x))
-            .sum::<i64>() as f64
-            / (nonzero.len() as f64);
+        let nz_mean =
+            nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);
         let nz_stdev = nonzero
             .iter()
             .map(|x| i64::from(*x))
@@ -106,7 +110,7 @@ impl HistoryTable {
 
 #[derive(Default)]
 pub struct DoubleHistoryTable {
-    table: Vec<i32>
+    table: Vec<i32>,
 }
 
 impl DoubleHistoryTable {
@@ -120,7 +124,8 @@ impl DoubleHistoryTable {
 
     pub fn clear(&mut self) {
         if self.table.is_empty() {
-            self.table.resize(BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES * pslots(), 0);
+            self.table
+                .resize(BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES * pslots(), 0);
         } else {
             self.table.fill(0);
         }
@@ -147,12 +152,10 @@ impl DoubleHistoryTable {
     #[allow(dead_code)]
     pub fn print_stats(&self) {
         #![allow(clippy::cast_precision_loss)]
-        let sum = self.table
-            .iter()
-            .map(|x| i64::from(*x))
-            .sum::<i64>();
+        let sum = self.table.iter().map(|x| i64::from(*x)).sum::<i64>();
         let mean = sum as f64 / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        let stdev = self.table
+        let stdev = self
+            .table
             .iter()
             .map(|x| i64::from(*x))
             .map(|x| (x as f64 - mean).powi(2))
@@ -162,17 +165,15 @@ impl DoubleHistoryTable {
         println!("mean: {}", mean);
         println!("stdev: {}", stdev);
         println!("max: {}", self.table.iter().copied().max().unwrap());
-        let nonzero = self.table
+        let nonzero = self
+            .table
             .iter()
             .copied()
             .filter(|x| *x != 0)
             .collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
-        let nz_mean = nonzero
-            .iter()
-            .map(|x| i64::from(*x))
-            .sum::<i64>() as f64
-            / (nonzero.len() as f64);
+        let nz_mean =
+            nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);
         let nz_stdev = nonzero
             .iter()
             .map(|x| i64::from(*x))
@@ -186,14 +187,12 @@ impl DoubleHistoryTable {
 }
 
 pub struct MoveTable {
-    table: Vec<Move>
+    table: Vec<Move>,
 }
 
 impl MoveTable {
     pub const fn new() -> Self {
-        Self {
-            table: Vec::new()
-        }
+        Self { table: Vec::new() }
     }
 
     pub fn clear(&mut self) {

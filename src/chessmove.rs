@@ -71,11 +71,19 @@ impl Move {
     }
 
     pub const fn is_kingside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), crate::definitions::Square::G1 | crate::definitions::Square::G8)
+        self.is_castle()
+            && matches!(
+                self.to(),
+                crate::definitions::Square::G1 | crate::definitions::Square::G8
+            )
     }
 
     pub const fn is_queenside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), crate::definitions::Square::C1 | crate::definitions::Square::C8)
+        self.is_castle()
+            && matches!(
+                self.to(),
+                crate::definitions::Square::C1 | crate::definitions::Square::C8
+            )
     }
 }
 

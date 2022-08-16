@@ -1,12 +1,12 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{DRAW_SCORE, MATE_SCORE, is_mate_score},
+        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE},
         movegen::TT_MOVE_SCORE,
         Board,
     },
     chessmove::Move,
-    definitions::{Depth, INFINITY, MAX_DEPTH, MAX_PLY, ONE_PLY, ZERO_PLY, QUEEN},
+    definitions::{Depth, INFINITY, MAX_DEPTH, MAX_PLY, ONE_PLY, QUEEN, ZERO_PLY},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -105,305 +105,353 @@ impl Board {
         alpha
     }
 
-#[rustfmt::skip]
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::similar_names)]
-    pub fn alpha_beta<const PV: bool>(&mut self, info: &mut SearchInfo, ss: &mut Stack, mut depth: Depth, mut alpha: i32, beta: i32) -> i32 {
-    #[cfg(debug_assertions)]
-    self.check_validity().unwrap();
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::similar_names
+    )]
+    pub fn alpha_beta<const PV: bool>(
+        &mut self,
+        info: &mut SearchInfo,
+        ss: &mut Stack,
+        mut depth: Depth,
+        mut alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
 
-    if depth <= ZERO_PLY {
-        return Self::quiescence(self, info, alpha, beta);
-    }
-
-    if info.nodes.trailing_zeros() >= 12 {
-        info.check_up();
-        if info.stopped {
-            return 0;
-        }
-    }
-
-    let height: i32 = self.height().try_into().unwrap();
-
-    let root_node = height == 0;
-
-    info.nodes += 1;
-    info.seldepth = if root_node { ZERO_PLY } else { info.seldepth.max(height.into()) };
-
-    if !root_node {
-        // check draw
-        if self.is_draw() {
-            // score fuzzing apparently helps with threefolds.
-            return 1 - (info.nodes & 2) as i32;
+        if depth <= ZERO_PLY {
+            return Self::quiescence(self, info, alpha, beta);
         }
 
-        // are we too deep?
-        if height > MAX_DEPTH.round() - 1 {
-            return self.evaluate();
-        }
-
-        // mate-distance pruning.
-        // doesn't actually add strength, but it makes viri better at solving puzzles.
-        // approach taken from Ethereal.
-        let r_alpha = if alpha > -MATE_SCORE + height     { alpha } else { -MATE_SCORE + height };
-        let r_beta  = if  beta <  MATE_SCORE - height - 1 {  beta } else {  MATE_SCORE - height - 1 };
-        if r_alpha >= r_beta { return r_alpha; }
-    }
-
-    debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
-
-    let excluded = ss.excluded[self.height()];
-
-    let tt_hit = if excluded.is_null() { 
-        match self.tt_probe(alpha, beta, depth) {
-            ProbeResult::Cutoff(s) => {
-                return s;
-            }
-            ProbeResult::Hit(tt_hit) => {
-                Some(tt_hit)
-            }
-            ProbeResult::Nothing => {
-                // TT-reduction.
-                if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH { depth -= 1; }
-                None
+        if info.nodes.trailing_zeros() >= 12 {
+            info.check_up();
+            if info.stopped {
+                return 0;
             }
         }
-    } else {
-        None // do not probe the TT if we're in a singular-verification search.
-    };
 
-    let in_check = self.in_check::<{ Self::US }>();
+        let height: i32 = self.height().try_into().unwrap();
 
-    let static_eval = if in_check { 
-        INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
-    } else { 
-        self.evaluate()
-    };
+        let root_node = height == 0;
 
-    ss.evals[self.height()] = static_eval;
-
-    // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
-    let improving = !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
-
-    // beta-pruning. (reverse futility pruning)
-    if !PV 
-    && !in_check 
-    && !root_node 
-    && excluded.is_null()
-    && !is_mate_score(beta) 
-    && depth <= BETA_PRUNING_DEPTH 
-    && static_eval - BETA_PRUNING_MARGIN * depth + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN > beta {
-        return static_eval;
-    }
-
-    // null-move pruning.
-    if !PV 
-    && !in_check 
-    && !root_node 
-    && excluded.is_null()
-    && static_eval >= beta - i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN
-    && depth >= 3.into() 
-    && self.zugzwang_unlikely() 
-    && !self.last_move_was_nullmove() {
-        self.make_nullmove();
-        let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
-        self.unmake_nullmove();
-        if info.stopped {
-            return 0;
-        }
-        if score >= beta {
-            return beta;
-        }
-    }
-
-    let mut move_list = MoveList::new();
-    self.generate_moves(&mut move_list);
-
-    // moves closer to the root (higher depth) should affect the history counters more.
-    let history_score = depth.squared();
-
-    let original_alpha = alpha;
-    let mut moves_made = 0;
-    let mut quiet_moves_made = 0;
-    let mut best_move = Move::NULL;
-    let mut best_score = -INFINITY;
-
-    let imp_2x = 1 + i32::from(improving);
-    // number of quiet moves to try before we start pruning
-    let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
-    // whether late move pruning is sound in this position.
-    let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
-    // whether to skip quiet moves (as they would be futile).
-    let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
-
-    if let Some(tt_hit) = &tt_hit {
-        if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
-            // set the move-ordering score of the TT-move to a very high value.
-            movelist_entry.score = TT_MOVE_SCORE;
-        }
-    }
-
-    let mut move_picker = move_list.init_movepicker();
-    while let Some(m) = move_picker.next() {
-        if !self.make_move(m) {
-            continue;
-        }
-        if excluded == m {
-            self.unmake_move();
-            continue;
-        }
-        moves_made += 1;
-
-        let is_capture = m.is_capture();
-        let gives_check = self.in_check::<{ Self::US }>();
-        let is_promotion = m.is_promo();
-
-        let is_interesting = is_capture || is_promotion || gives_check || in_check;
-        let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
-        quiet_moves_made += i32::from(!is_interesting);
-
-        if do_lmp && quiet_moves_made >= lmp_threshold {
-            self.unmake_move();
-            break; // okay to break because captures are ordered first.
-        }
-
-        // futility pruning
-        // if the static eval is too low, we might just skip the move.
-        if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning {
-            self.unmake_move();
-            continue;
-        }
-
-        let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| { 
-            !root_node
-            && moves_made == 1
-            && tt_hit.tt_move == m 
-            && depth >= SINGULARITY_MIN_DEPTH
-            && excluded.is_null() // don't recursively search the singular move.
-            && !is_mate_score(tt_hit.tt_value)
-            && tt_hit.tt_depth >= depth - 3
-            && tt_hit.tt_bound == HFlag::Beta
-        });
-
-        let extension = if maybe_singular {
-            let tt_value = tt_hit.as_ref().unwrap().tt_value;
-            let is_singular = self.is_singular(info, ss, m, tt_value, depth);
-            Depth::from(is_singular)
+        info.nodes += 1;
+        info.seldepth = if root_node {
+            ZERO_PLY
         } else {
-            Depth::from(gives_check)
+            info.seldepth.max(height.into())
         };
 
-        let mut score;
-        if moves_made == 1 {
-            // first move (presumably the PV-move)
-            score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
-        } else {
-            // calculation of LMR stuff
-            let can_reduce = extension == ZERO_PLY && do_lmr && depth >= 3.into() && moves_made >= (2 + usize::from(PV));
-            let r = if can_reduce {
-                let mut r = self.lmr_table.get(depth, moves_made);
-                r += i32::from(!PV);
-                Depth::new(r).clamp(ONE_PLY, depth - 1)
+        if !root_node {
+            // check draw
+            if self.is_draw() {
+                // score fuzzing apparently helps with threefolds.
+                return 1 - (info.nodes & 2) as i32;
+            }
+
+            // are we too deep?
+            if height > MAX_DEPTH.round() - 1 {
+                return self.evaluate();
+            }
+
+            // mate-distance pruning.
+            // doesn't actually add strength, but it makes viri better at solving puzzles.
+            // approach taken from Ethereal.
+            let r_alpha = if alpha > -MATE_SCORE + height {
+                alpha
             } else {
-                ONE_PLY
+                -MATE_SCORE + height
             };
-            // perform a zero-window search
-            score = -self.alpha_beta::<false>(info, ss, depth + extension - r, -alpha - 1, -alpha);
-            // if we failed, then full window search
-            if score > alpha && score < beta {
-                // this is a new best move, so it *is* PV.
-                score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
+            let r_beta = if beta < MATE_SCORE - height - 1 {
+                beta
+            } else {
+                MATE_SCORE - height - 1
+            };
+            if r_alpha >= r_beta {
+                return r_alpha;
             }
         }
-        self.unmake_move();
 
-        if info.stopped {
-            return 0;
+        debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
+
+        let excluded = ss.excluded[self.height()];
+
+        let tt_hit = if excluded.is_null() {
+            match self.tt_probe(alpha, beta, depth) {
+                ProbeResult::Cutoff(s) => {
+                    return s;
+                }
+                ProbeResult::Hit(tt_hit) => Some(tt_hit),
+                ProbeResult::Nothing => {
+                    // TT-reduction.
+                    if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH {
+                        depth -= 1;
+                    }
+                    None
+                }
+            }
+        } else {
+            None // do not probe the TT if we're in a singular-verification search.
+        };
+
+        let in_check = self.in_check::<{ Self::US }>();
+
+        let static_eval = if in_check {
+            INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+        } else {
+            self.evaluate()
+        };
+
+        ss.evals[self.height()] = static_eval;
+
+        // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
+        let improving =
+            !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
+
+        // beta-pruning. (reverse futility pruning)
+        if !PV
+            && !in_check
+            && !root_node
+            && excluded.is_null()
+            && !is_mate_score(beta)
+            && depth <= BETA_PRUNING_DEPTH
+            && static_eval - BETA_PRUNING_MARGIN * depth
+                + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN
+                > beta
+        {
+            return static_eval;
         }
 
-        if score > best_score {
-            best_score = score;
-            best_move = m;
-            if score > alpha {
-                alpha = score;
-                if score >= beta {
-                    // we failed high, so this is a cut-node
-                    if moves_made == 1 {
-                        info.failhigh_first += 1.0;
-                    }
-                    info.failhigh += 1.0;
+        // null-move pruning.
+        if !PV
+            && !in_check
+            && !root_node
+            && excluded.is_null()
+            && static_eval >= beta - i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN
+            && depth >= 3.into()
+            && self.zugzwang_unlikely()
+            && !self.last_move_was_nullmove()
+        {
+            self.make_nullmove();
+            let score = -self.alpha_beta::<PV>(info, ss, depth - 3, -beta, -alpha);
+            self.unmake_nullmove();
+            if info.stopped {
+                return 0;
+            }
+            if score >= beta {
+                return beta;
+            }
+        }
 
-                    if !is_capture {
-                        self.insert_killer(best_move);
-                        self.insert_countermove(best_move);
-                        self.update_history_metrics(best_move, history_score);
-                    }
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
 
-                    // decrease the history of the non-capture moves that came before the cutoff move.
-                    let ms = move_picker.moves_made();
-                    for e in ms.iter().filter(|e| !e.entry.is_capture()) {
-                        self.update_history_metrics(e.entry, -history_score);
-                    }
+        // moves closer to the root (higher depth) should affect the history counters more.
+        let history_score = depth.squared();
 
-                    if excluded.is_null() {
-                        self.tt_store(best_move, beta, HFlag::Beta, depth);
-                    }
+        let original_alpha = alpha;
+        let mut moves_made = 0;
+        let mut quiet_moves_made = 0;
+        let mut best_move = Move::NULL;
+        let mut best_score = -INFINITY;
 
-                    return beta;
+        let imp_2x = 1 + i32::from(improving);
+        // number of quiet moves to try before we start pruning
+        let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
+        // whether late move pruning is sound in this position.
+        let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
+        // whether to skip quiet moves (as they would be futile).
+        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
+
+        if let Some(tt_hit) = &tt_hit {
+            if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
+                // set the move-ordering score of the TT-move to a very high value.
+                movelist_entry.score = TT_MOVE_SCORE;
+            }
+        }
+
+        let mut move_picker = move_list.init_movepicker();
+        while let Some(m) = move_picker.next() {
+            if !self.make_move(m) {
+                continue;
+            }
+            if excluded == m {
+                self.unmake_move();
+                continue;
+            }
+            moves_made += 1;
+
+            let is_capture = m.is_capture();
+            let gives_check = self.in_check::<{ Self::US }>();
+            let is_promotion = m.is_promo();
+
+            let is_interesting = is_capture || is_promotion || gives_check || in_check;
+            let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
+            quiet_moves_made += i32::from(!is_interesting);
+
+            if do_lmp && quiet_moves_made >= lmp_threshold {
+                self.unmake_move();
+                break; // okay to break because captures are ordered first.
+            }
+
+            // futility pruning
+            // if the static eval is too low, we might just skip the move.
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
+            {
+                self.unmake_move();
+                continue;
+            }
+
+            let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
+                !root_node
+                    && moves_made == 1
+                    && tt_hit.tt_move == m
+                    && depth >= SINGULARITY_MIN_DEPTH
+                    && excluded.is_null()
+                    && !is_mate_score(tt_hit.tt_value)
+                    && tt_hit.tt_depth >= depth - 3
+                    && tt_hit.tt_bound == HFlag::Beta
+            });
+
+            let extension = if maybe_singular {
+                let tt_value = tt_hit.as_ref().unwrap().tt_value;
+                let is_singular = self.is_singular(info, ss, m, tt_value, depth);
+                Depth::from(is_singular)
+            } else {
+                Depth::from(gives_check)
+            };
+
+            let mut score;
+            if moves_made == 1 {
+                // first move (presumably the PV-move)
+                score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
+            } else {
+                // calculation of LMR stuff
+                let can_reduce = extension == ZERO_PLY
+                    && do_lmr
+                    && depth >= 3.into()
+                    && moves_made >= (2 + usize::from(PV));
+                let r = if can_reduce {
+                    let mut r = self.lmr_table.get(depth, moves_made);
+                    r += i32::from(!PV);
+                    Depth::new(r).clamp(ONE_PLY, depth - 1)
+                } else {
+                    ONE_PLY
+                };
+                // perform a zero-window search
+                score =
+                    -self.alpha_beta::<false>(info, ss, depth + extension - r, -alpha - 1, -alpha);
+                // if we failed, then full window search
+                if score > alpha && score < beta {
+                    // this is a new best move, so it *is* PV.
+                    score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
+                }
+            }
+            self.unmake_move();
+
+            if info.stopped {
+                return 0;
+            }
+
+            if score > best_score {
+                best_score = score;
+                best_move = m;
+                if score > alpha {
+                    alpha = score;
+                    if score >= beta {
+                        // we failed high, so this is a cut-node
+                        if moves_made == 1 {
+                            info.failhigh_first += 1.0;
+                        }
+                        info.failhigh += 1.0;
+
+                        if !is_capture {
+                            self.insert_killer(best_move);
+                            self.insert_countermove(best_move);
+                            self.update_history_metrics(best_move, history_score);
+                        }
+
+                        // decrease the history of the non-capture moves that came before the cutoff move.
+                        let ms = move_picker.moves_made();
+                        for e in ms.iter().filter(|e| !e.entry.is_capture()) {
+                            self.update_history_metrics(e.entry, -history_score);
+                        }
+
+                        if excluded.is_null() {
+                            self.tt_store(best_move, beta, HFlag::Beta, depth);
+                        }
+
+                        return beta;
+                    }
                 }
             }
         }
+
+        if moves_made == 0 {
+            if !excluded.is_null() {
+                return alpha;
+            }
+            if in_check {
+                return -MATE_SCORE + height;
+            }
+            return DRAW_SCORE;
+        }
+
+        if alpha == original_alpha {
+            // we didn't raise alpha, so this is an all-node
+            if excluded.is_null() {
+                self.tt_store(best_move, alpha, HFlag::Alpha, depth);
+            }
+        } else {
+            // we raised alpha, and didn't raise beta
+            // as if we had, we would have returned early,
+            // so this is a PV-node
+            if !best_move.is_capture() {
+                self.insert_killer(best_move);
+                self.insert_countermove(best_move);
+                self.update_history_metrics(best_move, history_score);
+            }
+
+            // decrease the history of the non-capture moves that came before the best move.
+            let ms = move_picker.moves_made();
+            for e in ms
+                .iter()
+                .take_while(|m| m.entry != best_move)
+                .filter(|e| !e.entry.is_capture())
+            {
+                self.update_history_metrics(e.entry, -history_score);
+            }
+
+            if excluded.is_null() {
+                self.tt_store(best_move, best_score, HFlag::Exact, depth);
+            }
+        }
+
+        alpha
     }
-
-    if moves_made == 0 {
-        if !excluded.is_null() {
-            return alpha;
-        }
-        if in_check {
-            return -MATE_SCORE + height;
-        }
-        return DRAW_SCORE;
-    }
-
-    if alpha == original_alpha {
-        // we didn't raise alpha, so this is an all-node
-        if excluded.is_null() {
-            self.tt_store(best_move, alpha, HFlag::Alpha, depth);
-        }
-    } else {
-        // we raised alpha, and didn't raise beta
-        // as if we had, we would have returned early, 
-        // so this is a PV-node
-        if !best_move.is_capture() {
-            self.insert_killer(best_move);
-            self.insert_countermove(best_move);
-            self.update_history_metrics(best_move, history_score);
-        }
-
-        // decrease the history of the non-capture moves that came before the best move.
-        let ms = move_picker.moves_made();
-        for e in ms.iter().take_while(|m| m.entry != best_move).filter(|e| !e.entry.is_capture()) {
-            self.update_history_metrics(e.entry, -history_score);
-        }
-
-        if excluded.is_null() {
-            self.tt_store(best_move, best_score, HFlag::Exact, depth);
-        }
-    }
-
-    alpha
-}
 
     fn update_history_metrics(&mut self, m: Move, history_score: i32) {
         self.add_history(m, history_score);
         self.add_followup_history(m, history_score);
     }
 
-    fn is_singular(&mut self, info: &mut SearchInfo, ss: &mut Stack, m: Move, tt_value: i32, depth: Depth) -> bool {
+    fn is_singular(
+        &mut self,
+        info: &mut SearchInfo,
+        ss: &mut Stack,
+        m: Move,
+        tt_value: i32,
+        depth: Depth,
+    ) -> bool {
         let reduced_beta = tt_value - 3 * depth.round();
         let reduced_depth = depth / 2;
         self.unmake_move(); // undo the singular move so we can search the position that it exists in.
         ss.excluded[self.height()] = m;
-        let value = self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
+        let value =
+            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
         ss.excluded[self.height()] = Move::NULL;
         self.make_move(m); // re-make the singular move.
         value < reduced_beta

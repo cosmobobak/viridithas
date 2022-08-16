@@ -1,8 +1,6 @@
 pub mod bitboards;
 
-use self::bitboards::{
-    lsb, north_east_one, north_west_one, south_east_one, south_west_one, BB_RANK_2, BB_RANK_7,
-};
+use self::bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7};
 pub use self::bitboards::{BitLoop, BB_NONE};
 
 use super::Board;
@@ -21,7 +19,8 @@ use crate::{
     },
     lookups::MVV_LVA_SCORE,
     macros,
-    validate::{piece_valid, square_on_board}, magic::MAGICS_READY,
+    magic::MAGICS_READY,
+    validate::{piece_valid, square_on_board},
 };
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
@@ -186,9 +185,11 @@ impl Board {
             FIRST_ORDER_KILLER_SCORE
         } else if killer_entry[1] == m {
             SECOND_ORDER_KILLER_SCORE
-        } else if self.is_countermove(m) { // move that refuted the previous move
+        } else if self.is_countermove(m) {
+            // move that refuted the previous move
             COUNTER_MOVE_SCORE
-        } else if self.is_third_order_killer(m) { // killer from two moves ago
+        } else if self.is_third_order_killer(m) {
+            // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {
             let history = self.history_score(m);
@@ -234,14 +235,14 @@ impl Board {
         };
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacks_west = if SIDE == WHITE {
-            south_east_one(their_pieces) & our_pawns
+            their_pieces.south_east_one() & our_pawns
         } else {
-            north_east_one(their_pieces) & our_pawns
+            their_pieces.north_east_one() & our_pawns
         };
         let attacks_east = if SIDE == WHITE {
-            south_west_one(their_pieces) & our_pawns
+            their_pieces.south_west_one() & our_pawns
         } else {
-            north_west_one(their_pieces) & our_pawns
+            their_pieces.north_west_one() & our_pawns
         };
         let promo_rank = if SIDE == WHITE { BB_RANK_7 } else { BB_RANK_2 };
         for from in BitLoop::new(attacks_west & !promo_rank) {
@@ -298,14 +299,14 @@ impl Board {
             self.pieces.pawns::<false>()
         };
         let attacks_west = if SIDE == WHITE {
-            south_east_one(ep_bb) & our_pawns
+            ep_bb.south_east_one() & our_pawns
         } else {
-            north_east_one(ep_bb) & our_pawns
+            ep_bb.north_east_one() & our_pawns
         };
         let attacks_east = if SIDE == WHITE {
-            south_west_one(ep_bb) & our_pawns
+            ep_bb.south_west_one() & our_pawns
         } else {
-            north_west_one(ep_bb) & our_pawns
+            ep_bb.north_west_one() & our_pawns
         };
 
         if attacks_west != 0 {
@@ -688,14 +689,14 @@ impl Board {
         let mut attackers = 0;
         if side == WHITE {
             let our_pawns = self.pieces.pawns::<true>();
-            let west_attacks = north_west_one(our_pawns);
-            let east_attacks = north_east_one(our_pawns);
+            let west_attacks = our_pawns.north_west_one();
+            let east_attacks = our_pawns.north_east_one();
             let pawn_attacks = west_attacks | east_attacks;
             attackers |= pawn_attacks;
         } else {
             let our_pawns = self.pieces.pawns::<false>();
-            let west_attacks = south_west_one(our_pawns);
-            let east_attacks = south_east_one(our_pawns);
+            let west_attacks = our_pawns.south_west_one();
+            let east_attacks = our_pawns.south_east_one();
             let pawn_attacks = west_attacks | east_attacks;
             attackers |= pawn_attacks;
         }

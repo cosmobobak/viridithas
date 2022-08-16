@@ -17,8 +17,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     search,
     searchinfo::SearchInfo,
-    NAME,
-    VERSION,
+    NAME, VERSION,
 };
 
 enum UciError {
@@ -58,15 +57,15 @@ impl From<ParseIntError> for UciError {
 impl Display for UciError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UciError::ParseGo(s) => write!(f, "ParseGo: {}", s),
-            UciError::ParseOption(s) => write!(f, "ParseOption: {}", s),
-            UciError::ParseFen(s) => write!(f, "ParseFen: {}", s),
-            UciError::ParseMove(s) => write!(f, "ParseMove: {}", s),
-            UciError::UnexpectedCommandTermination(s) => {
+            Self::ParseGo(s) => write!(f, "ParseGo: {}", s),
+            Self::ParseOption(s) => write!(f, "ParseOption: {}", s),
+            Self::ParseFen(s) => write!(f, "ParseFen: {}", s),
+            Self::ParseMove(s) => write!(f, "ParseMove: {}", s),
+            Self::UnexpectedCommandTermination(s) => {
                 write!(f, "UnexpectedCommandTermination: {}", s)
             }
-            UciError::InvalidFormat(s) => write!(f, "InvalidFormat: {}", s),
-            UciError::UnknownCommand(s) => write!(f, "UnknownCommand: {}", s),
+            Self::InvalidFormat(s) => write!(f, "InvalidFormat: {}", s),
+            Self::UnknownCommand(s) => write!(f, "UnknownCommand: {}", s),
         }
     }
 }
@@ -135,7 +134,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     if command != "go" {
         return Err(UciError::InvalidFormat("Expected \"go\"".into()));
     }
-    
+
     while let Some(part) = parts.next() {
         match part {
             "depth" => depth = Some(part_parse("depth", parts.next())?),
@@ -197,10 +196,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     Ok(())
 }
 
-fn part_parse<T>(
-    target: &str,
-    next_part: Option<&str>,
-) -> Result<T, UciError>
+fn part_parse<T>(target: &str, next_part: Option<&str>) -> Result<T, UciError>
 where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Display,
@@ -208,9 +204,7 @@ where
     next_part
         .ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?
         .parse()
-        .map_err(|e| {
-            UciError::InvalidFormat(format!("value for {target} is not a number: {e}"))
-        })
+        .map_err(|e| UciError::InvalidFormat(format!("value for {target} is not a number: {e}")))
 }
 
 struct SetOptions {
@@ -241,7 +235,10 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, Uci
             "no option value given after \"setoption name {opt_name} value\""
         ))
     })?;
-    let mut out = SetOptions { search_config: search::Config::default(), hash_mb: None };
+    let mut out = SetOptions {
+        search_config: search::Config::default(),
+        hash_mb: None,
+    };
     match opt_name {
         "LMRBASE" => out.search_config.lmr_base = opt_value.parse()?,
         "LMRDIVISION" => out.search_config.lmr_division = opt_value.parse()?,

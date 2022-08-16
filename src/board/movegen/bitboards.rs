@@ -26,25 +26,11 @@ pub const BB_NONE: u64 = 0x0000_0000_0000_0000;
 pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 
 pub static BB_RANKS: [u64; 8] = [
-    BB_RANK_1,
-    BB_RANK_2,
-    BB_RANK_3,
-    BB_RANK_4,
-    BB_RANK_5,
-    BB_RANK_6,
-    BB_RANK_7,
-    BB_RANK_8,
+    BB_RANK_1, BB_RANK_2, BB_RANK_3, BB_RANK_4, BB_RANK_5, BB_RANK_6, BB_RANK_7, BB_RANK_8,
 ];
 
 pub static BB_FILES: [u64; 8] = [
-    BB_FILE_A,
-    BB_FILE_B,
-    BB_FILE_C,
-    BB_FILE_D,
-    BB_FILE_E,
-    BB_FILE_F,
-    BB_FILE_G,
-    BB_FILE_H,
+    BB_FILE_A, BB_FILE_B, BB_FILE_C, BB_FILE_D, BB_FILE_E, BB_FILE_F, BB_FILE_G, BB_FILE_H,
 ];
 
 /// least significant bit of a u64
@@ -310,38 +296,51 @@ impl BitBoard {
         }
     }
 
-    pub const fn pawn_attacks<const IS_WHITE: bool>(&self) -> u64 {
+    pub fn pawn_attacks<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE {
-            north_east_one(self.w_pawns) | north_west_one(self.w_pawns)
+            self.w_pawns.north_east_one() | self.w_pawns.north_west_one()
         } else {
-            south_east_one(self.b_pawns) | south_west_one(self.b_pawns)
+            self.b_pawns.south_east_one() | self.b_pawns.south_west_one()
         }
     }
 }
 
-pub const fn north_east_one(b: u64) -> u64 {
-    (b << 9) & !BB_FILE_A
+pub trait BitShiftExt {
+    fn north_east_one(self) -> Self;
+    fn north_west_one(self) -> Self;
+    fn south_east_one(self) -> Self;
+    fn south_west_one(self) -> Self;
+    fn west_one(self) -> Self;
+    fn east_one(self) -> Self;
+    fn north_one(self) -> Self;
+    fn south_one(self) -> Self;
 }
-pub const fn south_east_one(b: u64) -> u64 {
-    (b >> 7) & !BB_FILE_A
-}
-pub const fn south_west_one(b: u64) -> u64 {
-    (b >> 9) & !BB_FILE_H
-}
-pub const fn north_west_one(b: u64) -> u64 {
-    (b << 7) & !BB_FILE_H
-}
-#[allow(dead_code)] pub const fn west_one(b: u64) -> u64 {
-    (b << 1) & !BB_FILE_H
-}
-#[allow(dead_code)] pub const fn east_one(b: u64) -> u64 {
-    (b >> 1) & !BB_FILE_A
-}
-pub const fn north_one(b: u64) -> u64 {
-    b << 8
-}
-pub const fn south_one(b: u64) -> u64 {
-    b >> 8
+
+impl BitShiftExt for u64 {
+    fn north_east_one(self) -> Self {
+        (self << 9) & !BB_FILE_A
+    }
+    fn north_west_one(self) -> Self {
+        (self << 7) & !BB_FILE_H
+    }
+    fn south_east_one(self) -> Self {
+        (self >> 7) & !BB_FILE_A
+    }
+    fn south_west_one(self) -> Self {
+        (self >> 9) & !BB_FILE_H
+    }
+    fn west_one(self) -> Self {
+        (self << 1) & !BB_FILE_H
+    }
+    fn east_one(self) -> Self {
+        (self >> 1) & !BB_FILE_A
+    }
+    fn north_one(self) -> Self {
+        self << 8
+    }
+    fn south_one(self) -> Self {
+        self >> 8
+    }
 }
 
 pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {

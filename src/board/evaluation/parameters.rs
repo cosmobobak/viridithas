@@ -7,9 +7,9 @@ use crate::{
 
 use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
-    KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
-    QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
-    ROOK_OPEN_FILE_BONUS, KING_DANGER_COEFFS,
+    KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES,
+    QUEEN_HALF_OPEN_FILE_BONUS, QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS,
+    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -162,8 +162,7 @@ impl Parameters {
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
             );
-        ss
-            .flat_map(|s| [s.0, s.1].into_iter())
+        ss.flat_map(|s| [s.0, s.1].into_iter())
             .chain(self.king_danger_coeffs.iter().copied())
             .collect()
     }
@@ -256,7 +255,11 @@ impl Parameters {
             s_iter.next().is_none(),
             "reading data from a vector of wrong size (too big)"
         );
-        for (coeff_out, coeff_in) in out.king_danger_coeffs.iter_mut().zip(data[data.len() - 3..].iter()) {
+        for (coeff_out, coeff_in) in out
+            .king_danger_coeffs
+            .iter_mut()
+            .zip(data[data.len() - 3..].iter())
+        {
             *coeff_out = *coeff_in;
         }
         out
@@ -314,7 +317,7 @@ mod tests {
         use crate::board::evaluation::Parameters;
 
         let n_params = Parameters::default().vectorise().len();
-        
+
         for _ in 1..100 {
             let vec = (0..n_params)
                 .map(|_| rand::random::<i32>())
