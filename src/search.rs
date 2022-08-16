@@ -212,16 +212,6 @@ impl Board {
         let improving =
             !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
-        // razoring
-        if !PV
-            && depth <= RAZORING_MAX_DEPTH
-            && static_eval < alpha - 350 - 250 * depth.squared() {
-            let value = self.quiescence(info, alpha - 1, alpha);
-            if value < alpha {
-                return value;
-            }
-        }
-
         // beta-pruning. (reverse futility pruning)
         if !PV
             && !in_check
