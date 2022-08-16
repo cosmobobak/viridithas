@@ -75,8 +75,14 @@ impl Board {
             alpha = stand_pat;
         }
 
+        let in_check = self.in_check::<{ Self::US }>();
+
         let mut move_list = MoveList::new();
-        self.generate_captures(&mut move_list);
+        if in_check {
+            self.generate_moves(&mut move_list);
+        } else {
+            self.generate_captures(&mut move_list);
+        }
 
         let mut moves_made = 0;
 
@@ -96,6 +102,10 @@ impl Board {
                 }
                 alpha = score;
             }
+        }
+
+        if in_check && moves_made == 0 {
+            return -MATE_SCORE + height;
         }
 
         alpha
