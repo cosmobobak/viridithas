@@ -237,7 +237,7 @@ impl Board {
         {
             let nm_depth = (depth - 3) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -alpha);
+            let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
