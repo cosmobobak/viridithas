@@ -3,7 +3,7 @@
 use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
-    definitions::{CompactDepthStorage, Depth, INFINITY, MAX_DEPTH},
+    definitions::{depth::CompactDepthStorage, depth::Depth, INFINITY, MAX_DEPTH},
     macros,
 };
 

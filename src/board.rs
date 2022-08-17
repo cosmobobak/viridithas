@@ -19,7 +19,7 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        colour_of, square_name, type_of, Colour, Depth, File,
+        colour_of, square_name, type_of, Colour, depth::Depth, File,
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
@@ -426,15 +426,11 @@ impl Board {
         if self.castle_perm == 0 {
             fen.push('-');
         } else {
-            #[rustfmt::skip]
-            write!(
-                fen,
-                "{}{}{}{}",
-                if self.castle_perm & WKCA == 0 { "" } else { "K" },
-                if self.castle_perm & WQCA == 0 { "" } else { "Q" },
-                if self.castle_perm & BKCA == 0 { "" } else { "k" },
-                if self.castle_perm & BQCA == 0 { "" } else { "q" },
-            ).unwrap();
+            [WKCA, WQCA, BKCA, BQCA]
+                .into_iter()
+                .zip(['K', 'Q', 'k', 'q'])
+                .filter(|(m, _)| self.castle_perm & m != 0)
+                .for_each(|(_, ch)| fen.push(ch));
         }
         fen.push(' ');
         if self.ep_sq == NO_SQUARE {

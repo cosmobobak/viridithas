@@ -1,6 +1,6 @@
 use std::{sync::mpsc, time::Instant};
 
-use crate::definitions::Depth;
+use crate::definitions::depth::Depth;
 
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
