@@ -283,7 +283,7 @@ impl Board {
             let gives_check = self.in_check::<{ Self::US }>();
             let is_quiet = m.is_quiet();
 
-            if skipquiets && is_quiet && !gives_check {
+            if skipquiets && is_quiet {
                 self.unmake_move();
                 continue;
             }
