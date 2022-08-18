@@ -1180,20 +1180,20 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub const fn num_ct<const PIECE: u8>(&self) -> u8 {
-        self.piece_lists[PIECE as usize].len()
-    }
-
     pub const fn num(&self, piece: u8) -> u8 {
         self.piece_lists[piece as usize].len()
     }
 
-    pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
-        self.piece_lists[PIECE_TYPE as usize].len() + self.piece_lists[PIECE_TYPE as usize + 6].len()
-    }
-
     pub const fn num_pt(&self, pt: u8) -> u8 {
         self.num(pt) + self.num(pt + 6)
+    }
+
+    pub const fn num_ct<const PIECE: u8>(&self) -> u8 {
+        self.piece_lists[PIECE as usize].len()
+    }
+
+    pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
+        self.piece_lists[PIECE_TYPE as usize].len() + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
     pub fn reset_tables(&mut self) {
