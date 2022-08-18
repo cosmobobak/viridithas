@@ -14,11 +14,10 @@ use crate::{
     chessmove::Move,
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
-        BB, BISHOP, BKCA, BLACK, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
+        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
         WKCA, WN, WQ, WQCA, WR,
     },
     lookups::MVV_LVA_SCORE,
-    macros,
     magic::MAGICS_READY,
     validate::{piece_valid, square_on_board},
 };
@@ -222,46 +221,38 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const SIDE: u8>(&self, move_list: &mut MoveList) {
-        let our_pawns = if SIDE == WHITE {
-            self.pieces.pawns::<true>()
-        } else {
-            self.pieces.pawns::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+    fn generate_pawn_caps<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
-        let attacks_west = if SIDE == WHITE {
+        let attacks_west = if IS_WHITE {
             their_pieces.south_east_one() & our_pawns
         } else {
             their_pieces.north_east_one() & our_pawns
         };
-        let attacks_east = if SIDE == WHITE {
+        let attacks_east = if IS_WHITE {
             their_pieces.south_west_one() & our_pawns
         } else {
             their_pieces.north_west_one() & our_pawns
         };
-        let promo_rank = if SIDE == WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         for from in BitLoop::new(attacks_west & !promo_rank) {
-            let to = if SIDE == WHITE { from + 7 } else { from - 9 };
+            let to = if IS_WHITE { from + 7 } else { from - 9 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::new(attacks_east & !promo_rank) {
-            let to = if SIDE == WHITE { from + 9 } else { from - 7 };
+            let to = if IS_WHITE { from + 9 } else { from - 7 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::new(attacks_west & promo_rank) {
-            let to = if SIDE == WHITE { from + 7 } else { from - 9 };
+            let to = if IS_WHITE { from + 7 } else { from - 9 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            if SIDE == WHITE {
+            if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
@@ -272,10 +263,10 @@ impl Board {
             }
         }
         for from in BitLoop::new(attacks_east & promo_rank) {
-            let to = if SIDE == WHITE { from + 9 } else { from - 7 };
+            let to = if IS_WHITE { from + 9 } else { from - 7 };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            if SIDE == WHITE {
+            if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
                     self.add_capture_move(Move::new(from, to, cap, promo, 0), move_list);
                 }
@@ -287,23 +278,19 @@ impl Board {
         }
     }
 
-    fn generate_ep<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    fn generate_ep<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #![allow(clippy::cast_possible_truncation)]
         if self.ep_sq == NO_SQUARE {
             return;
         }
         let ep_bb = 1 << self.ep_sq;
-        let our_pawns = if SIDE == WHITE {
-            self.pieces.pawns::<true>()
-        } else {
-            self.pieces.pawns::<false>()
-        };
-        let attacks_west = if SIDE == WHITE {
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let attacks_west = if IS_WHITE {
             ep_bb.south_east_one() & our_pawns
         } else {
             ep_bb.north_east_one() & our_pawns
         };
-        let attacks_east = if SIDE == WHITE {
+        let attacks_east = if IS_WHITE {
             ep_bb.south_west_one() & our_pawns
         } else {
             ep_bb.north_west_one() & our_pawns
@@ -325,41 +312,37 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<const SIDE: u8>(&self, move_list: &mut MoveList) {
-        let start_rank = if SIDE == WHITE { BB_RANK_2 } else { BB_RANK_7 };
-        let promo_rank = if SIDE == WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        let shifted_empty_squares = if SIDE == WHITE {
+    fn generate_pawn_forward<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
+        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let shifted_empty_squares = if IS_WHITE {
             self.pieces.empty() >> 8
         } else {
             self.pieces.empty() << 8
         };
-        let double_shifted_empty_squares = if SIDE == WHITE {
+        let double_shifted_empty_squares = if IS_WHITE {
             self.pieces.empty() >> 16
         } else {
             self.pieces.empty() << 16
         };
-        let our_pawns = if SIDE == WHITE {
-            self.pieces.pawns::<true>()
-        } else {
-            self.pieces.pawns::<false>()
-        };
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
-            let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
+            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
             self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
         }
         for sq in BitLoop::new(double_pushable_pawns) {
-            let to = if SIDE == WHITE { sq + 16 } else { sq - 16 };
+            let to = if IS_WHITE { sq + 16 } else { sq - 16 };
             self.add_quiet_move(
                 Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, Move::PAWN_START_MASK),
                 move_list,
             );
         }
         for sq in BitLoop::new(promoting_pawns) {
-            let to = if SIDE == WHITE { sq + 8 } else { sq - 8 };
-            if SIDE == WHITE {
+            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
+            if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
                     self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
@@ -375,45 +358,25 @@ impl Board {
         debug_assert!(self.movegen_ready);
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         if self.side == WHITE {
-            self.generate_moves_for::<WHITE>(move_list);
+            self.generate_moves_for::<true>(move_list);
         } else {
-            self.generate_moves_for::<BLACK>(move_list);
+            self.generate_moves_for::<false>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     #[inline(never)]
-    pub fn generate_moves_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    pub fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if SIDE != WHITE && SIDE != BLACK {
-            unsafe {
-                macros::inconceivable!();
-            }
-        }
-
-        if SIDE == WHITE {
-            self.generate_pawn_forward::<WHITE>(move_list);
-            self.generate_pawn_caps::<WHITE>(move_list);
-            self.generate_ep::<WHITE>(move_list);
-        } else {
-            self.generate_pawn_forward::<BLACK>(move_list);
-            self.generate_pawn_caps::<BLACK>(move_list);
-            self.generate_ep::<BLACK>(move_list);
-        }
+        self.generate_pawn_forward::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
-        let our_knights = if SIDE == WHITE {
-            self.pieces.knights::<true>()
-        } else {
-            self.pieces.knights::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+        let our_knights = self.pieces.knights::<IS_WHITE>();
+        let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         let freespace = self.pieces.empty();
         for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
@@ -429,17 +392,7 @@ impl Board {
         }
 
         // kings
-        let our_king = if SIDE == WHITE {
-            self.pieces.king::<true>()
-        } else {
-            self.pieces.king::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
-        let freespace = self.pieces.empty();
+        let our_king = self.pieces.king::<IS_WHITE>();
         for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
@@ -454,17 +407,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = if SIDE == WHITE {
-            self.pieces.bishopqueen::<true>()
-        } else {
-            self.pieces.bishopqueen::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
-        let freespace = self.pieces.empty();
+        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
@@ -480,18 +423,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = if SIDE == WHITE {
-            self.pieces.rookqueen::<true>()
-        } else {
-            self.pieces.rookqueen::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
-        let freespace = self.pieces.empty();
-        let blockers = self.pieces.occupied();
+        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
@@ -505,48 +437,29 @@ impl Board {
             }
         }
 
-        self.generate_castling_moves_for::<SIDE>(move_list);
+        self.generate_castling_moves_for::<IS_WHITE>(move_list);
     }
 
     pub fn generate_captures(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_captures_for::<WHITE>(move_list);
+            self.generate_captures_for::<true>(move_list);
         } else {
-            self.generate_captures_for::<BLACK>(move_list);
+            self.generate_captures_for::<false>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if SIDE != WHITE && SIDE != BLACK {
-            unsafe {
-                macros::inconceivable!();
-            }
-        }
-
         // both pawn moves and captures
-        if SIDE == WHITE {
-            self.generate_pawn_caps::<WHITE>(move_list);
-            self.generate_ep::<WHITE>(move_list);
-        } else {
-            self.generate_pawn_caps::<BLACK>(move_list);
-            self.generate_ep::<BLACK>(move_list);
-        }
+        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
-        let our_knights = if SIDE == WHITE {
-            self.pieces.knights::<true>()
-        } else {
-            self.pieces.knights::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+        let our_knights = self.pieces.knights::<IS_WHITE>();
+        let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
@@ -558,16 +471,7 @@ impl Board {
         }
 
         // kings
-        let our_king = if SIDE == WHITE {
-            self.pieces.king::<true>()
-        } else {
-            self.pieces.king::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+        let our_king = self.pieces.king::<IS_WHITE>();
         for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
@@ -579,16 +483,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = if SIDE == WHITE {
-            self.pieces.bishopqueen::<true>()
-        } else {
-            self.pieces.bishopqueen::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
@@ -601,16 +496,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = if SIDE == WHITE {
-            self.pieces.rookqueen::<true>()
-        } else {
-            self.pieces.rookqueen::<false>()
-        };
-        let their_pieces = if SIDE == WHITE {
-            self.pieces.their_pieces::<true>()
-        } else {
-            self.pieces.their_pieces::<false>()
-        };
+        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
@@ -625,14 +511,14 @@ impl Board {
 
     pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_castling_moves_for::<WHITE>(move_list);
+            self.generate_castling_moves_for::<true>(move_list);
         } else {
-            self.generate_castling_moves_for::<BLACK>(move_list);
+            self.generate_castling_moves_for::<false>(move_list);
         }
     }
 
-    pub fn generate_castling_moves_for<const SIDE: u8>(&self, move_list: &mut MoveList) {
-        if SIDE == WHITE {
+    pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        if IS_WHITE {
             if (self.castle_perm & WKCA) != 0
                 && self.piece_at(F1) == PIECE_EMPTY
                 && self.piece_at(G1) == PIECE_EMPTY
