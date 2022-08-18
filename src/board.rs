@@ -556,51 +556,54 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        // knights
-        let knights = self.pieces.knights::<IS_WHITE>();
-        let knight_attacks_from_this_square = bitboards::attacks::<{ KNIGHT }>(sq, BB_NONE);
-        if (knights & knight_attacks_from_this_square) != BB_NONE {
-            return true;
-        }
-
-        // king
+        let sq_bb = 1 << sq;
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let our_knights = self.pieces.knights::<IS_WHITE>();
+        let our_diags = self.pieces.bishopqueen::<IS_WHITE>();
+        let our_orthos = self.pieces.rookqueen::<IS_WHITE>();
         let our_king = self.pieces.king::<IS_WHITE>();
-        let king_attacks_from_this_square = bitboards::attacks::<{ KING }>(sq, BB_NONE);
-        if (our_king & king_attacks_from_this_square) != BB_NONE {
-            return true;
-        }
+        let blockers = self.pieces.occupied();
 
         // pawns
-        let our_pawns = self.pieces.pawns::<IS_WHITE>();
         if IS_WHITE {
             let west_attacks = our_pawns.north_west_one();
             let east_attacks = our_pawns.north_east_one();
             let attacks = west_attacks | east_attacks;
-            if attacks & (1 << sq) != 0 {
+            if attacks & sq_bb != 0 {
                 return true;
             }
         } else {
             let west_attacks = our_pawns.south_west_one();
             let east_attacks = our_pawns.south_east_one();
             let attacks = west_attacks | east_attacks;
-            if attacks & (1 << sq) != 0 {
+            if attacks & sq_bb != 0 {
                 return true;
             }
         }
 
-        // rooks, queens
-        let our_rooks_queens = self.pieces.rookqueen::<IS_WHITE>();
-        let ortho_attacks_from_this_square =
-            bitboards::attacks::<{ ROOK }>(sq, self.pieces.occupied());
-        if (our_rooks_queens & ortho_attacks_from_this_square) != BB_NONE {
+        // knights
+        let knight_attacks_from_this_square = bitboards::attacks::<{ KNIGHT }>(sq, BB_NONE);
+        if our_knights & knight_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // bishops, queens
-        let our_bishops_queens = self.pieces.bishopqueen::<IS_WHITE>();
         let diag_attacks_from_this_square =
-            bitboards::attacks::<{ BISHOP }>(sq, self.pieces.occupied());
-        if (our_bishops_queens & diag_attacks_from_this_square) != BB_NONE {
+            bitboards::attacks::<{ BISHOP }>(sq, blockers);
+        if our_diags & diag_attacks_from_this_square != BB_NONE {
+            return true;
+        }
+
+        // rooks, queens
+        let ortho_attacks_from_this_square =
+            bitboards::attacks::<{ ROOK }>(sq, blockers);
+        if our_orthos & ortho_attacks_from_this_square != BB_NONE {
+            return true;
+        }
+
+        // king
+        let king_attacks_from_this_square = bitboards::attacks::<{ KING }>(sq, BB_NONE);
+        if our_king & king_attacks_from_this_square != BB_NONE {
             return true;
         }
 
