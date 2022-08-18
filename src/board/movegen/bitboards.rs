@@ -329,11 +329,11 @@ impl BitShiftExt for u64 {
     fn south_west_one(self) -> Self {
         (self >> 9) & !BB_FILE_H
     }
-    fn west_one(self) -> Self {
-        (self << 1) & !BB_FILE_H
-    }
     fn east_one(self) -> Self {
         (self >> 1) & !BB_FILE_A
+    }
+    fn west_one(self) -> Self {
+        (self << 1) & !BB_FILE_H
     }
     fn north_one(self) -> Self {
         self << 8
