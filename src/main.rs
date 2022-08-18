@@ -59,7 +59,7 @@ fn main() {
     }
 
     if cli.tune {
-        texel::tune();
+        texel::tune(cli.resume);
         return;
     }
 

@@ -291,12 +291,14 @@ where
 
 fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
+    resume: bool,
     cost_function: F1,
 ) -> (Vec<i32>, f64) {
     #[allow(clippy::cast_possible_truncation)]
-    fn nudge_size(iteration: i32) -> i32 {
-        ((1.0 / f64::from(iteration) * 10.0) as i32).max(1)
-    }
+    let nudge_size = |iteration: i32| -> i32 {
+        let multiplier = if resume { 1.0 } else { 10.0 };
+        ((1.0 / f64::from(iteration) * multiplier) as i32).max(1)
+    };
     let init_start_time = Instant::now();
     let n_params = starting_point.len();
     let mut best_params = starting_point.to_vec();
@@ -307,7 +309,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         "Initialised in {:.1}s",
         init_start_time.elapsed().as_secs_f64()
     );
-    while improved || iteration <= 10 {
+    while improved || (iteration <= 10 && !resume) {
         println!("Iteration {iteration}");
         improved = false;
         let nudge_size = nudge_size(iteration);
@@ -349,7 +351,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune() {
+pub fn tune(resume: bool) {
     // hyperparameters
     let train = 16_000_000; // 8 million is recommended.
     let test = 100_000; // validation set.
@@ -415,7 +417,7 @@ pub fn tune() {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), |pvec| {
+    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), resume, |pvec| {
         compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
     });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());

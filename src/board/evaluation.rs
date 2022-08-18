@@ -169,20 +169,15 @@ impl Board {
         }
     }
 
-    fn unwinnable_for<const SIDE: u8>(&self) -> bool {
-        assert!(
-            SIDE == WHITE || SIDE == BLACK,
-            "unwinnable_for called with invalid side"
-        );
-
-        if SIDE == WHITE {
+    const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
+        if IS_WHITE {
             if self.major_piece_counts[WHITE as usize] != 0 {
                 return false;
             }
             if self.minor_piece_counts[WHITE as usize] > 1 {
                 return false;
             }
-            if self.num(WP) != 0 {
+            if self.num_ct::<WP>() != 0 {
                 return false;
             }
         } else {
@@ -192,7 +187,7 @@ impl Board {
             if self.minor_piece_counts[BLACK as usize] > 1 {
                 return false;
             }
-            if self.num(BP) != 0 {
+            if self.num_ct::<BP>() != 0 {
                 return false;
             }
         }
@@ -206,9 +201,8 @@ impl Board {
                 if self.num_ct::<WN>() < 3 && self.num_ct::<BN>() < 3 {
                     return true;
                 }
-            } else if (self.num_ct::<WN>() == 0
-                && self.num_ct::<BN>() == 0
-                && self.num_ct::<WB>().abs_diff(self.num(BB)) < 2)
+            } else if (self.num_pt_ct::<KNIGHT>() == 0
+                && self.num_ct::<WB>().abs_diff(self.num_ct::<BB>()) < 2)
                 || (self.num_ct::<WB>() + self.num_ct::<WN>() == 1 && self.num_ct::<BB>() + self.num_ct::<BN>() == 1)
             {
                 return true;
@@ -237,8 +231,8 @@ impl Board {
 
     fn preprocess_drawish_scores(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
-        if score > 0 && self.unwinnable_for::<{ WHITE }>()
-            || score < 0 && self.unwinnable_for::<{ BLACK }>()
+        if score > 0 && self.unwinnable_for::<true>()
+            || score < 0 && self.unwinnable_for::<false>()
         {
             0
         } else {

@@ -16,6 +16,9 @@ pub struct Cli {
     /// Run the texel tuner
     #[clap(long)]
     pub tune: bool,
+    /// Pick up texel tuning from halfway through the tuning process
+    #[clap(long)]
+    pub resume: bool,
     /// Display misc. information about the engine
     #[clap(short, long)]
     pub info: bool,
