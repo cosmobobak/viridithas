@@ -257,7 +257,7 @@ impl Board {
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
         // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
+        let do_fut_pruning = !PV && do_futility_pruning(depth, static_eval, alpha, beta) && !in_check;
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -266,6 +266,7 @@ impl Board {
             }
         }
 
+        let mut skipquiets = do_fut_pruning;
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if !self.make_move(m) {
@@ -282,19 +283,18 @@ impl Board {
             let gives_check = self.in_check::<{ Self::US }>();
             let is_quiet = m.is_quiet();
 
+            if skipquiets && is_quiet && !gives_check {
+                self.unmake_move();
+                continue;
+            }
+
             let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
             quiet_moves_made += i32::from(is_quiet && !gives_check);
 
-            if do_lmp && quiet_moves_made >= lmp_threshold {
+            // late move pruning.
+            if !PV && do_lmp && is_quiet && !gives_check && quiet_moves_made >= lmp_threshold {
                 self.unmake_move();
-                break; // okay to break because captures are ordered first.
-            }
-
-            // futility pruning
-            // if the static eval is too low, we might just skip the move.
-            if !(PV || !is_quiet || in_check || moves_made <= 1) && do_fut_pruning
-            {
-                self.unmake_move();
+                skipquiets = true;
                 continue;
             }
 
@@ -380,7 +380,7 @@ impl Board {
         }
 
         if moves_made == 0 {
-            if !excluded.is_null() {
+            if !excluded.is_null() || skipquiets {
                 return alpha;
             }
             if in_check {
