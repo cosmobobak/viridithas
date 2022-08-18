@@ -362,12 +362,12 @@ impl Board {
                             self.insert_killer(best_move);
                             self.insert_countermove(best_move);
                             self.update_history_metrics(best_move, history_score);
-                        }
 
-                        // decrease the history of the non-capture moves that came before the cutoff move.
-                        let ms = move_picker.moves_made();
-                        for e in ms.iter().filter(|e| !e.entry.is_capture()) {
-                            self.update_history_metrics(e.entry, -history_score);
+                            // decrease the history of the non-capture moves that came before the cutoff move.
+                            let ms = move_picker.moves_made();
+                            for e in ms.iter().filter(|e| !e.entry.is_capture()) {
+                                self.update_history_metrics(e.entry, -history_score);
+                            }
                         }
 
                         if excluded.is_null() {
@@ -403,16 +403,16 @@ impl Board {
                 self.insert_killer(best_move);
                 self.insert_countermove(best_move);
                 self.update_history_metrics(best_move, history_score);
-            }
 
-            // decrease the history of the non-capture moves that came before the best move.
-            let ms = move_picker.moves_made();
-            for e in ms
-                .iter()
-                .take_while(|m| m.entry != best_move)
-                .filter(|e| !e.entry.is_capture())
-            {
-                self.update_history_metrics(e.entry, -history_score);
+                // decrease the history of the non-capture moves that came before the best move.
+                let ms = move_picker.moves_made();
+                for e in ms
+                    .iter()
+                    .take_while(|m| m.entry != best_move)
+                    .filter(|e| !e.entry.is_capture())
+                {
+                    self.update_history_metrics(e.entry, -history_score);
+                }
             }
 
             if excluded.is_null() {
