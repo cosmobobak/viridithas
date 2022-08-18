@@ -205,7 +205,16 @@ const fn mvvlva_init() -> [[i32; 13]; 13] {
 }
 
 /// The score of this pair of pieces, for MVV/LVA move ordering.
-pub static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
+static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
+pub fn get_mvv_lva_score(victim: u8, attacker: u8) -> i32 {
+    debug_assert!(victim < 13);
+    debug_assert!(attacker < 13);
+    unsafe {
+        *MVV_LVA_SCORE
+            .get_unchecked(victim as usize)
+            .get_unchecked(attacker as usize)
+    }
+}
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     let mut attacks = [0; 64];

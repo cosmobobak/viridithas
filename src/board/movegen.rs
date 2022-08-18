@@ -15,9 +15,9 @@ use crate::{
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
         BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
-        WKCA, WN, WQ, WQCA, WR,
+        WKCA, WN, WQ, WQCA, WR, PAWN,
     },
-    lookups::MVV_LVA_SCORE,
+    lookups::get_mvv_lva_score,
     magic::MAGICS_READY,
     validate::{piece_valid, square_on_board},
 };
@@ -27,6 +27,7 @@ const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
+const CAPTURE_BASE_SCORE: i32 = 10_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -178,6 +179,13 @@ impl Board {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
 
+        let promo = m.promotion();
+        if promo != PIECE_EMPTY {
+            let score = get_mvv_lva_score(promo, PAWN) + CAPTURE_BASE_SCORE;
+            move_list.push(m, score);
+            return;
+        }
+
         let killer_entry = self.killer_move_table[self.height];
 
         let score = if killer_entry[0] == m {
@@ -204,20 +212,16 @@ impl Board {
         debug_assert!(square_on_board(m.to()));
         debug_assert!(piece_valid(m.capture()), "piece: {}", m);
 
-        let capture = m.capture() as usize;
-        let piece_moved = self.piece_at(m.from()) as usize;
-        let mmvlva = unsafe {
-            *MVV_LVA_SCORE
-                .get_unchecked(capture)
-                .get_unchecked(piece_moved)
-        };
+        let capture = m.capture();
+        let piece_moved = self.piece_at(m.from());
+        let mmvlva = get_mvv_lva_score(capture, piece_moved);
 
-        let score = mmvlva + 10_000_000;
+        let score = mmvlva + CAPTURE_BASE_SCORE;
         move_list.push(m, score);
     }
 
     fn add_ep_move(m: Move, move_list: &mut MoveList) {
-        move_list.push(m, 1050 + 10_000_000);
+        move_list.push(m, 1050 + CAPTURE_BASE_SCORE);
     }
 
     #[allow(clippy::cognitive_complexity)]
