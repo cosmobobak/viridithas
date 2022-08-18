@@ -15,7 +15,7 @@ use crate::{
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
         BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
-        WKCA, WN, WQ, WQCA, WR, PAWN,
+        WKCA, WN, WQ, WQCA, WR, QUEEN,
     },
     lookups::get_mvv_lva_score,
     magic::MAGICS_READY,
@@ -181,7 +181,11 @@ impl Board {
 
         let promo = m.promotion();
         if promo != PIECE_EMPTY {
-            let score = get_mvv_lva_score(promo, PAWN) + CAPTURE_BASE_SCORE;
+            let score = get_mvv_lva_score(promo, PIECE_EMPTY) + if promo == QUEEN || promo == KNIGHT {
+                CAPTURE_BASE_SCORE
+            } else {
+                CAPTURE_BASE_SCORE / 2
+            };
             move_list.push(m, score);
             return;
         }
