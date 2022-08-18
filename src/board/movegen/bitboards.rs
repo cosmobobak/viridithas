@@ -310,8 +310,8 @@ pub trait BitShiftExt {
     fn north_west_one(self) -> Self;
     fn south_east_one(self) -> Self;
     fn south_west_one(self) -> Self;
-    fn west_one(self) -> Self;
     fn east_one(self) -> Self;
+    fn west_one(self) -> Self;
     fn north_one(self) -> Self;
     fn south_one(self) -> Self;
 }
