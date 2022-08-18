@@ -66,6 +66,10 @@ impl Move {
         (self.data & Self::CAPTURE_MASK) != 0
     }
 
+    pub const fn is_quiet(self) -> bool {
+        !self.is_capture() && !self.is_promo()
+    }
+
     pub const fn is_null(self) -> bool {
         self.data == 0
     }
