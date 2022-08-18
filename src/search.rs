@@ -286,17 +286,19 @@ impl Board {
             let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            // late move pruning.
-            if do_lmp && quiet_moves_made >= lmp_threshold {
-                self.unmake_move();
-                break; // okay to break because captures are ordered first.
-            }
+            if !in_check {
+                // late move pruning.
+                if do_lmp && is_quiet && quiet_moves_made >= lmp_threshold {
+                    self.unmake_move();
+                    continue;
+                }
 
-            // futility pruning
-            // if the static eval is too low, we might just skip the move.
-            if !PV && do_fut_pruning && is_quiet && moves_made > 1 {
-                self.unmake_move();
-                continue;
+                // futility pruning
+                // if the static eval is too low, we might just skip the move.
+                if !PV && do_fut_pruning && is_quiet && moves_made > 1 {
+                    self.unmake_move();
+                    continue;
+                }
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
