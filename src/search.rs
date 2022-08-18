@@ -283,7 +283,7 @@ impl Board {
             let is_quiet = m.is_quiet();
 
             let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
-            quiet_moves_made += i32::from(is_quiet && !in_check && !gives_check);
+            quiet_moves_made += i32::from(is_quiet && !gives_check);
 
             if do_lmp && quiet_moves_made >= lmp_threshold {
                 self.unmake_move();
