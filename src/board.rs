@@ -1,6 +1,7 @@
 pub mod evaluation;
 mod history;
 pub mod movegen;
+pub mod validation;
 
 use std::{
     collections::HashSet,
@@ -13,22 +14,22 @@ use regex::Regex;
 use crate::{
     board::movegen::{
         bitboards::{
-            self, BitLoop, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
+            self, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
         },
         MoveList,
     },
     chessmove::Move,
     definitions::{
-        colour_of, square_name, type_of, Colour, depth::Depth, File,
+        colour_of, type_of, Colour, depth::Depth, File,
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
         KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
-    errors::{FenParseError, MoveParseError, PositionValidityError},
+    errors::{FenParseError, MoveParseError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
-        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN,
+        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ,
         PROMO_CHAR_LOOKUP, SQUARE_NAMES,
     },
     macros,
@@ -536,199 +537,6 @@ impl Board {
                     self.ply += 1;
                 }
             }
-        }
-
-        Ok(())
-    }
-
-    #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
-    pub fn check_validity(&self) -> Result<(), PositionValidityError> {
-        #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
-        use Colour::{Black, White};
-        let mut piece_num = [0u8; 13];
-        let mut big_pce = [0, 0];
-        let mut maj_pce = [0, 0];
-        let mut min_pce = [0, 0];
-        let mut material = [S(0, 0), S(0, 0)];
-
-        // check piece lists
-        for piece in WP..=BK {
-            for &sq in self.piece_lists[piece as usize].iter() {
-                if self.piece_at(sq) != piece {
-                    return Err(format!(
-                        "piece list corrupt: expected square {} to be '{}' but was '{}'",
-                        square_name(sq).unwrap_or(&format!("offboard: {}", sq)),
-                        piece_char(piece)
-                            .map(|c| c.to_string())
-                            .unwrap_or(format!("unknown piece: {}", piece)),
-                        piece_char(self.piece_at(sq))
-                            .map(|c| c.to_string())
-                            .unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
-                    ));
-                }
-            }
-        }
-
-        // check turn
-        if self.side != WHITE && self.side != BLACK {
-            return Err(format!("invalid side: {}", self.side));
-        }
-
-        // check piece count and other counters
-        for sq in 0..64 {
-            let piece = self.piece_at(sq);
-            if piece == PIECE_EMPTY {
-                continue;
-            }
-            piece_num[piece as usize] += 1;
-            let colour = colour_of(piece);
-            if PIECE_BIG[piece as usize] {
-                big_pce[colour as usize] += 1;
-            }
-            if PIECE_MAJ[piece as usize] {
-                maj_pce[colour as usize] += 1;
-            }
-            if PIECE_MIN[piece as usize] {
-                min_pce[colour as usize] += 1;
-            }
-            material[colour as usize] += self.eval_params.piece_values[piece as usize];
-        }
-
-        if piece_num[1..].to_vec()
-            != self.piece_lists[1..]
-                .iter()
-                .map(PieceList::len)
-                .collect::<Vec<_>>()
-        {
-            return Err(format!(
-                "piece counts are corrupt: expected {:?}, got {:?}",
-                &piece_num[1..],
-                &self.piece_lists[1..]
-                    .iter()
-                    .map(PieceList::len)
-                    .collect::<Vec<_>>()
-            ));
-        }
-
-        // check bitboard / piece array coherency
-        for piece in WP..=BK {
-            let bb = self.pieces.piece_bb(piece);
-            for sq in BitLoop::new(bb) {
-                if self.piece_at(sq) != piece {
-                    return Err(format!(
-                        "bitboard / piece array coherency corrupt: expected square {} to be '{}' but was '{}'",
-                        square_name(sq).unwrap_or(&format!("offboard: {}", sq)),
-                        piece_char(piece).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", piece)),
-                        piece_char(self.piece_at(sq)).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
-                    ));
-                }
-            }
-        }
-
-        if material[White as usize].0 != self.material[White as usize].0 {
-            return Err(format!(
-                "white midgame material is corrupt: expected {:?}, got {:?}",
-                material[White as usize].0, self.material[White as usize].0
-            ));
-        }
-        if material[White as usize].1 != self.material[White as usize].1 {
-            return Err(format!(
-                "white endgame material is corrupt: expected {:?}, got {:?}",
-                material[White as usize].1, self.material[White as usize].1
-            ));
-        }
-        if material[Black as usize].0 != self.material[Black as usize].0 {
-            return Err(format!(
-                "black midgame material is corrupt: expected {:?}, got {:?}",
-                material[Black as usize].0, self.material[Black as usize].0
-            ));
-        }
-        if material[Black as usize].1 != self.material[Black as usize].1 {
-            return Err(format!(
-                "black endgame material is corrupt: expected {:?}, got {:?}",
-                material[Black as usize].1, self.material[Black as usize].1
-            ));
-        }
-        if min_pce[White as usize] != self.minor_piece_counts[White as usize] {
-            return Err(format!(
-                "white minor piece count is corrupt: expected {:?}, got {:?}",
-                min_pce[White as usize], self.minor_piece_counts[White as usize]
-            ));
-        }
-        if min_pce[Black as usize] != self.minor_piece_counts[Black as usize] {
-            return Err(format!(
-                "black minor piece count is corrupt: expected {:?}, got {:?}",
-                min_pce[Black as usize], self.minor_piece_counts[Black as usize]
-            ));
-        }
-        if maj_pce[White as usize] != self.major_piece_counts[White as usize] {
-            return Err(format!(
-                "white major piece count is corrupt: expected {:?}, got {:?}",
-                maj_pce[White as usize], self.major_piece_counts[White as usize]
-            ));
-        }
-        if maj_pce[Black as usize] != self.major_piece_counts[Black as usize] {
-            return Err(format!(
-                "black major piece count is corrupt: expected {:?}, got {:?}",
-                maj_pce[Black as usize], self.major_piece_counts[Black as usize]
-            ));
-        }
-        if big_pce[White as usize] != self.big_piece_counts[White as usize] {
-            return Err(format!(
-                "white big piece count is corrupt: expected {:?}, got {:?}",
-                big_pce[White as usize], self.big_piece_counts[White as usize]
-            ));
-        }
-        if big_pce[Black as usize] != self.big_piece_counts[Black as usize] {
-            return Err(format!(
-                "black big piece count is corrupt: expected {:?}, got {:?}",
-                big_pce[Black as usize], self.big_piece_counts[Black as usize]
-            ));
-        }
-
-        if !(self.side == WHITE || self.side == BLACK) {
-            return Err(format!(
-                "side is corrupt: expected WHITE or BLACK, got {:?}",
-                self.side
-            ));
-        }
-        if self.generate_pos_key() != self.key {
-            return Err(format!(
-                "key is corrupt: expected {:?}, got {:?}",
-                self.generate_pos_key(),
-                self.key
-            ));
-        }
-
-        if !(self.ep_sq == NO_SQUARE
-            || (rank(self.ep_sq) == RANK_6 && self.side == WHITE)
-            || (rank(self.ep_sq) == RANK_3 && self.side == BLACK))
-        {
-            return Err(format!("en passant square is corrupt: expected square to be {} (NoSquare) or to be on ranks 6 or 3, got {} (Rank {})", NO_SQUARE, self.ep_sq, rank(self.ep_sq)));
-        }
-
-        if self.fifty_move_counter >= 100 {
-            return Err(format!(
-                "fifty move counter is corrupt: expected 0-99, got {}",
-                self.fifty_move_counter
-            ));
-        }
-
-        // check there are the correct number of kings for each side
-        assert_eq!(self.num(WK), 1);
-        assert_eq!(self.num(BK), 1);
-
-        if self.piece_at(self.king_sq(WHITE)) != WK {
-            return Err(format!(
-                "white king square is corrupt: expected white king, got {:?}",
-                self.piece_at(self.king_sq(WHITE))
-            ));
-        }
-        if self.piece_at(self.king_sq(BLACK)) != BK {
-            return Err(format!(
-                "black king square is corrupt: expected black king, got {:?}",
-                self.piece_at(self.king_sq(BLACK))
-            ));
         }
 
         Ok(())
@@ -1379,8 +1187,20 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
+    pub const fn num_ct<const PIECE: u8>(&self) -> u8 {
+        self.piece_lists[PIECE as usize].len()
+    }
+
     pub const fn num(&self, piece: u8) -> u8 {
         self.piece_lists[piece as usize].len()
+    }
+
+    pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
+        self.piece_lists[PIECE_TYPE as usize].len() + self.piece_lists[PIECE_TYPE as usize + 6].len()
+    }
+
+    pub const fn num_pt(&self, pt: u8) -> u8 {
+        self.num(pt) + self.num(pt + 6)
     }
 
     pub fn reset_tables(&mut self) {
@@ -1619,6 +1439,17 @@ mod tests {
             board.set_from_fen(&fen).expect("setfen failed.");
             let fen_2 = board.fen();
             assert_eq!(fen, fen_2);
+        }
+    }
+
+    #[test]
+    fn test_num_pt() {
+        use super::Board;
+        use crate::definitions::{BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB, WK, WN, WP, WQ, WR};
+        let board = Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1").unwrap();
+
+        for ((p1, p2), pt) in [WP, WN, WB, WR, WQ, WK].into_iter().zip([BP, BN, BB, BR, BQ, BK]).zip([PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING]) {
+            assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }
     }
 }

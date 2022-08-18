@@ -201,33 +201,33 @@ impl Board {
     }
 
     const fn is_material_draw(&self) -> bool {
-        if self.num(WR) == 0 && self.num(BR) == 0 && self.num(WQ) == 0 && self.num(BQ) == 0 {
-            if self.num(WB) == 0 && self.num(BB) == 0 {
-                if self.num(WN) < 3 && self.num(BN) < 3 {
+        if self.num_pt_ct::<ROOK>() == 0 && self.num_pt_ct::<QUEEN>() == 0 {
+            if self.num_pt_ct::<BISHOP>() == 0 {
+                if self.num_ct::<WN>() < 3 && self.num_ct::<BN>() < 3 {
                     return true;
                 }
-            } else if (self.num(WN) == 0
-                && self.num(BN) == 0
-                && self.num(WB).abs_diff(self.num(BB)) < 2)
-                || (self.num(WB) + self.num(WN) == 1 && self.num(BB) + self.num(BN) == 1)
+            } else if (self.num_ct::<WN>() == 0
+                && self.num_ct::<BN>() == 0
+                && self.num_ct::<WB>().abs_diff(self.num(BB)) < 2)
+                || (self.num_ct::<WB>() + self.num_ct::<WN>() == 1 && self.num_ct::<BB>() + self.num_ct::<BN>() == 1)
             {
                 return true;
             }
-        } else if self.num(WQ) == 0 && self.num(BQ) == 0 {
-            if self.num(WR) == 1 && self.num(BR) == 1 {
-                if (self.num(WN) + self.num(WB)) < 2 && (self.num(BN) + self.num(BB)) < 2 {
+        } else if self.num_pt_ct::<QUEEN>() == 0 {
+            if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 1 {
+                if (self.num_ct::<WN>() + self.num_ct::<WB>()) < 2 && (self.num_ct::<BN>() + self.num_ct::<BB>()) < 2 {
                     return true;
                 }
-            } else if self.num(WR) == 1 && self.num(BR) == 0 {
-                if (self.num(WN) + self.num(WB)) == 0
-                    && ((self.num(BN) + self.num(BB)) == 1 || (self.num(BN) + self.num(BB)) == 2)
+            } else if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 0 {
+                if (self.num_ct::<WN>() + self.num_ct::<WB>()) == 0
+                    && ((self.num_ct::<BN>() + self.num_ct::<BB>()) == 1 || (self.num_ct::<BN>() + self.num_ct::<BB>()) == 2)
                 {
                     return true;
                 }
-            } else if self.num(WR) == 0
-                && self.num(BR) == 1
-                && (self.num(BN) + self.num(BB)) == 0
-                && ((self.num(WN) + self.num(WB)) == 1 || (self.num(WN) + self.num(WB)) == 2)
+            } else if self.num_ct::<WR>() == 0
+                && self.num_ct::<BR>() == 1
+                && (self.num_ct::<BN>() + self.num_ct::<BB>()) == 0
+                && ((self.num_ct::<WN>() + self.num_ct::<WB>()) == 1 || (self.num_ct::<WN>() + self.num_ct::<WB>()) == 2)
             {
                 return true;
             }
