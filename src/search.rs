@@ -294,7 +294,7 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !PV && do_fut_pruning && !is_quiet && moves_made > 1 {
+            if !PV && do_fut_pruning && is_quiet && moves_made > 1 {
                 self.unmake_move();
                 continue;
             }
