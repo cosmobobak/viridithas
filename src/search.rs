@@ -266,7 +266,6 @@ impl Board {
             }
         }
 
-        let mut skipquiets = do_fut_pruning;
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if !self.make_move(m) {
@@ -283,18 +282,20 @@ impl Board {
             let gives_check = self.in_check::<{ Self::US }>();
             let is_quiet = m.is_quiet();
 
-            if skipquiets && is_quiet {
-                self.unmake_move();
-                continue;
-            }
-
+            let is_interesting = !is_quiet || gives_check || in_check;
             let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
-            quiet_moves_made += i32::from(is_quiet && !gives_check);
+            quiet_moves_made += i32::from(!is_interesting);
 
             // late move pruning.
-            if !PV && do_lmp && is_quiet && !gives_check && quiet_moves_made >= lmp_threshold {
+            if do_lmp && quiet_moves_made >= lmp_threshold {
                 self.unmake_move();
-                skipquiets = true;
+                break; // okay to break because captures are ordered first.
+            }
+
+            // futility pruning
+            // if the static eval is too low, we might just skip the move.
+            if !PV && do_fut_pruning && !is_quiet && moves_made > 1 {
+                self.unmake_move();
                 continue;
             }
 
@@ -380,7 +381,7 @@ impl Board {
         }
 
         if moves_made == 0 {
-            if !excluded.is_null() || skipquiets {
+            if !excluded.is_null() {
                 return alpha;
             }
             if in_check {
