@@ -257,7 +257,7 @@ impl Board {
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
         // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = !PV && do_futility_pruning(depth, static_eval, alpha, beta) && !in_check;
+        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -280,25 +280,23 @@ impl Board {
 
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
-            let is_quiet = m.is_quiet();
+            let is_promotion = m.is_promo();
 
-            let is_interesting = !is_quiet || gives_check || in_check;
+            let is_interesting = is_capture || is_promotion || gives_check || in_check;
             let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            if !in_check {
-                // late move pruning.
-                if do_lmp && is_quiet && quiet_moves_made >= lmp_threshold {
-                    self.unmake_move();
-                    continue;
-                }
+            if do_lmp && quiet_moves_made >= lmp_threshold {
+                self.unmake_move();
+                break; // okay to break because captures are ordered first.
+            }
 
-                // futility pruning
-                // if the static eval is too low, we might just skip the move.
-                if !PV && do_fut_pruning && is_quiet && moves_made > 1 {
-                    self.unmake_move();
-                    continue;
-                }
+            // futility pruning
+            // if the static eval is too low, we might just skip the move.
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
+            {
+                self.unmake_move();
+                continue;
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
@@ -360,14 +358,14 @@ impl Board {
                     if score >= beta {
                         // we failed high, so this is a cut-node
 
-                        if is_quiet {
+                        if !is_capture {
                             self.insert_killer(best_move);
                             self.insert_countermove(best_move);
                             self.update_history_metrics(best_move, history_score);
 
                             // decrease the history of the non-capture moves that came before the cutoff move.
                             let ms = move_picker.moves_made();
-                            for e in ms.iter().filter(|e| e.entry.is_quiet()) {
+                            for e in ms.iter().filter(|e| !e.entry.is_capture()) {
                                 self.update_history_metrics(e.entry, -history_score);
                             }
                         }
@@ -401,7 +399,7 @@ impl Board {
             // we raised alpha, and didn't raise beta
             // as if we had, we would have returned early,
             // so this is a PV-node
-            if best_move.is_quiet() {
+            if !best_move.is_capture() {
                 self.insert_killer(best_move);
                 self.insert_countermove(best_move);
                 self.update_history_metrics(best_move, history_score);
@@ -411,7 +409,7 @@ impl Board {
                 for e in ms
                     .iter()
                     .take_while(|m| m.entry != best_move)
-                    .filter(|e| e.entry.is_quiet())
+                    .filter(|e| !e.entry.is_capture())
                 {
                     self.update_history_metrics(e.entry, -history_score);
                 }
