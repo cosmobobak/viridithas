@@ -734,13 +734,13 @@ impl Board {
 
     /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: u8) -> u8 {
-        debug_assert!((sq as usize) < BOARD_N_SQUARES);
+        debug_assert!(square_on_board(sq));
         unsafe { *self.piece_array.get_unchecked(sq as usize) }
     }
 
     /// Gets a mutable reference to the piece at the given square.
     pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
-        debug_assert!((sq as usize) < BOARD_N_SQUARES);
+        debug_assert!(square_on_board(sq));
         unsafe { self.piece_array.get_unchecked_mut(sq as usize) }
     }
 
