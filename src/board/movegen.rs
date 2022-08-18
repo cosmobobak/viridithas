@@ -524,7 +524,7 @@ impl Board {
         const BQ_FREESPACE: u64 = 1 << B8 | 1 << C8 | 1 << D8;
         let occupied = self.pieces.occupied();
         if IS_WHITE {
-            if (self.castle_perm & WKCA) != 0
+            if self.castle_perm & WKCA != 0
                 && occupied & WK_FREESPACE == 0
                 && !self.sq_attacked_by::<false>(E1)
                 && !self.sq_attacked_by::<false>(F1)
@@ -535,7 +535,7 @@ impl Board {
                 );
             }
 
-            if (self.castle_perm & WQCA) != 0
+            if self.castle_perm & WQCA != 0
                 && occupied & WQ_FREESPACE == 0
                 && !self.sq_attacked_by::<false>(E1)
                 && !self.sq_attacked_by::<false>(D1)
@@ -546,7 +546,7 @@ impl Board {
                 );
             }
         } else {
-            if (self.castle_perm & BKCA) != 0
+            if self.castle_perm & BKCA != 0
                 && occupied & BK_FREESPACE == 0
                 && !self.sq_attacked_by::<true>(E8)
                 && !self.sq_attacked_by::<true>(F8)
@@ -557,7 +557,7 @@ impl Board {
                 );
             }
 
-            if (self.castle_perm & BQCA) != 0
+            if self.castle_perm & BQCA != 0
                 && occupied & BQ_FREESPACE == 0
                 && !self.sq_attacked_by::<true>(E8)
                 && !self.sq_attacked_by::<true>(D8)
