@@ -636,8 +636,8 @@ impl Board {
             if (self.castle_perm & WKCA) != 0
                 && self.piece_at(F1) == PIECE_EMPTY
                 && self.piece_at(G1) == PIECE_EMPTY
-                && !self.sq_attacked(E1, BLACK)
-                && !self.sq_attacked(F1, BLACK)
+                && !self.sq_attacked_by::<false>(E1)
+                && !self.sq_attacked_by::<false>(F1)
             {
                 self.add_quiet_move(
                     Move::new(E1, G1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
@@ -649,8 +649,8 @@ impl Board {
                 && self.piece_at(D1) == PIECE_EMPTY
                 && self.piece_at(C1) == PIECE_EMPTY
                 && self.piece_at(B1) == PIECE_EMPTY
-                && !self.sq_attacked(E1, BLACK)
-                && !self.sq_attacked(D1, BLACK)
+                && !self.sq_attacked_by::<false>(E1)
+                && !self.sq_attacked_by::<false>(D1)
             {
                 self.add_quiet_move(
                     Move::new(E1, C1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
@@ -661,8 +661,8 @@ impl Board {
             if (self.castle_perm & BKCA) != 0
                 && self.piece_at(F8) == PIECE_EMPTY
                 && self.piece_at(G8) == PIECE_EMPTY
-                && !self.sq_attacked(E8, WHITE)
-                && !self.sq_attacked(F8, WHITE)
+                && !self.sq_attacked_by::<true>(E8)
+                && !self.sq_attacked_by::<true>(F8)
             {
                 self.add_quiet_move(
                     Move::new(E8, G8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
@@ -674,8 +674,8 @@ impl Board {
                 && self.piece_at(D8) == PIECE_EMPTY
                 && self.piece_at(C8) == PIECE_EMPTY
                 && self.piece_at(B8) == PIECE_EMPTY
-                && !self.sq_attacked(E8, WHITE)
-                && !self.sq_attacked(D8, WHITE)
+                && !self.sq_attacked_by::<true>(E8)
+                && !self.sq_attacked_by::<true>(D8)
             {
                 self.add_quiet_move(
                     Move::new(E8, C8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),

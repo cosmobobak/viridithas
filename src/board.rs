@@ -544,14 +544,21 @@ impl Board {
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: u8, side: u8) -> bool {
-        debug_assert!(side_valid(side));
+        if side == WHITE {
+            self.sq_attacked_by::<true>(sq)
+        } else {
+            self.sq_attacked_by::<false>(sq)
+        }
+    }
+
+    pub fn sq_attacked_by<const IS_WHITE: bool>(&self, sq: u8) -> bool {
         debug_assert!(square_on_board(sq));
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         // pawns
-        if side == WHITE {
-            let our_pawns = self.pieces.pawns::<true>();
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        if IS_WHITE {
             let west_attacks = our_pawns.north_west_one();
             let east_attacks = our_pawns.north_east_one();
             let attacks = west_attacks | east_attacks;
@@ -559,7 +566,6 @@ impl Board {
                 return true;
             }
         } else {
-            let our_pawns = self.pieces.pawns::<false>();
             let west_attacks = our_pawns.south_west_one();
             let east_attacks = our_pawns.south_east_one();
             let attacks = west_attacks | east_attacks;
@@ -569,22 +575,14 @@ impl Board {
         }
 
         // knights
-        let knights = if side == WHITE {
-            self.pieces.knights::<true>()
-        } else {
-            self.pieces.knights::<false>()
-        };
+        let knights = self.pieces.knights::<IS_WHITE>();
         let knight_attacks_from_this_square = bitboards::attacks::<{ KNIGHT }>(sq, BB_NONE);
         if (knights & knight_attacks_from_this_square) != BB_NONE {
             return true;
         }
 
         // rooks, queens
-        let our_rooks_queens = if side == WHITE {
-            self.pieces.rookqueen::<true>()
-        } else {
-            self.pieces.rookqueen::<false>()
-        };
+        let our_rooks_queens = self.pieces.rookqueen::<IS_WHITE>();
         let ortho_attacks_from_this_square =
             bitboards::attacks::<{ ROOK }>(sq, self.pieces.occupied());
         if (our_rooks_queens & ortho_attacks_from_this_square) != BB_NONE {
@@ -592,11 +590,7 @@ impl Board {
         }
 
         // bishops, queens
-        let our_bishops_queens = if side == WHITE {
-            self.pieces.bishopqueen::<true>()
-        } else {
-            self.pieces.bishopqueen::<false>()
-        };
+        let our_bishops_queens = self.pieces.bishopqueen::<IS_WHITE>();
         let diag_attacks_from_this_square =
             bitboards::attacks::<{ BISHOP }>(sq, self.pieces.occupied());
         if (our_bishops_queens & diag_attacks_from_this_square) != BB_NONE {
@@ -604,11 +598,7 @@ impl Board {
         }
 
         // king
-        let our_king = if side == WHITE {
-            self.pieces.king::<true>()
-        } else {
-            self.pieces.king::<false>()
-        };
+        let our_king = self.pieces.king::<IS_WHITE>();
         let king_attacks_from_this_square = bitboards::attacks::<{ KING }>(sq, BB_NONE);
         if (our_king & king_attacks_from_this_square) != BB_NONE {
             return true;
