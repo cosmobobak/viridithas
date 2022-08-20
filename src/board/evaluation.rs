@@ -504,16 +504,14 @@ impl Board {
     }
 
     pub fn estimated_see(&self, m: Move) -> i32 {
-        // Start with the value of the piece on the target square
-        let piece_ty = type_of(self.piece_at(m.to()));
-        let mut value = SEE_PIECE_VALUES[piece_ty as usize];
+        // initially take the value of the thing on the target square
+        let mut value = SEE_PIECE_VALUES[type_of(self.piece_at(m.to())) as usize];
 
-        // Factor in the new piece's value and remove our promoted pawn
         if m.is_promo() {
+            // if it's a promo, swap a pawn for the promoted piece type
             value += SEE_PIECE_VALUES[type_of(m.promotion()) as usize] - SEE_PIECE_VALUES[PAWN as usize];
-        }
-        // Target square is encoded as empty for enpass moves
-        else if m.is_ep() {
+        } else if m.is_ep() {
+            // for e.p. we will miss a pawn because the target square is empty
             value = SEE_PIECE_VALUES[PAWN as usize];
         }
 
