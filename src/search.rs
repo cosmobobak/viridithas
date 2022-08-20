@@ -1,12 +1,12 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE},
+        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, SEE_PIECE_VALUES},
         movegen::TT_MOVE_SCORE,
         Board,
     },
     chessmove::Move,
-    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, QUEEN, depth::ZERO_PLY},
+    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, QUEEN, depth::ZERO_PLY, type_of},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -84,10 +84,18 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
+            let worst_case = self.estimated_see(m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
+
             if !self.make_move(m) {
                 continue;
             }
             info.nodes += 1;
+
+            let at_least = stand_pat + worst_case;
+            if at_least > beta && !is_mate_score(at_least * 2) {
+                self.unmake_move();
+                return beta;
+            }
 
             let score = -self.quiescence(info, -beta, -alpha);
             self.unmake_move();

@@ -68,7 +68,7 @@ impl Display for S {
 impl S {
     pub const NULL: Self = Self(0, 0);
 
-    pub fn value(self, phase: i32) -> i32 {
+    pub const fn value(self, phase: i32) -> i32 {
         lerp(self.0, self.1, phase)
     }
 }

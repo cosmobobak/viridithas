@@ -10,9 +10,9 @@ use crate::{
     board::Board,
     definitions::{
         BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP,
-        WQ, WR,
+        WQ, WR, type_of, PAWN,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, chessmove::Move,
 };
 
 use super::movegen::{
@@ -25,6 +25,15 @@ pub const KNIGHT_VALUE: S = S(425, 390);
 pub const BISHOP_VALUE: S = S(418, 424);
 pub const ROOK_VALUE: S = S(584, 663);
 pub const QUEEN_VALUE: S = S(1204, 1109);
+
+pub static SEE_PIECE_VALUES: [i32; 6] = [
+    0, 
+    PAWN_VALUE.value(128), 
+    KNIGHT_VALUE.value(128),
+    BISHOP_VALUE.value(128),
+    ROOK_VALUE.value(128),
+    QUEEN_VALUE.value(128),
+];
 
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
@@ -111,9 +120,9 @@ pub const fn game_phase(p: u8, n: u8, b: u8, r: u8, q: u8) -> i32 {
 
 /// `lerp` linearly interpolates between `a` and `b` by `t`.
 /// `t` is between 0 and 256.
-pub fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
+pub const fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
     // debug_assert!((0..=256).contains(&t));
-    let t = t.min(256);
+    let t = if t > 256 { 256 } else { t };
     mg * (256 - t) / 256 + eg * t / 256
 }
 
@@ -491,6 +500,23 @@ impl Board {
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
+    }
+
+    pub fn estimated_see(&self, m: Move) -> i32 {
+        // Start with the value of the piece on the target square
+        let piece_ty = type_of(self.piece_at(m.to()));
+        let mut value = SEE_PIECE_VALUES[piece_ty as usize];
+
+        // Factor in the new piece's value and remove our promoted pawn
+        if m.is_promo() {
+            value += SEE_PIECE_VALUES[m.promotion() as usize] - SEE_PIECE_VALUES[PAWN as usize];
+        }
+        // Target square is encoded as empty for enpass moves
+        else if m.is_ep() {
+            value = SEE_PIECE_VALUES[PAWN as usize];
+        }
+
+        value
     }
 }
 
