@@ -20,11 +20,11 @@ use super::movegen::{
     BitLoop, BB_NONE,
 };
 
-pub const PAWN_VALUE: S = S(107, 195);
-pub const KNIGHT_VALUE: S = S(384, 362);
-pub const BISHOP_VALUE: S = S(371, 380);
-pub const ROOK_VALUE: S = S(532, 590);
-pub const QUEEN_VALUE: S = S(1131, 1036);
+pub const PAWN_VALUE: S = S(116, 200);
+pub const KNIGHT_VALUE: S = S(425, 390);
+pub const BISHOP_VALUE: S = S(418, 424);
+pub const ROOK_VALUE: S = S(584, 663);
+pub const QUEEN_VALUE: S = S(1204, 1109);
 
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
@@ -47,35 +47,35 @@ pub static PIECE_VALUES: [S; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: S = S(19, 2);
+pub const ISOLATED_PAWN_MALUS: S = S(22, 10);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(18, 47);
+pub const DOUBLED_PAWN_MALUS: S = S(17, 41);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(57, 103);
+pub const BISHOP_PAIR_BONUS: S = S(72, 100);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(83, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(81, 0);
 /// The bonus for having a rook on a semi-open file.
 pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(48, 0);
 /// The bonus for having a queen on an open file.
-pub const QUEEN_OPEN_FILE_BONUS: S = S(9, 0);
+pub const QUEEN_OPEN_FILE_BONUS: S = S(2, 0);
 /// The bonus for having a queen on a semi-open file.
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(22, 0);
 
 // nonlinear mobility eval tables.
 #[rustfmt::skip]
-const KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-105, -157), S(-52, 15), S(-8, 16), S(3, 57), S(23, 79), S(31, 99), S(50, 99), S(70, 100), S(89, 76)];
+static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-89, -170), S(-37, -10), S(9, 33), S(24, 78), S(48, 99), S(57, 124), S(78, 127), S(101, 122), S(125, 97)];
 #[rustfmt::skip]
-const BISHOP_MOBILITY_BONUS: [S; 14] = [S(-68, -179), S(-65, -25), S(-6, -24), S(15, 46), S(40, 65), S(56, 87), S(70, 104), S(79, 118), S(90, 122), S(101, 123), S(111, 122), S(143, 95), S(164, 110), S(141, 87)];
+static BISHOP_MOBILITY_BONUS: [S; 14] = [S(-79, -246), S(-35, -67), S(8, -13), S(29, 53), S(54, 80), S(71, 100), S(85, 119), S(97, 136), S(105, 140), S(116, 149), S(128, 140), S(146, 132), S(198, 121), S(176, 131)];
 #[rustfmt::skip]
-const ROOK_MOBILITY_BONUS: [S; 15] = [S(-119, -125), S(-60, -31), S(6, 50), S(15, 99), S(23, 142), S(25, 160), S(30, 180), S(40, 179), S(41, 195), S(53, 201), S(56, 213), S(63, 217), S(73, 216), S(80, 208), S(20, 241)];
+static ROOK_MOBILITY_BONUS: [S; 15] = [S(-67, -65), S(-28, 34), S(27, 92), S(36, 146), S(45, 185), S(49, 201), S(49, 233), S(55, 238), S(59, 236), S(70, 248), S(73, 257), S(82, 256), S(91, 252), S(99, 243), S(51, 263)];
 #[rustfmt::skip]
-const QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-46, -58), S(-125, -126), S(13, 32), S(4, -14), S(48, -27), S(70, 15), S(75, 59), S(77, 98), S(75, 162), S(84, 160), S(95, 184), S(104, 194), S(114, 198), S(119, 213), S(119, 228), S(123, 234), S(130, 225), S(131, 230), S(153, 200), S(156, 204), S(175, 181), S(176, 183), S(187, 164), S(208, 156), S(128, 155), S(136, 130), S(31, 101)];
+static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-82, -97), S(-131, -182), S(55, 95), S(54, 48), S(111, 14), S(132, 13), S(128, 111), S(128, 150), S(127, 220), S(132, 230), S(140, 251), S(149, 264), S(158, 268), S(163, 285), S(163, 301), S(173, 306), S(176, 298), S(182, 303), S(211, 273), S(221, 277), S(244, 254), S(249, 256), S(260, 237), S(278, 224), S(201, 221), S(209, 196), S(100, 102)];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-pub static PASSED_PAWN_BONUS: [S; 6] = [S(-3, 5), S(-32, 27), S(-16, 60), S(16, 95), S(76, 154), S(179, 213)];
+pub static PASSED_PAWN_BONUS: [S; 6] = [S(3, 15), S(-29, 40), S(-16, 78), S(18, 117), S(55, 212), S(125, 286)];
 
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
@@ -85,7 +85,7 @@ const QUEEN_PHASE: i32 = 40;
 const TOTAL_PHASE: i32 =
     16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
 
-const KING_DANGER_COEFFS: [i32; 3] = [44, 197, -733];
+const KING_DANGER_COEFFS: [i32; 3] = [44, 198, -733];
 
 #[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
