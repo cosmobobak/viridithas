@@ -26,13 +26,14 @@ pub const BISHOP_VALUE: S = S(418, 424);
 pub const ROOK_VALUE: S = S(584, 663);
 pub const QUEEN_VALUE: S = S(1204, 1109);
 
-pub static SEE_PIECE_VALUES: [i32; 6] = [
+pub static SEE_PIECE_VALUES: [i32; 7] = [
     0, 
     PAWN_VALUE.value(128), 
     KNIGHT_VALUE.value(128),
     BISHOP_VALUE.value(128),
     ROOK_VALUE.value(128),
     QUEEN_VALUE.value(128),
+    0
 ];
 
 /// The value of checkmate.
@@ -509,7 +510,7 @@ impl Board {
 
         // Factor in the new piece's value and remove our promoted pawn
         if m.is_promo() {
-            value += SEE_PIECE_VALUES[m.promotion() as usize] - SEE_PIECE_VALUES[PAWN as usize];
+            value += SEE_PIECE_VALUES[type_of(m.promotion()) as usize] - SEE_PIECE_VALUES[PAWN as usize];
         }
         // Target square is encoded as empty for enpass moves
         else if m.is_ep() {
