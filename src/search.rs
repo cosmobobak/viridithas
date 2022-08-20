@@ -60,6 +60,10 @@ impl Board {
             return self.evaluate();
         }
 
+        if let ProbeResult::Cutoff(s) = self.tt_probe(alpha, beta, ZERO_PLY) {
+            return s;
+        }
+
         let stand_pat = self.evaluate();
 
         if stand_pat >= beta {
