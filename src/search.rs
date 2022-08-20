@@ -60,6 +60,7 @@ impl Board {
             return self.evaluate();
         }
 
+        // probe the TT and see if we get a cutoff.
         if let ProbeResult::Cutoff(s) = self.tt_probe(alpha, beta, ZERO_PLY) {
             return s;
         }
