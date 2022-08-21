@@ -216,7 +216,9 @@ impl Board {
 
         ss.evals[self.height()] = static_eval;
 
-        // improving is true when the current position has a better static evaluation than the one from a fullmove ago.
+        // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
+        // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
+        // but we should be less agressive with alpha-reductions (eval is too low).
         let improving =
             !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
 
