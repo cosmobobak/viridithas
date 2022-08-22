@@ -66,20 +66,32 @@ pub struct Board {
     pieces: BitBoard,
     /// An array to accelerate piece_at().
     piece_array: [u8; 64],
+    /// Piece lists that allow pieces to be located quickly.
+    piece_lists: [PieceList; 13],
+    /// The side to move.
     side: u8,
+    /// The en passant square.
     ep_sq: u8,
+    /// The castling permissions.
+    castle_perm: u8,
+    /// The number of half moves made since the last capture or pawn advance.
     fifty_move_counter: u8,
-    height: usize,
+    /// The number of half made since the start of the game.
     ply: usize,
+
+    /// The Zobrist hash of the board.
     key: u64,
+
+    /* Incrementally updated features used to accelerate various queries */
     big_piece_counts: [u8; 2],
     major_piece_counts: [u8; 2],
     minor_piece_counts: [u8; 2],
     material: [S; 2],
-    castle_perm: u8,
+    pst_vals: S,
+
+    height: usize,
     history: Vec<Undo>,
     repetition_cache: HashSet<u64>,
-    piece_lists: [PieceList; 13],
 
     principal_variation: Vec<Move>,
 
@@ -89,8 +101,6 @@ pub struct Board {
     followup_history: DoubleHistoryTable,
     tt: TranspositionTable,
     hash_mb: usize,
-
-    pst_vals: S,
 
     eval_params: evaluation::parameters::Parameters,
     pub search_params: search::Config,
