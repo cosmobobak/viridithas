@@ -44,9 +44,13 @@ Viridithas is not a complete chess program and requires a UCI-compatible graphic
 - #### Late Move Pruning
   Essentially the same idea as LMR, but at low depth when enough moves have been tried, the rest of the moves are simply skipped.
 - #### Transposition Table Reductions
-  When a position that will be in the principal variation (the most important line of search) is entered, and no best-move is found from the transposition table, the depth is reduced by one ply. This is not done for any tactical reason, but instead because such a search is likely to take a lot of time to complete, so reducing depth is a time-saving measure to avoid search explosion.
+  When a position that will be in the principal variation (the most important line of search) is entered, and no best-move is found from the transposition table, the depth is reduced by one ply. This is not done for any tactical reason, but instead because such a search is likely to take a lot of time to complete, so reducing depth is a time-saving measure to avoid search explosion. This is most likely to occur when deep search reveals that the low-depth PV was incorrect, so search must begin on a new PV that has less information saved in the hashtable for it.
 - #### Check Extensions
   If a move is made that gives check, the depth to which that moves is searched is increased by one ply. (This may not be *exactly* one ply, as Viridithas makes use of *fractional depth*.) This often allows Viridithas to see checkmates that are several moves deeper than the nominal search depth.
+- #### Singular Extensions
+  If a move proves to be much better than all the alternatives in a position, the depth used to explore that move is increased by one.
+- #### Quiescence Search SEE Pruning
+  If a capture is found in the quiescence search that would beat beta even if the capturing piece was immediately lost for nothing, then qsearch terminates early with a beta-cutoff.
 
 ## Evaluation Techniques
 - #### Tapered Evaluation
@@ -61,5 +65,7 @@ Viridithas is not a complete chess program and requires a UCI-compatible graphic
   A small bonus is given if a side has a pair of bishops.
 - #### Mobility
   The relative mobility of the pieces in a position can be an important factor in the evaluation. Piece mobilities are evaluated with differing weights and with some restrictions on their movement, like ruling that moves to squares that are controlled by enemy pawns are likely not useful.
+- #### King Safety
+  The number of attacks on the squares around the king are passed into a nonlinear formula that determines the value in centipawns of the king's safety or danger.
 - #### Texel Tuning
-  The weights of the evaluation function are tuned on strong human games, to best predict their outcomes.
+  The weights of the evaluation function are tuned on Viridithas's own self-play games.
