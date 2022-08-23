@@ -113,9 +113,6 @@ impl Board {
     #[allow(
         clippy::too_many_lines,
         clippy::cognitive_complexity,
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        clippy::similar_names
     )]
     pub fn alpha_beta<const PV: bool>(
         &mut self,
@@ -297,7 +294,6 @@ impl Board {
             let is_promotion = m.is_promo();
 
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
-            let do_lmr = !is_capture && m.promotion() != QUEEN && !gives_check;
             quiet_moves_made += i32::from(!is_interesting);
 
             if do_lmp && quiet_moves_made >= lmp_threshold {
@@ -339,7 +335,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let can_reduce = extension == ZERO_PLY
-                    && do_lmr
+                    && !m.is_quiet()
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV));
                 let r = if can_reduce {
