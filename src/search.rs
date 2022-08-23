@@ -335,7 +335,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let can_reduce = extension == ZERO_PLY
-                    && !m.is_quiet()
+                    && m.is_quiet()
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV));
                 let r = if can_reduce {
