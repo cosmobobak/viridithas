@@ -170,7 +170,7 @@ impl Board {
 
         let score = score.value(self.phase());
 
-        let score = self.preprocess_drawish_scores(score);
+        // let score = self.preprocess_drawish_scores(score);
 
         if self.side == WHITE {
             score
