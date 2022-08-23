@@ -140,8 +140,6 @@ impl Board {
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate(&mut self) -> i32 {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE {
                 DRAW_SCORE
@@ -149,6 +147,7 @@ impl Board {
                 -DRAW_SCORE
             };
         }
+
         let material = self.material[WHITE as usize] - self.material[BLACK as usize];
         let pst = self.pst_vals;
 
@@ -170,7 +169,7 @@ impl Board {
 
         let score = score.value(self.phase());
 
-        // let score = self.preprocess_drawish_scores(score);
+        let score = self.preprocess_drawish_scores(score);
 
         if self.side == WHITE {
             score
