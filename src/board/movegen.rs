@@ -15,7 +15,7 @@ use crate::{
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
         BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
-        WKCA, WN, WQ, WQCA, WR, QUEEN,
+        WKCA, WN, WQ, WQCA, WR, QUEEN, PAWN,
     },
     lookups::get_mvv_lva_score,
     magic::MAGICS_READY,
@@ -175,20 +175,24 @@ impl Display for MoveVecWrapper {
 }
 
 impl Board {
-    fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
+    fn add_promo_move(m: Move, move_list: &mut MoveList) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
 
         let promo = m.promotion();
-        if promo != PIECE_EMPTY {
-            let score = get_mvv_lva_score(promo, PIECE_EMPTY) + if promo == QUEEN || promo == KNIGHT {
-                CAPTURE_BASE_SCORE
-            } else {
-                CAPTURE_BASE_SCORE / 2
-            };
-            move_list.push(m, score);
-            return;
-        }
+        
+        let score = get_mvv_lva_score(promo, PAWN) + if promo == QUEEN || promo == KNIGHT {
+            CAPTURE_BASE_SCORE
+        } else {
+            CAPTURE_BASE_SCORE / 2
+        };
+
+        move_list.push(m, score);
+    }
+
+    fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
+        debug_assert!(square_on_board(m.from()));
+        debug_assert!(square_on_board(m.to()));
 
         let killer_entry = self.killer_move_table[self.height];
 
@@ -352,11 +356,11 @@ impl Board {
             let to = if IS_WHITE { sq + 8 } else { sq - 8 };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             }
         }
