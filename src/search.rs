@@ -311,11 +311,9 @@ impl Board {
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !root_node
-                    && moves_made == 1
-                    && tt_hit.tt_move == m
                     && depth >= SINGULARITY_MIN_DEPTH
+                    && tt_hit.tt_move == m
                     && excluded.is_null()
-                    && !is_mate_score(tt_hit.tt_value)
                     && tt_hit.tt_depth >= depth - 3
                     && tt_hit.tt_bound == HFlag::LowerBound
             });

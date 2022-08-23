@@ -87,7 +87,7 @@ static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-82, -97), S(-131, -182),
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [S; 6] = [S(3, 15), S(-29, 40), S(-16, 78), S(18, 117), S(55, 212), S(125, 286)];
 
-pub const TEMPO_BONUS: S = S(0, 0);
+pub const TEMPO_BONUS: S = S(20, 20);
 
 const KING_DANGER_COEFFS: [i32; 3] = [44, 198, -733];
 
