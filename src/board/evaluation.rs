@@ -87,6 +87,10 @@ static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-82, -97), S(-131, -182),
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [S; 6] = [S(3, 15), S(-29, 40), S(-16, 78), S(18, 117), S(55, 212), S(125, 286)];
 
+pub const TEMPO_BONUS: S = S(0, 0);
+
+const KING_DANGER_COEFFS: [i32; 3] = [44, 198, -733];
+
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
 const BISHOP_PHASE: i32 = 10;
@@ -94,8 +98,6 @@ const ROOK_PHASE: i32 = 20;
 const QUEEN_PHASE: i32 = 40;
 const TOTAL_PHASE: i32 =
     16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
-
-const KING_DANGER_COEFFS: [i32; 3] = [44, 198, -733];
 
 #[allow(dead_code)]
 pub static RANK_BB: [u64; 8] = init_eval_masks().0;
@@ -157,6 +159,7 @@ impl Board {
         let queen_open_file_val = self.queen_open_file_term();
         let (mobility_val, danger_info) = self.mobility();
         let king_danger = self.score_kingdanger(danger_info);
+        let tempo = if self.turn() == WHITE { self.eval_params.tempo } else { -self.eval_params.tempo };
 
         let mut score = material;
         score += pst;
@@ -166,6 +169,7 @@ impl Board {
         score += queen_open_file_val;
         score += mobility_val;
         score += king_danger;
+        score += tempo;
 
         let score = score.value(self.phase());
 

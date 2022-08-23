@@ -9,7 +9,7 @@ use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
     KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES,
     QUEEN_HALF_OPEN_FILE_BONUS, QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS,
-    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS,
+    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -28,6 +28,7 @@ pub struct Parameters {
     pub queen_mobility_bonus: [S; 28],
     pub passed_pawn_bonus: [S; 6],
     pub piece_square_tables: [[S; 64]; 13],
+    pub tempo: S,
     pub king_danger_coeffs: [i32; 3],
 }
 
@@ -48,6 +49,7 @@ impl Default for Parameters {
             queen_mobility_bonus: QUEEN_MOBILITY_BONUS,
             passed_pawn_bonus: PASSED_PAWN_BONUS,
             piece_square_tables: crate::piecesquaretable::tables::construct_piece_square_table(),
+            tempo: TEMPO_BONUS,
             king_danger_coeffs: KING_DANGER_COEFFS,
         }
     }
@@ -105,11 +107,7 @@ impl Display for Parameters {
             self.queen_mobility_bonus
         )?;
         writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
-        writeln!(
-            f,
-            "    piece_square_tables: {:?},",
-            &self.piece_square_tables[1..7]
-        )?;
+        writeln!(f, "    tempo: {:?},", self.tempo)?;
         writeln!(f, "    king_danger_formula: {:?},", self.king_danger_coeffs)?;
         write!(f, "}}")?;
         Ok(())
@@ -132,6 +130,7 @@ impl Parameters {
         queen_mobility_bonus: [S::NULL; 28],
         passed_pawn_bonus: [S::NULL; 6],
         piece_square_tables: [[S::NULL; 64]; 13],
+        tempo: S::NULL,
         king_danger_coeffs: [0; 3],
     };
 
@@ -161,7 +160,8 @@ impl Parameters {
                 self.piece_square_tables[(WN as usize)..=(WK as usize)]
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
-            );
+            )
+            .chain(Some(self.tempo));
         ss.flat_map(|s| [s.0, s.1].into_iter())
             .chain(self.king_danger_coeffs.iter().copied())
             .collect()
@@ -251,6 +251,10 @@ impl Parameters {
                 }
             }
         }
+        // read in the tempo term
+        out.tempo = s_iter
+            .next()
+            .expect("failed to read tempo term from vector");
         assert!(
             s_iter.next().is_none(),
             "reading data from a vector of wrong size (too big)"
