@@ -320,12 +320,13 @@ impl Board {
                     && tt_hit.tt_bound == HFlag::LowerBound
             });
 
-            let extension = if maybe_singular {
+            let mut extension = ZERO_PLY;
+            if !root_node && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
                 let is_singular = self.is_singular(info, ss, m, tt_value, depth);
-                Depth::from(is_singular)
-            } else {
-                Depth::from(gives_check)
+                extension = Depth::from(is_singular);
+            } else if !root_node {
+                extension = Depth::from(gives_check);
             };
 
             let mut score;
@@ -336,7 +337,7 @@ impl Board {
                 // calculation of LMR stuff
                 let can_reduce = extension == ZERO_PLY
                     && m.is_quiet()
-                    && depth > 2.into()
+                    && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV));
                 let r = if can_reduce {
                     let mut r = self.lmr_table.get(depth, moves_made);
