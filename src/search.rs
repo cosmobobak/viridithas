@@ -319,11 +319,7 @@ impl Board {
             });
 
             let mut extension = ZERO_PLY;
-            if !root_node && maybe_singular {
-                let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular(info, ss, m, tt_value, depth);
-                extension = Depth::from(is_singular);
-            } else if !root_node {
+            if !root_node {
                 extension = Depth::from(gives_check);
             };
 
