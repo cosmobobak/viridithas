@@ -319,7 +319,11 @@ impl Board {
             });
 
             let mut extension = ZERO_PLY;
-            if !root_node {
+            if !root_node && maybe_singular {
+                let tt_value = tt_hit.as_ref().unwrap().tt_value;
+                let is_singular = self.is_singular(info, ss, m, tt_value, depth);
+                extension = Depth::from(is_singular);
+            } else if !root_node {
                 extension = Depth::from(gives_check);
             };
 
@@ -441,14 +445,21 @@ impl Board {
         tt_value: i32,
         depth: Depth,
     ) -> bool {
-        let reduced_beta = tt_value - 3 * depth.round();
-        let reduced_depth = depth / 2;
-        self.unmake_move(); // undo the singular move so we can search the position that it exists in.
+        let reduced_beta = (tt_value - 2 * depth.round()).max(-MATE_SCORE);
+        let reduced_depth = (depth - 1) / 2;
+        // undo the singular move so we can search the position that it exists in.
+        self.unmake_move();
         ss.excluded[self.height()] = m;
-        let value =
-            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
+        let value = self.alpha_beta::<false>(
+            info,
+            ss,
+            reduced_depth,
+            reduced_beta - 1,
+            reduced_beta
+        );
         ss.excluded[self.height()] = Move::NULL;
-        self.make_move(m); // re-make the singular move.
+        // re-make the singular move.
+        self.make_move(m);
         value < reduced_beta
     }
 }
