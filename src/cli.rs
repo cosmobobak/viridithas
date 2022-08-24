@@ -19,6 +19,9 @@ pub struct Cli {
     /// Pick up texel tuning from halfway through the tuning process
     #[clap(long)]
     pub resume: bool,
+    /// Number of examples to use for tuning
+    #[clap(long, value_name = "N_EXAMPLES", default_value = "16000000")]
+    pub examples: usize,
     /// Display misc. information about the engine
     #[clap(short, long)]
     pub info: bool,

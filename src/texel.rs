@@ -351,9 +351,9 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune(resume: bool) {
+pub fn tune(resume: bool, examples: usize) {
     // hyperparameters
-    let train = 16_000_000; // 8 million is recommended.
+    let train = examples; // 8 million is recommended.
     let test = 100_000; // validation set.
 
     // let n_particles = 100; // No idea what a good value is.
