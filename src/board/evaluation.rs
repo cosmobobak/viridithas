@@ -553,14 +553,16 @@ mod tests {
 
     #[test]
     fn turn_equality() {
+        use crate::board::evaluation::parameters::Parameters;
         const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
         crate::magic::initialise();
+        let tempo = Parameters::default().tempo.0;
         let mut board1 = super::Board::from_fen(FEN1).unwrap();
         let mut board2 = super::Board::from_fen(FEN2).unwrap();
         let eval1 = board1.evaluate();
         let eval2 = board2.evaluate();
-        assert_eq!(eval1, -eval2);
+        assert_eq!(eval1, -eval2 + 2 * tempo);
     }
 
     #[test]
@@ -573,9 +575,11 @@ mod tests {
 
     #[test]
     fn startpos_eval_equality() {
+        use crate::board::evaluation::parameters::Parameters;
         crate::magic::initialise();
+        let tempo = Parameters::default().tempo.0;
         let mut board = super::Board::default();
-        assert_eq!(board.evaluate(), 0);
+        assert_eq!(board.evaluate(), tempo);
     }
 
     #[test]
