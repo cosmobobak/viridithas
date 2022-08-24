@@ -353,7 +353,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune(resume: bool, examples: usize) {
+pub fn tune(resume: bool, examples: usize, starting_params: &Parameters) {
     // hyperparameters
     let train = examples; // 8 million is recommended.
     let test = 30_000; // validation set.
@@ -400,12 +400,10 @@ pub fn tune(resume: bool, examples: usize) {
     data.truncate(train + test);
     let (train_set, _test_set) = data.split_at(train);
 
-    let params = Parameters::default();
-
     println!("Optimising...");
     println!(
         "There are {} parameters to optimise",
-        params.vectorise().len()
+        starting_params.vectorise().len()
     );
     let start_time = Instant::now();
     // let (best_params, best_loss) = particle_swarm_optimise(
@@ -419,7 +417,7 @@ pub fn tune(resume: bool, examples: usize) {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(&params.vectorise(), resume, |pvec| {
+    let (best_params, best_loss) = local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
         compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
     });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
