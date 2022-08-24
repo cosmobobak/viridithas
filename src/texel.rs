@@ -34,6 +34,8 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
+    pos.set_hash_size(1);
+    pos.reset_tables();
     pos.set_eval_params(params.clone());
     data.iter()
         .map(|TrainingExample { fen, outcome }| {
