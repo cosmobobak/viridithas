@@ -6,7 +6,7 @@ use crate::{
         Board,
     },
     chessmove::Move,
-    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, depth::ZERO_PLY, type_of},
+    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, depth::ZERO_PLY, type_of, PIECE_EMPTY},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -461,6 +461,59 @@ impl Board {
         // re-make the singular move.
         self.make_move(m);
         value < reduced_beta
+    }
+
+    #[allow(clippy::all, unused_mut, unused_variables, unreachable_code)]
+    fn _static_exchange_eval(&mut self, m: Move, threshold: i32) -> bool {
+        let from = m.from();
+        let to = m.to();
+        let promo = m.promotion();
+
+        let mut next_victim = if promo == PIECE_EMPTY {
+            self.piece_at(from) // ??????????????????????????
+        } else {
+            promo
+        };
+
+        let mut balance = self.estimated_see(m) - threshold;
+
+        if balance < 0 {
+            return false;
+        }
+
+        // worst case is losing the piece
+        balance -= SEE_PIECE_VALUES[next_victim as usize];
+
+        if balance >= 0 {
+            return true;
+        }
+
+        let diag_sliders = self.pieces.bishopqueen::<true>() | self.pieces.bishopqueen::<false>();
+        let orth_sliders = self.pieces.rookqueen::<true>() | self.pieces.rookqueen::<false>();
+
+        let mut occupied = self.pieces.occupied();
+        occupied = (occupied ^ (1 << from)) | (1 << to);
+        if m.is_ep() {
+            occupied ^= 1 << self.ep_sq();
+        }
+
+        let attackers = self.pieces._all_attackers_to_sq(to, occupied) & occupied;
+
+        let colour = self.turn() ^ 1;
+
+        let mut my_attackers;
+        loop {
+            my_attackers = attackers & self.pieces.occupied_co(colour);
+            if my_attackers == 0 {
+                break;
+            }
+
+            todo!();
+        }
+
+        todo!();
+
+        false
     }
 }
 

@@ -63,7 +63,7 @@ fn get_san_regex() -> &'static Regex {
 
 pub struct Board {
     /// The bitboards of all the pieces on the board.
-    pieces: BitBoard,
+    pub(crate) pieces: BitBoard,
     /// An array to accelerate piece_at().
     piece_array: [u8; 64],
     /// Piece lists that allow pieces to be located quickly.
@@ -201,6 +201,10 @@ impl Board {
     /// This wipes all entries in the table, don't call it during a search.
     pub fn clear_tt(&mut self) {
         self.tt.resize(self.hash_mb);
+    }
+
+    pub const fn ep_sq(&self) -> u8 {
+        self.ep_sq
     }
 
     pub fn set_hash_size(&mut self, mb: usize) {

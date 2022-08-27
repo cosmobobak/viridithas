@@ -146,6 +146,14 @@ impl BitBoard {
         if IS_WHITE { self.w_pawns } else { self.b_pawns }
     }
 
+    pub const fn occupied_co(&self, colour: u8) -> u64 {
+        if colour == WHITE {
+            self.white
+        } else {
+            self.black
+        }
+    }
+
     #[rustfmt::skip]
     pub const fn their_pieces<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.black } else { self.white }
@@ -303,6 +311,11 @@ impl BitBoard {
             self.b_pawns.south_east_one() | self.b_pawns.south_west_one()
         }
     }
+
+    #[allow(clippy::unused_self)]
+    pub fn _all_attackers_to_sq(&self, _sq: u8, _occupied: u64) -> u64 {
+        todo!()
+    }
 }
 
 pub trait BitShiftExt {
@@ -352,6 +365,15 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
         KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
         KING => lookups::get_jumping_piece_attack::<KING>(sq),
         _ => unsafe { macros::inconceivable!() },
+    }
+}
+
+pub fn pawn_attacks<const IS_WHITE: bool>(sq: u8) -> u64 {
+    let sq_bb = 1u64 << sq;
+    if IS_WHITE {
+        sq_bb.north_east_one() | sq_bb.north_west_one()
+    } else {
+        sq_bb.south_east_one() | sq_bb.south_west_one()
     }
 }
 
