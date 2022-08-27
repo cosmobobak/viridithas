@@ -34,7 +34,7 @@ Best moves previously found in the search are cached in the hashtable. When a po
 
 ## Search Reduction and Extension Techniques
 #### Null-Move Pruning
-The null-move heuristic uses the concept of "giving a side two moves in a row" to prune certain lines of search if giving the opponent two moves in a row is not sufficient for them to beat beta, then we prune the search tree as our advantage is large enough not to bother searching.
+The null-move heuristic uses the concept of "giving a side two moves in a row" to prune certain lines of search. If giving the opponent two moves in a row is not sufficient for them to beat beta, then we prune the search tree as our advantage is large enough not to bother searching.
 #### Futility Pruning
 Nodes close to the leaves of the search tree are pruned if they have a very low static evaluation score, assuming that only a few moves will not be enough to recover the position.
 #### Reverse Futility Pruning / Beta Pruning
