@@ -8,11 +8,12 @@ use score::S;
 
 use crate::{
     board::Board,
+    chessmove::Move,
     definitions::{
-        BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, QUEEN, ROOK, WB, WHITE, WN, WP,
-        WQ, WR, type_of, PAWN,
+        type_of, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN, ROOK, WB,
+        WHITE, WN, WP, WQ, WR,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, chessmove::Move,
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
 };
 
 use super::movegen::{
@@ -20,20 +21,20 @@ use super::movegen::{
     BitLoop, BB_NONE,
 };
 
-pub const PAWN_VALUE: S = S(116, 200);
-pub const KNIGHT_VALUE: S = S(425, 390);
-pub const BISHOP_VALUE: S = S(418, 424);
-pub const ROOK_VALUE: S = S(584, 663);
-pub const QUEEN_VALUE: S = S(1204, 1109);
+pub const PAWN_VALUE: S = S(116, 191);
+pub const KNIGHT_VALUE: S = S(415, 404);
+pub const BISHOP_VALUE: S = S(398, 435);
+pub const ROOK_VALUE: S = S(560, 702);
+pub const QUEEN_VALUE: S = S(1263, 1168);
 
 pub static SEE_PIECE_VALUES: [i32; 7] = [
-    0, 
-    PAWN_VALUE.value(128), 
+    0,
+    PAWN_VALUE.value(128),
     KNIGHT_VALUE.value(128),
     BISHOP_VALUE.value(128),
     ROOK_VALUE.value(128),
     QUEEN_VALUE.value(128),
-    0
+    0,
 ];
 
 /// The value of checkmate.
@@ -60,36 +61,46 @@ pub static PIECE_VALUES: [S; 13] = [
 pub const ISOLATED_PAWN_MALUS: S = S(22, 10);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(17, 41);
+pub const DOUBLED_PAWN_MALUS: S = S(17, 42);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(72, 100);
+pub const BISHOP_PAIR_BONUS: S = S(55, 104);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(81, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(69, 0);
 /// The bonus for having a rook on a semi-open file.
-pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(48, 0);
+pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(38, 0);
 /// The bonus for having a queen on an open file.
-pub const QUEEN_OPEN_FILE_BONUS: S = S(2, 0);
+pub const QUEEN_OPEN_FILE_BONUS: S = S(1, 0);
 /// The bonus for having a queen on a semi-open file.
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(22, 0);
 
 // nonlinear mobility eval tables.
-#[rustfmt::skip]
-static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-89, -170), S(-37, -10), S(9, 33), S(24, 78), S(48, 99), S(57, 124), S(78, 127), S(101, 122), S(125, 97)];
-#[rustfmt::skip]
-static BISHOP_MOBILITY_BONUS: [S; 14] = [S(-79, -246), S(-35, -67), S(8, -13), S(29, 53), S(54, 80), S(71, 100), S(85, 119), S(97, 136), S(105, 140), S(116, 149), S(128, 140), S(146, 132), S(198, 121), S(176, 131)];
-#[rustfmt::skip]
-static ROOK_MOBILITY_BONUS: [S; 15] = [S(-67, -65), S(-28, 34), S(27, 92), S(36, 146), S(45, 185), S(49, 201), S(49, 233), S(55, 238), S(59, 236), S(70, 248), S(73, 257), S(82, 256), S(91, 252), S(99, 243), S(51, 263)];
-#[rustfmt::skip]
-static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-82, -97), S(-131, -182), S(55, 95), S(54, 48), S(111, 14), S(132, 13), S(128, 111), S(128, 150), S(127, 220), S(132, 230), S(140, 251), S(149, 264), S(158, 268), S(163, 285), S(163, 301), S(173, 306), S(176, 298), S(182, 303), S(211, 273), S(221, 277), S(244, 254), S(249, 256), S(260, 237), S(278, 224), S(201, 221), S(209, 196), S(100, 102)];
+
+static KNIGHT_MOBILITY_BONUS: [S; 9] = [
+    S(-148, -229), S(-3, 12), S(12, 23), S(24, 79), S(43, 90), S(50, 120), S(69, 125), S(90, 126), S(117, 100)
+];
+
+static BISHOP_MOBILITY_BONUS: [S; 14] = [
+    S(-25, -187), S(-11, -97), S(28, -11), S(43, 64), S(62, 87), S(76, 102), S(85, 123), S(92, 140), S(99, 143), S(106, 148), S(110, 140), S(117, 140), S(202, 110), S(172, 125)
+];
+
+static ROOK_MOBILITY_BONUS: [S; 15] = [
+    S(-8, -6), S(22, 90), S(25, 127), S(36, 175), S(42, 202), S(48, 218), S(46, 245), S(52, 249), S(58, 246), S(62, 261), S(68, 267), S(72, 270), S(78, 264), S(92, 253), S(67, 257)
+];
+
+static QUEEN_MOBILITY_BONUS: [S; 28] = [
+    S(-29, -49), S(-128, -151), S(-166, -237), S(112, 143), S(66, 33), S(170, 61), S(191, 67), S(184, 138), S(182, 208), S(181, 264), S(186, 285), S(192, 308), S(198, 323), S(207, 327), S(209, 344), S(211, 360), S(213, 365), S(222, 357), S(230, 362), S(262, 332), S(263, 336), S(299, 313), S(307, 315), S(319, 296), S(337, 283), S(260, 280), S(268, 255), S(159, 161)
+];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-pub static PASSED_PAWN_BONUS: [S; 6] = [S(3, 15), S(-29, 40), S(-16, 78), S(18, 117), S(55, 212), S(125, 286)];
+pub static PASSED_PAWN_BONUS: [S; 6] = [
+    S(2, 19), S(-23, 36), S(-26, 74), S(12, 109), S(39, 216), S(108, 302)
+];
 
-pub const TEMPO_BONUS: S = S(20, 20);
+pub const TEMPO_BONUS: S = S(2, 5);
 
-const KING_DANGER_COEFFS: [i32; 3] = [44, 198, -733];
+const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
@@ -159,7 +170,11 @@ impl Board {
         let queen_open_file_val = self.queen_open_file_term();
         let (mobility_val, danger_info) = self.mobility();
         let king_danger = self.score_kingdanger(danger_info);
-        let tempo = if self.turn() == WHITE { self.eval_params.tempo } else { -self.eval_params.tempo };
+        let tempo = if self.turn() == WHITE {
+            self.eval_params.tempo
+        } else {
+            -self.eval_params.tempo
+        };
 
         let mut score = material;
         score += pst;
@@ -216,25 +231,30 @@ impl Board {
                 }
             } else if (self.num_pt_ct::<KNIGHT>() == 0
                 && self.num_ct::<WB>().abs_diff(self.num_ct::<BB>()) < 2)
-                || (self.num_ct::<WB>() + self.num_ct::<WN>() == 1 && self.num_ct::<BB>() + self.num_ct::<BN>() == 1)
+                || (self.num_ct::<WB>() + self.num_ct::<WN>() == 1
+                    && self.num_ct::<BB>() + self.num_ct::<BN>() == 1)
             {
                 return true;
             }
         } else if self.num_pt_ct::<QUEEN>() == 0 {
             if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 1 {
-                if (self.num_ct::<WN>() + self.num_ct::<WB>()) < 2 && (self.num_ct::<BN>() + self.num_ct::<BB>()) < 2 {
+                if (self.num_ct::<WN>() + self.num_ct::<WB>()) < 2
+                    && (self.num_ct::<BN>() + self.num_ct::<BB>()) < 2
+                {
                     return true;
                 }
             } else if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 0 {
                 if (self.num_ct::<WN>() + self.num_ct::<WB>()) == 0
-                    && ((self.num_ct::<BN>() + self.num_ct::<BB>()) == 1 || (self.num_ct::<BN>() + self.num_ct::<BB>()) == 2)
+                    && ((self.num_ct::<BN>() + self.num_ct::<BB>()) == 1
+                        || (self.num_ct::<BN>() + self.num_ct::<BB>()) == 2)
                 {
                     return true;
                 }
             } else if self.num_ct::<WR>() == 0
                 && self.num_ct::<BR>() == 1
                 && (self.num_ct::<BN>() + self.num_ct::<BB>()) == 0
-                && ((self.num_ct::<WN>() + self.num_ct::<WB>()) == 1 || (self.num_ct::<WN>() + self.num_ct::<WB>()) == 2)
+                && ((self.num_ct::<WN>() + self.num_ct::<WB>()) == 1
+                    || (self.num_ct::<WN>() + self.num_ct::<WB>()) == 2)
             {
                 return true;
             }
@@ -244,8 +264,7 @@ impl Board {
 
     fn preprocess_drawish_scores(&mut self, score: i32) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
-        if score > 0 && self.unwinnable_for::<true>()
-            || score < 0 && self.unwinnable_for::<false>()
+        if score > 0 && self.unwinnable_for::<true>() || score < 0 && self.unwinnable_for::<false>()
         {
             0
         } else {
@@ -512,7 +531,8 @@ impl Board {
 
         if m.is_promo() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += SEE_PIECE_VALUES[type_of(m.promotion()) as usize] - SEE_PIECE_VALUES[PAWN as usize];
+            value +=
+                SEE_PIECE_VALUES[type_of(m.promotion()) as usize] - SEE_PIECE_VALUES[PAWN as usize];
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
             value = SEE_PIECE_VALUES[PAWN as usize];
