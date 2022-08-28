@@ -425,10 +425,15 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     //     particle_distance,
     //     velocity_distance,
     // );
+    let n_params = starting_params.vectorise().len();
+    let mut iterations = 0;
     let (best_params, best_loss) =
         local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
-            let mut rng = rand::thread_rng();
-            data.shuffle(&mut rng);
+            if iterations % n_params == 0 {
+                let mut rng = rand::thread_rng();
+                data.shuffle(&mut rng);
+            }
+            iterations += 1;
             let train_set = &data[..train];
             compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
         }, params_to_tune);
