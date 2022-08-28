@@ -27,6 +27,9 @@ pub const BB_ALL: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 pub const BB_LIGHT_SQUARES: u64 = 0x55AA_55AA_55AA_55AA;
 pub const BB_DARK_SQUARES: u64 = 0xAA55_AA55_AA55_AA55;
 
+pub const LIGHT_SQUARE: bool = true;
+pub const DARK_SQUARE: bool = false;
+
 pub static BB_RANKS: [u64; 8] = [
     BB_RANK_1, BB_RANK_2, BB_RANK_3, BB_RANK_4, BB_RANK_5, BB_RANK_6, BB_RANK_7, BB_RANK_8,
 ];
@@ -197,6 +200,21 @@ impl BitBoard {
     #[rustfmt::skip]
     pub const fn queens<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_queens } else { self.b_queens }
+    }
+
+    #[rustfmt::skip]
+    pub const fn bishops_sqco<const IS_WHITE: bool, const IS_LSB: bool>(&self) -> u64 {
+        if IS_WHITE { 
+            if IS_LSB {
+                self.w_bishops & BB_LIGHT_SQUARES
+            } else {
+                self.w_bishops & BB_DARK_SQUARES
+            }
+        } else if IS_LSB {
+            self.b_bishops & BB_LIGHT_SQUARES
+        } else {
+            self.b_bishops & BB_DARK_SQUARES
+        }
     }
 
     pub fn reset(&mut self) {

@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt, BB_LIGHT_SQUARES, BB_DARK_SQUARES},
+    bitboards::{attacks, BitShiftExt, BB_LIGHT_SQUARES, BB_DARK_SQUARES, LIGHT_SQUARE, DARK_SQUARE},
     BitLoop, BB_NONE,
 };
 
@@ -349,15 +349,17 @@ impl Board {
     }
 
     fn bishop_pair_term(&self) -> S {
-        let w_count = self.num(WB);
-        let b_count = self.num(BB);
-        if w_count == b_count {
+        let white_pair = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>() != 0 
+            && self.pieces.bishops_sqco::<true, DARK_SQUARE>() != 0;
+        let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>() != 0 
+            && self.pieces.bishops_sqco::<false, DARK_SQUARE>() != 0;
+        if white_pair && black_pair {
             return S(0, 0);
         }
-        if w_count >= 2 {
+        if white_pair {
             return self.eval_params.bishop_pair_bonus;
         }
-        if b_count >= 2 {
+        if black_pair {
             return -self.eval_params.bishop_pair_bonus;
         }
         S(0, 0)
@@ -613,10 +615,10 @@ impl Board {
         let black_pawns_on_light = formula(multiplier, (BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
         let black_pawns_on_dark = formula(multiplier, (BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
 
-        let white_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<true>();
-        let white_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<true>();
-        let black_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<false>();
-        let black_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<false>();
+        let white_bishops_on_light = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>();
+        let white_bishops_on_dark = self.pieces.bishops_sqco::<true, DARK_SQUARE>();
+        let black_bishops_on_light = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>();
+        let black_bishops_on_dark = self.pieces.bishops_sqco::<false, DARK_SQUARE>();
 
         if white_bishops_on_light != 0 {
             // white has a LSB
