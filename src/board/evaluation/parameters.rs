@@ -9,7 +9,7 @@ use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
     KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES,
     QUEEN_HALF_OPEN_FILE_BONUS, QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS,
-    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS, COLOUR_COMPLEX_MULTIPLIER,
+    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -29,7 +29,6 @@ pub struct Parameters {
     pub passed_pawn_bonus: [S; 6],
     pub piece_square_tables: [[S; 64]; 13],
     pub tempo: S,
-    pub colour_complex_multiplier: S,
     pub king_danger_coeffs: [i32; 3],
 }
 
@@ -51,7 +50,6 @@ impl Default for Parameters {
             passed_pawn_bonus: PASSED_PAWN_BONUS,
             piece_square_tables: crate::piecesquaretable::tables::construct_piece_square_table(),
             tempo: TEMPO_BONUS,
-            colour_complex_multiplier: COLOUR_COMPLEX_MULTIPLIER,
             king_danger_coeffs: KING_DANGER_COEFFS,
         }
     }
@@ -110,7 +108,6 @@ impl Display for Parameters {
         )?;
         writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
         writeln!(f, "    tempo: {:?},", self.tempo)?;
-        writeln!(f, "    colour_complex_multiplier: {:?},", self.colour_complex_multiplier)?;
         writeln!(f, "    king_danger_formula: {:?},", self.king_danger_coeffs)?;
         write!(f, "}}")?;
         Ok(())
@@ -134,7 +131,6 @@ impl Parameters {
         passed_pawn_bonus: [S::NULL; 6],
         piece_square_tables: [[S::NULL; 64]; 13],
         tempo: S::NULL,
-        colour_complex_multiplier: S::NULL,
         king_danger_coeffs: [0; 3],
     };
 
@@ -165,8 +161,7 @@ impl Parameters {
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
             )
-            .chain(Some(self.tempo))
-            .chain(Some(self.colour_complex_multiplier));
+            .chain(Some(self.tempo));
         ss.flat_map(|s| [s.0, s.1].into_iter())
             .chain(self.king_danger_coeffs.iter().copied())
             .collect()
@@ -260,10 +255,6 @@ impl Parameters {
         out.tempo = s_iter
             .next()
             .expect("failed to read tempo term from vector");
-        // read in the colour complex multiplier term
-        out.colour_complex_multiplier = s_iter
-            .next()
-            .expect("failed to read colour_complex_multiplier term from vector");
         assert!(
             s_iter.next().is_none(),
             "reading data from a vector of wrong size (too big)"

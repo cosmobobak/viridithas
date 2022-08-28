@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt, BB_LIGHT_SQUARES, BB_DARK_SQUARES, LIGHT_SQUARE, DARK_SQUARE},
+    bitboards::{attacks, BitShiftExt, LIGHT_SQUARE, DARK_SQUARE},
     BitLoop, BB_NONE,
 };
 
@@ -64,7 +64,7 @@ pub const ISOLATED_PAWN_MALUS: S = S(22, 10);
 pub const DOUBLED_PAWN_MALUS: S = S(17, 42);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(53, 110);
+pub const BISHOP_PAIR_BONUS: S = S(55, 104);
 
 /// The bonus for having a rook on an open file.
 pub const ROOK_OPEN_FILE_BONUS: S = S(69, 0);
@@ -167,8 +167,6 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
 
 pub const TEMPO_BONUS: S = S(2, 5);
 
-pub const COLOUR_COMPLEX_MULTIPLIER: S = S(150, 150);
-
 const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
 const PAWN_PHASE: i32 = 1;
@@ -244,7 +242,6 @@ impl Board {
         } else {
             -self.eval_params.tempo
         };
-        let colour_complexes = self.colour_complexes();
 
         let mut score = material;
         score += pst;
@@ -255,7 +252,6 @@ impl Board {
         score += mobility_val;
         score += king_danger;
         score += tempo;
-        score += colour_complexes;
 
         let score = score.value(self.phase());
 
@@ -596,60 +592,6 @@ impl Board {
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
-    }
-
-    pub fn colour_complexes(&self) -> S {
-        #![allow(clippy::cast_possible_wrap)]
-        // it's bad for your bishop to have your pawns on the same colour complex as it.
-        // it's good for your bishop to have your pawns on the opposite colour complex as it.
-        let mut score = S(0, 0);
-        let multiplier = self.eval_params.colour_complex_multiplier;
-
-        let formula = |m: S, n: i32| {
-            let score = m * (n * n);
-            S(score.0 / 400, score.1 / 400)
-        };
-
-        let white_pawns_on_light = formula(multiplier, (BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
-        let white_pawns_on_dark = formula(multiplier, (BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
-        let black_pawns_on_light = formula(multiplier, (BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
-        let black_pawns_on_dark = formula(multiplier, (BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
-
-        let white_bishops_on_light = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>();
-        let white_bishops_on_dark = self.pieces.bishops_sqco::<true, DARK_SQUARE>();
-        let black_bishops_on_light = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>();
-        let black_bishops_on_dark = self.pieces.bishops_sqco::<false, DARK_SQUARE>();
-
-        if white_bishops_on_light != 0 {
-            // white has a LSB
-            let blocked_malus = white_pawns_on_light;
-            let free_bonus = white_pawns_on_dark;
-            score -= blocked_malus;
-            score += free_bonus;
-        }
-        if white_bishops_on_dark != 0 {
-            // white has a DSB
-            let blocked_malus = white_pawns_on_dark;
-            let free_bonus = white_pawns_on_light;
-            score -= blocked_malus;
-            score += free_bonus;
-        }
-        if black_bishops_on_light != 0 {
-            // black has a LSB
-            let blocked_malus = black_pawns_on_light;
-            let free_bonus = black_pawns_on_dark;
-            score += blocked_malus;
-            score -= free_bonus;
-        }
-        if black_bishops_on_dark != 0 {
-            // black has a DSB
-            let blocked_malus = black_pawns_on_dark;
-            let free_bonus = black_pawns_on_light;
-            score += blocked_malus;
-            score -= free_bonus;
-        }
-
-        score
     }
 
     pub fn estimated_see(&self, m: Move) -> i32 {
