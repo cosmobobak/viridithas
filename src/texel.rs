@@ -192,6 +192,7 @@ fn read_data() -> Vec<TrainingExample> {
         .lines()
         .map(|line| {
             let line = line.unwrap();
+            // we expect lines in the format "{fen};{outcome}"
             let (fen, outcome) = line.rsplit_once(';').unwrap();
             let outcome = outcome.parse::<f64>().unwrap();
             let fen = fen.to_owned();
