@@ -595,7 +595,7 @@ impl Board {
     }
 
     pub fn colour_complexes(&self) -> S {
-        static COLOUR_BONUS: [i32; 8] = [2, 4, 6, 8, 10, 12, 14, 16];
+        static COLOUR_BONUS: [i32; 9] = [0, 2, 4, 6, 8, 10, 12, 14, 16];
         // it's bad for your bishop to have your pawns on the same colour complex as it.
         // it's good for your bishop to have your pawns on the opposite colour complex as it.
         let mut score = S(0, 0);
