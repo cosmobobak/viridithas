@@ -1,5 +1,3 @@
-#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-
 use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
@@ -73,6 +71,11 @@ impl TranspositionTable {
         Self { table: Vec::new() }
     }
 
+    fn wrap_key(&self, key: u64) -> usize {
+        #![allow(clippy::cast_possible_truncation)]
+        (key % self.table.len() as u64) as usize
+    }
+
     pub fn resize(&mut self, megabytes: usize) {
         let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
         self.table.resize(new_len, TTEntry::NULL);
@@ -103,7 +106,7 @@ impl TranspositionTable {
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let index = (key % self.table.len() as u64) as usize;
+        let index = self.wrap_key(key);
         let slot = &mut self.table[index];
 
         let score = normalise_mate_score(score, ply);
@@ -130,7 +133,7 @@ impl TranspositionTable {
     }
 
     pub fn probe(&self, key: u64, ply: usize, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        let index = (key % (self.table.len() as u64)) as usize;
+        let index = self.wrap_key(key);
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);
@@ -198,6 +201,7 @@ impl TranspositionTable {
 }
 
 const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
     if score > MINIMUM_MATE_SCORE {
         score += ply as i32;
     } else if score < -MINIMUM_MATE_SCORE {
@@ -207,6 +211,7 @@ const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
 }
 
 const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
     if score > MINIMUM_MATE_SCORE {
         score -= ply as i32;
     } else if score < -MINIMUM_MATE_SCORE {

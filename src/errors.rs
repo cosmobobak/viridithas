@@ -28,6 +28,5 @@ impl Display for MoveParseError {
     }
 }
 
-#[allow(dead_code)]
 pub type PositionValidityError = String;
 pub type FenParseError = String;

@@ -209,9 +209,6 @@ pub const fn flip_file(sq: u8) -> u8 {
     sq ^ 7
 }
 
-#[allow(dead_code)]
-pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
 mod tests {
     #[test]
     fn square_flipping() {

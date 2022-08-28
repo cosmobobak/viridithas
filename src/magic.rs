@@ -47,29 +47,6 @@ static ROOK_REL_BITS: [i32; 64] = [
     12, 11, 11, 11, 11, 11, 11, 12,
 ];
 
-#[allow(dead_code)]
-pub fn print_bitboard_maksim(bb: u64) {
-    println!();
-    // loop over ranks
-    for rank in 0..8 {
-        // loop over files
-        for file in 0..8 {
-            let square = rank * 8 + file;
-            if file == 0 {
-                print!("  {} ", 8 - rank);
-            }
-            if (bb & (1 << square)) == 0 {
-                print!(" .");
-            } else {
-                print!(" X");
-            }
-        }
-        println!();
-    }
-    println!("\n     a b c d e f g h\n");
-    println!("    bitboard: {bb}\n");
-}
-
 const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: u64) -> u64 {
     use crate::board::movegen::bitboards::lsb;
     let mut occupancy = 0;

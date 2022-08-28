@@ -5,7 +5,6 @@ use std::{
 
 use crate::board::{movegen::MoveList, Board};
 
-#[allow(dead_code)]
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -29,7 +28,6 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     count
 }
 
-#[allow(dead_code)]
 pub fn gamut() {
     // open perftsuite.epd
     let f = File::open("perftsuite.epd").unwrap();
