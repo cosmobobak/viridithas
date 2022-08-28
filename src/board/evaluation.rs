@@ -64,7 +64,7 @@ pub const ISOLATED_PAWN_MALUS: S = S(22, 10);
 pub const DOUBLED_PAWN_MALUS: S = S(17, 42);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(55, 104);
+pub const BISHOP_PAIR_BONUS: S = S(53, 110);
 
 /// The bonus for having a rook on an open file.
 pub const ROOK_OPEN_FILE_BONUS: S = S(69, 0);
@@ -167,7 +167,7 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
 
 pub const TEMPO_BONUS: S = S(2, 5);
 
-pub const COLOUR_COMPLEX_MULTIPLIER: S = S(135, 135);
+pub const COLOUR_COMPLEX_MULTIPLIER: S = S(150, 150);
 
 const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
