@@ -291,10 +291,10 @@ where
     (best_loc, best_cost)
 }
 
-fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
+fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
     resume: bool,
-    cost_function: F1,
+    mut cost_function: F1,
     params_to_tune: Option<&[usize]>,
 ) -> (Vec<i32>, f64) {
     if let Some(ptt) = params_to_tune {
@@ -407,8 +407,6 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     println!("Splitting data...");
 
     assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {train}, test = {test}, but data has {} examples", data.len());
-    data.truncate(train + test);
-    let (train_set, _test_set) = data.split_at(train);
 
     println!("Optimising...");
     println!(
@@ -429,6 +427,9 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     // );
     let (best_params, best_loss) =
         local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
+            let mut rng = rand::thread_rng();
+            data.shuffle(&mut rng);
+            let train_set = &data[..train];
             compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
         }, params_to_tune);
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
