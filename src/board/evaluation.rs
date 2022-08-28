@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt},
+    bitboards::{attacks, BitShiftExt, BB_LIGHT_SQUARES, BB_DARK_SQUARES},
     BitLoop, BB_NONE,
 };
 
@@ -242,6 +242,7 @@ impl Board {
         } else {
             -self.eval_params.tempo
         };
+        let colour_complexes = self.colour_complexes();
 
         let mut score = material;
         score += pst;
@@ -252,6 +253,7 @@ impl Board {
         score += mobility_val;
         score += king_danger;
         score += tempo;
+        score += colour_complexes;
 
         let score = score.value(self.phase());
 
@@ -590,6 +592,54 @@ impl Board {
         let black_attack_strength = kd_formula(kd.attack_units_on_white.clamp(0, 99)).min(500);
         let relscore = white_attack_strength - black_attack_strength;
         S(relscore, relscore / 2)
+    }
+
+    pub fn colour_complexes(&self) -> S {
+        static COLOUR_BONUS: [i32; 8] = [2, 4, 6, 8, 10, 12, 14, 16];
+        // it's bad for your bishop to have your pawns on the same colour complex as it.
+        // it's good for your bishop to have your pawns on the opposite colour complex as it.
+        let mut score = S(0, 0);
+
+        let white_pawns_on_light = COLOUR_BONUS[(BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as usize];
+        let white_pawns_on_dark = COLOUR_BONUS[(BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as usize];
+        let black_pawns_on_light = COLOUR_BONUS[(BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as usize];
+        let black_pawns_on_dark = COLOUR_BONUS[(BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as usize];
+
+        let white_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<true>();
+        let white_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<true>();
+        let black_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<false>();
+        let black_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<false>();
+
+        if white_bishops_on_light != 0 {
+            // white has a LSB
+            let blocked_malus = white_pawns_on_light;
+            let free_bonus = white_pawns_on_dark;
+            score -= blocked_malus.into();
+            score += free_bonus.into();
+        }
+        if white_bishops_on_dark != 0 {
+            // white has a DSB
+            let blocked_malus = white_pawns_on_dark;
+            let free_bonus = white_pawns_on_light;
+            score -= blocked_malus.into();
+            score += free_bonus.into();
+        }
+        if black_bishops_on_light != 0 {
+            // black has a LSB
+            let blocked_malus = black_pawns_on_light;
+            let free_bonus = black_pawns_on_dark;
+            score += blocked_malus.into();
+            score -= free_bonus.into();
+        }
+        if black_bishops_on_dark != 0 {
+            // black has a DSB
+            let blocked_malus = black_pawns_on_dark;
+            let free_bonus = black_pawns_on_light;
+            score += blocked_malus.into();
+            score -= free_bonus.into();
+        }
+
+        score
     }
 
     pub fn estimated_see(&self, m: Move) -> i32 {

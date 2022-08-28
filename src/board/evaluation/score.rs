@@ -53,6 +53,12 @@ impl Mul<i32> for S {
     }
 }
 
+impl From<i32> for S {
+    fn from(i: i32) -> Self {
+        Self(i, i)
+    }
+}
+
 impl Sum for S {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Self(0, 0), |acc, x| acc + x)
