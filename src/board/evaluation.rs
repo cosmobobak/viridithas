@@ -21,11 +21,11 @@ use super::movegen::{
     BitLoop, BB_NONE,
 };
 
-pub const PAWN_VALUE: S = S(116, 192);
-pub const KNIGHT_VALUE: S = S(415, 405);
-pub const BISHOP_VALUE: S = S(397, 436);
+pub const PAWN_VALUE: S = S(116, 191);
+pub const KNIGHT_VALUE: S = S(415, 404);
+pub const BISHOP_VALUE: S = S(398, 435);
 pub const ROOK_VALUE: S = S(560, 702);
-pub const QUEEN_VALUE: S = S(1265, 1170);
+pub const QUEEN_VALUE: S = S(1263, 1168);
 
 pub static SEE_PIECE_VALUES: [i32; 7] = [
     0,
