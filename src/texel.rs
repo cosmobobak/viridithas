@@ -331,27 +331,26 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
             let start = Instant::now();
             let mut new_params = best_params.clone();
             new_params[param_idx] += nudge_size; // try adding step_size to the param
-            let new_err = cost_function(&new_params);
-            if new_err < best_err {
+            let incr_err = cost_function(&new_params);
+            new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
+            let decr_err = cost_function(&new_params);
+            if incr_err < best_err && incr_err < decr_err {
+                new_params[param_idx] += nudge_size * 2;
                 best_params = new_params;
-                best_err = new_err;
+                best_err = incr_err;
                 improved = true;
                 let time_taken = start.elapsed().as_secs_f64();
                 println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
+            } else if decr_err < best_err {
+                best_params = new_params;
+                best_err = decr_err;
+                improved = true;
+                let time_taken = start.elapsed().as_secs_f64();
+                println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
             } else {
-                new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
-                let new_err = cost_function(&new_params);
-                if new_err < best_err {
-                    best_params = new_params;
-                    best_err = new_err;
-                    improved = true;
-                    let time_taken = start.elapsed().as_secs_f64();
-                    println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
-                } else {
-                    new_params[param_idx] += nudge_size; // reset the param.
-                    let time_taken = start.elapsed().as_secs_f64();
-                    println!("{CONTROL_RED}no improvement.{CONTROL_RESET} ({time_taken:.2}s)");
-                }
+                new_params[param_idx] += nudge_size; // reset the param.
+                let time_taken = start.elapsed().as_secs_f64();
+                println!("{CONTROL_RED}no improvement.{CONTROL_RESET} ({time_taken:.2}s)");
             }
         }
         Parameters::save_param_vec(
