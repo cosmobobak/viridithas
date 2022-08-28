@@ -304,6 +304,18 @@ impl BitBoard {
         }
     }
 
+    pub const fn of_type(&self, piece_type: u8) -> u64 {
+        match piece_type {
+            PAWN => self.w_pawns | self.b_pawns,
+            KNIGHT => self.w_knights | self.b_knights,
+            BISHOP => self.w_bishops | self.b_bishops,
+            ROOK => self.w_rooks | self.b_rooks,
+            QUEEN => self.w_queens | self.b_queens,
+            KING => self.w_king | self.b_king,
+            _ => unsafe { macros::inconceivable!() },
+        }
+    }
+
     pub fn pawn_attacks<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE {
             self.w_pawns.north_east_one() | self.w_pawns.north_west_one()
@@ -312,9 +324,14 @@ impl BitBoard {
         }
     }
 
-    #[allow(clippy::unused_self)]
-    pub fn _all_attackers_to_sq(&self, _sq: u8, _occupied: u64) -> u64 {
-        todo!()
+    pub fn all_attackers_to_sq(&self, sq: u8, occupied: u64) -> u64 {
+        let black_pawn_attackers = pawn_attacks::<true>(sq) & self.b_pawns;
+        let white_pawn_attackers = pawn_attacks::<false>(sq) & self.w_pawns;
+        let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
+        let diag_attackers = attacks::<BISHOP>(sq, occupied) & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
+        let orth_attackers = attacks::<ROOK>(sq, occupied) & (self.w_rooks | self.b_rooks | self.w_queens | self.b_queens);
+        let king_attackers = attacks::<KING>(sq, BB_NONE) & (self.w_king | self.b_king);
+        black_pawn_attackers | white_pawn_attackers | knight_attackers | diag_attackers | orth_attackers | king_attackers
     }
 }
 

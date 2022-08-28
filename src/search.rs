@@ -1,12 +1,12 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, SEE_PIECE_VALUES},
-        movegen::TT_MOVE_SCORE,
+        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, SEE_PIECE_VALUES, MINIMUM_MATE_SCORE},
+        movegen::{TT_MOVE_SCORE, bitboards::{lsb, self}},
         Board,
     },
     chessmove::Move,
-    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, depth::ZERO_PLY, type_of, PIECE_EMPTY},
+    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, depth::ZERO_PLY, type_of, QUEEN, PAWN, KING, BISHOP, ROOK},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -32,6 +32,9 @@ const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
+const SEE_PRUNING_MAXDEPTH: Depth = Depth::new(9);
+const SEE_QUIET_MARGIN: i32 = -64;
+const SEE_CAPTURE_MARGIN: i32 = -19;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -208,6 +211,11 @@ impl Board {
 
         ss.evals[self.height()] = static_eval;
 
+        let see_table = [
+            SEE_CAPTURE_MARGIN * depth.squared(),
+            SEE_QUIET_MARGIN * depth.round(),
+        ];
+
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less agressive with alpha-reductions (eval is too low).
@@ -279,6 +287,10 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
+            if best_score > -MINIMUM_MATE_SCORE && depth < SEE_PRUNING_MAXDEPTH && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())]) {
+                continue;
+            }
+
             if !self.make_move(m) {
                 continue;
             }
@@ -463,20 +475,19 @@ impl Board {
         value < reduced_beta
     }
 
-    #[allow(clippy::all, unused_mut, unused_variables, unreachable_code)]
-    fn _static_exchange_eval(&mut self, m: Move, threshold: i32) -> bool {
+    fn static_exchange_eval(&mut self, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
-        let promo = m.promotion();
 
-        let mut next_victim = if promo == PIECE_EMPTY {
-            self.piece_at(from) // ??????????????????????????
+        let mut next_victim = if m.is_promo() {
+            type_of(m.promotion())
         } else {
-            promo
+            type_of(self.piece_at(from))
         };
 
         let mut balance = self.estimated_see(m) - threshold;
 
+        // if the best case fails, don't bother doing the full search.
         if balance < 0 {
             return false;
         }
@@ -484,6 +495,7 @@ impl Board {
         // worst case is losing the piece
         balance -= SEE_PIECE_VALUES[next_victim as usize];
 
+        // if the worst case passes, we can return true immediately.
         if balance >= 0 {
             return true;
         }
@@ -491,29 +503,63 @@ impl Board {
         let diag_sliders = self.pieces.bishopqueen::<true>() | self.pieces.bishopqueen::<false>();
         let orth_sliders = self.pieces.rookqueen::<true>() | self.pieces.rookqueen::<false>();
 
-        let mut occupied = self.pieces.occupied();
-        occupied = (occupied ^ (1 << from)) | (1 << to);
+        // occupied starts with the position after the move `m` is made.
+        let mut occupied = (self.pieces.occupied() ^ (1 << from)) | (1 << to);
         if m.is_ep() {
             occupied ^= 1 << self.ep_sq();
         }
 
-        let attackers = self.pieces._all_attackers_to_sq(to, occupied) & occupied;
+        let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;
 
-        let colour = self.turn() ^ 1;
+        // after the move, it's the opponent's turn.
+        let mut colour = self.turn() ^ 1;
 
-        let mut my_attackers;
         loop {
-            my_attackers = attackers & self.pieces.occupied_co(colour);
+            let my_attackers = attackers & self.pieces.occupied_co(colour);
             if my_attackers == 0 {
                 break;
             }
 
-            todo!();
+            // find cheapest attacker
+            for victim in PAWN..=KING {
+                next_victim = victim;
+                if my_attackers & self.pieces.of_type(victim) != 0 {
+                    break;
+                }
+            }
+
+            occupied ^= 1 << lsb(my_attackers & self.pieces.of_type(next_victim));
+
+            // diagonal moves reveal bishops and queens:
+            if next_victim == PAWN || next_victim == BISHOP || next_victim == QUEEN {
+                attackers |= bitboards::attacks::<BISHOP>(to, occupied) & diag_sliders;
+            }
+
+            // orthogonal moves reveal rooks and queens:
+            if next_victim == ROOK || next_victim == QUEEN {
+                attackers |= bitboards::attacks::<ROOK>(to, occupied) & orth_sliders;
+            }
+
+            attackers &= occupied;
+
+            colour ^= 1;
+
+            balance = -balance - 1 - SEE_PIECE_VALUES[next_victim as usize];
+
+            if balance >= 0 {
+                // from Ethereal:
+                // As a slight optimisation for move legality checking, if our last attacking
+                // piece is a king, and our opponent still has attackers, then we've
+                // lost as the move we followed would be illegal
+                if next_victim == KING && attackers & self.pieces.occupied_co(colour) != 0 {
+                    colour ^= 1;
+                }
+                break;
+            }
         }
 
-        todo!();
-
-        false
+        // the side that is to move after loop exit is the loser.
+        self.turn() != colour
     }
 }
 
