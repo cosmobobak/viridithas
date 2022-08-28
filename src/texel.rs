@@ -51,12 +51,13 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
         .sum::<f64>()
 }
 
-fn compute_mse(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
+fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     #![allow(clippy::cast_precision_loss)]
+    let params = Parameters::devectorise(params);
     let n: f64 = data.len() as f64;
     let chunk_size = data.len() / num_cpus::get();
     data.par_chunks(chunk_size)
-        .map(|chunk| total_squared_error(chunk, params, k))
+        .map(|chunk| total_squared_error(chunk, &params, k))
         .sum::<f64>()
         / n
 }
@@ -133,32 +134,15 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_to_tune: Option<&[usize]>) {
-    // hyperparameters
-    let train = examples; // 8 million is recommended.
-    let test = 30_000; // validation set.
-
-    // let n_particles = 100; // No idea what a good value is.
-    // let inertia_weight = 0.8; // the inertia of a particle
-    // let cognitive_coeff = 1.7; // how much particles get drawn towards their best known position
-    // let social_coeff = 1.7; // how much particles get drawn towards the best position of the whole swarm
-    // let particle_distance = 10; // how far away from the default parameters a particle can be
-    // let velocity_distance = 3; // how far away from the zero velocity a particle can begin
-
-    let data = File::open("../texel_data.txt").unwrap();
-
+pub fn tune(
+    resume: bool,
+    examples: usize,
+    starting_params: &Parameters,
+    params_to_tune: Option<&[usize]>,
+) {
     println!("Parsing tuning data...");
     let start_time = Instant::now();
-    let mut data = BufReader::new(data)
-        .lines()
-        .map(|line| {
-            let line = line.unwrap();
-            let (fen, outcome) = line.rsplit_once(';').unwrap();
-            let outcome = outcome.parse::<f64>().unwrap();
-            let fen = fen.to_owned();
-            TrainingExample { fen, outcome }
-        })
-        .collect::<Vec<_>>();
+    let mut data = read_data();
     println!(
         "Parsed {} examples in {:.1}s",
         data.len(),
@@ -176,26 +160,42 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
 
     println!("Splitting data...");
 
-    assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {train}, test = {test}, but data has {} examples", data.len());
+    assert!(
+        examples <= data.len(),
+        "not enough data for training, requested examples = {examples}, but data has {} examples",
+        data.len()
+    );
 
     println!("Optimising...");
     let n_params = params_to_tune.map_or_else(|| starting_params.vectorise().len(), <[usize]>::len);
     println!("There are {n_params} parameters to optimise");
     let start_time = Instant::now();
-    
-    let mut iterations = 0;
-    let (best_params, best_loss) =
-        local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
-            if iterations % n_params == 0 {
-                let mut rng = rand::thread_rng();
-                data.shuffle(&mut rng);
-            }
-            iterations += 1;
-            compute_mse(&data[..train], &Parameters::devectorise(pvec), DEFAULT_K)
-        }, params_to_tune);
+
+    let training_data = &data[..examples];
+
+    let (best_params, best_loss) = local_search_optimise(
+        &starting_params.vectorise(),
+        resume,
+        |params| compute_mse(training_data, params, DEFAULT_K),
+        params_to_tune,
+    );
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Best loss: {best_loss:.6}");
     println!("Saving best parameters...");
     Parameters::save_param_vec(&best_params, "params/localsearchfinal.txt");
+}
+
+fn read_data() -> Vec<TrainingExample> {
+    let data = File::open("../texel_data.txt").unwrap();
+    BufReader::new(data)
+        .lines()
+        .map(|line| {
+            let line = line.unwrap();
+            let (fen, outcome) = line.rsplit_once(';').unwrap();
+            let outcome = outcome.parse::<f64>().unwrap();
+            let fen = fen.to_owned();
+            TrainingExample { fen, outcome }
+        })
+        .collect::<Vec<_>>()
 }
