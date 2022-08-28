@@ -73,7 +73,6 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: Parameters, time: u64) {
     let n_positions = positions.len();
     println!("successfully parsed {n_positions} positions!");
 
-    let mut failed_positions = vec![];
     let mut successes = 0;
     for position in positions {
         let Position {
@@ -101,23 +100,13 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: Parameters, time: u64) {
         };
         let d_best_moves = MoveVecWrapper(best_moves.clone());
         println!(
-            "{id} {color}{}{CONTROL_RESET}{fen} {d_best_moves}{failinfo}",
-            if passed { "PASS " } else { "FAIL " }
+            "{id} {color}{}{CONTROL_RESET} {fen} {d_best_moves}{failinfo}",
+            if passed { "PASS" } else { "FAIL" }
         );
         if passed {
             successes += 1;
-        } else {
-            failed_positions.push(position);
         }
     }
 
     println!("{}/{} passed", successes, n_positions);
-
-    if !failed_positions.is_empty() {
-        println!("failed positions:");
-        for position in failed_positions {
-            let d_best_moves = MoveVecWrapper(position.best_moves);
-            println!("{d_best_moves} in {}", position.fen);
-        }
-    }
 }
