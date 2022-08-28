@@ -601,16 +601,17 @@ impl Board {
         // it's bad for your bishop to have your pawns on the same colour complex as it.
         // it's good for your bishop to have your pawns on the opposite colour complex as it.
         let mut score = S(0, 0);
+        let multiplier = self.eval_params.colour_complex_multiplier;
 
-        let formula = |n: i32| {
-            let score = self.eval_params.colour_complex_multiplier * (n * n);
+        let formula = |m: S, n: i32| {
+            let score = m * (n * n);
             S(score.0 / 400, score.1 / 400)
         };
 
-        let white_pawns_on_light = formula((BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
-        let white_pawns_on_dark = formula((BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
-        let black_pawns_on_light = formula((BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
-        let black_pawns_on_dark = formula((BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
+        let white_pawns_on_light = formula(multiplier, (BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
+        let white_pawns_on_dark = formula(multiplier, (BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
+        let black_pawns_on_light = formula(multiplier, (BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
+        let black_pawns_on_dark = formula(multiplier, (BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
 
         let white_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<true>();
         let white_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<true>();
