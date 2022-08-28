@@ -9,7 +9,7 @@ use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
     KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, PASSED_PAWN_BONUS, PIECE_VALUES,
     QUEEN_HALF_OPEN_FILE_BONUS, QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS,
-    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
+    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS, PAWN_THREAT_ON_MINOR, PAWN_THREAT_ON_MAJOR, MINOR_THREAT_ON_MAJOR,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -29,6 +29,9 @@ pub struct Parameters {
     pub passed_pawn_bonus: [S; 6],
     pub piece_square_tables: [[S; 64]; 13],
     pub tempo: S,
+    pub pawn_threat_on_minor: S,
+    pub pawn_threat_on_major: S,
+    pub minor_threat_on_major: S,
     pub king_danger_coeffs: [i32; 3],
 }
 
@@ -50,6 +53,9 @@ impl Default for Parameters {
             passed_pawn_bonus: PASSED_PAWN_BONUS,
             piece_square_tables: crate::piecesquaretable::tables::construct_piece_square_table(),
             tempo: TEMPO_BONUS,
+            pawn_threat_on_minor: PAWN_THREAT_ON_MINOR,
+            pawn_threat_on_major: PAWN_THREAT_ON_MAJOR,
+            minor_threat_on_major: MINOR_THREAT_ON_MAJOR,
             king_danger_coeffs: KING_DANGER_COEFFS,
         }
     }
@@ -108,6 +114,9 @@ impl Display for Parameters {
         )?;
         writeln!(f, "    passed_pawn_bonus: {:?},", self.passed_pawn_bonus)?;
         writeln!(f, "    tempo: {:?},", self.tempo)?;
+        writeln!(f, "    pawn_threat_on_minor: {:?},", self.pawn_threat_on_minor)?;
+        writeln!(f, "    pawn_threat_on_major: {:?},", self.pawn_threat_on_major)?;
+        writeln!(f, "    minor_threat_on_major: {:?},", self.minor_threat_on_major)?;
         writeln!(f, "    king_danger_formula: {:?},", self.king_danger_coeffs)?;
         write!(f, "}}")?;
         Ok(())
@@ -131,6 +140,9 @@ impl Parameters {
         passed_pawn_bonus: [S::NULL; 6],
         piece_square_tables: [[S::NULL; 64]; 13],
         tempo: S::NULL,
+        pawn_threat_on_minor: S::NULL,
+        pawn_threat_on_major: S::NULL,
+        minor_threat_on_major: S::NULL,
         king_danger_coeffs: [0; 3],
     };
 
@@ -161,12 +173,16 @@ impl Parameters {
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
             )
-            .chain(Some(self.tempo));
+            .chain(Some(self.tempo))
+            .chain(Some(self.pawn_threat_on_minor))
+            .chain(Some(self.pawn_threat_on_major))
+            .chain(Some(self.minor_threat_on_major));
         ss.flat_map(|s| [s.0, s.1].into_iter())
             .chain(self.king_danger_coeffs.iter().copied())
             .collect()
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn devectorise(data: &[i32]) -> Self {
         let mut out = Self::NULL;
         let mut s_iter = data[..data.len() - 3].chunks(2).map(|x| S(x[0], x[1]));
@@ -255,6 +271,18 @@ impl Parameters {
         out.tempo = s_iter
             .next()
             .expect("failed to read tempo term from vector");
+        // read in the pawn threat on minor term
+        out.pawn_threat_on_minor = s_iter
+            .next()
+            .expect("failed to read pawn_threat_on_minor term from vector");
+        // read in the pawn threat on major term
+        out.pawn_threat_on_major = s_iter
+            .next()
+            .expect("failed to read pawn_threat_on_major term from vector");
+        // read in the minor threat on major term
+        out.minor_threat_on_major = s_iter
+            .next()
+            .expect("failed to read minor_threat_on_major term from vector");
         assert!(
             s_iter.next().is_none(),
             "reading data from a vector of wrong size (too big)"

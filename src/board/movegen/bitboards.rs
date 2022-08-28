@@ -174,6 +174,16 @@ impl BitBoard {
         if IS_WHITE { self.w_bishops | self.w_queens } else { self.b_bishops | self.b_queens }
     }
 
+    #[rustfmt::skip]
+    pub const fn minors<const IS_WHITE: bool>(&self) -> u64 {
+        if IS_WHITE { self.w_bishops | self.w_knights } else { self.b_bishops | self.b_knights }
+    }
+
+    #[rustfmt::skip]
+    pub const fn majors<const IS_WHITE: bool>(&self) -> u64 {
+        if IS_WHITE { self.w_rooks | self.w_queens } else { self.b_rooks | self.b_queens }
+    }
+
     pub const fn empty(&self) -> u64 {
         !self.occupied
     }

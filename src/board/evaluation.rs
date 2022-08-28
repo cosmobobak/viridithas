@@ -167,6 +167,10 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
 
 pub const TEMPO_BONUS: S = S(2, 5);
 
+pub const PAWN_THREAT_ON_MINOR: S = S(54, 54);
+pub const PAWN_THREAT_ON_MAJOR: S = S(74, 74);
+pub const MINOR_THREAT_ON_MAJOR: S = S(60, 60);
+
 const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
 const PAWN_PHASE: i32 = 1;
@@ -235,7 +239,7 @@ impl Board {
         let bishop_pair_val = self.bishop_pair_term();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
-        let (mobility_val, danger_info) = self.mobility();
+        let (mobility_val, threat_val, danger_info) = self.mobility();
         let king_danger = self.score_kingdanger(danger_info);
         let tempo = if self.turn() == WHITE {
             self.eval_params.tempo
@@ -250,6 +254,7 @@ impl Board {
         score += rook_open_file_val;
         score += queen_open_file_val;
         score += mobility_val;
+        score += threat_val;
         score += king_danger;
         score += tempo;
 
@@ -472,17 +477,29 @@ impl Board {
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
-    fn mobility(&mut self) -> (S, KingDangerInfo) {
+    #[allow(clippy::too_many_lines)]
+    fn mobility(&mut self) -> (S, S, KingDangerInfo) {
         #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
         let mut king_danger_info = KingDangerInfo {
             attack_units_on_white: 0,
             attack_units_on_black: 0,
         };
+        let mut mob_score = S(0, 0);
+        let mut threat_score = S(0, 0);
         let white_king_area = king_area::<true>(self.king_sq(WHITE));
         let black_king_area = king_area::<false>(self.king_sq(BLACK));
-        let mut mob_score = S(0, 0);
-        let safe_white_moves = !self.pieces.pawn_attacks::<false>();
-        let safe_black_moves = !self.pieces.pawn_attacks::<true>();
+        let white_pawn_attacks = self.pieces.pawn_attacks::<true>();
+        let black_pawn_attacks = self.pieces.pawn_attacks::<false>();
+        let white_minor = self.pieces.minors::<true>();
+        let black_minor = self.pieces.minors::<false>();
+        let white_major = self.pieces.majors::<true>();
+        let black_major = self.pieces.majors::<false>();
+        threat_score += self.eval_params.pawn_threat_on_minor * (black_minor & white_pawn_attacks).count_ones() as i32;
+        threat_score -= self.eval_params.pawn_threat_on_minor * (white_minor & black_pawn_attacks).count_ones() as i32;
+        threat_score += self.eval_params.pawn_threat_on_major * (black_major & white_pawn_attacks).count_ones() as i32;
+        threat_score -= self.eval_params.pawn_threat_on_major * (white_major & black_pawn_attacks).count_ones() as i32;
+        let safe_white_moves = !black_pawn_attacks;
+        let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
         for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
@@ -491,6 +508,9 @@ impl Board {
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
+            // threats
+            let attacks_on_majors = attacks & black_major;
+            threat_score += self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -503,6 +523,9 @@ impl Board {
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
+            // threats
+            let attacks_on_majors = attacks & white_major;
+            threat_score -= self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -515,6 +538,9 @@ impl Board {
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
+            // threats
+            let attacks_on_majors = attacks & black_major;
+            threat_score += self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -527,6 +553,9 @@ impl Board {
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
+            // threats
+            let attacks_on_majors = attacks & white_major;
+            threat_score -= self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -580,7 +609,7 @@ impl Board {
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eval_params.queen_mobility_bonus[attacks];
         }
-        (mob_score, king_danger_info)
+        (mob_score, threat_score, king_danger_info)
     }
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
