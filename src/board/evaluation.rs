@@ -167,7 +167,7 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
 
 pub const TEMPO_BONUS: S = S(2, 5);
 
-pub const COLOUR_COMPLEX_MULTIPLIER: S = S(115, 115);
+pub const COLOUR_COMPLEX_MULTIPLIER: S = S(135, 135);
 
 const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
