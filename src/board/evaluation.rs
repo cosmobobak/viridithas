@@ -239,7 +239,7 @@ impl Board {
         let bishop_pair_val = self.bishop_pair_term();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
-        let (mobility_val, threat_val, danger_info) = self.mobility();
+        let (mobility_val, threat_val, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = self.score_kingdanger(danger_info);
         let tempo = if self.turn() == WHITE {
             self.eval_params.tempo
@@ -478,7 +478,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn mobility(&mut self) -> (S, S, KingDangerInfo) {
+    fn mobility_threats_kingdanger(&mut self) -> (S, S, KingDangerInfo) {
         #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
         let mut king_danger_info = KingDangerInfo {
             attack_units_on_white: 0,
@@ -503,7 +503,7 @@ impl Board {
         let blockers = self.pieces.occupied();
         for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
@@ -518,7 +518,7 @@ impl Board {
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
@@ -533,7 +533,7 @@ impl Board {
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 2;
@@ -548,7 +548,7 @@ impl Board {
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 2;
@@ -563,7 +563,7 @@ impl Board {
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 3;
@@ -575,7 +575,7 @@ impl Board {
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 3;
@@ -587,7 +587,7 @@ impl Board {
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black += attacks_on_black_king.count_ones() as i32 * 5;
@@ -599,7 +599,7 @@ impl Board {
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
-            // extracting kingsafety
+            // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white += attacks_on_white_king.count_ones() as i32 * 5;
@@ -688,7 +688,7 @@ mod tests {
         use crate::board::evaluation::S;
         crate::magic::initialise();
         let mut board = super::Board::default();
-        assert_eq!(board.mobility().0, S(0, 0));
+        assert_eq!(board.mobility_threats_kingdanger().0, S(0, 0));
     }
 
     #[test]
@@ -713,7 +713,7 @@ mod tests {
         let pst = board.pst_vals;
         let pawn_val = board.pawn_structure_term();
         let bishop_pair_val = board.bishop_pair_term();
-        let mobility_val = board.mobility().0;
+        let mobility_val = board.mobility_threats_kingdanger().0;
         let rook_open_file_val = board.rook_open_file_term();
         let queen_open_file_val = board.queen_open_file_term();
 
