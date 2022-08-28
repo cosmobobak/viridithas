@@ -167,6 +167,8 @@ pub static PASSED_PAWN_BONUS: [S; 6] = [
 
 pub const TEMPO_BONUS: S = S(2, 5);
 
+pub const COLOUR_COMPLEX_MULTIPLIER: S = S(2, 2);
+
 const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
 
 const PAWN_PHASE: i32 = 1;
@@ -595,15 +597,20 @@ impl Board {
     }
 
     pub fn colour_complexes(&self) -> S {
-        static COLOUR_BONUS: [i32; 9] = [0, 0, 1, 2, 4, 6, 9, 12, 16];
+        #![allow(clippy::cast_possible_wrap)]
         // it's bad for your bishop to have your pawns on the same colour complex as it.
         // it's good for your bishop to have your pawns on the opposite colour complex as it.
         let mut score = S(0, 0);
 
-        let white_pawns_on_light = COLOUR_BONUS[(BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as usize];
-        let white_pawns_on_dark = COLOUR_BONUS[(BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as usize];
-        let black_pawns_on_light = COLOUR_BONUS[(BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as usize];
-        let black_pawns_on_dark = COLOUR_BONUS[(BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as usize];
+        let formula = |n: i32| {
+            let score = self.eval_params.colour_complex_multiplier * (n * n);
+            S(score.0 / 400, score.1 / 400)
+        };
+
+        let white_pawns_on_light = formula((BB_LIGHT_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
+        let white_pawns_on_dark = formula((BB_DARK_SQUARES & self.pieces.pawns::<true>()).count_ones() as i32);
+        let black_pawns_on_light = formula((BB_LIGHT_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
+        let black_pawns_on_dark = formula((BB_DARK_SQUARES & self.pieces.pawns::<false>()).count_ones() as i32);
 
         let white_bishops_on_light = BB_LIGHT_SQUARES & self.pieces.bishops::<true>();
         let white_bishops_on_dark = BB_DARK_SQUARES & self.pieces.bishops::<true>();
@@ -614,29 +621,29 @@ impl Board {
             // white has a LSB
             let blocked_malus = white_pawns_on_light;
             let free_bonus = white_pawns_on_dark;
-            score -= blocked_malus.into();
-            score += free_bonus.into();
+            score -= blocked_malus;
+            score += free_bonus;
         }
         if white_bishops_on_dark != 0 {
             // white has a DSB
             let blocked_malus = white_pawns_on_dark;
             let free_bonus = white_pawns_on_light;
-            score -= blocked_malus.into();
-            score += free_bonus.into();
+            score -= blocked_malus;
+            score += free_bonus;
         }
         if black_bishops_on_light != 0 {
             // black has a LSB
             let blocked_malus = black_pawns_on_light;
             let free_bonus = black_pawns_on_dark;
-            score += blocked_malus.into();
-            score -= free_bonus.into();
+            score += blocked_malus;
+            score -= free_bonus;
         }
         if black_bishops_on_dark != 0 {
             // black has a DSB
             let blocked_malus = black_pawns_on_dark;
             let free_bonus = black_pawns_on_light;
-            score += blocked_malus.into();
-            score -= free_bonus.into();
+            score += blocked_malus;
+            score -= free_bonus;
         }
 
         score
