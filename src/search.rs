@@ -38,7 +38,7 @@ const LMP_BASE_MOVES: i32 = 3;
 const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
 const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
-const SEE_PRUNING_MAXDEPTH: Depth = Depth::new(9);
+const SEE_PRUNING_MAXDEPTH: Depth = Depth::new(8);
 const SEE_QUIET_MARGIN: i32 = -64;
 const SEE_CAPTURE_MARGIN: i32 = -19;
 
@@ -245,7 +245,7 @@ impl Board {
             && !in_check
             && !root_node
             && excluded.is_null()
-            && static_eval >= beta - i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN
+            && static_eval + i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
             && !self.last_move_was_nullmove()
@@ -292,7 +292,7 @@ impl Board {
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if best_score > -MINIMUM_MATE_SCORE
-                && depth < SEE_PRUNING_MAXDEPTH
+                && depth <= SEE_PRUNING_MAXDEPTH
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
