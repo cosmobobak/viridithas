@@ -1,13 +1,10 @@
-#![allow(dead_code)]
-
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    sync::Mutex,
     time::Instant,
 };
 
-use rand::{prelude::SliceRandom, Rng};
+use rand::prelude::SliceRandom;
 use rayon::prelude::*;
 
 use crate::{
@@ -23,7 +20,7 @@ const CONTROL_RESET: &str = "\u{001b}[0m";
 #[derive(Debug, Clone, PartialEq)]
 struct TrainingExample {
     fen: String,
-    outcome: f64, // 0.0, 0.5, 1.0
+    outcome: f64, // expect 0.0, 0.5, 1.0
 }
 
 const DEFAULT_K: f64 = 0.5;
@@ -62,233 +59,6 @@ fn compute_mse(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
         .map(|chunk| total_squared_error(chunk, params, k))
         .sum::<f64>()
         / n
-}
-
-fn generate_particles(
-    starting_point: Vec<i32>,
-    n_particles: usize,
-    parameter_distance: i32,
-) -> Vec<Vec<i32>> {
-    let mut particles = vec![starting_point];
-    for _ in 1..n_particles {
-        let mut new_particle = particles[0].clone();
-        for param in &mut new_particle {
-            *param += rand::random::<i32>() % parameter_distance * 2 - parameter_distance;
-        }
-        particles.push(new_particle);
-    }
-    particles
-}
-
-fn generate_velocities(
-    n_params: usize,
-    n_particles: usize,
-    parameter_distance: i32,
-) -> Vec<Vec<i32>> {
-    let mut particles = vec![];
-    for _ in 0..n_particles {
-        let mut new_particle = vec![0; n_params];
-        for param in &mut new_particle {
-            *param = rand::random::<i32>() % parameter_distance * 2 - parameter_distance;
-        }
-        particles.push(new_particle);
-    }
-    particles
-}
-
-struct Particle {
-    pub loc: Vec<i32>,
-    pub best_known_params: Vec<i32>,
-    pub best_cost: f64,
-    pub velocity: Vec<i32>,
-}
-
-fn initialise<F1: Fn(&[i32]) -> f64 + Sync>(
-    starting_point: Vec<i32>,
-    cost_function: &F1,
-    n_particles: usize,
-    n_params: usize,
-    particle_distance: i32,
-    velocity_distance: i32,
-) -> (Vec<Particle>, Vec<i32>, f64) {
-    #![allow(clippy::cast_precision_loss)]
-    // initialize the particles' positions with a uniformly distributed random vector
-    println!("generating particle locations...");
-    let particles = generate_particles(starting_point, n_particles, particle_distance);
-    // initialize the particles' best known positions to their initial positions
-    let mut particles = particles
-        .into_iter()
-        .map(|particle| Particle {
-            loc: particle.clone(),
-            best_known_params: particle,
-            best_cost: 0.0,
-            velocity: Vec::new(),
-        })
-        .collect::<Vec<_>>();
-    // determine the lowest-energy particle in the whole swarm and initialise costs
-    println!("finding the lowest-energy particle...");
-    let mut best_loc = particles[0].loc.clone();
-    println!("finding cost of particle 0 (the initial parameter configuration)...");
-    let start_time = Instant::now();
-    let mut best_cost = cost_function(&best_loc);
-    let time_taken = start_time.elapsed().as_secs_f64();
-    println!("cost of the default parameters: {}", best_cost);
-    println!("costing the first particle took {:.1}s", time_taken);
-    println!(
-        "for {0} particles and {1} threads, it can be expected that we will need {0} * {2:.1} / {1} = ~{3:.1}s to compute an iteration.", 
-        n_particles,
-        num_cpus::get(),
-        time_taken,
-        n_particles as f64 * time_taken / num_cpus::get() as f64
-    );
-    let best_cost_mutex = Mutex::new(&mut best_cost);
-    let best_loc_mutex = Mutex::new(&mut best_loc);
-    particles[1..].par_iter_mut().for_each(|particle| {
-        let cost = cost_function(&particle.loc);
-        particle.best_cost = cost;
-        let mut best_cost = best_cost_mutex.lock().unwrap();
-        if cost < **best_cost {
-            **best_loc_mutex.lock().unwrap() = particle.loc.clone();
-            **best_cost = cost;
-        }
-    });
-    let time_taken = start_time.elapsed().as_secs_f64();
-    println!("finding the lowest-energy particle took {:.1}s", time_taken);
-    // generate the initial velocity of each particle
-    println!("generating particle velocities...");
-    let velocities = generate_velocities(n_params, n_particles, velocity_distance);
-    particles
-        .iter_mut()
-        .zip(velocities.into_iter())
-        .for_each(|(particle, velocity)| {
-            particle.velocity = velocity;
-        });
-    (particles, best_loc, best_cost)
-}
-
-fn particle_swarm_optimise<F1, F2>(
-    starting_point: Vec<i32>,
-    cost_function: F1,
-    test_function: F2,
-    inertia_weight: f64,
-    cognitive_coeff: f64,
-    social_coeff: f64,
-    n_particles: usize,
-    particle_distance: i32,
-    velocity_distance: i32,
-) -> (Vec<i32>, f64)
-where
-    F1: Fn(&[i32]) -> f64 + Sync,
-    F2: Fn(&[i32]) -> f64 + Sync,
-{
-    #![allow(
-        clippy::similar_names,
-        clippy::cast_possible_truncation,
-        clippy::needless_range_loop,
-        clippy::too_many_arguments,
-        clippy::too_many_lines
-    )]
-    let n_params = starting_point.len();
-    let (mut particles, mut best_loc, mut best_cost) = initialise(
-        starting_point,
-        &cost_function,
-        n_particles,
-        n_params,
-        particle_distance,
-        velocity_distance,
-    );
-    let best_cost_mutex = Mutex::new(&mut best_cost);
-    // begin the optimisation loop proper
-    println!("optimising...");
-    let mut iterations_without_progress = 0;
-    for iteration in 1.. {
-        println!("iteration {}", iteration);
-        let it_start = Instant::now();
-        let cost_before = **best_cost_mutex.lock().unwrap();
-        println!("computing new velocities...");
-        particles.par_iter_mut().for_each(|particle| {
-            let mut rng = rand::thread_rng();
-            // update velocity based on swarm information
-            for (((&x_id, &p_id), v_id), &g_d) in particle
-                .loc
-                .iter()
-                .zip(particle.best_known_params.iter())
-                .zip(particle.velocity.iter_mut())
-                .zip(best_loc.iter())
-            {
-                let r_p = rng.gen_range(0.0..1.0);
-                let r_g = rng.gen_range(0.0..1.0);
-                let d_p = f64::from(p_id - x_id);
-                let d_g = f64::from(g_d - x_id);
-                let inertial_component = f64::from(*v_id) * inertia_weight;
-                let cognitive_component = r_p * d_p * cognitive_coeff;
-                let social_component = r_g * d_g * social_coeff;
-                *v_id = (inertial_component + cognitive_component + social_component) as i32;
-            }
-        });
-        println!("updating particle positions...");
-        particles.par_iter_mut().for_each(|particle| {
-            // update position based on velocity
-            for (x_i, v_i) in particle.loc.iter_mut().zip(particle.velocity.iter()) {
-                *x_i += *v_i;
-            }
-        });
-        let best_loc_mutex = Mutex::new(&mut best_loc);
-        println!("finding new best particle...");
-        particles
-            .par_iter_mut()
-            .map(|particle| {
-                let new_cost = cost_function(&particle.loc);
-                (particle, new_cost)
-            })
-            .for_each(|(particle, new_cost)| {
-                if new_cost < particle.best_cost {
-                    particle.best_cost = new_cost;
-                    particle.best_known_params = particle.loc.clone();
-                    let mut best_cost = best_cost_mutex.lock().unwrap();
-                    if new_cost < **best_cost {
-                        **best_loc_mutex.lock().unwrap() = particle.loc.clone();
-                        **best_cost = new_cost;
-                    }
-                }
-            });
-        let mut best_cost = best_cost_mutex.lock().unwrap();
-        let mut best_loc = best_loc_mutex.lock().unwrap();
-        println!("iteration done in {:.1}s", it_start.elapsed().as_secs_f64());
-        println!("best cost after iteration {iteration}: {best_cost}");
-        println!("computing test score...");
-        let test_score = test_function(&best_loc);
-        println!("test score: {test_score}");
-        if **best_cost < cost_before {
-            iterations_without_progress = 0;
-            println!(
-                "{CONTROL_GREEN}best cost decreased by {}!{CONTROL_RESET}",
-                cost_before - **best_cost
-            );
-            println!("saving params to params_{iteration}.txt");
-            Parameters::save_param_vec(&best_loc, &format!("params/params_{iteration}.txt"));
-        } else {
-            iterations_without_progress += 1;
-        }
-        if iterations_without_progress == 10 {
-            println!("{CONTROL_RED}no progress for 10 iterations, re-initialising particles...{CONTROL_RESET}");
-            let (new_particles, g_best_loc, g_best_cost) = initialise(
-                best_loc.clone(),
-                &cost_function,
-                n_particles,
-                n_params,
-                particle_distance,
-                velocity_distance,
-            );
-            particles = new_particles;
-            **best_loc = g_best_loc;
-            **best_cost = g_best_cost;
-            iterations_without_progress = 0;
-            println!("re-initialised particles, continuing...");
-        }
-    }
-
-    (best_loc, best_cost)
 }
 
 fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
@@ -331,26 +101,27 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
             let start = Instant::now();
             let mut new_params = best_params.clone();
             new_params[param_idx] += nudge_size; // try adding step_size to the param
-            let incr_err = cost_function(&new_params);
-            new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
-            let decr_err = cost_function(&new_params);
-            if incr_err < best_err && incr_err < decr_err {
-                new_params[param_idx] += nudge_size * 2;
+            let new_err = cost_function(&new_params);
+            if new_err < best_err {
                 best_params = new_params;
-                best_err = incr_err;
+                best_err = new_err;
                 improved = true;
                 let time_taken = start.elapsed().as_secs_f64();
                 println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
-            } else if decr_err < best_err {
-                best_params = new_params;
-                best_err = decr_err;
-                improved = true;
-                let time_taken = start.elapsed().as_secs_f64();
-                println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
             } else {
-                new_params[param_idx] += nudge_size; // reset the param.
-                let time_taken = start.elapsed().as_secs_f64();
-                println!("{CONTROL_RED}no improvement.{CONTROL_RESET} ({time_taken:.2}s)");
+                new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
+                let new_err = cost_function(&new_params);
+                if new_err < best_err {
+                    best_params = new_params;
+                    best_err = new_err;
+                    improved = true;
+                    let time_taken = start.elapsed().as_secs_f64();
+                    println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
+                } else {
+                    new_params[param_idx] += nudge_size; // reset the param.
+                    let time_taken = start.elapsed().as_secs_f64();
+                    println!("{CONTROL_RED}no improvement.{CONTROL_RESET} ({time_taken:.2}s)");
+                }
             }
         }
         Parameters::save_param_vec(
@@ -411,17 +182,7 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     let n_params = params_to_tune.map_or_else(|| starting_params.vectorise().len(), <[usize]>::len);
     println!("There are {n_params} parameters to optimise");
     let start_time = Instant::now();
-    // let (best_params, best_loss) = particle_swarm_optimise(
-    //     params.vectorise(),
-    //     |pvec| compute_mse(&train_set, &Parameters::devectorise(pvec), DEFAULT_K),
-    //     |pvec| compute_mse(&test_set, &Parameters::devectorise(pvec), DEFAULT_K),
-    //     inertia_weight,
-    //     cognitive_coeff,
-    //     social_coeff,
-    //     n_particles,
-    //     particle_distance,
-    //     velocity_distance,
-    // );
+    
     let mut iterations = 0;
     let (best_params, best_loss) =
         local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
