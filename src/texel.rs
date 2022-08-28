@@ -312,7 +312,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         "Initialised in {:.1}s",
         init_start_time.elapsed().as_secs_f64()
     );
-    while improved || (iteration <= 10 && resume) {
+    while improved || (iteration <= 10 && !resume) {
         println!("Iteration {iteration}");
         improved = false;
         let nudge_size = nudge_size(iteration);
