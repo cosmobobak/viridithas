@@ -235,7 +235,7 @@ impl Board {
         let material = self.material[WHITE as usize] - self.material[BLACK as usize];
         let pst = self.pst_vals;
 
-        let pawn_val = self.pawn_structure_term(); // INCREMENTAL UPDATE.
+        let pawn_val = self.pawn_structure_term();
         let bishop_pair_val = self.bishop_pair_term();
         let rook_open_file_val = self.rook_open_file_term();
         let queen_open_file_val = self.queen_open_file_term();
