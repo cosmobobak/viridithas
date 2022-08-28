@@ -91,6 +91,7 @@ mod tests {
     fn perft_start_position() {
         use super::*;
         use crate::board::movegen::MoveVecWrapper;
+        crate::magic::initialise();
         let mut pos = Board::new();
         pos.reset_tables();
         std::env::set_var("RUST_BACKTRACE", "1");
@@ -116,6 +117,7 @@ mod tests {
     fn perft_krk() {
         use super::*;
         use crate::board::movegen::MoveVecWrapper;
+        crate::magic::initialise();
         let mut pos = Board::new();
         pos.reset_tables();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();

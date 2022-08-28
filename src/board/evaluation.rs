@@ -235,11 +235,11 @@ impl Board {
         let material = self.material[WHITE as usize] - self.material[BLACK as usize];
         let pst = self.pst_vals;
 
-        let pawn_val = self.pawn_structure_term();
-        let bishop_pair_val = self.bishop_pair_term();
-        let rook_open_file_val = self.rook_open_file_term();
-        let queen_open_file_val = self.queen_open_file_term();
-        let (mobility_val, threat_val, danger_info) = self.mobility_threats_kingdanger();
+        let pawn_structure = self.pawn_structure_term();
+        let bishop_pair = self.bishop_pair_term();
+        let rook_files = self.rook_open_file_term();
+        let queen_files = self.queen_open_file_term();
+        let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = self.score_kingdanger(danger_info);
         let tempo = if self.turn() == WHITE {
             self.eval_params.tempo
@@ -249,12 +249,12 @@ impl Board {
 
         let mut score = material;
         score += pst;
-        score += pawn_val;
-        score += bishop_pair_val;
-        score += rook_open_file_val;
-        score += queen_open_file_val;
-        score += mobility_val;
-        score += threat_val;
+        score += pawn_structure;
+        score += bishop_pair;
+        score += rook_files;
+        score += queen_files;
+        score += mobility;
+        score += threats;
         score += king_danger;
         score += tempo;
 
