@@ -295,6 +295,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
     resume: bool,
     cost_function: F1,
+    params_to_tune: Option<&[usize]>,
 ) -> (Vec<i32>, f64) {
     #[allow(clippy::cast_possible_truncation)]
     let nudge_size = |iteration: i32| -> i32 {
@@ -317,6 +318,11 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         let nudge_size = nudge_size(iteration);
 
         for param_idx in 0..n_params {
+            if let Some(params_to_tune) = params_to_tune {
+                if !params_to_tune.contains(&param_idx) {
+                    continue;
+                }
+            }
             println!("Optimising param {param_idx}");
             let start = Instant::now();
             let mut new_params = best_params.clone();
@@ -353,7 +359,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune(resume: bool, examples: usize, starting_params: &Parameters) {
+pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_to_tune: Option<&[usize]>) {
     // hyperparameters
     let train = examples; // 8 million is recommended.
     let test = 30_000; // validation set.
@@ -420,7 +426,7 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters) {
     let (best_params, best_loss) =
         local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
             compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
-        });
+        }, params_to_tune);
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Best loss: {best_loss:.6}");

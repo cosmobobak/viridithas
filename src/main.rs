@@ -59,7 +59,7 @@ fn main() {
     }
 
     if cli.tune {
-        texel::tune(cli.resume, cli.examples, &params);
+        texel::tune(cli.resume, cli.examples, &params, cli.limitparams.as_deref());
         return;
     }
 
