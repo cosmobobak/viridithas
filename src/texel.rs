@@ -409,10 +409,8 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {train}, test = {test}, but data has {} examples", data.len());
 
     println!("Optimising...");
-    println!(
-        "There are {} parameters to optimise",
-        starting_params.vectorise().len()
-    );
+    let n_params = starting_params.vectorise().len();
+    println!("There are {n_params} parameters to optimise");
     let start_time = Instant::now();
     // let (best_params, best_loss) = particle_swarm_optimise(
     //     params.vectorise(),
@@ -425,7 +423,6 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     //     particle_distance,
     //     velocity_distance,
     // );
-    let n_params = starting_params.vectorise().len();
     let mut iterations = 0;
     let (best_params, best_loss) =
         local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
@@ -434,8 +431,7 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
                 data.shuffle(&mut rng);
             }
             iterations += 1;
-            let train_set = &data[..train];
-            compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
+            compute_mse(&data[..train], &Parameters::devectorise(pvec), DEFAULT_K)
         }, params_to_tune);
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
