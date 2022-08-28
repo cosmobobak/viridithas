@@ -409,7 +409,7 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters, params_
     assert!(train + test <= data.len(), "not enough data for training and testing, requested train = {train}, test = {test}, but data has {} examples", data.len());
 
     println!("Optimising...");
-    let n_params = starting_params.vectorise().len();
+    let n_params = params_to_tune.map_or_else(|| starting_params.vectorise().len(), <[usize]>::len);
     println!("There are {n_params} parameters to optimise");
     let start_time = Instant::now();
     // let (best_params, best_loss) = particle_swarm_optimise(
