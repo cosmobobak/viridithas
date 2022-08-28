@@ -1,12 +1,18 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, SEE_PIECE_VALUES, MINIMUM_MATE_SCORE},
-        movegen::{TT_MOVE_SCORE, bitboards::{lsb, self}},
+        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
+        movegen::{
+            bitboards::{self, lsb},
+            TT_MOVE_SCORE,
+        },
         Board,
     },
     chessmove::Move,
-    definitions::{depth::Depth, INFINITY, MAX_DEPTH, MAX_PLY, depth::ONE_PLY, depth::ZERO_PLY, type_of, QUEEN, PAWN, KING, BISHOP, ROOK},
+    definitions::{
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
+        MAX_PLY, PAWN, QUEEN, ROOK,
+    },
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult},
 };
@@ -84,7 +90,8 @@ impl Board {
         while let Some(m) = move_picker.next() {
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
-            let worst_case = self.estimated_see(m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
+            let worst_case =
+                self.estimated_see(m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
 
             if !self.make_move(m) {
                 continue;
@@ -113,10 +120,7 @@ impl Board {
         alpha
     }
 
-    #[allow(
-        clippy::too_many_lines,
-        clippy::cognitive_complexity,
-    )]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn alpha_beta<const PV: bool>(
         &mut self,
         info: &mut SearchInfo,
@@ -287,7 +291,10 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
-            if best_score > -MINIMUM_MATE_SCORE && depth < SEE_PRUNING_MAXDEPTH && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())]) {
+            if best_score > -MINIMUM_MATE_SCORE
+                && depth < SEE_PRUNING_MAXDEPTH
+                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
+            {
                 continue;
             }
 
@@ -462,13 +469,8 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move();
         ss.excluded[self.height()] = m;
-        let value = self.alpha_beta::<false>(
-            info,
-            ss,
-            reduced_depth,
-            reduced_beta - 1,
-            reduced_beta
-        );
+        let value =
+            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
         ss.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move(m);

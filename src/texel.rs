@@ -417,9 +417,10 @@ pub fn tune(resume: bool, examples: usize, starting_params: &Parameters) {
     //     particle_distance,
     //     velocity_distance,
     // );
-    let (best_params, best_loss) = local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
-        compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
-    });
+    let (best_params, best_loss) =
+        local_search_optimise(&starting_params.vectorise(), resume, |pvec| {
+            compute_mse(train_set, &Parameters::devectorise(pvec), DEFAULT_K)
+        });
     println!("Optimised in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Best loss: {best_loss:.6}");

@@ -37,7 +37,11 @@ impl PieceList {
 
     pub fn insert(&mut self, sq: u8) {
         debug_assert!(self.len < 10, "PieceList is full: {self}");
-        debug_assert!(!self.squares().contains(&sq), "PieceList already contains square {}: {self}", sq_display(sq));
+        debug_assert!(
+            !self.squares().contains(&sq),
+            "PieceList already contains square {}: {self}",
+            sq_display(sq)
+        );
         unsafe {
             *self.data.get_unchecked_mut(self.len as usize) = sq;
         }
@@ -58,8 +62,14 @@ impl PieceList {
             }
             idx += 1;
         }
-        debug_assert!(false, "PieceList::remove: piece not found: looking for {} in {self}", sq_display(sq));
-        unsafe { macros::inconceivable!(); }
+        debug_assert!(
+            false,
+            "PieceList::remove: piece not found: looking for {} in {self}",
+            sq_display(sq)
+        );
+        unsafe {
+            macros::inconceivable!();
+        }
     }
 
     pub const fn len(&self) -> u8 {
@@ -79,10 +89,13 @@ fn sq_display(sq: u8) -> String {
 
 impl Display for PieceList {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        let repr = self.iter()
-            .map(|&s| square_name(s)
-                .map(std::string::ToString::to_string)
-                .unwrap_or(format!("offboard: {s}")))
+        let repr = self
+            .iter()
+            .map(|&s| {
+                square_name(s)
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or(format!("offboard: {s}"))
+            })
             .collect::<Vec<_>>()
             .join(", ");
         write!(f, "[{}]", repr)

@@ -14,8 +14,8 @@ use crate::{
     chessmove::Move,
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
-        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE,
-        WKCA, WN, WQ, WQCA, WR, QUEEN, PAWN,
+        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
+        WHITE, WKCA, WN, WQ, WQCA, WR,
     },
     lookups::get_mvv_lva_score,
     magic::MAGICS_READY,
@@ -180,12 +180,13 @@ impl Board {
         debug_assert!(square_on_board(m.to()));
 
         let promo = m.promotion();
-        
-        let score = get_mvv_lva_score(promo, PAWN) + if promo == QUEEN || promo == KNIGHT {
-            CAPTURE_BASE_SCORE
-        } else {
-            CAPTURE_BASE_SCORE / 2
-        };
+
+        let score = get_mvv_lva_score(promo, PAWN)
+            + if promo == QUEEN || promo == KNIGHT {
+                CAPTURE_BASE_SCORE
+            } else {
+                CAPTURE_BASE_SCORE / 2
+            };
 
         move_list.push(m, score);
     }

@@ -13,14 +13,14 @@ use regex::Regex;
 
 use crate::{
     board::movegen::{
-        bitboards::{
-            self, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
-        },
+        bitboards::{self, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7},
         MoveList,
     },
     chessmove::Move,
     definitions::{
-        colour_of, type_of, Colour, depth::Depth, File,
+        colour_of,
+        depth::Depth,
+        type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
@@ -29,8 +29,8 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
-        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ,
-        PROMO_CHAR_LOOKUP, SQUARE_NAMES,
+        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
+        SQUARE_NAMES,
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
@@ -596,27 +596,25 @@ impl Board {
         }
 
         // knights
-        let knight_attacks_from_this_square = bitboards::attacks::<{ KNIGHT }>(sq, BB_NONE);
+        let knight_attacks_from_this_square = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
         if our_knights & knight_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // bishops, queens
-        let diag_attacks_from_this_square =
-            bitboards::attacks::<{ BISHOP }>(sq, blockers);
+        let diag_attacks_from_this_square = bitboards::attacks::<BISHOP>(sq, blockers);
         if our_diags & diag_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square =
-            bitboards::attacks::<{ ROOK }>(sq, blockers);
+        let ortho_attacks_from_this_square = bitboards::attacks::<ROOK>(sq, blockers);
         if our_orthos & ortho_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square = bitboards::attacks::<{ KING }>(sq, BB_NONE);
+        let king_attacks_from_this_square = bitboards::attacks::<KING>(sq, BB_NONE);
         if our_king & king_attacks_from_this_square != BB_NONE {
             return true;
         }
@@ -1207,7 +1205,8 @@ impl Board {
     }
 
     pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
-        self.piece_lists[PIECE_TYPE as usize].len() + self.piece_lists[PIECE_TYPE as usize + 6].len()
+        self.piece_lists[PIECE_TYPE as usize].len()
+            + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
     pub fn reset_tables(&mut self) {
@@ -1452,10 +1451,18 @@ mod tests {
     #[test]
     fn test_num_pt() {
         use super::Board;
-        use crate::definitions::{BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB, WK, WN, WP, WQ, WR};
-        let board = Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1").unwrap();
+        use crate::definitions::{
+            BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB, WK, WN, WP, WQ, WR,
+        };
+        let board =
+            Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1")
+                .unwrap();
 
-        for ((p1, p2), pt) in [WP, WN, WB, WR, WQ, WK].into_iter().zip([BP, BN, BB, BR, BQ, BK]).zip([PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING]) {
+        for ((p1, p2), pt) in [WP, WN, WB, WR, WQ, WK]
+            .into_iter()
+            .zip([BP, BN, BB, BR, BQ, BK])
+            .zip([PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING])
+        {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }
     }

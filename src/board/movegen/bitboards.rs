@@ -328,10 +328,17 @@ impl BitBoard {
         let black_pawn_attackers = pawn_attacks::<true>(sq) & self.b_pawns;
         let white_pawn_attackers = pawn_attacks::<false>(sq) & self.w_pawns;
         let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
-        let diag_attackers = attacks::<BISHOP>(sq, occupied) & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
-        let orth_attackers = attacks::<ROOK>(sq, occupied) & (self.w_rooks | self.b_rooks | self.w_queens | self.b_queens);
+        let diag_attackers = attacks::<BISHOP>(sq, occupied)
+            & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
+        let orth_attackers = attacks::<ROOK>(sq, occupied)
+            & (self.w_rooks | self.b_rooks | self.w_queens | self.b_queens);
         let king_attackers = attacks::<KING>(sq, BB_NONE) & (self.w_king | self.b_king);
-        black_pawn_attackers | white_pawn_attackers | knight_attackers | diag_attackers | orth_attackers | king_attackers
+        black_pawn_attackers
+            | white_pawn_attackers
+            | knight_attackers
+            | diag_attackers
+            | orth_attackers
+            | king_attackers
     }
 }
 

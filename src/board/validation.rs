@@ -1,6 +1,18 @@
-use crate::{errors::PositionValidityError, definitions::{BK, WP, square_name, WHITE, BLACK, PIECE_EMPTY, colour_of, Square::NO_SQUARE, Rank::{RANK_6, RANK_3}, WK, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING}, board::evaluation::score::S, lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PIECE_MIN, rank}, piecelist::PieceList};
+use crate::{
+    board::evaluation::score::S,
+    definitions::{
+        colour_of, square_name,
+        Rank::{RANK_3, RANK_6},
+        Square::NO_SQUARE,
+        BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
+        WHITE, WK, WN, WP, WQ, WR,
+    },
+    errors::PositionValidityError,
+    lookups::{piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
+    piecelist::PieceList,
+};
 
-use super::{Board, movegen::bitboards::BitLoop};
+use super::{movegen::bitboards::BitLoop, Board};
 
 impl Board {
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
@@ -201,7 +213,9 @@ impl Board {
             && self.num(WK) == self.num_ct::<WK>()
             && self.num(BK) == self.num_ct::<BK>();
         if !comptime_consistency {
-            return Err("comptime consistency for Board::num is corrupt: expected true, got false".into());
+            return Err(
+                "comptime consistency for Board::num is corrupt: expected true, got false".into(),
+            );
         }
         let comptime_consistency = self.num_pt(PAWN) == self.num_pt_ct::<PAWN>()
             && self.num_pt(KNIGHT) == self.num_pt_ct::<KNIGHT>()
@@ -210,7 +224,10 @@ impl Board {
             && self.num_pt(QUEEN) == self.num_pt_ct::<QUEEN>()
             && self.num_pt(KING) == self.num_pt_ct::<KING>();
         if !comptime_consistency {
-            return Err("comptime consistency for Board::num_pt is corrupt: expected true, got false".into());
+            return Err(
+                "comptime consistency for Board::num_pt is corrupt: expected true, got false"
+                    .into(),
+            );
         }
 
         if self.piece_at(self.king_sq(WHITE)) != WK {
