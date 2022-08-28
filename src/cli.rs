@@ -16,6 +16,9 @@ pub struct Cli {
     /// Run the texel tuner
     #[clap(long)]
     pub tune: bool,
+    /// Limit tuning to a parameter. Can be passed multiple times to limit tuning to multiple parameters.
+    #[clap(short, long, value_parser, value_name = "PARAMETERS")]
+    pub limitparams: Option<Vec<usize>>,
     /// Pick up texel tuning from halfway through the tuning process
     #[clap(long)]
     pub resume: bool,
