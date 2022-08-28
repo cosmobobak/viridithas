@@ -297,6 +297,9 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
     cost_function: F1,
     params_to_tune: Option<&[usize]>,
 ) -> (Vec<i32>, f64) {
+    if let Some(ptt) = params_to_tune {
+        println!("limiting tuning to params: {:?}", ptt);
+    }
     #[allow(clippy::cast_possible_truncation)]
     let nudge_size = |iteration: i32| -> i32 {
         let multiplier = if resume { 1.0 } else { 10.0 };
@@ -316,6 +319,7 @@ fn local_search_optimise<F1: Fn(&[i32]) -> f64 + Sync>(
         println!("Iteration {iteration}");
         improved = false;
         let nudge_size = nudge_size(iteration);
+        println!("nudge size: {nudge_size}");
 
         for param_idx in 0..n_params {
             if let Some(params_to_tune) = params_to_tune {
