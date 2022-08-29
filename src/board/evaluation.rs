@@ -21,11 +21,11 @@ use super::movegen::{
     BitLoop, BB_NONE,
 };
 
-pub const PAWN_VALUE: S = S(116, 191);
-pub const KNIGHT_VALUE: S = S(415, 404);
-pub const BISHOP_VALUE: S = S(398, 435);
-pub const ROOK_VALUE: S = S(560, 702);
-pub const QUEEN_VALUE: S = S(1263, 1168);
+pub const PAWN_VALUE: S = S(116, 194);
+pub const KNIGHT_VALUE: S = S(415, 416);
+pub const BISHOP_VALUE: S = S(407, 448);
+pub const ROOK_VALUE: S = S(572, 742);
+pub const QUEEN_VALUE: S = S(1303, 1208);
 
 pub static SEE_PIECE_VALUES: [i32; 7] = [
     0,
@@ -58,120 +58,43 @@ pub static PIECE_VALUES: [S; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: S = S(22, 10);
+pub const ISOLATED_PAWN_MALUS: S = S(22, 11);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(17, 42);
+pub const DOUBLED_PAWN_MALUS: S = S(18, 42);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(55, 104);
+pub const BISHOP_PAIR_BONUS: S = S(46, 116);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(69, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(70, 0);
 /// The bonus for having a rook on a semi-open file.
 pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(38, 0);
 /// The bonus for having a queen on an open file.
-pub const QUEEN_OPEN_FILE_BONUS: S = S(1, 0);
+pub const QUEEN_OPEN_FILE_BONUS: S = S(-5, 0);
 /// The bonus for having a queen on a semi-open file.
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(22, 0);
 
 // nonlinear mobility eval tables.
 
-static KNIGHT_MOBILITY_BONUS: [S; 9] = [
-    S(-148, -229),
-    S(-3, 12),
-    S(12, 23),
-    S(24, 79),
-    S(43, 90),
-    S(50, 120),
-    S(69, 125),
-    S(90, 126),
-    S(117, 100),
-];
+static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-188, -265), S(-10, 11), S(10, 29), S(24, 84), S(43, 98), S(49, 131), S(69, 135), S(92, 136), S(119, 107)];
 
-static BISHOP_MOBILITY_BONUS: [S; 14] = [
-    S(-25, -187),
-    S(-11, -97),
-    S(28, -11),
-    S(43, 64),
-    S(62, 87),
-    S(76, 102),
-    S(85, 123),
-    S(92, 140),
-    S(99, 143),
-    S(106, 148),
-    S(110, 140),
-    S(117, 140),
-    S(202, 110),
-    S(172, 125),
-];
+static BISHOP_MOBILITY_BONUS: [S; 14] = [S(-12, -147), S(-10, -92), S(28, -5), S(43, 74), S(62, 94), S(76, 108), S(85, 131), S(92, 148), S(99, 147), S(102, 155), S(107, 146), S(109, 149), S(206, 110), S(178, 131)];
 
-static ROOK_MOBILITY_BONUS: [S; 15] = [
-    S(-8, -6),
-    S(22, 90),
-    S(25, 127),
-    S(36, 175),
-    S(42, 202),
-    S(48, 218),
-    S(46, 245),
-    S(52, 249),
-    S(58, 246),
-    S(62, 261),
-    S(68, 267),
-    S(72, 270),
-    S(78, 264),
-    S(92, 253),
-    S(67, 257),
-];
+static ROOK_MOBILITY_BONUS: [S; 15] = [S(32, 34), S(41, 115), S(22, 137), S(35, 183), S(41, 212), S(48, 226), S(46, 252), S(52, 257), S(61, 248), S(65, 265), S(73, 270), S(80, 273), S(84, 268), S(98, 255), S(83, 254)];
 
-static QUEEN_MOBILITY_BONUS: [S; 28] = [
-    S(-29, -49),
-    S(-128, -151),
-    S(-166, -237),
-    S(112, 143),
-    S(66, 33),
-    S(170, 61),
-    S(191, 67),
-    S(184, 138),
-    S(182, 208),
-    S(181, 264),
-    S(186, 285),
-    S(192, 308),
-    S(198, 323),
-    S(207, 327),
-    S(209, 344),
-    S(211, 360),
-    S(213, 365),
-    S(222, 357),
-    S(230, 362),
-    S(262, 332),
-    S(263, 336),
-    S(299, 313),
-    S(307, 315),
-    S(319, 296),
-    S(337, 283),
-    S(260, 280),
-    S(268, 255),
-    S(159, 161),
-];
+static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-161, -187), S(-172, -277), S(152, 176), S(93, 34), S(192, 95), S(205, 97), S(197, 173), S(194, 246), S(193, 293), S(198, 321), S(204, 342), S(209, 362), S(218, 366), S(221, 384), S(223, 400), S(223, 404), S(234, 397), S(244, 402), S(275, 372), S(271, 376), S(314, 352), S(329, 350), S(358, 316), S(375, 305), S(300, 315), S(308, 291), S(199, 201)];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-pub static PASSED_PAWN_BONUS: [S; 6] = [
-    S(2, 19),
-    S(-23, 36),
-    S(-26, 74),
-    S(12, 109),
-    S(39, 216),
-    S(108, 302),
-];
+pub static PASSED_PAWN_BONUS: [S; 6] = [S(1, 19), S(-23, 35), S(-26, 75), S(12, 112), S(35, 225), S(100, 311)];
 
-pub const TEMPO_BONUS: S = S(2, 5);
+pub const TEMPO_BONUS: S = S(12, 5);
 
-pub const PAWN_THREAT_ON_MINOR: S = S(54, 54);
-pub const PAWN_THREAT_ON_MAJOR: S = S(74, 74);
-pub const MINOR_THREAT_ON_MAJOR: S = S(60, 60);
+pub const PAWN_THREAT_ON_MINOR: S = S(73, 69);
+pub const PAWN_THREAT_ON_MAJOR: S = S(78, 67);
+pub const MINOR_THREAT_ON_MAJOR: S = S(70, 60);
 
-const KING_DANGER_COEFFS: [i32; 3] = [38, 199, -739];
+const KING_DANGER_COEFFS: [i32; 3] = [36, 181, -729];
 
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
