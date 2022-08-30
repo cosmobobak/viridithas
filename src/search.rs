@@ -187,7 +187,7 @@ impl Board {
 
         let excluded = ss.excluded[self.height()];
 
-        let tt_hit = if excluded.is_null() {
+        let tt_hit = if excluded.is_null() && !root_node {
             match self.tt_probe(alpha, beta, depth) {
                 ProbeResult::Cutoff(s) => {
                     return s;
@@ -202,7 +202,7 @@ impl Board {
                 }
             }
         } else {
-            None // do not probe the TT if we're in a singular-verification search.
+            None // do not probe the TT if we're in a singular-verification search, or if we're at the root.
         };
 
         let in_check = self.in_check::<{ Self::US }>();

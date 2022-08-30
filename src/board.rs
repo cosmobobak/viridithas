@@ -13,7 +13,7 @@ use regex::Regex;
 
 use crate::{
     board::movegen::{
-        bitboards::{self, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7},
+        bitboards::{self, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7, pawn_attacks},
         MoveList,
     },
     chessmove::Move,
@@ -579,20 +579,9 @@ impl Board {
         let blockers = self.pieces.occupied();
 
         // pawns
-        if IS_WHITE {
-            let west_attacks = our_pawns.north_west_one();
-            let east_attacks = our_pawns.north_east_one();
-            let attacks = west_attacks | east_attacks;
-            if attacks & sq_bb != 0 {
-                return true;
-            }
-        } else {
-            let west_attacks = our_pawns.south_west_one();
-            let east_attacks = our_pawns.south_east_one();
-            let attacks = west_attacks | east_attacks;
-            if attacks & sq_bb != 0 {
-                return true;
-            }
+        let attacks = pawn_attacks::<IS_WHITE>(our_pawns);
+        if attacks & sq_bb != 0 {
+            return true;
         }
 
         // knights

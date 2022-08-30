@@ -355,8 +355,9 @@ impl BitBoard {
     }
 
     pub fn all_attackers_to_sq(&self, sq: u8, occupied: u64) -> u64 {
-        let black_pawn_attackers = pawn_attacks::<true>(sq) & self.b_pawns;
-        let white_pawn_attackers = pawn_attacks::<false>(sq) & self.w_pawns;
+        let sq_bb = 1u64 << sq;
+        let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.b_pawns;
+        let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.w_pawns;
         let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
         let diag_attackers = attacks::<BISHOP>(sq, occupied)
             & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
@@ -422,12 +423,11 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
     }
 }
 
-pub fn pawn_attacks<const IS_WHITE: bool>(sq: u8) -> u64 {
-    let sq_bb = 1u64 << sq;
+pub fn pawn_attacks<const IS_WHITE: bool>(bb: u64) -> u64 {
     if IS_WHITE {
-        sq_bb.north_east_one() | sq_bb.north_west_one()
+        bb.north_east_one() | bb.north_west_one()
     } else {
-        sq_bb.south_east_one() | sq_bb.south_west_one()
+        bb.south_east_one() | bb.south_west_one()
     }
 }
 
