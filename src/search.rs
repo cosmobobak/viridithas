@@ -69,7 +69,7 @@ impl Board {
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) = self.tt_probe(alpha, beta, ZERO_PLY) {
+        if let ProbeResult::Cutoff(s) = self.tt_probe(alpha, beta, ZERO_PLY, false) {
             return s;
         }
 
@@ -187,8 +187,8 @@ impl Board {
 
         let excluded = ss.excluded[self.height()];
 
-        let tt_hit = if excluded.is_null() && !root_node {
-            match self.tt_probe(alpha, beta, depth) {
+        let tt_hit = if excluded.is_null() {
+            match self.tt_probe(alpha, beta, depth, root_node) {
                 ProbeResult::Cutoff(s) => {
                     return s;
                 }

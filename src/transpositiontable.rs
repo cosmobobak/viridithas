@@ -132,7 +132,7 @@ impl TranspositionTable {
         }
     }
 
-    pub fn probe(&self, key: u64, ply: usize, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
+    pub fn probe<const ROOT: bool>(&self, key: u64, ply: usize, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
         let index = self.wrap_key(key);
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
@@ -172,7 +172,7 @@ impl TranspositionTable {
         match entry.flag {
             HFlag::None => unsafe { macros::inconceivable!() },
             HFlag::UpperBound => {
-                if score <= alpha {
+                if !ROOT && score <= alpha {
                     ProbeResult::Cutoff(alpha)
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -184,7 +184,7 @@ impl TranspositionTable {
                 }
             }
             HFlag::LowerBound => {
-                if score >= beta {
+                if !ROOT && score >= beta {
                     ProbeResult::Cutoff(beta)
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -195,7 +195,18 @@ impl TranspositionTable {
                     })
                 }
             }
-            HFlag::Exact => ProbeResult::Cutoff(score),
+            HFlag::Exact => {
+                if ROOT {
+                    ProbeResult::Hit(TTHit {
+                        tt_move: m,
+                        tt_depth: e_depth,
+                        tt_bound: HFlag::Exact,
+                        tt_value: entry.score,
+                    })
+                } else {
+                    ProbeResult::Cutoff(score)
+                }
+            }
         }
     }
 }

@@ -193,8 +193,12 @@ impl Board {
             .store(self.key, self.height, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        self.tt.probe(self.key, self.height, alpha, beta, depth)
+    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth, root_node: bool) -> ProbeResult {
+        if root_node {
+            self.tt.probe::<true>(self.key, self.height, alpha, beta, depth)
+        } else {
+            self.tt.probe::<false>(self.key, self.height, alpha, beta, depth)
+        }
     }
 
     /// Nuke the transposition table.
@@ -1212,7 +1216,7 @@ impl Board {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
-            self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH)
+            self.tt_probe(-INFINITY, INFINITY, MAX_DEPTH, true)
         {
             if self.principal_variation.len() < depth.try_into().unwrap()
                 && self.is_legal(tt_move)
