@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, DRAW_SCORE, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
+        evaluation::{is_mate_score, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
         movegen::{
             bitboards::{self, lsb},
             TT_MOVE_SCORE,
@@ -157,7 +157,7 @@ impl Board {
             // check draw
             if self.is_draw() {
                 // score fuzzing apparently helps with threefolds.
-                return 1 - (info.nodes & 2) as i32;
+                return 2 - (info.nodes & 0b111) as i32;
             }
 
             // are we too deep?
@@ -415,7 +415,7 @@ impl Board {
             if in_check {
                 return -MATE_SCORE + height;
             }
-            return DRAW_SCORE;
+            return 2 - (info.nodes & 0b111) as i32;
         }
 
         if alpha == original_alpha {
