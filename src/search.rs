@@ -1,7 +1,7 @@
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
+        evaluation::{is_mate_score, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES, CONTEMPT},
         movegen::{
             bitboards::{self, lsb},
             TT_MOVE_SCORE,
@@ -59,8 +59,7 @@ impl Board {
 
         // check draw
         if self.is_draw() {
-            // score fuzzing apparently helps with threefolds.
-            return 1 - (info.nodes & 2) as i32;
+            return draw_score(info);
         }
 
         // are we too deep?
@@ -156,8 +155,7 @@ impl Board {
         if !root_node {
             // check draw
             if self.is_draw() {
-                // score fuzzing apparently helps with threefolds.
-                return 2 - (info.nodes & 0b111) as i32;
+                return draw_score(info);
             }
 
             // are we too deep?
@@ -415,7 +413,7 @@ impl Board {
             if in_check {
                 return -MATE_SCORE + height;
             }
-            return 2 - (info.nodes & 0b111) as i32;
+            return draw_score(info);
         }
 
         if alpha == original_alpha {
@@ -563,6 +561,11 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+const fn draw_score(info: &SearchInfo) -> i32 {
+    // score fuzzing apparently helps with threefolds.
+    -CONTEMPT + 2 - (info.nodes & 0b111) as i32
 }
 
 fn do_futility_pruning(depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {

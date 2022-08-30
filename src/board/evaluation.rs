@@ -96,6 +96,8 @@ pub const MINOR_THREAT_ON_MAJOR: S = S(70, 60);
 
 const KING_DANGER_COEFFS: [i32; 3] = [36, 181, -729];
 
+pub const CONTEMPT: i32 = 100;
+
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
 const BISHOP_PHASE: i32 = 10;
