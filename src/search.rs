@@ -59,12 +59,12 @@ impl Board {
 
         // check draw
         if self.is_draw() {
-            return draw_score(info);
+            return draw_score(info.nodes);
         }
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate();
+            return self.evaluate(info.nodes);
         }
 
         // probe the TT and see if we get a cutoff.
@@ -72,7 +72,7 @@ impl Board {
             return s;
         }
 
-        let stand_pat = self.evaluate();
+        let stand_pat = self.evaluate(info.nodes);
 
         if stand_pat >= beta {
             return beta;
@@ -155,12 +155,12 @@ impl Board {
         if !root_node {
             // check draw
             if self.is_draw() {
-                return draw_score(info);
+                return draw_score(info.nodes);
             }
 
             // are we too deep?
             if height > MAX_DEPTH.round() - 1 {
-                return self.evaluate();
+                return self.evaluate(info.nodes);
             }
 
             // mate-distance pruning.
@@ -208,7 +208,7 @@ impl Board {
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else {
-            self.evaluate()
+            self.evaluate(info.nodes)
         };
 
         ss.evals[self.height()] = static_eval;
@@ -413,7 +413,7 @@ impl Board {
             if in_check {
                 return -MATE_SCORE + height;
             }
-            return draw_score(info);
+            return draw_score(info.nodes);
         }
 
         if alpha == original_alpha {
@@ -563,9 +563,9 @@ impl Board {
     }
 }
 
-const fn draw_score(info: &SearchInfo) -> i32 {
+pub const fn draw_score(nodes: u64) -> i32 {
     // score fuzzing apparently helps with threefolds.
-    -CONTEMPT + 2 - (info.nodes & 0b111) as i32
+    -CONTEMPT + 2 - (nodes & 0b111) as i32
 }
 
 fn do_futility_pruning(depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {

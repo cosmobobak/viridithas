@@ -13,7 +13,7 @@ use crate::{
         type_of, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN, ROOK, WB,
         WHITE, WN, WP, WQ, WR,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, search::draw_score,
 };
 
 use super::movegen::{
@@ -46,9 +46,6 @@ pub const MATE_SCORE: i32 = 3_000_000;
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
-
-/// The value of a draw.
-pub const DRAW_SCORE: i32 = 0;
 
 #[rustfmt::skip]
 pub static PIECE_VALUES: [S; 13] = [
@@ -148,12 +145,12 @@ impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
-    pub fn evaluate(&mut self) -> i32 {
+    pub fn evaluate(&mut self, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE {
-                DRAW_SCORE
+                draw_score(nodes)
             } else {
-                -DRAW_SCORE
+                -draw_score(nodes)
             };
         }
 
@@ -185,7 +182,7 @@ impl Board {
 
         let score = score.value(self.phase());
 
-        let score = self.preprocess_drawish_scores(score);
+        let score = self.preprocess_drawish_scores(score, nodes);
 
         if self.side == WHITE {
             score
@@ -259,11 +256,11 @@ impl Board {
         false
     }
 
-    fn preprocess_drawish_scores(&mut self, score: i32) -> i32 {
+    fn preprocess_drawish_scores(&mut self, score: i32, nodes: u64) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
-        if score > 0 && self.unwinnable_for::<true>() || score < 0 && self.unwinnable_for::<false>()
-        {
-            0
+        let drawscore = draw_score(nodes);
+        if score > drawscore && self.unwinnable_for::<true>() || score < drawscore && self.unwinnable_for::<false>() {
+            drawscore
         } else {
             score
         }
@@ -587,7 +584,7 @@ mod tests {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
         let mut board = super::Board::from_fen(FEN).unwrap();
-        let eval = board.evaluate();
+        let eval = board.evaluate(0);
         assert!(
             eval.abs() == 0,
             "eval is not a draw score ({eval}cp != 0cp) in a position unwinnable for both sides."
@@ -603,8 +600,8 @@ mod tests {
         let tempo = Parameters::default().tempo.0;
         let mut board1 = super::Board::from_fen(FEN1).unwrap();
         let mut board2 = super::Board::from_fen(FEN2).unwrap();
-        let eval1 = board1.evaluate();
-        let eval2 = board2.evaluate();
+        let eval1 = board1.evaluate(0);
+        let eval2 = board2.evaluate(0);
         assert_eq!(eval1, -eval2 + 2 * tempo);
     }
 
@@ -622,7 +619,7 @@ mod tests {
         crate::magic::initialise();
         let tempo = Parameters::default().tempo.0;
         let mut board = super::Board::default();
-        assert_eq!(board.evaluate(), tempo);
+        assert_eq!(board.evaluate(0), tempo);
     }
 
     #[test]
@@ -691,8 +688,8 @@ mod tests {
         let mut starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
         let mut end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
-        let starting_rank_eval = starting_rank_passer.evaluate();
-        let end_rank_eval = end_rank_passer.evaluate();
+        let starting_rank_eval = starting_rank_passer.evaluate(0);
+        let end_rank_eval = end_rank_passer.evaluate(0);
 
         // is should be better to have a passer that is more advanced.
         assert!(
