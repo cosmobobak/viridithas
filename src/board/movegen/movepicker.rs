@@ -17,7 +17,7 @@ impl MovePicker {
 }
 
 impl MovePicker {
-    pub fn next(&mut self, skip_quiets: bool) -> Option<Move> {
+    pub fn next(&mut self) -> Option<Move> {
         if self.index == self.count {
             return None;
         }
@@ -25,10 +25,7 @@ impl MovePicker {
         let mut best_num = self.index;
 
         for index in self.index..self.count {
-            let MoveListEntry { entry, score } = unsafe { *self.moves.get_unchecked(index) };
-            if skip_quiets && entry.is_quiet() {
-                continue;
-            }
+            let score = unsafe { self.moves.get_unchecked(index).score };
             if score > best_score {
                 best_score = score;
                 best_num = index;
