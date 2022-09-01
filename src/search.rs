@@ -267,7 +267,6 @@ impl Board {
         let history_score = depth.squared();
 
         let original_alpha = alpha;
-        let mut moves_seen = 0;
         let mut moves_made = 0;
         let mut quiet_moves_made = 0;
         let mut best_move = Move::NULL;
@@ -280,6 +279,8 @@ impl Board {
         let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
+        // whether to skip quiet moves (as they would be futile).
+        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -290,9 +291,6 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next(skip_quiets) {
-            moves_seen += 1;
-            let lmr_depth = (depth - self.lmr_table.get(depth, moves_made)).max(ZERO_PLY);
-
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= SEE_PRUNING_MAXDEPTH
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
@@ -318,15 +316,15 @@ impl Board {
             quiet_moves_made += i32::from(!is_interesting);
 
             if do_lmp && quiet_moves_made >= lmp_threshold {
-                self.unmake_move();
-                break; // okay to break because captures are ordered first.
+                skip_quiets = true;
             }
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) 
-                && do_futility_pruning(lmr_depth, static_eval, alpha, beta) {
-                skip_quiets = true;
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
+            {
+                self.unmake_move();
+                continue;
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
