@@ -86,7 +86,7 @@ impl Board {
         self.generate_captures(&mut move_list);
 
         let mut move_picker = move_list.init_movepicker();
-        while let Some(m) = move_picker.next() {
+        while let Some(m) = move_picker.next(false) {
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             let worst_case =
@@ -267,18 +267,19 @@ impl Board {
         let history_score = depth.squared();
 
         let original_alpha = alpha;
+        let mut moves_seen = 0;
         let mut moves_made = 0;
         let mut quiet_moves_made = 0;
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
+
+        let mut skip_quiets = false;
 
         let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
         let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
-        // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -288,7 +289,10 @@ impl Board {
         }
 
         let mut move_picker = move_list.init_movepicker();
-        while let Some(m) = move_picker.next() {
+        while let Some(m) = move_picker.next(skip_quiets) {
+            moves_seen += 1;
+            let lmr_depth = (depth - self.lmr_table.get(depth, moves_made)).max(ZERO_PLY);
+
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= SEE_PRUNING_MAXDEPTH
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
@@ -320,10 +324,9 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
-            {
-                self.unmake_move();
-                continue;
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) 
+                && do_futility_pruning(lmr_depth, static_eval, alpha, beta) {
+                skip_quiets = true;
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {

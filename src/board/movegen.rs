@@ -1,6 +1,7 @@
 pub mod bitboards;
+pub mod movepicker;
 
-use self::bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7};
+use self::{bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7}, movepicker::MovePicker};
 pub use self::bitboards::{BitLoop, BB_NONE};
 
 use super::Board;
@@ -41,12 +42,6 @@ pub struct MoveListEntry {
 pub struct MoveList {
     moves: [MoveListEntry; MAX_POSITION_MOVES],
     count: usize,
-}
-
-pub struct MovePicker {
-    moves: [MoveListEntry; MAX_POSITION_MOVES],
-    count: usize,
-    index: usize,
 }
 
 impl MoveList {
@@ -91,44 +86,6 @@ impl MoveList {
             count: self.count,
             index: 0,
         }
-    }
-}
-
-impl MovePicker {
-    pub fn moves_made(&self) -> &[MoveListEntry] {
-        &self.moves[..self.index]
-    }
-}
-
-impl MovePicker {
-    pub fn next(&mut self) -> Option<Move> {
-        if self.index == self.count {
-            return None;
-        }
-        let mut best_score = 0;
-        let mut best_num = self.index;
-
-        for index in self.index..self.count {
-            let score = unsafe { self.moves.get_unchecked(index).score };
-            if score > best_score {
-                best_score = score;
-                best_num = index;
-            }
-        }
-
-        debug_assert!(self.index < self.count);
-        debug_assert!(best_num < self.count);
-        debug_assert!(best_num >= self.index);
-
-        let m = unsafe { self.moves.get_unchecked(best_num).entry };
-
-        unsafe {
-            *self.moves.get_unchecked_mut(best_num) = *self.moves.get_unchecked(self.index);
-        }
-
-        self.index += 1;
-
-        Some(m)
     }
 }
 
