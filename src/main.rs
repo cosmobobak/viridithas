@@ -41,15 +41,15 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
-    let params = cli
-        .params
-        .map_or_else(board::evaluation::parameters::Parameters::default, |p| {
-            board::evaluation::parameters::Parameters::from_file(p).unwrap()
+    let eparams = cli
+        .eparams
+        .map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
+            board::evaluation::parameters::EvalParams::from_file(p).unwrap()
         });
 
     if cli.gensource {
         println!("PSQT source code:");
-        piecesquaretable::tables::printout_pst_source(&params.piece_square_tables);
+        piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
         return;
     }
 
@@ -59,7 +59,7 @@ fn main() {
     }
 
     if cli.tune {
-        texel::tune(cli.resume, cli.examples, &params, cli.limitparams.as_deref());
+        texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref());
         return;
     }
 
@@ -68,7 +68,7 @@ fn main() {
         println!("version: {VERSION}");
         println!(
             "number of evaluation parameters: {}",
-            board::evaluation::parameters::Parameters::default()
+            board::evaluation::parameters::EvalParams::default()
                 .vectorise()
                 .len()
         );
@@ -76,19 +76,19 @@ fn main() {
     }
 
     if cli.visparams {
-        println!("{params}");
+        println!("{eparams}");
         return;
     }
 
     if cli.vispsqt {
-        piecesquaretable::render_pst_table(&params.piece_square_tables);
+        piecesquaretable::render_pst_table(&eparams.piece_square_tables);
         return;
     }
 
     if let Some(epd_path) = cli.epdpath {
-        epd::gamut(epd_path, params, cli.epdtime);
+        epd::gamut(epd_path, eparams, cli.epdtime);
         return;
     }
 
-    uci::main_loop(params);
+    uci::main_loop(eparams);
 }

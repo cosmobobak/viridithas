@@ -6,7 +6,10 @@ use clap::Parser;
 pub struct Cli {
     /// A path to the evaluation parameters for the engine - if omitted, the default parameters will be used
     #[clap(long, value_parser, value_name = "PATH")]
-    pub params: Option<std::path::PathBuf>,
+    pub eparams: Option<std::path::PathBuf>,
+    /// A path to the search parameters for the engine - if omitted, the default parameters will be used
+    #[clap(long, value_parser, value_name = "PATH")]
+    pub sparams: Option<std::path::PathBuf>,
     /// Generate source code for PSQTs based on the evaluation parameters
     #[clap(long)]
     pub gensource: bool,

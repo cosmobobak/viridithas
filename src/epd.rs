@@ -1,7 +1,7 @@
 use std::{io::BufRead, path::Path};
 
 use crate::{
-    board::{evaluation::parameters::Parameters, movegen::MoveVecWrapper, Board},
+    board::{evaluation::parameters::EvalParams, movegen::MoveVecWrapper, Board},
     chessmove::Move,
     searchinfo::SearchInfo,
 };
@@ -16,7 +16,7 @@ struct Position {
     id: String,
 }
 
-pub fn gamut(epd_path: impl AsRef<Path>, params: Parameters, time: u64) {
+pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let mut board = Board::new();
     board.reset_tables();
     board.set_eval_params(params);

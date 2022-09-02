@@ -3,7 +3,7 @@
 pub mod parameters;
 pub mod score;
 
-use parameters::Parameters;
+use parameters::EvalParams;
 use score::S;
 
 use crate::{
@@ -138,7 +138,7 @@ pub const fn is_mate_score(score: i32) -> bool {
 }
 
 impl Board {
-    pub fn set_eval_params(&mut self, params: Parameters) {
+    pub fn set_eval_params(&mut self, params: EvalParams) {
         self.eval_params = params;
     }
 
@@ -594,11 +594,11 @@ mod tests {
 
     #[test]
     fn turn_equality() {
-        use crate::board::evaluation::parameters::Parameters;
+        use crate::board::evaluation::parameters::EvalParams;
         const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
         crate::magic::initialise();
-        let tempo = Parameters::default().tempo.0;
+        let tempo = EvalParams::default().tempo.0;
         let mut board1 = super::Board::from_fen(FEN1).unwrap();
         let mut board2 = super::Board::from_fen(FEN2).unwrap();
         let eval1 = board1.evaluate(0);
@@ -616,9 +616,9 @@ mod tests {
 
     #[test]
     fn startpos_eval_equality() {
-        use crate::board::evaluation::parameters::Parameters;
+        use crate::board::evaluation::parameters::EvalParams;
         crate::magic::initialise();
-        let tempo = Parameters::default().tempo.0;
+        let tempo = EvalParams::default().tempo.0;
         let mut board = super::Board::default();
         assert_eq!(board.evaluate(0), tempo);
     }

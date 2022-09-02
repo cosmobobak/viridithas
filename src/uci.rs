@@ -10,12 +10,12 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, parameters::Parameters, MATE_SCORE},
+        evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE},
         Board,
     },
     definitions::{BLACK, MAX_DEPTH, WHITE},
     errors::{FenParseError, MoveParseError},
-    search,
+    search::parameters::SearchParams,
     searchinfo::SearchInfo,
     NAME, VERSION,
 };
@@ -208,7 +208,7 @@ where
 }
 
 struct SetOptions {
-    pub search_config: search::Config,
+    pub search_config: SearchParams,
     pub hash_mb: Option<usize>,
 }
 
@@ -236,15 +236,12 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, Uci
         ))
     })?;
     let mut out = SetOptions {
-        search_config: search::Config::default(),
+        search_config: SearchParams::default(),
         hash_mb: None,
     };
     match opt_name {
         "LMRBASE" => out.search_config.lmr_base = opt_value.parse()?,
         "LMRDIVISION" => out.search_config.lmr_division = opt_value.parse()?,
-        "FUTILITY_GRADIENT" => out.search_config.futility_gradient = opt_value.parse()?,
-        "FUTILITY_INTERCEPT" => out.search_config.futility_intercept = opt_value.parse()?,
-        "NULL_MOVE_REDUCTION" => out.search_config.null_move_reduction = opt_value.parse()?,
         "Hash" => out.hash_mb = Some(opt_value.parse()?),
         _ => eprintln!("ignoring option {}", opt_name),
     }
@@ -303,7 +300,7 @@ fn print_uci_response() {
     println!("uciok");
 }
 
-pub fn main_loop(params: Parameters) {
+pub fn main_loop(params: EvalParams) {
     print_uci_response();
 
     let mut pos = Board::new();
@@ -344,7 +341,7 @@ pub fn main_loop(params: Parameters) {
             }
             input if input.starts_with("setoption") => {
                 parse_setoption(input, &mut info).map(|config| {
-                    pos.set_search_config(config.search_config);
+                    pos.set_search_params(config.search_config);
                     if let Some(hash_mb) = config.hash_mb {
                         pos.set_hash_size(hash_mb);
                     }

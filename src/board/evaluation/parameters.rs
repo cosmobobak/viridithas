@@ -13,7 +13,7 @@ use super::{
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Parameters {
+pub struct EvalParams {
     pub piece_values: [S; 13],
     pub isolated_pawn_malus: S,
     pub doubled_pawn_malus: S,
@@ -35,7 +35,7 @@ pub struct Parameters {
     pub king_danger_coeffs: [i32; 3],
 }
 
-impl Default for Parameters {
+impl Default for EvalParams {
     fn default() -> Self {
         Self {
             piece_values: PIECE_VALUES,
@@ -61,7 +61,7 @@ impl Default for Parameters {
     }
 }
 
-impl Display for Parameters {
+impl Display for EvalParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         writeln!(f, "Parameters {{")?;
         writeln!(f, "    piece_values: {:?},", &self.piece_values[1..6])?;
@@ -123,7 +123,7 @@ impl Display for Parameters {
     }
 }
 
-impl Parameters {
+impl EvalParams {
     pub const NULL: Self = Self {
         piece_values: [S::NULL; 13],
         isolated_pawn_malus: S::NULL,
@@ -326,11 +326,11 @@ impl Parameters {
 mod tests {
     #[test]
     fn params_round_trip() {
-        use crate::board::evaluation::Parameters;
+        use crate::board::evaluation::EvalParams;
 
-        let params = Parameters::default();
+        let params = EvalParams::default();
         let vec = params.vectorise();
-        let params2 = Parameters::devectorise(&vec);
+        let params2 = EvalParams::devectorise(&vec);
         assert_eq!(params, params2);
 
         let n_params = vec.len();
@@ -338,7 +338,7 @@ mod tests {
             let vec = (0..n_params)
                 .map(|_| rand::random::<i32>())
                 .collect::<Vec<_>>();
-            let params = Parameters::devectorise(&vec);
+            let params = EvalParams::devectorise(&vec);
             let vec2 = params.vectorise();
             assert_eq!(vec, vec2);
         }
@@ -346,15 +346,15 @@ mod tests {
 
     #[test]
     fn params_round_trip_fuzz() {
-        use crate::board::evaluation::Parameters;
+        use crate::board::evaluation::EvalParams;
 
-        let n_params = Parameters::default().vectorise().len();
+        let n_params = EvalParams::default().vectorise().len();
 
         for _ in 1..100 {
             let vec = (0..n_params)
                 .map(|_| rand::random::<i32>())
                 .collect::<Vec<_>>();
-            let params = Parameters::devectorise(&vec);
+            let params = EvalParams::devectorise(&vec);
             let vec2 = params.vectorise();
             assert_eq!(vec, vec2);
         }

@@ -8,7 +8,7 @@ use rand::prelude::SliceRandom;
 use rayon::prelude::*;
 
 use crate::{
-    board::{evaluation::parameters::Parameters, Board},
+    board::{evaluation::parameters::EvalParams, Board},
     definitions::{INFINITY, WHITE},
     searchinfo::SearchInfo,
 };
@@ -28,7 +28,7 @@ fn sigmoid(s: f64, k: f64) -> f64 {
     1.0 / (1.0 + 10.0f64.powf(-k * s / 400.0))
 }
 
-fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) -> f64 {
+fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) -> f64 {
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
     pos.set_hash_size(1);
@@ -53,7 +53,7 @@ fn total_squared_error(data: &[TrainingExample], params: &Parameters, k: f64) ->
 
 fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     #![allow(clippy::cast_precision_loss)]
-    let params = Parameters::devectorise(params);
+    let params = EvalParams::devectorise(params);
     let n: f64 = data.len() as f64;
     let chunk_size = data.len() / num_cpus::get();
     data.par_chunks(chunk_size)
@@ -125,7 +125,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                 }
             }
         }
-        Parameters::save_param_vec(
+        EvalParams::save_param_vec(
             &best_params,
             &format!("params/localsearch{iteration:0>3}.txt"),
         );
@@ -137,7 +137,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
 pub fn tune(
     resume: bool,
     examples: usize,
-    starting_params: &Parameters,
+    starting_params: &EvalParams,
     params_to_tune: Option<&[usize]>,
 ) {
     println!("Parsing tuning data...");
@@ -183,7 +183,7 @@ pub fn tune(
 
     println!("Best loss: {best_loss:.6}");
     println!("Saving best parameters...");
-    Parameters::save_param_vec(&best_params, "params/localsearchfinal.txt");
+    EvalParams::save_param_vec(&best_params, "params/localsearchfinal.txt");
 }
 
 fn read_data() -> Vec<TrainingExample> {

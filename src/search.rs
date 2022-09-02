@@ -1,3 +1,5 @@
+pub mod parameters;
+
 use crate::{
     board::movegen::MoveList,
     board::{
@@ -17,6 +19,8 @@ use crate::{
     transpositiontable::{HFlag, ProbeResult},
 };
 
+use self::parameters::SearchParams;
+
 // In alpha-beta search, there are three classes of node to be aware of:
 // 1. PV-nodes: nodes that end up being within the alpha-beta window,
 // i.e. a call to alpha_beta(PVNODE, a, b) returns a value v where v is within the window [a, b].
@@ -29,18 +33,24 @@ use crate::{
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 25;
-const BETA_PRUNING_DEPTH: Depth = Depth::new(8);
-const BETA_PRUNING_MARGIN: i32 = 125;
-const BETA_PRUNING_IMPROVING_MARGIN: i32 = 80;
+const RFP_MARGIN: i32 = 125;
+const RFP_IMPROVING_MARGIN: i32 = 80;
 const NULLMOVE_PRUNING_IMPROVING_MARGIN: i32 = 80;
-const LMP_MAX_DEPTH: Depth = Depth::new(3);
-const LMP_BASE_MOVES: i32 = 3;
-const TT_FAIL_REDUCTION_MIN_DEPTH: Depth = Depth::new(5);
-const FUTILITY_MAX_DEPTH: Depth = Depth::new(4);
-const SINGULARITY_MIN_DEPTH: Depth = Depth::new(8);
-const SEE_PRUNING_MAXDEPTH: Depth = Depth::new(8);
 const SEE_QUIET_MARGIN: i32 = -64;
-const SEE_CAPTURE_MARGIN: i32 = -19;
+const SEE_TACTICAL_MARGIN: i32 = -19;
+const LMP_BASE_MOVES: i32 = 3;
+const FUTILITY_COEFF_2: i32 = 25;
+const FUTILITY_COEFF_1: i32 = 25;
+const FUTILITY_COEFF_0: i32 = 100;
+const RFP_DEPTH: Depth = Depth::new(8);
+const NMP_BASE_REDUCTION: Depth = Depth::new(3);
+const LMP_MAX_DEPTH: Depth = Depth::new(3);
+const TT_REDUCTION_DEPTH: Depth = Depth::new(5);
+const FUTILITY_DEPTH: Depth = Depth::new(4);
+const SINGULARITY_DEPTH: Depth = Depth::new(8);
+const SEE_DEPTH: Depth = Depth::new(8);
+const LMR_BASE: f64 = 0.75;
+const LMR_DIVISION: f64 = 2.25;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -131,9 +141,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let in_check = self.in_check::<{ Self::US }>();
-
-        if !in_check && depth <= ZERO_PLY {
+        if depth <= ZERO_PLY {
             return self.quiescence(info, alpha, beta);
         }
 
@@ -195,7 +203,7 @@ impl Board {
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction.
-                    if PV && depth >= TT_FAIL_REDUCTION_MIN_DEPTH {
+                    if PV && depth >= self.search_params.tt_reduction_depth {
                         depth -= 1;
                     }
                     None
@@ -204,6 +212,8 @@ impl Board {
         } else {
             None // do not probe the TT if we're in a singular-verification search, or if we're at the root.
         };
+
+        let in_check = self.in_check::<{ Self::US }>();
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
@@ -214,8 +224,8 @@ impl Board {
         ss.evals[self.height()] = static_eval;
 
         let see_table = [
-            SEE_CAPTURE_MARGIN * depth.squared(),
-            SEE_QUIET_MARGIN * depth.round(),
+            self.search_params.see_tactical_margin * depth.squared(),
+            self.search_params.see_quiet_margin * depth.round(),
         ];
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -230,9 +240,9 @@ impl Board {
             && !root_node
             && excluded.is_null()
             && !is_mate_score(beta)
-            && depth <= BETA_PRUNING_DEPTH
-            && static_eval - BETA_PRUNING_MARGIN * depth
-                + i32::from(improving) * BETA_PRUNING_IMPROVING_MARGIN
+            && depth <= self.search_params.rfp_depth
+            && static_eval - self.search_params.rfp_margin * depth
+                + i32::from(improving) * self.search_params.rfp_improving_margin
                 > beta
         {
             return static_eval;
@@ -243,12 +253,12 @@ impl Board {
             && !in_check
             && !root_node
             && excluded.is_null()
-            && static_eval + i32::from(improving) * NULLMOVE_PRUNING_IMPROVING_MARGIN >= beta
+            && static_eval + i32::from(improving) * self.search_params.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
             && !self.last_move_was_nullmove()
         {
-            let nm_depth = (depth - 3) - (depth / 3 - 1);
+            let nm_depth = (depth - self.search_params.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
             let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
@@ -274,11 +284,11 @@ impl Board {
 
         let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = (LMP_BASE_MOVES + depth.squared()) * imp_2x;
+        let lmp_threshold = (self.search_params.lmp_base_moves + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
-        let do_lmp = !PV && !root_node && depth <= LMP_MAX_DEPTH && !in_check;
+        let do_lmp = !PV && !root_node && depth <= self.search_params.lmp_depth && !in_check;
         // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = do_futility_pruning(depth, static_eval, alpha, beta);
+        let do_fut_pruning = self.do_futility_pruning(depth, static_eval, alpha, beta);
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -290,7 +300,7 @@ impl Board {
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if best_score > -MINIMUM_MATE_SCORE
-                && depth <= SEE_PRUNING_MAXDEPTH
+                && depth <= self.search_params.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
@@ -328,7 +338,7 @@ impl Board {
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !root_node
-                    && depth >= SINGULARITY_MIN_DEPTH
+                    && depth >= self.search_params.singularity_depth
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
@@ -561,6 +571,17 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+
+    fn do_futility_pruning(&self, depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
+        if depth > FUTILITY_DEPTH || is_mate_score(a) || is_mate_score(b) {
+            return false;
+        }
+        let depth = depth.round();
+        let margin = depth * depth * self.search_params.futility_coeff_2
+            + depth * self.search_params.futility_coeff_1
+            + self.search_params.futility_coeff_0;
+        static_eval + margin < a
+    }
 }
 
 pub const fn draw_score(nodes: u64) -> i32 {
@@ -568,42 +589,12 @@ pub const fn draw_score(nodes: u64) -> i32 {
     -CONTEMPT + 2 - (nodes & 0b111) as i32
 }
 
-fn do_futility_pruning(depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
-    if depth > FUTILITY_MAX_DEPTH || is_mate_score(a) || is_mate_score(b) {
-        return false;
-    }
-    let depth = depth.round();
-    let margin = depth * depth * 25 + depth * 25 + 100;
-    static_eval + margin < a
-}
-
-#[derive(Debug)]
-pub struct Config {
-    pub null_move_reduction: Depth,
-    pub futility_gradient: i32,
-    pub futility_intercept: i32,
-    pub lmr_base: f64,
-    pub lmr_division: f64,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            null_move_reduction: 3.into(),
-            futility_gradient: 41,
-            futility_intercept: 51,
-            lmr_base: 0.75,
-            lmr_division: 2.25,
-        }
-    }
-}
-
 pub struct LMRTable {
     table: [[i32; 64]; 64],
 }
 
 impl LMRTable {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &SearchParams) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         let mut out = Self {
             table: [[0; 64]; 64],

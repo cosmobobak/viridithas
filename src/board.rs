@@ -36,7 +36,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, Stack, ASPIRATION_WINDOW},
+    search::{self, Stack, ASPIRATION_WINDOW, parameters::SearchParams},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
@@ -102,8 +102,8 @@ pub struct Board {
     tt: TranspositionTable,
     hash_mb: usize,
 
-    eval_params: evaluation::parameters::Parameters,
-    pub search_params: search::Config,
+    eval_params: evaluation::parameters::EvalParams,
+    pub search_params: SearchParams,
     pub lmr_table: search::LMRTable,
 
     movegen_ready: bool,
@@ -174,16 +174,16 @@ impl Board {
             pst_vals: S(0, 0),
             tt: TranspositionTable::new(),
             hash_mb: 4,
-            eval_params: evaluation::parameters::Parameters::default(),
-            search_params: search::Config::default(),
-            lmr_table: search::LMRTable::new(&search::Config::default()),
+            eval_params: evaluation::parameters::EvalParams::default(),
+            search_params: SearchParams::default(),
+            lmr_table: search::LMRTable::new(&SearchParams::default()),
             movegen_ready: false,
         };
         out.reset();
         out
     }
 
-    pub fn set_search_config(&mut self, config: search::Config) {
+    pub fn set_search_params(&mut self, config: SearchParams) {
         self.search_params = config;
         self.lmr_table = search::LMRTable::new(&self.search_params);
     }
