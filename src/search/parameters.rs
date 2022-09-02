@@ -10,6 +10,7 @@ use super::{
     SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
 };
 
+#[derive(Clone, Debug)]
 pub struct SearchParams {
     pub aspiration_window: i32,
     pub rfp_margin: i32,

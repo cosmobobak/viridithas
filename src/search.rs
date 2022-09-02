@@ -49,8 +49,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(5);
 const FUTILITY_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(8);
-const LMR_BASE: f64 = 0.75;
-const LMR_DIVISION: f64 = 2.25;
+const LMR_BASE: f64 = 75.0;
+const LMR_DIVISION: f64 = 225.0;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -599,11 +599,12 @@ impl LMRTable {
         let mut out = Self {
             table: [[0; 64]; 64],
         };
+        let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         for depth in 1..64 {
             for played in 1..64 {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
-                out.table[depth][played] = (config.lmr_base + ld * lp / config.lmr_division) as i32;
+                out.table[depth][played] = (base + ld * lp / division) as i32;
             }
         }
         out

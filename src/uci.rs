@@ -212,7 +212,7 @@ struct SetOptions {
     pub hash_mb: Option<usize>,
 }
 
-fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, UciError> {
+fn parse_setoption(text: &str, _info: &mut SearchInfo, pre_config: SetOptions) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     parts.next().unwrap();
@@ -235,10 +235,7 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, Uci
             "no option value given after \"setoption name {opt_name} value\""
         ))
     })?;
-    let mut out = SetOptions {
-        search_config: SearchParams::default(),
-        hash_mb: None,
-    };
+    let mut out = pre_config;
     let id_parser_pairs = out.search_config.ids_with_parsers();
     let mut found_match = false;
     for (param_name, mut parser) in id_parser_pairs {
@@ -356,7 +353,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             input if input.starts_with("setoption") => {
-                parse_setoption(input, &mut info).map(|config| {
+                parse_setoption(input, &mut info, SetOptions { search_config: pos.search_params.clone(), hash_mb: None }).map(|config| {
                     pos.set_search_params(config.search_config);
                     if let Some(hash_mb) = config.hash_mb {
                         pos.set_hash_size(hash_mb);
