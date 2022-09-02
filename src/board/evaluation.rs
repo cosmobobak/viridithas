@@ -581,13 +581,14 @@ struct KingDangerInfo {
 mod tests {
     #[test]
     fn unwinnable() {
+        use crate::board::evaluation::CONTEMPT;
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
         let mut board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate(0);
         assert!(
-            eval.abs() == 0,
-            "eval is not a draw score ({eval}cp != 0cp) in a position unwinnable for both sides."
+            (-2..=2).contains(&(eval.abs() - CONTEMPT)),
+            "eval is not a draw score in a position unwinnable for both sides."
         );
     }
 
