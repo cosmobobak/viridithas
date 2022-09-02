@@ -324,6 +324,24 @@ impl Board {
         }
     }
 
+    fn generate_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let promoting_pawns = our_pawns & promo_rank;
+        for sq in BitLoop::new(promoting_pawns) {
+            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
+            if IS_WHITE {
+                for &promo in &[WQ, WN, WR, WB] {
+                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                }
+            } else {
+                for &promo in &[BQ, BN, BR, BB] {
+                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                }
+            }
+        }
+    }
+
     pub fn generate_moves(&self, move_list: &mut MoveList) {
         debug_assert!(self.movegen_ready);
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
@@ -335,7 +353,6 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    #[inline(never)]
     pub fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -423,7 +440,10 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        // both pawn moves and captures
+        // promotions
+        self.generate_promos::<IS_WHITE>(move_list);
+
+        // pawn captures
         self.generate_pawn_caps::<IS_WHITE>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
