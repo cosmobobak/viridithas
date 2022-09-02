@@ -239,11 +239,24 @@ fn parse_setoption(text: &str, _info: &mut SearchInfo) -> Result<SetOptions, Uci
         search_config: SearchParams::default(),
         hash_mb: None,
     };
+    let id_parser_pairs = out.search_config.ids_with_parsers();
+    let mut found_match = false;
+    for (param_name, mut parser) in id_parser_pairs {
+        if param_name == opt_name {
+            let res = parser(opt_value);
+            if let Err(e) = res {
+                return Err(UciError::InvalidFormat(e.to_string()));
+            }
+            found_match = true;
+            break;
+        }
+    }
+    if found_match {
+        return Ok(out);
+    }
     match opt_name {
-        "LMRBASE" => out.search_config.lmr_base = opt_value.parse()?,
-        "LMRDIVISION" => out.search_config.lmr_division = opt_value.parse()?,
         "Hash" => out.hash_mb = Some(opt_value.parse()?),
-        _ => eprintln!("ignoring option {}", opt_name),
+        _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
 }
@@ -297,6 +310,9 @@ fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("option name Hash type spin default 4 min 1 max 1024");
+    for (id, default) in SearchParams::default().ids_with_values() {
+        println!("option name {id} type spin default {default} min -999999 max 999999");
+    }
     println!("uciok");
 }
 

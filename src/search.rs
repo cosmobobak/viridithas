@@ -35,7 +35,7 @@ use self::parameters::SearchParams;
 pub const ASPIRATION_WINDOW: i32 = 25;
 const RFP_MARGIN: i32 = 125;
 const RFP_IMPROVING_MARGIN: i32 = 80;
-const NULLMOVE_PRUNING_IMPROVING_MARGIN: i32 = 80;
+const NMP_IMPROVING_MARGIN: i32 = 80;
 const SEE_QUIET_MARGIN: i32 = -64;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 3;

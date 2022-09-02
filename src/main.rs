@@ -77,6 +77,7 @@ fn main() {
 
     if cli.visparams {
         println!("{eparams}");
+        println!("{}", crate::search::parameters::SearchParams::default());
         return;
     }
 

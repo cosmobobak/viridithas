@@ -151,6 +151,20 @@ impl From<f32> for Depth {
     }
 }
 
+impl From<Depth> for f64 {
+    fn from(depth: Depth) -> Self {
+        Self::from(depth.0) / Self::from(Depth::INNER_INCR_BY_PLY)
+    }
+}
+
+impl From<f64> for Depth {
+    fn from(depth: f64) -> Self {
+        #![allow(clippy::cast_possible_truncation)]
+        let inner_depth = depth * f64::from(Self::INNER_INCR_BY_PLY);
+        Self::from_raw(inner_depth as i32)
+    }
+}
+
 impl From<Depth> for f32 {
     fn from(depth: Depth) -> Self {
         #![allow(clippy::cast_precision_loss)]
