@@ -324,10 +324,16 @@ impl Board {
         }
     }
 
-    fn generate_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_forward_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let shifted_empty_squares = if IS_WHITE {
+            self.pieces.empty() >> 8
+        } else {
+            self.pieces.empty() << 8
+        };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
-        let promoting_pawns = our_pawns & promo_rank;
+        let pushable_pawns = our_pawns & shifted_empty_squares;
+        let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq + 8 } else { sq - 8 };
             if IS_WHITE {
@@ -441,9 +447,9 @@ impl Board {
         self.check_validity().unwrap();
 
         // promotions
-        self.generate_promos::<IS_WHITE>(move_list);
+        self.generate_forward_promos::<IS_WHITE>(move_list);
 
-        // pawn captures
+        // pawn captures and capture promos
         self.generate_pawn_caps::<IS_WHITE>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
