@@ -131,7 +131,9 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if depth <= ZERO_PLY {
+        let in_check = self.in_check::<{ Self::US }>();
+
+        if !in_check && depth <= ZERO_PLY {
             return self.quiescence(info, alpha, beta);
         }
 
@@ -202,8 +204,6 @@ impl Board {
         } else {
             None // do not probe the TT if we're in a singular-verification search, or if we're at the root.
         };
-
-        let in_check = self.in_check::<{ Self::US }>();
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
