@@ -32,25 +32,25 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-pub const ASPIRATION_WINDOW: i32 = 25;
-const RFP_MARGIN: i32 = 125;
-const RFP_IMPROVING_MARGIN: i32 = 80;
-const NMP_IMPROVING_MARGIN: i32 = 80;
-const SEE_QUIET_MARGIN: i32 = -64;
+pub const ASPIRATION_WINDOW: i32 = 26;
+const RFP_MARGIN: i32 = 118;
+const RFP_IMPROVING_MARGIN: i32 = 76;
+const NMP_IMPROVING_MARGIN: i32 = 76;
+const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
-const LMP_BASE_MOVES: i32 = 3;
+const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_2: i32 = 25;
-const FUTILITY_COEFF_1: i32 = 25;
-const FUTILITY_COEFF_0: i32 = 100;
+const FUTILITY_COEFF_1: i32 = 27;
+const FUTILITY_COEFF_0: i32 = 103;
 const RFP_DEPTH: Depth = Depth::new(8);
-const NMP_BASE_REDUCTION: Depth = Depth::new(3);
+const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const LMP_MAX_DEPTH: Depth = Depth::new(3);
-const TT_REDUCTION_DEPTH: Depth = Depth::new(5);
+const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
-const SEE_DEPTH: Depth = Depth::new(8);
-const LMR_BASE: f64 = 75.0;
-const LMR_DIVISION: f64 = 225.0;
+const SEE_DEPTH: Depth = Depth::new(9);
+const LMR_BASE: f64 = 77.0;
+const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
