@@ -51,6 +51,8 @@ If a move is made that gives check, the depth to which that moves is searched is
 If a move proves to be much better than all the alternatives in a position, the depth used to explore that move is increased by one.
 #### Quiescence Search SEE Pruning
 If a capture is found in the quiescence search that would beat beta even if the capturing piece was immediately lost for nothing, then qsearch terminates early with a beta-cutoff.
+#### Main Search SEE Pruning
+Each time a move is found in main-search, all captures possible on the to-square are tried, cheapest-piece-first, and if the exchange is losing, the move is pruned.
 
 ## Evaluation Techniques
 #### Tapered Evaluation
@@ -67,5 +69,9 @@ A small bonus is given if a side has a pair of bishops.
 The relative mobility of the pieces in a position can be an important factor in the evaluation. Piece mobilities are evaluated with differing weights and with some restrictions on their movement, like ruling that moves to squares that are controlled by enemy pawns are likely not useful.
 #### King Safety
 The number of attacks on the squares around the king are passed into a nonlinear formula that determines the value in centipawns of the king's safety or danger.
+#### Threats
+Attacks from pawns on pieces and from minors on majors are given a bonus in the evaluation.
+#### Tempo
+A small bonus is given for being the side-to-move in a position.
 #### Texel Tuning
 The weights of the evaluation function are tuned on Viridithas's own self-play games.
