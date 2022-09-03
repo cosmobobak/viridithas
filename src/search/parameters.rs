@@ -5,7 +5,7 @@ use crate::definitions::depth::Depth;
 use super::{
     ASPIRATION_WINDOW, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN,
     FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_COEFF_2, FUTILITY_DEPTH, LMP_BASE_MOVES,
-    LMP_MAX_DEPTH, LMR_BASE, LMR_DIVISION, NMP_IMPROVING_MARGIN,
+    LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_IMPROVING_MARGIN,
     NMP_BASE_REDUCTION, SEE_TACTICAL_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN,
     SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
 };
@@ -48,7 +48,7 @@ impl Default for SearchParams {
             futility_coeff_0: FUTILITY_COEFF_0,
             rfp_depth: RFP_DEPTH,
             nmp_base_reduction: NMP_BASE_REDUCTION,
-            lmp_depth: LMP_MAX_DEPTH,
+            lmp_depth: LMP_DEPTH,
             tt_reduction_depth: TT_REDUCTION_DEPTH,
             futility_depth: FUTILITY_DEPTH,
             singularity_depth: SINGULARITY_DEPTH,
