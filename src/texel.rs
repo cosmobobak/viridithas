@@ -40,11 +40,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
             let pov_score = Board::quiescence(&mut pos, &mut info, -INFINITY, INFINITY);
-            let score = if pos.turn() == WHITE {
-                pov_score
-            } else {
-                -pov_score
-            };
+            let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)
         })
@@ -56,10 +52,7 @@ fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     let params = EvalParams::devectorise(params);
     let n: f64 = data.len() as f64;
     let chunk_size = data.len() / num_cpus::get();
-    data.par_chunks(chunk_size)
-        .map(|chunk| total_squared_error(chunk, &params, k))
-        .sum::<f64>()
-        / n
+    data.par_chunks(chunk_size).map(|chunk| total_squared_error(chunk, &params, k)).sum::<f64>() / n
 }
 
 fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
@@ -82,10 +75,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     let mut best_err = cost_function(&best_params);
     let mut improved = true;
     let mut iteration = 1;
-    println!(
-        "Initialised in {:.1}s",
-        init_start_time.elapsed().as_secs_f64()
-    );
+    println!("Initialised in {:.1}s", init_start_time.elapsed().as_secs_f64());
     while improved || (iteration <= 10 && !resume) {
         println!("Iteration {iteration}");
         improved = false;
@@ -125,10 +115,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                 }
             }
         }
-        EvalParams::save_param_vec(
-            &best_params,
-            &format!("params/localsearch{iteration:0>3}.txt"),
-        );
+        EvalParams::save_param_vec(&best_params, &format!("params/localsearch{iteration:0>3}.txt"));
         iteration += 1;
     }
     (best_params, best_err)
@@ -143,20 +130,13 @@ pub fn tune(
     println!("Parsing tuning data...");
     let start_time = Instant::now();
     let mut data = read_data();
-    println!(
-        "Parsed {} examples in {:.1}s",
-        data.len(),
-        start_time.elapsed().as_secs_f32()
-    );
+    println!("Parsed {} examples in {:.1}s", data.len(), start_time.elapsed().as_secs_f32());
 
     println!("Shuffling data...");
     let start_time = Instant::now();
     let mut rng = rand::thread_rng();
     data.shuffle(&mut rng);
-    println!(
-        "Shuffled data in {:.1}s",
-        start_time.elapsed().as_secs_f32()
-    );
+    println!("Shuffled data in {:.1}s", start_time.elapsed().as_secs_f32());
 
     println!("Splitting data...");
 

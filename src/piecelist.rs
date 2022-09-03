@@ -11,10 +11,7 @@ pub struct PieceList {
 
 impl PieceList {
     pub const fn new() -> Self {
-        Self {
-            data: [0; 10],
-            len: 0,
-        }
+        Self { data: [0; 10], len: 0 }
     }
 
     pub fn first(&self) -> Option<&u8> {
@@ -82,9 +79,7 @@ impl PieceList {
 }
 
 fn sq_display(sq: u8) -> String {
-    square_name(sq)
-        .map(std::string::ToString::to_string)
-        .unwrap_or(format!("offboard: {}", sq))
+    square_name(sq).map(std::string::ToString::to_string).unwrap_or(format!("offboard: {}", sq))
 }
 
 impl Display for PieceList {

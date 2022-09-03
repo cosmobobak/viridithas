@@ -139,11 +139,7 @@ pub fn construct_piece_square_table() -> PieceSquareTable {
         while pieces_idx < 6 {
             let mut pst_idx = 0;
             while pst_idx < 64 {
-                let sq = if colour == WHITE {
-                    pst_idx
-                } else {
-                    flip_rank(pst_idx)
-                };
+                let sq = if colour == WHITE { pst_idx } else { flip_rank(pst_idx) };
                 let r = rank(pst_idx) as usize;
                 let f = file(pst_idx) as usize;
                 let value = if pieces_idx == 0 {

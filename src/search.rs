@@ -3,7 +3,7 @@ pub mod parameters;
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES, CONTEMPT},
+        evaluation::{is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
         movegen::{
             bitboards::{self, lsb},
             TT_MOVE_SCORE,
@@ -156,11 +156,7 @@ impl Board {
 
         let root_node = height == 0;
 
-        info.seldepth = if root_node {
-            ZERO_PLY
-        } else {
-            info.seldepth.max(height.into())
-        };
+        info.seldepth = if root_node { ZERO_PLY } else { info.seldepth.max(height.into()) };
 
         if !root_node {
             // check draw
@@ -176,16 +172,9 @@ impl Board {
             // mate-distance pruning.
             // doesn't actually add strength, but it makes viri better at solving puzzles.
             // approach taken from Ethereal.
-            let r_alpha = if alpha > -MATE_SCORE + height {
-                alpha
-            } else {
-                -MATE_SCORE + height
-            };
-            let r_beta = if beta < MATE_SCORE - height - 1 {
-                beta
-            } else {
-                MATE_SCORE - height - 1
-            };
+            let r_alpha = if alpha > -MATE_SCORE + height { alpha } else { -MATE_SCORE + height };
+            let r_beta =
+                if beta < MATE_SCORE - height - 1 { beta } else { MATE_SCORE - height - 1 };
             if r_alpha >= r_beta {
                 return r_alpha;
             }
@@ -439,10 +428,8 @@ impl Board {
 
                 // decrease the history of the non-capture moves that came before the best move.
                 let ms = move_picker.moves_made();
-                for e in ms
-                    .iter()
-                    .take_while(|m| m.entry != best_move)
-                    .filter(|e| e.entry.is_quiet())
+                for e in
+                    ms.iter().take_while(|m| m.entry != best_move).filter(|e| e.entry.is_quiet())
                 {
                     self.update_history_metrics::<false>(e.entry, depth);
                 }
@@ -486,11 +473,8 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        let mut next_victim = if m.is_promo() {
-            type_of(m.promotion())
-        } else {
-            type_of(self.piece_at(from))
-        };
+        let mut next_victim =
+            if m.is_promo() { type_of(m.promotion()) } else { type_of(self.piece_at(from)) };
 
         let mut balance = self.estimated_see(m) - threshold;
 
@@ -593,9 +577,7 @@ pub struct LMRTable {
 impl LMRTable {
     pub fn new(config: &SearchParams) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        let mut out = Self {
-            table: [[0; 64]; 64],
-        };
+        let mut out = Self { table: [[0; 64]; 64] };
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         for depth in 1..64 {
             for played in 1..64 {
@@ -621,9 +603,6 @@ pub struct Stack {
 
 impl Stack {
     pub const fn new() -> Self {
-        Self {
-            evals: [0; MAX_PLY],
-            excluded: [Move::NULL; MAX_PLY],
-        }
+        Self { evals: [0; MAX_PLY], excluded: [Move::NULL; MAX_PLY] }
     }
 }

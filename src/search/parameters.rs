@@ -3,10 +3,9 @@ use std::fmt::Display;
 use crate::definitions::depth::Depth;
 
 use super::{
-    ASPIRATION_WINDOW, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN,
-    FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_COEFF_2, FUTILITY_DEPTH, LMP_BASE_MOVES,
-    LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_IMPROVING_MARGIN,
-    NMP_BASE_REDUCTION, SEE_TACTICAL_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN,
+    ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_COEFF_2, FUTILITY_DEPTH,
+    LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
+    RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
     SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
 };
 
@@ -69,7 +68,6 @@ impl Display for SearchParams {
     }
 }
 
-
 macro_rules! id_parser_gen {
     ($($option:ident = [$($field:tt)*]),*) => {
         vec![$(
@@ -124,25 +122,44 @@ impl SearchParams {
 
     pub fn ids_with_values(&self) -> Vec<(&str, f64)> {
         id_value_gen![
-            ASPIRATION_WINDOW, [self.aspiration_window.into()],
-            RFP_MARGIN, [self.rfp_margin.into()],
-            RFP_IMPROVING_MARGIN, [self.rfp_improving_margin.into()],
-            NMP_IMPROVING_MARGIN, [self.nmp_improving_margin.into()],
-            SEE_QUIET_MARGIN, [self.see_quiet_margin.into()],
-            SEE_TACTICAL_MARGIN, [self.see_tactical_margin.into()],
-            LMP_BASE_MOVES, [self.lmp_base_moves.into()],
-            FUTILITY_COEFF_2, [self.futility_coeff_2.into()],
-            FUTILITY_COEFF_1, [self.futility_coeff_1.into()],
-            FUTILITY_COEFF_0, [self.futility_coeff_0.into()],
-            RFP_DEPTH, [self.rfp_depth.into()],
-            NMP_BASE_REDUCTION, [self.nmp_base_reduction.into()],
-            LMP_DEPTH, [self.lmp_depth.into()],
-            TT_REDUCTION_DEPTH, [self.tt_reduction_depth.into()],
-            FUTILITY_DEPTH, [self.futility_depth.into()],
-            SINGULARITY_DEPTH, [self.singularity_depth.into()],
-            SEE_DEPTH, [self.see_depth.into()],
-            LMR_BASE, [self.lmr_base],
-            LMR_DIVISION, [self.lmr_division]
+            ASPIRATION_WINDOW,
+            [self.aspiration_window.into()],
+            RFP_MARGIN,
+            [self.rfp_margin.into()],
+            RFP_IMPROVING_MARGIN,
+            [self.rfp_improving_margin.into()],
+            NMP_IMPROVING_MARGIN,
+            [self.nmp_improving_margin.into()],
+            SEE_QUIET_MARGIN,
+            [self.see_quiet_margin.into()],
+            SEE_TACTICAL_MARGIN,
+            [self.see_tactical_margin.into()],
+            LMP_BASE_MOVES,
+            [self.lmp_base_moves.into()],
+            FUTILITY_COEFF_2,
+            [self.futility_coeff_2.into()],
+            FUTILITY_COEFF_1,
+            [self.futility_coeff_1.into()],
+            FUTILITY_COEFF_0,
+            [self.futility_coeff_0.into()],
+            RFP_DEPTH,
+            [self.rfp_depth.into()],
+            NMP_BASE_REDUCTION,
+            [self.nmp_base_reduction.into()],
+            LMP_DEPTH,
+            [self.lmp_depth.into()],
+            TT_REDUCTION_DEPTH,
+            [self.tt_reduction_depth.into()],
+            FUTILITY_DEPTH,
+            [self.futility_depth.into()],
+            SINGULARITY_DEPTH,
+            [self.singularity_depth.into()],
+            SEE_DEPTH,
+            [self.see_depth.into()],
+            LMR_BASE,
+            [self.lmr_base],
+            LMR_DIVISION,
+            [self.lmr_division]
         ]
     }
 }

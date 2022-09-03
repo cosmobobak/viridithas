@@ -41,9 +41,8 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
-    let eparams = cli
-        .eparams
-        .map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
+    let eparams =
+        cli.eparams.map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
             board::evaluation::parameters::EvalParams::from_file(p).unwrap()
         });
 
@@ -68,9 +67,7 @@ fn main() {
         println!("version: {VERSION}");
         println!(
             "number of evaluation parameters: {}",
-            board::evaluation::parameters::EvalParams::default()
-                .vectorise()
-                .len()
+            board::evaluation::parameters::EvalParams::default().vectorise().len()
         );
         return;
     }

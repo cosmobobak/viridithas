@@ -13,7 +13,9 @@ use regex::Regex;
 
 use crate::{
     board::movegen::{
-        bitboards::{self, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7, pawn_attacks},
+        bitboards::{
+            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
+        },
         MoveList,
     },
     chessmove::Move,
@@ -36,7 +38,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, Stack, ASPIRATION_WINDOW, parameters::SearchParams},
+    search::{self, parameters::SearchParams, Stack, ASPIRATION_WINDOW},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
@@ -189,11 +191,16 @@ impl Board {
     }
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
-        self.tt
-            .store(self.key, self.height, best_move, score, flag, depth);
+        self.tt.store(self.key, self.height, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(&mut self, alpha: i32, beta: i32, depth: Depth, root_node: bool) -> ProbeResult {
+    pub fn tt_probe(
+        &mut self,
+        alpha: i32,
+        beta: i32,
+        depth: Depth,
+        root_node: bool,
+    ) -> ProbeResult {
         if root_node {
             self.tt.probe::<true>(self.key, self.height, alpha, beta, depth)
         } else {
@@ -900,12 +907,8 @@ impl Board {
         self.height -= 1;
         self.ply -= 1;
 
-        let Undo {
-            m,
-            castle_perm,
-            ep_square,
-            fifty_move_counter,
-        } = self.history.pop().expect("No move to unmake!");
+        let Undo { m, castle_perm, ep_square, fifty_move_counter } =
+            self.history.pop().expect("No move to unmake!");
 
         let from = m.from();
         let to = m.to();
@@ -961,14 +964,7 @@ impl Board {
             debug_assert!(piece_valid(m.promotion()));
             debug_assert!(m.promotion() != WP && m.promotion() != BP);
             self.clear_piece(from);
-            self.add_piece(
-                from,
-                if colour_of(m.promotion()) == WHITE {
-                    WP
-                } else {
-                    BP
-                },
-            );
+            self.add_piece(from, if colour_of(m.promotion()) == WHITE { WP } else { BP });
         }
 
         let something_removed = self.repetition_cache.remove(&self.key);
@@ -991,12 +987,8 @@ impl Board {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        let Undo {
-            m: _,
-            castle_perm,
-            ep_square,
-            fifty_move_counter,
-        } = self.history.pop().expect("No move to unmake!");
+        let Undo { m: _, castle_perm, ep_square, fifty_move_counter } =
+            self.history.pop().expect("No move to unmake!");
 
         self.castle_perm = castle_perm;
         self.ep_sq = ep_square;
@@ -1095,25 +1087,15 @@ impl Board {
         let reg_match = reg_match.unwrap();
 
         let to_sq_name = reg_match.get(4).unwrap().as_str();
-        let to_square = SQUARE_NAMES
-            .iter()
-            .position(|&sq| sq == to_sq_name)
-            .unwrap();
+        let to_square = SQUARE_NAMES.iter().position(|&sq| sq == to_sq_name).unwrap();
         let to_bb = 1 << to_square;
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
-            b"pnbrqk"
-                .iter()
-                .position(|&c| c == *promo.as_str().as_bytes().last().unwrap())
-                .unwrap()
+            b"pnbrqk".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap()
         });
         if promo.is_some() {
-            let legal_mask = if self.side == WHITE {
-                BB_RANK_7
-            } else {
-                BB_RANK_2
-            };
+            let legal_mask = if self.side == WHITE { BB_RANK_7 } else { BB_RANK_2 };
             from_bb &= legal_mask;
         }
 
@@ -1131,12 +1113,8 @@ impl Board {
 
         if let Some(piece) = reg_match.get(1) {
             let piece = piece.as_str().as_bytes()[0];
-            let piece: u8 = b".PNBRQK"
-                .iter()
-                .position(|&c| c == piece)
-                .unwrap()
-                .try_into()
-                .unwrap();
+            let piece: u8 =
+                b".PNBRQK".iter().position(|&c| c == piece).unwrap().try_into().unwrap();
             let whitepbb = self.pieces.piece_bb(piece);
             let blackpbb = self.pieces.piece_bb(piece + 6);
             from_bb &= whitepbb | blackpbb;
@@ -1284,10 +1262,7 @@ impl Board {
                 most_recent_score = score;
                 best_depth = i_depth;
                 self.regenerate_pv_line(best_depth);
-                most_recent_move = *self
-                    .principal_variation
-                    .first()
-                    .unwrap_or(&most_recent_move);
+                most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
                 if info.print_to_stdout {
                     self.print_pv();
                 }
@@ -1317,10 +1292,7 @@ impl Board {
                 beta = INFINITY;
             }
             self.regenerate_pv_line(best_depth);
-            most_recent_move = *self
-                .principal_variation
-                .first()
-                .unwrap_or(&most_recent_move);
+            most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
             let score_string = format_score(most_recent_score, self.turn());
             if info.print_to_stdout {
@@ -1350,14 +1322,7 @@ impl Board {
             self.print_pv();
             println!("bestmove {most_recent_move}");
         }
-        (
-            if self.side == WHITE {
-                most_recent_score
-            } else {
-                -most_recent_score
-            },
-            most_recent_move,
-        )
+        (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
     fn get_first_legal_move(&mut self) -> Option<Move> {
@@ -1410,9 +1375,7 @@ mod tests {
         crate::magic::initialise();
 
         let mut board_1 = Board::new();
-        board_1
-            .set_from_fen(Board::STARTING_FEN)
-            .expect("setfen failed.");
+        board_1.set_from_fen(Board::STARTING_FEN).expect("setfen failed.");
         board_1.check_validity().unwrap();
 
         let board_2 = Board::from_fen(Board::STARTING_FEN).expect("setfen failed.");

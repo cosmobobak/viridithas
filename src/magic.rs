@@ -217,11 +217,8 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
     let mut used_indices = [0u64; 4096];
 
     // mask piece attack
-    let mask_attack = if is_bishop {
-        mask_bishop_attacks(square)
-    } else {
-        mask_rook_attacks(square)
-    };
+    let mask_attack =
+        if is_bishop { mask_bishop_attacks(square) } else { mask_rook_attacks(square) };
 
     // occupancy variations
     let occupancy_variations = 1 << relevant_bits;
@@ -282,11 +279,7 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
     panic!("magic number failed");
 }
 
-#[allow(
-    dead_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
-)]
+#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub fn init_magics() {
     println!("Generating bishop magics...");
     println!("static BISHOP_MAGICS: [u64; 64] = [");
@@ -330,11 +323,7 @@ unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
         ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
 
         // init the current mask
-        let mask = if IS_BISHOP {
-            BISHOP_MASKS[square]
-        } else {
-            ROOK_MASKS[square]
-        };
+        let mask = if IS_BISHOP { BISHOP_MASKS[square] } else { ROOK_MASKS[square] };
 
         // count attack mask bits
         let bit_count = mask.count_ones();

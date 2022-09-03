@@ -75,11 +75,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn check_up(&mut self) {
-        if self.time_set
-            && Instant::now()
-                .checked_duration_since(self.stop_time)
-                .is_some()
-        {
+        if self.time_set && Instant::now().checked_duration_since(self.stop_time).is_some() {
             self.stopped = true;
         }
         if let Some(Ok(cmd)) = self.stdin_rx.map(mpsc::Receiver::try_recv) {

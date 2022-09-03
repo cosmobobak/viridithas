@@ -68,18 +68,12 @@ impl Board {
         }
 
         if piece_num[1..].to_vec()
-            != self.piece_lists[1..]
-                .iter()
-                .map(PieceList::len)
-                .collect::<Vec<_>>()
+            != self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
         {
             return Err(format!(
                 "piece counts are corrupt: expected {:?}, got {:?}",
                 &piece_num[1..],
-                &self.piece_lists[1..]
-                    .iter()
-                    .map(PieceList::len)
-                    .collect::<Vec<_>>()
+                &self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
             ));
         }
 
@@ -160,10 +154,7 @@ impl Board {
         }
 
         if !(self.side == WHITE || self.side == BLACK) {
-            return Err(format!(
-                "side is corrupt: expected WHITE or BLACK, got {:?}",
-                self.side
-            ));
+            return Err(format!("side is corrupt: expected WHITE or BLACK, got {:?}", self.side));
         }
         if self.generate_pos_key() != self.key {
             return Err(format!(
@@ -189,16 +180,10 @@ impl Board {
 
         // check there are the correct number of kings for each side
         if self.num(WK) != 1 {
-            return Err(format!(
-                "white king count is corrupt: expected 1, got {}",
-                self.num(WK)
-            ));
+            return Err(format!("white king count is corrupt: expected 1, got {}", self.num(WK)));
         }
         if self.num(BK) != 1 {
-            return Err(format!(
-                "black king count is corrupt: expected 1, got {}",
-                self.num(BK)
-            ));
+            return Err(format!("black king count is corrupt: expected 1, got {}", self.num(BK)));
         }
         let comptime_consistency = self.num(WP) == self.num_ct::<WP>()
             && self.num(BP) == self.num_ct::<BP>()
@@ -214,7 +199,7 @@ impl Board {
             && self.num(BK) == self.num_ct::<BK>();
         if !comptime_consistency {
             return Err(
-                "comptime consistency for Board::num is corrupt: expected true, got false".into(),
+                "comptime consistency for Board::num is corrupt: expected true, got false".into()
             );
         }
         let comptime_consistency = self.num_pt(PAWN) == self.num_pt_ct::<PAWN>()

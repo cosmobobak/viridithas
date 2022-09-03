@@ -13,11 +13,12 @@ use crate::{
         type_of, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN, ROOK, WB,
         WHITE, WN, WP, WQ, WR,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank}, search::draw_score,
+    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    search::draw_score,
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt, LIGHT_SQUARE, DARK_SQUARE},
+    bitboards::{attacks, pawn_attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE},
     BitLoop, BB_NONE,
 };
 
@@ -73,17 +74,18 @@ pub const QUEEN_OPEN_FILE_BONUS: S = S(-5, 0);
 pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(22, 0);
 
 // nonlinear mobility eval tables.
-
+#[rustfmt::skip]
 static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-188, -265), S(-10, 11), S(10, 29), S(24, 84), S(43, 98), S(49, 131), S(69, 135), S(92, 136), S(119, 107)];
-
+#[rustfmt::skip]
 static BISHOP_MOBILITY_BONUS: [S; 14] = [S(-12, -147), S(-10, -92), S(28, -5), S(43, 74), S(62, 94), S(76, 108), S(85, 131), S(92, 148), S(99, 147), S(102, 155), S(107, 146), S(109, 149), S(206, 110), S(178, 131)];
-
+#[rustfmt::skip]
 static ROOK_MOBILITY_BONUS: [S; 15] = [S(32, 34), S(41, 115), S(22, 137), S(35, 183), S(41, 212), S(48, 226), S(46, 252), S(52, 257), S(61, 248), S(65, 265), S(73, 270), S(80, 273), S(84, 268), S(98, 255), S(83, 254)];
-
+#[rustfmt::skip]
 static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-161, -187), S(-172, -277), S(152, 176), S(93, 34), S(192, 95), S(205, 97), S(197, 173), S(194, 246), S(193, 293), S(198, 321), S(204, 342), S(209, 362), S(218, 366), S(221, 384), S(223, 400), S(223, 404), S(234, 397), S(244, 402), S(275, 372), S(271, 376), S(314, 352), S(329, 350), S(358, 316), S(375, 305), S(300, 315), S(308, 291), S(199, 201)];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
-pub static PASSED_PAWN_BONUS: [S; 6] = [S(1, 19), S(-23, 35), S(-26, 75), S(12, 112), S(35, 225), S(100, 311)];
+pub static PASSED_PAWN_BONUS: [S; 6] =
+    [S(1, 19), S(-23, 35), S(-26, 75), S(12, 112), S(35, 225), S(100, 311)];
 
 pub const TEMPO_BONUS: S = S(12, 5);
 
@@ -147,11 +149,7 @@ impl Board {
     /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate(&mut self, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == WHITE {
-                draw_score(nodes)
-            } else {
-                -draw_score(nodes)
-            };
+            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
         let material = self.material[WHITE as usize] - self.material[BLACK as usize];
@@ -163,11 +161,8 @@ impl Board {
         let queen_files = self.queen_open_file_term();
         let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = self.score_kingdanger(danger_info);
-        let tempo = if self.turn() == WHITE {
-            self.eval_params.tempo
-        } else {
-            -self.eval_params.tempo
-        };
+        let tempo =
+            if self.turn() == WHITE { self.eval_params.tempo } else { -self.eval_params.tempo };
 
         let mut score = material;
         score += pst;
@@ -259,7 +254,9 @@ impl Board {
     fn preprocess_drawish_scores(&mut self, score: i32, nodes: u64) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
         let drawscore = draw_score(nodes);
-        if score > drawscore && self.unwinnable_for::<true>() || score < drawscore && self.unwinnable_for::<false>() {
+        if score > drawscore && self.unwinnable_for::<true>()
+            || score < drawscore && self.unwinnable_for::<false>()
+        {
             drawscore
         } else {
             score
@@ -272,9 +269,9 @@ impl Board {
     }
 
     fn bishop_pair_term(&self) -> S {
-        let white_pair = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>() != 0 
+        let white_pair = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>() != 0
             && self.pieces.bishops_sqco::<true, DARK_SQUARE>() != 0;
-        let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>() != 0 
+        let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>() != 0
             && self.pieces.bishops_sqco::<false, DARK_SQUARE>() != 0;
         if white_pair && black_pair {
             return S(0, 0);
@@ -286,6 +283,18 @@ impl Board {
             return -self.eval_params.bishop_pair_bonus;
         }
         S(0, 0)
+    }
+
+    #[rustfmt::skip]
+    fn backward_pawns<const IS_WHITE: bool>(&self) -> u64 {
+        // this function will be so much nicer with const operations.
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let their_pawns = if IS_WHITE { self.pieces.pawns::<false>() } else { self.pieces.pawns::<true>() };
+        let our_stops = if IS_WHITE { our_pawns.north_one() } else { our_pawns.south_one() };
+        let our_pawn_attacks = pawn_attacks::<IS_WHITE>(our_pawns);
+        let their_pawn_attacks = if IS_WHITE { pawn_attacks::<false>(their_pawns) } else { pawn_attacks::<true>(their_pawns) };
+        let blocked_squares = our_stops & their_pawn_attacks & !our_pawn_attacks;
+        if IS_WHITE { blocked_squares.south_one() } else { blocked_squares.north_one() }
     }
 
     fn pawn_structure_term(&self) -> S {
@@ -338,11 +347,8 @@ impl Board {
 
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = if SIDE == WHITE {
-            self.pieces.pawns::<true>()
-        } else {
-            self.pieces.pawns::<false>()
-        };
+        let pawns =
+            if SIDE == WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
         (mask & pawns) == 0
     }
 
@@ -402,10 +408,8 @@ impl Board {
     #[allow(clippy::too_many_lines)]
     fn mobility_threats_kingdanger(&mut self) -> (S, S, KingDangerInfo) {
         #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
-        let mut king_danger_info = KingDangerInfo {
-            attack_units_on_white: 0,
-            attack_units_on_black: 0,
-        };
+        let mut king_danger_info =
+            KingDangerInfo { attack_units_on_white: 0, attack_units_on_black: 0 };
         let mut mob_score = S(0, 0);
         let mut threat_score = S(0, 0);
         let white_king_area = king_area::<true>(self.king_sq(WHITE));
@@ -416,10 +420,14 @@ impl Board {
         let black_minor = self.pieces.minors::<false>();
         let white_major = self.pieces.majors::<true>();
         let black_major = self.pieces.majors::<false>();
-        threat_score += self.eval_params.pawn_threat_on_minor * (black_minor & white_pawn_attacks).count_ones() as i32;
-        threat_score -= self.eval_params.pawn_threat_on_minor * (white_minor & black_pawn_attacks).count_ones() as i32;
-        threat_score += self.eval_params.pawn_threat_on_major * (black_major & white_pawn_attacks).count_ones() as i32;
-        threat_score -= self.eval_params.pawn_threat_on_major * (white_major & black_pawn_attacks).count_ones() as i32;
+        threat_score += self.eval_params.pawn_threat_on_minor
+            * (black_minor & white_pawn_attacks).count_ones() as i32;
+        threat_score -= self.eval_params.pawn_threat_on_minor
+            * (white_minor & black_pawn_attacks).count_ones() as i32;
+        threat_score += self.eval_params.pawn_threat_on_major
+            * (black_major & white_pawn_attacks).count_ones() as i32;
+        threat_score -= self.eval_params.pawn_threat_on_major
+            * (white_major & black_pawn_attacks).count_ones() as i32;
         let safe_white_moves = !black_pawn_attacks;
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
@@ -432,7 +440,8 @@ impl Board {
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
             // threats
             let attacks_on_majors = attacks & black_major;
-            threat_score += self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+            threat_score +=
+                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -447,7 +456,8 @@ impl Board {
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
             // threats
             let attacks_on_majors = attacks & white_major;
-            threat_score -= self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+            threat_score -=
+                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -462,7 +472,8 @@ impl Board {
             king_danger_info.attack_units_on_white -= defense_of_white_king.count_ones() as i32;
             // threats
             let attacks_on_majors = attacks & black_major;
-            threat_score += self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+            threat_score +=
+                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
@@ -477,7 +488,8 @@ impl Board {
             king_danger_info.attack_units_on_black -= defense_of_black_king.count_ones() as i32;
             // threats
             let attacks_on_majors = attacks & white_major;
-            threat_score -= self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+            threat_score -=
+                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
@@ -564,11 +576,7 @@ impl Board {
 
 pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
     let king_attacks = attacks::<KING>(king_sq, BB_NONE);
-    let forward_area = if IS_WHITE {
-        king_attacks.north_one()
-    } else {
-        king_attacks.south_one()
-    };
+    let forward_area = if IS_WHITE { king_attacks.north_one() } else { king_attacks.south_one() };
     king_attacks | forward_area
 }
 

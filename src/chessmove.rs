@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::{definitions::square_name, lookups::PROMO_CHAR_LOOKUP};
+use crate::{
+    definitions::{square_name, Square},
+    lookups::PROMO_CHAR_LOOKUP,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {
@@ -75,19 +78,11 @@ impl Move {
     }
 
     pub const fn is_kingside_castling(self) -> bool {
-        self.is_castle()
-            && matches!(
-                self.to(),
-                crate::definitions::Square::G1 | crate::definitions::Square::G8
-            )
+        self.is_castle() && matches!(self.to(), Square::G1 | Square::G8)
     }
 
     pub const fn is_queenside_castling(self) -> bool {
-        self.is_castle()
-            && matches!(
-                self.to(),
-                crate::definitions::Square::C1 | crate::definitions::Square::C8
-            )
+        self.is_castle() && matches!(self.to(), Square::C1 | Square::C8)
     }
 }
 

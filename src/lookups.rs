@@ -131,18 +131,15 @@ pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
 
 /// knights, bishops, rooks, and queens.
-pub static PIECE_BIG: [bool; 13] = [
-    false, false, true, true, true, true, false, false, true, true, true, true, false,
-];
+pub static PIECE_BIG: [bool; 13] =
+    [false, false, true, true, true, true, false, false, true, true, true, true, false];
 /// rooks and queens.
-pub static PIECE_MAJ: [bool; 13] = [
-    false, false, false, false, true, true, false, false, false, false, true, true, false,
-];
+pub static PIECE_MAJ: [bool; 13] =
+    [false, false, false, false, true, true, false, false, false, false, true, true, false];
 /// knights and bishops.
 #[allow(dead_code)]
-pub static PIECE_MIN: [bool; 13] = [
-    false, false, true, true, false, false, false, false, true, true, false, false, false,
-];
+pub static PIECE_MIN: [bool; 13] =
+    [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
 /// The file that this square is on.
 pub const fn file(sq: u8) -> u8 {
@@ -186,9 +183,8 @@ pub fn piece_char(piece: u8) -> Option<char> {
 }
 
 /// The score of this piece, for MVV/LVA move ordering.
-const VICTIM_SCORE: [i32; 13] = [
-    0, 1000, 2000, 3000, 4000, 5000, 6000, 1000, 2000, 3000, 4000, 5000, 6000,
-];
+const VICTIM_SCORE: [i32; 13] =
+    [0, 1000, 2000, 3000, 4000, 5000, 6000, 1000, 2000, 3000, 4000, 5000, 6000];
 
 const fn mvvlva_init() -> [[i32; 13]; 13] {
     let mut mvvlva = [[0; 13]; 13];
@@ -209,20 +205,13 @@ static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
 pub fn get_mvv_lva_score(victim: u8, attacker: u8) -> i32 {
     debug_assert!(victim < 13);
     debug_assert!(attacker < 13);
-    unsafe {
-        *MVV_LVA_SCORE
-            .get_unchecked(victim as usize)
-            .get_unchecked(attacker as usize)
-    }
+    unsafe { *MVV_LVA_SCORE.get_unchecked(victim as usize).get_unchecked(attacker as usize) }
 }
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     let mut attacks = [0; 64];
-    let deltas = if IS_KNIGHT {
-        &[17, 15, 10, 6, -17, -15, -10, -6]
-    } else {
-        &[9, 8, 7, 1, -9, -8, -7, -1]
-    };
+    let deltas =
+        if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
     cfor!(let mut sq = 0; sq < 64; sq += 1; {
         let mut attacks_bb = 0;
         cfor!(let mut idx = 0; idx < 8; idx += 1; {
@@ -253,11 +242,7 @@ pub fn get_jumping_piece_attack<const PIECE: u8>(sq: u8) -> u64 {
     debug_assert!(PIECE < 7);
     debug_assert!(sq < 64);
     debug_assert!(PIECE == KNIGHT || PIECE == KING);
-    unsafe {
-        *JUMPING_ATTACKS
-            .get_unchecked(PIECE as usize)
-            .get_unchecked(sq as usize)
-    }
+    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE as usize).get_unchecked(sq as usize) }
 }
 
 #[allow(dead_code)]
@@ -336,15 +321,9 @@ mod tests {
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(get_jumping_piece_attack::<KNIGHT>(0), 132_096);
-        assert_eq!(
-            get_jumping_piece_attack::<KNIGHT>(63),
-            9_077_567_998_918_656
-        );
+        assert_eq!(get_jumping_piece_attack::<KNIGHT>(63), 9_077_567_998_918_656);
 
         assert_eq!(get_jumping_piece_attack::<KING>(0), 770);
-        assert_eq!(
-            get_jumping_piece_attack::<KING>(63),
-            4_665_729_213_955_833_856
-        );
+        assert_eq!(get_jumping_piece_attack::<KING>(63), 4_665_729_213_955_833_856);
     }
 }

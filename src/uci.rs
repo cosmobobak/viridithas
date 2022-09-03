@@ -212,7 +212,11 @@ struct SetOptions {
     pub hash_mb: Option<usize>,
 }
 
-fn parse_setoption(text: &str, _info: &mut SearchInfo, pre_config: SetOptions) -> Result<SetOptions, UciError> {
+fn parse_setoption(
+    text: &str,
+    _info: &mut SearchInfo,
+    pre_config: SetOptions,
+) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     parts.next().unwrap();
@@ -352,14 +356,17 @@ pub fn main_loop(params: EvalParams) {
                 pos.clear_tt();
                 res
             }
-            input if input.starts_with("setoption") => {
-                parse_setoption(input, &mut info, SetOptions { search_config: pos.search_params.clone(), hash_mb: None }).map(|config| {
-                    pos.set_search_params(config.search_config);
-                    if let Some(hash_mb) = config.hash_mb {
-                        pos.set_hash_size(hash_mb);
-                    }
-                })
-            }
+            input if input.starts_with("setoption") => parse_setoption(
+                input,
+                &mut info,
+                SetOptions { search_config: pos.search_params.clone(), hash_mb: None },
+            )
+            .map(|config| {
+                pos.set_search_params(config.search_config);
+                if let Some(hash_mb) = config.hash_mb {
+                    pos.set_hash_size(hash_mb);
+                }
+            }),
             input if input.starts_with("position") => parse_position(input, &mut pos),
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);

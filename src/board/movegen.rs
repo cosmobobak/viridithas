@@ -1,8 +1,11 @@
 pub mod bitboards;
 pub mod movepicker;
 
-use self::{bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7}, movepicker::MovePicker};
 pub use self::bitboards::{BitLoop, BB_NONE};
+use self::{
+    bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7},
+    movepicker::MovePicker,
+};
 
 use super::Board;
 
@@ -46,23 +49,12 @@ pub struct MoveList {
 
 impl MoveList {
     pub const fn new() -> Self {
-        const DEFAULT: MoveListEntry = MoveListEntry {
-            entry: Move { data: 0 },
-            score: 0,
-        };
-        Self {
-            moves: [DEFAULT; MAX_POSITION_MOVES],
-            count: 0,
-        }
+        const DEFAULT: MoveListEntry = MoveListEntry { entry: Move { data: 0 }, score: 0 };
+        Self { moves: [DEFAULT; MAX_POSITION_MOVES], count: 0 }
     }
 
     pub fn lookup_by_move(&mut self, m: Move) -> Option<&mut MoveListEntry> {
-        unsafe {
-            self.moves
-                .get_unchecked_mut(..self.count)
-                .iter_mut()
-                .find(|e| e.entry == m)
-        }
+        unsafe { self.moves.get_unchecked_mut(..self.count).iter_mut().find(|e| e.entry == m) }
     }
 
     pub fn push(&mut self, m: Move, score: i32) {
@@ -81,11 +73,7 @@ impl MoveList {
     }
 
     pub const fn init_movepicker(self) -> MovePicker {
-        MovePicker {
-            moves: self.moves,
-            count: self.count,
-            index: 0,
-        }
+        MovePicker { moves: self.moves, count: self.count, index: 0 }
     }
 }
 
@@ -285,16 +273,10 @@ impl Board {
     fn generate_pawn_forward<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        let shifted_empty_squares = if IS_WHITE {
-            self.pieces.empty() >> 8
-        } else {
-            self.pieces.empty() << 8
-        };
-        let double_shifted_empty_squares = if IS_WHITE {
-            self.pieces.empty() >> 16
-        } else {
-            self.pieces.empty() << 16
-        };
+        let shifted_empty_squares =
+            if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
+        let double_shifted_empty_squares =
+            if IS_WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
@@ -326,11 +308,8 @@ impl Board {
 
     fn generate_forward_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        let shifted_empty_squares = if IS_WHITE {
-            self.pieces.empty() >> 8
-        } else {
-            self.pieces.empty() << 8
-        };
+        let shifted_empty_squares =
+            if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -609,11 +588,8 @@ impl Board {
         let orth_attacks = bitboards::attacks::<ROOK>(sq, blockers) & our_orth_pieces;
         attackers |= orth_attacks;
 
-        let our_king = if side == WHITE {
-            self.pieces.king::<true>()
-        } else {
-            self.pieces.king::<false>()
-        };
+        let our_king =
+            if side == WHITE { self.pieces.king::<true>() } else { self.pieces.king::<false>() };
 
         let king_attacks = bitboards::attacks::<KING>(sq, BB_NONE) & our_king;
         attackers |= king_attacks;

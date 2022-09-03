@@ -30,13 +30,11 @@ pub const BB_DARK_SQUARES: u64 = 0xAA55_AA55_AA55_AA55;
 pub const LIGHT_SQUARE: bool = true;
 pub const DARK_SQUARE: bool = false;
 
-pub static BB_RANKS: [u64; 8] = [
-    BB_RANK_1, BB_RANK_2, BB_RANK_3, BB_RANK_4, BB_RANK_5, BB_RANK_6, BB_RANK_7, BB_RANK_8,
-];
+pub static BB_RANKS: [u64; 8] =
+    [BB_RANK_1, BB_RANK_2, BB_RANK_3, BB_RANK_4, BB_RANK_5, BB_RANK_6, BB_RANK_7, BB_RANK_8];
 
-pub static BB_FILES: [u64; 8] = [
-    BB_FILE_A, BB_FILE_B, BB_FILE_C, BB_FILE_D, BB_FILE_E, BB_FILE_F, BB_FILE_G, BB_FILE_H,
-];
+pub static BB_FILES: [u64; 8] =
+    [BB_FILE_A, BB_FILE_B, BB_FILE_C, BB_FILE_D, BB_FILE_E, BB_FILE_F, BB_FILE_G, BB_FILE_H];
 
 /// least significant bit of a u64
 /// ```
@@ -192,29 +190,24 @@ impl BitBoard {
         self.occupied
     }
 
-    #[rustfmt::skip]
     pub const fn knights<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_knights } else { self.b_knights }
     }
 
-    #[rustfmt::skip]
     pub const fn rooks<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_rooks } else { self.b_rooks }
     }
 
-    #[rustfmt::skip]
     pub const fn bishops<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_bishops } else { self.b_bishops }
     }
 
-    #[rustfmt::skip]
     pub const fn queens<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_queens } else { self.b_queens }
     }
 
-    #[rustfmt::skip]
     pub const fn bishops_sqco<const IS_WHITE: bool, const IS_LSB: bool>(&self) -> u64 {
-        if IS_WHITE { 
+        if IS_WHITE {
             if IS_LSB {
                 self.w_bishops & BB_LIGHT_SQUARES
             } else {
@@ -436,14 +429,7 @@ pub fn print_bb(bb: u64) {
     for rank in (0..=7).rev() {
         for file in 0..=7 {
             let sq = crate::lookups::filerank_to_square(file, rank);
-            assert!(
-                sq < 64,
-                "sq64: {}, sq: {}, file: {}, rank: {}",
-                sq,
-                sq,
-                file,
-                rank
-            );
+            assert!(sq < 64, "sq64: {}, sq: {}, file: {}, rank: {}", sq, sq, file, rank);
             if bb & (1 << sq) == 0 {
                 print!(" .");
             } else {

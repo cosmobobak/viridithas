@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{BOARD_N_SQUARES, PIECE_EMPTY, depth::Depth},
+    definitions::{depth::Depth, BOARD_N_SQUARES, PIECE_EMPTY},
     validate::piece_valid,
 };
 
@@ -37,11 +37,7 @@ const fn history_bonus(depth: Depth) -> i32 {
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
     const HISTORY_DIVISOR: i32 = i32::MAX / 10;
-    let delta = if IS_GOOD {
-        history_bonus(depth)
-    } else {
-        -history_bonus(depth)
-    };
+    let delta = if IS_GOOD { history_bonus(depth) } else { -history_bonus(depth) };
     *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
 }
 
@@ -76,12 +72,7 @@ impl HistoryTable {
     #[allow(dead_code)]
     pub fn print_stats(&self) {
         #![allow(clippy::cast_precision_loss)]
-        let sum = self
-            .table
-            .iter()
-            .flatten()
-            .map(|x| i64::from(*x))
-            .sum::<i64>();
+        let sum = self.table.iter().flatten().map(|x| i64::from(*x)).sum::<i64>();
         let mean = sum as f64 / (BOARD_N_SQUARES as f64 * pslots() as f64);
         let stdev = self
             .table
@@ -94,17 +85,8 @@ impl HistoryTable {
             / (BOARD_N_SQUARES as f64 * pslots() as f64);
         println!("mean: {}", mean);
         println!("stdev: {}", stdev);
-        println!(
-            "max: {}",
-            self.table.iter().flatten().copied().max().unwrap()
-        );
-        let nonzero = self
-            .table
-            .iter()
-            .flatten()
-            .copied()
-            .filter(|x| *x != 0)
-            .collect::<Vec<_>>();
+        println!("max: {}", self.table.iter().flatten().copied().max().unwrap());
+        let nonzero = self.table.iter().flatten().copied().filter(|x| *x != 0).collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
         let nz_mean =
             nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);
@@ -136,8 +118,7 @@ impl DoubleHistoryTable {
 
     pub fn clear(&mut self) {
         if self.table.is_empty() {
-            self.table
-                .resize(BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES * pslots(), 0);
+            self.table.resize(BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES * pslots(), 0);
         } else {
             self.table.fill(0);
         }
@@ -177,12 +158,7 @@ impl DoubleHistoryTable {
         println!("mean: {}", mean);
         println!("stdev: {}", stdev);
         println!("max: {}", self.table.iter().copied().max().unwrap());
-        let nonzero = self
-            .table
-            .iter()
-            .copied()
-            .filter(|x| *x != 0)
-            .collect::<Vec<_>>();
+        let nonzero = self.table.iter().copied().filter(|x| *x != 0).collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
         let nz_mean =
             nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);

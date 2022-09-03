@@ -17,11 +17,7 @@ pub fn hash_castling(key: &mut u64, castle_perm: u8) {
 pub fn hash_piece(key: &mut u64, piece: u8, sq: u8) {
     debug_assert!((piece as usize) < PIECE_KEYS.len());
     debug_assert!((sq as usize) < 64);
-    let piece_key = unsafe {
-        *PIECE_KEYS
-            .get_unchecked(piece as usize)
-            .get_unchecked(sq as usize)
-    };
+    let piece_key = unsafe { *PIECE_KEYS.get_unchecked(piece as usize).get_unchecked(sq as usize) };
     *key ^= piece_key;
 }
 
@@ -31,11 +27,8 @@ pub fn hash_side(key: &mut u64) {
 
 pub fn hash_ep(key: &mut u64, ep_sq: u8) {
     debug_assert!((ep_sq as usize) < 64);
-    let ep_key = unsafe {
-        *PIECE_KEYS
-            .get_unchecked(PIECE_EMPTY as usize)
-            .get_unchecked(ep_sq as usize)
-    };
+    let ep_key =
+        unsafe { *PIECE_KEYS.get_unchecked(PIECE_EMPTY as usize).get_unchecked(ep_sq as usize) };
     *key ^= ep_key;
 }
 

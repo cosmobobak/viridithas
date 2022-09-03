@@ -1,6 +1,7 @@
 use crate::{
     chessmove::Move,
-    definitions::{MAX_DEPTH, PIECE_EMPTY, depth::Depth}, historytable::update_history,
+    definitions::{depth::Depth, MAX_DEPTH, PIECE_EMPTY},
+    historytable::update_history,
 };
 
 use super::Board;

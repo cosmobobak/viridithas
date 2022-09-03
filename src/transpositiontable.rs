@@ -111,13 +111,7 @@ impl TranspositionTable {
 
         let score = normalise_mate_score(score, ply);
 
-        let entry = TTEntry {
-            key,
-            m: best_move,
-            score,
-            depth: depth.try_into().unwrap(),
-            flag,
-        };
+        let entry = TTEntry { key, m: best_move, score, depth: depth.try_into().unwrap(), flag };
 
         let record_depth: Depth = slot.depth.into();
 
@@ -132,7 +126,14 @@ impl TranspositionTable {
         }
     }
 
-    pub fn probe<const ROOT: bool>(&self, key: u64, ply: usize, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
+    pub fn probe<const ROOT: bool>(
+        &self,
+        key: u64,
+        ply: usize,
+        alpha: i32,
+        beta: i32,
+        depth: Depth,
+    ) -> ProbeResult {
         let index = self.wrap_key(key);
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
@@ -150,10 +151,7 @@ impl TranspositionTable {
         let m = entry.m;
         let e_depth = entry.depth.into();
 
-        debug_assert!(
-            (0i32.into()..=MAX_DEPTH).contains(&e_depth),
-            "depth: {e_depth}"
-        );
+        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
 
         if e_depth < depth {
             return ProbeResult::Hit(TTHit {
