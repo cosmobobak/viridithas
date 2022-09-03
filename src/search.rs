@@ -570,7 +570,7 @@ impl Board {
     }
 
     fn do_futility_pruning(&self, depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
-        if depth > FUTILITY_DEPTH || is_mate_score(a) || is_mate_score(b) {
+        if depth > self.search_params.futility_depth || is_mate_score(a) || is_mate_score(b) {
             return false;
         }
         let depth = depth.round();
