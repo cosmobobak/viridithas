@@ -273,9 +273,6 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
 
-        // moves closer to the root (higher depth) should affect the history counters more.
-        let history_score = depth.squared();
-
         let original_alpha = alpha;
         let mut moves_made = 0;
         let mut quiet_moves_made = 0;
@@ -397,12 +394,12 @@ impl Board {
                         if best_move.is_quiet() {
                             self.insert_killer(best_move);
                             self.insert_countermove(best_move);
-                            self.update_history_metrics(best_move, history_score);
+                            self.update_history_metrics::<true>(best_move, depth);
 
                             // decrease the history of the non-capture moves that came before the cutoff move.
                             let ms = move_picker.moves_made();
                             for e in ms.iter().filter(|e| e.entry.is_quiet()) {
-                                self.update_history_metrics(e.entry, -history_score);
+                                self.update_history_metrics::<false>(e.entry, depth);
                             }
                         }
 
@@ -438,7 +435,7 @@ impl Board {
             if best_move.is_quiet() {
                 self.insert_killer(best_move);
                 self.insert_countermove(best_move);
-                self.update_history_metrics(best_move, history_score);
+                self.update_history_metrics::<true>(best_move, depth);
 
                 // decrease the history of the non-capture moves that came before the best move.
                 let ms = move_picker.moves_made();
@@ -447,7 +444,7 @@ impl Board {
                     .take_while(|m| m.entry != best_move)
                     .filter(|e| e.entry.is_quiet())
                 {
-                    self.update_history_metrics(e.entry, -history_score);
+                    self.update_history_metrics::<false>(e.entry, depth);
                 }
             }
 
@@ -459,9 +456,9 @@ impl Board {
         alpha
     }
 
-    fn update_history_metrics(&mut self, m: Move, history_score: i32) {
-        self.add_history(m, history_score);
-        self.add_followup_history(m, history_score);
+    fn update_history_metrics<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
+        self.add_history::<IS_GOOD>(m, depth);
+        self.add_followup_history::<IS_GOOD>(m, depth);
     }
 
     fn is_singular(

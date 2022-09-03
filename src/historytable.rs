@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{BOARD_N_SQUARES, PIECE_EMPTY},
+    definitions::{BOARD_N_SQUARES, PIECE_EMPTY, depth::Depth},
     validate::piece_valid,
 };
 
@@ -31,6 +31,20 @@ const fn piece_index(piece: u8) -> u8 {
     }
 }
 
+const fn history_bonus(depth: Depth) -> i32 {
+    depth.squared() + depth.round()
+}
+
+pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
+    const HISTORY_DIVISOR: i32 = i32::MAX / 10;
+    let delta = if IS_GOOD {
+        history_bonus(depth)
+    } else {
+        -history_bonus(depth)
+    };
+    *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
+}
+
 #[derive(Default)]
 pub struct HistoryTable {
     table: Box<[[i32; BOARD_N_SQUARES]]>,
@@ -49,16 +63,14 @@ impl HistoryTable {
         }
     }
 
-    #[allow(clippy::only_used_in_recursion)] // wtf??
-    pub fn add(&mut self, piece: u8, sq: u8, score: i32) {
-        let pt = piece_index(piece);
-        let slot = &mut self.table[pt as usize][sq as usize];
-        *slot = slot.saturating_add(score);
-    }
-
     pub const fn get(&self, piece: u8, sq: u8) -> i32 {
         let pt = piece_index(piece);
         self.table[pt as usize][sq as usize]
+    }
+
+    pub fn get_mut(&mut self, piece: u8, sq: u8) -> &mut i32 {
+        let pt = piece_index(piece);
+        &mut self.table[pt as usize][sq as usize]
     }
 
     #[allow(dead_code)]
@@ -131,15 +143,6 @@ impl DoubleHistoryTable {
         }
     }
 
-    pub fn add(&mut self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8, score: i32) {
-        let pt_1 = piece_index(piece_1) as usize;
-        let pt_2 = piece_index(piece_2) as usize;
-        let sq1 = sq1 as usize;
-        let sq2 = sq2 as usize;
-        let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
-        self.table[idx] = self.table[idx].saturating_add(score);
-    }
-
     pub fn get(&self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> i32 {
         let pt_1 = piece_index(piece_1) as usize;
         let pt_2 = piece_index(piece_2) as usize;
@@ -147,6 +150,15 @@ impl DoubleHistoryTable {
         let sq2 = sq2 as usize;
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
         self.table[idx]
+    }
+
+    pub fn get_mut(&mut self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> &mut i32 {
+        let pt_1 = piece_index(piece_1) as usize;
+        let pt_2 = piece_index(piece_2) as usize;
+        let sq1 = sq1 as usize;
+        let sq2 = sq2 as usize;
+        let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
+        &mut self.table[idx]
     }
 
     #[allow(dead_code)]

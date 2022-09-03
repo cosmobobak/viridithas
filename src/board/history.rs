@@ -1,20 +1,21 @@
 use crate::{
     chessmove::Move,
-    definitions::{MAX_DEPTH, PIECE_EMPTY},
+    definitions::{MAX_DEPTH, PIECE_EMPTY, depth::Depth}, historytable::update_history,
 };
 
 use super::Board;
 
 impl Board {
     /// Add a move to the history table.
-    pub fn add_history(&mut self, m: Move, score: i32) {
+    pub fn add_history<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
         let piece_moved = self.moved_piece(m);
         debug_assert!(
             crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY,
             "Invalid piece moved by move {m} in position \n{self}"
         );
         let to = m.to();
-        self.history_table.add(piece_moved, to, score);
+        let val = self.history_table.get_mut(piece_moved, to);
+        update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the history score for a move.
@@ -58,7 +59,7 @@ impl Board {
     }
 
     /// Add a move to the follow-up history table.
-    pub fn add_followup_history(&mut self, m: Move, score: i32) {
+    pub fn add_followup_history<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
         debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
         let two_ply_ago = match self.history.len().checked_sub(2) {
             Some(idx) => idx,
@@ -90,8 +91,8 @@ impl Board {
         let to = m.to();
         let piece = self.moved_piece(m);
 
-        self.followup_history
-            .add(tpa_piece, tpa_to, piece, to, score);
+        let val = self.followup_history.get_mut(tpa_piece, tpa_to, piece, to);
+        update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the follow-up history score for a move.
