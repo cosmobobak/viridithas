@@ -10,7 +10,7 @@ use super::{
     KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, MINOR_THREAT_ON_MAJOR, PASSED_PAWN_BONUS,
     PAWN_THREAT_ON_MAJOR, PAWN_THREAT_ON_MINOR, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
     QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
-    ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
+    ROOK_OPEN_FILE_BONUS, TEMPO_BONUS, BACKWARD_PAWN_MALUS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -18,6 +18,7 @@ pub struct EvalParams {
     pub piece_values: [S; 13],
     pub isolated_pawn_malus: S,
     pub doubled_pawn_malus: S,
+    pub backward_pawn_malus: S,
     pub bishop_pair_bonus: S,
     pub rook_open_file_bonus: S,
     pub rook_half_open_file_bonus: S,
@@ -42,6 +43,7 @@ impl Default for EvalParams {
             piece_values: PIECE_VALUES,
             isolated_pawn_malus: ISOLATED_PAWN_MALUS,
             doubled_pawn_malus: DOUBLED_PAWN_MALUS,
+            backward_pawn_malus: BACKWARD_PAWN_MALUS,
             bishop_pair_bonus: BISHOP_PAIR_BONUS,
             rook_open_file_bonus: ROOK_OPEN_FILE_BONUS,
             rook_half_open_file_bonus: ROOK_HALF_OPEN_FILE_BONUS,
@@ -68,6 +70,7 @@ impl Display for EvalParams {
         writeln!(f, "    piece_values: {:?},", &self.piece_values[1..6])?;
         writeln!(f, "    isolated_pawn_malus: {:?},", self.isolated_pawn_malus)?;
         writeln!(f, "    doubled_pawn_malus: {:?},", self.doubled_pawn_malus)?;
+        writeln!(f, "    backward_pawn_malus: {:?},", self.backward_pawn_malus)?;
         writeln!(f, "    bishop_pair_bonus: {:?},", self.bishop_pair_bonus)?;
         writeln!(f, "    rook_open_file_bonus: {:?},", self.rook_open_file_bonus)?;
         writeln!(f, "    rook_half_open_file_bonus: {:?},", self.rook_half_open_file_bonus)?;
@@ -93,6 +96,7 @@ impl EvalParams {
         piece_values: [S::NULL; 13],
         isolated_pawn_malus: S::NULL,
         doubled_pawn_malus: S::NULL,
+        backward_pawn_malus: S::NULL,
         bishop_pair_bonus: S::NULL,
         rook_open_file_bonus: S::NULL,
         rook_half_open_file_bonus: S::NULL,
@@ -117,6 +121,7 @@ impl EvalParams {
             .copied()
             .chain(Some(self.isolated_pawn_malus))
             .chain(Some(self.doubled_pawn_malus))
+            .chain(Some(self.backward_pawn_malus))
             .chain(Some(self.bishop_pair_bonus))
             .chain(Some(S(self.rook_open_file_bonus.0, self.rook_half_open_file_bonus.0)))
             .chain(Some(S(self.queen_open_file_bonus.0, self.queen_half_open_file_bonus.0)))
@@ -154,6 +159,8 @@ impl EvalParams {
             s_iter.next().expect("failed to read isolated_pawn_malus term from vector");
         out.doubled_pawn_malus =
             s_iter.next().expect("failed to read doubled_pawn_malus term from vector");
+        out.backward_pawn_malus =
+            s_iter.next().expect("failed to read backward_pawn_malus term from vector");
         out.bishop_pair_bonus =
             s_iter.next().expect("failed to read bishop_pair_bonus term from vector");
         let rook_file_bonus =

@@ -61,6 +61,9 @@ pub const ISOLATED_PAWN_MALUS: S = S(22, 11);
 /// The malus applied when two (or more) pawns of a colour are on the same file.
 pub const DOUBLED_PAWN_MALUS: S = S(18, 42);
 
+/// The malus applied when a pawn is blocked (it has an advance square that is controlled by enemy pawns but not our own.)
+pub const BACKWARD_PAWN_MALUS: S = S(0, 16);
+
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: S = S(46, 116);
 
@@ -298,6 +301,7 @@ impl Board {
     }
 
     fn pawn_structure_term(&self) -> S {
+        #![allow(clippy::cast_possible_wrap)]
         /// not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
         static DOUBLED_PAWN_MAPPING: [i32; 7] = [0, 0, 1, 2, 3, 4, 5];
         let mut w_score = S(0, 0);
@@ -335,6 +339,12 @@ impl Board {
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             b_score -= self.eval_params.doubled_pawn_malus * multiplier;
         }
+
+        let white_backward = self.backward_pawns::<true>();
+        let black_backward = self.backward_pawns::<false>();
+
+        w_score -= self.eval_params.backward_pawn_malus * white_backward.count_ones() as i32;
+        b_score -= self.eval_params.backward_pawn_malus * black_backward.count_ones() as i32;
 
         w_score - b_score
     }
