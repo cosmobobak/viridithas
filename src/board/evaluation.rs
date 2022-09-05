@@ -62,7 +62,7 @@ pub const ISOLATED_PAWN_MALUS: S = S(22, 11);
 pub const DOUBLED_PAWN_MALUS: S = S(18, 42);
 
 /// The malus applied when a pawn is blocked (it has an advance square that is controlled by enemy pawns but not our own.)
-pub const BACKWARD_PAWN_MALUS: S = S(0, 16);
+pub const BACKWARD_PAWN_MALUS: S = S(8, 8);
 
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: S = S(46, 116);
