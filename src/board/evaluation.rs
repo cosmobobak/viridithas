@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, pawn_attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE},
+    bitboards::{attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE},
     BitLoop, BB_NONE,
 };
 
@@ -60,9 +60,6 @@ pub const ISOLATED_PAWN_MALUS: S = S(22, 11);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
 pub const DOUBLED_PAWN_MALUS: S = S(18, 42);
-
-/// The malus applied when a pawn is blocked (it has an advance square that is controlled by enemy pawns but not our own.)
-pub const BACKWARD_PAWN_MALUS: S = S(8, 8);
 
 /// The bonus granted for having two bishops.
 pub const BISHOP_PAIR_BONUS: S = S(46, 116);
@@ -288,18 +285,6 @@ impl Board {
         S(0, 0)
     }
 
-    #[rustfmt::skip]
-    fn backward_pawns<const IS_WHITE: bool>(&self) -> u64 {
-        // this function will be so much nicer with const operations.
-        let our_pawns = self.pieces.pawns::<IS_WHITE>();
-        let their_pawns = if IS_WHITE { self.pieces.pawns::<false>() } else { self.pieces.pawns::<true>() };
-        let our_stops = if IS_WHITE { our_pawns.north_one() } else { our_pawns.south_one() };
-        let our_pawn_attacks = pawn_attacks::<IS_WHITE>(our_pawns);
-        let their_pawn_attacks = if IS_WHITE { pawn_attacks::<false>(their_pawns) } else { pawn_attacks::<true>(their_pawns) };
-        let blocked_squares = our_stops & their_pawn_attacks & !our_pawn_attacks;
-        if IS_WHITE { blocked_squares.south_one() } else { blocked_squares.north_one() }
-    }
-
     fn pawn_structure_term(&self) -> S {
         #![allow(clippy::cast_possible_wrap)]
         /// not a tunable parameter, just how "number of pawns in a file" is mapped to "amount of doubled pawn-ness"
@@ -339,12 +324,6 @@ impl Board {
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             b_score -= self.eval_params.doubled_pawn_malus * multiplier;
         }
-
-        let white_backward = self.backward_pawns::<true>();
-        let black_backward = self.backward_pawns::<false>();
-
-        w_score -= self.eval_params.backward_pawn_malus * white_backward.count_ones() as i32;
-        b_score -= self.eval_params.backward_pawn_malus * black_backward.count_ones() as i32;
 
         w_score - b_score
     }
