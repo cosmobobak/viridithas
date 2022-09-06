@@ -104,8 +104,8 @@ pub struct Board {
     tt: TranspositionTable,
     hash_mb: usize,
 
-    eval_params: evaluation::parameters::EvalParams,
-    pub search_params: SearchParams,
+    eparams: evaluation::parameters::EvalParams,
+    pub sparams: SearchParams,
     pub lmr_table: search::LMRTable,
 
     movegen_ready: bool,
@@ -176,8 +176,8 @@ impl Board {
             pst_vals: S(0, 0),
             tt: TranspositionTable::new(),
             hash_mb: 4,
-            eval_params: evaluation::parameters::EvalParams::default(),
-            search_params: SearchParams::default(),
+            eparams: evaluation::parameters::EvalParams::default(),
+            sparams: SearchParams::default(),
             lmr_table: search::LMRTable::new(&SearchParams::default()),
             movegen_ready: false,
         };
@@ -186,21 +186,15 @@ impl Board {
     }
 
     pub fn set_search_params(&mut self, config: SearchParams) {
-        self.search_params = config;
-        self.lmr_table = search::LMRTable::new(&self.search_params);
+        self.sparams = config;
+        self.lmr_table = search::LMRTable::new(&self.sparams);
     }
 
     pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
         self.tt.store(self.key, self.height, best_move, score, flag, depth);
     }
 
-    pub fn tt_probe(
-        &self,
-        alpha: i32,
-        beta: i32,
-        depth: Depth,
-        root_node: bool,
-    ) -> ProbeResult {
+    pub fn tt_probe(&self, alpha: i32, beta: i32, depth: Depth, root_node: bool) -> ProbeResult {
         if root_node {
             self.tt.probe::<true>(self.key, self.height, alpha, beta, depth)
         } else {
@@ -659,8 +653,8 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = PIECE_EMPTY;
-        self.material[colour as usize] -= self.eval_params.piece_values[piece as usize];
-        self.pst_vals -= pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.material[colour as usize] -= self.eparams.piece_values[piece as usize];
+        self.pst_vals -= pst_value(piece, sq, &self.eparams.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -685,8 +679,8 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.material[colour as usize] += self.eval_params.piece_values[piece as usize];
-        self.pst_vals += pst_value(piece, sq, &self.eval_params.piece_square_tables);
+        self.material[colour as usize] += self.eparams.piece_values[piece as usize];
+        self.pst_vals += pst_value(piece, sq, &self.eparams.piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -718,8 +712,8 @@ impl Board {
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals -= pst_value(piece_moved, from, &self.eval_params.piece_square_tables);
-        self.pst_vals += pst_value(piece_moved, to, &self.eval_params.piece_square_tables);
+        self.pst_vals -= pst_value(piece_moved, from, &self.eparams.piece_square_tables);
+        self.pst_vals += pst_value(piece_moved, to, &self.eparams.piece_square_tables);
 
         for sq in self.piece_lists[piece_moved as usize].iter_mut() {
             if *sq == from {

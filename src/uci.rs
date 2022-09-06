@@ -359,7 +359,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("setoption") => parse_setoption(
                 input,
                 &mut info,
-                SetOptions { search_config: pos.search_params.clone(), hash_mb: None },
+                SetOptions { search_config: pos.sparams.clone(), hash_mb: None },
             )
             .map(|config| {
                 pos.set_search_params(config.search_config);

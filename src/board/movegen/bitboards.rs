@@ -191,19 +191,35 @@ impl BitBoard {
     }
 
     pub const fn knights<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.w_knights } else { self.b_knights }
+        if IS_WHITE {
+            self.w_knights
+        } else {
+            self.b_knights
+        }
     }
 
     pub const fn rooks<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.w_rooks } else { self.b_rooks }
+        if IS_WHITE {
+            self.w_rooks
+        } else {
+            self.b_rooks
+        }
     }
 
     pub const fn bishops<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.w_bishops } else { self.b_bishops }
+        if IS_WHITE {
+            self.w_bishops
+        } else {
+            self.b_bishops
+        }
     }
 
     pub const fn queens<const IS_WHITE: bool>(&self) -> u64 {
-        if IS_WHITE { self.w_queens } else { self.b_queens }
+        if IS_WHITE {
+            self.w_queens
+        } else {
+            self.b_queens
+        }
     }
 
     pub const fn bishops_sqco<const IS_WHITE: bool, const IS_LSB: bool>(&self) -> u64 {

@@ -64,7 +64,7 @@ impl Board {
             if PIECE_MIN[piece as usize] {
                 min_pce[colour as usize] += 1;
             }
-            material[colour as usize] += self.eval_params.piece_values[piece as usize];
+            material[colour as usize] += self.eparams.piece_values[piece as usize];
         }
 
         if piece_num[1..].to_vec()

@@ -192,7 +192,7 @@ impl Board {
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction.
-                    if PV && depth >= self.search_params.tt_reduction_depth {
+                    if PV && depth >= self.sparams.tt_reduction_depth {
                         depth -= 1;
                     }
                     None
@@ -227,9 +227,9 @@ impl Board {
             && !root_node
             && excluded.is_null()
             && !is_mate_score(beta)
-            && depth <= self.search_params.rfp_depth
-            && static_eval - self.search_params.rfp_margin * depth
-                + i32::from(improving) * self.search_params.rfp_improving_margin
+            && depth <= self.sparams.rfp_depth
+            && static_eval - self.sparams.rfp_margin * depth
+                + i32::from(improving) * self.sparams.rfp_improving_margin
                 > beta
         {
             return static_eval;
@@ -240,12 +240,12 @@ impl Board {
             && !in_check
             && !root_node
             && excluded.is_null()
-            && static_eval + i32::from(improving) * self.search_params.nmp_improving_margin >= beta
+            && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
             && !self.last_move_was_nullmove()
         {
-            let nm_depth = (depth - self.search_params.nmp_base_reduction) - (depth / 3 - 1);
+            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
             let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
@@ -268,9 +268,9 @@ impl Board {
 
         let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = (self.search_params.lmp_base_moves + depth.squared()) * imp_2x;
+        let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
-        let do_lmp = !PV && !root_node && depth <= self.search_params.lmp_depth && !in_check;
+        let do_lmp = !PV && !root_node && depth <= self.sparams.lmp_depth && !in_check;
         // whether to skip quiet moves (as they would be futile).
         let do_fut_pruning = self.do_futility_pruning(depth, static_eval, alpha, beta);
 
@@ -282,14 +282,14 @@ impl Board {
         }
 
         let see_table = [
-            self.search_params.see_tactical_margin * depth.squared(),
-            self.search_params.see_quiet_margin * depth.round(),
+            self.sparams.see_tactical_margin * depth.squared(),
+            self.sparams.see_quiet_margin * depth.round(),
         ];
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
             if best_score > -MINIMUM_MATE_SCORE
-                && depth <= self.search_params.see_depth
+                && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
@@ -327,7 +327,7 @@ impl Board {
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !root_node
-                    && depth >= self.search_params.singularity_depth
+                    && depth >= self.sparams.singularity_depth
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
@@ -557,13 +557,13 @@ impl Board {
     }
 
     fn do_futility_pruning(&self, depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
-        if depth > self.search_params.futility_depth || is_mate_score(a) || is_mate_score(b) {
+        if depth > self.sparams.futility_depth || is_mate_score(a) || is_mate_score(b) {
             return false;
         }
         let depth = depth.round();
-        let margin = depth * depth * self.search_params.futility_coeff_2
-            + depth * self.search_params.futility_coeff_1
-            + self.search_params.futility_coeff_0;
+        let margin = depth * depth * self.sparams.futility_coeff_2
+            + depth * self.sparams.futility_coeff_1
+            + self.sparams.futility_coeff_0;
         static_eval + margin < a
     }
 }

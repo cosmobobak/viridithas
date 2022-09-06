@@ -141,7 +141,7 @@ pub const fn is_mate_score(score: i32) -> bool {
 
 impl Board {
     pub fn set_eval_params(&mut self, params: EvalParams) {
-        self.eval_params = params;
+        self.eparams = params;
     }
 
     /// Computes a score for the position, from the point of view of the side to move.
@@ -161,8 +161,7 @@ impl Board {
         let queen_files = self.queen_open_file_term();
         let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = self.score_kingdanger(danger_info);
-        let tempo =
-            if self.turn() == WHITE { self.eval_params.tempo } else { -self.eval_params.tempo };
+        let tempo = if self.turn() == WHITE { self.eparams.tempo } else { -self.eparams.tempo };
 
         let mut score = material;
         score += pst;
@@ -277,10 +276,10 @@ impl Board {
             return S(0, 0);
         }
         if white_pair {
-            return self.eval_params.bishop_pair_bonus;
+            return self.eparams.bishop_pair_bonus;
         }
         if black_pair {
-            return -self.eval_params.bishop_pair_bonus;
+            return -self.eparams.bishop_pair_bonus;
         }
         S(0, 0)
     }
@@ -296,33 +295,33 @@ impl Board {
 
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
             if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
-                w_score -= self.eval_params.isolated_pawn_malus;
+                w_score -= self.eparams.isolated_pawn_malus;
             }
 
             if WHITE_PASSED_BB[white_pawn_loc as usize] & black_pawns == 0 {
                 let rank = rank(white_pawn_loc) as usize;
-                w_score += self.eval_params.passed_pawn_bonus[rank - 1];
+                w_score += self.eparams.passed_pawn_bonus[rank - 1];
             }
         }
 
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
             if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
-                b_score -= self.eval_params.isolated_pawn_malus;
+                b_score -= self.eparams.isolated_pawn_malus;
             }
 
             if BLACK_PASSED_BB[black_pawn_loc as usize] & white_pawns == 0 {
                 let rank = rank(black_pawn_loc) as usize;
-                b_score += self.eval_params.passed_pawn_bonus[7 - rank - 1];
+                b_score += self.eparams.passed_pawn_bonus[7 - rank - 1];
             }
         }
 
         for &file_mask in &FILE_BB {
             let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
-            w_score -= self.eval_params.doubled_pawn_malus * multiplier;
+            w_score -= self.eparams.doubled_pawn_malus * multiplier;
             let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
-            b_score -= self.eval_params.doubled_pawn_malus * multiplier;
+            b_score -= self.eparams.doubled_pawn_malus * multiplier;
         }
 
         w_score - b_score
@@ -346,17 +345,17 @@ impl Board {
         for &rook_sq in self.piece_lists[WR as usize].iter() {
             let file = file(rook_sq);
             if self.is_file_open(file) {
-                score += self.eval_params.rook_open_file_bonus;
+                score += self.eparams.rook_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
-                score += self.eval_params.rook_half_open_file_bonus;
+                score += self.eparams.rook_half_open_file_bonus;
             }
         }
         for &rook_sq in self.piece_lists[BR as usize].iter() {
             let file = file(rook_sq);
             if self.is_file_open(file) {
-                score -= self.eval_params.rook_open_file_bonus;
+                score -= self.eparams.rook_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
-                score -= self.eval_params.rook_half_open_file_bonus;
+                score -= self.eparams.rook_half_open_file_bonus;
             }
         }
         score
@@ -367,17 +366,17 @@ impl Board {
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
             let file = file(queen_sq);
             if self.is_file_open(file) {
-                score += self.eval_params.queen_open_file_bonus;
+                score += self.eparams.queen_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
-                score += self.eval_params.queen_half_open_file_bonus;
+                score += self.eparams.queen_half_open_file_bonus;
             }
         }
         for &queen_sq in self.piece_lists[BQ as usize].iter() {
             let file = file(queen_sq);
             if self.is_file_open(file) {
-                score -= self.eval_params.queen_open_file_bonus;
+                score -= self.eparams.queen_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
-                score -= self.eval_params.queen_half_open_file_bonus;
+                score -= self.eparams.queen_half_open_file_bonus;
             }
         }
         score
@@ -409,13 +408,13 @@ impl Board {
         let black_minor = self.pieces.minors::<false>();
         let white_major = self.pieces.majors::<true>();
         let black_major = self.pieces.majors::<false>();
-        threat_score += self.eval_params.pawn_threat_on_minor
+        threat_score += self.eparams.pawn_threat_on_minor
             * (black_minor & white_pawn_attacks).count_ones() as i32;
-        threat_score -= self.eval_params.pawn_threat_on_minor
+        threat_score -= self.eparams.pawn_threat_on_minor
             * (white_minor & black_pawn_attacks).count_ones() as i32;
-        threat_score += self.eval_params.pawn_threat_on_major
+        threat_score += self.eparams.pawn_threat_on_major
             * (black_major & white_pawn_attacks).count_ones() as i32;
-        threat_score -= self.eval_params.pawn_threat_on_major
+        threat_score -= self.eparams.pawn_threat_on_major
             * (white_major & black_pawn_attacks).count_ones() as i32;
         let safe_white_moves = !black_pawn_attacks;
         let safe_black_moves = !white_pawn_attacks;
@@ -430,11 +429,11 @@ impl Board {
             // threats
             let attacks_on_majors = attacks & black_major;
             threat_score +=
-                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                self.eparams.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score += self.eval_params.knight_mobility_bonus[attacks];
+            mob_score += self.eparams.knight_mobility_bonus[attacks];
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
             let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
@@ -446,11 +445,11 @@ impl Board {
             // threats
             let attacks_on_majors = attacks & white_major;
             threat_score -=
-                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                self.eparams.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score -= self.eval_params.knight_mobility_bonus[attacks];
+            mob_score -= self.eparams.knight_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
@@ -462,11 +461,11 @@ impl Board {
             // threats
             let attacks_on_majors = attacks & black_major;
             threat_score +=
-                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                self.eparams.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score += self.eval_params.bishop_mobility_bonus[attacks];
+            mob_score += self.eparams.bishop_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
             let attacks = attacks::<BISHOP>(bishop_sq, blockers);
@@ -478,11 +477,11 @@ impl Board {
             // threats
             let attacks_on_majors = attacks & white_major;
             threat_score -=
-                self.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                self.eparams.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score -= self.eval_params.bishop_mobility_bonus[attacks];
+            mob_score -= self.eparams.bishop_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
@@ -494,7 +493,7 @@ impl Board {
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score += self.eval_params.rook_mobility_bonus[attacks];
+            mob_score += self.eparams.rook_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let attacks = attacks::<ROOK>(rook_sq, blockers);
@@ -506,7 +505,7 @@ impl Board {
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score -= self.eval_params.rook_mobility_bonus[attacks];
+            mob_score -= self.eparams.rook_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
@@ -518,7 +517,7 @@ impl Board {
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score += self.eval_params.queen_mobility_bonus[attacks];
+            mob_score += self.eparams.queen_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let attacks = attacks::<QUEEN>(queen_sq, blockers);
@@ -530,13 +529,13 @@ impl Board {
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count_ones() as usize;
-            mob_score -= self.eval_params.queen_mobility_bonus[attacks];
+            mob_score -= self.eparams.queen_mobility_bonus[attacks];
         }
         (mob_score, threat_score, king_danger_info)
     }
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
-        let [a, b, c] = self.eval_params.king_danger_coeffs;
+        let [a, b, c] = self.eparams.king_danger_coeffs;
         let kd_formula = |au| (a * au * au + b * au + c) / 100;
 
         let white_attack_strength = kd_formula(kd.attack_units_on_black.clamp(0, 99)).min(500);
