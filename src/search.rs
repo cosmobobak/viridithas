@@ -349,10 +349,14 @@ impl Board {
                 score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
-                let can_reduce = m.is_quiet() && depth >= 3.into() && moves_made > 1;
+                let can_reduce = extension == ZERO_PLY
+                    && m.is_quiet()
+                    && depth >= 3.into()
+                    && moves_made >= (2 + usize::from(PV));
                 let r = if can_reduce {
                     let mut r = self.lmr_table.get(depth, moves_made);
                     r += i32::from(!PV);
+                    r += i32::from(in_check && type_of(self.moved_piece(m)) == KING);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
