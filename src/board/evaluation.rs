@@ -23,10 +23,10 @@ use super::movegen::{
 };
 
 pub const PAWN_VALUE: S = S(116, 194);
-pub const KNIGHT_VALUE: S = S(415, 416);
-pub const BISHOP_VALUE: S = S(407, 448);
-pub const ROOK_VALUE: S = S(572, 742);
-pub const QUEEN_VALUE: S = S(1303, 1208);
+pub const KNIGHT_VALUE: S = S(420, 436);
+pub const BISHOP_VALUE: S = S(417, 468);
+pub const ROOK_VALUE: S = S(577, 767);
+pub const QUEEN_VALUE: S = S(1330, 1235);
 
 pub static SEE_PIECE_VALUES: [i32; 7] = [
     0,
@@ -56,18 +56,18 @@ pub static PIECE_VALUES: [S; 13] = [
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
-pub const ISOLATED_PAWN_MALUS: S = S(22, 11);
+pub const ISOLATED_PAWN_MALUS: S = S(21, 16);
 
 /// The malus applied when two (or more) pawns of a colour are on the same file.
-pub const DOUBLED_PAWN_MALUS: S = S(18, 42);
+pub const DOUBLED_PAWN_MALUS: S = S(20, 36);
 
 /// The bonus granted for having two bishops.
-pub const BISHOP_PAIR_BONUS: S = S(46, 116);
+pub const BISHOP_PAIR_BONUS: S = S(36, 119);
 
 /// The bonus for having a rook on an open file.
-pub const ROOK_OPEN_FILE_BONUS: S = S(70, 0);
+pub const ROOK_OPEN_FILE_BONUS: S = S(68, 0);
 /// The bonus for having a rook on a semi-open file.
-pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(38, 0);
+pub const ROOK_HALF_OPEN_FILE_BONUS: S = S(39, 0);
 /// The bonus for having a queen on an open file.
 pub const QUEEN_OPEN_FILE_BONUS: S = S(-5, 0);
 /// The bonus for having a queen on a semi-open file.
@@ -75,25 +75,25 @@ pub const QUEEN_HALF_OPEN_FILE_BONUS: S = S(22, 0);
 
 // nonlinear mobility eval tables.
 #[rustfmt::skip]
-static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-188, -265), S(-10, 11), S(10, 29), S(24, 84), S(43, 98), S(49, 131), S(69, 135), S(92, 136), S(119, 107)];
+static KNIGHT_MOBILITY_BONUS: [S; 9] = [S(-169, -243), S(-10, 4), S(12, 31), S(27, 93), S(43, 108), S(48, 144), S(69, 142), S(92, 143), S(120, 112)];
 #[rustfmt::skip]
-static BISHOP_MOBILITY_BONUS: [S; 14] = [S(-12, -147), S(-10, -92), S(28, -5), S(43, 74), S(62, 94), S(76, 108), S(85, 131), S(92, 148), S(99, 147), S(102, 155), S(107, 146), S(109, 149), S(206, 110), S(178, 131)];
+static BISHOP_MOBILITY_BONUS: [S; 14] = [S(2, -125), S(0, -84), S(31, 3), S(46, 72), S(66, 89), S(78, 110), S(84, 133), S(90, 152), S(99, 149), S(100, 159), S(105, 150), S(104, 151), S(207, 117), S(177, 131)];
 #[rustfmt::skip]
-static ROOK_MOBILITY_BONUS: [S; 15] = [S(32, 34), S(41, 115), S(22, 137), S(35, 183), S(41, 212), S(48, 226), S(46, 252), S(52, 257), S(61, 248), S(65, 265), S(73, 270), S(80, 273), S(84, 268), S(98, 255), S(83, 254)];
+static ROOK_MOBILITY_BONUS: [S; 15] = [S(25, 25), S(26, 126), S(24, 124), S(35, 180), S(41, 217), S(47, 233), S(46, 255), S(52, 260), S(61, 253), S(68, 269), S(75, 273), S(82, 276), S(89, 270), S(107, 258), S(91, 260)];
 #[rustfmt::skip]
-static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-161, -187), S(-172, -277), S(152, 176), S(93, 34), S(192, 95), S(205, 97), S(197, 173), S(194, 246), S(193, 293), S(198, 321), S(204, 342), S(209, 362), S(218, 366), S(221, 384), S(223, 400), S(223, 404), S(234, 397), S(244, 402), S(275, 372), S(271, 376), S(314, 352), S(329, 350), S(358, 316), S(375, 305), S(300, 315), S(308, 291), S(199, 201)];
+static QUEEN_MOBILITY_BONUS: [S; 28] = [S(-29, -49), S(-185, -204), S(-153, -295), S(160, 160), S(117, 56), S(202, 80), S(208, 118), S(208, 197), S(206, 271), S(207, 308), S(211, 346), S(216, 366), S(220, 386), S(229, 392), S(231, 409), S(234, 423), S(236, 429), S(243, 423), S(248, 428), S(274, 399), S(280, 402), S(318, 375), S(343, 368), S(376, 328), S(391, 312), S(325, 321), S(330, 305), S(226, 225)];
 
 /// The bonus applied when a pawn has no pawns of the opposite colour ahead of it, or to the left or right, scaled by the rank that the pawn is on.
 pub static PASSED_PAWN_BONUS: [S; 6] =
-    [S(1, 19), S(-23, 35), S(-26, 75), S(12, 112), S(35, 225), S(100, 311)];
+    [S(5, 24), S(-20, 37), S(-21, 80), S(17, 120), S(45, 225), S(80, 284)];
 
-pub const TEMPO_BONUS: S = S(12, 5);
+pub const TEMPO_BONUS: S = S(12, 0);
 
-pub const PAWN_THREAT_ON_MINOR: S = S(73, 69);
-pub const PAWN_THREAT_ON_MAJOR: S = S(78, 67);
-pub const MINOR_THREAT_ON_MAJOR: S = S(70, 60);
+pub const PAWN_THREAT_ON_MINOR: S = S(75, 74);
+pub const PAWN_THREAT_ON_MAJOR: S = S(72, 55);
+pub const MINOR_THREAT_ON_MAJOR: S = S(75, 53);
 
-const KING_DANGER_COEFFS: [i32; 3] = [36, 181, -729];
+const KING_DANGER_COEFFS: [i32; 3] = [36, 175, -729];
 
 pub const CONTEMPT: i32 = 10;
 

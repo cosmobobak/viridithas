@@ -202,6 +202,9 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search, or if we're at the root.
         };
 
+        // just enforcing immutability here.
+        let depth = depth;
+
         let in_check = self.in_check::<{ Self::US }>();
 
         let static_eval = if in_check {
@@ -211,11 +214,6 @@ impl Board {
         };
 
         ss.evals[self.height()] = static_eval;
-
-        let see_table = [
-            self.search_params.see_tactical_margin * depth.squared(),
-            self.search_params.see_quiet_margin * depth.round(),
-        ];
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
@@ -282,6 +280,11 @@ impl Board {
                 movelist_entry.score = TT_MOVE_SCORE;
             }
         }
+
+        let see_table = [
+            self.search_params.see_tactical_margin * depth.squared(),
+            self.search_params.see_quiet_margin * depth.round(),
+        ];
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(m) = move_picker.next() {
