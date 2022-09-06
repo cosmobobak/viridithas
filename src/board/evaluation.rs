@@ -536,7 +536,6 @@ impl Board {
     }
 
     fn score_kingdanger(&self, kd: KingDangerInfo) -> S {
-        #![allow(clippy::unused_self)]
         let [a, b, c] = self.eval_params.king_danger_coeffs;
         let kd_formula = |au| (a * au * au + b * au + c) / 100;
 
