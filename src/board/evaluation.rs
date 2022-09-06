@@ -147,7 +147,7 @@ impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
-    pub fn evaluate(&mut self, nodes: u64) -> i32 {
+    pub fn evaluate(&self, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
@@ -251,7 +251,7 @@ impl Board {
         false
     }
 
-    fn preprocess_drawish_scores(&mut self, score: i32, nodes: u64) -> i32 {
+    const fn preprocess_drawish_scores(&self, score: i32, nodes: u64) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
         let drawscore = draw_score(nodes);
         if score > drawscore && self.unwinnable_for::<true>()
@@ -395,7 +395,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn mobility_threats_kingdanger(&mut self) -> (S, S, KingDangerInfo) {
+    fn mobility_threats_kingdanger(&self) -> (S, S, KingDangerInfo) {
         #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
         let mut king_danger_info =
             KingDangerInfo { attack_units_on_white: 0, attack_units_on_black: 0 };
@@ -580,7 +580,7 @@ mod tests {
         use crate::board::evaluation::CONTEMPT;
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
-        let mut board = super::Board::from_fen(FEN).unwrap();
+        let board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate(0);
         assert!(
             (-2..=2).contains(&(eval.abs() - CONTEMPT)),
@@ -595,8 +595,8 @@ mod tests {
         const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
         crate::magic::initialise();
         let tempo = EvalParams::default().tempo.0;
-        let mut board1 = super::Board::from_fen(FEN1).unwrap();
-        let mut board2 = super::Board::from_fen(FEN2).unwrap();
+        let board1 = super::Board::from_fen(FEN1).unwrap();
+        let board2 = super::Board::from_fen(FEN2).unwrap();
         let eval1 = board1.evaluate(0);
         let eval2 = board2.evaluate(0);
         assert_eq!(eval1, -eval2 + 2 * tempo);
@@ -606,7 +606,7 @@ mod tests {
     fn startpos_mobility_equality() {
         use crate::board::evaluation::S;
         crate::magic::initialise();
-        let mut board = super::Board::default();
+        let board = super::Board::default();
         assert_eq!(board.mobility_threats_kingdanger().0, S(0, 0));
     }
 
@@ -615,7 +615,7 @@ mod tests {
         use crate::board::evaluation::parameters::EvalParams;
         crate::magic::initialise();
         let tempo = EvalParams::default().tempo.0;
-        let mut board = super::Board::default();
+        let board = super::Board::default();
         assert_eq!(board.evaluate(0), tempo);
     }
 
@@ -625,7 +625,7 @@ mod tests {
 
         crate::magic::initialise();
 
-        let mut board = super::Board::default();
+        let board = super::Board::default();
 
         let material = board.material[crate::definitions::WHITE as usize]
             - board.material[crate::definitions::BLACK as usize];
@@ -682,8 +682,8 @@ mod tests {
     fn passers_should_be_pushed() {
         use super::Board;
 
-        let mut starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
-        let mut end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
+        let starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
+        let end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
         let starting_rank_eval = starting_rank_passer.evaluate(0);
         let end_rank_eval = end_rank_passer.evaluate(0);

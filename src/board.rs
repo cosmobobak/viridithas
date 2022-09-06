@@ -195,7 +195,7 @@ impl Board {
     }
 
     pub fn tt_probe(
-        &mut self,
+        &self,
         alpha: i32,
         beta: i32,
         depth: Depth,
