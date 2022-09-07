@@ -100,9 +100,9 @@ impl Board {
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             let worst_case =
-                self.estimated_see(m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
+                self.estimated_see(*m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
 
-            if !self.make_move(m) {
+            if !self.make_move(*m) {
                 continue;
             }
             info.nodes += 1;
@@ -287,7 +287,7 @@ impl Board {
         ];
 
         let mut move_picker = move_list.init_movepicker();
-        while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
+        while let Some(&MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
             if root_node && depth > Depth::new(5) { 
                 println!("info currmove {} currmovenumber {}", m, moves_made + 1);
                 eprintln!("ordering score: {}", ordering_score);
