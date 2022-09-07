@@ -102,7 +102,7 @@ impl Board {
             }
             info.nodes += 1;
 
-            // SEE pruning - if the worst case is enough to beat beta, just stop.
+            // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             // we have to do this after make_move, because the move has to be legal.
