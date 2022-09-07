@@ -293,15 +293,15 @@ impl Board {
                 eprintln!("ordering score: {}", ordering_score);
             }
 
+            if ordering_score < 0 {
+                move_picker.skip_ordering();
+            }
+
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
-            }
-
-            if ordering_score < 0 {
-                move_picker.skip_ordering();
             }
 
             if !self.make_move(m) {
