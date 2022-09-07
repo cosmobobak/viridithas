@@ -16,7 +16,7 @@ impl MovePicker {
 
 impl MovePicker {
     /// Select the next move to try. Executes one iteration of partial insertion sort.
-    pub fn next(&mut self) -> Option<&MoveListEntry> {
+    pub fn next(&mut self) -> Option<MoveListEntry> {
         // If we have already tried all moves, return None.
         if self.index == self.count {
             return None;
@@ -38,12 +38,12 @@ impl MovePicker {
         debug_assert!(best_num < self.count);
         debug_assert!(best_num >= self.index);
 
+        let &m = unsafe { self.moves.get_unchecked(best_num) };
+
         // swap the best move with the first unsorted move.
         unsafe {
             *self.moves.get_unchecked_mut(best_num) = *self.moves.get_unchecked(self.index);
         }
-
-        let m = unsafe { self.moves.get_unchecked(best_num) };
 
         self.index += 1;
 
