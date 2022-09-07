@@ -1,5 +1,3 @@
-use crate::chessmove::Move;
-
 use super::MAX_POSITION_MOVES;
 
 use super::MoveListEntry;
@@ -17,11 +15,11 @@ impl MovePicker {
 }
 
 impl MovePicker {
-    pub fn next(&mut self) -> Option<Move> {
+    pub fn next(&mut self) -> Option<MoveListEntry> {
         if self.index == self.count {
             return None;
         }
-        let mut best_score = 0;
+        let mut best_score = -i32::MAX;
         let mut best_num = self.index;
 
         for index in self.index..self.count {
@@ -36,7 +34,7 @@ impl MovePicker {
         debug_assert!(best_num < self.count);
         debug_assert!(best_num >= self.index);
 
-        let m = unsafe { self.moves.get_unchecked(best_num).entry };
+        let &m = unsafe { self.moves.get_unchecked(best_num) };
 
         unsafe {
             *self.moves.get_unchecked_mut(best_num) = *self.moves.get_unchecked(self.index);

@@ -6,7 +6,7 @@ use crate::{
         evaluation::{is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
         movegen::{
             bitboards::{self, lsb},
-            TT_MOVE_SCORE,
+            TT_MOVE_SCORE, MoveListEntry,
         },
         Board,
     },
@@ -96,7 +96,7 @@ impl Board {
         self.generate_captures(&mut move_list);
 
         let mut move_picker = move_list.init_movepicker();
-        while let Some(m) = move_picker.next() {
+        while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next() {
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             let worst_case =
@@ -287,7 +287,12 @@ impl Board {
         ];
 
         let mut move_picker = move_list.init_movepicker();
-        while let Some(m) = move_picker.next() {
+        while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
+            if root_node && depth > Depth::new(5) { 
+                println!("info currmove {} currmovenumber {}", m, moves_made + 1);
+                eprintln!("ordering score: {}", ordering_score);
+            }
+
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
