@@ -28,15 +28,18 @@ pub const BISHOP_VALUE: S = S(417, 468);
 pub const ROOK_VALUE: S = S(577, 767);
 pub const QUEEN_VALUE: S = S(1330, 1235);
 
-pub static SEE_PIECE_VALUES: [i32; 7] = [
-    0,
-    PAWN_VALUE.value(128),
-    KNIGHT_VALUE.value(128),
-    BISHOP_VALUE.value(128),
-    ROOK_VALUE.value(128),
-    QUEEN_VALUE.value(128),
-    0,
-];
+pub fn get_see_value(piece: u8) -> i32 {
+    static SEE_PIECE_VALUES: [i32; 7] = [
+        0,
+        PAWN_VALUE.value(128),
+        KNIGHT_VALUE.value(128),
+        BISHOP_VALUE.value(128),
+        ROOK_VALUE.value(128),
+        QUEEN_VALUE.value(128),
+        0,
+    ];
+    SEE_PIECE_VALUES[piece as usize]
+}
 
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
@@ -546,15 +549,14 @@ impl Board {
 
     pub fn estimated_see(&self, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = SEE_PIECE_VALUES[type_of(self.piece_at(m.to())) as usize];
+        let mut value = get_see_value(type_of(self.piece_at(m.to())));
 
         if m.is_promo() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value +=
-                SEE_PIECE_VALUES[type_of(m.promotion()) as usize] - SEE_PIECE_VALUES[PAWN as usize];
+            value += get_see_value(type_of(m.promotion())) - get_see_value(PAWN);
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = SEE_PIECE_VALUES[PAWN as usize];
+            value = get_see_value(PAWN);
         }
 
         value

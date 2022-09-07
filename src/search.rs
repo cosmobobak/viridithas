@@ -3,7 +3,7 @@ pub mod parameters;
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, SEE_PIECE_VALUES},
+        evaluation::{is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, get_see_value},
         movegen::{
             bitboards::{self, lsb},
             TT_MOVE_SCORE, MoveListEntry,
@@ -107,7 +107,7 @@ impl Board {
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             // we have to do this after make_move, because the move has to be legal.
             let worst_case =
-                self.estimated_see(m) - SEE_PIECE_VALUES[type_of(self.piece_at(m.from())) as usize];
+                self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
                 self.unmake_move();
@@ -495,7 +495,7 @@ impl Board {
         }
 
         // worst case is losing the piece
-        balance -= SEE_PIECE_VALUES[next_victim as usize];
+        balance -= get_see_value(next_victim);
 
         // if the worst case passes, we can return true immediately.
         if balance >= 0 {
@@ -546,7 +546,7 @@ impl Board {
 
             colour ^= 1;
 
-            balance = -balance - 1 - SEE_PIECE_VALUES[next_victim as usize];
+            balance = -balance - 1 - get_see_value(next_victim);
 
             if balance >= 0 {
                 // from Ethereal:
