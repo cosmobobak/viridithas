@@ -300,6 +300,10 @@ impl Board {
                 continue;
             }
 
+            if ordering_score < 0 {
+                move_picker.skip_ordering();
+            }
+
             if !self.make_move(m) {
                 continue;
             }
