@@ -3,10 +3,12 @@ pub mod parameters;
 use crate::{
     board::movegen::MoveList,
     board::{
-        evaluation::{is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, get_see_value},
+        evaluation::{
+            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, QUEEN_VALUE,
+        },
         movegen::{
             bitboards::{self, lsb},
-            TT_MOVE_SCORE, MoveListEntry,
+            MoveListEntry, TT_MOVE_SCORE,
         },
         Board,
     },
@@ -287,7 +289,7 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-            if root_node && depth > Depth::new(5) { 
+            if root_node && depth > Depth::new(5) {
                 println!("info currmove {} currmovenumber {}", m, moves_made + 1);
                 eprintln!("ordering score: {}", ordering_score);
             }
@@ -615,5 +617,59 @@ pub struct Stack {
 impl Stack {
     pub const fn new() -> Self {
         Self { evals: [0; MAX_PLY], excluded: [Move::NULL; MAX_PLY] }
+    }
+}
+
+pub struct AspirationWindow {
+    pub alpha: i32,
+    pub beta: i32,
+    pub midpoint: i32,
+    pub alpha_fails: i32,
+    pub beta_fails: i32,
+}
+
+impl AspirationWindow {
+    pub const fn new() -> Self {
+        Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
+    }
+
+    pub const fn from_last_score(last_score: i32) -> Self {
+        if is_mate_score(last_score) {
+            Self {
+                alpha: -INFINITY,
+                beta: INFINITY,
+                midpoint: last_score,
+                alpha_fails: 0,
+                beta_fails: 0,
+            }
+        } else {
+            Self {
+                alpha: last_score - ASPIRATION_WINDOW,
+                beta: last_score + ASPIRATION_WINDOW,
+                midpoint: last_score,
+                alpha_fails: 0,
+                beta_fails: 0,
+            }
+        }
+    }
+
+    pub fn widen_down(&mut self) {
+        let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
+        if margin > QUEEN_VALUE.0 {
+            self.alpha = -INFINITY;
+            return;
+        }
+        self.alpha = self.midpoint - margin;
+        self.alpha_fails += 1;
+    }
+
+    pub fn widen_up(&mut self) {
+        let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
+        if margin > QUEEN_VALUE.0 {
+            self.beta = INFINITY;
+            return;
+        }
+        self.beta = self.midpoint + margin;
+        self.beta_fails += 1;
     }
 }
