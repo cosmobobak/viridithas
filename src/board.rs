@@ -1279,7 +1279,12 @@ impl Board {
 
                 break; // we got an exact score, so we can stop the aspiration loop.
             }
-            aspiration_window = AspirationWindow::from_last_score(most_recent_score);
+
+            if i_depth > 4 {
+                aspiration_window = AspirationWindow::from_last_score(most_recent_score);
+            } else {
+                aspiration_window = AspirationWindow::new();
+            }
         }
 
         if info.print_to_stdout {
