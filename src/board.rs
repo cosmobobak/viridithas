@@ -49,7 +49,7 @@ const UPPER_BOUND: u8 = 1;
 const LOWER_BOUND: u8 = 2;
 const EXACT: u8 = 3;
 
-use self::{evaluation::score::S, movegen::bitboards::BitBoard};
+use self::{evaluation::{score::S, is_mate_score}, movegen::bitboards::BitBoard};
 
 static SAN_REGEX_INIT: Once = Once::new();
 static mut SAN_REGEX: Option<Regex> = None;
@@ -1234,6 +1234,7 @@ impl Board {
         let mut aspiration_window = AspirationWindow::new();
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         let mut ss = Stack::new();
+        let mut mate_counter = 0;
         'deepening: for i_depth in 1..=max_depth {
             // aspiration loop:
             loop {
@@ -1247,6 +1248,14 @@ impl Board {
                 info.check_up();
                 if info.stopped {
                     break 'deepening;
+                }
+                if is_mate_score(score) {
+                    mate_counter += 1;
+                    if mate_counter >= 3 {
+                        break 'deepening;
+                    }
+                } else {
+                    mate_counter = 0;
                 }
 
                 let score_string = format_score(score, self.turn());

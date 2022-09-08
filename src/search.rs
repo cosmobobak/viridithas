@@ -289,10 +289,10 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-            if root_node && depth > Depth::new(5) {
-                println!("info currmove {} currmovenumber {}", m, moves_made + 1);
-                eprintln!("ordering score: {}", ordering_score);
-            }
+            // if root_node && depth > Depth::new(5) {
+            //     println!("info currmove {} currmovenumber {}", m, moves_made + 1);
+            //     eprintln!("ordering score: {}", ordering_score);
+            // }
 
             if ordering_score < 0 {
                 move_picker.skip_ordering();
