@@ -1282,6 +1282,10 @@ impl Board {
             aspiration_window = AspirationWindow::from_last_score(most_recent_score);
         }
 
+        if info.print_to_stdout {
+            println!("bestmove {most_recent_move}");
+        }
+
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
