@@ -4,7 +4,7 @@ use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{
-            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, QUEEN_VALUE,
+            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE,
         },
         movegen::{
             bitboards::{self, lsb},
@@ -621,9 +621,9 @@ impl Stack {
 }
 
 pub struct AspirationWindow {
+    pub midpoint: i32,
     pub alpha: i32,
     pub beta: i32,
-    pub midpoint: i32,
     pub alpha_fails: i32,
     pub beta_fails: i32,
 }
@@ -636,17 +636,17 @@ impl AspirationWindow {
     pub const fn from_last_score(last_score: i32) -> Self {
         if is_mate_score(last_score) {
             Self {
+                midpoint: last_score,
                 alpha: -INFINITY,
                 beta: INFINITY,
-                midpoint: last_score,
                 alpha_fails: 0,
                 beta_fails: 0,
             }
         } else {
             Self {
+                midpoint: last_score,
                 alpha: last_score - ASPIRATION_WINDOW,
                 beta: last_score + ASPIRATION_WINDOW,
-                midpoint: last_score,
                 alpha_fails: 0,
                 beta_fails: 0,
             }
@@ -654,22 +654,22 @@ impl AspirationWindow {
     }
 
     pub fn widen_down(&mut self) {
-        // let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
-        // if margin > QUEEN_VALUE.0 {
+        if self.alpha_fails > 2 {
             self.alpha = -INFINITY;
-        //     return;
-        // }
-        // self.alpha = self.midpoint - margin;
-        // self.alpha_fails += 1;
+            return;
+        }
+        let margin = ASPIRATION_WINDOW << ((self.alpha_fails + 1) * 2);
+        self.alpha = self.midpoint - margin;
+        self.alpha_fails += 1;
     }
 
     pub fn widen_up(&mut self) {
-        // let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
-        // if margin > QUEEN_VALUE.0 {
+        if self.beta_fails > 2 {
             self.beta = INFINITY;
-        //     return;
-        // }
-        // self.beta = self.midpoint + margin;
-        // self.beta_fails += 1;
+            return;
+        }
+        let margin = ASPIRATION_WINDOW << ((self.beta_fails + 1) * 2);
+        self.beta = self.midpoint + margin;
+        self.beta_fails += 1;
     }
 }
