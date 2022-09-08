@@ -38,7 +38,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, parameters::SearchParams, AspirationWindow, Stack},
+    search::{self, parameters::SearchParams, AspirationWindow, Stack, ASPIRATION_WINDOW},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
@@ -1231,74 +1231,109 @@ impl Board {
 
         let mut most_recent_move = first_legal;
         let mut most_recent_score = 0;
-        let mut aspiration_window = AspirationWindow::new();
+        let mut best_depth = 1;
+        let (mut alpha, mut beta) = (-INFINITY, INFINITY);
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
-        let mut ss = Stack::new();
-        let mut mate_counter = 0;
-        'deepening: for i_depth in 1..=max_depth {
-            // aspiration loop:
-            loop {
-                let score = self.alpha_beta::<true>(
+        for i_depth in 1..=max_depth {
+            let depth = Depth::new(i_depth);
+            // main search
+            assert!(self.height == 0, "height != 0 before aspiration search");
+            let mut score =
+                Self::alpha_beta::<true>(self, info, &mut Stack::new(), depth, alpha, beta);
+
+            info.check_up();
+            if info.stopped {
+                break;
+            }
+
+            if score <= alpha || score >= beta {
+                let score_string = format_score(score, self.turn());
+                let boundstr = ["lowerbound", "upperbound"][usize::from(score <= alpha)];
+                if info.print_to_stdout {
+                    print!(
+                        "info score {score_string} {boundstr} depth {i_depth} seldepth {} nodes {} time {} pv ",
+                        info.seldepth.ply_to_horizon(),
+                        info.nodes,
+                        info.start_time.elapsed().as_millis()
+                    );
+                }
+                most_recent_score = score;
+                best_depth = i_depth;
+                self.regenerate_pv_line(best_depth);
+                most_recent_move = *self
+                    .principal_variation
+                    .first()
+                    .unwrap_or(&most_recent_move);
+                if info.print_to_stdout {
+                    self.print_pv();
+                }
+                // recalculate the score with a full window, as we failed either low or high.
+                assert!(self.height == 0, "height != 0 before fullwindow search");
+                score = Self::alpha_beta::<true>(
+                    self,
                     info,
-                    &mut ss,
-                    Depth::new(i_depth),
-                    aspiration_window.alpha,
-                    aspiration_window.beta,
+                    &mut Stack::new(),
+                    depth,
+                    -INFINITY,
+                    INFINITY,
                 );
                 info.check_up();
                 if info.stopped {
-                    break 'deepening;
+                    break;
                 }
-                if is_mate_score(score) {
-                    mate_counter += 1;
-                    if mate_counter >= 3 {
-                        break 'deepening;
-                    }
-                } else {
-                    mate_counter = 0;
-                }
-
-                let score_string = format_score(score, self.turn());
-
-                most_recent_score = score;
-                self.regenerate_pv_line(i_depth);
-                most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
-
-                if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
-                    // fail low
-                    if info.print_to_stdout {
-                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
-                    }
-                    aspiration_window.widen_down();
-                    continue;
-                }
-                if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
-                    // fail high
-                    if info.print_to_stdout {
-                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info);
-                    }
-                    aspiration_window.widen_up();
-                    continue;
-                }
-                if info.print_to_stdout {
-                    self.readout_info::<EXACT>(&score_string, i_depth, info);
-                }
-
-                break; // we got an exact score, so we can stop the aspiration loop.
             }
 
-            if i_depth > 4 {
-                aspiration_window = AspirationWindow::from_last_score(most_recent_score);
+            most_recent_score = score;
+            best_depth = i_depth;
+            if !evaluation::is_mate_score(score) && i_depth > 4 {
+                alpha = score - ASPIRATION_WINDOW;
+                beta = score + ASPIRATION_WINDOW;
             } else {
-                aspiration_window = AspirationWindow::new();
+                alpha = -INFINITY;
+                beta = INFINITY;
+            }
+            self.regenerate_pv_line(best_depth);
+            most_recent_move = *self
+                .principal_variation
+                .first()
+                .unwrap_or(&most_recent_move);
+
+            let score_string = format_score(most_recent_score, self.turn());
+            if info.print_to_stdout {
+                print!(
+                    "info score {score_string} depth {i_depth} seldepth {} nodes {} time {} pv ",
+                    info.seldepth.ply_to_horizon(),
+                    info.nodes,
+                    info.start_time.elapsed().as_millis()
+                );
+                self.print_pv();
+            }
+
+            info.check_up();
+            if info.stopped {
+                break;
             }
         }
-
+        let score_string = format_score(most_recent_score, self.turn());
+        self.regenerate_pv_line(best_depth);
         if info.print_to_stdout {
+            print!(
+                "info score {score_string} depth {best_depth} seldepth {} nodes {} time {} pv ",
+                info.seldepth.ply_to_horizon(),
+                info.nodes,
+                info.start_time.elapsed().as_millis()
+            );
+            self.print_pv();
             println!("bestmove {most_recent_move}");
         }
-
-        (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
+        (
+            if self.side == WHITE {
+                most_recent_score
+            } else {
+                -most_recent_score
+            },
+            most_recent_move,
+        )
     }
 
     fn readout_info<const BOUND: u8>(&mut self, sstring: &str, depth: i32, info: &SearchInfo) {
