@@ -654,7 +654,7 @@ impl AspirationWindow {
     }
 
     pub fn widen_down(&mut self) {
-        if self.alpha_fails > 2 {
+        if self.alpha_fails > 1 {
             self.alpha = -INFINITY;
             return;
         }
@@ -664,7 +664,7 @@ impl AspirationWindow {
     }
 
     pub fn widen_up(&mut self) {
-        if self.beta_fails > 2 {
+        if self.beta_fails > 1 {
             self.beta = INFINITY;
             return;
         }
