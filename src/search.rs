@@ -4,7 +4,7 @@ use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{
-            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE,
+            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, self,
         },
         movegen::{
             bitboards::{self, lsb},
@@ -101,7 +101,7 @@ impl Board {
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next() {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
-                
+
             if !self.make_move(m) {
                 continue;
             }
@@ -625,11 +625,13 @@ pub struct AspirationWindow {
     pub midpoint: i32,
     pub alpha: i32,
     pub beta: i32,
+    pub alpha_fails: i32,
+    pub beta_fails: i32,
 }
 
 impl AspirationWindow {
     pub const fn new() -> Self {
-        Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0 }
+        Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
     pub const fn from_last_score(last_score: i32) -> Self {
@@ -638,21 +640,37 @@ impl AspirationWindow {
                 midpoint: last_score,
                 alpha: -INFINITY,
                 beta: INFINITY,
+                alpha_fails: 0,
+                beta_fails: 0,
             }
         } else {
             Self {
                 midpoint: last_score,
                 alpha: last_score - ASPIRATION_WINDOW,
                 beta: last_score + ASPIRATION_WINDOW,
+                alpha_fails: 0,
+                beta_fails: 0,
             }
         }
     }
 
     pub fn widen_down(&mut self) {
-        self.alpha = -INFINITY;
+        let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
+        if margin > evaluation::QUEEN_VALUE.0 {
+            self.alpha = -INFINITY;
+            return;
+        }
+        self.alpha = self.midpoint - margin;
+        self.alpha_fails += 1;
     }
 
     pub fn widen_up(&mut self) {
-        self.beta = INFINITY;
+        let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
+        if margin > evaluation::QUEEN_VALUE.0 {
+            self.beta = INFINITY;
+            return;
+        }
+        self.beta = self.midpoint + margin;
+        self.beta_fails += 1;
     }
 }
