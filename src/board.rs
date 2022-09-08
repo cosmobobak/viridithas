@@ -1235,14 +1235,12 @@ impl Board {
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         let mut ss = Stack::new();
         'deepening: for i_depth in 1..=max_depth {
-            let depth = Depth::new(i_depth);
-
             // aspiration loop:
             loop {
                 let score = self.alpha_beta::<true>(
                     info,
                     &mut ss,
-                    depth,
+                    Depth::new(i_depth),
                     aspiration_window.alpha,
                     aspiration_window.beta,
                 );
