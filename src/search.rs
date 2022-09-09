@@ -483,7 +483,7 @@ impl Board {
         value < reduced_beta
     }
 
-    fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
+    pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
 

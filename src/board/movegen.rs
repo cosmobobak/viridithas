@@ -31,7 +31,7 @@ const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
-const CAPTURE_BASE_SCORE: i32 = 10_000_000;
+const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -120,18 +120,21 @@ impl Display for MoveVecWrapper {
 }
 
 impl Board {
-    fn add_promo_move(m: Move, move_list: &mut MoveList) {
+    fn add_promo_move(&self, m: Move, move_list: &mut MoveList) {
         debug_assert!(square_on_board(m.from()));
         debug_assert!(square_on_board(m.to()));
 
         let promo = m.promotion();
 
-        let score = get_mvv_lva_score(promo, PAWN)
-            + if promo == QUEEN || promo == KNIGHT {
-                CAPTURE_BASE_SCORE
+        let mut score = get_mvv_lva_score(promo, PAWN);
+            
+        if self.static_exchange_eval(m, 0) {
+            if promo == QUEEN || promo == KNIGHT {
+                score += WINNING_CAPTURE_SCORE;
             } else {
-                CAPTURE_BASE_SCORE / 2
+                score += WINNING_CAPTURE_SCORE / 2;
             };
+        }
 
         move_list.push(m, score);
     }
@@ -170,12 +173,19 @@ impl Board {
         let piece_moved = self.piece_at(m.from());
         let mmvlva = get_mvv_lva_score(capture, piece_moved);
 
-        let score = mmvlva + CAPTURE_BASE_SCORE;
+        let mut score = mmvlva;
+        if self.static_exchange_eval(m, 0) {
+            score += WINNING_CAPTURE_SCORE;
+        }
         move_list.push(m, score);
     }
 
-    fn add_ep_move(m: Move, move_list: &mut MoveList) {
-        move_list.push(m, 1050 + CAPTURE_BASE_SCORE);
+    fn add_ep_move(&self, m: Move, move_list: &mut MoveList) {
+        let mut score = 1050;
+        if self.static_exchange_eval(m, 0) {
+            score += WINNING_CAPTURE_SCORE;
+        }
+        move_list.push(m, score);
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -256,14 +266,14 @@ impl Board {
 
         if attacks_west != 0 {
             let from_sq = lsb(attacks_west) as u8;
-            Self::add_ep_move(
+            self.add_ep_move(
                 Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
         }
         if attacks_east != 0 {
             let from_sq = lsb(attacks_east) as u8;
-            Self::add_ep_move(
+            self.add_ep_move(
                 Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
@@ -296,11 +306,11 @@ impl Board {
             let to = if IS_WHITE { sq + 8 } else { sq - 8 };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             }
         }
@@ -317,11 +327,11 @@ impl Board {
             let to = if IS_WHITE { sq + 8 } else { sq - 8 };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    Self::add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
+                    self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
                 }
             }
         }
