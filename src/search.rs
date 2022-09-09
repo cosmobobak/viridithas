@@ -295,7 +295,7 @@ impl Board {
             //     eprintln!("ordering score: {}", ordering_score);
             // }
 
-            if ordering_score < 0 {
+            if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
             }
 

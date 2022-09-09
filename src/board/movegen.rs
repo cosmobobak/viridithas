@@ -127,7 +127,7 @@ impl Board {
         let promo = m.promotion();
 
         let mut score = get_mvv_lva_score(promo, PAWN);
-            
+
         if self.static_exchange_eval(m, 0) {
             if promo == QUEEN || promo == KNIGHT {
                 score += WINNING_CAPTURE_SCORE;
