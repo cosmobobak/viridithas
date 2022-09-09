@@ -16,7 +16,7 @@ As we hope that the first move tried is the best one (and it often is), all that
 #### Iterative Deepening
 In order to search within a limited time, successively deeper searches are done, instead of searching directly to a specified depth. This sounds like it would cause crippling time wastage, but lower-depth searches contribute to move-ordering for deeper searches, leading counterintuitively to a speedup in time-to-depth.
 #### Aspiration Windows
-When the iterative deepening search progresses from depth N to depth N + 1, the search is initially run with a small alpha-beta window around the value returned by the previous search. This provides the search with the ability to prune more aggressively in circumstances where the search is stable. If a window fails, a re-search is done with an infinite window, but this does not happen often enough to be a problem.
+When the iterative deepening search progresses from depth N to depth N + 1, the search is initially run with a small alpha-beta window around the value returned by the previous search. This provides the search with the ability to prune more aggressively in circumstances where the search is stable. If a window fails, the window is expanded exponentially in the direction of the failiure.
 #### Transposition Table
 Every position searched is hashed into a 64-bit unsigned integer value, or "zobrist hash", which is used to store information about the position in a flat, fixed-size hashtable. This allows information to preserved between searches, and also vastly improves move ordering as best moves from lower depths can be re-tried first.
 
