@@ -87,7 +87,7 @@ impl<'a> SearchInfo<'a> {
         };
     }
 
-    pub fn in_game(&self) -> bool {
+    pub const fn in_game(&self) -> bool {
         !self.infinite
     }
 }
