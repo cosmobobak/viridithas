@@ -1251,7 +1251,7 @@ impl Board {
                 }
                 if is_mate_score(score) {
                     mate_counter += 1;
-                    if mate_counter >= 3 {
+                    if info.in_game() && mate_counter >= 3 {
                         break 'deepening;
                     }
                 } else {
