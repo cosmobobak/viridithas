@@ -36,7 +36,7 @@ const fn history_bonus(depth: Depth) -> i32 {
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
-    const HISTORY_DIVISOR: i32 = i32::MAX / 10;
+    const HISTORY_DIVISOR: i32 = i16::MAX as i32;
     let delta = if IS_GOOD { history_bonus(depth) } else { -history_bonus(depth) };
     *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
 }
