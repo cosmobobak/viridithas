@@ -1267,6 +1267,8 @@ impl Board {
                 if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
                     // fail low
                     if info.print_to_stdout {
+                        // this is an upper bound, because we're going to widen the window downward,
+                        // and find a lower score (in theory).
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_down();
@@ -1275,6 +1277,8 @@ impl Board {
                 if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
                     // fail high
                     if info.print_to_stdout {
+                        // this is a lower bound, because we're going to widen the window upward,
+                        // and find a higher score (in theory).
                         self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_up();
@@ -1301,15 +1305,23 @@ impl Board {
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
-    fn readout_info<const BOUND: u8>(&mut self, sstring: &str, depth: i32, info: &SearchInfo) {
-        if BOUND == UPPER_BOUND {
+    fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo) {
+        let mut bound = BOUND;
+        if self.turn() == BLACK {
+            bound = match bound {
+                UPPER_BOUND => LOWER_BOUND,
+                LOWER_BOUND => UPPER_BOUND,
+                _ => EXACT,
+            };
+        }
+        if bound == UPPER_BOUND {
             print!(
                 "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
-        } else if BOUND == LOWER_BOUND {
+        } else if bound == LOWER_BOUND {
             print!(
                 "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} pv ",
                 info.seldepth.ply_to_horizon(),
@@ -1325,6 +1337,9 @@ impl Board {
             );
         }
         self.print_pv();
+        #[allow(clippy::cast_precision_loss)]
+        let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
+        eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 
     fn get_first_legal_move(&mut self) -> Option<Move> {

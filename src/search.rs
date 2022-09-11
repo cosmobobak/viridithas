@@ -395,6 +395,12 @@ impl Board {
                     alpha = score;
                     if score >= beta {
                         // we failed high, so this is a cut-node
+                        
+                        // record move ordering stats:
+                        if moves_made == 1 {
+                            info.failhigh_first += 1;
+                        }
+                        info.failhigh += 1;
 
                         if best_move.is_quiet() {
                             self.insert_killer(best_move);
