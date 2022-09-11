@@ -23,9 +23,9 @@ pub struct SearchInfo<'a> {
     pub stopped: bool,
 
     /// The number of fail-highs found (beta cutoffs).
-    pub failhigh: f32,
+    pub failhigh: u64,
     /// The number of fail-highs that occured on the first move searched.
-    pub failhigh_first: f32,
+    pub failhigh_first: u64,
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,
 
@@ -48,8 +48,8 @@ impl Default for SearchInfo<'_> {
             nodes: 0,
             quit: false,
             stopped: false,
-            failhigh: 0.0,
-            failhigh_first: 0.0,
+            failhigh: 0,
+            failhigh_first: 0,
             seldepth: 0.into(),
             stdin_rx: None,
             print_to_stdout: true,
@@ -61,8 +61,8 @@ impl<'a> SearchInfo<'a> {
     pub fn clear_for_search(&mut self) {
         self.stopped = false;
         self.nodes = 0;
-        self.failhigh = 0.0;
-        self.failhigh_first = 0.0;
+        self.failhigh = 0;
+        self.failhigh_first = 0;
     }
 
     pub fn set_stdin(&mut self, stdin_rx: &'a mpsc::Receiver<String>) {
