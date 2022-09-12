@@ -4,7 +4,7 @@ use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{
-            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, self,
+            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, self, mated_in, mate_in,
         },
         movegen::{
             bitboards::{self, lsb},
@@ -174,9 +174,8 @@ impl Board {
             // mate-distance pruning.
             // doesn't actually add strength, but it makes viri better at solving puzzles.
             // approach taken from Ethereal.
-            let r_alpha = if alpha > -MATE_SCORE + height { alpha } else { -MATE_SCORE + height };
-            let r_beta =
-                if beta < MATE_SCORE - height - 1 { beta } else { MATE_SCORE - height - 1 };
+            let r_alpha = alpha.max(mated_in(height));
+            let r_beta = beta.min(mate_in(height + 1));
             if r_alpha >= r_beta {
                 return r_alpha;
             }
@@ -228,9 +227,7 @@ impl Board {
         // beta-pruning. (reverse futility pruning)
         if !PV
             && !in_check
-            && !root_node
             && excluded.is_null()
-            && !is_mate_score(beta)
             && depth <= self.sparams.rfp_depth
             && static_eval - self.sparams.rfp_margin * depth
                 + i32::from(improving) * self.sparams.rfp_improving_margin
@@ -242,12 +239,11 @@ impl Board {
         // null-move pruning.
         if !PV
             && !in_check
-            && !root_node
             && excluded.is_null()
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
-            && self.zugzwang_unlikely()
             && !self.last_move_was_nullmove()
+            && self.zugzwang_unlikely()
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
@@ -395,7 +391,7 @@ impl Board {
                     alpha = score;
                     if score >= beta {
                         // we failed high, so this is a cut-node
-                        
+
                         // record move ordering stats:
                         if moves_made == 1 {
                             info.failhigh_first += 1;
@@ -429,7 +425,7 @@ impl Board {
                 return alpha;
             }
             if in_check {
-                return -MATE_SCORE + height;
+                return mated_in(height);
             }
             return draw_score(info.nodes);
         }
