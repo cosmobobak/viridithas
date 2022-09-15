@@ -23,9 +23,9 @@ param_files = [folder_path + "/" + f for f in param_files]
 
 command = "nice -n 10 cutechess-cli "
 for fname, ename in zip(param_files, engine_names):
-    command += f"-engine cmd=virtue/target/release/viridithas arg=\"--eparams\" arg=\"{fname}\" name=\"{ename}\" "
+    command += f"-engine cmd=target/release/viridithas arg=\"--eparams\" arg=\"{fname}\" name=\"{ename}\" "
 
-command += "-engine cmd=virtue/target/release/viridithas name=dev "
-command += f"-each timemargin=400 proto=uci tc=100/8+0.08 -rounds {n_rounds} -concurrency 60 -openings file=uhobook.pgn format=pgn -repeat -games 2"
+command += "-engine cmd=target/release/viridithas name=dev "
+command += f"-each timemargin=400 proto=uci tc=100/8+0.08 -concurrency 60 -openings file=uhobook.pgn format=pgn -repeat -games 2 -rounds {n_rounds} -pgnout tune-comparison.pgn"
 
 print(command)
