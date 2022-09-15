@@ -29,6 +29,6 @@ for fname, ename in zip(param_files, engine_names):
     command += f"-engine cmd=target/release/viridithas arg=\"--eparams\" arg=\"{fname}\" name=\"{ename}\" "
 
 command += "-engine cmd=target/release/viridithas name=dev "
-command += f"-each timemargin=400 proto=uci tc=100/8+0.08 -concurrency 60 -openings file=uhobook.pgn format=pgn -repeat -games 2 -rounds {n_rounds} -pgnout tune-comparison.pgn"
+command += f"-each timemargin=400 proto=uci tc=100/8+0.08 -concurrency 60 -openings file=../uhobook.pgn format=pgn -repeat -games 2 -rounds {n_rounds} -pgnout tune-comparison.pgn"
 
 print(command)
