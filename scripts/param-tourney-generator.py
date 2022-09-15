@@ -2,10 +2,19 @@
 folder_path = input("Enter the folder path: ")
 n_values = input("Enter the number of values: ")
 n_values = int(n_values)
+automatic_file_generation = input("Do you want to generate the files automatically? (y/n): ")
 param_files = []
-for i in range(n_values):
-    f_name = input(f"Enter the name of file {i+1}: ")
-    param_files.append(f_name)
+if automatic_file_generation == "n":
+    for i in range(n_values):
+        f_name = input(f"Enter the name of file {i+1}: ")
+        param_files.append(f_name)
+elif automatic_file_generation == "y":
+    for i in range(n_values):
+        f_name = f"localsearch{i+1}.txt"
+        param_files.append(f_name)
+else:
+    print("Invalid input")
+    exit()
 n_rounds = input("Enter the number of rounds: ")
 n_rounds = int(n_rounds)
 
