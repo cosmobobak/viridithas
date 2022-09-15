@@ -1,4 +1,5 @@
 
+param_extension = ".txt"
 folder_path = input("Enter the folder path: ")
 n_values = input("Enter the number of values: ")
 n_values = int(n_values)
@@ -13,7 +14,7 @@ elif automatic_file_generation == "y":
         # pad with zeroes to make it three wide
         idx = i + 1
         idx = str(idx).zfill(3)
-        f_name = f"localsearch{idx}.params"
+        f_name = f"localsearch{idx}"
         param_files.append(f_name)
 else:
     print("Invalid input")
@@ -22,7 +23,7 @@ n_rounds = input("Enter the number of rounds: ")
 n_rounds = int(n_rounds)
 
 engine_names = [f"p_{f}" for f in param_files]
-param_files = [folder_path + "/" + f for f in param_files]
+param_files = [f"{folder_path}/{f}{param_extension}" for f in param_files]
 
 command = "nice -n 10 cutechess-cli "
 for fname, ename in zip(param_files, engine_names):
