@@ -10,7 +10,10 @@ if automatic_file_generation == "n":
         param_files.append(f_name)
 elif automatic_file_generation == "y":
     for i in range(n_values):
-        f_name = f"localsearch{i+1}.txt"
+        # pad with zeroes to make it three wide
+        idx = i + 1
+        idx = str(idx).zfill(3)
+        f_name = f"localsearch{idx}.params"
         param_files.append(f_name)
 else:
     print("Invalid input")
