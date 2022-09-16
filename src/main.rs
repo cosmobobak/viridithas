@@ -47,19 +47,15 @@ fn main() {
         });
 
     if cli.gensource {
-        println!("PSQT source code:");
-        piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
-        return;
+        return piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
     }
 
     if cli.perfttest {
-        perft::gamut();
-        return;
+        return perft::gamut();
     }
 
     if cli.tune {
-        texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref());
-        return;
+        return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref());
     }
 
     if cli.info {
@@ -79,13 +75,11 @@ fn main() {
     }
 
     if cli.vispsqt {
-        piecesquaretable::render_pst_table(&eparams.piece_square_tables);
-        return;
+        return piecesquaretable::render_pst_table(&eparams.piece_square_tables);
     }
 
     if let Some(epd_path) = cli.epdpath {
-        epd::gamut(epd_path, eparams, cli.epdtime);
-        return;
+        return epd::gamut(epd_path, eparams, cli.epdtime);
     }
 
     uci::main_loop(eparams);

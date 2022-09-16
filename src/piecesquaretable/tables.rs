@@ -86,6 +86,7 @@ static P_BONUS: [[S; 8]; 8] = [
 ];
 
 pub fn printout_pst_source(pst: &PieceSquareTable) {
+    println!("PSQT source code:");
     #[rustfmt::skip]
     println!(
 "static BONUS: [[[S; 4]; 8]; 7] = [
