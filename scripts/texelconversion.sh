@@ -1,2 +1,2 @@
 #!/bin/bash
-nice -n 10 pypy scripts/texelconversion.py > /dev/null
+nice -n 10 pypy scripts/texelconversion.py $1

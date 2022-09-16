@@ -3,7 +3,12 @@ import chess
 import chess.pgn
 import tqdm
 
-PGN = "selfplay.pgn"
+# read command line arg:
+import sys
+if len(sys.argv) != 2:
+    print("Usage: texelconversion.py <PGN>")
+    exit(1)
+PGN = sys.argv[1]
 
 def main():
     counter = 0
