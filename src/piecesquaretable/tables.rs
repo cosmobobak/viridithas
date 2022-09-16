@@ -131,14 +131,11 @@ static P_BONUS: [[S; 8]; 8] = [
 
 pub fn construct_piece_square_table() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
-    let mut colour = WHITE;
-    loop {
+    for colour in [WHITE, BLACK] {
         let offset = if colour == BLACK { 7 } else { 1 };
         let multiplier = if colour == BLACK { -1 } else { 1 };
-        let mut pieces_idx = 0;
-        while pieces_idx < 6 {
-            let mut pst_idx = 0;
-            while pst_idx < 64 {
+        for pieces_idx in 0..6 {
+            for pst_idx in 0..64 {
                 let sq = if colour == WHITE { pst_idx } else { flip_rank(pst_idx) };
                 let r = rank(pst_idx) as usize;
                 let f = file(pst_idx) as usize;
@@ -150,14 +147,8 @@ pub fn construct_piece_square_table() -> PieceSquareTable {
                 };
                 let S(mg, eg) = value;
                 pst[pieces_idx + offset][sq as usize] = S(mg * multiplier, eg * multiplier);
-                pst_idx += 1;
             }
-            pieces_idx += 1;
         }
-        if colour == BLACK {
-            break;
-        }
-        colour = BLACK;
     }
     pst
 }
