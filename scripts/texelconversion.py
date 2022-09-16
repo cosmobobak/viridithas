@@ -3,19 +3,20 @@ import chess
 import chess.pgn
 import tqdm
 
-# read command line arg:
+# read command line args
 import sys
-if len(sys.argv) != 2:
-    print("Usage: texelconversion.py <PGN>")
+if len(sys.argv) != 3:
+    print("Usage: texelconversion.py <INPUTPGN> <OUTPUTTXT>")
     exit(1)
 PGN = sys.argv[1]
+OUT = sys.argv[2]
 
 def main():
     counter = 0
     wins, draws, losses = 0, 0, 0
     pbar = tqdm.tqdm()
     with open(f"{PGN}", "r") as pgn:
-        with open("../texel_data.txt", "w") as texel_data:
+        with open("{OUT}", "w") as texel_data:
             while True:
                 if counter & 0xFF == 0:
                     pbar.update(0xFF)
