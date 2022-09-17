@@ -15,8 +15,8 @@ def main():
     counter = 0
     wins, draws, losses = 0, 0, 0
     pbar = tqdm.tqdm()
-    with open(f"{PGN}", "r") as pgn:
-        with open("{OUT}", "w") as texel_data:
+    with open(PGN, "r") as pgn:
+        with open(OUT, "w") as texel_data:
             while True:
                 if counter & 0xFF == 0:
                     pbar.update(0xFF)
