@@ -53,6 +53,7 @@ const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
+const HISTORY_LEAF_PRUNING_MARGIN: i32 = 0;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
@@ -365,6 +366,10 @@ impl Board {
                 {
                     let mut r = self.lmr_table.get(depth, moves_made);
                     r += i32::from(!PV);
+                    if depth - r <= ZERO_PLY && ordering_score < HISTORY_LEAF_PRUNING_MARGIN {
+                        self.unmake_move();
+                        continue;
+                    }
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
