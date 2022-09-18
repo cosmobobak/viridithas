@@ -73,6 +73,8 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     let n_params = starting_point.len();
     let mut best_params = starting_point.to_vec();
     let mut best_err = cost_function(&best_params);
+    let initial_err = best_err;
+    println!("initial error: {}", initial_err);
     let mut improved = true;
     let mut iteration = 1;
     println!("Initialised in {:.1}s", init_start_time.elapsed().as_secs_f64());
@@ -99,6 +101,9 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                 improved = true;
                 let time_taken = start.elapsed().as_secs_f64();
                 println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
+                println!("new error: {best_err}");
+                let percentage_of_initial = (best_err / initial_err) * 100.0;
+                println!("({percentage_of_initial:.2}% of initial error)");
             } else {
                 new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
@@ -108,6 +113,9 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                     improved = true;
                     let time_taken = start.elapsed().as_secs_f64();
                     println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
+                    println!("new error: {best_err}");
+                    let percentage_of_initial = (best_err / initial_err) * 100.0;
+                    println!("({percentage_of_initial:.2}% of initial error)");
                 } else {
                     new_params[param_idx] += nudge_size; // reset the param.
                     let time_taken = start.elapsed().as_secs_f64();
@@ -121,15 +129,18 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     (best_params, best_err)
 }
 
-pub fn tune(
+pub fn tune<P>(
     resume: bool,
     examples: usize,
     starting_params: &EvalParams,
     params_to_tune: Option<&[usize]>,
-) {
+    data_path: P,
+) where
+    P: AsRef<std::path::Path>,
+{
     println!("Parsing tuning data...");
     let start_time = Instant::now();
-    let mut data = read_data();
+    let mut data = read_data(data_path);
     println!("Parsed {} examples in {:.1}s", data.len(), start_time.elapsed().as_secs_f32());
 
     println!("Shuffling data...");
@@ -166,8 +177,11 @@ pub fn tune(
     EvalParams::save_param_vec(&best_params, "params/localsearchfinal.txt");
 }
 
-fn read_data() -> Vec<TrainingExample> {
-    let data = File::open("../texel_data.txt").unwrap();
+fn read_data<P>(path: P) -> Vec<TrainingExample>
+where
+    P: AsRef<std::path::Path>,
+{
+    let data = File::open(path).unwrap();
     BufReader::new(data)
         .lines()
         .map(|line| {

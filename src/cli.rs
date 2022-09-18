@@ -16,9 +16,9 @@ pub struct Cli {
     /// Run the perft test suite
     #[clap(long)]
     pub perfttest: bool,
-    /// Run the texel tuner
-    #[clap(long)]
-    pub tune: bool,
+    /// Run the texel tuner on some data
+    #[clap(long, value_parser, value_name = "PATH")]
+    pub tune: Option<std::path::PathBuf>,
     /// Limit tuning to a parameter. Can be passed multiple times to limit tuning to multiple parameters.
     #[clap(short, long, value_parser, value_name = "PARAMETERS")]
     pub limitparams: Option<Vec<usize>>,

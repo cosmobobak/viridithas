@@ -54,8 +54,8 @@ fn main() {
         return perft::gamut();
     }
 
-    if cli.tune {
-        return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref());
+    if let Some(path) = cli.tune {
+        return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
     }
 
     if cli.info {
