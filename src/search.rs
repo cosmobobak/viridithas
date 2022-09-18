@@ -53,7 +53,7 @@ const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
-const HISTORY_LEAF_PRUNING_MARGIN: i32 = -100;
+const HISTORY_LEAF_PRUNING_MARGIN: i32 = -10;
 
 impl Board {
     pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
