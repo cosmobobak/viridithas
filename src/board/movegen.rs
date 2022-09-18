@@ -32,7 +32,6 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-const LOSING_CAPTURE_SCORE: i32 = -100_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -129,12 +128,8 @@ impl Board {
 
         let mut score = get_mvv_lva_score(promo, PAWN);
 
-        if self.static_exchange_eval(m, 0) {
-            if promo == QUEEN || promo == KNIGHT {
-                score += WINNING_CAPTURE_SCORE;
-            } else {
-                score += WINNING_CAPTURE_SCORE / 2;
-            };
+        if self.static_exchange_eval(m, 0) && (promo == QUEEN || promo == KNIGHT) {
+            score += WINNING_CAPTURE_SCORE;
         }
 
         move_list.push(m, score);
@@ -159,7 +154,7 @@ impl Board {
         } else {
             let history = self.history_score(m);
             let followup_history = self.followup_history_score(m);
-            history + followup_history
+            history + 2 * followup_history
         };
 
         move_list.push(m, score);
@@ -177,8 +172,6 @@ impl Board {
         let mut score = mmvlva;
         if self.static_exchange_eval(m, 0) {
             score += WINNING_CAPTURE_SCORE;
-        } else  {
-            score += LOSING_CAPTURE_SCORE;
         }
         move_list.push(m, score);
     }
