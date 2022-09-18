@@ -32,6 +32,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+const LOSING_CAPTURE_SCORE: i32 = -100_000;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -176,6 +177,8 @@ impl Board {
         let mut score = mmvlva;
         if self.static_exchange_eval(m, 0) {
             score += WINNING_CAPTURE_SCORE;
+        } else  {
+            score += LOSING_CAPTURE_SCORE;
         }
         move_list.push(m, score);
     }
