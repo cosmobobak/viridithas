@@ -55,12 +55,17 @@ fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     data.par_chunks(chunk_size).map(|chunk| total_squared_error(chunk, &params, k)).sum::<f64>() / n
 }
 
+struct PVec {
+    pub params: Vec<i32>,
+    pub mse: f64,
+}
+
 fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     starting_point: &[i32],
     resume: bool,
     mut cost_function: F1,
     params_to_tune: Option<&[usize]>,
-) -> (Vec<i32>, f64) {
+) -> PVec {
     if let Some(ptt) = params_to_tune {
         println!("limiting tuning to params: {:?}", ptt);
     }
@@ -71,9 +76,9 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     };
     let init_start_time = Instant::now();
     let n_params = starting_point.len();
-    let mut best_params = starting_point.to_vec();
-    let mut best_err = cost_function(&best_params);
-    let initial_err = best_err;
+    let best_params = starting_point.to_vec();
+    let mut best_params = PVec { mse: cost_function(&best_params), params: best_params };
+    let initial_err = best_params.mse;
     println!("initial error: {}", initial_err);
     let mut improved = true;
     let mut iteration = 1;
@@ -92,29 +97,27 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
             }
             println!("Optimising param {param_idx}");
             let start = Instant::now();
-            let mut new_params = best_params.clone();
+            let mut new_params = best_params.params.clone();
             new_params[param_idx] += nudge_size; // try adding step_size to the param
             let new_err = cost_function(&new_params);
-            if new_err < best_err {
-                best_params = new_params;
-                best_err = new_err;
+            if new_err < best_params.mse {
+                best_params = PVec { params: new_params, mse: new_err };
                 improved = true;
                 let time_taken = start.elapsed().as_secs_f64();
                 println!("{CONTROL_GREEN}found improvement! (+{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
-                println!("new error: {best_err}");
-                let percentage_of_initial = (best_err / initial_err) * 100.0;
+                println!("new error: {}", best_params.mse);
+                let percentage_of_initial = (best_params.mse / initial_err) * 100.0;
                 println!("({percentage_of_initial:.2}% of initial error)");
             } else {
                 new_params[param_idx] -= nudge_size * 2; // try subtracting step_size from the param
                 let new_err = cost_function(&new_params);
-                if new_err < best_err {
-                    best_params = new_params;
-                    best_err = new_err;
+                if new_err < best_params.mse {
+                    best_params = PVec { params: new_params, mse: new_err };
                     improved = true;
                     let time_taken = start.elapsed().as_secs_f64();
                     println!("{CONTROL_GREEN}found improvement! (-{nudge_size}){CONTROL_RESET} ({time_taken:.2}s)");
-                    println!("new error: {best_err}");
-                    let percentage_of_initial = (best_err / initial_err) * 100.0;
+                    println!("new error: {}", best_params.mse);
+                    let percentage_of_initial = (best_params.mse / initial_err) * 100.0;
                     println!("({percentage_of_initial:.2}% of initial error)");
                 } else {
                     new_params[param_idx] += nudge_size; // reset the param.
@@ -123,10 +126,10 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                 }
             }
         }
-        EvalParams::save_param_vec(&best_params, &format!("params/localsearch{iteration:0>3}.txt"));
+        EvalParams::save_param_vec(&best_params.params, &format!("params/localsearch{iteration:0>3}.txt"));
         iteration += 1;
     }
-    (best_params, best_err)
+    best_params
 }
 
 pub fn tune<P>(
@@ -164,7 +167,7 @@ pub fn tune<P>(
 
     let training_data = &data[..examples];
 
-    let (best_params, best_loss) = local_search_optimise(
+    let PVec { params: best_params, mse: best_loss } = local_search_optimise(
         &starting_params.vectorise(),
         resume,
         |params| compute_mse(training_data, params, DEFAULT_K),
