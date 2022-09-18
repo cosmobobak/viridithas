@@ -158,7 +158,7 @@ impl Board {
         } else {
             let history = self.history_score(m);
             let followup_history = self.followup_history_score(m);
-            history + 4 * followup_history
+            history + followup_history
         };
 
         move_list.push(m, score);
