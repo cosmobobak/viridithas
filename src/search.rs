@@ -366,10 +366,6 @@ impl Board {
                 {
                     let mut r = self.lmr_table.get(depth, moves_made);
                     r += i32::from(!PV);
-                    if depth - r <= ZERO_PLY && ordering_score < HISTORY_LEAF_PRUNING_MARGIN {
-                        self.unmake_move();
-                        continue;
-                    }
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
