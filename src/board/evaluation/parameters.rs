@@ -242,10 +242,8 @@ impl EvalParams {
 
     pub fn load_param_vec<P: AsRef<Path>>(path: P) -> Result<Vec<i32>, Box<dyn Error>> {
         let mut params = Vec::new();
-        let input = std::io::BufReader::new(std::fs::File::open(path)?);
-        for param in std::io::BufRead::split(input, b',') {
-            let param = param?;
-            let param = String::from_utf8(param)?;
+        let input = std::fs::read_to_string(path)?;
+        for param in input.trim().split(',') {
             let param: i32 = param.parse()?;
             params.push(param);
         }
