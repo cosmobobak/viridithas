@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE},
+    bitboards::{attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE, lsb},
     BitLoop, BB_NONE,
 };
 
@@ -404,7 +404,7 @@ impl Board {
 
     #[allow(clippy::too_many_lines)]
     fn mobility_threats_kingdanger(&self) -> (S, S, KingDangerInfo) {
-        #![allow(clippy::cast_possible_wrap)] // for count_ones, which can return at most 64.
+        #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // for count_ones, which can return at most 64.
         let mut king_danger_info =
             KingDangerInfo { attack_units_on_white: 0, attack_units_on_black: 0 };
         let mut mob_score = S(0, 0);
@@ -540,6 +540,12 @@ impl Board {
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eparams.queen_mobility_bonus[attacks];
         }
+        let white_king_vision = attacks::<QUEEN>(lsb(self.pieces.king::<true>()) as u8, blockers);
+        let black_king_vision = attacks::<QUEEN>(lsb(self.pieces.king::<false>()) as u8, blockers);
+        let white_king_vision = white_king_vision.count_ones() as i32;
+        let black_king_vision = black_king_vision.count_ones() as i32;
+        king_danger_info.attack_units_on_white += white_king_vision;
+        king_danger_info.attack_units_on_black += black_king_vision;
         (mob_score, threat_score, king_danger_info)
     }
 
