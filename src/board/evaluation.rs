@@ -544,8 +544,8 @@ impl Board {
         let black_king_vision = attacks::<QUEEN>(lsb(self.pieces.king::<false>()) as u8, blockers);
         let white_king_vision = white_king_vision.count_ones() as i32;
         let black_king_vision = black_king_vision.count_ones() as i32;
-        king_danger_info.attack_units_on_white += white_king_vision;
-        king_danger_info.attack_units_on_black += black_king_vision;
+        king_danger_info.attack_units_on_white += white_king_vision / 2;
+        king_danger_info.attack_units_on_black += black_king_vision / 2;
         (mob_score, threat_score, king_danger_info)
     }
 
