@@ -10,7 +10,7 @@ use super::{
     KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, MINOR_THREAT_ON_MAJOR, PASSED_PAWN_BONUS,
     PAWN_THREAT_ON_MAJOR, PAWN_THREAT_ON_MINOR, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
     QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
-    ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
+    ROOK_OPEN_FILE_BONUS, TEMPO_BONUS, KING_DANGER_PIECE_WEIGHTS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -34,6 +34,7 @@ pub struct EvalParams {
     pub pawn_threat_on_major: S,
     pub minor_threat_on_major: S,
     pub king_danger_coeffs: [i32; 3],
+    pub king_danger_piece_weights: [i32; 8],
 }
 
 impl Default for EvalParams {
@@ -58,6 +59,7 @@ impl Default for EvalParams {
             pawn_threat_on_major: PAWN_THREAT_ON_MAJOR,
             minor_threat_on_major: MINOR_THREAT_ON_MAJOR,
             king_danger_coeffs: KING_DANGER_COEFFS,
+            king_danger_piece_weights: KING_DANGER_PIECE_WEIGHTS,
         }
     }
 }
@@ -109,6 +111,7 @@ impl EvalParams {
         pawn_threat_on_major: S::NULL,
         minor_threat_on_major: S::NULL,
         king_danger_coeffs: [0; 3],
+        king_danger_piece_weights: [0; 8],
     };
 
     pub fn vectorise(&self) -> Vec<i32> {
@@ -138,13 +141,14 @@ impl EvalParams {
             .chain(Some(self.minor_threat_on_major));
         ss.flat_map(|s| [s.0, s.1].into_iter())
             .chain(self.king_danger_coeffs.iter().copied())
+            .chain(self.king_danger_piece_weights.iter().copied())
             .collect()
     }
 
     #[allow(clippy::too_many_lines)]
     pub fn devectorise(data: &[i32]) -> Self {
         let mut out = Self::NULL;
-        let mut s_iter = data[..data.len() - 3].chunks(2).map(|x| S(x[0], x[1]));
+        let mut s_iter = data[..data.len() - 3 - 8].chunks(2).map(|x| S(x[0], x[1]));
         for p in 1..6 {
             let val = s_iter.next().expect("failed to read piece_value term from vector");
             out.piece_values[p] = val;
@@ -225,9 +229,14 @@ impl EvalParams {
             s_iter.next().expect("failed to read minor_threat_on_major term from vector");
         assert!(s_iter.next().is_none(), "reading data from a vector of wrong size (too big)");
         for (coeff_out, coeff_in) in
-            out.king_danger_coeffs.iter_mut().zip(data[data.len() - 3..].iter())
+            out.king_danger_coeffs.iter_mut().zip(&data[data.len() - 8 - 3..data.len() - 8])
         {
             *coeff_out = *coeff_in;
+        }
+        for (weight_out, weight_in) in 
+            out.king_danger_piece_weights.iter_mut().zip(&data[data.len() - 8..])
+        {
+            *weight_out = *weight_in;
         }
         out
     }
