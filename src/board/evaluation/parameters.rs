@@ -233,11 +233,13 @@ impl EvalParams {
     }
 
     pub fn save_param_vec<P: AsRef<Path>>(param_vec: &[i32], path: P) {
-        let mut output = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
-        for param in param_vec {
-            std::io::Write::write_all(&mut output, format!("{param},").as_bytes()).unwrap();
-        }
-        std::io::Write::flush(&mut output).unwrap();
+        let mut output = std::fs::File::create(path).unwrap();
+        let out = param_vec
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        std::io::Write::write_all(&mut output, out.as_bytes()).unwrap();
     }
 
     pub fn load_param_vec<P: AsRef<Path>>(path: P) -> Result<Vec<i32>, Box<dyn Error>> {
