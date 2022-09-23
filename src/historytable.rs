@@ -5,7 +5,7 @@ use crate::{
 };
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
-const AGEING_DIVISOR: i32 = 10;
+const AGEING_DIVISOR: i32 = 2;
 
 const fn pslots() -> usize {
     if DO_COLOUR_DIFFERENTIATION {
