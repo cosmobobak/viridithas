@@ -5,6 +5,7 @@ use crate::{
 };
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
+const AGEING_DIVISOR: i32 = 10;
 
 const fn pslots() -> usize {
     if DO_COLOUR_DIFFERENTIATION {
@@ -57,6 +58,11 @@ impl HistoryTable {
         } else {
             self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
+    }
+
+    pub fn age_entries(&mut self) {
+        assert!(!self.table.is_empty());
+        self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
     pub const fn get(&self, piece: u8, sq: u8) -> i32 {
@@ -122,6 +128,11 @@ impl DoubleHistoryTable {
         } else {
             self.table.fill(0);
         }
+    }
+
+    pub fn age_entries(&mut self) {
+        assert!(!self.table.is_empty());
+        self.table.iter_mut().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
     pub fn get(&self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> i32 {

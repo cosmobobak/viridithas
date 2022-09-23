@@ -32,7 +32,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
     pos.set_hash_size(1);
-    pos.reset_tables();
+    pos.setup_tables_for_search();
     pos.set_eval_params(params.clone());
     data.iter()
         .map(|TrainingExample { fen, outcome }| {

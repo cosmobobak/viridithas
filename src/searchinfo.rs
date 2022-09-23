@@ -58,7 +58,7 @@ impl Default for SearchInfo<'_> {
 }
 
 impl<'a> SearchInfo<'a> {
-    pub fn clear_for_search(&mut self) {
+    pub fn setup_for_search(&mut self) {
         self.stopped = false;
         self.nodes = 0;
         self.failhigh = 0;

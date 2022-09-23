@@ -1178,13 +1178,22 @@ impl Board {
             + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
-    pub fn reset_tables(&mut self) {
-        self.history_table.clear();
+    pub fn setup_tables_for_search(&mut self) {
+        self.history_table.age_entries();
+        self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
-        self.followup_history.clear();
         self.height = 0;
         self.tt.clear_for_search(self.hash_mb);
+    }
+
+    pub fn alloc_tables(&mut self) {
+        self.history_table.clear();
+        self.followup_history.clear();
+        self.counter_move_table.clear();
+        self.killer_move_table.fill([Move::NULL; 2]);
+        self.tt.clear_for_search(self.hash_mb);
+        self.height = 0;
         self.movegen_ready = true;
     }
 
@@ -1224,8 +1233,8 @@ impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
     pub fn search_position(&mut self, info: &mut SearchInfo) -> (i32, Move) {
-        self.reset_tables();
-        info.clear_for_search();
+        self.setup_tables_for_search();
+        info.setup_for_search();
 
         let first_legal = self.get_first_legal_move().unwrap_or(Move::NULL);
 

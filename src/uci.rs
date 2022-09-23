@@ -322,7 +322,7 @@ pub fn main_loop(params: EvalParams) {
 
     let mut pos = Board::new();
 
-    pos.reset_tables();
+    pos.alloc_tables();
 
     let mut info = SearchInfo::default();
 
