@@ -104,8 +104,9 @@ pub const MINOR_THREAT_ON_MAJOR: S = S(75, 53);
 
 pub static KING_DANGER_COEFFS: [i32; 3] = [36, 165, -719];
 pub static KING_DANGER_PIECE_WEIGHTS: [i32; 8] = [
-    200, 100, 200, 100, 300, 100, 500, 200,
+    40, 20, 40, 20, 60, 20, 100, 40,
 ];
+const KINGDANGER_DESCALE: i32 = 20;
 
 pub const CONTEMPT: i32 = 10;
 
@@ -544,8 +545,8 @@ impl Board {
             let attacks = attacks.count_ones() as usize;
             mob_score -= self.eparams.queen_mobility_bonus[attacks];
         }
-        king_danger_info.attack_units_on_white /= 100;
-        king_danger_info.attack_units_on_black /= 100;
+        king_danger_info.attack_units_on_white /= KINGDANGER_DESCALE;
+        king_danger_info.attack_units_on_black /= KINGDANGER_DESCALE;
         (mob_score, threat_score, king_danger_info)
     }
 
