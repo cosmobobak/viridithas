@@ -128,8 +128,12 @@ impl Board {
 
         let mut score = get_mvv_lva_score(promo, PAWN);
 
-        if (promo == QUEEN || promo == KNIGHT) && self.static_exchange_eval(m, 0) {
-            score += WINNING_CAPTURE_SCORE;
+        if self.static_exchange_eval(m, 0) {
+            if promo == QUEEN || promo == KNIGHT {
+                score += WINNING_CAPTURE_SCORE;
+            } else {
+                score += WINNING_CAPTURE_SCORE / 2;
+            };
         }
 
         move_list.push(m, score);
