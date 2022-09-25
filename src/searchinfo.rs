@@ -1,4 +1,4 @@
-use std::{sync::mpsc, time::Instant};
+use std::{sync::mpsc, time::{Instant, Duration}};
 
 use crate::definitions::depth::Depth;
 
@@ -89,5 +89,9 @@ impl<'a> SearchInfo<'a> {
 
     pub const fn in_game(&self) -> bool {
         !self.infinite
+    }
+
+    pub fn time_since_start(&self) -> Duration {
+        Instant::now().checked_duration_since(self.start_time).unwrap_or_default()
     }
 }

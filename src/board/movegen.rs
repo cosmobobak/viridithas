@@ -18,12 +18,12 @@ use crate::{
     chessmove::Move,
     definitions::{
         Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
-        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
-        WHITE, WKCA, WN, WQ, WQCA, WR,
+        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WKCA,
+        WN, WQ, WQCA, WR,
     },
     lookups::get_mvv_lva_score,
     magic::MAGICS_READY,
-    validate::{piece_valid, square_on_board},
+    validate::piece_valid,
 };
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
@@ -32,7 +32,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-const MOVEGEN_SEE_THRESHOLD: i32 = -100;
+const MOVEGEN_SEE_THRESHOLD: i32 = 0;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -122,28 +122,15 @@ impl Display for MoveVecWrapper {
 
 impl Board {
     fn add_promo_move(&self, m: Move, move_list: &mut MoveList) {
-        debug_assert!(square_on_board(m.from()));
-        debug_assert!(square_on_board(m.to()));
-
-        let promo = m.promotion();
-
-        let mut score = get_mvv_lva_score(promo, PAWN);
-
+        let mut score = get_mvv_lva_score(m.promotion(), PAWN);
         if self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
-            if promo == QUEEN || promo == KNIGHT {
-                score += WINNING_CAPTURE_SCORE;
-            } else {
-                score += WINNING_CAPTURE_SCORE / 2;
-            };
+            score += WINNING_CAPTURE_SCORE;
         }
 
         move_list.push(m, score);
     }
 
     fn add_quiet_move(&self, m: Move, move_list: &mut MoveList) {
-        debug_assert!(square_on_board(m.from()));
-        debug_assert!(square_on_board(m.to()));
-
         let killer_entry = self.killer_move_table[self.height];
 
         let score = if killer_entry[0] == m {
@@ -166,15 +153,7 @@ impl Board {
     }
 
     fn add_capture_move(&self, m: Move, move_list: &mut MoveList) {
-        debug_assert!(square_on_board(m.from()));
-        debug_assert!(square_on_board(m.to()));
-        debug_assert!(piece_valid(m.capture()), "piece: {}", m);
-
-        let capture = m.capture();
-        let piece_moved = self.piece_at(m.from());
-        let mmvlva = get_mvv_lva_score(capture, piece_moved);
-
-        let mut score = mmvlva;
+        let mut score = get_mvv_lva_score(m.capture(), self.piece_at(m.from()));
         if self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
         }

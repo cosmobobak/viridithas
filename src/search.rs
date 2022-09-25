@@ -1,5 +1,7 @@
 pub mod parameters;
 
+use std::time::Duration;
+
 use crate::{
     board::movegen::MoveList,
     board::{
@@ -288,10 +290,9 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-            // if root_node && depth > Depth::new(5) {
-            //     println!("info currmove {} currmovenumber {}", m, moves_made + 1);
-            //     eprintln!("ordering score: {}", ordering_score);
-            // }
+            if root_node && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+                println!("info currmove {m} currmovenumber {} nodes {}", moves_made + 1, info.nodes);
+            }
 
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
