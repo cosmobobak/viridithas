@@ -285,16 +285,8 @@ impl Board {
             && self.pieces.bishops_sqco::<true, DARK_SQUARE>() != 0;
         let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>() != 0
             && self.pieces.bishops_sqco::<false, DARK_SQUARE>() != 0;
-        if white_pair && black_pair {
-            return S(0, 0);
-        }
-        if white_pair {
-            return self.eparams.bishop_pair_bonus;
-        }
-        if black_pair {
-            return -self.eparams.bishop_pair_bonus;
-        }
-        S(0, 0)
+        let multiplier = i32::from(white_pair) - i32::from(black_pair);
+        self.eparams.bishop_pair_bonus * multiplier
     }
 
     fn pawn_structure_term(&self) -> S {
