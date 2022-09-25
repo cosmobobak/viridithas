@@ -32,6 +32,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+const MOVEGEN_SEE_THRESHOLD: i32 = -100;
 
 const MAX_POSITION_MOVES: usize = 256;
 
@@ -128,7 +129,7 @@ impl Board {
 
         let mut score = get_mvv_lva_score(promo, PAWN);
 
-        if self.static_exchange_eval(m, 0) {
+        if self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             if promo == QUEEN || promo == KNIGHT {
                 score += WINNING_CAPTURE_SCORE;
             } else {
@@ -174,15 +175,15 @@ impl Board {
         let mmvlva = get_mvv_lva_score(capture, piece_moved);
 
         let mut score = mmvlva;
-        if self.static_exchange_eval(m, 0) {
+        if self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
         }
         move_list.push(m, score);
     }
 
     fn add_ep_move(&self, m: Move, move_list: &mut MoveList) {
-        let mut score = 1050;
-        if self.static_exchange_eval(m, 0) {
+        let mut score = 1050; // the score for PxP in MVVLVA
+        if self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
         }
         move_list.push(m, score);
