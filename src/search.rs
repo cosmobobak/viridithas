@@ -25,7 +25,7 @@ use self::parameters::SearchParams;
 
 // In alpha-beta search, there are three classes of node to be aware of:
 // 1. PV-nodes: nodes that end up being within the alpha-beta window,
-// i.e. a call to alpha_beta(PVNODE, a, b) returns a value v where v is within the window [a, b].
+// i.e. a call to alpha_beta(PVNODE, a, b) returns a value v where v is within the exclusive window (a, b).
 // the score returned is an exact score for the node.
 // 2. Cut-nodes: nodes that fail high, i.e. a move is found that leads to a value >= beta.
 // in alpha-beta, a call to alpha_beta(CUTNODE, alpha, beta) returns a score >= beta.
