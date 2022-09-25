@@ -18,7 +18,7 @@ struct Position {
 
 pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let mut board = Board::new();
-    board.setup_tables_for_search();
+    board.alloc_tables();
     board.set_eval_params(params);
     let file = std::fs::File::open(epd_path).unwrap();
     let mut reader = std::io::BufReader::new(file);
@@ -63,7 +63,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     for position in positions {
         let Position { fen, best_moves, id } = &position;
         board.set_from_fen(fen).unwrap();
-        board.setup_tables_for_search();
+        board.alloc_tables();
         let now = std::time::Instant::now();
         let mut info = SearchInfo {
             print_to_stdout: false,

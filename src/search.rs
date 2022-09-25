@@ -297,13 +297,6 @@ impl Board {
                 move_picker.skip_ordering();
             }
 
-            if best_score > -MINIMUM_MATE_SCORE
-                && depth <= self.sparams.see_depth
-                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
-            {
-                continue;
-            }
-
             if !self.make_move(m) {
                 continue;
             }
@@ -313,6 +306,13 @@ impl Board {
                 continue;
             }
             moves_made += 1;
+
+            if best_score > -MINIMUM_MATE_SCORE
+                && depth <= self.sparams.see_depth
+                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
+            {
+                continue;
+            }
 
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
