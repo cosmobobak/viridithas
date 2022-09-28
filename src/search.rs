@@ -496,7 +496,7 @@ impl Board {
         value: i32,
         depth: Depth,
     ) -> bool {
-        let reduced_beta = (value - 225).max(-MATE_SCORE);
+        let reduced_beta = (value - 200).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move();
