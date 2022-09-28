@@ -1275,13 +1275,15 @@ impl Board {
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if i_depth > 8 && !singular_contracted {
+                    self.make_move(most_recent_move);
                     let is_singular = self.is_singular(
                         info, 
                         &mut ss, 
                         most_recent_move, 
                         most_recent_score, 
-                        Depth::new(i_depth / 2),
+                        Depth::new(i_depth),
                     );
+                    self.unmake_move();
                     if is_singular {
                         singular_contracted = true;
                         info.multiply_time_window(0.5);
