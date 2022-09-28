@@ -1380,18 +1380,6 @@ impl Board {
         eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 
-    fn get_first_legal_move(&mut self) -> Option<Move> {
-        let mut move_list = MoveList::new();
-        self.generate_moves(&mut move_list);
-        for &m in move_list.iter() {
-            if self.make_move(m) {
-                self.unmake_move();
-                return Some(m);
-            }
-        }
-        None
-    }
-
     fn legal_moves(&mut self) -> Vec<Move> {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
