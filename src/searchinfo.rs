@@ -74,6 +74,12 @@ impl<'a> SearchInfo<'a> {
         self.stop_time = self.start_time + std::time::Duration::from_millis(millis);
     }
 
+    pub fn multiply_time_window(&mut self, factor: f64) {
+        let secs = (self.stop_time - self.start_time).as_secs_f64();
+        let new_secs = secs * factor;
+        self.stop_time = self.start_time + Duration::from_secs_f64(new_secs);
+    }
+
     pub fn check_up(&mut self) {
         if self.time_set && Instant::now().checked_duration_since(self.stop_time).is_some() {
             self.stopped = true;

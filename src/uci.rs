@@ -155,18 +155,17 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             time = Some(movetime);
             movetime
         }
-        None => match time {
-            Some(t) => {
+        None => {
+            if let Some(t) = time {
                 info.time_set = true;
                 let time = t / moves_to_go.unwrap_or(30) + inc.unwrap_or(0);
                 let time = time.saturating_sub(30);
                 time.min(t)
-            }
-            None => {
+            } else {
                 info.time_set = false;
                 0
             }
-        },
+        }
     };
 
     let is_computed_time_window_valid =

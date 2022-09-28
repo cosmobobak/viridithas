@@ -467,7 +467,7 @@ impl Board {
         self.add_followup_history::<IS_GOOD>(m, depth);
     }
 
-    fn is_singular(
+    pub fn is_singular(
         &mut self,
         info: &mut SearchInfo,
         ss: &mut Stack,

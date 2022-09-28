@@ -1244,6 +1244,7 @@ impl Board {
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         let mut ss = Stack::new();
         let mut mate_counter = 0;
+        let mut singular_contracted = false;
         'deepening: for i_depth in 1..=max_depth {
             // aspiration loop:
             loop {
@@ -1273,6 +1274,24 @@ impl Board {
                 self.regenerate_pv_line(i_depth);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
+                if i_depth > 8 && !singular_contracted {
+                    let is_singular = self.is_singular(
+                        info, 
+                        &mut ss, 
+                        most_recent_move, 
+                        most_recent_score, 
+                        Depth::new(i_depth / 2),
+                    );
+                    if is_singular {
+                        singular_contracted = true;
+                        info.multiply_time_window(0.5);
+                    }
+                    info.check_up();
+                    if info.stopped {
+                        break 'deepening;
+                    }
+                }
+
                 if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
                     // fail low
                     if info.print_to_stdout {
@@ -1281,6 +1300,7 @@ impl Board {
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_down();
+                    info.multiply_time_window(1.1);
                     continue;
                 }
                 if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
@@ -1291,6 +1311,7 @@ impl Board {
                         self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_up();
+                    info.multiply_time_window(1.1);
                     continue;
                 }
                 if info.print_to_stdout {
