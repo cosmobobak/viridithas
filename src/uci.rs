@@ -5,7 +5,7 @@ use std::{
     sync::{
         atomic::{self, AtomicBool},
         mpsc,
-    },
+    }, time::Duration,
 };
 
 use crate::{
@@ -167,6 +167,11 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             }
         }
     };
+    let max_time_window = movetime.map_or_else(
+        || Duration::from_millis((search_time_window * 2).min(time.unwrap_or(0))), 
+        Duration::from_millis
+    );
+    info.max_time_window = max_time_window;
 
     let is_computed_time_window_valid =
         !info.time_set || search_time_window <= time.unwrap() as u64;

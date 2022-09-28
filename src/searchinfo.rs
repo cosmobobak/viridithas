@@ -16,6 +16,7 @@ pub struct SearchInfo<'a> {
     pub moves_to_go: usize,
     pub infinite: bool,
     pub nodes: u64,
+    pub max_time_window: Duration,
 
     /// Signal to quit the search.
     pub quit: bool,
@@ -46,6 +47,7 @@ impl Default for SearchInfo<'_> {
             moves_to_go: 0,
             infinite: false,
             nodes: 0,
+            max_time_window: std::time::Duration::from_secs(2),
             quit: false,
             stopped: false,
             failhigh: 0,
@@ -77,7 +79,8 @@ impl<'a> SearchInfo<'a> {
     pub fn multiply_time_window(&mut self, factor: f64) {
         let secs = (self.stop_time - self.start_time).as_secs_f64();
         let new_secs = secs * factor;
-        self.stop_time = self.start_time + Duration::from_secs_f64(new_secs);
+        let new_duration = std::time::Duration::from_secs_f64(new_secs);
+        self.stop_time = self.start_time + new_duration.min(self.max_time_window);
     }
 
     pub fn check_up(&mut self) {
