@@ -1236,9 +1236,12 @@ impl Board {
         self.setup_tables_for_search();
         info.setup_for_search();
 
-        let first_legal = self.get_first_legal_move().unwrap_or(Move::NULL);
+        let legal_moves = self.legal_moves();
+        if legal_moves.len() == 1 {
+            info.set_time_window(0);
+        }
 
-        let mut most_recent_move = first_legal;
+        let mut most_recent_move = legal_moves[0];
         let mut most_recent_score = 0;
         let mut aspiration_window = AspirationWindow::new();
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
@@ -1387,6 +1390,19 @@ impl Board {
             }
         }
         None
+    }
+
+    fn legal_moves(&mut self) -> Vec<Move> {
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        let mut legal_moves = Vec::new();
+        for &m in move_list.iter() {
+            if self.make_move(m) {
+                self.unmake_move();
+                legal_moves.push(m);
+            }
+        }
+        legal_moves
     }
 }
 
