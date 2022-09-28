@@ -1,4 +1,11 @@
-![build](https://github.com/cosmobobak/virtue/actions/workflows/rust.yml/badge.svg)
+<div align="center">
+
+  [![Build][build-badge]][build-link]
+  [![License][license-badge]][license-link]
+  [![Release][release-badge]][release-link]
+  [![Commits][commits-badge]][commits-link]
+  
+</div>
 
 # Viridithas II, a UCI chess engine written in Rust.
 
@@ -75,3 +82,12 @@ Attacks from pawns on pieces and from minors on majors are given a bonus in the 
 A small bonus is given for being the side-to-move in a position.
 #### Texel Tuning
 The weights of the evaluation function are tuned on Viridithas's own self-play games.
+
+[build-badge]:https://img.shields.io/github/workflow/status/cosmobobak/virtue/Rust?logo=github&style=for-the-badge
+[build-link]:https://github.com/cosmobobak/virtue/actions/workflows/rust.yml
+[commits-badge]:https://img.shields.io/github/commits-since/cosmobobak/virtue/latest?style=for-the-badge
+[commits-link]:https://github.com/cosmobobak/virtue/commits/master
+[release-badge]:https://img.shields.io/github/v/release/cosmobobak/virtue?style=for-the-badge&label=official%20release
+[release-link]:https://github.com/cosmobobak/virtue/releases/latest
+[license-badge]:https://img.shields.io/github/license/cosmobobak/virtue?style=for-the-badge&label=license&color=success
+[license-link]:https://github.com/cosmobobak/virtue/blob/master/LICENSE
