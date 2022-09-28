@@ -1238,7 +1238,7 @@ impl Board {
 
         let legal_moves = self.legal_moves();
         if legal_moves.len() == 1 {
-            info.set_time_window(0);
+            info.set_time_window(1);
         }
 
         let mut most_recent_move = legal_moves[0];
