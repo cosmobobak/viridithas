@@ -1287,7 +1287,7 @@ impl Board {
                     self.unmake_move();
                     if forced {
                         forcing_time_reduction = true;
-                        info.multiply_time_window(0.1);
+                        info.multiply_time_window(0.3);
                     }
                     info.check_up();
                     if info.stopped {
