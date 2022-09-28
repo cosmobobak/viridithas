@@ -1305,7 +1305,7 @@ impl Board {
                     aspiration_window.widen_down();
                     if !fail_increment {
                         fail_increment = true;
-                        info.multiply_time_window(1.3);
+                        info.multiply_time_window(1.5);
                     }
                     continue;
                 }
