@@ -488,6 +488,27 @@ impl Board {
         value < reduced_beta
     }
 
+    pub fn is_forced(
+        &mut self,
+        info: &mut SearchInfo,
+        ss: &mut Stack,
+        m: Move,
+        value: i32,
+        depth: Depth,
+    ) -> bool {
+        let reduced_beta = (value - 200).max(-MATE_SCORE);
+        let reduced_depth = (depth - 1) / 2;
+        // undo the singular move so we can search the position that it exists in.
+        self.unmake_move();
+        ss.excluded[self.height()] = m;
+        let value =
+            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
+        ss.excluded[self.height()] = Move::NULL;
+        // re-make the singular move.
+        self.make_move(m);
+        value < reduced_beta
+    }
+
     pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();

@@ -1244,7 +1244,7 @@ impl Board {
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
         let mut ss = Stack::new();
         let mut mate_counter = 0;
-        let mut singular_contracted = false;
+        let mut forcing_time_reduction = false;
         let mut fail_increment = false;
         'deepening: for i_depth in 1..=max_depth {
             // aspiration loop:
@@ -1275,9 +1275,9 @@ impl Board {
                 self.regenerate_pv_line(i_depth);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
-                if i_depth > 8 && !singular_contracted {
+                if i_depth > 8 && !forcing_time_reduction {
                     self.make_move(most_recent_move);
-                    let is_singular = self.is_singular(
+                    let forced = self.is_forced(
                         info, 
                         &mut ss, 
                         most_recent_move, 
@@ -1285,8 +1285,8 @@ impl Board {
                         Depth::new(i_depth),
                     );
                     self.unmake_move();
-                    if is_singular {
-                        singular_contracted = true;
+                    if forced {
+                        forcing_time_reduction = true;
                         info.multiply_time_window(0.2);
                     }
                     info.check_up();
