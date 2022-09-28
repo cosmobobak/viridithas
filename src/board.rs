@@ -1246,6 +1246,7 @@ impl Board {
         let mut mate_counter = 0;
         let mut singular_contracted = false;
         'deepening: for i_depth in 1..=max_depth {
+            let mut fail_increment = false;
             // aspiration loop:
             loop {
                 let score = self.alpha_beta::<true>(
@@ -1302,7 +1303,10 @@ impl Board {
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_down();
-                    info.multiply_time_window(1.1);
+                    if !fail_increment {
+                        fail_increment = true;
+                        info.multiply_time_window(1.1);
+                    }
                     continue;
                 }
                 if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
@@ -1313,7 +1317,10 @@ impl Board {
                         self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_up();
-                    info.multiply_time_window(1.1);
+                    if !fail_increment {
+                        fail_increment = true;
+                        info.multiply_time_window(1.1);
+                    }
                     continue;
                 }
                 if info.print_to_stdout {
