@@ -1273,7 +1273,6 @@ impl Board {
 
                 most_recent_score = score;
                 self.regenerate_pv_line(i_depth);
-                let prev_move = most_recent_move;
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if i_depth > 8 && !forcing_time_reduction {
@@ -1294,9 +1293,6 @@ impl Board {
                     if info.stopped {
                         break 'deepening;
                     }
-                }
-                if i_depth > 8 && prev_move == most_recent_move {
-                    info.multiply_time_window(0.97);
                 }
 
                 if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
