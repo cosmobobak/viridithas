@@ -1279,15 +1279,13 @@ impl Board {
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if i_depth > 8 && !forcing_time_reduction {
-                    self.make_move(most_recent_move);
-                    let forced = self.is_forced(
+                    let forced = self.is_forced::<200>(
                         info, 
                         &mut ss, 
                         most_recent_move, 
                         most_recent_score, 
                         Depth::new(i_depth),
                     );
-                    self.unmake_move();
                     if forced {
                         forcing_time_reduction = true;
                         info.multiply_time_window(0.25);

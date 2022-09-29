@@ -488,7 +488,7 @@ impl Board {
         value < reduced_beta
     }
 
-    pub fn is_forced(
+    pub fn is_forced<const MARGIN: i32>(
         &mut self,
         info: &mut SearchInfo,
         ss: &mut Stack,
@@ -496,16 +496,15 @@ impl Board {
         value: i32,
         depth: Depth,
     ) -> bool {
-        let reduced_beta = (value - 200).max(-MATE_SCORE);
+        let reduced_beta = (value - MARGIN).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
-        // undo the singular move so we can search the position that it exists in.
-        self.unmake_move();
         ss.excluded[self.height()] = m;
+        let pts_prev = info.print_to_stdout;
+        info.print_to_stdout = false;
         let value =
             self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
+        info.print_to_stdout = pts_prev;
         ss.excluded[self.height()] = Move::NULL;
-        // re-make the singular move.
-        self.make_move(m);
         value < reduced_beta
     }
 
