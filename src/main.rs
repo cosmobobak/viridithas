@@ -26,6 +26,7 @@ mod texel;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod nnue;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -56,6 +57,15 @@ fn main() {
 
     if let Some(path) = cli.tune {
         return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
+    }
+
+    if let Some(path) = cli.nnueconversionpath {
+        let output_path = cli.output.unwrap_or_else(|| {
+            let mut path = path.clone();
+            path.set_extension("nnuedata");
+            path
+        });
+        return nnue::convert::wdl_to_nnue(path, output_path).unwrap();
     }
 
     if cli.info {
