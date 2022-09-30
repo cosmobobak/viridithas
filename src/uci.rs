@@ -158,7 +158,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         None => {
             if let Some(t) = time {
                 info.time_set = true;
-                let time = t / moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() / 2) + inc.unwrap_or(0);
+                let time = t / moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 30) + inc.unwrap_or(0);
                 let time = time.saturating_sub(30);
                 time.min(t)
             } else {
