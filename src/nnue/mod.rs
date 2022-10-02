@@ -28,18 +28,18 @@ pub static NNUE_JSON: &str = include_str!("C:/github/chess/marlinflow/trainer/nn
 #[derive(Debug)]
 pub struct NNUE {
     // fixed values (can be shared between threads)
-    feature_weights: [i16; INPUT * HIDDEN],
-    flipped_weights: [i16; INPUT * HIDDEN],
-    feature_bias: [i16; HIDDEN],
-    output_weights: [i16; HIDDEN * 2],
-    output_bias: i16,
+    pub feature_weights: [i16; INPUT * HIDDEN],
+    pub flipped_weights: [i16; INPUT * HIDDEN],
+    pub feature_bias: [i16; HIDDEN],
+    pub output_weights: [i16; HIDDEN * 2],
+    pub output_bias: i16,
 
     // thread-local values
-    white_pov: [i16; INPUT],
-    black_pov: [i16; INPUT],
+    pub white_pov: [i16; INPUT],
+    pub black_pov: [i16; INPUT],
 
-    accumulators: [Accumulator<HIDDEN>; ACC_STACK_SIZE],
-    current_acc: usize,
+    pub accumulators: [Accumulator<HIDDEN>; ACC_STACK_SIZE],
+    pub current_acc: usize,
 }
 
 impl NNUE {
@@ -52,7 +52,9 @@ impl NNUE {
         self.current_acc -= 1;
     }
 
-    pub fn refresh_acc(&mut self, board: &Board) {        
+    pub fn refresh_acc(&mut self, board: &Board) {
+        self.current_acc = 0;
+
         self.white_pov.fill(0);
         self.black_pov.fill(0);
 
@@ -181,22 +183,18 @@ impl NNUE {
         let acc = &self.accumulators[self.current_acc];
         
         let output = if stm == WHITE {
-            clipped_relu_flatten_and_forward(
+            clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.white,
                 &acc.black,
                 &self.feature_bias,
                 &self.output_weights,
-                CR_MIN,
-                CR_MAX,
             )
         } else {
-            clipped_relu_flatten_and_forward(
+            clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.black,
                 &acc.white,
                 &self.feature_bias,
                 &self.output_weights,
-                CR_MIN,
-                CR_MAX,
             )
         };
 
@@ -322,23 +320,23 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
 }
 
 pub fn clipped_relu_flatten_and_forward<
-    const SIZE: usize, 
-    const BIAS: usize, 
+    const MIN: i16,
+    const MAX: i16,
+    const SIZE: usize,
     const WEIGHTS: usize,
 >(
     input_us: &[i16; SIZE],
     input_them: &[i16; SIZE],
-    bias: &[i16; BIAS],
+    bias: &[i16; SIZE],
     weights: &[i16; WEIGHTS],
-    min: i16,
-    max: i16,
 ) -> i32 {
+    debug_assert_eq!(SIZE * 2, WEIGHTS);
     let mut sum: i32 = 0;
     for ((&i, &b), &w) in input_us.iter().zip(bias).zip(weights) {
-        sum += i32::from((i + b).clamp(min, max)) * i32::from(w);
+        sum += i32::from((i + b).clamp(MIN, MAX)) * i32::from(w);
     }
     for ((&i, &b), &w) in input_them.iter().zip(bias).zip(&weights[SIZE..]) {
-        sum += i32::from((i + b).clamp(min, max)) * i32::from(w);
+        sum += i32::from((i + b).clamp(MIN, MAX)) * i32::from(w);
     }
     sum
 }

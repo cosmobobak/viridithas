@@ -204,7 +204,7 @@ impl Board {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
-        t.nnue.evaluate(self.turn())
+        t.nnue.evaluate(self.side)
     }
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
