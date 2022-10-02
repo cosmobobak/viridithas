@@ -26,7 +26,7 @@ use crate::{
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
-        KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR, PAWN,
     },
     errors::{FenParseError, MoveParseError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
@@ -38,11 +38,11 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     piecelist::PieceList,
     piecesquaretable::pst_value,
-    search::{self, parameters::SearchParams, AspirationWindow, Stack},
+    search::{self, parameters::SearchParams, AspirationWindow},
     searchinfo::SearchInfo,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, threadlocal::ThreadData, nnue::{DEACTIVATE, ACTIVATE},
 };
 
 const UPPER_BOUND: u8 = 1;
@@ -972,6 +972,83 @@ impl Board {
         self.check_validity().unwrap();
     }
 
+    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
+        let piece = type_of(self.moved_piece(m));
+        let colour = self.turn();
+        let res = self.make_move(m);
+        if !res {
+            return false;
+        }
+        let from = m.from();
+        let to = m.to();
+        t.nnue.push_acc();
+        if m.is_ep() {
+            let ep_sq = if colour == WHITE { to - 8 } else { to + 8 };
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, 1 ^ colour, ep_sq);
+        } else if m.is_castle() {
+            match to {
+                C1 => t.nnue.efficiently_update_from_move(ROOK, colour, A1, D1),
+                C8 => t.nnue.efficiently_update_from_move(ROOK, colour, A8, D8),
+                G1 => t.nnue.efficiently_update_from_move(ROOK, colour, H1, F1),
+                G8 => t.nnue.efficiently_update_from_move(ROOK, colour, H8, F8),
+                _ => {
+                    panic!("Invalid castle move");
+                }
+            }
+        }
+
+        if m.is_capture() {
+            let captured = type_of(m.capture());
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(captured, 1 ^ colour, to);
+        }
+
+        t.nnue.efficiently_update_from_move(piece, colour, from, to);
+
+        if m.is_promo() {
+            let promo = type_of(m.promotion());
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, to);
+            t.nnue.efficiently_update_manual::<ACTIVATE>(promo, colour, to);
+        }
+
+        true
+    }
+
+    pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
+        let m = self.history.last().unwrap().m;
+        self.unmake_move();
+        let piece = type_of(self.moved_piece(m));
+        let from = m.from();
+        let to = m.to();
+        let colour = self.turn();
+        t.nnue.pop_acc();
+        if m.is_ep() {
+            let ep_sq = if colour == WHITE { to - 8 } else { to + 8 };
+            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, 1 ^ colour, ep_sq);
+        } else if m.is_castle() {
+            match to {
+                C1 => t.nnue.update_pov_move(ROOK, colour, D1, A1),
+                C8 => t.nnue.update_pov_move(ROOK, colour, D8, A8),
+                G1 => t.nnue.update_pov_move(ROOK, colour, F1, H1),
+                G8 => t.nnue.update_pov_move(ROOK, colour, F8, H8),
+                _ => {
+                    panic!("Invalid castle move");
+                }
+            }
+        }
+        if m.is_promo() {
+            let promo = type_of(m.promotion());
+            debug_assert!(piece_valid(promo));
+            debug_assert!(promo != WP && promo != BP);
+            t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
+            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, colour, to);
+        }
+        t.nnue.update_pov_move(piece, colour, to, from);
+        let captured = m.capture();
+        if captured != PIECE_EMPTY {
+            t.nnue.update_pov_manual::<ACTIVATE>(type_of(captured), 1 ^ colour, to);
+        }
+    }
+
     pub fn unmake_nullmove(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1232,7 +1309,7 @@ impl Board {
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
-    pub fn search_position(&mut self, info: &mut SearchInfo) -> (i32, Move) {
+    pub fn search_position(&mut self, info: &mut SearchInfo, thread_data: &mut [ThreadData]) -> (i32, Move) {
         self.setup_tables_for_search();
         info.setup_for_search();
 
@@ -1245,7 +1322,6 @@ impl Board {
         let mut most_recent_score = 0;
         let mut aspiration_window = AspirationWindow::new();
         let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
-        let mut ss = Stack::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
@@ -1254,7 +1330,7 @@ impl Board {
             loop {
                 let score = self.alpha_beta::<true>(
                     info,
-                    &mut ss,
+                    thread_data.first_mut().unwrap(),
                     Depth::new(i_depth),
                     aspiration_window.alpha,
                     aspiration_window.beta,
@@ -1279,13 +1355,15 @@ impl Board {
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if i_depth > 8 && !forcing_time_reduction {
+                    let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
-                        info, 
-                        &mut ss, 
+                        info,
+                        thread_data.first_mut().unwrap(), 
                         most_recent_move, 
                         most_recent_score, 
                         Depth::new(i_depth),
                     );
+                    info.seldepth = saved_seldepth;
                     if forced {
                         forcing_time_reduction = true;
                         info.multiply_time_window(0.25);

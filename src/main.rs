@@ -27,6 +27,7 @@ mod transpositiontable;
 mod uci;
 mod validate;
 mod nnue;
+mod threadlocal;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -39,8 +40,6 @@ fn main() {
 
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
-    // init NNUE
-    nnue::initialise();
 
     let cli = <cli::Cli as clap::Parser>::parse();
 

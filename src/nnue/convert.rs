@@ -1,18 +1,18 @@
 use std::{io::{Write, BufReader, BufRead, BufWriter}, path::Path, fs::File};
 
-use crate::{board::Board, searchinfo::SearchInfo, search::Stack, definitions::{depth::Depth, INFINITY, WHITE}};
+use crate::{board::Board, searchinfo::SearchInfo, definitions::{depth::Depth, INFINITY, WHITE}, threadlocal::ThreadData};
 
 use rayon::prelude::*;
 
 fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
     let mut pos = Board::default();
     let mut info = SearchInfo { infinite: true, time_set: false, print_to_stdout: false, ..Default::default() };
-    let mut ss = Stack::new();
+    let mut t = ThreadData::new();
     pos.set_hash_size(1);
     pos.alloc_tables();
     for fen in fens {
         pos.set_from_fen(fen).unwrap();
-        let pov_score = pos.alpha_beta::<true>(&mut info, &mut ss, Depth::new(depth), -INFINITY, INFINITY);
+        let pov_score = pos.alpha_beta::<true>(&mut info, &mut t, Depth::new(depth), -INFINITY, INFINITY);
         let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
         evals.push(score);
     }

@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     definitions::{INFINITY, WHITE},
-    searchinfo::SearchInfo,
+    searchinfo::SearchInfo, threadlocal::ThreadData,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -31,6 +31,7 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) -> f64 {
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
+    let mut t = ThreadData::new();
     pos.set_hash_size(1);
     pos.alloc_tables();
     pos.set_eval_params(params.clone());
@@ -39,7 +40,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             // set_from_fen does not allocate, so it should be pretty fast.
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
-            let pov_score = Board::quiescence(&mut pos, &mut info, -INFINITY, INFINITY);
+            let pov_score = Board::quiescence(&mut pos, &mut info, &mut t, -INFINITY, INFINITY);
             let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)

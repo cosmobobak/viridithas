@@ -1,12 +1,12 @@
 
 
 #[derive(Debug, Clone, Copy)]
-pub struct BasicAccumulator<const HIDDEN: usize> {
+pub struct Accumulator<const HIDDEN: usize> {
     pub white: [i16; HIDDEN],
     pub black: [i16; HIDDEN],
 }
 
-impl<const HIDDEN: usize> BasicAccumulator<HIDDEN> {
+impl<const HIDDEN: usize> Accumulator<HIDDEN> {
     pub const fn new() -> Self {
         Self {
             white: [0; HIDDEN],

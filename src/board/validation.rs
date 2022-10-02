@@ -5,11 +5,11 @@ use crate::{
         Rank::{RANK_3, RANK_6},
         Square::NO_SQUARE,
         BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR,
+        WHITE, WK, WN, WP, WQ, WR, type_of,
     },
     errors::PositionValidityError,
-    lookups::{piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
-    piecelist::PieceList,
+    lookups::{piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, piece_name},
+    piecelist::PieceList, nnue::NNUE,
 };
 
 use super::{movegen::bitboards::BitLoop, Board};
@@ -229,5 +229,32 @@ impl Board {
         }
 
         Ok(())
+    }
+
+    pub fn check_nnue_coherency(&self, nn: &NNUE) -> bool {
+        for feature in nn.active_features() {
+            let (co, pt, sq) = NNUE::feature_loc_to_parts(feature);
+            let pt = pt + 1;
+            let piece_on_board = self.piece_at(sq);
+            let actual_colour = colour_of(piece_on_board);
+            if co != actual_colour {
+                eprintln!(
+                    "coherency check failed: feature on sq {} has colour {}, but piece on board is {}",
+                    sq, co, piece_name(piece_on_board).unwrap()
+                );
+                eprintln!("fen: {}", self.fen());
+                return false;
+            }
+            let actual_piece_type = type_of(piece_on_board);
+            if pt != actual_piece_type {
+                eprintln!(
+                    "coherency check failed: feature on sq {} has piece type {}, but piece on board is {}",
+                    sq, pt, piece_name(piece_on_board).unwrap()
+                );
+                eprintln!("fen: {}", self.fen());
+                return false;
+            }
+        }
+        true
     }
 }

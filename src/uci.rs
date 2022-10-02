@@ -17,7 +17,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     search::parameters::SearchParams,
     searchinfo::SearchInfo,
-    NAME, VERSION,
+    NAME, VERSION, threadlocal::ThreadData,
 };
 
 enum UciError {
@@ -336,6 +336,9 @@ pub fn main_loop(params: EvalParams) {
 
     info.set_stdin(&stdin);
 
+    let mut thread_data = Vec::new();
+    thread_data.push(ThreadData::new());
+
     loop {
         std::io::stdout().flush().unwrap();
         let line = stdin.recv().expect("Couldn't read from stdin");
@@ -361,7 +364,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate(0));
+                println!("{}", pos.evaluate(thread_data.first_mut().unwrap(), 0));
                 Ok(())
             }
             input if input.starts_with("setoption") => parse_setoption(
@@ -375,11 +378,19 @@ pub fn main_loop(params: EvalParams) {
                     pos.set_hash_size(hash_mb);
                 }
             }),
-            input if input.starts_with("position") => parse_position(input, &mut pos),
+            input if input.starts_with("position") => {
+                let res = parse_position(input, &mut pos);
+                if res.is_ok() {
+                    for t in &mut thread_data {
+                        t.nnue.refresh_acc(&pos);
+                    }
+                }
+                res
+            }
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
-                    pos.search_position(&mut info);
+                    pos.search_position(&mut info, &mut thread_data);
                 }
                 res
             }

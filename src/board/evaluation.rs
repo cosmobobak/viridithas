@@ -14,7 +14,7 @@ use crate::{
         WHITE, WN, WP, WQ, WR,
     },
     lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
-    search::draw_score,
+    search::draw_score, threadlocal::ThreadData,
 };
 
 use super::movegen::{
@@ -160,44 +160,51 @@ impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
-    pub fn evaluate(&self, nodes: u64) -> i32 {
-        crate::nnue::evaluate(self)
+    #[allow(dead_code)]
+    pub fn evaluate_classical(&self, nodes: u64) -> i32 {
+        if !self.pieces.any_pawns() && self.is_material_draw() {
+            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+        }
 
-        // if !self.pieces.any_pawns() && self.is_material_draw() {
-        //     return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
-        // }
+        let material = self.material[WHITE as usize] - self.material[BLACK as usize];
+        let pst = self.pst_vals;
 
-        // let material = self.material[WHITE as usize] - self.material[BLACK as usize];
-        // let pst = self.pst_vals;
+        let pawn_structure = self.pawn_structure_term();
+        let bishop_pair = self.bishop_pair_term();
+        let rook_files = self.rook_open_file_term();
+        let queen_files = self.queen_open_file_term();
+        let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
+        let king_danger = self.score_kingdanger(danger_info);
+        let tempo = if self.turn() == WHITE { self.eparams.tempo } else { -self.eparams.tempo };
 
-        // let pawn_structure = self.pawn_structure_term();
-        // let bishop_pair = self.bishop_pair_term();
-        // let rook_files = self.rook_open_file_term();
-        // let queen_files = self.queen_open_file_term();
-        // let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
-        // let king_danger = self.score_kingdanger(danger_info);
-        // let tempo = if self.turn() == WHITE { self.eparams.tempo } else { -self.eparams.tempo };
+        let mut score = material;
+        score += pst;
+        score += pawn_structure;
+        score += bishop_pair;
+        score += rook_files;
+        score += queen_files;
+        score += mobility;
+        score += threats;
+        score += king_danger;
+        score += tempo;
 
-        // let mut score = material;
-        // score += pst;
-        // score += pawn_structure;
-        // score += bishop_pair;
-        // score += rook_files;
-        // score += queen_files;
-        // score += mobility;
-        // score += threats;
-        // score += king_danger;
-        // score += tempo;
+        let score = score.value(self.phase());
 
-        // let score = score.value(self.phase());
+        let score = self.preprocess_drawish_scores(score, nodes);
 
-        // let score = self.preprocess_drawish_scores(score, nodes);
+        if self.side == WHITE {
+            score
+        } else {
+            -score
+        }
+    }
+    
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        if !self.pieces.any_pawns() && self.is_material_draw() {
+            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+        }
 
-        // if self.side == WHITE {
-        //     score
-        // } else {
-        //     -score
-        // }
+        t.nnue.evaluate(self.turn())
     }
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
@@ -589,7 +596,7 @@ mod tests {
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
         let board = super::Board::from_fen(FEN).unwrap();
-        let eval = board.evaluate(0);
+        let eval = board.evaluate_classical(0);
         assert!(
             (-2..=2).contains(&(eval.abs() - CONTEMPT)),
             "eval is not a draw score in a position unwinnable for both sides."
@@ -605,8 +612,8 @@ mod tests {
         let tempo = EvalParams::default().tempo.0;
         let board1 = super::Board::from_fen(FEN1).unwrap();
         let board2 = super::Board::from_fen(FEN2).unwrap();
-        let eval1 = board1.evaluate(0);
-        let eval2 = board2.evaluate(0);
+        let eval1 = board1.evaluate_classical(0);
+        let eval2 = board2.evaluate_classical(0);
         assert_eq!(eval1, -eval2 + 2 * tempo);
     }
 
@@ -624,7 +631,7 @@ mod tests {
         crate::magic::initialise();
         let tempo = EvalParams::default().tempo.0;
         let board = super::Board::default();
-        assert_eq!(board.evaluate(0), tempo);
+        assert_eq!(board.evaluate_classical(0), tempo);
     }
 
     #[test]
@@ -693,8 +700,8 @@ mod tests {
         let starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
         let end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
-        let starting_rank_eval = starting_rank_passer.evaluate(0);
-        let end_rank_eval = end_rank_passer.evaluate(0);
+        let starting_rank_eval = starting_rank_passer.evaluate_classical(0);
+        let end_rank_eval = end_rank_passer.evaluate_classical(0);
 
         // is should be better to have a passer that is more advanced.
         assert!(

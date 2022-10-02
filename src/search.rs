@@ -17,10 +17,10 @@ use crate::{
     chessmove::Move,
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
-        MAX_PLY, PAWN, QUEEN, ROOK,
+        PAWN, QUEEN, ROOK,
     },
     searchinfo::SearchInfo,
-    transpositiontable::{HFlag, ProbeResult},
+    transpositiontable::{HFlag, ProbeResult}, threadlocal::ThreadData,
 };
 
 use self::parameters::SearchParams;
@@ -57,7 +57,7 @@ const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
-    pub fn quiescence(&mut self, info: &mut SearchInfo, mut alpha: i32, beta: i32) -> i32 {
+    pub fn quiescence(&mut self, info: &mut SearchInfo, t: &mut ThreadData, mut alpha: i32, beta: i32) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -78,7 +78,7 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate(info.nodes);
+            return self.evaluate(t, info.nodes);
         }
 
         // probe the TT and see if we get a cutoff.
@@ -86,7 +86,7 @@ impl Board {
             return s;
         }
 
-        let stand_pat = self.evaluate(info.nodes);
+        let stand_pat = self.evaluate(t, info.nodes);
 
         if stand_pat >= beta {
             return beta;
@@ -104,7 +104,7 @@ impl Board {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
-            if !self.make_move(m) {
+            if !self.make_move_nnue(m, t) {
                 continue;
             }
             info.nodes += 1;
@@ -115,12 +115,12 @@ impl Board {
             // we have to do this after make_move, because the move has to be legal.
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
-                self.unmake_move();
+                self.unmake_move_nnue(t);
                 return beta;
             }
 
-            let score = -self.quiescence(info, -beta, -alpha);
-            self.unmake_move();
+            let score = -self.quiescence(info, t, -beta, -alpha);
+            self.unmake_move_nnue(t);
 
             if score > alpha {
                 if score >= beta {
@@ -137,16 +137,17 @@ impl Board {
     pub fn alpha_beta<const PV: bool>(
         &mut self,
         info: &mut SearchInfo,
-        ss: &mut Stack,
+        t: &mut ThreadData,
         mut depth: Depth,
         mut alpha: i32,
         beta: i32,
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
+        debug_assert!(self.check_nnue_coherency(&t.nnue));
 
         if depth <= ZERO_PLY {
-            return self.quiescence(info, alpha, beta);
+            return self.quiescence(info, t, alpha, beta);
         }
 
         if info.nodes.trailing_zeros() >= 12 {
@@ -170,7 +171,7 @@ impl Board {
 
             // are we too deep?
             if height > MAX_DEPTH.round() - 1 {
-                return self.evaluate(info.nodes);
+                return self.evaluate(t, info.nodes);
             }
 
             // mate-distance pruning.
@@ -185,7 +186,7 @@ impl Board {
 
         debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
-        let excluded = ss.excluded[self.height()];
+        let excluded = t.excluded[self.height()];
 
         let tt_hit = if excluded.is_null() {
             match self.tt_probe(alpha, beta, depth, root_node) {
@@ -213,10 +214,10 @@ impl Board {
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else {
-            self.evaluate(info.nodes)
+            self.evaluate(t, info.nodes)
         };
 
-        ss.evals[self.height()] = static_eval;
+        t.evals[self.height()] = static_eval;
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
@@ -224,7 +225,7 @@ impl Board {
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
         let improving =
-            !in_check && self.height() >= 2 && static_eval >= ss.evals[self.height() - 2];
+            !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
         // beta-pruning. (reverse futility pruning)
         if !PV
@@ -249,7 +250,7 @@ impl Board {
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV>(info, ss, nm_depth, -beta, -beta + 1);
+            let score = -self.alpha_beta::<PV>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -305,12 +306,12 @@ impl Board {
                 continue;
             }
 
-            if !self.make_move(m) {
+            if !self.make_move_nnue(m, t) {
                 continue;
             }
             info.nodes += 1;
             if excluded == m {
-                self.unmake_move();
+                self.unmake_move_nnue(t);
                 continue;
             }
             moves_made += 1;
@@ -323,7 +324,7 @@ impl Board {
             quiet_moves_made += i32::from(!is_interesting);
 
             if do_lmp && quiet_moves_made >= lmp_threshold {
-                self.unmake_move();
+                self.unmake_move_nnue(t);
                 break; // okay to break because captures are ordered first.
             }
 
@@ -331,7 +332,7 @@ impl Board {
             // if the static eval is too low, we might just skip the move.
             if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
             {
-                self.unmake_move();
+                self.unmake_move_nnue(t);
                 continue;
             }
 
@@ -347,7 +348,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !root_node && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular(info, ss, m, tt_value, depth);
+                let is_singular = self.is_singular(info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
             } else if !root_node {
                 extension = Depth::from(gives_check);
@@ -356,7 +357,7 @@ impl Board {
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
+                score = -self.alpha_beta::<PV>(info, t, depth + extension - 1, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
@@ -372,14 +373,14 @@ impl Board {
                 };
                 // perform a zero-window search
                 score =
-                    -self.alpha_beta::<false>(info, ss, depth + extension - r, -alpha - 1, -alpha);
+                    -self.alpha_beta::<false>(info, t, depth + extension - r, -alpha - 1, -alpha);
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<PV>(info, ss, depth + extension - 1, -beta, -alpha);
+                    score = -self.alpha_beta::<PV>(info, t, depth + extension - 1, -beta, -alpha);
                 }
             }
-            self.unmake_move();
+            self.unmake_move_nnue(t);
 
             if info.stopped {
                 return 0;
@@ -470,7 +471,7 @@ impl Board {
     pub fn is_singular(
         &mut self,
         info: &mut SearchInfo,
-        ss: &mut Stack,
+        t: &mut ThreadData,
         m: Move,
         tt_value: i32,
         depth: Depth,
@@ -478,33 +479,33 @@ impl Board {
         let reduced_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
-        self.unmake_move();
-        ss.excluded[self.height()] = m;
+        self.unmake_move_nnue(t);
+        t.excluded[self.height()] = m;
         let value =
-            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
-        ss.excluded[self.height()] = Move::NULL;
+            self.alpha_beta::<false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+        t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
-        self.make_move(m);
+        self.make_move_nnue(m, t);
         value < reduced_beta
     }
 
     pub fn is_forced<const MARGIN: i32>(
         &mut self,
         info: &mut SearchInfo,
-        ss: &mut Stack,
+        t: &mut ThreadData,
         m: Move,
         value: i32,
         depth: Depth,
     ) -> bool {
         let reduced_beta = (value - MARGIN).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
-        ss.excluded[self.height()] = m;
+        t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value =
-            self.alpha_beta::<false>(info, ss, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.alpha_beta::<false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         info.print_to_stdout = pts_prev;
-        ss.excluded[self.height()] = Move::NULL;
+        t.excluded[self.height()] = Move::NULL;
         value < reduced_beta
     }
 
@@ -632,17 +633,6 @@ impl LMRTable {
         let depth = depth.ply_to_horizon().min(63);
         let played = moves_made.min(63);
         self.table[depth][played]
-    }
-}
-
-pub struct Stack {
-    evals: [i32; MAX_PLY],
-    excluded: [Move; MAX_PLY],
-}
-
-impl Stack {
-    pub const fn new() -> Self {
-        Self { evals: [0; MAX_PLY], excluded: [Move::NULL; MAX_PLY] }
     }
 }
 

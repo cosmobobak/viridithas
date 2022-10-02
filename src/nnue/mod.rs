@@ -1,19 +1,16 @@
-use std::{fs::File, path, io::BufReader};
-
 use serde_json::Value;
 
-use crate::{board::{Board, movegen::BitLoop}, definitions::{flip_rank, BLACK, WHITE, PAWN, KING}};
+use crate::{board::{Board, movegen::BitLoop}, definitions::{flip_rank, BLACK, WHITE, PAWN, KING}, lookups::{piece_from_cotype, SQUARE_NAMES}};
 
-use self::accumulator::BasicAccumulator;
+use self::accumulator::Accumulator;
 
 pub mod convert;
 mod accumulator;
 
 const INPUT: usize = 768;
 const HIDDEN: usize = 256;
-const OUTPUT: usize = 1;
 const CR_MIN: i16 = 0;
-const CR_MAX: i16 = QA as i16;
+const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
 
 const QA: i32 = 255;
@@ -22,27 +19,30 @@ const QAB: i32 = QA * QB;
 
 const ACC_STACK_SIZE: usize = 256;
 
-const ACTIVATE: bool = true;
-const DEACTIVATE: bool = false;
+pub const ACTIVATE: bool = true;
+pub const DEACTIVATE: bool = false;
 
+pub static NNUE_JSON: &str = include_str!("C:/github/chess/marlinflow/trainer/nn/viri0000.json");
+
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
-pub struct BasicNNUE {
+pub struct NNUE {
+    // fixed values (can be shared between threads)
     feature_weights: [i16; INPUT * HIDDEN],
     flipped_weights: [i16; INPUT * HIDDEN],
     feature_bias: [i16; HIDDEN],
-    output_weights: [i16; HIDDEN * 2 * OUTPUT],
-    output_bias: [i16; OUTPUT],
+    output_weights: [i16; HIDDEN * 2],
+    output_bias: i16,
 
+    // thread-local values
     white_pov: [i16; INPUT],
     black_pov: [i16; INPUT],
 
-    accumulators: [BasicAccumulator<HIDDEN>; ACC_STACK_SIZE],
+    accumulators: [Accumulator<HIDDEN>; ACC_STACK_SIZE],
     current_acc: usize,
-
-    output: [i32; OUTPUT],
 }
 
-impl BasicNNUE {
+impl NNUE {
     pub fn push_acc(&mut self) {
         self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc];
         self.current_acc += 1;
@@ -52,14 +52,7 @@ impl BasicNNUE {
         self.current_acc -= 1;
     }
 
-    pub fn reset_acc(&mut self) {
-        self.current_acc = 0;
-    }
-
-    pub fn refresh_acc(&mut self, board: &Board) {
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
-        
+    pub fn refresh_acc(&mut self, board: &Board) {        
         self.white_pov.fill(0);
         self.black_pov.fill(0);
 
@@ -78,24 +71,28 @@ impl BasicNNUE {
     }
 
     pub fn efficiently_update_from_move(&mut self, piece: u8, colour: u8, from: u8, to: u8) {
+        #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
-        let from = from as usize;
-        let to = to as usize;
+
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
 
-        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from;
-        let black_idx_from = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from as u8) as usize;
-        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to;
-        let black_idx_to = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to as u8) as usize;
+        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
+        let black_idx_from = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
+        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
+        let black_idx_to = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
 
-        let acc = &mut self.accumulators[self.current_acc];
-
+        debug_assert_eq!(self.white_pov[white_idx_from], 1, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
+        debug_assert_eq!(self.black_pov[black_idx_from], 1, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
+        debug_assert_eq!(self.white_pov[white_idx_to], 0, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
+        debug_assert_eq!(self.black_pov[black_idx_to], 0, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
         self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
         self.white_pov[white_idx_to] = 1;
         self.black_pov[black_idx_to] = 1;
+
+        let acc = &mut self.accumulators[self.current_acc];
 
         subtract_and_add_to_all(
             &mut acc.white, 
@@ -111,24 +108,30 @@ impl BasicNNUE {
         );
     }
 
-    fn efficiently_update_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: u8) {
+    pub fn efficiently_update_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: u8) {
+        #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
-        let sq = sq as usize;
+
+        let sq = sq;
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
         
         let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
-        let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq as u8) as usize;
+        let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
 
         let acc = &mut self.accumulators[self.current_acc];
 
         if IS_ACTIVATE {
+            debug_assert!(self.white_pov[white_idx] == 0, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
+            debug_assert!(self.black_pov[black_idx] == 0, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
             add_to_all(&mut acc.white, &self.flipped_weights, white_idx * HIDDEN);
             add_to_all(&mut acc.black, &self.flipped_weights, black_idx * HIDDEN);
         } else {
+            debug_assert!(self.white_pov[white_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
+            debug_assert!(self.black_pov[black_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
             sub_from_all(&mut acc.white, &self.flipped_weights, white_idx * HIDDEN);
@@ -136,59 +139,90 @@ impl BasicNNUE {
         }
     }
 
-    pub fn evaluate(&mut self, stm: u8) -> i32 {
-        let acc = &self.accumulators[self.current_acc];
+    pub fn update_pov_move(&mut self, piece: u8, colour: u8, from: u8, to: u8) {
+        const COLOUR_STRIDE: usize = 64 * 6;
+        const PIECE_STRIDE: usize = 64;
 
-        if stm == WHITE {
+        let piece = piece as usize - 1; // shift into correct range.
+        let colour = colour as usize;
+
+        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
+        let black_idx_from = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
+        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
+        let black_idx_to = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
+
+        self.white_pov[white_idx_from] = 0;
+        self.black_pov[black_idx_from] = 0;
+        self.white_pov[white_idx_to] = 1;
+        self.black_pov[black_idx_to] = 1;
+    }
+
+    pub fn update_pov_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: u8) {
+        const COLOUR_STRIDE: usize = 64 * 6;
+        const PIECE_STRIDE: usize = 64;
+
+        let sq = sq;
+        let piece = piece as usize - 1; // shift into correct range.
+        let colour = colour as usize;
+        
+        let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
+        let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
+
+        if IS_ACTIVATE {
+            self.white_pov[white_idx] = 1;
+            self.black_pov[black_idx] = 1;
+        } else {
+            self.white_pov[white_idx] = 0;
+            self.black_pov[black_idx] = 0;
+        }
+    }
+
+    pub fn evaluate(&self, stm: u8) -> i32 {
+        let acc = &self.accumulators[self.current_acc];
+        
+        let output = if stm == WHITE {
             clipped_relu_flatten_and_forward(
                 &acc.white,
                 &acc.black,
                 &self.feature_bias,
                 &self.output_weights,
-                &mut self.output,
                 CR_MIN,
                 CR_MAX,
-            );
+            )
         } else {
             clipped_relu_flatten_and_forward(
                 &acc.black,
                 &acc.white,
                 &self.feature_bias,
                 &self.output_weights,
-                &mut self.output,
                 CR_MIN,
                 CR_MAX,
-            );
-        }
+            )
+        };
 
-        (self.output[0] + i32::from(self.output_bias[0])) * SCALE / QAB
+        (output + i32::from(self.output_bias)) * SCALE / QAB
     }
 
-    pub fn from_json(path: &str) -> Box<Self> {
+    pub fn from_json() -> Box<Self> {
+        #![allow(clippy::cast_possible_truncation)]
         fn weight(weight_relation: &Value, weight_array: &mut [i16], stride: usize, k: i32, flip: bool) {
-            let mut i = 0;
-            for output in weight_relation.as_array().unwrap() {
-                let mut j = 0;
-                for weight in output.as_array().unwrap() {
+            for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
+                for (j, weight) in output.as_array().unwrap().iter().enumerate() {
                     let index = if flip {
                         (j * stride + i) as usize
                     } else {
                         (i * stride + j) as usize
                     };
                     let value = weight.as_f64().unwrap();
-                    weight_array[index] = (value * k as f64) as i16;
-                    j += 1;
+                    weight_array[index] = (value * f64::from(k)) as i16;
                 }
-                i += 1;
             }
         }
 
         fn bias(bias_relation: &Value, bias_array: &mut [i16], k: i32) {
-            let mut i = 0;
-            for bias in bias_relation.as_array().unwrap() {
+            for (i, bias) in bias_relation.as_array().unwrap().iter().enumerate() {
                 let value = bias.as_f64().unwrap();
-                bias_array[i] = (value * k as f64) as i16;
-                i += 1;
+                bias_array[i] = (value * f64::from(k)) as i16;
             }
         }
 
@@ -196,18 +230,15 @@ impl BasicNNUE {
             feature_weights: [0; INPUT * HIDDEN],
             flipped_weights: [0; INPUT * HIDDEN],
             feature_bias: [0; HIDDEN],
-            output_weights: [0; HIDDEN * 2 * OUTPUT],
-            output_bias: [0; OUTPUT],
+            output_weights: [0; HIDDEN * 2],
+            output_bias: 0,
             white_pov: [0; INPUT],
             black_pov: [0; INPUT],
-            accumulators: [BasicAccumulator::new(); ACC_STACK_SIZE],
+            accumulators: [Accumulator::new(); ACC_STACK_SIZE],
             current_acc: 0,
-            output: [0; OUTPUT],
         });
 
-        let file = File::open(path).unwrap();
-        let reader = BufReader::new(file);
-        let json: Value = serde_json::from_reader(reader).unwrap();
+        let json: Value = serde_json::from_str(NNUE_JSON).unwrap();
 
         for property in json.as_object().unwrap() {
             match property.0.as_str() {
@@ -225,7 +256,9 @@ impl BasicNNUE {
                     println!("output weights loaded");
                 }
                 "out.bias" => {
-                    bias(property.1, &mut out.output_bias, QAB);
+                    let mut temparr = [0];
+                    bias(property.1, &mut temparr, QAB);
+                    out.output_bias = temparr[0];
                     println!("output bias loaded");
                 }
                 _ => {}
@@ -235,6 +268,25 @@ impl BasicNNUE {
         println!("nnue loaded");
 
         out
+    }
+
+    pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
+        self.white_pov
+            .iter()
+            .enumerate()
+            .filter(|(_, &x)| x == 1)
+            .map(|(i, _)| i)
+    }
+
+    pub const fn feature_loc_to_parts(loc: usize) -> (u8, u8, u8) {
+        #![allow(clippy::cast_possible_truncation)]
+        const COLOUR_STRIDE: usize = 64 * 6;
+        const PIECE_STRIDE: usize = 64;
+        let colour = (loc / COLOUR_STRIDE) as u8;
+        let rem = loc % COLOUR_STRIDE;
+        let piece = (rem / PIECE_STRIDE) as u8;
+        let sq = (rem % PIECE_STRIDE) as u8;
+        (colour, piece, sq)
     }
 }
 
@@ -255,7 +307,7 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     offset_add: usize,
 ) {
     for i in 0..SIZE {
-        input[i] = input[i] + delta[offset_add + i];
+        input[i] += delta[offset_add + i];
     }
 }
 
@@ -265,7 +317,7 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     offset_sub: usize,
 ) {
     for i in 0..SIZE {
-        input[i] = input[i] - delta[offset_sub + i];
+        input[i] -= delta[offset_sub + i];
     }
 }
 
@@ -273,44 +325,116 @@ pub fn clipped_relu_flatten_and_forward<
     const SIZE: usize, 
     const BIAS: usize, 
     const WEIGHTS: usize,
-    const OUTPUT: usize,
 >(
     input_us: &[i16; SIZE],
     input_them: &[i16; SIZE],
     bias: &[i16; BIAS],
     weights: &[i16; WEIGHTS],
-    output: &mut [i32; OUTPUT],
     min: i16,
     max: i16,
-) {
-    for i in 0..OUTPUT {
-        let mut sum: i32 = 0;
-        for j in 0..SIZE {
-            let input = input_us;
-            let r_idx = j;
-            sum += i32::from((input[r_idx] + bias[i]).clamp(min, max)) * i32::from(weights[j]);
-        }
-        for j in SIZE..(SIZE * 2) {
-            let input = input_them;
-            let r_idx = j - SIZE;
-            sum += i32::from((input[r_idx] + bias[i]).clamp(min, max)) * i32::from(weights[j]);
-        }
-        output[i] = sum;
+) -> i32 {
+    let mut sum: i32 = 0;
+    for ((&i, &b), &w) in input_us.iter().zip(bias).zip(weights) {
+        sum += i32::from((i + b).clamp(min, max)) * i32::from(w);
     }
+    for ((&i, &b), &w) in input_them.iter().zip(bias).zip(&weights[SIZE..]) {
+        sum += i32::from((i + b).clamp(min, max)) * i32::from(w);
+    }
+    sum
 }
 
-pub static mut GLOBAL_NNUE: Option<Box<BasicNNUE>> = None;
-
-pub fn initialise() {
-    unsafe {
-        GLOBAL_NNUE = Some(BasicNNUE::from_json("..\\marlinflow\\trainer\\nn\\sn0016_80.json"));
+mod tests {
+    #[test]
+    fn pov_preserved() {
+        crate::magic::initialise();
+        let mut board = crate::board::Board::default();
+        board.alloc_tables();
+        let mut t = crate::threadlocal::ThreadData::new();
+        let mut ml = crate::board::movegen::MoveList::new();
+        board.generate_moves(&mut ml);
+        t.nnue.refresh_acc(&board);
+        let initial_white = t.nnue.white_pov;
+        let initial_black = t.nnue.black_pov;
+        for &m in ml.iter() {
+            if !board.make_move_nnue(m, &mut t) {
+                continue;
+            }
+            board.unmake_move_nnue(&mut t);
+            assert_eq!(initial_white, t.nnue.white_pov);
+            assert_eq!(initial_black, t.nnue.black_pov);
+        }
     }
-}
 
-pub fn evaluate(board: &Board) -> i32 {
-    unsafe {
-        let nnue = GLOBAL_NNUE.as_mut().unwrap();
-        nnue.refresh_acc(board);
-        nnue.evaluate(board.turn())
+    #[test]
+    fn pov_preserved_ep() {
+        crate::magic::initialise();
+        let mut board = crate::board::Board::from_fen("rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5").unwrap();
+        board.alloc_tables();
+        let mut t = crate::threadlocal::ThreadData::new();
+        let mut ml = crate::board::movegen::MoveList::new();
+        board.generate_moves(&mut ml);
+        t.nnue.refresh_acc(&board);
+        let initial_white = t.nnue.white_pov;
+        let initial_black = t.nnue.black_pov;
+        for &m in ml.iter() {
+            if !board.make_move_nnue(m, &mut t) {
+                continue;
+            }
+            board.unmake_move_nnue(&mut t);
+            assert_eq!(initial_white, t.nnue.white_pov);
+            assert_eq!(initial_black, t.nnue.black_pov);
+        }
+    }
+
+    #[test]
+    fn pov_preserved_castling() {
+        crate::magic::initialise();
+        let mut board = crate::board::Board::from_fen("rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7").unwrap();
+        board.alloc_tables();
+        let mut t = crate::threadlocal::ThreadData::new();
+        let mut ml = crate::board::movegen::MoveList::new();
+        board.generate_moves(&mut ml);
+        t.nnue.refresh_acc(&board);
+        let initial_white = t.nnue.white_pov;
+        let initial_black = t.nnue.black_pov;
+        for &m in ml.iter() {
+            if !board.make_move_nnue(m, &mut t) {
+                continue;
+            }
+            board.unmake_move_nnue(&mut t);
+            assert_eq!(initial_white, t.nnue.white_pov);
+            assert_eq!(initial_black, t.nnue.black_pov);
+        }
+    }
+
+    #[test]
+    fn pov_preserved_promo() {
+        crate::magic::initialise();
+        let mut board = crate::board::Board::from_fen("rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9").unwrap();
+        board.alloc_tables();
+        let mut t = crate::threadlocal::ThreadData::new();
+        let mut ml = crate::board::movegen::MoveList::new();
+        board.generate_moves(&mut ml);
+        t.nnue.refresh_acc(&board);
+        let initial_white = t.nnue.white_pov;
+        let initial_black = t.nnue.black_pov;
+        for &m in ml.iter() {
+            println!();
+            if !board.make_move_nnue(m, &mut t) {
+                continue;
+            }
+            println!("{m}");
+            board.unmake_move_nnue(&mut t);
+            for i in 0..768 {
+                if initial_white[i] != t.nnue.white_pov[i] {
+                    eprintln!("{i}: {} != {}", initial_white[i], t.nnue.white_pov[i]);
+                }
+                if initial_black[i] != t.nnue.black_pov[i] {
+                    eprintln!("{i}: {} != {}", initial_black[i], t.nnue.black_pov[i]);
+                }
+            }
+            assert_eq!(initial_white, t.nnue.white_pov);
+            assert_eq!(initial_black, t.nnue.black_pov);
+        }
     }
 }
