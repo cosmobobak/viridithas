@@ -360,6 +360,10 @@ pub fn main_loop(params: EvalParams) {
                 pos.clear_tt();
                 res
             }
+            "eval" => {
+                println!("{}", pos.evaluate(0));
+                Ok(())
+            }
             input if input.starts_with("setoption") => parse_setoption(
                 input,
                 &mut info,

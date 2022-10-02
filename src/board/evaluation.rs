@@ -161,41 +161,43 @@ impl Board {
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate(&self, nodes: u64) -> i32 {
-        if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
-        }
+        crate::nnue::evaluate(self)
 
-        let material = self.material[WHITE as usize] - self.material[BLACK as usize];
-        let pst = self.pst_vals;
+        // if !self.pieces.any_pawns() && self.is_material_draw() {
+        //     return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+        // }
 
-        let pawn_structure = self.pawn_structure_term();
-        let bishop_pair = self.bishop_pair_term();
-        let rook_files = self.rook_open_file_term();
-        let queen_files = self.queen_open_file_term();
-        let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
-        let king_danger = self.score_kingdanger(danger_info);
-        let tempo = if self.turn() == WHITE { self.eparams.tempo } else { -self.eparams.tempo };
+        // let material = self.material[WHITE as usize] - self.material[BLACK as usize];
+        // let pst = self.pst_vals;
 
-        let mut score = material;
-        score += pst;
-        score += pawn_structure;
-        score += bishop_pair;
-        score += rook_files;
-        score += queen_files;
-        score += mobility;
-        score += threats;
-        score += king_danger;
-        score += tempo;
+        // let pawn_structure = self.pawn_structure_term();
+        // let bishop_pair = self.bishop_pair_term();
+        // let rook_files = self.rook_open_file_term();
+        // let queen_files = self.queen_open_file_term();
+        // let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
+        // let king_danger = self.score_kingdanger(danger_info);
+        // let tempo = if self.turn() == WHITE { self.eparams.tempo } else { -self.eparams.tempo };
 
-        let score = score.value(self.phase());
+        // let mut score = material;
+        // score += pst;
+        // score += pawn_structure;
+        // score += bishop_pair;
+        // score += rook_files;
+        // score += queen_files;
+        // score += mobility;
+        // score += threats;
+        // score += king_danger;
+        // score += tempo;
 
-        let score = self.preprocess_drawish_scores(score, nodes);
+        // let score = score.value(self.phase());
 
-        if self.side == WHITE {
-            score
-        } else {
-            -score
-        }
+        // let score = self.preprocess_drawish_scores(score, nodes);
+
+        // if self.side == WHITE {
+        //     score
+        // } else {
+        //     -score
+        // }
     }
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {

@@ -39,6 +39,8 @@ fn main() {
 
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
+    // init NNUE
+    nnue::initialise();
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
