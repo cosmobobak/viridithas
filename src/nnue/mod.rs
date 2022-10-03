@@ -22,7 +22,7 @@ const ACC_STACK_SIZE: usize = 256;
 pub const ACTIVATE: bool = true;
 pub const DEACTIVATE: bool = false;
 
-pub static NNUE_JSON: &str = include_str!("C:/github/chess/marlinflow/trainer/nn/viri0000.json");
+pub static NNUE_JSON: &str = include_str!("../../net.json");
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
