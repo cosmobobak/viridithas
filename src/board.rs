@@ -1354,7 +1354,7 @@ impl Board {
                 self.regenerate_pv_line(i_depth);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
-                if i_depth > 8 && !forcing_time_reduction {
+                if i_depth > 8 && !forcing_time_reduction && info.dyntime_allowed {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
                         info,
@@ -1382,7 +1382,7 @@ impl Board {
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_down();
-                    if !fail_increment {
+                    if !fail_increment && info.dyntime_allowed {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }
