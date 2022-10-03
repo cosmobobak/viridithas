@@ -58,7 +58,7 @@ impl NNUE {
         self.white_pov.fill(0);
         self.black_pov.fill(0);
 
-        self.accumulators[self.current_acc].zero_out();
+        self.accumulators[self.current_acc].init(&self.feature_bias);
 
         for colour in [WHITE, BLACK] {
             for piece_type in PAWN..=KING {
@@ -186,14 +186,12 @@ impl NNUE {
             clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.white,
                 &acc.black,
-                &self.feature_bias,
                 &self.output_weights,
             )
         } else {
             clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.black,
                 &acc.white,
-                &self.feature_bias,
                 &self.output_weights,
             )
         };
@@ -294,8 +292,12 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     offset_sub: usize,
     offset_add: usize,
 ) {
-    for i in 0..SIZE {
-        input[i] = input[i] - delta[offset_sub + i] + delta[offset_add + i];
+    for ((ds, da), i) in delta[offset_sub..offset_sub + SIZE]
+        .iter()
+        .zip(delta[offset_add..offset_add + SIZE].iter())
+        .zip(input.iter_mut())
+    {
+        *i = *i - *ds + *da;
     }
 }
 
@@ -304,8 +306,8 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_add: usize,
 ) {
-    for i in 0..SIZE {
-        input[i] += delta[offset_add + i];
+    for (i, d) in input.iter_mut().zip(&delta[offset_add..]) {
+        *i += *d;
     }
 }
 
@@ -314,8 +316,8 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_sub: usize,
 ) {
-    for i in 0..SIZE {
-        input[i] -= delta[offset_sub + i];
+    for (i, d) in input.iter_mut().zip(&delta[offset_sub..]) {
+        *i -= *d;
     }
 }
 
@@ -327,16 +329,15 @@ pub fn clipped_relu_flatten_and_forward<
 >(
     input_us: &[i16; SIZE],
     input_them: &[i16; SIZE],
-    bias: &[i16; SIZE],
     weights: &[i16; WEIGHTS],
 ) -> i32 {
     debug_assert_eq!(SIZE * 2, WEIGHTS);
     let mut sum: i32 = 0;
-    for ((&i, &b), &w) in input_us.iter().zip(bias).zip(weights) {
-        sum += i32::from((i + b).clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in input_us.iter().zip(weights) {
+        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
     }
-    for ((&i, &b), &w) in input_them.iter().zip(bias).zip(&weights[SIZE..]) {
-        sum += i32::from((i + b).clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in input_them.iter().zip(&weights[SIZE..]) {
+        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
     }
     sum
 }

@@ -14,8 +14,8 @@ impl<const HIDDEN: usize> Accumulator<HIDDEN> {
         }
     }
 
-    pub fn zero_out(&mut self) {
-        self.white.fill(0);
-        self.black.fill(0);
+    pub fn init(&mut self, bias: &[i16; HIDDEN]) {
+        self.white.copy_from_slice(bias);
+        self.black.copy_from_slice(bias);
     }
 }
