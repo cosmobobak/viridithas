@@ -22,19 +22,117 @@ const ACC_STACK_SIZE: usize = 256;
 pub const ACTIVATE: bool = true;
 pub const DEACTIVATE: bool = false;
 
-pub static NNUE_JSON: &str = include_str!("../../net.json");
+// read in bytes from files and transmute them into u16s.
+// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
+pub static NNUE: NNUEParams = NNUEParams {
+    feature_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
+    flipped_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
+    feature_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
+    output_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
+    output_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
+};
 
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Debug)]
-pub struct NNUE {
-    // fixed values (can be shared between threads)
+pub struct NNUEParams {
     pub feature_weights: [i16; INPUT * HIDDEN],
     pub flipped_weights: [i16; INPUT * HIDDEN],
     pub feature_bias: [i16; HIDDEN],
     pub output_weights: [i16; HIDDEN * 2],
     pub output_bias: i16,
+}
 
-    // thread-local values
+impl NNUEParams {
+    pub fn from_json(path: &str) -> Box<Self> {
+        #![allow(clippy::cast_possible_truncation)]
+        fn weight(weight_relation: &Value, weight_array: &mut [i16], stride: usize, k: i32, flip: bool) {
+            for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
+                for (j, weight) in output.as_array().unwrap().iter().enumerate() {
+                    let index = if flip {
+                        (j * stride + i) as usize
+                    } else {
+                        (i * stride + j) as usize
+                    };
+                    let value = weight.as_f64().unwrap();
+                    weight_array[index] = (value * f64::from(k)) as i16;
+                }
+            }
+        }
+
+        fn bias(bias_relation: &Value, bias_array: &mut [i16], k: i32) {
+            for (i, bias) in bias_relation.as_array().unwrap().iter().enumerate() {
+                let value = bias.as_f64().unwrap();
+                bias_array[i] = (value * f64::from(k)) as i16;
+            }
+        }
+
+        let mut out = Box::new(Self {
+            feature_weights: [0; INPUT * HIDDEN],
+            flipped_weights: [0; INPUT * HIDDEN],
+            feature_bias: [0; HIDDEN],
+            output_weights: [0; HIDDEN * 2],
+            output_bias: 0,
+        });
+
+        let file = std::fs::read_to_string(path).unwrap();
+        let json: Value = serde_json::from_str(&file).unwrap();
+
+        for property in json.as_object().unwrap() {
+            match property.0.as_str() {
+                "ft.weight" => {
+                    weight(property.1, &mut out.feature_weights, INPUT, QA, false);
+                    weight(property.1, &mut out.flipped_weights, HIDDEN, QA, true);
+                    println!("feature weights loaded");
+                }
+                "ft.bias" => {
+                    bias(property.1, &mut out.feature_bias, QA);
+                    println!("feature bias loaded");
+                }
+                "out.weight" => {
+                    weight(property.1, &mut out.output_weights, HIDDEN * 2, QB, false);
+                    println!("output weights loaded");
+                }
+                "out.bias" => {
+                    let mut temparr = [0];
+                    bias(property.1, &mut temparr, QAB);
+                    out.output_bias = temparr[0];
+                    println!("output bias loaded");
+                }
+                _ => {}
+            }
+        }
+
+        println!("nnue loaded");
+
+        out
+    }
+
+    pub fn to_bytes(&self) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+
+        let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
+        let (head, flipped_weights, tail) = unsafe { self.flipped_weights.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
+        let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
+        let (head, output_weights, tail) = unsafe { self.output_weights.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
+        let ob = [self.output_bias];
+        let (head, output_bias, tail) = unsafe { ob.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
+
+        out.push(feature_weights.to_vec());
+        out.push(flipped_weights.to_vec());
+        out.push(feature_bias.to_vec());
+        out.push(output_weights.to_vec());
+        out.push(output_bias.to_vec());
+
+        out
+    }
+}
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug)]
+pub struct NNUEState {
     pub white_pov: [i16; INPUT],
     pub black_pov: [i16; INPUT],
 
@@ -42,7 +140,16 @@ pub struct NNUE {
     pub current_acc: usize,
 }
 
-impl NNUE {
+impl NNUEState {
+    pub const fn new() -> Self {
+        Self {
+            white_pov: [0; INPUT],
+            black_pov: [0; INPUT],
+            accumulators: [Accumulator::new(); ACC_STACK_SIZE],
+            current_acc: 0,
+        }
+    }
+
     pub fn push_acc(&mut self) {
         self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc];
         self.current_acc += 1;
@@ -58,7 +165,7 @@ impl NNUE {
         self.white_pov.fill(0);
         self.black_pov.fill(0);
 
-        self.accumulators[self.current_acc].init(&self.feature_bias);
+        self.accumulators[self.current_acc].init(&NNUE.feature_bias);
 
         for colour in [WHITE, BLACK] {
             for piece_type in PAWN..=KING {
@@ -98,13 +205,13 @@ impl NNUE {
 
         subtract_and_add_to_all(
             &mut acc.white, 
-            &self.flipped_weights,
+            &NNUE.flipped_weights,
             white_idx_from * HIDDEN,
             white_idx_to * HIDDEN,
         );
         subtract_and_add_to_all(
             &mut acc.black, 
-            &self.flipped_weights,
+            &NNUE.flipped_weights,
             black_idx_from * HIDDEN,
             black_idx_to * HIDDEN,
         );
@@ -129,15 +236,15 @@ impl NNUE {
             debug_assert!(self.black_pov[black_idx] == 0, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
-            add_to_all(&mut acc.white, &self.flipped_weights, white_idx * HIDDEN);
-            add_to_all(&mut acc.black, &self.flipped_weights, black_idx * HIDDEN);
+            add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
+            add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * HIDDEN);
         } else {
             debug_assert!(self.white_pov[white_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
             debug_assert!(self.black_pov[black_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
-            sub_from_all(&mut acc.white, &self.flipped_weights, white_idx * HIDDEN);
-            sub_from_all(&mut acc.black, &self.flipped_weights, black_idx * HIDDEN);
+            sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
+            sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * HIDDEN);
         }
     }
 
@@ -186,84 +293,17 @@ impl NNUE {
             clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.white,
                 &acc.black,
-                &self.output_weights,
+                &NNUE.output_weights,
             )
         } else {
             clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.black,
                 &acc.white,
-                &self.output_weights,
+                &NNUE.output_weights,
             )
         };
 
-        (output + i32::from(self.output_bias)) * SCALE / QAB
-    }
-
-    pub fn from_json() -> Box<Self> {
-        #![allow(clippy::cast_possible_truncation)]
-        fn weight(weight_relation: &Value, weight_array: &mut [i16], stride: usize, k: i32, flip: bool) {
-            for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
-                for (j, weight) in output.as_array().unwrap().iter().enumerate() {
-                    let index = if flip {
-                        (j * stride + i) as usize
-                    } else {
-                        (i * stride + j) as usize
-                    };
-                    let value = weight.as_f64().unwrap();
-                    weight_array[index] = (value * f64::from(k)) as i16;
-                }
-            }
-        }
-
-        fn bias(bias_relation: &Value, bias_array: &mut [i16], k: i32) {
-            for (i, bias) in bias_relation.as_array().unwrap().iter().enumerate() {
-                let value = bias.as_f64().unwrap();
-                bias_array[i] = (value * f64::from(k)) as i16;
-            }
-        }
-
-        let mut out = Box::new(Self {
-            feature_weights: [0; INPUT * HIDDEN],
-            flipped_weights: [0; INPUT * HIDDEN],
-            feature_bias: [0; HIDDEN],
-            output_weights: [0; HIDDEN * 2],
-            output_bias: 0,
-            white_pov: [0; INPUT],
-            black_pov: [0; INPUT],
-            accumulators: [Accumulator::new(); ACC_STACK_SIZE],
-            current_acc: 0,
-        });
-
-        let json: Value = serde_json::from_str(NNUE_JSON).unwrap();
-
-        for property in json.as_object().unwrap() {
-            match property.0.as_str() {
-                "ft.weight" => {
-                    weight(property.1, &mut out.feature_weights, INPUT, QA, false);
-                    weight(property.1, &mut out.flipped_weights, HIDDEN, QA, true);
-                    println!("feature weights loaded");
-                }
-                "ft.bias" => {
-                    bias(property.1, &mut out.feature_bias, QA);
-                    println!("feature bias loaded");
-                }
-                "out.weight" => {
-                    weight(property.1, &mut out.output_weights, HIDDEN * 2, QB, false);
-                    println!("output weights loaded");
-                }
-                "out.bias" => {
-                    let mut temparr = [0];
-                    bias(property.1, &mut temparr, QAB);
-                    out.output_bias = temparr[0];
-                    println!("output bias loaded");
-                }
-                _ => {}
-            }
-        }
-
-        println!("nnue loaded");
-
-        out
+        (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
 
     pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
@@ -340,6 +380,22 @@ pub fn clipped_relu_flatten_and_forward<
         sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
     }
     sum
+}
+
+pub fn convert_json_to_binary(json_path: &str, output_path: &str) {
+    let nnue = NNUEParams::from_json(json_path);
+    let bytes = nnue.to_bytes();
+    std::fs::create_dir(output_path).unwrap();
+    for (fname, byte_vector) in [
+        "feature_weights", 
+        "flipped_weights", 
+        "feature_bias",
+        "output_weights",
+        "output_bias",
+    ].into_iter().zip(&bytes) {
+        let mut f = std::fs::File::create(format!("{}/{}.bin", output_path, fname)).unwrap();
+        std::io::Write::write_all(&mut f, byte_vector).unwrap();
+    }
 }
 
 mod tests {

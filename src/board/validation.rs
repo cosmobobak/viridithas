@@ -9,7 +9,7 @@ use crate::{
     },
     errors::PositionValidityError,
     lookups::{piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, piece_name},
-    piecelist::PieceList, nnue::NNUE,
+    piecelist::PieceList, nnue::NNUEState,
 };
 
 use super::{movegen::bitboards::BitLoop, Board};
@@ -231,9 +231,9 @@ impl Board {
         Ok(())
     }
 
-    pub fn check_nnue_coherency(&self, nn: &NNUE) -> bool {
+    pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
         for feature in nn.active_features() {
-            let (co, pt, sq) = NNUE::feature_loc_to_parts(feature);
+            let (co, pt, sq) = NNUEState::feature_loc_to_parts(feature);
             let pt = pt + 1;
             let piece_on_board = self.piece_at(sq);
             let actual_colour = colour_of(piece_on_board);

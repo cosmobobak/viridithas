@@ -49,4 +49,7 @@ pub struct Cli {
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
+    /// Do conversion from NNUE json to NNUE binary.
+    #[clap(long)]
+    pub nnuejsonconversion: bool,
 }

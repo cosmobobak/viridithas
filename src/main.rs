@@ -93,5 +93,19 @@ fn main() {
         return epd::gamut(epd_path, eparams, cli.epdtime);
     }
 
+    if cli.nnuejsonconversion {
+        let mut json_path = String::new();
+        print!("Enter the path to the JSON file: ");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        std::io::stdin().read_line(&mut json_path).unwrap();
+        let json_path = json_path.trim();
+        let mut nnue_path = String::new();
+        print!("Enter the path for the NNUE binary file: ");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        std::io::stdin().read_line(&mut nnue_path).unwrap();
+        let nnue_path = nnue_path.trim();
+        return nnue::convert_json_to_binary(json_path, nnue_path);
+    }
+
     uci::main_loop(eparams);
 }
