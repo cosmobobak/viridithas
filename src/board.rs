@@ -49,7 +49,10 @@ const UPPER_BOUND: u8 = 1;
 const LOWER_BOUND: u8 = 2;
 const EXACT: u8 = 3;
 
-use self::{evaluation::{score::S, is_mate_score}, movegen::bitboards::BitBoard};
+use self::{
+    evaluation::{is_mate_score, score::S},
+    movegen::bitboards::BitBoard,
+};
 
 static SAN_REGEX_INIT: Once = Once::new();
 static mut SAN_REGEX: Option<Regex> = None;
@@ -1305,6 +1308,34 @@ impl Board {
             print!("{m} ");
         }
         println!();
+    }
+
+    pub fn predicted_moves_left(&self) -> u64 {
+        #![allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
+        static WEIGHTS: [f64; 6] = [
+            0.322_629_598_871_821,
+            -0.789_691_260_856_047_8,
+            -0.001_186_089_580_333_777,
+            -0.000_701_857_880_801_681_8,
+            0.002_348_458_515_297_663_4,
+            88.189_977_391_814_35,
+        ];
+        let half_moves_since_game_start = self.ply;
+        let phase = self.phase();
+        let (a, b) = (half_moves_since_game_start as f64, f64::from(phase));
+        let prediction = b.powi(2).mul_add(
+            WEIGHTS[4],
+            a.powi(2).mul_add(
+                WEIGHTS[3],
+                (a * b).mul_add(WEIGHTS[2], a.mul_add(WEIGHTS[0], b * WEIGHTS[1])),
+            ),
+        ) + WEIGHTS[5];
+        let prediction = prediction.max(2.0);
+        prediction.round() as u64
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.

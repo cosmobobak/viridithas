@@ -291,9 +291,6 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-            if root_node && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {} nodes {}", moves_made + 1, info.nodes);
-            }
 
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
@@ -315,6 +312,9 @@ impl Board {
                 continue;
             }
             moves_made += 1;
+            if root_node && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+                println!("info currmove {m} currmovenumber {} nodes {}", moves_made, info.nodes);
+            }
 
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
