@@ -166,13 +166,17 @@ pub static SQUARE_NAMES: [&str; 64] = [
 /// The name of this piece.
 #[allow(dead_code)]
 static PIECE_NAMES: [&str; 13] = [
-    "NO_PIECE", "pawn", "knight", "bishop", "rook", "queen", "king", "pawn", "knight", "bishop",
-    "rook", "queen", "king",
+    "NO_PIECE", "wpawn", "wknight", "wbishop", "wrook", "wqueen", "wking", "bpawn", "bknight", "bbishop",
+    "brook", "bqueen", "bking",
 ];
 
 #[allow(dead_code)]
 pub fn piece_name(piece: u8) -> Option<&'static str> {
     PIECE_NAMES.get(piece as usize).copied()
+}
+
+pub const fn piece_from_cotype(colour: u8, ty: u8) -> u8 {
+    (colour * 6 + ty) as u8
 }
 
 static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";

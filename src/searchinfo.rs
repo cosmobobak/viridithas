@@ -12,6 +12,7 @@ pub struct SearchInfo<'a> {
     /// The maximum depth of the search.
     pub depth: Depth,
 
+    pub dyntime_allowed: bool,
     pub time_set: bool,
     pub moves_to_go: usize,
     pub infinite: bool,
@@ -43,6 +44,7 @@ impl Default for SearchInfo<'_> {
             start_time: Instant::now(),
             stop_time: Instant::now() + std::time::Duration::from_secs(1),
             depth: 60.into(),
+            dyntime_allowed: false,
             time_set: false,
             moves_to_go: 0,
             infinite: false,
@@ -77,6 +79,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn multiply_time_window(&mut self, factor: f64) {
+        assert!(self.dyntime_allowed);
         let secs = (self.stop_time - self.start_time).as_secs_f64();
         let new_secs = secs * factor;
         let new_duration = std::time::Duration::from_secs_f64(new_secs);

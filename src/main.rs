@@ -26,6 +26,8 @@ mod texel;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod nnue;
+mod threadlocal;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -58,6 +60,15 @@ fn main() {
         return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
     }
 
+    if let Some(path) = cli.nnueconversionpath {
+        let output_path = cli.output.unwrap_or_else(|| {
+            let mut path = path.clone();
+            path.set_extension("nnuedata");
+            path
+        });
+        return nnue::convert::wdl_to_nnue(path, output_path).unwrap();
+    }
+
     if cli.info {
         println!("name: {NAME}");
         println!("version: {VERSION}");
@@ -80,6 +91,20 @@ fn main() {
 
     if let Some(epd_path) = cli.epdpath {
         return epd::gamut(epd_path, eparams, cli.epdtime);
+    }
+
+    if cli.nnuejsonconversion {
+        let mut json_path = String::new();
+        print!("Enter the path to the JSON file: ");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        std::io::stdin().read_line(&mut json_path).unwrap();
+        let json_path = json_path.trim();
+        let mut nnue_path = String::new();
+        print!("Enter the path for the NNUE binary file: ");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        std::io::stdin().read_line(&mut nnue_path).unwrap();
+        let nnue_path = nnue_path.trim();
+        return nnue::convert_json_to_binary(json_path, nnue_path);
     }
 
     uci::main_loop(eparams);

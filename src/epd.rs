@@ -3,7 +3,7 @@ use std::{io::BufRead, path::Path};
 use crate::{
     board::{evaluation::parameters::EvalParams, movegen::MoveVecWrapper, Board},
     chessmove::Move,
-    searchinfo::SearchInfo,
+    searchinfo::SearchInfo, threadlocal::ThreadData,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -25,6 +25,9 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
 
     let mut line = String::new();
     let mut positions = Vec::new();
+
+    let mut thread_data = Vec::new();
+    thread_data.push(ThreadData::new());
 
     while reader.read_line(&mut line).expect("Got invalid UTF-8") > 0 {
         let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>();
@@ -64,6 +67,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
         let Position { fen, best_moves, id } = &position;
         board.set_from_fen(fen).unwrap();
         board.alloc_tables();
+        thread_data.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&board));
         let now = std::time::Instant::now();
         let mut info = SearchInfo {
             print_to_stdout: false,
@@ -72,7 +76,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
             stop_time: now + std::time::Duration::from_millis(time),
             ..SearchInfo::default()
         };
-        let (_, bm) = board.search_position(&mut info);
+        let (_, bm) = board.search_position(&mut info, &mut thread_data);
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed { "".into() } else { format!(", program chose {bm}") };
