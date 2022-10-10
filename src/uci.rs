@@ -159,7 +159,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             if let Some(t) = time {
                 info.time_set = true;
                 info.dyntime_allowed = true;
-                let time = t / moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 30) + inc.unwrap_or(0);
+                let time = t / moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 40) + inc.unwrap_or(0);
                 let time = time.saturating_sub(30);
                 time.min(t)
             } else {
@@ -169,7 +169,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         }
     };
     let max_time_window = movetime.map_or_else(
-        || Duration::from_millis((search_time_window * 2).min(time.unwrap_or(0))), 
+        || Duration::from_millis((search_time_window * 4).min(time.unwrap_or(0))), 
         Duration::from_millis
     );
     info.max_time_window = max_time_window;

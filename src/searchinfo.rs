@@ -2,6 +2,18 @@ use std::{sync::mpsc, time::{Instant, Duration}};
 
 use crate::definitions::depth::Depth;
 
+enum Limit {
+    Infinite,
+    Depth(Depth),
+    FixedMillis(u64),
+    FixedNodes(u64),
+    Variable {
+        time_on_clock: u64,
+        increment: u64,
+        moves_to_go: Option<u64>,
+    }
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.

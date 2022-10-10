@@ -1345,6 +1345,9 @@ impl Board {
         info.setup_for_search();
 
         let legal_moves = self.legal_moves();
+        if legal_moves.is_empty() {
+            return (0, Move::NULL);
+        }
         if legal_moves.len() == 1 {
             info.set_time_window(0);
         }
