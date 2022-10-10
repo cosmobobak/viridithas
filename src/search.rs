@@ -96,6 +96,10 @@ impl Board {
             alpha = stand_pat;
         }
 
+        let original_alpha = alpha;
+        let mut best_move = Move::NULL;
+        let mut best_score = -INFINITY;
+
         let mut move_list = MoveList::new();
         self.generate_captures(&mut move_list);
 
@@ -122,12 +126,24 @@ impl Board {
             let score = -self.quiescence(info, t, -beta, -alpha);
             self.unmake_move_nnue(t);
 
-            if score > alpha {
-                if score >= beta {
-                    return beta;
+            if score > best_score {
+                best_score = score;
+                best_move = m;
+                if score > alpha {
+                    if score >= beta {
+                        self.tt_store(best_move, beta, HFlag::LowerBound, ZERO_PLY);
+                        return beta;
+                    }
+                    alpha = score;
                 }
-                alpha = score;
             }
+        }
+
+        if alpha == original_alpha {
+            // we didn't raise alpha, so this is an all-node
+            self.tt_store(best_move, alpha, HFlag::UpperBound, ZERO_PLY);
+        } else {
+            self.tt_store(best_move, best_score, HFlag::Exact, ZERO_PLY);
         }
 
         alpha
@@ -264,10 +280,10 @@ impl Board {
         self.generate_moves(&mut move_list);
 
         let original_alpha = alpha;
-        let mut moves_made = 0;
-        let mut quiet_moves_made = 0;
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
+        let mut moves_made = 0;
+        let mut quiet_moves_made = 0;
 
         let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
