@@ -204,7 +204,21 @@ impl Board {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
-        t.nnue.evaluate(self.side)
+        let pov_score = t.nnue.evaluate(self.side);
+
+        let abs_score = if self.side == WHITE {
+            pov_score
+        } else {
+            -pov_score
+        };
+
+        let score = self.preprocess_drawish_scores(abs_score, nodes);
+
+        if self.side == WHITE {
+            score
+        } else {
+            -score
+        }
     }
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
