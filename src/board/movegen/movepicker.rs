@@ -24,12 +24,12 @@ impl<'a> MovePicker<'a> {
         self.skip_ordering = true;
     }
 
-    pub fn score_by(&mut self, pre_ordered: &[Move]) {
+    pub fn score_by(&mut self, pre_ordered: &[(Move, u64)]) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         self.movelist.iter_mut().for_each(|m| {
             let score = pre_ordered
                 .iter()
-                .position(|p| p == &m.entry)
+                .position(|p| p.0 == m.entry)
                 .map_or(-1_000_000, |idx| 256 - idx as i32);
             m.score = score;
         });
