@@ -307,7 +307,10 @@ impl Board {
 
         let mut move_picker = move_list.init_movepicker();
         if ROOT {
-            move_picker.score_by(&t.root_legal_moves);
+            if depth == Depth::new(1) {
+                t.root_moves = self.legal_moves().into_iter().map(|m| (m, 0)).collect();
+            }
+            move_picker.score_by(&t.root_moves);
         }
         let mut root_nodecount_record = Vec::new();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
@@ -438,7 +441,7 @@ impl Board {
                             self.tt_store(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        t.order_root_moves(&root_nodecount_record);
+                        if ROOT { t.order_root_moves(&root_nodecount_record); }
                         return beta;
                     }
                 }
@@ -483,7 +486,7 @@ impl Board {
             }
         }
 
-        t.order_root_moves(&root_nodecount_record);
+        if ROOT { t.order_root_moves(&root_nodecount_record); }
         alpha
     }
 

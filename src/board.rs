@@ -1490,7 +1490,7 @@ impl Board {
         eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 
-    fn legal_moves(&mut self) -> Vec<Move> {
+    pub fn legal_moves(&mut self) -> Vec<Move> {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
