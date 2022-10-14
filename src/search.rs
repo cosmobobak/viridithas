@@ -441,7 +441,6 @@ impl Board {
                             self.tt_store(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        if ROOT { t.order_root_moves(&root_nodecount_record); }
                         return beta;
                     }
                 }
