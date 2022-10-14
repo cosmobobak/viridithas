@@ -83,6 +83,17 @@ A small bonus is given for being the side-to-move in a position.
 #### Texel Tuning
 The weights of the evaluation function are tuned on Viridithas's own self-play games.
 
+# Thanks and Acknowledgements
+[python-chess](https://github.com/niklasf/python-chess), without which I would never have been able to gain a love for chess programming.
+
+Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingly clear code of which helped me realise several horrible flaws in Viridithas.
+
+[Shaheryar Sohail](https://github.com/TheBlackPlague), whose (very strong) StockNemo engine evolved alongside Viridithas, and who helped me significantly with NNUE.
+
+[weather-factory](https://github.com/dsekercioglu/weather-factory), which I used only minimally, but which is still responsible for about ~10 elo in Viridithas.
+
+[marlinflow](https://github.com/dsekercioglu/marlinflow), which is responsible for all neural network training for Viridithas.
+
 [build-badge]:https://img.shields.io/github/workflow/status/cosmobobak/virtue/Rust?logo=github&style=for-the-badge
 [build-link]:https://github.com/cosmobobak/virtue/actions/workflows/rust.yml
 [commits-badge]:https://img.shields.io/github/commits-since/cosmobobak/virtue/latest?style=for-the-badge
