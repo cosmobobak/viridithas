@@ -405,7 +405,7 @@ impl Board {
             }
             self.unmake_move_nnue(t);
             let nodes_used = info.nodes - nodes_before;
-            root_nodecount_record.push((m, nodes_used));
+            if ROOT { root_nodecount_record.push((m, nodes_used)) };
 
             if info.stopped {
                 return 0;

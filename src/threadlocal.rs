@@ -18,11 +18,16 @@ impl ThreadData {
     }
 
     pub fn order_root_moves(&mut self, nodecounts: &[(Move, u64)]) {
+        // println!("len of nodecounts: {}", nodecounts.len());
         let nodecount = |m| nodecounts.iter().find(|(m2, _)| *m2 == m).map(|(_, n)| *n);
         // moves with the highest nodecounts at the front, please.
         for entry in &mut self.root_moves {
             entry.1 = nodecount(entry.0).unwrap_or(entry.1);
         }
         self.root_moves.sort_by_key(|b| std::cmp::Reverse(b.1));
+        // for entry in &self.root_moves {
+        //     print!("{}: nc {}, ", entry.0, entry.1);
+        // }
+        // println!();
     }
 }
