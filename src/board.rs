@@ -1362,7 +1362,7 @@ impl Board {
         'deepening: for i_depth in 1..=max_depth {
             // aspiration loop:
             loop {
-                let score = self.alpha_beta::<true>(
+                let score = self.alpha_beta::<true, true>(
                     info,
                     thread_data.first_mut().unwrap(),
                     Depth::new(i_depth),

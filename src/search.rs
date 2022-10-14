@@ -150,7 +150,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn alpha_beta<const PV: bool>(
+    pub fn alpha_beta<const PV: bool, const ROOT: bool>(
         &mut self,
         info: &mut SearchInfo,
         t: &mut ThreadData,
@@ -175,11 +175,11 @@ impl Board {
 
         let height: i32 = self.height().try_into().unwrap();
 
-        let root_node = height == 0;
+        debug_assert_eq!(height == 0, ROOT);
 
-        info.seldepth = if root_node { ZERO_PLY } else { info.seldepth.max(height.into()) };
+        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(height.into()) };
 
-        if !root_node {
+        if !ROOT {
             // check draw
             if self.is_draw() {
                 return draw_score(info.nodes);
@@ -205,7 +205,7 @@ impl Board {
         let excluded = t.excluded[self.height()];
 
         let tt_hit = if excluded.is_null() {
-            match self.tt_probe(alpha, beta, depth, root_node) {
+            match self.tt_probe(alpha, beta, depth, ROOT) {
                 ProbeResult::Cutoff(s) => {
                     return s;
                 }
@@ -266,7 +266,7 @@ impl Board {
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV>(info, t, nm_depth, -beta, -beta + 1);
+            let score = -self.alpha_beta::<PV, false>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -289,7 +289,7 @@ impl Board {
         // number of quiet moves to try before we start pruning
         let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
-        let do_lmp = !PV && !root_node && depth <= self.sparams.lmp_depth && !in_check;
+        let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
         // whether to skip quiet moves (as they would be futile).
         let do_fut_pruning = self.do_futility_pruning(depth, static_eval, alpha, beta);
 
@@ -306,8 +306,10 @@ impl Board {
         ];
 
         let mut move_picker = move_list.init_movepicker();
+        if ROOT {
+            move_picker.score_by(&t.root_legal_moves);
+        }
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
             }
@@ -328,7 +330,7 @@ impl Board {
                 continue;
             }
             moves_made += 1;
-            if root_node && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
                 println!("info currmove {m} currmovenumber {} nodes {}", moves_made, info.nodes);
             }
 
@@ -353,7 +355,7 @@ impl Board {
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
-                !root_node
+                !ROOT
                     && depth >= self.sparams.singularity_depth
                     && tt_hit.tt_move == m
                     && excluded.is_null()
@@ -362,18 +364,18 @@ impl Board {
             });
 
             let mut extension = ZERO_PLY;
-            if !root_node && maybe_singular {
+            if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
                 let is_singular = self.is_singular(info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
-            } else if !root_node {
+            } else if !ROOT {
                 extension = Depth::from(gives_check);
             };
 
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.alpha_beta::<PV>(info, t, depth + extension - 1, -beta, -alpha);
+                score = -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
@@ -389,11 +391,11 @@ impl Board {
                 };
                 // perform a zero-window search
                 score =
-                    -self.alpha_beta::<false>(info, t, depth + extension - r, -alpha - 1, -alpha);
+                    -self.alpha_beta::<false, false>(info, t, depth + extension - r, -alpha - 1, -alpha);
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<PV>(info, t, depth + extension - 1, -beta, -alpha);
+                    score = -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
                 }
             }
             self.unmake_move_nnue(t);
@@ -498,13 +500,14 @@ impl Board {
         self.unmake_move_nnue(t);
         t.excluded[self.height()] = m;
         let value =
-            self.alpha_beta::<false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.alpha_beta::<false, false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move_nnue(m, t);
         value < reduced_beta
     }
 
+    /// function called at root to modify time control if only one move is good.
     pub fn is_forced<const MARGIN: i32>(
         &mut self,
         info: &mut SearchInfo,
@@ -519,7 +522,7 @@ impl Board {
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value =
-            self.alpha_beta::<false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.alpha_beta::<false, true>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
         value < reduced_beta

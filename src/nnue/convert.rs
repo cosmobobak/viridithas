@@ -12,7 +12,7 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
     pos.alloc_tables();
     for fen in fens {
         pos.set_from_fen(fen).unwrap();
-        let pov_score = pos.alpha_beta::<true>(&mut info, &mut t, Depth::new(depth), -INFINITY, INFINITY);
+        let pov_score = pos.alpha_beta::<true, true>(&mut info, &mut t, Depth::new(depth), -INFINITY, INFINITY);
         let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
         evals.push(score);
     }

@@ -1,3 +1,5 @@
+use crate::chessmove::Move;
+
 use super::MAX_POSITION_MOVES;
 
 use super::MoveListEntry;
@@ -11,12 +13,7 @@ pub struct MovePicker<'a> {
 
 impl<'a> MovePicker<'a> {
     pub fn new(moves: &'a mut [MoveListEntry; MAX_POSITION_MOVES], count: usize) -> MovePicker<'a> {
-        Self {
-            movelist: moves,
-            count,
-            index: 0,
-            skip_ordering: false,
-        }
+        Self { movelist: moves, count, index: 0, skip_ordering: false }
     }
 
     pub fn moves_made(&self) -> &[MoveListEntry] {
@@ -25,6 +22,17 @@ impl<'a> MovePicker<'a> {
 
     pub fn skip_ordering(&mut self) {
         self.skip_ordering = true;
+    }
+
+    pub fn score_by(&mut self, pre_ordered: &[Move]) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        self.movelist.iter_mut().for_each(|m| {
+            let score = pre_ordered
+                .iter()
+                .position(|p| p == &m.entry)
+                .map_or(-1_000_000, |idx| 256 - idx as i32);
+            m.score = score;
+        });
     }
 }
 
