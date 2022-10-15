@@ -5,7 +5,7 @@ use std::{
     sync::{
         atomic::{self, AtomicBool},
         mpsc,
-    },
+    }, time::Instant,
 };
 
 use crate::{
@@ -176,6 +176,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(UciError::InvalidFormat("at least one of [wtime, btime, winc, binc] provided, but not all.".into()));
     }
+
+    info.start_time = Instant::now();
 
     Ok(())
 }
