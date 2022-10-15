@@ -159,11 +159,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
         let [our_inc, their_inc] = [incs[0].unwrap_or(0), incs[1].unwrap_or(0)];
-        let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 40);
-        let computed_time_window = our_clock / moves_to_go + our_inc;
-        let computed_time_window = computed_time_window.saturating_sub(30);
-        let time_window = computed_time_window.min(our_clock);
-        let max_time_window = (time_window * 4).min(our_clock);
+        let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
+        let (time_window, max_time_window) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
         info.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
