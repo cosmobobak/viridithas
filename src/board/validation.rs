@@ -1,15 +1,16 @@
 use crate::{
     board::evaluation::score::S,
     definitions::{
-        colour_of, square_name,
+        colour_of, square_name, type_of,
         Rank::{RANK_3, RANK_6},
         Square::NO_SQUARE,
         BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR, type_of,
+        WHITE, WK, WN, WP, WQ, WR,
     },
     errors::PositionValidityError,
-    lookups::{piece_char, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN, piece_name},
-    piecelist::PieceList, nnue::NNUEState,
+    lookups::{piece_char, piece_name, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
+    nnue::NNUEState,
+    piecelist::PieceList,
 };
 
 use super::{movegen::bitboards::BitLoop, Board};

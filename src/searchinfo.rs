@@ -1,4 +1,7 @@
-use std::{sync::mpsc, time::{Instant, Duration}};
+use std::{
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
 use crate::definitions::depth::Depth;
 

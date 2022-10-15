@@ -26,7 +26,7 @@ use crate::{
         Rank::{self, RANK_3, RANK_6},
         Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
         Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
-        KNIGHT, MAX_DEPTH, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR, PAWN,
+        KNIGHT, MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
@@ -36,13 +36,15 @@ use crate::{
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
+    nnue::{ACTIVATE, DEACTIVATE},
     piecelist::PieceList,
     piecesquaretable::pst_value,
     search::{self, parameters::SearchParams, AspirationWindow},
     searchinfo::SearchInfo,
+    threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board}, threadlocal::ThreadData, nnue::{DEACTIVATE, ACTIVATE},
+    validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
 };
 
 const UPPER_BOUND: u8 = 1;
@@ -1340,7 +1342,11 @@ impl Board {
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
-    pub fn search_position(&mut self, info: &mut SearchInfo, thread_data: &mut [ThreadData]) -> (i32, Move) {
+    pub fn search_position(
+        &mut self,
+        info: &mut SearchInfo,
+        thread_data: &mut [ThreadData],
+    ) -> (i32, Move) {
         self.setup_tables_for_search();
         info.setup_for_search();
 
@@ -1392,9 +1398,9 @@ impl Board {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
                         info,
-                        thread_data.first_mut().unwrap(), 
-                        most_recent_move, 
-                        most_recent_score, 
+                        thread_data.first_mut().unwrap(),
+                        most_recent_move,
+                        most_recent_score,
                         Depth::new(i_depth),
                     );
                     info.seldepth = saved_seldepth;

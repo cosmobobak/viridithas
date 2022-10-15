@@ -10,7 +10,8 @@ use rayon::prelude::*;
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     definitions::{INFINITY, WHITE},
-    searchinfo::SearchInfo, threadlocal::ThreadData,
+    searchinfo::SearchInfo,
+    threadlocal::ThreadData,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -127,7 +128,10 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
                 }
             }
         }
-        EvalParams::save_param_vec(&best_params.params, &format!("params/localsearch{iteration:0>3}.txt"));
+        EvalParams::save_param_vec(
+            &best_params.params,
+            &format!("params/localsearch{iteration:0>3}.txt"),
+        );
         iteration += 1;
     }
     best_params

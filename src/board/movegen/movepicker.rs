@@ -27,7 +27,9 @@ impl<'a> MovePicker<'a> {
     pub fn score_by(&mut self, pre_ordered: &[(Move, u64)]) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         self.movelist.iter_mut().for_each(|m| {
-            if m.score == TT_MOVE_SCORE { return; }
+            if m.score == TT_MOVE_SCORE {
+                return;
+            }
             let score = pre_ordered
                 .iter()
                 .position(|p| p.0 == m.entry)

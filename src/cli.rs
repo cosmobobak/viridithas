@@ -16,7 +16,7 @@ pub struct Cli {
     /// Run the perft test suite
     #[clap(long)]
     pub perfttest: bool,
-    /// Run the texel tuner on some data
+    /// Run the texel tuner on a WDL data file.
     #[clap(long, value_parser, value_name = "PATH")]
     pub tune: Option<std::path::PathBuf>,
     /// Limit tuning to a parameter. Can be passed multiple times to limit tuning to multiple parameters.
@@ -49,7 +49,7 @@ pub struct Cli {
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
-    /// Do conversion from NNUE json to NNUE binary.
+    /// Do conversion from NNUE json to NNUE binary. Arg1 is the input path, arg2 is the output path.
     #[clap(long)]
-    pub nnuejsonconversion: bool,
+    pub jsontobin: Vec<std::path::PathBuf>,
 }

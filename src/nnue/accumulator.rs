@@ -1,5 +1,3 @@
-
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Accumulator<const HIDDEN: usize> {
     pub white: [i16; HIDDEN],
@@ -8,10 +6,7 @@ pub struct Accumulator<const HIDDEN: usize> {
 
 impl<const HIDDEN: usize> Accumulator<HIDDEN> {
     pub const fn new() -> Self {
-        Self {
-            white: [0; HIDDEN],
-            black: [0; HIDDEN],
-        }
+        Self { white: [0; HIDDEN], black: [0; HIDDEN] }
     }
 
     pub fn init(&mut self, bias: &[i16; HIDDEN]) {

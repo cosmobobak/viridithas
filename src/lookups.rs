@@ -166,8 +166,8 @@ pub static SQUARE_NAMES: [&str; 64] = [
 /// The name of this piece.
 #[allow(dead_code)]
 static PIECE_NAMES: [&str; 13] = [
-    "NO_PIECE", "wpawn", "wknight", "wbishop", "wrook", "wqueen", "wking", "bpawn", "bknight", "bbishop",
-    "brook", "bqueen", "bking",
+    "NO_PIECE", "wpawn", "wknight", "wbishop", "wrook", "wqueen", "wking", "bpawn", "bknight",
+    "bbishop", "brook", "bqueen", "bking",
 ];
 
 #[allow(dead_code)]

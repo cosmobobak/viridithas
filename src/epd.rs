@@ -3,14 +3,15 @@ use std::{io::BufRead, path::Path};
 use crate::{
     board::{evaluation::parameters::EvalParams, movegen::MoveVecWrapper, Board},
     chessmove::Move,
-    searchinfo::SearchInfo, threadlocal::ThreadData,
+    searchinfo::SearchInfo,
+    threadlocal::ThreadData,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
 const CONTROL_RED: &str = "\u{001b}[31m";
 const CONTROL_RESET: &str = "\u{001b}[0m";
 
-struct Position {
+struct EpdPosition {
     fen: String,
     best_moves: Vec<Move>,
     id: String,
@@ -25,9 +26,6 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
 
     let mut line = String::new();
     let mut positions = Vec::new();
-
-    let mut thread_data = Vec::new();
-    thread_data.push(ThreadData::new());
 
     while reader.read_line(&mut line).expect("Got invalid UTF-8") > 0 {
         let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>();
@@ -55,16 +53,23 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
             .next()
             .unwrap_or_else(|| panic!("no id found in {line}"))
             .to_string();
-        positions.push(Position { fen, best_moves, id });
+        positions.push(EpdPosition { fen, best_moves, id });
         line.clear();
     }
 
     let n_positions = positions.len();
     println!("successfully parsed {n_positions} positions!");
 
+    let successes = run_on_positions(positions, board, time);
+
+    println!("{}/{} passed", successes, n_positions);
+}
+
+fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
+    let mut thread_data = vec![ThreadData::new()];
     let mut successes = 0;
     for position in positions {
-        let Position { fen, best_moves, id } = &position;
+        let EpdPosition { fen, best_moves, id } = &position;
         board.set_from_fen(fen).unwrap();
         board.alloc_tables();
         thread_data.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&board));
@@ -89,6 +94,5 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
             successes += 1;
         }
     }
-
-    println!("{}/{} passed", successes, n_positions);
+    successes
 }

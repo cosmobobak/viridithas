@@ -7,10 +7,10 @@ use crate::{
 
 use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
-    KING_DANGER_COEFFS, KNIGHT_MOBILITY_BONUS, MINOR_THREAT_ON_MAJOR, PASSED_PAWN_BONUS,
-    PAWN_THREAT_ON_MAJOR, PAWN_THREAT_ON_MINOR, PIECE_VALUES, QUEEN_HALF_OPEN_FILE_BONUS,
-    QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS, ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS,
-    ROOK_OPEN_FILE_BONUS, TEMPO_BONUS, KING_DANGER_PIECE_WEIGHTS,
+    KING_DANGER_COEFFS, KING_DANGER_PIECE_WEIGHTS, KNIGHT_MOBILITY_BONUS, MINOR_THREAT_ON_MAJOR,
+    PASSED_PAWN_BONUS, PAWN_THREAT_ON_MAJOR, PAWN_THREAT_ON_MINOR, PIECE_VALUES,
+    QUEEN_HALF_OPEN_FILE_BONUS, QUEEN_MOBILITY_BONUS, QUEEN_OPEN_FILE_BONUS,
+    ROOK_HALF_OPEN_FILE_BONUS, ROOK_MOBILITY_BONUS, ROOK_OPEN_FILE_BONUS, TEMPO_BONUS,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -233,7 +233,7 @@ impl EvalParams {
         {
             *coeff_out = *coeff_in;
         }
-        for (weight_out, weight_in) in 
+        for (weight_out, weight_in) in
             out.king_danger_piece_weights.iter_mut().zip(&data[data.len() - 8..])
         {
             *weight_out = *weight_in;
@@ -243,11 +243,7 @@ impl EvalParams {
 
     pub fn save_param_vec<P: AsRef<Path>>(param_vec: &[i32], path: P) {
         let mut output = std::fs::File::create(path).unwrap();
-        let out = param_vec
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
+        let out = param_vec.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
         std::io::Write::write_all(&mut output, out.as_bytes()).unwrap();
     }
 

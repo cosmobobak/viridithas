@@ -1,11 +1,17 @@
+use std::fs;
+
 use serde_json::Value;
 
-use crate::{board::{Board, movegen::BitLoop}, definitions::{flip_rank, BLACK, WHITE, PAWN, KING}, lookups::{piece_from_cotype, SQUARE_NAMES}};
+use crate::{
+    board::{movegen::BitLoop, Board},
+    definitions::{flip_rank, BLACK, KING, PAWN, WHITE},
+    lookups::{piece_from_cotype, SQUARE_NAMES},
+};
 
 use self::accumulator::Accumulator;
 
-pub mod convert;
 mod accumulator;
+pub mod convert;
 
 const INPUT: usize = 768;
 const HIDDEN: usize = 256;
@@ -25,10 +31,16 @@ pub const DEACTIVATE: bool = false;
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
-    feature_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
-    flipped_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
+    feature_weights: unsafe {
+        std::mem::transmute(*include_bytes!("../../nnue/feature_weights.bin"))
+    },
+    flipped_weights: unsafe {
+        std::mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin"))
+    },
     feature_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
-    output_weights: unsafe { std::mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
+    output_weights: unsafe {
+        std::mem::transmute(*include_bytes!("../../nnue/output_weights.bin"))
+    },
     output_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
 };
 
@@ -41,16 +53,19 @@ pub struct NNUEParams {
 }
 
 impl NNUEParams {
-    pub fn from_json(path: &str) -> Box<Self> {
+    pub fn from_json(path: impl AsRef<std::path::Path>) -> Box<Self> {
         #![allow(clippy::cast_possible_truncation)]
-        fn weight(weight_relation: &Value, weight_array: &mut [i16], stride: usize, k: i32, flip: bool) {
+        fn weight(
+            weight_relation: &Value,
+            weight_array: &mut [i16],
+            stride: usize,
+            k: i32,
+            flip: bool,
+        ) {
             for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
                 for (j, weight) in output.as_array().unwrap().iter().enumerate() {
-                    let index = if flip {
-                        (j * stride + i) as usize
-                    } else {
-                        (i * stride + j) as usize
-                    };
+                    let index =
+                        if flip { (j * stride + i) as usize } else { (i * stride + j) as usize };
                     let value = weight.as_f64().unwrap();
                     weight_array[index] = (value * f64::from(k)) as i16;
                 }
@@ -72,7 +87,7 @@ impl NNUEParams {
             output_bias: 0,
         });
 
-        let file = std::fs::read_to_string(path).unwrap();
+        let file = fs::read_to_string(path).unwrap();
         let json: Value = serde_json::from_str(&file).unwrap();
 
         for property in json.as_object().unwrap() {
@@ -188,14 +203,44 @@ impl NNUEState {
         let colour = colour as usize;
 
         let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
-        let black_idx_from = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
+        let black_idx_from =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
         let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
-        let black_idx_to = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
+        let black_idx_to =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
 
-        debug_assert_eq!(self.white_pov[white_idx_from], 1, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
-        debug_assert_eq!(self.black_pov[black_idx_from], 1, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
-        debug_assert_eq!(self.white_pov[white_idx_to], 0, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
-        debug_assert_eq!(self.black_pov[black_idx_to], 0, "piece: {}, from: {}, to: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[from as usize], SQUARE_NAMES[to as usize]);
+        debug_assert_eq!(
+            self.white_pov[white_idx_from],
+            1,
+            "piece: {}, from: {}, to: {}",
+            crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
+            SQUARE_NAMES[from as usize],
+            SQUARE_NAMES[to as usize]
+        );
+        debug_assert_eq!(
+            self.black_pov[black_idx_from],
+            1,
+            "piece: {}, from: {}, to: {}",
+            crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
+            SQUARE_NAMES[from as usize],
+            SQUARE_NAMES[to as usize]
+        );
+        debug_assert_eq!(
+            self.white_pov[white_idx_to],
+            0,
+            "piece: {}, from: {}, to: {}",
+            crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
+            SQUARE_NAMES[from as usize],
+            SQUARE_NAMES[to as usize]
+        );
+        debug_assert_eq!(
+            self.black_pov[black_idx_to],
+            0,
+            "piece: {}, from: {}, to: {}",
+            crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
+            SQUARE_NAMES[from as usize],
+            SQUARE_NAMES[to as usize]
+        );
         self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
         self.white_pov[white_idx_to] = 1;
@@ -204,20 +249,25 @@ impl NNUEState {
         let acc = &mut self.accumulators[self.current_acc];
 
         subtract_and_add_to_all(
-            &mut acc.white, 
+            &mut acc.white,
             &NNUE.flipped_weights,
             white_idx_from * HIDDEN,
             white_idx_to * HIDDEN,
         );
         subtract_and_add_to_all(
-            &mut acc.black, 
+            &mut acc.black,
             &NNUE.flipped_weights,
             black_idx_from * HIDDEN,
             black_idx_to * HIDDEN,
         );
     }
 
-    pub fn efficiently_update_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: u8) {
+    pub fn efficiently_update_manual<const IS_ACTIVATE: bool>(
+        &mut self,
+        piece: u8,
+        colour: u8,
+        sq: u8,
+    ) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
@@ -225,22 +275,47 @@ impl NNUEState {
         let sq = sq;
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
-        
+
         let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
-        let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
+        let black_idx =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
 
         let acc = &mut self.accumulators[self.current_acc];
 
         if IS_ACTIVATE {
-            debug_assert!(self.white_pov[white_idx] == 0, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
-            debug_assert!(self.black_pov[black_idx] == 0, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
+            debug_assert!(
+                self.white_pov[white_idx] == 0,
+                "piece: {}, sq: {}",
+                crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
+                    .unwrap(),
+                SQUARE_NAMES[sq as usize]
+            );
+            debug_assert!(
+                self.black_pov[black_idx] == 0,
+                "piece: {}, sq: {}",
+                crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
+                    .unwrap(),
+                SQUARE_NAMES[sq as usize]
+            );
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
             add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
             add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * HIDDEN);
         } else {
-            debug_assert!(self.white_pov[white_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
-            debug_assert!(self.black_pov[black_idx] == 1, "piece: {}, sq: {}", crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(), SQUARE_NAMES[sq as usize]);
+            debug_assert!(
+                self.white_pov[white_idx] == 1,
+                "piece: {}, sq: {}",
+                crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
+                    .unwrap(),
+                SQUARE_NAMES[sq as usize]
+            );
+            debug_assert!(
+                self.black_pov[black_idx] == 1,
+                "piece: {}, sq: {}",
+                crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
+                    .unwrap(),
+                SQUARE_NAMES[sq as usize]
+            );
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
             sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
@@ -256,9 +331,11 @@ impl NNUEState {
         let colour = colour as usize;
 
         let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
-        let black_idx_from = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
+        let black_idx_from =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
         let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
-        let black_idx_to = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
+        let black_idx_to =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
 
         self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
@@ -273,9 +350,10 @@ impl NNUEState {
         let sq = sq;
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
-        
+
         let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
-        let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
+        let black_idx =
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
 
         if IS_ACTIVATE {
             self.white_pov[white_idx] = 1;
@@ -288,7 +366,7 @@ impl NNUEState {
 
     pub fn evaluate(&self, stm: u8) -> i32 {
         let acc = &self.accumulators[self.current_acc];
-        
+
         let output = if stm == WHITE {
             clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
                 &acc.white,
@@ -307,11 +385,7 @@ impl NNUEState {
     }
 
     pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
-        self.white_pov
-            .iter()
-            .enumerate()
-            .filter(|(_, &x)| x == 1)
-            .map(|(i, _)| i)
+        self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
     }
 
     pub const fn feature_loc_to_parts(loc: usize) -> (u8, u8, u8) {
@@ -382,18 +456,20 @@ pub fn clipped_relu_flatten_and_forward<
     sum
 }
 
-pub fn convert_json_to_binary(json_path: &str, output_path: &str) {
+pub fn convert_json_to_binary(
+    json_path: impl AsRef<std::path::Path>,
+    output_path: impl AsRef<std::path::Path>,
+) {
     let nnue = NNUEParams::from_json(json_path);
     let bytes = nnue.to_bytes();
-    std::fs::create_dir(output_path).unwrap();
-    for (fname, byte_vector) in [
-        "feature_weights", 
-        "flipped_weights", 
-        "feature_bias",
-        "output_weights",
-        "output_bias",
-    ].into_iter().zip(&bytes) {
-        let mut f = std::fs::File::create(format!("{}/{}.bin", output_path, fname)).unwrap();
+    fs::create_dir(&output_path).unwrap();
+    for (fname, byte_vector) in
+        ["feature_weights", "flipped_weights", "feature_bias", "output_weights", "output_bias"]
+            .into_iter()
+            .zip(&bytes)
+    {
+        let mut f =
+            fs::File::create(output_path.as_ref().join(fname).with_extension("bin")).unwrap();
         std::io::Write::write_all(&mut f, byte_vector).unwrap();
     }
 }
@@ -423,7 +499,10 @@ mod tests {
     #[test]
     fn pov_preserved_ep() {
         crate::magic::initialise();
-        let mut board = crate::board::Board::from_fen("rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5").unwrap();
+        let mut board = crate::board::Board::from_fen(
+            "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
+        )
+        .unwrap();
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
@@ -444,7 +523,10 @@ mod tests {
     #[test]
     fn pov_preserved_castling() {
         crate::magic::initialise();
-        let mut board = crate::board::Board::from_fen("rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7").unwrap();
+        let mut board = crate::board::Board::from_fen(
+            "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
+        )
+        .unwrap();
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
@@ -465,7 +547,10 @@ mod tests {
     #[test]
     fn pov_preserved_promo() {
         crate::magic::initialise();
-        let mut board = crate::board::Board::from_fen("rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9").unwrap();
+        let mut board = crate::board::Board::from_fen(
+            "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
+        )
+        .unwrap();
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();

@@ -6,7 +6,8 @@ use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{
-            get_see_value, is_mate_score, CONTEMPT, MATE_SCORE, MINIMUM_MATE_SCORE, self, mated_in, mate_in,
+            self, get_see_value, is_mate_score, mate_in, mated_in, CONTEMPT, MATE_SCORE,
+            MINIMUM_MATE_SCORE,
         },
         movegen::{
             bitboards::{self, lsb},
@@ -20,7 +21,8 @@ use crate::{
         PAWN, QUEEN, ROOK,
     },
     searchinfo::SearchInfo,
-    transpositiontable::{HFlag, ProbeResult}, threadlocal::ThreadData,
+    threadlocal::ThreadData,
+    transpositiontable::{HFlag, ProbeResult},
 };
 
 use self::parameters::SearchParams;
@@ -57,7 +59,13 @@ const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
-    pub fn quiescence(&mut self, info: &mut SearchInfo, t: &mut ThreadData, mut alpha: i32, beta: i32) -> i32 {
+    pub fn quiescence(
+        &mut self,
+        info: &mut SearchInfo,
+        t: &mut ThreadData,
+        mut alpha: i32,
+        beta: i32,
+    ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -380,7 +388,8 @@ impl Board {
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
+                score =
+                    -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
@@ -395,17 +404,30 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score =
-                    -self.alpha_beta::<false, false>(info, t, depth + extension - r, -alpha - 1, -alpha);
+                score = -self.alpha_beta::<false, false>(
+                    info,
+                    t,
+                    depth + extension - r,
+                    -alpha - 1,
+                    -alpha,
+                );
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
+                    score = -self.alpha_beta::<PV, false>(
+                        info,
+                        t,
+                        depth + extension - 1,
+                        -beta,
+                        -alpha,
+                    );
                 }
             }
             self.unmake_move_nnue(t);
             let nodes_used = info.nodes - nodes_before;
-            if ROOT { root_nodecount_record.push((m, nodes_used)) };
+            if ROOT {
+                root_nodecount_record.push((m, nodes_used))
+            };
 
             if info.stopped {
                 return 0;
@@ -441,7 +463,9 @@ impl Board {
                             self.tt_store(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        if ROOT { t.order_root_moves(&root_nodecount_record); }
+                        if ROOT {
+                            t.order_root_moves(&root_nodecount_record);
+                        }
                         return beta;
                     }
                 }
@@ -486,7 +510,9 @@ impl Board {
             }
         }
 
-        if ROOT { t.order_root_moves(&root_nodecount_record); }
+        if ROOT {
+            t.order_root_moves(&root_nodecount_record);
+        }
         alpha
     }
 
