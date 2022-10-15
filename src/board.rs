@@ -4,7 +4,6 @@ pub mod movegen;
 pub mod validation;
 
 use std::{
-    collections::HashSet,
     fmt::{Debug, Display, Formatter, Write},
     sync::Once,
 };
@@ -102,7 +101,7 @@ pub struct Board {
 
     height: usize,
     history: Vec<Undo>,
-    repetition_cache: HashSet<u64>,
+    repetition_cache: Vec<u64>,
 
     principal_variation: Vec<Move>,
 
@@ -175,7 +174,7 @@ impl Board {
             material: [S(0, 0); 2],
             castle_perm: 0,
             history: Vec::new(),
-            repetition_cache: HashSet::new(),
+            repetition_cache: Vec::new(),
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::new(),
             history_table: HistoryTable::new(),
@@ -807,7 +806,7 @@ impl Board {
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
         });
-        self.repetition_cache.insert(saved_key);
+        self.repetition_cache.push(saved_key);
 
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from as usize) };
         self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to as usize) };
@@ -970,8 +969,8 @@ impl Board {
             self.add_piece(from, if colour_of(m.promotion()) == WHITE { WP } else { BP });
         }
 
-        let something_removed = self.repetition_cache.remove(&self.key);
-        debug_assert!(something_removed);
+        let key = self.repetition_cache.pop().expect("No key to unmake!");
+        debug_assert_eq!(key, self.key);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1235,7 +1234,17 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        self.repetition_cache.contains(&self.key)
+        // search backward because
+        for (key, undo) in self.repetition_cache.iter().rev().zip(self.history.iter().rev()) {
+            if *key == self.key {
+                return true;
+            }
+            // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
+            if undo.fifty_move_counter == 0 {
+                return false;
+            }
+        }
+        false
     }
 
     /// Should we consider the current position a draw?
