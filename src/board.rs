@@ -1361,7 +1361,7 @@ impl Board {
         let mut most_recent_move = legal_moves[0];
         let mut most_recent_score = 0;
         let mut aspiration_window = AspirationWindow::new();
-        let max_depth = std::cmp::min(info.depth, MAX_DEPTH - 1).round();
+        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
@@ -1394,7 +1394,7 @@ impl Board {
                 self.regenerate_pv_line(i_depth);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
-                if i_depth > 8 && !forcing_time_reduction && info.dyntime_allowed {
+                if i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
                         info,
@@ -1422,7 +1422,7 @@ impl Board {
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
                     }
                     aspiration_window.widen_down();
-                    if !fail_increment && info.dyntime_allowed {
+                    if !fail_increment && info.in_game() {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }

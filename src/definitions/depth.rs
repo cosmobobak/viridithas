@@ -4,6 +4,8 @@ use std::{
     str::FromStr,
 };
 
+use super::MAX_DEPTH;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Depth(i32);
 
@@ -20,6 +22,10 @@ impl Depth {
 
     pub const fn from_raw(raw: i32) -> Self {
         Self(raw)
+    }
+    
+    pub fn is_valid(self) -> bool {
+        (ZERO_PLY..=MAX_DEPTH).contains(&self)
     }
 
     pub const fn ply_to_horizon(self) -> usize {

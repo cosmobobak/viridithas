@@ -3,7 +3,7 @@ use std::{io::BufRead, path::Path};
 use crate::{
     board::{evaluation::parameters::EvalParams, movegen::MoveVecWrapper, Board},
     chessmove::Move,
-    searchinfo::SearchInfo,
+    searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
 };
 
@@ -76,9 +76,8 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         let now = std::time::Instant::now();
         let mut info = SearchInfo {
             print_to_stdout: false,
-            time_set: true,
             start_time: now,
-            stop_time: now + std::time::Duration::from_millis(time),
+            limit: SearchLimit::Time(time),
             ..SearchInfo::default()
         };
         let (_, bm) = board.search_position(&mut info, &mut thread_data);

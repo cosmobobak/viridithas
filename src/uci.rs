@@ -6,7 +6,6 @@ use std::{
         atomic::{self, AtomicBool},
         mpsc,
     },
-    time::Duration,
 };
 
 use crate::{
@@ -14,16 +13,15 @@ use crate::{
         evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE},
         Board,
     },
-    definitions::{BLACK, MAX_DEPTH, WHITE},
+    definitions::{BLACK, WHITE},
     errors::{FenParseError, MoveParseError},
     search::parameters::SearchParams,
-    searchinfo::SearchInfo,
+    searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
     NAME, VERSION,
 };
 
 enum UciError {
-    ParseGo(String),
     ParseOption(String),
     ParseFen(FenParseError),
     ParseMove(MoveParseError),
@@ -59,7 +57,6 @@ impl From<ParseIntError> for UciError {
 impl Display for UciError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ParseGo(s) => write!(f, "ParseGo: {}", s),
             Self::ParseOption(s) => write!(f, "ParseOption: {}", s),
             Self::ParseFen(s) => write!(f, "ParseFen: {}", s),
             Self::ParseMove(s) => write!(f, "ParseMove: {}", s),
@@ -125,9 +122,9 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
     let mut movetime: Option<u64> = None;
-    let mut time: Option<u64> = None;
-    let mut inc: Option<u64> = None;
-    info.time_set = false;
+    let mut clocks: [Option<u64>; 2] = [None, None];
+    let mut incs: [Option<u64>; 2] = [None, None];
+    let mut nodes: Option<u64> = None;
 
     let mut parts = text.split_ascii_whitespace();
     let command = parts
@@ -142,64 +139,43 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "depth" => depth = Some(part_parse("depth", parts.next())?),
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
-            "wtime" if pos.turn() == WHITE => time = Some(part_parse("wtime", parts.next())?),
-            "btime" if pos.turn() == BLACK => time = Some(part_parse("btime", parts.next())?),
-            "winc" if pos.turn() == WHITE => inc = Some(part_parse("winc", parts.next())?),
-            "binc" if pos.turn() == BLACK => inc = Some(part_parse("binc", parts.next())?),
-            "infinite" => info.infinite = true,
-            _ => (), //eprintln!("ignoring term in parse_go: {}", part),
+            "wtime" => clocks[pos.turn() as usize] = Some(part_parse("wtime", parts.next())?),
+            "btime"  => clocks[1 ^ pos.turn() as usize] = Some(part_parse("btime", parts.next())?),
+            "winc" => incs[pos.turn() as usize] = Some(part_parse("winc", parts.next())?),
+            "binc" => incs[1 ^ pos.turn() as usize] = Some(part_parse("binc", parts.next())?),
+            "infinite" => info.limit = SearchLimit::Infinite,
+            "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
+            other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
 
-    let search_time_window = match movetime {
-        Some(movetime) => {
-            info.time_set = true;
-            time = Some(movetime);
-            movetime
-        }
-        None => {
-            if let Some(t) = time {
-                info.time_set = true;
-                info.dyntime_allowed = true;
-                let time = t / moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 40)
-                    + inc.unwrap_or(0);
-                let time = time.saturating_sub(30);
-                time.min(t)
-            } else {
-                info.time_set = false;
-                0
-            }
-        }
-    };
-    let max_time_window = movetime.map_or_else(
-        || Duration::from_millis((search_time_window * 4).min(time.unwrap_or(0))),
-        Duration::from_millis,
-    );
-    info.max_time_window = max_time_window;
-
-    let is_computed_time_window_valid =
-        !info.time_set || search_time_window <= time.unwrap() as u64;
-    if !is_computed_time_window_valid {
-        let time = time.unwrap();
-        return Err(UciError::ParseGo(format!(
-            "search window was {search_time_window}, but time was {time}"
-        )));
+    if let Some(movetime) = movetime {
+        info.limit = SearchLimit::Time(movetime);
+    } else if let Some(depth) = depth {
+        info.limit = SearchLimit::Depth(depth.into());
+    } else if let Some(nodes) = nodes {
+        info.limit = SearchLimit::Nodes(nodes);
     }
 
-    info.set_time_window(search_time_window);
-
-    if let Some(depth) = depth {
-        info.depth = depth.into();
-    } else {
-        info.depth = MAX_DEPTH;
+    if let [Some(our_clock), Some(their_clock)] = clocks {
+        let [our_inc, their_inc] = [incs[0].unwrap_or(0), incs[1].unwrap_or(0)];
+        let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left() * 68 / 40);
+        let computed_time_window = our_clock / moves_to_go + our_inc;
+        let computed_time_window = computed_time_window.saturating_sub(30);
+        let time_window = computed_time_window.min(our_clock);
+        let max_time_window = (time_window * 4).min(our_clock);
+        info.limit = SearchLimit::Dynamic {
+            our_clock,
+            their_clock,
+            our_inc,
+            their_inc,
+            moves_to_go,
+            max_time_window,
+            time_window
+        };
+    } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
+        return Err(UciError::InvalidFormat("at least one of [wtime, btime, winc, binc] provided, but not all.".into()));
     }
-
-    // println!(
-    //     "time: {}, depth: {}, timeset: {}",
-    //     info.stop_time.duration_since(info.start_time).as_millis(),
-    //     info.depth.n_ply(),
-    //     info.time_set
-    // );
 
     Ok(())
 }

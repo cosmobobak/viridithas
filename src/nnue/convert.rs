@@ -7,7 +7,7 @@ use std::{
 use crate::{
     board::Board,
     definitions::{depth::Depth, INFINITY, WHITE},
-    searchinfo::SearchInfo,
+    searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
 };
 
@@ -16,8 +16,7 @@ use rayon::prelude::*;
 fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
     let mut pos = Board::default();
     let mut info = SearchInfo {
-        infinite: true,
-        time_set: false,
+        limit: SearchLimit::Infinite,
         print_to_stdout: false,
         ..Default::default()
     };

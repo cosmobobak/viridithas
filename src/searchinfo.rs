@@ -3,24 +3,46 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum SearchLimit {
+    Infinite,
+    Depth(Depth),
+    Time(u64),
+    Nodes(u64),
+    Dynamic {
+        our_clock: u64,
+        their_clock: u64,
+        our_inc: u64,
+        their_inc: u64,
+        moves_to_go: u64,
+        max_time_window: u64,
+        time_window: u64,
+    },
+}
+
+impl Default for SearchLimit {
+    fn default() -> Self {
+        Self::Infinite
+    }
+}
+
+impl SearchLimit {
+    pub const fn depth(&self) -> Option<Depth> {
+        match self {
+            Self::Depth(d) => Some(*d),
+            _ => None,
+        }
+    }
+}
+
 use crate::definitions::depth::Depth;
 
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
     pub start_time: Instant,
-    /// The ending time of the search.
-    pub stop_time: Instant,
 
-    /// The maximum depth of the search.
-    pub depth: Depth,
-
-    pub dyntime_allowed: bool,
-    pub time_set: bool,
-    pub moves_to_go: usize,
-    pub infinite: bool,
     pub nodes: u64,
-    pub max_time_window: Duration,
 
     /// Signal to quit the search.
     pub quit: bool,
@@ -39,20 +61,16 @@ pub struct SearchInfo<'a> {
 
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
+
+    /// Form of the search limit.
+    pub limit: SearchLimit,
 }
 
 impl Default for SearchInfo<'_> {
     fn default() -> Self {
         Self {
             start_time: Instant::now(),
-            stop_time: Instant::now() + std::time::Duration::from_secs(1),
-            depth: 60.into(),
-            dyntime_allowed: false,
-            time_set: false,
-            moves_to_go: 0,
-            infinite: false,
             nodes: 0,
-            max_time_window: std::time::Duration::from_secs(2),
             quit: false,
             stopped: false,
             failhigh: 0,
@@ -60,6 +78,7 @@ impl Default for SearchInfo<'_> {
             seldepth: 0.into(),
             stdin_rx: None,
             print_to_stdout: true,
+            limit: SearchLimit::default(),
         }
     }
 }
@@ -78,20 +97,59 @@ impl<'a> SearchInfo<'a> {
 
     pub fn set_time_window(&mut self, millis: u64) {
         self.start_time = Instant::now();
-        self.stop_time = self.start_time + std::time::Duration::from_millis(millis);
+        match &mut self.limit {
+            SearchLimit::Dynamic {
+                time_window, ..
+            } => {
+                *time_window = millis;
+            }
+            SearchLimit::Time(inner_ms) => {
+                *inner_ms = millis;
+            },
+            other => panic!("Unexpected search limit: {:?}", other),
+        }
     }
 
     pub fn multiply_time_window(&mut self, factor: f64) {
-        assert!(self.dyntime_allowed);
-        let secs = (self.stop_time - self.start_time).as_secs_f64();
-        let new_secs = secs * factor;
-        let new_duration = std::time::Duration::from_secs_f64(new_secs);
-        self.stop_time = self.start_time + new_duration.min(self.max_time_window);
+        #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match &mut self.limit {
+            SearchLimit::Dynamic {
+                time_window, ..
+            } => {
+                *time_window = (*time_window as f64 * factor) as u64;
+            }
+            other => panic!("Unexpected search limit: {:?}", other),
+        }
     }
 
     pub fn check_up(&mut self) {
-        if self.time_set && Instant::now().checked_duration_since(self.stop_time).is_some() {
-            self.stopped = true;
+        match self.limit {
+            SearchLimit::Depth(_) | SearchLimit::Infinite => {}
+            SearchLimit::Time(millis) => {
+                let elapsed = self.start_time.elapsed();
+                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
+                #[allow(clippy::cast_possible_truncation)]
+                let elapsed_millis = elapsed.as_millis() as u64;
+                if elapsed_millis >= millis {
+                    self.stopped = true;
+                }
+            }
+            SearchLimit::Nodes(nodes) => {
+                if self.nodes >= nodes {
+                    self.stopped = true;
+                }
+            }
+            SearchLimit::Dynamic {
+                time_window, ..
+            } => {
+                let elapsed = self.start_time.elapsed();
+                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
+                #[allow(clippy::cast_possible_truncation)]
+                let elapsed_millis = elapsed.as_millis() as u64;
+                if elapsed_millis >= time_window {
+                    self.stopped = true;
+                }
+            }
         }
         if let Some(Ok(cmd)) = self.stdin_rx.map(mpsc::Receiver::try_recv) {
             self.stopped = true;
@@ -103,7 +161,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub const fn in_game(&self) -> bool {
-        !self.infinite
+        matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
     pub fn time_since_start(&self) -> Duration {
