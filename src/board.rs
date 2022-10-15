@@ -1328,16 +1328,10 @@ impl Board {
         ];
         let half_moves_since_game_start = self.ply;
         let phase = self.phase();
-        let (a, b) = (half_moves_since_game_start as f64, f64::from(phase));
-        let prediction = b.powi(2).mul_add(
-            WEIGHTS[4],
-            a.powi(2).mul_add(
-                WEIGHTS[3],
-                (a * b).mul_add(WEIGHTS[2], a.mul_add(WEIGHTS[0], b * WEIGHTS[1])),
-            ),
-        ) + WEIGHTS[5];
-        let prediction = prediction.max(2.0);
-        (2.0 * prediction.round()) as u64 // unconditionally multiplied by two to avoid underestimating MTG and using too much time
+        let (a, b) = (f64::from(phase), half_moves_since_game_start as f64);
+        let features = [a, b, a * b, a * a, b * b, 1.0];
+        let prediction = WEIGHTS.iter().zip(features.iter()).map(|(w, f)| w * f).sum::<f64>();
+        prediction.round().max(2.0) as u64
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
