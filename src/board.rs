@@ -1337,7 +1337,7 @@ impl Board {
             ),
         ) + WEIGHTS[5];
         let prediction = prediction.max(2.0);
-        prediction.round() as u64
+        (2.0 * prediction.round()) as u64 // unconditionally multiplied by two to avoid underestimating MTG and using too much time
     }
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
