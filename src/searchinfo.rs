@@ -3,6 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::definitions::depth::Depth;
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
@@ -42,33 +44,26 @@ impl SearchLimit {
     }
 }
 
-use crate::definitions::depth::Depth;
-
 #[allow(clippy::struct_excessive_bools)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
     pub start_time: Instant,
-
+    /// The number of nodes searched.
     pub nodes: u64,
-
     /// Signal to quit the search.
     pub quit: bool,
     /// Signal to stop the search.
     pub stopped: bool,
-
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
     /// The number of fail-highs that occured on the first move searched.
     pub failhigh_first: u64,
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,
-
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
-
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
-
     /// Form of the search limit.
     pub limit: SearchLimit,
 }

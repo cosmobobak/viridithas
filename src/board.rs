@@ -1467,6 +1467,8 @@ impl Board {
     }
 
     fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo) {
+        #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let nps = (info.nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         let mut bound = BOUND;
         if self.turn() == BLACK {
             bound = match bound {
@@ -1477,21 +1479,21 @@ impl Board {
         }
         if bound == UPPER_BOUND {
             print!(
-                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} pv ",
+                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
         } else if bound == LOWER_BOUND {
             print!(
-                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} pv ",
+                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
             );
         } else {
             print!(
-                "info score {sstring} depth {depth} seldepth {} nodes {} time {} pv ",
+                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis()
