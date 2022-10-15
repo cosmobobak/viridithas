@@ -34,8 +34,8 @@ impl SearchLimit {
         }
     }
 
-    pub fn compute_time_windows(our_clock: u64, moves_to_go: u64, our_inc: u64) -> (u64, u64) {
-        let computed_time_window = our_clock / moves_to_go.min(20) + our_inc / 2;
+    pub fn compute_time_windows(our_clock: u64, _moves_to_go: u64, our_inc: u64) -> (u64, u64) {
+        let computed_time_window = our_clock / 20 + our_inc / 2;
         let time_window = computed_time_window.min(our_clock);
         let max_time_window = (time_window * 5 / 2).min(our_clock);
         (time_window, max_time_window)
@@ -165,6 +165,23 @@ impl<'a> SearchInfo<'a> {
                 self.quit = true;
             }
         };
+    }
+
+    /// If we have used enough time that stopping after finishing a depth would be good here.
+    pub fn is_past_opt_time(&self) -> bool {
+        match self.limit {
+            SearchLimit::Dynamic { 
+                time_window, .. 
+            } => {
+                let elapsed = self.start_time.elapsed();
+                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
+                #[allow(clippy::cast_possible_truncation)]
+                let elapsed_millis = elapsed.as_millis() as u64;
+                let optimistic_time_window = time_window * 8 / 10;
+                elapsed_millis >= optimistic_time_window
+            }
+            _ => false,
+        }
     }
 
     pub const fn in_game(&self) -> bool {
