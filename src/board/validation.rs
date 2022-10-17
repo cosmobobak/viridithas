@@ -233,24 +233,23 @@ impl Board {
     }
 
     pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
-        for feature in nn.active_features() {
-            let (co, pt, sq) = NNUEState::feature_loc_to_parts(feature);
-            let pt = pt + 1;
-            let piece_on_board = self.piece_at(sq);
+        for (colour, piece_type, square) in nn.active_features().map(NNUEState::feature_loc_to_parts) {
+            let piece_type = piece_type + 1; // shift into the correct range, because we reserve 0 for NO_PIECE
+            let piece_on_board = self.piece_at(square);
             let actual_colour = colour_of(piece_on_board);
-            if co != actual_colour {
+            if colour != actual_colour {
                 eprintln!(
                     "coherency check failed: feature on sq {} has colour {}, but piece on board is {}",
-                    sq, co, piece_name(piece_on_board).unwrap()
+                    square, colour, piece_name(piece_on_board).unwrap()
                 );
                 eprintln!("fen: {}", self.fen());
                 return false;
             }
             let actual_piece_type = type_of(piece_on_board);
-            if pt != actual_piece_type {
+            if piece_type != actual_piece_type {
                 eprintln!(
                     "coherency check failed: feature on sq {} has piece type {}, but piece on board is {}",
-                    sq, pt, piece_name(piece_on_board).unwrap()
+                    square, piece_type, piece_name(piece_on_board).unwrap()
                 );
                 eprintln!("fen: {}", self.fen());
                 return false;

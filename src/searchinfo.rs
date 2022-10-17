@@ -100,24 +100,24 @@ impl<'a> SearchInfo<'a> {
     pub fn set_time_window(&mut self, millis: u64) {
         self.start_time = Instant::now();
         match &mut self.limit {
-            SearchLimit::Dynamic {
-                time_window, ..
-            } => {
+            SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = millis;
             }
             SearchLimit::Time(inner_ms) => {
                 *inner_ms = millis;
-            },
+            }
             other => panic!("Unexpected search limit: {:?}", other),
         }
     }
 
     pub fn multiply_time_window(&mut self, factor: f64) {
-        #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
         match &mut self.limit {
-            SearchLimit::Dynamic {
-                time_window, ..
-            } => {
+            SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = (*time_window as f64 * factor) as u64;
             }
             other => panic!("Unexpected search limit: {:?}", other),
@@ -127,23 +127,12 @@ impl<'a> SearchInfo<'a> {
     pub fn check_up(&mut self) {
         match self.limit {
             SearchLimit::Depth(_) | SearchLimit::Infinite => {}
-            SearchLimit::Time(millis) => {
-                let elapsed = self.start_time.elapsed();
-                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
-                #[allow(clippy::cast_possible_truncation)]
-                let elapsed_millis = elapsed.as_millis() as u64;
-                if elapsed_millis >= millis {
-                    self.stopped = true;
-                }
-            }
             SearchLimit::Nodes(nodes) => {
                 if self.nodes >= nodes {
                     self.stopped = true;
                 }
             }
-            SearchLimit::Dynamic {
-                time_window, ..
-            } => {
+            SearchLimit::Time(time_window) | SearchLimit::Dynamic { time_window, .. } => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
@@ -165,9 +154,7 @@ impl<'a> SearchInfo<'a> {
     /// If we have used enough time that stopping after finishing a depth would be good here.
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
-            SearchLimit::Dynamic { 
-                time_window, .. 
-            } => {
+            SearchLimit::Dynamic { time_window, .. } => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
