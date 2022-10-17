@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, mem};
 
 use serde_json::Value;
 
@@ -31,17 +31,11 @@ pub const DEACTIVATE: bool = false;
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
-    feature_weights: unsafe {
-        std::mem::transmute(*include_bytes!("../../nnue/feature_weights.bin"))
-    },
-    flipped_weights: unsafe {
-        std::mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin"))
-    },
-    feature_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
-    output_weights: unsafe {
-        std::mem::transmute(*include_bytes!("../../nnue/output_weights.bin"))
-    },
-    output_bias: unsafe { std::mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
+    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
+    flipped_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
+    feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
+    output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
+    output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
 };
 
 pub struct NNUEParams {
