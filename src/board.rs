@@ -1370,7 +1370,7 @@ impl Board {
         let mut fail_increment = false;
         'deepening: for i_depth in 1..=max_depth {
             // consider stopping early if we've neatly completed a depth:
-            if info.in_game() && info.is_past_opt_time() {
+            if i_depth > 8 && info.in_game() && info.is_past_opt_time() {
                 break 'deepening;
             }
             // aspiration loop:
