@@ -171,7 +171,7 @@ impl TranspositionTable {
             HFlag::None => unsafe { macros::inconceivable!() },
             HFlag::UpperBound => {
                 if !ROOT && score <= alpha {
-                    ProbeResult::Cutoff(alpha)
+                    ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
@@ -183,7 +183,7 @@ impl TranspositionTable {
             }
             HFlag::LowerBound => {
                 if !ROOT && score >= beta {
-                    ProbeResult::Cutoff(beta)
+                    ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
@@ -202,7 +202,7 @@ impl TranspositionTable {
                         tt_value: entry.score,
                     })
                 } else {
-                    ProbeResult::Cutoff(score)
+                    ProbeResult::Cutoff(score) // never cutoff at root.
                 }
             }
         }

@@ -90,7 +90,7 @@ impl Board {
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) = self.tt_probe(alpha, beta, ZERO_PLY, false) {
+        if let ProbeResult::Cutoff(s) = self.tt_probe::<false>(alpha, beta, ZERO_PLY) {
             return s;
         }
 
@@ -213,7 +213,7 @@ impl Board {
         let excluded = t.excluded[self.height()];
 
         let tt_hit = if excluded.is_null() {
-            match self.tt_probe(alpha, beta, depth, ROOT) {
+            match self.tt_probe::<ROOT>(alpha, beta, depth) {
                 ProbeResult::Cutoff(s) => {
                     return s;
                 }
@@ -227,7 +227,7 @@ impl Board {
                 }
             }
         } else {
-            None // do not probe the TT if we're in a singular-verification search, or if we're at the root.
+            None // do not probe the TT if we're in a singular-verification search.
         };
 
         // just enforcing immutability here.
