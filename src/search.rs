@@ -59,7 +59,7 @@ const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
-    pub fn quiescence(
+    pub fn quiescence<const USE_NNUE: bool>(
         &mut self,
         info: &mut SearchInfo,
         t: &mut ThreadData,
@@ -86,7 +86,7 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate(t, info.nodes);
+            return self.evaluate::<USE_NNUE>(t, info.nodes);
         }
 
         // probe the TT and see if we get a cutoff.
@@ -94,7 +94,7 @@ impl Board {
             return s;
         }
 
-        let stand_pat = self.evaluate(t, info.nodes);
+        let stand_pat = self.evaluate::<USE_NNUE>(t, info.nodes);
 
         if stand_pat >= beta {
             return beta;
@@ -131,7 +131,7 @@ impl Board {
                 return beta;
             }
 
-            let score = -self.quiescence(info, t, -beta, -alpha);
+            let score = -self.quiescence::<USE_NNUE>(info, t, -beta, -alpha);
             self.unmake_move_nnue(t);
 
             if score > best_score {
@@ -158,7 +158,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn alpha_beta<const PV: bool, const ROOT: bool>(
+    pub fn alpha_beta<const PV: bool, const ROOT: bool, const USE_NNUE: bool>(
         &mut self,
         info: &mut SearchInfo,
         t: &mut ThreadData,
@@ -171,7 +171,7 @@ impl Board {
         debug_assert!(self.check_nnue_coherency(&t.nnue));
 
         if depth <= ZERO_PLY {
-            return self.quiescence(info, t, alpha, beta);
+            return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
         }
 
         if info.nodes.trailing_zeros() >= 12 {
@@ -195,7 +195,7 @@ impl Board {
 
             // are we too deep?
             if height > MAX_DEPTH.round() - 1 {
-                return self.evaluate(t, info.nodes);
+                return self.evaluate::<USE_NNUE>(t, info.nodes);
             }
 
             // mate-distance pruning.
@@ -238,7 +238,7 @@ impl Board {
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else {
-            self.evaluate(t, info.nodes)
+            self.evaluate::<USE_NNUE>(t, info.nodes)
         };
 
         t.evals[self.height()] = static_eval;
@@ -274,7 +274,7 @@ impl Board {
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV, false>(info, t, nm_depth, -beta, -beta + 1);
+            let score = -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -378,7 +378,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular(info, t, m, tt_value, depth);
+                let is_singular = self.is_singular::<USE_NNUE>(info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
             } else if !ROOT {
                 extension = Depth::from(gives_check);
@@ -389,7 +389,7 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 score =
-                    -self.alpha_beta::<PV, false>(info, t, depth + extension - 1, -beta, -alpha);
+                    -self.alpha_beta::<PV, false, USE_NNUE>(info, t, depth + extension - 1, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
@@ -404,7 +404,7 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score = -self.alpha_beta::<false, false>(
+                score = -self.alpha_beta::<false, false, USE_NNUE>(
                     info,
                     t,
                     depth + extension - r,
@@ -414,7 +414,7 @@ impl Board {
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<PV, false>(
+                    score = -self.alpha_beta::<PV, false, USE_NNUE>(
                         info,
                         t,
                         depth + extension - 1,
@@ -521,7 +521,7 @@ impl Board {
         self.add_followup_history::<IS_GOOD>(m, depth);
     }
 
-    pub fn is_singular(
+    pub fn is_singular<const USE_NNUE: bool>(
         &mut self,
         info: &mut SearchInfo,
         t: &mut ThreadData,
@@ -535,7 +535,7 @@ impl Board {
         self.unmake_move_nnue(t);
         t.excluded[self.height()] = m;
         let value =
-            self.alpha_beta::<false, false>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.alpha_beta::<false, false, USE_NNUE>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move_nnue(m, t);
@@ -557,7 +557,7 @@ impl Board {
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value =
-            self.alpha_beta::<false, true>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.alpha_beta::<false, true, true>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
         value < reduced_beta

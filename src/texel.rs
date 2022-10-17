@@ -41,7 +41,8 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             // set_from_fen does not allocate, so it should be pretty fast.
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
-            let pov_score = Board::quiescence(&mut pos, &mut info, &mut t, -INFINITY, INFINITY);
+            // don't use NNUE, this only works for HCE.
+            let pov_score = Board::quiescence::<false>(&mut pos, &mut info, &mut t, -INFINITY, INFINITY);
             let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)

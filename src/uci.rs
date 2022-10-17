@@ -57,14 +57,14 @@ impl From<ParseIntError> for UciError {
 impl Display for UciError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ParseOption(s) => write!(f, "ParseOption: {}", s),
-            Self::ParseFen(s) => write!(f, "ParseFen: {}", s),
-            Self::ParseMove(s) => write!(f, "ParseMove: {}", s),
+            Self::ParseOption(s) => write!(f, "ParseOption: {s}"),
+            Self::ParseFen(s) => write!(f, "ParseFen: {s}"),
+            Self::ParseMove(s) => write!(f, "ParseMove: {s}"),
             Self::UnexpectedCommandTermination(s) => {
-                write!(f, "UnexpectedCommandTermination: {}", s)
+                write!(f, "UnexpectedCommandTermination: {s}")
             }
-            Self::InvalidFormat(s) => write!(f, "InvalidFormat: {}", s),
-            Self::UnknownCommand(s) => write!(f, "UnknownCommand: {}", s),
+            Self::InvalidFormat(s) => write!(f, "InvalidFormat: {s}"),
+            Self::UnknownCommand(s) => write!(f, "UnknownCommand: {s}"),
         }
     }
 }
@@ -343,7 +343,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate(thread_data.first_mut().unwrap(), 0));
+                println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
                 Ok(())
             }
             input if input.starts_with("setoption") => parse_setoption(

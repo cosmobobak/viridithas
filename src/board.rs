@@ -1375,7 +1375,7 @@ impl Board {
             }
             // aspiration loop:
             loop {
-                let score = self.alpha_beta::<true, true>(
+                let score = self.alpha_beta::<true, true, true>(
                     info,
                     thread_data.first_mut().unwrap(),
                     Depth::new(i_depth),

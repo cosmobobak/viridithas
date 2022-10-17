@@ -198,12 +198,20 @@ impl Board {
         }
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate_nnue(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
         t.nnue.evaluate(self.side)
+    }
+
+    pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        if USE_NNUE {
+            self.evaluate_nnue(t, nodes)
+        } else {
+            self.evaluate_classical(nodes)
+        }
     }
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
