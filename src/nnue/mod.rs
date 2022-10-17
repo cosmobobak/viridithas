@@ -84,24 +84,24 @@ impl NNUEParams {
         let file = fs::read_to_string(path).unwrap();
         let json: Value = serde_json::from_str(&file).unwrap();
 
-        for property in json.as_object().unwrap() {
-            match property.0.as_str() {
+        for (key, value) in json.as_object().unwrap() {
+            match key.as_str() {
                 "ft.weight" => {
-                    weight(property.1, &mut out.feature_weights, INPUT, QA, false);
-                    weight(property.1, &mut out.flipped_weights, HIDDEN, QA, true);
+                    weight(value, &mut out.feature_weights, INPUT, QA, false);
+                    weight(value, &mut out.flipped_weights, HIDDEN, QA, true);
                     println!("feature weights loaded");
                 }
                 "ft.bias" => {
-                    bias(property.1, &mut out.feature_bias, QA);
+                    bias(value, &mut out.feature_bias, QA);
                     println!("feature bias loaded");
                 }
                 "out.weight" => {
-                    weight(property.1, &mut out.output_weights, HIDDEN * 2, QB, false);
+                    weight(value, &mut out.output_weights, HIDDEN * 2, QB, false);
                     println!("output weights loaded");
                 }
                 "out.bias" => {
                     let mut temparr = [0];
-                    bias(property.1, &mut temparr, QAB);
+                    bias(value, &mut temparr, QAB);
                     out.output_bias = temparr[0];
                     println!("output bias loaded");
                 }
