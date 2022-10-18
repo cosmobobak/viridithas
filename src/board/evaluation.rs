@@ -159,7 +159,6 @@ impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
-    #[allow(dead_code)]
     pub fn evaluate_classical(&self, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
