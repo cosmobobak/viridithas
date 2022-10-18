@@ -79,6 +79,7 @@ impl TranspositionTable {
         let new_len = bytes / TT_ENTRY_SIZE;
         self.table.resize(new_len, TTEntry::NULL);
         self.table.shrink_to_fit();
+        self.table.fill(TTEntry::NULL);
     }
 
     pub fn clear_for_search(&mut self, bytes: usize) {
@@ -86,6 +87,7 @@ impl TranspositionTable {
         if self.table.len() != new_len {
             self.table.resize(new_len, TTEntry::NULL);
             self.table.shrink_to_fit();
+            self.table.fill(TTEntry::NULL);
         }
         // else do nothing.
     }
@@ -205,6 +207,10 @@ impl TranspositionTable {
                 }
             }
         }
+    }
+
+    pub fn hashfull(&self) -> usize {
+        self.table.iter().take(1000).filter(|e| e.key != 0).count()
     }
 }
 

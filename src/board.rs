@@ -1475,30 +1475,33 @@ impl Board {
         }
         if bound == UPPER_BOUND {
             print!(
-                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
+                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
-                info.start_time.elapsed().as_millis()
+                info.start_time.elapsed().as_millis(),
+                self.tt.hashfull(),
             );
         } else if bound == LOWER_BOUND {
             print!(
-                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
+                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
-                info.start_time.elapsed().as_millis()
+                info.start_time.elapsed().as_millis(),
+                self.tt.hashfull(),
             );
         } else {
             print!(
-                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} pv ",
+                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
-                info.start_time.elapsed().as_millis()
+                info.start_time.elapsed().as_millis(),
+                self.tt.hashfull(),
             );
         }
         self.print_pv();
-        #[allow(clippy::cast_precision_loss)]
-        let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
-        eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
+        // #[allow(clippy::cast_precision_loss)]
+        // let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
+        // eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 
     pub fn legal_moves(&mut self) -> Vec<Move> {
