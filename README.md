@@ -38,6 +38,8 @@ Whenever a move causes a beta-cutoff, it is remembered as a counter-move to the 
 Every time a move of a piece to a square results in a beta-cutoff, the score of that pairing of (piece, square) is increased in a table. This allows the search to generalise across subtrees to further improve move ordering. Additionally, if a move that was *not* the first move causes a beta-cutoff, the moves that were tried before it have their history scores decreased.
 #### TT-moves
 Best moves previously found in the search are cached in the hashtable. When a position is re-searched, the TT-move is tried before all other moves, as it is extremely likely to be the best move.
+#### Subtree Size At Root
+At the root of the search, the moves are ordered by the number of nodes required to search them in the previous iteration of Iterative Deepening, descending.
 
 ## Search Reduction and Extension Techniques
 #### Null-Move Pruning
