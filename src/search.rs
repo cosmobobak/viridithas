@@ -221,7 +221,7 @@ impl Board {
                 ProbeResult::Nothing => {
                     // TT-reduction.
                     if PV && depth >= self.sparams.tt_reduction_depth {
-                        depth -= 3;
+                        depth -= 1;
                     }
                     None
                 }

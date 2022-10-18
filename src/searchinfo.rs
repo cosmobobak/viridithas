@@ -159,7 +159,7 @@ impl<'a> SearchInfo<'a> {
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
                 let elapsed_millis = elapsed.as_millis() as u64;
-                let optimistic_time_window = time_window * 8 / 10;
+                let optimistic_time_window = time_window * 6 / 10;
                 elapsed_millis >= optimistic_time_window
             }
             _ => false,
