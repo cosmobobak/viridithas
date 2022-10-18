@@ -30,7 +30,7 @@ impl_from_hflag!(i32);
 pub struct TTEntry {
     pub key: u64,
     pub m: Move,
-    pub score: i32,
+    pub score: i16,
     pub depth: CompactDepthStorage,
     pub flag: HFlag,
 }
@@ -110,7 +110,7 @@ impl TranspositionTable {
 
         let score = normalise_mate_score(score, ply);
 
-        let entry = TTEntry { key, m: best_move, score, depth: depth.try_into().unwrap(), flag };
+        let entry = TTEntry { key, m: best_move, score: score.try_into().unwrap(), depth: depth.try_into().unwrap(), flag };
 
         let record_depth: Depth = slot.depth.into();
 
@@ -157,13 +157,13 @@ impl TranspositionTable {
                 tt_move: m,
                 tt_depth: e_depth,
                 tt_bound: entry.flag,
-                tt_value: entry.score,
+                tt_value: entry.score.into(),
             });
         }
 
         // we can't store the score in a tagged union,
         // because we need to do mate score preprocessing.
-        let score = reconstruct_mate_score(entry.score, ply);
+        let score = reconstruct_mate_score(entry.score.into(), ply);
 
         debug_assert!(score >= -INFINITY);
         match entry.flag {
@@ -176,7 +176,7 @@ impl TranspositionTable {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::UpperBound,
-                        tt_value: entry.score,
+                        tt_value: entry.score.into(),
                     })
                 }
             }
@@ -188,7 +188,7 @@ impl TranspositionTable {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::LowerBound,
-                        tt_value: entry.score,
+                        tt_value: entry.score.into(),
                     })
                 }
             }
@@ -198,7 +198,7 @@ impl TranspositionTable {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::Exact,
-                        tt_value: entry.score,
+                        tt_value: entry.score.into(),
                     })
                 } else {
                     ProbeResult::Cutoff(score) // never cutoff at root.

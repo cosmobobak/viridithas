@@ -46,7 +46,7 @@ pub fn get_see_value(piece: u8) -> i32 {
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
 /// e.g. if white has a mate in two ply, the output from a depth-5 search will be
 /// `3_000_000 - 2 = 2_999_998`.
-pub const MATE_SCORE: i32 = 3_000_000;
+pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
 pub const fn mate_in(ply: i32) -> i32 {
     MATE_SCORE - ply
 }
