@@ -21,11 +21,12 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
         ..Default::default()
     };
     let mut t = ThreadData::new();
-    pos.set_hash_size(1);
+    pos.set_hash_size(16);
     pos.alloc_tables();
     for fen in fens {
         pos.set_from_fen(fen).unwrap();
         // no NNUE for generating training data.
+        // TODO: iterative deepening.
         let pov_score =
             pos.alpha_beta::<true, true, false>(&mut info, &mut t, Depth::new(depth), -INFINITY, INFINITY);
         let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
