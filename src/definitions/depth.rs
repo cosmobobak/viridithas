@@ -218,22 +218,23 @@ impl FromStr for Depth {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct CompactDepthStorage(i16);
+pub struct CompactDepthStorage(u8);
 
 impl CompactDepthStorage {
     pub const NULL: Self = Self(0);
 }
 
 impl TryFrom<Depth> for CompactDepthStorage {
-    type Error = <i16 as std::convert::TryFrom<i32>>::Error;
+    type Error = <u8 as std::convert::TryFrom<i32>>::Error;
     fn try_from(depth: Depth) -> Result<Self, Self::Error> {
-        let inner = depth.0.try_into()?;
+        let whole_depth = depth.0 / Depth::INNER_INCR_BY_PLY;
+        let inner = whole_depth.try_into()?;
         Ok(Self(inner))
     }
 }
 
 impl From<CompactDepthStorage> for Depth {
     fn from(depth: CompactDepthStorage) -> Self {
-        Self::from_raw(i32::from(depth.0))
+        Self::new(i32::from(depth.0))
     }
 }

@@ -1,4 +1,4 @@
-use std::{fs, mem};
+use std::{array::from_mut, fs, mem};
 
 use serde_json::Value;
 
@@ -49,9 +49,9 @@ pub struct NNUEParams {
 impl NNUEParams {
     pub fn from_json(path: impl AsRef<std::path::Path>) -> Box<Self> {
         #![allow(clippy::cast_possible_truncation)]
-        fn weight(
+        fn weight<const LEN: usize>(
             weight_relation: &Value,
-            weight_array: &mut [i16],
+            weight_array: &mut [i16; LEN],
             stride: usize,
             k: i32,
             flip: bool,
@@ -66,7 +66,7 @@ impl NNUEParams {
             }
         }
 
-        fn bias(bias_relation: &Value, bias_array: &mut [i16], k: i32) {
+        fn bias<const LEN: usize>(bias_relation: &Value, bias_array: &mut [i16; LEN], k: i32) {
             for (i, bias) in bias_relation.as_array().unwrap().iter().enumerate() {
                 let value = bias.as_f64().unwrap();
                 bias_array[i] = (value * f64::from(k)) as i16;
@@ -89,27 +89,19 @@ impl NNUEParams {
                 "ft.weight" => {
                     weight(value, &mut out.feature_weights, INPUT, QA, false);
                     weight(value, &mut out.flipped_weights, HIDDEN, QA, true);
-                    println!("feature weights loaded");
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
-                    println!("feature bias loaded");
                 }
                 "out.weight" => {
                     weight(value, &mut out.output_weights, HIDDEN * 2, QB, false);
-                    println!("output weights loaded");
                 }
                 "out.bias" => {
-                    let mut temparr = [0];
-                    bias(value, &mut temparr, QAB);
-                    out.output_bias = temparr[0];
-                    println!("output bias loaded");
+                    bias(value, from_mut(&mut out.output_bias), QAB);
                 }
                 _ => {}
             }
         }
-
-        println!("nnue loaded");
 
         out
     }
