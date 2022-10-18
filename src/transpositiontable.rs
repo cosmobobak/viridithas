@@ -45,7 +45,6 @@ impl TTEntry {
     };
 }
 
-const MEGABYTE: usize = 1024 * 1024;
 const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 #[derive(Debug)]
@@ -76,14 +75,14 @@ impl TranspositionTable {
         (key % self.table.len() as u64) as usize
     }
 
-    pub fn resize(&mut self, megabytes: usize) {
-        let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
+    pub fn resize(&mut self, bytes: usize) {
+        let new_len = bytes / TT_ENTRY_SIZE;
         self.table.resize(new_len, TTEntry::NULL);
         self.table.shrink_to_fit();
     }
 
-    pub fn clear_for_search(&mut self, megabytes: usize) {
-        let new_len = megabytes * MEGABYTE / TT_ENTRY_SIZE;
+    pub fn clear_for_search(&mut self, bytes: usize) {
+        let new_len = bytes / TT_ENTRY_SIZE;
         if self.table.len() != new_len {
             self.table.resize(new_len, TTEntry::NULL);
             self.table.shrink_to_fit();

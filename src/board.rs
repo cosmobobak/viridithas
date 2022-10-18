@@ -110,7 +110,7 @@ pub struct Board {
     counter_move_table: MoveTable,
     followup_history: DoubleHistoryTable,
     tt: TranspositionTable,
-    hash_mb: usize,
+    hashtable_bytes: usize,
 
     eparams: evaluation::parameters::EvalParams,
     pub sparams: SearchParams,
@@ -183,7 +183,7 @@ impl Board {
             followup_history: DoubleHistoryTable::new(),
             pst_vals: S(0, 0),
             tt: TranspositionTable::new(),
-            hash_mb: 4,
+            hashtable_bytes: 4 * 1024 * 1024,
             eparams: evaluation::parameters::EvalParams::default(),
             sparams: SearchParams::default(),
             lmr_table: search::LMRTable::new(&SearchParams::default()),
@@ -209,7 +209,7 @@ impl Board {
     /// Nuke the transposition table.
     /// This wipes all entries in the table, don't call it during a search.
     pub fn clear_tt(&mut self) {
-        self.tt.resize(self.hash_mb);
+        self.tt.resize(self.hashtable_bytes);
     }
 
     pub const fn ep_sq(&self) -> u8 {
@@ -217,7 +217,7 @@ impl Board {
     }
 
     pub fn set_hash_size(&mut self, mb: usize) {
-        self.hash_mb = mb;
+        self.hashtable_bytes = mb * 1024 * 1024;
         self.clear_tt();
     }
 
@@ -1271,7 +1271,7 @@ impl Board {
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
         self.height = 0;
-        self.tt.clear_for_search(self.hash_mb);
+        self.tt.clear_for_search(self.hashtable_bytes);
     }
 
     pub fn alloc_tables(&mut self) {
@@ -1279,7 +1279,7 @@ impl Board {
         self.followup_history.clear();
         self.counter_move_table.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.tt.clear_for_search(self.hash_mb);
+        self.tt.clear_for_search(self.hashtable_bytes);
         self.height = 0;
         self.movegen_ready = true;
     }
