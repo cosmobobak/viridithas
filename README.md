@@ -88,6 +88,8 @@ The weights of the evaluation function are tuned on Viridithas's own self-play g
 # Thanks and Acknowledgements
 [python-chess](https://github.com/niklasf/python-chess), without which I would never have been able to gain a love for chess programming.
 
+The [VICE](https://www.youtube.com/playlist?list=PLZ1QII7yudbc-Ky058TEaOstZHVbT-2hg) video series, which was invaluable for explaining how various chess engine concepts can be implemented.
+
 Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingly clear code of which helped me realise several horrible flaws in Viridithas.
 
 [Shaheryar Sohail](https://github.com/TheBlackPlague), whose (very strong) StockNemo engine evolved alongside Viridithas, and who helped me significantly with NNUE.
