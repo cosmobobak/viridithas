@@ -46,7 +46,7 @@ pub fn wdl_to_nnue<P1: AsRef<Path>, P2: AsRef<Path>>(
         Format::Marlinflow => from_marlinflow_format(reader)?,
     };
     let cores = num_cpus::get();
-    let chunk_size = fens.len() / cores;
+    let chunk_size = (fens.len() / cores).max(1);
     let evals = fens
         .par_chunks(chunk_size)
         .map(|chunk| {
