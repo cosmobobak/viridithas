@@ -369,7 +369,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
-                    pos.search_position(&mut info, &mut thread_data);
+                    pos.search_position::<true>(&mut info, &mut thread_data);
                 }
                 res
             }

@@ -27,7 +27,7 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::default()
         };
-        let (pov_score, _) = pos.search_position(&mut info, &mut t);
+        let (pov_score, _) = pos.search_position::<false>(&mut info, &mut t);
         let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
         evals.push(score);
     }
