@@ -97,11 +97,11 @@ impl TranspositionTable {
         // else do nothing.
     }
 
-    pub fn store(
+    pub fn store<const PV: bool>(
         &mut self,
         key: u64,
         ply: usize,
-        best_move: Move,
+        mut best_move: Move,
         score: i32,
         flag: HFlag,
         depth: Depth,
@@ -116,20 +116,33 @@ impl TranspositionTable {
         let key = Self::pack_key(key);
         let slot = &mut self.table[index];
 
-        let score = normalise_mate_score(score, ply);
+        if best_move.is_null() {
+            best_move = slot.m;
+        }
 
-        let entry = TTEntry { key, m: best_move, score: score.try_into().unwrap(), depth: depth.try_into().unwrap(), flag };
+        let score = normalise_mate_score(score, ply);
 
         let record_depth: Depth = slot.depth.into();
 
+        // give entries a bonus for type:
+        // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
         let record_flag_bonus = i32::from(slot.flag);
 
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
-        if flag == Exact && slot.flag != Exact || insert_depth * 3 >= record_depth * 2 {
-            *slot = entry;
+        if flag == Exact
+            || slot.key != key
+            || insert_depth * 3 + 2 * Depth::from(PV) >= record_depth * 2
+        {
+            *slot = TTEntry {
+                key,
+                m: best_move,
+                score: score.try_into().unwrap(),
+                depth: depth.try_into().unwrap(),
+                flag,
+            };
         }
     }
 
