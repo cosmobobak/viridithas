@@ -198,8 +198,8 @@ impl Board {
         self.lmr_table = search::LMRTable::new(&self.sparams);
     }
 
-    pub fn tt_store<const PV: bool>(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
-        self.tt.store::<PV>(self.key, self.height, best_move, score, flag, depth);
+    pub fn tt_store(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
+        self.tt.store(self.key, self.height, best_move, score, flag, depth);
     }
 
     pub fn tt_probe<const ROOT: bool>(&self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {

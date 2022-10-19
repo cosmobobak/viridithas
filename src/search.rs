@@ -139,7 +139,7 @@ impl Board {
                 best_move = m;
                 if score > alpha {
                     if score >= beta {
-                        self.tt_store::<false>(best_move, beta, HFlag::LowerBound, ZERO_PLY);
+                        self.tt_store(best_move, beta, HFlag::LowerBound, ZERO_PLY);
                         return beta;
                     }
                     alpha = score;
@@ -149,9 +149,9 @@ impl Board {
 
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
-            self.tt_store::<false>(best_move, alpha, HFlag::UpperBound, ZERO_PLY);
+            self.tt_store(best_move, alpha, HFlag::UpperBound, ZERO_PLY);
         } else {
-            self.tt_store::<false>(best_move, best_score, HFlag::Exact, ZERO_PLY);
+            self.tt_store(best_move, best_score, HFlag::Exact, ZERO_PLY);
         }
 
         alpha
@@ -460,7 +460,7 @@ impl Board {
                         }
 
                         if excluded.is_null() {
-                            self.tt_store::<PV>(best_move, beta, HFlag::LowerBound, depth);
+                            self.tt_store(best_move, beta, HFlag::LowerBound, depth);
                         }
 
                         if ROOT {
@@ -485,7 +485,7 @@ impl Board {
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
-                self.tt_store::<PV>(best_move, alpha, HFlag::UpperBound, depth);
+                self.tt_store(best_move, alpha, HFlag::UpperBound, depth);
             }
         } else {
             // we raised alpha, and didn't raise beta
@@ -506,7 +506,7 @@ impl Board {
             }
 
             if excluded.is_null() {
-                self.tt_store::<PV>(best_move, best_score, HFlag::Exact, depth);
+                self.tt_store(best_move, best_score, HFlag::Exact, depth);
             }
         }
 

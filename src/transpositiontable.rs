@@ -97,7 +97,7 @@ impl TranspositionTable {
         // else do nothing.
     }
 
-    pub fn store<const PV: bool>(
+    pub fn store(
         &mut self,
         key: u64,
         ply: usize,
@@ -134,7 +134,7 @@ impl TranspositionTable {
 
         if flag == Exact
             || slot.key != key
-            || insert_depth * 3 + 2 * Depth::from(PV) >= record_depth * 2
+            || insert_depth * 3 >= record_depth * 2
         {
             *slot = TTEntry {
                 key,
