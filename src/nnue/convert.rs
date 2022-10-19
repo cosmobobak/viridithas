@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     board::Board,
-    definitions::{depth::Depth, WHITE},
+    definitions::depth::Depth,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
 };
@@ -27,8 +27,7 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::default()
         };
-        let (pov_score, _) = pos.search_position::<false>(&mut info, &mut t);
-        let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
+        let (score, _) = pos.search_position::<false>(&mut info, &mut t);
         evals.push(score);
     }
 }
