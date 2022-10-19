@@ -80,7 +80,7 @@ impl TranspositionTable {
 
     const fn pack_key(key: u64) -> u16 {
         #![allow(clippy::cast_possible_truncation)]
-        (key >> 48) as u16
+        key as u16
     }
 
     pub fn resize(&mut self, bytes: usize) {
