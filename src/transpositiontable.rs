@@ -117,29 +117,29 @@ impl TranspositionTable {
 
         let index = self.wrap_key(key);
         let key = Self::pack_key(key);
-        let slot = &mut self.table[index];
+        let entry = &mut self.table[index];
 
         if best_move.is_null() {
-            best_move = slot.m;
+            best_move = entry.m;
         }
 
         let score = normalise_mate_score(score, ply);
 
-        let record_depth: Depth = slot.depth.into();
+        let record_depth: Depth = entry.depth.into();
 
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
-        let record_flag_bonus = i32::from(slot.flag);
+        let record_flag_bonus = i32::from(entry.flag);
 
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
-        if slot.key != key
-            || flag == Exact && slot.flag != Exact
+        if entry.key != key
+            || flag == Exact && entry.flag != Exact
             || insert_depth * 3 >= record_depth * 2
         {
-            *slot = TTEntry {
+            *entry = TTEntry {
                 key,
                 m: best_move,
                 score: score.try_into().unwrap(),
