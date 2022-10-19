@@ -77,7 +77,7 @@ impl TranspositionTable {
 
     const fn pack_key(key: u64) -> u16 {
         #![allow(clippy::cast_possible_truncation)]
-        key as u16
+        (key >> 48) as u16
     }
 
     pub fn resize(&mut self, bytes: usize) {
@@ -132,8 +132,8 @@ impl TranspositionTable {
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
-        if flag == Exact
-            || slot.key != key
+        if slot.key != key
+            || flag == Exact && slot.flag != Exact
             || insert_depth * 3 >= record_depth * 2
         {
             *slot = TTEntry {
