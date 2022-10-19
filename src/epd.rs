@@ -73,10 +73,9 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         board.set_from_fen(fen).unwrap();
         board.alloc_tables();
         thread_data.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&board));
-        let now = std::time::Instant::now();
+        
         let mut info = SearchInfo {
             print_to_stdout: false,
-            start_time: now,
             limit: SearchLimit::Time(time),
             ..SearchInfo::default()
         };

@@ -46,6 +46,9 @@ pub struct Cli {
     /// Path to a WDL data file to evaluate for NNUE data.
     #[clap(long, value_name = "PATH")]
     pub nnueconversionpath: Option<std::path::PathBuf>,
+    /// Path to an NNUE data file to reanalyse with the current evaluation parameters.
+    #[clap(long, value_name = "PATH")]
+    pub nnuereanalysepath: Option<std::path::PathBuf>,
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
