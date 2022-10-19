@@ -75,6 +75,7 @@ impl TranspositionTable {
         // take the bottom 32 bits of the key
         let key = (key as u32) as usize;
         let len = self.table.len();
+        // fixed-point multiplication trick!
         (key * len) >> 32
     }
 
