@@ -72,11 +72,10 @@ impl TranspositionTable {
 
     fn wrap_key(&self, key: u64) -> usize {
         #![allow(clippy::cast_possible_truncation)]
-        // take the bottom 32 bits of the key
-        let key = (key as u32) as usize;
-        let len = self.table.len();
+        let key = u128::from(key);
+        let len = self.table.len() as u128;
         // fixed-point multiplication trick!
-        (key * len) >> 32
+        ((key * len) >> 64) as usize
     }
 
     const fn pack_key(key: u64) -> u16 {
