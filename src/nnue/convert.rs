@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write, self},
     path::Path,
 };
 
@@ -36,7 +36,7 @@ pub fn wdl_to_nnue<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
     format: Format,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     let input_file = File::open(input_file)?;
     let output_file = File::create(output_file)?;
     let reader = BufReader::new(input_file);
@@ -62,7 +62,7 @@ pub fn wdl_to_nnue<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
-fn from_our_texel_format(mut reader: BufReader<File>) -> Result<(Vec<String>, Vec<f32>), std::io::Error> {
+fn from_our_texel_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>, Vec<f32>)> {
     let mut line = String::new();
     let mut fens = Vec::new();
     let mut outcomes = Vec::new();
@@ -75,7 +75,7 @@ fn from_our_texel_format(mut reader: BufReader<File>) -> Result<(Vec<String>, Ve
     Ok((fens, outcomes))
 }
 
-fn from_marlinflow_format(mut reader: BufReader<File>) -> Result<(Vec<String>, Vec<f32>), std::io::Error> {
+fn from_marlinflow_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>, Vec<f32>)> {
     let mut line = String::new();
     let mut fens = Vec::new();
     let mut outcomes = Vec::new();
