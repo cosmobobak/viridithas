@@ -7,9 +7,9 @@
   
 </div>
 
-# Viridithas II, a UCI chess engine written in Rust.
+# Viridithas, a UCI chess engine written in Rust.
 
-Viridithas II is a free and open source chess engine and the successor to the original [Viridithas](https://github.com/cosmobobak/viridithas-chess).
+Viridithas is a free and open source chess engine and the successor to the original [Viridithas](https://github.com/cosmobobak/viridithas-chess).
 
 Viridithas is not a complete chess program and requires a UCI-compatible graphical user interface in order to be used comfortably. Read the documentation for your GUI of choice for information about how to use Viridithas with it.
 
