@@ -103,9 +103,6 @@ impl<'a> SearchInfo<'a> {
             SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = millis;
             }
-            SearchLimit::Time(inner_ms) => {
-                *inner_ms = millis;
-            }
             other => panic!("Unexpected search limit: {:?}", other),
         }
     }
