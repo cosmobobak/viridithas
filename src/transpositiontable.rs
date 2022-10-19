@@ -28,7 +28,7 @@ impl_from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TTEntry {
-    pub key: u64,
+    pub key: u16,
     pub m: Move,
     pub score: i16,
     pub depth: CompactDepthStorage,
@@ -75,6 +75,11 @@ impl TranspositionTable {
         (key % self.table.len() as u64) as usize
     }
 
+    const fn pack_key(key: u64) -> u16 {
+        #![allow(clippy::cast_possible_truncation)]
+        key as u16
+    }
+
     pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
         self.table.resize(new_len, TTEntry::NULL);
@@ -108,6 +113,7 @@ impl TranspositionTable {
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         let index = self.wrap_key(key);
+        let key = Self::pack_key(key);
         let slot = &mut self.table[index];
 
         let score = normalise_mate_score(score, ply);
@@ -136,6 +142,7 @@ impl TranspositionTable {
         depth: Depth,
     ) -> ProbeResult {
         let index = self.wrap_key(key);
+        let key = Self::pack_key(key);
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);
