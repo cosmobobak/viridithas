@@ -1353,7 +1353,7 @@ impl Board {
         if legal_moves.is_empty() {
             return (0, Move::NULL);
         }
-        if legal_moves.len() == 1 {
+        if info.in_game() && legal_moves.len() == 1 {
             info.set_time_window(0);
         }
 
