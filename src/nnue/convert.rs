@@ -11,8 +11,6 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use rayon::prelude::*;
-
 fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
     let mut pos = Board::default();
     let mut t = vec![ThreadData::new()];
@@ -44,23 +42,33 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
         Format::OurTexel => from_our_texel_format(reader)?,
         Format::Marlinflow => from_marlinflow_format(reader)?,
     };
-    let cores = num_cpus::get();
-    let chunk_size = (fens.len() / cores).max(1);
-    let evals = fens
-        .par_chunks(chunk_size)
-        .map(|chunk| {
-            let mut inner_evals = Vec::new();
-            batch_convert(10, chunk, &mut inner_evals);
-            inner_evals
-        })
-        .flatten()
-        .collect::<Vec<_>>();
+    let evals = parallel_evaluate(&fens);
     let mut output = BufWriter::new(output_file);
     for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
         // data is written to conform with marlinflow's data format.
         writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
     }
     Ok(())
+}
+
+fn parallel_evaluate(fens: &[String]) -> Vec<i32> {
+    let chunk_size = fens.len() / num_cpus::get() + 1;
+    let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
+    std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        let mut evals = Vec::with_capacity(fens.len());
+        for chunk in chunks {
+            handles.push(s.spawn(|| {
+                let mut inner_evals = Vec::new();
+                batch_convert(10, chunk, &mut inner_evals);
+                inner_evals
+            }));
+        }
+        for handle in handles {
+            evals.extend_from_slice(&handle.join().unwrap());
+        }
+        evals
+    })
 }
 
 fn from_our_texel_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>, Vec<f32>)> {

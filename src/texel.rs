@@ -5,7 +5,6 @@ use std::{
 };
 
 use rand::prelude::SliceRandom;
-use rayon::prelude::*;
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
@@ -54,8 +53,18 @@ fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     #![allow(clippy::cast_precision_loss)]
     let params = EvalParams::devectorise(params);
     let n: f64 = data.len() as f64;
-    let chunk_size = data.len() / num_cpus::get();
-    data.par_chunks(chunk_size).map(|chunk| total_squared_error(chunk, &params, k)).sum::<f64>() / n
+    let chunk_size = data.len() / num_cpus::get() + 1; // +1 to avoid 0
+    let chunks = data.chunks(chunk_size).collect::<Vec<_>>();
+    let total = std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for chunk in chunks {
+            handles.push(s.spawn(|| {
+                total_squared_error(chunk, &params, k)
+            }));
+        }
+        handles.into_iter().map(|h| h.join().unwrap()).sum::<f64>()
+    });
+    total / n
 }
 
 struct PVec {

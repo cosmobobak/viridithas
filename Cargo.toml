@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
-rayon = "1.5.3"
 num_cpus = "1.13.1"
 clap = { version = "3.2.16", features = ["derive"] }
 regex = "1.6.0"
