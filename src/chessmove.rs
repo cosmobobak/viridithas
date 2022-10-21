@@ -11,12 +11,12 @@ pub struct Move {
 }
 
 impl Move {
-    const FROM_MASK: u32 = 0b0111_1111;
-    const TO_MASK: u32 = 0b0011_1111_1000_0000;
-    const CAPTURE_MASK: u32 = 0b0011_1100_0000_0000_0000;
-    const PROMO_MASK: u32 = 0b1111_0000_0000_0000_0000_0000;
-    pub const EP_MASK: u32 = 0b0100_0000_0000_0000_0000;
-    pub const PAWN_START_MASK: u32 = 0b1000_0000_0000_0000_0000;
+    const FROM_MASK: u32 =                                0b0111_1111;
+    const TO_MASK: u32 =                        0b0011_1111_1000_0000;
+    const CAPTURE_MASK: u32 =              0b0011_1100_0000_0000_0000;
+    const PROMO_MASK: u32 =           0b1111_0000_0000_0000_0000_0000;
+    pub const EP_MASK: u32 =               0b0100_0000_0000_0000_0000;
+    pub const PAWN_START_MASK: u32 =       0b1000_0000_0000_0000_0000;
     pub const CASTLE_MASK: u32 = 0b0001_0000_0000_0000_0000_0000_0000;
     pub const NULL: Self = Self { data: 0 };
 

@@ -1,7 +1,7 @@
 use std::{io::BufRead, path::Path};
 
 use crate::{
-    board::{evaluation::parameters::EvalParams, movegen::MoveVecWrapper, Board},
+    board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
@@ -83,10 +83,13 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed { "".into() } else { format!(", program chose {bm}") };
-        let d_best_moves = MoveVecWrapper(best_moves.clone());
+        let move_strings = best_moves.iter().map(
+            |&m| if m == bm { format!("{CONTROL_GREEN}{m}{CONTROL_RESET}") } else { m.to_string() }
+        ).collect::<Vec<_>>();
         println!(
-            "{id} {color}{}{CONTROL_RESET} {fen} {d_best_moves}{failinfo}",
-            if passed { "PASS" } else { "FAIL" }
+            "{id} {color}{}{CONTROL_RESET} {fen} [{}]{failinfo}",
+            if passed { "PASS" } else { "FAIL" },
+            move_strings.join(", "),
         );
         if passed {
             successes += 1;

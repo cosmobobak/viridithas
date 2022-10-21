@@ -66,7 +66,7 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::wdl_to_nnue(path, output_path, nnue::convert::Format::OurTexel)
+        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::OurTexel)
             .unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
@@ -74,7 +74,7 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::wdl_to_nnue(path, output_path, nnue::convert::Format::Marlinflow)
+        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::Marlinflow)
             .unwrap();
     }
 
@@ -84,6 +84,10 @@ fn main() {
         println!(
             "number of evaluation parameters: {}",
             board::evaluation::parameters::EvalParams::default().vectorise().len()
+        );
+        println!(
+            "size of a transposition table entry: {}",
+            std::mem::size_of::<transpositiontable::TTEntry>()
         );
         return;
     }

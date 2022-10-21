@@ -63,7 +63,6 @@ mod tests {
     #[test]
     fn perft_hard_position() {
         use super::*;
-        use crate::board::movegen::MoveVecWrapper;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
         crate::magic::initialise();
@@ -81,7 +80,7 @@ mod tests {
                     pos.unmake_move();
                 }
             }
-            MoveVecWrapper(legal)
+            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
@@ -91,7 +90,6 @@ mod tests {
     #[test]
     fn perft_start_position() {
         use super::*;
-        use crate::board::movegen::MoveVecWrapper;
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.alloc_tables();
@@ -107,7 +105,7 @@ mod tests {
                     pos.unmake_move();
                 }
             }
-            MoveVecWrapper(legal)
+            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
@@ -117,7 +115,6 @@ mod tests {
     #[test]
     fn perft_krk() {
         use super::*;
-        use crate::board::movegen::MoveVecWrapper;
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.alloc_tables();
@@ -132,7 +129,7 @@ mod tests {
                     pos.unmake_move();
                 }
             }
-            MoveVecWrapper(legal)
+            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
     }
 }

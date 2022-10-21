@@ -32,7 +32,7 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>) {
     }
 }
 
-pub fn wdl_to_nnue<P1: AsRef<Path>, P2: AsRef<Path>>(
+pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
     format: Format,
@@ -57,6 +57,7 @@ pub fn wdl_to_nnue<P1: AsRef<Path>, P2: AsRef<Path>>(
         .collect::<Vec<_>>();
     let mut output = BufWriter::new(output_file);
     for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
+        // data is written to conform with marlinflow's data format.
         writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
     }
     Ok(())
@@ -66,6 +67,7 @@ fn from_our_texel_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>
     let mut line = String::new();
     let mut fens = Vec::new();
     let mut outcomes = Vec::new();
+    // texel format is <FEN>;<WDL>
     while reader.read_line(&mut line)? > 0 {
         let (fen, outcome) = line.trim().split_once(';').unwrap();
         fens.push(fen.to_string());
@@ -79,6 +81,7 @@ fn from_marlinflow_format(mut reader: BufReader<File>) -> io::Result<(Vec<String
     let mut line = String::new();
     let mut fens = Vec::new();
     let mut outcomes = Vec::new();
+    // marlinflow format is <FEN> | <EVAL> | <WDL>
     while reader.read_line(&mut line)? > 0 {
         let (fen, rest) = line.trim().split_once('|').unwrap();
         let fen = fen.trim();

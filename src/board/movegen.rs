@@ -105,21 +105,6 @@ impl Display for MoveList {
     }
 }
 
-pub struct MoveVecWrapper(pub Vec<Move>);
-impl Display for MoveVecWrapper {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        if self.0.is_empty() {
-            return write!(f, "[]");
-        }
-        write!(f, "[")?;
-        for m in &self.0[..self.0.len() - 1] {
-            write!(f, "{}, ", m)?;
-        }
-        write!(f, "{}", self.0.last().unwrap())?;
-        write!(f, "]")
-    }
-}
-
 impl Board {
     fn add_promo_move(&self, m: Move, move_list: &mut MoveList) {
         let mut score = get_mvv_lva_score(m.promotion(), PAWN);

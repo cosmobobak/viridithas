@@ -28,11 +28,11 @@ impl_from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TTEntry {
-    pub key: u16,
-    pub m: Move,
-    pub score: i16,
-    pub depth: CompactDepthStorage,
-    pub flag: HFlag,
+    pub key: u16,                   // 16 bits
+    pub m: Move,                    // 32 bits
+    pub score: i16,                 // 16 bits
+    pub depth: CompactDepthStorage, // 8 bits
+    pub flag: HFlag,                // 4 bits (8 with padding)
 }
 
 impl TTEntry {
