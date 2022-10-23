@@ -52,11 +52,6 @@ pub const fn first_square(x: u64) -> Square {
 
 /// Iterator over the squares of a bitboard.
 /// The squares are returned in increasing order.
-/// ```
-/// let bb = 0b010110;
-/// let squares = BitLoop::new(bb).collect::<Vec<_>>();
-/// assert_eq!(squares, vec![1, 2, 4]);
-/// ```
 pub struct BitLoop {
     value: u64,
 }
