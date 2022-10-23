@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, BOARD_N_SQUARES, PIECE_EMPTY},
+    definitions::{depth::Depth, BOARD_N_SQUARES, PIECE_EMPTY, Square},
     validate::piece_valid,
 };
 
@@ -65,14 +65,14 @@ impl HistoryTable {
         self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub const fn get(&self, piece: u8, sq: u8) -> i32 {
+    pub const fn get(&self, piece: u8, sq: Square) -> i32 {
         let pt = piece_index(piece);
-        self.table[pt as usize][sq as usize]
+        self.table[pt as usize][sq.index()]
     }
 
-    pub fn get_mut(&mut self, piece: u8, sq: u8) -> &mut i32 {
+    pub fn get_mut(&mut self, piece: u8, sq: Square) -> &mut i32 {
         let pt = piece_index(piece);
-        &mut self.table[pt as usize][sq as usize]
+        &mut self.table[pt as usize][sq.index()]
     }
 
     #[allow(dead_code)]
@@ -135,20 +135,20 @@ impl DoubleHistoryTable {
         self.table.iter_mut().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub fn get(&self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> i32 {
+    pub fn get(&self, piece_1: u8, sq1: Square, piece_2: u8, sq2: Square) -> i32 {
         let pt_1 = piece_index(piece_1) as usize;
         let pt_2 = piece_index(piece_2) as usize;
-        let sq1 = sq1 as usize;
-        let sq2 = sq2 as usize;
+        let sq1 = sq1.index();
+        let sq2 = sq2.index();
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
         self.table[idx]
     }
 
-    pub fn get_mut(&mut self, piece_1: u8, sq1: u8, piece_2: u8, sq2: u8) -> &mut i32 {
+    pub fn get_mut(&mut self, piece_1: u8, sq1: Square, piece_2: u8, sq2: Square) -> &mut i32 {
         let pt_1 = piece_index(piece_1) as usize;
         let pt_2 = piece_index(piece_2) as usize;
-        let sq1 = sq1 as usize;
-        let sq2 = sq2 as usize;
+        let sq1 = sq1.index();
+        let sq2 = sq2.index();
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
         &mut self.table[idx]
     }
@@ -202,15 +202,15 @@ impl MoveTable {
         }
     }
 
-    pub fn add(&mut self, piece: u8, sq: u8, move_: Move) {
+    pub fn add(&mut self, piece: u8, sq: Square, move_: Move) {
         let pt = piece_index(piece) as usize;
-        let sq = sq as usize;
+        let sq = sq.index();
         self.table[pt * BOARD_N_SQUARES + sq] = move_;
     }
 
-    pub fn get(&self, piece: u8, sq: u8) -> Move {
+    pub fn get(&self, piece: u8, sq: Square) -> Move {
         let pt = piece_index(piece) as usize;
-        let sq = sq as usize;
+        let sq = sq.index();
         self.table[pt * BOARD_N_SQUARES + sq]
     }
 }

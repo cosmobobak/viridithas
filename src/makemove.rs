@@ -4,7 +4,7 @@
 // the Board::make_move() function.
 
 use crate::{
-    definitions::PIECE_EMPTY,
+    definitions::{PIECE_EMPTY, Square},
     lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
 };
 
@@ -14,10 +14,10 @@ pub fn hash_castling(key: &mut u64, castle_perm: u8) {
     *key ^= castle_key;
 }
 
-pub fn hash_piece(key: &mut u64, piece: u8, sq: u8) {
+pub fn hash_piece(key: &mut u64, piece: u8, sq: Square) {
     debug_assert!((piece as usize) < PIECE_KEYS.len());
-    debug_assert!((sq as usize) < 64);
-    let piece_key = unsafe { *PIECE_KEYS.get_unchecked(piece as usize).get_unchecked(sq as usize) };
+    debug_assert!(sq.on_board());
+    let piece_key = unsafe { *PIECE_KEYS.get_unchecked(piece as usize).get_unchecked(sq.index()) };
     *key ^= piece_key;
 }
 
@@ -25,10 +25,10 @@ pub fn hash_side(key: &mut u64) {
     *key ^= SIDE_KEY;
 }
 
-pub fn hash_ep(key: &mut u64, ep_sq: u8) {
-    debug_assert!((ep_sq as usize) < 64);
+pub fn hash_ep(key: &mut u64, ep_sq: Square) {
+    debug_assert!(ep_sq.on_board());
     let ep_key =
-        unsafe { *PIECE_KEYS.get_unchecked(PIECE_EMPTY as usize).get_unchecked(ep_sq as usize) };
+        unsafe { *PIECE_KEYS.get_unchecked(PIECE_EMPTY as usize).get_unchecked(ep_sq.index()) };
     *key ^= ep_key;
 }
 

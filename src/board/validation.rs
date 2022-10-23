@@ -1,14 +1,14 @@
 use crate::{
     board::evaluation::score::S,
     definitions::{
-        colour_of, square_name, type_of,
+        colour_of, type_of,
         Rank::{RANK_3, RANK_6},
-        Square::NO_SQUARE,
+        Square,
         BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
         WHITE, WK, WN, WP, WQ, WR,
     },
     errors::PositionValidityError,
-    lookups::{piece_char, piece_name, rank, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
+    lookups::{piece_char, piece_name, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
     nnue::NNUEState,
     piecelist::PieceList,
 };
@@ -31,7 +31,7 @@ impl Board {
                 if self.piece_at(sq) != piece {
                     return Err(format!(
                         "piece list corrupt: expected square {} to be '{}' but was '{}'",
-                        square_name(sq).unwrap_or(&format!("offboard: {}", sq)),
+                        sq,
                         piece_char(piece)
                             .map(|c| c.to_string())
                             .unwrap_or(format!("unknown piece: {}", piece)),
@@ -50,6 +50,7 @@ impl Board {
 
         // check piece count and other counters
         for sq in 0..64 {
+            let sq = Square::new(sq);
             let piece = self.piece_at(sq);
             if piece == PIECE_EMPTY {
                 continue;
@@ -85,7 +86,7 @@ impl Board {
                 if self.piece_at(sq) != piece {
                     return Err(format!(
                         "bitboard / piece array coherency corrupt: expected square {} to be '{}' but was '{}'",
-                        square_name(sq).unwrap_or(&format!("offboard: {}", sq)),
+                        sq,
                         piece_char(piece).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", piece)),
                         piece_char(self.piece_at(sq)).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
                     ));
@@ -165,11 +166,11 @@ impl Board {
             ));
         }
 
-        if !(self.ep_sq == NO_SQUARE
-            || (rank(self.ep_sq) == RANK_6 && self.side == WHITE)
-            || (rank(self.ep_sq) == RANK_3 && self.side == BLACK))
+        if !(self.ep_sq == Square::NO_SQUARE
+            || (self.ep_sq.rank() == RANK_6 && self.side == WHITE)
+            || (self.ep_sq.rank() == RANK_3 && self.side == BLACK))
         {
-            return Err(format!("en passant square is corrupt: expected square to be {} (NoSquare) or to be on ranks 6 or 3, got {} (Rank {})", NO_SQUARE, self.ep_sq, rank(self.ep_sq)));
+            return Err(format!("en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})", Square::NO_SQUARE, self.ep_sq, self.ep_sq.rank()));
         }
 
         if self.fifty_move_counter >= 100 {

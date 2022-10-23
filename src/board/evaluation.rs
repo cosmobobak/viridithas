@@ -11,9 +11,9 @@ use crate::{
     chessmove::Move,
     definitions::{
         type_of, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN, ROOK, WB,
-        WHITE, WN, WP, WQ, WR,
+        WHITE, WN, WP, WQ, WR, Square,
     },
-    lookups::{file, init_eval_masks, init_passed_isolated_bb, rank},
+    lookups::{init_eval_masks, init_passed_isolated_bb},
     search::draw_score,
     threadlocal::ThreadData,
 };
@@ -45,7 +45,7 @@ pub fn get_see_value(piece: u8) -> i32 {
 /// The value of checkmate.
 /// To recover depth-to-mate, we subtract depth (ply) from this value.
 /// e.g. if white has a mate in two ply, the output from a depth-5 search will be
-/// `3_000_000 - 2 = 2_999_998`.
+/// two less than `MATE_SCORE`.
 pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
 pub const fn mate_in(ply: i32) -> i32 {
     MATE_SCORE - ply
@@ -314,23 +314,23 @@ impl Board {
         let black_pawns = self.pieces.pawns::<false>();
 
         for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
-            if ISOLATED_BB[white_pawn_loc as usize] & white_pawns == 0 {
+            if ISOLATED_BB[white_pawn_loc.index()] & white_pawns == 0 {
                 w_score -= self.eparams.isolated_pawn_malus;
             }
 
-            if WHITE_PASSED_BB[white_pawn_loc as usize] & black_pawns == 0 {
-                let rank = rank(white_pawn_loc) as usize;
+            if WHITE_PASSED_BB[white_pawn_loc.index()] & black_pawns == 0 {
+                let rank = white_pawn_loc.rank() as usize;
                 w_score += self.eparams.passed_pawn_bonus[rank - 1];
             }
         }
 
         for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
-            if ISOLATED_BB[black_pawn_loc as usize] & black_pawns == 0 {
+            if ISOLATED_BB[black_pawn_loc.index()] & black_pawns == 0 {
                 b_score -= self.eparams.isolated_pawn_malus;
             }
 
-            if BLACK_PASSED_BB[black_pawn_loc as usize] & white_pawns == 0 {
-                let rank = rank(black_pawn_loc) as usize;
+            if BLACK_PASSED_BB[black_pawn_loc.index()] & white_pawns == 0 {
+                let rank = black_pawn_loc.rank() as usize;
                 b_score += self.eparams.passed_pawn_bonus[7 - rank - 1];
             }
         }
@@ -363,7 +363,7 @@ impl Board {
     fn rook_open_file_term(&self) -> S {
         let mut score = S(0, 0);
         for &rook_sq in self.piece_lists[WR as usize].iter() {
-            let file = file(rook_sq);
+            let file = rook_sq.file();
             if self.is_file_open(file) {
                 score += self.eparams.rook_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -371,7 +371,7 @@ impl Board {
             }
         }
         for &rook_sq in self.piece_lists[BR as usize].iter() {
-            let file = file(rook_sq);
+            let file = rook_sq.file();
             if self.is_file_open(file) {
                 score -= self.eparams.rook_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -384,7 +384,7 @@ impl Board {
     fn queen_open_file_term(&self) -> S {
         let mut score = S(0, 0);
         for &queen_sq in self.piece_lists[WQ as usize].iter() {
-            let file = file(queen_sq);
+            let file = queen_sq.file();
             if self.is_file_open(file) {
                 score += self.eparams.queen_open_file_bonus;
             } else if self.is_file_halfopen::<WHITE>(file) {
@@ -392,7 +392,7 @@ impl Board {
             }
         }
         for &queen_sq in self.piece_lists[BQ as usize].iter() {
-            let file = file(queen_sq);
+            let file = queen_sq.file();
             if self.is_file_open(file) {
                 score -= self.eparams.queen_open_file_bonus;
             } else if self.is_file_halfopen::<BLACK>(file) {
@@ -599,7 +599,7 @@ impl Board {
     }
 }
 
-pub fn king_area<const IS_WHITE: bool>(king_sq: u8) -> u64 {
+pub fn king_area<const IS_WHITE: bool>(king_sq: Square) -> u64 {
     let king_attacks = attacks::<KING>(king_sq, BB_NONE);
     let forward_area = if IS_WHITE { king_attacks.north_one() } else { king_attacks.south_one() };
     king_attacks | forward_area

@@ -1,7 +1,7 @@
 use crate::{
     definitions::{
         colour_of, type_of, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR,
+        WHITE, WK, WN, WP, WQ, WR, Square,
     },
     lookups, macros, magic,
 };
@@ -44,6 +44,12 @@ pub const fn lsb(x: u64) -> u64 {
     x.trailing_zeros() as u64
 }
 
+/// first set square of a u64
+pub const fn first_square(x: u64) -> Square {
+    #![allow(clippy::cast_possible_truncation)]
+    Square::new(x.trailing_zeros() as u8)
+}
+
 /// Iterator over the squares of a bitboard.
 /// The squares are returned in increasing order.
 /// ```
@@ -62,7 +68,7 @@ impl BitLoop {
 }
 
 impl Iterator for BitLoop {
-    type Item = u8;
+    type Item = Square;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.value == 0 {
@@ -71,7 +77,7 @@ impl Iterator for BitLoop {
             // faster if we have bmi (maybe)
             let lsb: u8 = unsafe { self.value.trailing_zeros().try_into().unwrap_unchecked() };
             self.value ^= 1 << lsb;
-            Some(lsb)
+            Some(Square::new(lsb))
         }
     }
 }
@@ -267,55 +273,57 @@ impl BitBoard {
         }
     }
 
-    pub fn set_piece_at(&mut self, sq: u8, piece: u8) {
-        self.occupied |= 1u64 << sq;
+    pub fn set_piece_at(&mut self, sq: Square, piece: u8) {
+        let sq_bb = sq.bitboard();
+        self.occupied |= sq_bb;
         if colour_of(piece) == WHITE {
-            self.white |= 1u64 << sq;
+            self.white |= sq_bb;
             match type_of(piece) {
-                PAWN => self.w_pawns |= 1u64 << sq,
-                KNIGHT => self.w_knights |= 1u64 << sq,
-                BISHOP => self.w_bishops |= 1u64 << sq,
-                ROOK => self.w_rooks |= 1u64 << sq,
-                QUEEN => self.w_queens |= 1u64 << sq,
-                KING => self.w_king |= 1u64 << sq,
+                PAWN => self.w_pawns |= sq_bb,
+                KNIGHT => self.w_knights |= sq_bb,
+                BISHOP => self.w_bishops |= sq_bb,
+                ROOK => self.w_rooks |= sq_bb,
+                QUEEN => self.w_queens |= sq_bb,
+                KING => self.w_king |= sq_bb,
                 _ => unsafe { macros::inconceivable!() },
             }
         } else {
-            self.black |= 1u64 << sq;
+            self.black |= sq_bb;
             match type_of(piece) {
-                PAWN => self.b_pawns |= 1u64 << sq,
-                KNIGHT => self.b_knights |= 1u64 << sq,
-                BISHOP => self.b_bishops |= 1u64 << sq,
-                ROOK => self.b_rooks |= 1u64 << sq,
-                QUEEN => self.b_queens |= 1u64 << sq,
-                KING => self.b_king |= 1u64 << sq,
+                PAWN => self.b_pawns |= sq_bb,
+                KNIGHT => self.b_knights |= sq_bb,
+                BISHOP => self.b_bishops |= sq_bb,
+                ROOK => self.b_rooks |= sq_bb,
+                QUEEN => self.b_queens |= sq_bb,
+                KING => self.b_king |= sq_bb,
                 _ => unsafe { macros::inconceivable!() },
             }
         }
     }
 
-    pub fn clear_piece_at(&mut self, sq: u8, piece: u8) {
-        self.occupied &= !(1u64 << sq);
+    pub fn clear_piece_at(&mut self, sq: Square, piece: u8) {
+        let sq_bb = sq.bitboard();
+        self.occupied &= !sq_bb;
         if colour_of(piece) == WHITE {
-            self.white &= !(1u64 << sq);
+            self.white &= !sq_bb;
             match type_of(piece) {
-                PAWN => self.w_pawns &= !(1u64 << sq),
-                KNIGHT => self.w_knights &= !(1u64 << sq),
-                BISHOP => self.w_bishops &= !(1u64 << sq),
-                ROOK => self.w_rooks &= !(1u64 << sq),
-                QUEEN => self.w_queens &= !(1u64 << sq),
-                KING => self.w_king &= !(1u64 << sq),
+                PAWN => self.w_pawns &= !sq_bb,
+                KNIGHT => self.w_knights &= !sq_bb,
+                BISHOP => self.w_bishops &= !sq_bb,
+                ROOK => self.w_rooks &= !sq_bb,
+                QUEEN => self.w_queens &= !sq_bb,
+                KING => self.w_king &= !sq_bb,
                 _ => unsafe { macros::inconceivable!() },
             }
         } else {
-            self.black &= !(1u64 << sq);
+            self.black &= !sq_bb;
             match type_of(piece) {
-                PAWN => self.b_pawns &= !(1u64 << sq),
-                KNIGHT => self.b_knights &= !(1u64 << sq),
-                BISHOP => self.b_bishops &= !(1u64 << sq),
-                ROOK => self.b_rooks &= !(1u64 << sq),
-                QUEEN => self.b_queens &= !(1u64 << sq),
-                KING => self.b_king &= !(1u64 << sq),
+                PAWN => self.b_pawns &= !sq_bb,
+                KNIGHT => self.b_knights &= !sq_bb,
+                BISHOP => self.b_bishops &= !sq_bb,
+                ROOK => self.b_rooks &= !sq_bb,
+                QUEEN => self.b_queens &= !sq_bb,
+                KING => self.b_king &= !sq_bb,
                 _ => unsafe { macros::inconceivable!() },
             }
         }
@@ -363,8 +371,8 @@ impl BitBoard {
         }
     }
 
-    pub fn all_attackers_to_sq(&self, sq: u8, occupied: u64) -> u64 {
-        let sq_bb = 1u64 << sq;
+    pub fn all_attackers_to_sq(&self, sq: Square, occupied: u64) -> u64 {
+        let sq_bb = 1u64 << sq.index();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.b_pawns;
         let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.w_pawns;
         let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
@@ -420,7 +428,7 @@ impl BitShiftExt for u64 {
     }
 }
 
-pub fn attacks<const PIECE_TYPE: u8>(sq: u8, blockers: u64) -> u64 {
+pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: u64) -> u64 {
     debug_assert!(PIECE_TYPE != PAWN);
     match PIECE_TYPE {
         BISHOP => magic::get_bishop_attacks(sq, blockers),

@@ -1,12 +1,10 @@
 use crate::{
     board::evaluation::score::S,
     definitions::{
-        flip_rank,
         File::{FILE_A, FILE_D, FILE_H},
         Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
-        BLACK, WHITE, WK, WN, WP,
+        BLACK, WHITE, WK, WN, WP, Square,
     },
-    lookups::{file, filerank_to_square, rank},
 };
 
 use super::PieceSquareTable;
@@ -100,8 +98,8 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
         for rank in RANK_1..=RANK_8 {
             print!("        [");
             for file in FILE_A..=FILE_D {
-                let sq = filerank_to_square(file, rank);
-                let val = pst[piece as usize][sq as usize];
+                let sq = Square::from_rank_file(rank, file);
+                let val = pst[piece as usize][sq.index()];
                 print!("{}, ", val);
             }
             println!("],");
@@ -120,8 +118,8 @@ static P_BONUS: [[S; 8]; 8] = [
     for rank in RANK_2..=RANK_7 {
         print!("    [ ");
         for file in FILE_A..=FILE_H {
-            let sq = filerank_to_square(file, rank);
-            let val = pst[WP as usize][sq as usize];
+            let sq = Square::from_rank_file(rank, file);
+            let val = pst[WP as usize][sq.index()];
             print!("{}, ", val);
         }
         println!("],");
@@ -137,9 +135,10 @@ pub fn construct_piece_square_table() -> PieceSquareTable {
         let multiplier = if colour == BLACK { -1 } else { 1 };
         for pieces_idx in 0..6 {
             for pst_idx in 0..64 {
-                let sq = if colour == WHITE { pst_idx } else { flip_rank(pst_idx) };
-                let r = rank(pst_idx) as usize;
-                let f = file(pst_idx) as usize;
+                let pst_idx = Square::new(pst_idx);
+                let sq = if colour == WHITE { pst_idx } else { pst_idx.flip_rank() };
+                let r = pst_idx.rank() as usize;
+                let f = pst_idx.file() as usize;
                 let value = if pieces_idx == 0 {
                     P_BONUS[r][f]
                 } else {
@@ -147,7 +146,7 @@ pub fn construct_piece_square_table() -> PieceSquareTable {
                     BONUS[pieces_idx + 1][r][f]
                 };
                 let S(mg, eg) = value;
-                pst[pieces_idx + offset][sq as usize] = S(mg * multiplier, eg * multiplier);
+                pst[pieces_idx + offset][sq.index()] = S(mg * multiplier, eg * multiplier);
             }
         }
     }

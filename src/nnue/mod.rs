@@ -4,8 +4,8 @@ use serde_json::Value;
 
 use crate::{
     board::{movegen::BitLoop, Board},
-    definitions::{flip_rank, BLACK, KING, PAWN, WHITE},
-    lookups::{piece_from_cotype, SQUARE_NAMES},
+    definitions::{BLACK, KING, PAWN, WHITE, Square},
+    lookups::piece_from_cotype,
 };
 
 use self::accumulator::Accumulator;
@@ -180,7 +180,7 @@ impl NNUEState {
         }
     }
 
-    pub fn efficiently_update_from_move(&mut self, piece: u8, colour: u8, from: u8, to: u8) {
+    pub fn efficiently_update_from_move(&mut self, piece: u8, colour: u8, from: Square, to: Square) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
@@ -188,44 +188,44 @@ impl NNUEState {
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
 
-        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
+        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from.index();
         let black_idx_from =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
-        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + from.flip_rank().index();
+        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to.index();
         let black_idx_to =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + to.flip_rank().index();
 
         debug_assert_eq!(
             self.white_pov[white_idx_from],
             1,
             "piece: {}, from: {}, to: {}",
             crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
-            SQUARE_NAMES[from as usize],
-            SQUARE_NAMES[to as usize]
+            from,
+            to
         );
         debug_assert_eq!(
             self.black_pov[black_idx_from],
             1,
             "piece: {}, from: {}, to: {}",
             crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
-            SQUARE_NAMES[from as usize],
-            SQUARE_NAMES[to as usize]
+            from,
+            to
         );
         debug_assert_eq!(
             self.white_pov[white_idx_to],
             0,
             "piece: {}, from: {}, to: {}",
             crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
-            SQUARE_NAMES[from as usize],
-            SQUARE_NAMES[to as usize]
+            from,
+            to
         );
         debug_assert_eq!(
             self.black_pov[black_idx_to],
             0,
             "piece: {}, from: {}, to: {}",
             crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1)).unwrap(),
-            SQUARE_NAMES[from as usize],
-            SQUARE_NAMES[to as usize]
+            from,
+            to
         );
         self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
@@ -252,7 +252,7 @@ impl NNUEState {
         &mut self,
         piece: u8,
         colour: u8,
-        sq: u8,
+        sq: Square,
     ) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
@@ -262,9 +262,9 @@ impl NNUEState {
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
 
-        let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
+        let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq.index();
         let black_idx =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + sq.flip_rank().index();
 
         let acc = &mut self.accumulators[self.current_acc];
 
@@ -274,14 +274,14 @@ impl NNUEState {
                 "piece: {}, sq: {}",
                 crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
                     .unwrap(),
-                SQUARE_NAMES[sq as usize]
+                sq
             );
             debug_assert!(
                 self.black_pov[black_idx] == 0,
                 "piece: {}, sq: {}",
                 crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
                     .unwrap(),
-                SQUARE_NAMES[sq as usize]
+                sq
             );
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
@@ -293,14 +293,14 @@ impl NNUEState {
                 "piece: {}, sq: {}",
                 crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
                     .unwrap(),
-                SQUARE_NAMES[sq as usize]
+                sq
             );
             debug_assert!(
                 self.black_pov[black_idx] == 1,
                 "piece: {}, sq: {}",
                 crate::lookups::piece_name(piece_from_cotype(colour as u8, piece as u8 + 1))
                     .unwrap(),
-                SQUARE_NAMES[sq as usize]
+                sq
             );
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
@@ -309,19 +309,19 @@ impl NNUEState {
         }
     }
 
-    pub fn update_pov_move(&mut self, piece: u8, colour: u8, from: u8, to: u8) {
+    pub fn update_pov_move(&mut self, piece: u8, colour: u8, from: Square, to: Square) {
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
 
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
 
-        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from as usize;
+        let white_idx_from = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + from.index();
         let black_idx_from =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(from) as usize;
-        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + from.flip_rank().index();
+        let white_idx_to = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + to.index();
         let black_idx_to =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(to) as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + to.flip_rank().index();
 
         self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
@@ -329,7 +329,7 @@ impl NNUEState {
         self.black_pov[black_idx_to] = 1;
     }
 
-    pub fn update_pov_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: u8) {
+    pub fn update_pov_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: Square) {
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
 
@@ -337,9 +337,9 @@ impl NNUEState {
         let piece = piece as usize - 1; // shift into correct range.
         let colour = colour as usize;
 
-        let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq as usize;
+        let white_idx = colour * COLOUR_STRIDE + piece * PIECE_STRIDE + sq.index();
         let black_idx =
-            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + flip_rank(sq) as usize;
+            (1 ^ colour) * COLOUR_STRIDE + piece * PIECE_STRIDE + sq.flip_rank().index();
 
         if IS_ACTIVATE {
             self.white_pov[white_idx] = 1;
@@ -374,7 +374,7 @@ impl NNUEState {
         self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
     }
 
-    pub const fn feature_loc_to_parts(loc: usize) -> (u8, u8, u8) {
+    pub const fn feature_loc_to_parts(loc: usize) -> (u8, u8, Square) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
@@ -382,7 +382,7 @@ impl NNUEState {
         let rem = loc % COLOUR_STRIDE;
         let piece = (rem / PIECE_STRIDE) as u8;
         let sq = (rem % PIECE_STRIDE) as u8;
-        (colour, piece, sq)
+        (colour, piece, Square::new(sq))
     }
 }
 

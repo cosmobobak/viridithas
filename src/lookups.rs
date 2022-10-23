@@ -2,10 +2,9 @@
 
 use crate::{
     definitions::{
-        square_distance,
         File::{FILE_A, FILE_H},
         Rank::{RANK_1, RANK_8},
-        BK, KING, KNIGHT, WP,
+        BK, KING, KNIGHT, WP, Square,
     },
     rng::XorShiftState,
 };
@@ -14,6 +13,7 @@ macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
         {
             $init
+            #[allow(while_true)]
             while $cond {
                 $body;
 
@@ -74,53 +74,56 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
     let mut black_passed_bb = [0; 64];
     let mut isolated_bb = [0; 64];
 
-    let mut sq = 0;
-    while sq < 64 {
-        let mut t_sq = sq as isize + 8;
+    let mut sq = Square::A1;
+    loop {
+        let mut t_sq = sq.signed_inner() + 8;
         while t_sq < 64 {
-            white_passed_bb[sq] |= 1 << t_sq;
+            white_passed_bb[sq.index()] |= 1 << t_sq;
             t_sq += 8;
         }
 
-        t_sq = sq as isize - 8;
+        t_sq = sq.signed_inner() - 8;
         while t_sq >= 0 {
-            black_passed_bb[sq] |= 1 << t_sq;
+            black_passed_bb[sq.index()] |= 1 << t_sq;
             t_sq -= 8;
         }
 
-        if file(sq as u8) > FILE_A {
-            isolated_bb[sq] |= _FILE_BB[file(sq as u8) as usize - 1];
+        if sq.file() > FILE_A {
+            isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize - 1];
 
-            t_sq = sq as isize + 7;
+            t_sq = sq.signed_inner() + 7;
             while t_sq < 64 {
-                white_passed_bb[sq] |= 1 << t_sq;
+                white_passed_bb[sq.index()] |= 1 << t_sq;
                 t_sq += 8;
             }
 
-            t_sq = sq as isize - 9;
+            t_sq = sq.signed_inner() - 9;
             while t_sq >= 0 {
-                black_passed_bb[sq] |= 1 << t_sq;
+                black_passed_bb[sq.index()] |= 1 << t_sq;
                 t_sq -= 8;
             }
         }
 
-        if file(sq as u8) < FILE_H {
-            isolated_bb[sq] |= _FILE_BB[file(sq as u8) as usize + 1];
+        if sq.file() < FILE_H {
+            isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize + 1];
 
-            t_sq = sq as isize + 9;
+            t_sq = sq.signed_inner() + 9;
             while t_sq < 64 {
-                white_passed_bb[sq] |= 1 << t_sq;
+                white_passed_bb[sq.index()] |= 1 << t_sq;
                 t_sq += 8;
             }
 
-            t_sq = sq as isize - 7;
+            t_sq = sq.signed_inner() - 7;
             while t_sq >= 0 {
-                black_passed_bb[sq] |= 1 << t_sq;
+                black_passed_bb[sq.index()] |= 1 << t_sq;
                 t_sq -= 8;
             }
         }
 
-        sq += 1;
+        if matches!(sq, Square::H8) {
+            break;
+        }
+        sq = sq.add(1);
     }
 
     (white_passed_bb, black_passed_bb, isolated_bb)
@@ -141,27 +144,10 @@ pub static PIECE_MAJ: [bool; 13] =
 pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
-/// The file that this square is on.
-pub const fn file(sq: u8) -> u8 {
-    sq % 8
-}
-/// The rank that this square is on.
-pub const fn rank(sq: u8) -> u8 {
-    sq / 8
-}
-
 /// The square corresponding to the given file and rank.
 pub const fn filerank_to_square(file: u8, rank: u8) -> u8 {
     file + rank * 8
 }
-
-/// The name of this 64-indexed square.
-pub static SQUARE_NAMES: [&str; 64] = [
-    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
-    "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
-    "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
-    "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
-];
 
 /// The name of this piece.
 #[allow(dead_code)]
@@ -216,18 +202,20 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     let mut attacks = [0; 64];
     let deltas =
         if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
-    cfor!(let mut sq = 0; sq < 64; sq += 1; {
+    cfor!(let mut sq = Square::A1; true; sq = sq.add(1); {
         let mut attacks_bb = 0;
         cfor!(let mut idx = 0; idx < 8; idx += 1; {
             let delta = deltas[idx];
-            #[allow(clippy::cast_possible_wrap)]
-            let attacked_sq = sq as i32 + delta;
+            let attacked_sq = sq.signed_inner() + delta;
             #[allow(clippy::cast_sign_loss)]
-            if attacked_sq >= 0 && attacked_sq < 64 && square_distance(sq as u8, attacked_sq as u8) <= 2 {
+            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(sq, Square::new(attacked_sq as u8)) <= 2 {
                 attacks_bb |= 1 << attacked_sq;
             }
         });
-        attacks[sq] = attacks_bb;
+        attacks[sq.index()] = attacks_bb;
+        if matches!(sq, Square::H8) {
+            break;
+        }
     });
     attacks
 }
@@ -242,11 +230,11 @@ static JUMPING_ATTACKS: [[u64; 64]; 7] = [
     init_jumping_attacks::<false>(), // king
 ];
 
-pub fn get_jumping_piece_attack<const PIECE: u8>(sq: u8) -> u64 {
+pub fn get_jumping_piece_attack<const PIECE: u8>(sq: Square) -> u64 {
     debug_assert!(PIECE < 7);
-    debug_assert!(sq < 64);
+    debug_assert!(sq.on_board());
     debug_assert!(PIECE == KNIGHT || PIECE == KING);
-    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE as usize).get_unchecked(sq as usize) }
+    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE as usize).get_unchecked(sq.index()) }
 }
 
 mod tests {
@@ -276,12 +264,13 @@ mod tests {
     fn python_chess_validation() {
         use crate::definitions::{KING, KNIGHT};
         use crate::lookups::get_jumping_piece_attack;
+        use crate::definitions::Square;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_jumping_piece_attack::<KNIGHT>(0), 132_096);
-        assert_eq!(get_jumping_piece_attack::<KNIGHT>(63), 9_077_567_998_918_656);
+        assert_eq!(get_jumping_piece_attack::<KNIGHT>(Square::new(0)), 132_096);
+        assert_eq!(get_jumping_piece_attack::<KNIGHT>(Square::new(63)), 9_077_567_998_918_656);
 
-        assert_eq!(get_jumping_piece_attack::<KING>(0), 770);
-        assert_eq!(get_jumping_piece_attack::<KING>(63), 4_665_729_213_955_833_856);
+        assert_eq!(get_jumping_piece_attack::<KING>(Square::new(0)), 770);
+        assert_eq!(get_jumping_piece_attack::<KING>(Square::new(63)), 4_665_729_213_955_833_856);
     }
 }

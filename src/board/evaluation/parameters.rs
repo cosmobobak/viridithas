@@ -1,8 +1,7 @@
 use std::{error::Error, fmt::Display, path::Path};
 
 use crate::{
-    definitions::{flip_file, flip_rank, BP, KING, KNIGHT, WK, WN, WP},
-    lookups::file,
+    definitions::{BP, KING, KNIGHT, WK, WN, WP, Square},
 };
 
 use super::{
@@ -190,29 +189,31 @@ impl EvalParams {
         }
         // load in the pawn table
         for sq in 0..64 {
+            let sq = Square::new(sq);
             let val =
                 s_iter.next().expect("failed to read pawn piece_square_table term from vector");
-            out.piece_square_tables[WP as usize][sq as usize] = val;
-            out.piece_square_tables[BP as usize][flip_rank(sq) as usize] = -val;
+            out.piece_square_tables[WP as usize][sq.index()] = val;
+            out.piece_square_tables[BP as usize][sq.flip_rank().index()] = -val;
         }
         // load in the rest of the tables
         for pt in KNIGHT..=KING {
             for sq in 0..64 {
-                let file = file(sq);
+                let sq = Square::new(sq);
+                let file = sq.file();
                 if file > 3 {
                     // load from the other half of the piece-square table.
                     // the left-hand sides of the tables are loaded first, so we
                     // can safely load out of LHS to populate RHS.
-                    let mirrored_sq = flip_file(sq);
-                    out.piece_square_tables[pt as usize][sq as usize] =
-                        out.piece_square_tables[pt as usize][mirrored_sq as usize];
-                    out.piece_square_tables[pt as usize + 6][flip_rank(sq) as usize] =
-                        out.piece_square_tables[pt as usize + 6][flip_rank(mirrored_sq) as usize];
+                    let mirrored_sq = sq.flip_file();
+                    out.piece_square_tables[pt as usize][sq.index()] =
+                        out.piece_square_tables[pt as usize][mirrored_sq.index()];
+                    out.piece_square_tables[pt as usize + 6][sq.flip_rank().index()] =
+                        out.piece_square_tables[pt as usize + 6][mirrored_sq.flip_rank().index()];
                 } else {
                     let val =
                         s_iter.next().expect("failed to read piece_square_table term from vector");
-                    out.piece_square_tables[pt as usize][sq as usize] = val;
-                    out.piece_square_tables[pt as usize + 6][flip_rank(sq) as usize] = -val;
+                    out.piece_square_tables[pt as usize][sq.index()] = val;
+                    out.piece_square_tables[pt as usize + 6][sq.flip_rank().index()] = -val;
                 }
             }
         }

@@ -1,9 +1,5 @@
 use crate::definitions::{BK, KING, PAWN, WP};
 
-pub const fn square_on_board(sq: u8) -> bool {
-    sq < 64
-}
-
 pub const fn side_valid(side: u8) -> bool {
     side == 0 || side == 1
 }

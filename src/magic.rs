@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::{macros, rng::XorShiftState};
+use crate::{macros, rng::XorShiftState, definitions::Square};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -510,8 +510,8 @@ static ROOK_MAGICS: [u64; 64] = [
 ];
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_bishop_attacks(sq: u8, blockers: u64) -> u64 {
-    let sq = sq as usize;
+pub fn get_bishop_attacks(sq: Square, blockers: u64) -> u64 {
+    let sq = sq.index();
     if sq >= 64 {
         unsafe {
             // assert to the compiler that it's chill not to bounds-check
@@ -531,8 +531,8 @@ pub fn get_bishop_attacks(sq: u8, blockers: u64) -> u64 {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_rook_attacks(sq: u8, blockers: u64) -> u64 {
-    let sq = sq as usize;
+pub fn get_rook_attacks(sq: Square, blockers: u64) -> u64 {
+    let sq = sq.index();
     if sq >= 64 {
         unsafe {
             // assert to the compiler that it's chill not to bounds-check

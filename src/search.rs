@@ -589,9 +589,9 @@ impl Board {
         let orth_sliders = self.pieces.rookqueen::<true>() | self.pieces.rookqueen::<false>();
 
         // occupied starts with the position after the move `m` is made.
-        let mut occupied = (self.pieces.occupied() ^ (1 << from)) | (1 << to);
+        let mut occupied = (self.pieces.occupied() ^ (1 << from.index())) | (1 << to.index());
         if m.is_ep() {
-            occupied ^= 1 << self.ep_sq();
+            occupied ^= 1 << self.ep_sq().index();
         }
 
         let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;

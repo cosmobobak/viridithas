@@ -3,7 +3,7 @@ pub mod movepicker;
 
 pub use self::bitboards::{BitLoop, BB_NONE};
 use self::{
-    bitboards::{lsb, BitShiftExt, BB_RANK_2, BB_RANK_7},
+    bitboards::{BitShiftExt, BB_RANK_2, BB_RANK_7, first_square},
     movepicker::MovePicker,
 };
 
@@ -17,7 +17,7 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Square::{B1, B8, C1, C8, D1, D8, E1, E8, F1, F8, G1, G8, NO_SQUARE},
+        Square,
         BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WKCA,
         WN, WQ, WQCA, WR,
     },
@@ -170,19 +170,19 @@ impl Board {
         };
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         for from in BitLoop::new(attacks_west & !promo_rank) {
-            let to = if IS_WHITE { from + 7 } else { from - 9 };
+            let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::new(attacks_east & !promo_rank) {
-            let to = if IS_WHITE { from + 9 } else { from - 7 };
+            let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             self.add_capture_move(Move::new(from, to, cap, PIECE_EMPTY, 0), move_list);
         }
         for from in BitLoop::new(attacks_west & promo_rank) {
-            let to = if IS_WHITE { from + 7 } else { from - 9 };
+            let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             if IS_WHITE {
@@ -196,7 +196,7 @@ impl Board {
             }
         }
         for from in BitLoop::new(attacks_east & promo_rank) {
-            let to = if IS_WHITE { from + 9 } else { from - 7 };
+            let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
             if IS_WHITE {
@@ -213,10 +213,10 @@ impl Board {
 
     fn generate_ep<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #![allow(clippy::cast_possible_truncation)]
-        if self.ep_sq == NO_SQUARE {
+        if self.ep_sq == Square::NO_SQUARE {
             return;
         }
-        let ep_bb = 1 << self.ep_sq;
+        let ep_bb = 1 << self.ep_sq.index();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let attacks_west = if IS_WHITE {
             ep_bb.south_east_one() & our_pawns
@@ -230,14 +230,14 @@ impl Board {
         };
 
         if attacks_west != 0 {
-            let from_sq = lsb(attacks_west) as u8;
+            let from_sq = first_square(attacks_west);
             self.add_ep_move(
                 Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
             );
         }
         if attacks_east != 0 {
-            let from_sq = lsb(attacks_east) as u8;
+            let from_sq = first_square(attacks_east);
             self.add_ep_move(
                 Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
                 move_list,
@@ -257,18 +257,18 @@ impl Board {
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
-            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
+            let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             self.add_quiet_move(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0), move_list);
         }
         for sq in BitLoop::new(double_pushable_pawns) {
-            let to = if IS_WHITE { sq + 16 } else { sq - 16 };
+            let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             self.add_quiet_move(
                 Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, Move::PAWN_START_MASK),
                 move_list,
             );
         }
         for sq in BitLoop::new(promoting_pawns) {
-            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
+            let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
                     self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
@@ -289,7 +289,7 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
-            let to = if IS_WHITE { sq + 8 } else { sq - 8 };
+            let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
                     self.add_promo_move(Move::new(sq, to, PIECE_EMPTY, promo, 0), move_list);
@@ -468,59 +468,59 @@ impl Board {
     }
 
     pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
-        const WK_FREESPACE: u64 = 1 << F1 | 1 << G1;
-        const WQ_FREESPACE: u64 = 1 << B1 | 1 << C1 | 1 << D1;
-        const BK_FREESPACE: u64 = 1 << F8 | 1 << G8;
-        const BQ_FREESPACE: u64 = 1 << B8 | 1 << C8 | 1 << D8;
+        const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
+        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
+        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
         if IS_WHITE {
             if self.castle_perm & WKCA != 0
                 && occupied & WK_FREESPACE == 0
-                && !self.sq_attacked_by::<false>(E1)
-                && !self.sq_attacked_by::<false>(F1)
+                && !self.sq_attacked_by::<false>(Square::E1)
+                && !self.sq_attacked_by::<false>(Square::F1)
             {
                 self.add_quiet_move(
-                    Move::new(E1, G1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
+                    Move::new(Square::E1, Square::G1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
 
             if self.castle_perm & WQCA != 0
                 && occupied & WQ_FREESPACE == 0
-                && !self.sq_attacked_by::<false>(E1)
-                && !self.sq_attacked_by::<false>(D1)
+                && !self.sq_attacked_by::<false>(Square::E1)
+                && !self.sq_attacked_by::<false>(Square::D1)
             {
                 self.add_quiet_move(
-                    Move::new(E1, C1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
+                    Move::new(Square::E1, Square::C1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
         } else {
             if self.castle_perm & BKCA != 0
                 && occupied & BK_FREESPACE == 0
-                && !self.sq_attacked_by::<true>(E8)
-                && !self.sq_attacked_by::<true>(F8)
+                && !self.sq_attacked_by::<true>(Square::E8)
+                && !self.sq_attacked_by::<true>(Square::F8)
             {
                 self.add_quiet_move(
-                    Move::new(E8, G8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
+                    Move::new(Square::E8, Square::G8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
 
             if self.castle_perm & BQCA != 0
                 && occupied & BQ_FREESPACE == 0
-                && !self.sq_attacked_by::<true>(E8)
-                && !self.sq_attacked_by::<true>(D8)
+                && !self.sq_attacked_by::<true>(Square::E8)
+                && !self.sq_attacked_by::<true>(Square::D8)
             {
                 self.add_quiet_move(
-                    Move::new(E8, C8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
+                    Move::new(Square::E8, Square::C8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK),
                     move_list,
                 );
             }
         }
     }
 
-    pub fn _attackers_mask(&self, sq: u8, side: u8, blockers: u64) -> u64 {
+    pub fn _attackers_mask(&self, sq: Square, side: u8, blockers: u64) -> u64 {
         let mut attackers = 0;
         if side == WHITE {
             let our_pawns = self.pieces.pawns::<true>();

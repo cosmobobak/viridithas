@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::{
-    definitions::{square_name, Square},
+    definitions::Square,
     lookups::PROMO_CHAR_LOOKUP,
 };
 
@@ -20,7 +20,7 @@ impl Move {
     pub const CASTLE_MASK: u32 = 0b0001_0000_0000_0000_0000_0000_0000;
     pub const NULL: Self = Self { data: 0 };
 
-    pub fn new(from: u8, to: u8, capture: u8, promotion: u8, flags: u32) -> Self {
+    pub fn new(from: Square, to: Square, capture: u8, promotion: u8, flags: u32) -> Self {
         debug_assert!(
             (flags & (Self::EP_MASK | Self::PAWN_START_MASK | Self::CASTLE_MASK)) == flags
         );
@@ -33,12 +33,12 @@ impl Move {
         }
     }
 
-    pub const fn from(self) -> u8 {
-        (self.data & Self::FROM_MASK) as u8
+    pub const fn from(self) -> Square {
+        Square::new((self.data & Self::FROM_MASK) as u8)
     }
 
-    pub const fn to(self) -> u8 {
-        (((self.data & Self::TO_MASK) >> 7) & 0x7F) as u8
+    pub const fn to(self) -> Square {
+        Square::new((((self.data & Self::TO_MASK) >> 7) & 0x7F) as u8)
     }
 
     pub const fn capture(self) -> u8 {
@@ -92,16 +92,11 @@ impl Display for Move {
             return write!(f, "null");
         }
 
-        let from_square =
-            square_name(self.from()).unwrap_or_else(|| panic!("Invalid square {}", self.from()));
-        let to_square =
-            square_name(self.to()).unwrap_or_else(|| panic!("Invalid square {}", self.to()));
-
         if self.is_promo() {
             let pchar = PROMO_CHAR_LOOKUP[self.promotion() as usize];
-            write!(f, "{}{}{}", from_square, to_square, pchar as char)?;
+            write!(f, "{}{}{}", self.from(), self.to(), pchar as char)?;
         } else {
-            write!(f, "{}{}", from_square, to_square)?;
+            write!(f, "{}{}", self.from(), self.to())?;
         }
 
         Ok(())
@@ -112,11 +107,11 @@ impl Debug for Move {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "move from {} ({}) to {} ({}), capture {}, promo {}, ispromo {}, ep {}, pawn start {}, castle {}",
+            "move from {} ({:?}) to {} ({:?}), capture {}, promo {}, ispromo {}, ep {}, pawn start {}, castle {}",
             self.from(),
-            square_name(self.from()).unwrap_or("NONE"), 
+            self.from(),
             self.to(),
-            square_name(self.to()).unwrap_or("NONE"),
+            self.to(),
             self.capture(),
             self.promotion(),
             self.is_promo(),

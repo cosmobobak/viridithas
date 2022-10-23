@@ -23,15 +23,14 @@ use crate::{
         depth::Depth,
         type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
-        Square::{A1, A8, C1, C8, D1, D8, F1, F8, G1, G8, H1, H8, NO_SQUARE},
-        Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BOARD_N_SQUARES, BP, BQ, BQCA, BR, INFINITY, KING,
+        Square,
+        Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING,
         KNIGHT, MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
-        file, filerank_to_square, piece_char, rank, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
-        SQUARE_NAMES,
+        piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
@@ -43,7 +42,7 @@ use crate::{
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
     uci::format_score,
-    validate::{piece_type_valid, piece_valid, side_valid, square_on_board},
+    validate::{piece_type_valid, piece_valid, side_valid},
 };
 
 const UPPER_BOUND: u8 = 1;
@@ -81,7 +80,7 @@ pub struct Board {
     /// The side to move.
     side: u8,
     /// The en passant square.
-    ep_sq: u8,
+    ep_sq: Square,
     /// The castling permissions.
     castle_perm: u8,
     /// The number of half moves made since the last capture or pawn advance.
@@ -163,7 +162,7 @@ impl Board {
             pieces: BitBoard::NULL,
             piece_array: [0; 64],
             side: 0,
-            ep_sq: NO_SQUARE,
+            ep_sq: Square::NO_SQUARE,
             fifty_move_counter: 0,
             height: 0,
             ply: 0,
@@ -212,7 +211,7 @@ impl Board {
         self.tt.resize(self.hashtable_bytes);
     }
 
-    pub const fn ep_sq(&self) -> u8 {
+    pub const fn ep_sq(&self) -> Square {
         self.ep_sq
     }
 
@@ -221,7 +220,7 @@ impl Board {
         self.clear_tt();
     }
 
-    pub fn king_sq(&self, side: u8) -> u8 {
+    pub fn king_sq(&self, side: u8) -> Square {
         debug_assert!(side == WHITE || side == BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);
         debug_assert_eq!(self.pieces.king::<false>().count_ones(), 1);
@@ -232,7 +231,7 @@ impl Board {
             BLACK => *self.piece_lists[BK as usize].first().unwrap(),
             _ => unsafe { macros::inconceivable!() },
         };
-        debug_assert!(sq < 64);
+        debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(colour_of(self.piece_at(sq)), side);
         debug_assert_eq!(type_of(self.piece_at(sq)), KING);
         sq
@@ -266,9 +265,10 @@ impl Board {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
         for (sq, &piece) in self.piece_array.iter().enumerate() {
+            let sq = Square::new(sq.try_into().unwrap());
             if piece != PIECE_EMPTY {
                 debug_assert!((WP..=BK).contains(&piece));
-                hash_piece(&mut key, piece, sq.try_into().unwrap());
+                hash_piece(&mut key, piece, sq);
             }
         }
 
@@ -276,9 +276,9 @@ impl Board {
             hash_side(&mut key);
         }
 
-        if self.ep_sq != NO_SQUARE {
-            debug_assert!(self.ep_sq < BOARD_N_SQUARES.try_into().unwrap());
-            hash_ep(&mut key, self.ep_sq as u8);
+        if self.ep_sq != Square::NO_SQUARE {
+            debug_assert!(self.ep_sq.on_board());
+            hash_ep(&mut key, self.ep_sq);
         }
 
         debug_assert!(self.castle_perm <= 15);
@@ -297,7 +297,7 @@ impl Board {
         self.material.fill(S(0, 0));
         self.piece_lists.iter_mut().for_each(PieceList::clear);
         self.side = Colour::Both as u8;
-        self.ep_sq = NO_SQUARE;
+        self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
         self.height = 0;
         self.ply = 0;
@@ -359,7 +359,7 @@ impl Board {
             }
 
             for _ in 0..count {
-                let sq = rank * 8 + file;
+                let sq = Square::from_rank_file(rank, file);
                 if piece != PIECE_EMPTY {
                     // this is only ever run once, as count is 1 for non-empty pieces.
                     self.add_piece(sq, piece);
@@ -423,7 +423,7 @@ impl Board {
         let mut counter = 0;
         for rank in (0..8).rev() {
             for file in 0..8 {
-                let sq = rank * 8 + file;
+                let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
                 if piece == PIECE_EMPTY {
                     counter += 1;
@@ -457,10 +457,10 @@ impl Board {
                 .for_each(|(_, ch)| fen.push(ch));
         }
         fen.push(' ');
-        if self.ep_sq == NO_SQUARE {
+        if self.ep_sq == Square::NO_SQUARE {
             fen.push('-');
         } else {
-            fen.push_str(SQUARE_NAMES[self.ep_sq as usize]);
+            fen.push_str(&self.ep_sq.to_string());
         }
         write!(fen, " {}", self.fifty_move_counter).unwrap();
         write!(fen, " {}", self.ply / 2 + 1).unwrap();
@@ -506,7 +506,7 @@ impl Board {
     fn set_ep(&mut self, ep_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match ep_part {
             None => return Err("FEN string is invalid, expected en passant part.".to_string()),
-            Some([b'-']) => self.ep_sq = NO_SQUARE,
+            Some([b'-']) => self.ep_sq = Square::NO_SQUARE,
             Some(ep_sq) => {
                 if ep_sq.len() != 2 {
                     return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
@@ -518,7 +518,7 @@ impl Board {
                 {
                     return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
                 }
-                self.ep_sq = filerank_to_square(file, rank);
+                self.ep_sq = Square::from_rank_file(rank, file);
             }
         }
 
@@ -566,7 +566,7 @@ impl Board {
     }
 
     /// Determines if `sq` is attacked by `side`
-    pub fn sq_attacked(&self, sq: u8, side: u8) -> bool {
+    pub fn sq_attacked(&self, sq: Square, side: u8) -> bool {
         if side == WHITE {
             self.sq_attacked_by::<true>(sq)
         } else {
@@ -574,12 +574,12 @@ impl Board {
         }
     }
 
-    pub fn sq_attacked_by<const IS_WHITE: bool>(&self, sq: u8) -> bool {
-        debug_assert!(square_on_board(sq));
+    pub fn sq_attacked_by<const IS_WHITE: bool>(&self, sq: Square) -> bool {
+        debug_assert!(sq.on_board());
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let sq_bb = 1 << sq;
+        let sq_bb = 1 << sq.index();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let our_diags = self.pieces.bishopqueen::<IS_WHITE>();
@@ -643,8 +643,8 @@ impl Board {
         false
     }
 
-    fn clear_piece(&mut self, sq: u8) {
-        debug_assert!(square_on_board(sq));
+    fn clear_piece(&mut self, sq: Square) {
+        debug_assert!(sq.on_board());
         let piece = self.piece_at(sq);
         debug_assert!(piece_valid(piece));
         let piece_type = type_of(piece);
@@ -672,9 +672,9 @@ impl Board {
         self.piece_lists[piece as usize].remove(sq);
     }
 
-    fn add_piece(&mut self, sq: u8, piece: u8) {
+    fn add_piece(&mut self, sq: Square, piece: u8) {
         debug_assert!(piece_valid(piece));
-        debug_assert!(square_on_board(sq));
+        debug_assert!(sq.on_board());
 
         self.pieces.set_piece_at(sq, piece);
 
@@ -698,13 +698,13 @@ impl Board {
         self.piece_lists[piece as usize].insert(sq);
     }
 
-    fn move_piece(&mut self, from: u8, to: u8) {
-        debug_assert!(square_on_board(from));
-        debug_assert!(square_on_board(to));
+    fn move_piece(&mut self, from: Square, to: Square) {
+        debug_assert!(from.on_board());
+        debug_assert!(to.on_board());
 
         let piece_moved = self.piece_at(from);
 
-        let from_to_bb = 1 << from | 1 << to;
+        let from_to_bb = 1 << from.index() | 1 << to.index();
         self.pieces.move_piece(from_to_bb, piece_moved);
 
         // if we're in debug mode, check that we actually find a matching piecelist entry.
@@ -738,20 +738,20 @@ impl Board {
 
     /// Gets the piece that will be moved by the given move.
     pub fn moved_piece(&self, m: Move) -> u8 {
-        debug_assert!(square_on_board(m.from()));
-        unsafe { *self.piece_array.get_unchecked(m.from() as usize) }
+        debug_assert!(m.from().on_board());
+        unsafe { *self.piece_array.get_unchecked(m.from().index()) }
     }
 
     /// Gets the piece at the given square.
-    pub fn piece_at(&self, sq: u8) -> u8 {
-        debug_assert!(square_on_board(sq));
-        unsafe { *self.piece_array.get_unchecked(sq as usize) }
+    pub fn piece_at(&self, sq: Square) -> u8 {
+        debug_assert!(sq.on_board());
+        unsafe { *self.piece_array.get_unchecked(sq.index()) }
     }
 
     /// Gets a mutable reference to the piece at the given square.
-    pub fn piece_at_mut(&mut self, sq: u8) -> &mut u8 {
-        debug_assert!(square_on_board(sq));
-        unsafe { self.piece_array.get_unchecked_mut(sq as usize) }
+    pub fn piece_at_mut(&mut self, sq: Square) -> &mut u8 {
+        debug_assert!(sq.on_board());
+        unsafe { self.piece_array.get_unchecked_mut(sq.index()) }
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -764,8 +764,8 @@ impl Board {
         let side = self.side;
         let piece = self.moved_piece(m);
 
-        debug_assert!(square_on_board(from));
-        debug_assert!(square_on_board(to));
+        debug_assert!(from.on_board());
+        debug_assert!(to.on_board());
         debug_assert!(side_valid(side));
         debug_assert!(piece_valid(piece), "piece: {:?}", piece);
 
@@ -773,23 +773,23 @@ impl Board {
 
         if m.is_ep() {
             if side == WHITE {
-                self.clear_piece(to - 8);
+                self.clear_piece(to.add(-8));
             } else {
-                self.clear_piece(to + 8);
+                self.clear_piece(to.add(8));
             }
         } else if m.is_castle() {
             match to {
-                C1 => self.move_piece(A1, D1),
-                C8 => self.move_piece(A8, D8),
-                G1 => self.move_piece(H1, F1),
-                G8 => self.move_piece(H8, F8),
+                Square::C1 => self.move_piece(Square::A1, Square::D1),
+                Square::C8 => self.move_piece(Square::A8, Square::D8),
+                Square::G1 => self.move_piece(Square::H1, Square::F1),
+                Square::G8 => self.move_piece(Square::H8, Square::F8),
                 _ => {
                     panic!("Invalid castle move");
                 }
             }
         }
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -804,9 +804,9 @@ impl Board {
         });
         self.repetition_cache.push(saved_key);
 
-        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from as usize) };
-        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to as usize) };
-        self.ep_sq = NO_SQUARE;
+        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from.index()) };
+        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to.index()) };
+        self.ep_sq = Square::NO_SQUARE;
 
         // reinsert the castling rights
         hash_castling(&mut self.key, self.castle_perm);
@@ -827,11 +827,11 @@ impl Board {
             self.fifty_move_counter = 0;
             if m.is_pawn_start() {
                 if side == WHITE {
-                    self.ep_sq = from + 8;
-                    debug_assert!(rank(self.ep_sq) == RANK_3);
+                    self.ep_sq = from.add(8);
+                    debug_assert!(self.ep_sq.rank() == RANK_3);
                 } else {
-                    self.ep_sq = from - 8;
-                    debug_assert!(rank(self.ep_sq) == RANK_6);
+                    self.ep_sq = from.add(-8);
+                    debug_assert!(self.ep_sq.rank() == RANK_6);
                 }
                 hash_ep(&mut self.key, self.ep_sq);
             }
@@ -875,11 +875,11 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
         });
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        self.ep_sq = NO_SQUARE;
+        self.ep_sq = Square::NO_SQUARE;
 
         self.side ^= 1;
         self.ply += 1;
@@ -911,7 +911,7 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -922,7 +922,7 @@ impl Board {
         self.ep_sq = ep_square;
         self.fifty_move_counter = fifty_move_counter;
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -934,16 +934,16 @@ impl Board {
 
         if m.is_ep() {
             if self.side == WHITE {
-                self.add_piece(to - 8, BP);
+                self.add_piece(to.add(-8), BP);
             } else {
-                self.add_piece(to + 8, WP);
+                self.add_piece(to.add(8), WP);
             }
         } else if m.is_castle() {
             match to {
-                C1 => self.move_piece(D1, A1),
-                C8 => self.move_piece(D8, A8),
-                G1 => self.move_piece(F1, H1),
-                G8 => self.move_piece(F8, H8),
+                Square::C1 => self.move_piece(Square::D1, Square::A1),
+                Square::C8 => self.move_piece(Square::D8, Square::A8),
+                Square::G1 => self.move_piece(Square::F1, Square::H1),
+                Square::G8 => self.move_piece(Square::F8, Square::H8),
                 _ => {
                     panic!("Invalid castle move");
                 }
@@ -983,14 +983,14 @@ impl Board {
         let to = m.to();
         t.nnue.push_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to - 8 } else { to + 8 };
+            let ep_sq = if colour == WHITE { to.add(-8) } else { to.add(8) };
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, 1 ^ colour, ep_sq);
         } else if m.is_castle() {
             match to {
-                C1 => t.nnue.efficiently_update_from_move(ROOK, colour, A1, D1),
-                C8 => t.nnue.efficiently_update_from_move(ROOK, colour, A8, D8),
-                G1 => t.nnue.efficiently_update_from_move(ROOK, colour, H1, F1),
-                G8 => t.nnue.efficiently_update_from_move(ROOK, colour, H8, F8),
+                Square::C1 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1),
+                Square::C8 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8),
+                Square::G1 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1),
+                Square::G8 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8),
                 _ => {
                     panic!("Invalid castle move");
                 }
@@ -1022,14 +1022,14 @@ impl Board {
         let colour = self.turn();
         t.nnue.pop_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to - 8 } else { to + 8 };
+            let ep_sq = if colour == WHITE { to.add(-8) } else { to.add(8) };
             t.nnue.update_pov_manual::<ACTIVATE>(PAWN, 1 ^ colour, ep_sq);
         } else if m.is_castle() {
             match to {
-                C1 => t.nnue.update_pov_move(ROOK, colour, D1, A1),
-                C8 => t.nnue.update_pov_move(ROOK, colour, D8, A8),
-                G1 => t.nnue.update_pov_move(ROOK, colour, F1, H1),
-                G8 => t.nnue.update_pov_move(ROOK, colour, F8, H8),
+                Square::C1 => t.nnue.update_pov_move(ROOK, colour, Square::D1, Square::A1),
+                Square::G8 => t.nnue.update_pov_move(ROOK, colour, Square::F8, Square::H8),
+                Square::C8 => t.nnue.update_pov_move(ROOK, colour, Square::D8, Square::A8),
+                Square::G1 => t.nnue.update_pov_move(ROOK, colour, Square::F1, Square::H1),
                 _ => {
                     panic!("Invalid castle move");
                 }
@@ -1056,7 +1056,7 @@ impl Board {
         self.height -= 1;
         self.ply -= 1;
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             // this might be unreachable, but that's ok.
             // the branch predictor will hopefully figure it out.
             hash_ep(&mut self.key, self.ep_sq);
@@ -1069,7 +1069,7 @@ impl Board {
         self.ep_sq = ep_square;
         self.fifty_move_counter = fifty_move_counter;
 
-        if self.ep_sq != NO_SQUARE {
+        if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
@@ -1106,8 +1106,8 @@ impl Board {
             return Err(InvalidPromotionPiece(san_bytes[4] as char));
         }
 
-        let from = filerank_to_square(san_bytes[0] - b'a', san_bytes[1] - b'1');
-        let to = filerank_to_square(san_bytes[2] - b'a', san_bytes[3] - b'1');
+        let from = Square::from_rank_file(san_bytes[1] - b'1', san_bytes[0] - b'a');
+        let to = Square::from_rank_file(san_bytes[3] - b'1', san_bytes[2] - b'a');
 
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
@@ -1162,8 +1162,8 @@ impl Board {
         let reg_match = reg_match.unwrap();
 
         let to_sq_name = reg_match.get(4).unwrap().as_str();
-        let to_square = SQUARE_NAMES.iter().position(|&sq| sq == to_sq_name).unwrap();
-        let to_bb = 1 << to_square;
+        let to_square = to_sq_name.parse::<Square>().unwrap();
+        let to_bb = 1 << to_square.index();
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
@@ -1196,7 +1196,7 @@ impl Board {
         } else {
             from_bb &= self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
             if reg_match.get(2).is_none() {
-                from_bb &= BB_FILES[file(to_square.try_into().unwrap()) as usize];
+                from_bb &= BB_FILES[to_square.file() as usize];
             }
         }
 
@@ -1216,8 +1216,8 @@ impl Board {
             if m.promotion() as usize != promo.unwrap_or(0) {
                 continue;
             }
-            let m_from_bb = 1 << m.from();
-            let m_to_bb: u64 = 1 << m.to();
+            let m_from_bb = 1 << m.from().index();
+            let m_to_bb: u64 = 1 << m.to().index();
             if (m_from_bb & from_bb) != 0 && (m_to_bb & to_bb) != 0 {
                 if legal_move.is_some() {
                     return Err(AmbiguousSAN(san.to_string()));
@@ -1533,7 +1533,7 @@ impl Display for Board {
         for rank in ((Rank::RANK_1)..=(Rank::RANK_8)).rev() {
             write!(f, "{} ", rank + 1)?;
             for file in (File::FILE_A)..=(File::FILE_H) {
-                let sq = filerank_to_square(file, rank);
+                let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
                 write!(f, "{} ", piece_char(piece).unwrap() as char)?;
             }
