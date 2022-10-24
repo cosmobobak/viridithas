@@ -661,7 +661,7 @@ impl Board {
 
 pub const fn draw_score(nodes: u64) -> i32 {
     // score fuzzing apparently helps with threefolds.
-    -CONTEMPT + 2 - (nodes & 0b111) as i32
+    (nodes & 0b11) as i32 - 2
 }
 
 pub struct LMRTable {
