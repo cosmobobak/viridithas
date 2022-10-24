@@ -89,8 +89,8 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     let fens_processed = AtomicU64::new(0);
     let start_time = std::time::Instant::now();
     loop {
-        let mut fens = Vec::with_capacity(1000);
-        let mut outcomes = Vec::with_capacity(1000);
+        let mut fens = Vec::with_capacity(100_000);
+        let mut outcomes = Vec::with_capacity(100_000);
         for _ in 0..100_000 {
             if let Some((fen, outcome)) = data_iterator.next() {
                 fens.push(fen);
