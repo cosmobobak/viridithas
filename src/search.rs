@@ -660,7 +660,7 @@ impl Board {
 }
 
 pub const fn draw_score(nodes: u64) -> i32 {
-    // score fuzzing apparently helps with threefolds.
+    // score fuzzing helps with threefolds.
     (nodes & 0b11) as i32 - 2
 }
 
