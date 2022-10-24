@@ -15,7 +15,7 @@ use crate::{
 fn batch_convert(
     depth: i32,
     fens: &[String],
-    evals: &mut Vec<i32>,
+    evals: &mut Vec<Option<i32>>,
     filter_quiescent: bool,
     counter: &AtomicU64,
     printing_thread: bool,
@@ -43,6 +43,7 @@ fn batch_convert(
         }
         pos.set_from_fen(fen).unwrap();
         if filter_quiescent && pos.in_check::<{ Board::US }>() {
+            evals.push(None);
             continue;
         }
         // no NNUE for generating training data.
@@ -54,9 +55,10 @@ fn batch_convert(
         };
         let (score, bm) = pos.search_position::<false>(&mut info, &mut t);
         if filter_quiescent && !bm.is_quiet() {
+            evals.push(None);
             continue;
         }
-        evals.push(score);
+        evals.push(Some(score));
         counter.fetch_add(1, atomic::Ordering::SeqCst);
         local_ticker += 1;
     }
@@ -102,14 +104,16 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
         }
         let evals = parallel_evaluate(&fens, depth, filter_quiescent, &fens_processed, start_time);
         for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
-            // data is written to conform with marlinflow's data format.
-            writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
+            if let Some(eval) = eval {
+                // data is written to conform with marlinflow's data format.
+                writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
+            }
         }
     }
     Ok(())
 }
 
-fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<i32> {
+fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
     let chunk_size = fens.len() / num_cpus::get() + 1;
     let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
     std::thread::scope(|s| {
