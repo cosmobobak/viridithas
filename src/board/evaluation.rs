@@ -107,8 +107,6 @@ pub static KING_DANGER_COEFFS: [i32; 3] = [36, 165, -719];
 pub static KING_DANGER_PIECE_WEIGHTS: [i32; 8] = [40, 20, 40, 20, 60, 20, 100, 40];
 const KINGDANGER_DESCALE: i32 = 20;
 
-pub const CONTEMPT: i32 = 10;
-
 const PAWN_PHASE: i32 = 1;
 const KNIGHT_PHASE: i32 = 10;
 const BISHOP_PHASE: i32 = 10;
@@ -614,13 +612,12 @@ struct KingDangerInfo {
 mod tests {
     #[test]
     fn unwinnable() {
-        use crate::board::evaluation::CONTEMPT;
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
         let board = super::Board::from_fen(FEN).unwrap();
         let eval = board.evaluate_classical(0);
         assert!(
-            (-2..=2).contains(&(eval.abs() - CONTEMPT)),
+            (-2..=2).contains(&(eval.abs())),
             "eval is not a draw score in a position unwinnable for both sides."
         );
     }

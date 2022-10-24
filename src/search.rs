@@ -6,7 +6,7 @@ use crate::{
     board::movegen::MoveList,
     board::{
         evaluation::{
-            self, get_see_value, is_mate_score, mate_in, mated_in, CONTEMPT, MATE_SCORE,
+            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE,
             MINIMUM_MATE_SCORE,
         },
         movegen::{
