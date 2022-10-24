@@ -100,7 +100,7 @@ impl TranspositionTable {
         // else do nothing.
     }
 
-    pub fn store(
+    pub fn store<const ROOT: bool>(
         &mut self,
         key: u64,
         ply: usize,
@@ -135,7 +135,7 @@ impl TranspositionTable {
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
-        if entry.key != key
+        if ROOT || entry.key != key
             || flag == Exact && entry.flag != Exact
             || insert_depth * 3 >= record_depth * 2
         {
