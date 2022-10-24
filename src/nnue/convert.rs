@@ -34,6 +34,8 @@ fn batch_convert(
         std::io::stdout().flush().unwrap();
     }
     for fen in fens {
+        counter.fetch_add(1, atomic::Ordering::SeqCst);
+        local_ticker += 1;
         if printing_thread && local_ticker % 25 == 0 {
             let c = counter.load(atomic::Ordering::SeqCst);
             #[allow(clippy::cast_precision_loss)]
@@ -59,8 +61,6 @@ fn batch_convert(
             continue;
         }
         evals.push(Some(score));
-        counter.fetch_add(1, atomic::Ordering::SeqCst);
-        local_ticker += 1;
     }
     if printing_thread {
         let c = counter.load(atomic::Ordering::SeqCst);
