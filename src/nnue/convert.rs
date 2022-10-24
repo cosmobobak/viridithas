@@ -78,19 +78,19 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     depth: i32,
     filter_quiescent: bool,
 ) -> io::Result<()> {
-    let input_file = File::open(input_file)?;
-    let output_file = File::create(output_file)?;
-    let reader = BufReader::new(input_file);
-    let mut data_iterator: Box<dyn Iterator<Item = (String, f32)>> = match format {
-        Format::OurTexel => Box::new(from_our_texel_format(reader)),
-        Format::Marlinflow => Box::new(from_marlinflow_format(reader)),
+    let reader = BufReader::new(File::open(input_file)?);
+    let mut output = BufWriter::new(File::create(output_file)?);
+    let mut data_iterator = match format {
+        Format::OurTexel => from_our_texel_format(reader),
+        Format::Marlinflow => from_marlinflow_format(reader),
     };
-    let mut output = BufWriter::new(output_file);
     let fens_processed = AtomicU64::new(0);
     let start_time = std::time::Instant::now();
+    let mut fens = Vec::with_capacity(100_000);
+    let mut outcomes = Vec::with_capacity(100_000);
     loop {
-        let mut fens = Vec::with_capacity(100_000);
-        let mut outcomes = Vec::with_capacity(100_000);
+        fens.clear();
+        outcomes.clear();
         for _ in 0..100_000 {
             if let Some((fen, outcome)) = data_iterator.next() {
                 fens.push(fen);
@@ -103,13 +103,14 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
             break;
         }
         let evals = parallel_evaluate(&fens, depth, filter_quiescent, &fens_processed, start_time);
-        for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
+        for ((fen, outcome), eval) in fens.iter().zip(&outcomes).zip(&evals) {
             if let Some(eval) = eval {
                 // data is written to conform with marlinflow's data format.
                 writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
             }
         }
     }
+    output.flush()?;
     Ok(())
 }
 
@@ -142,25 +143,27 @@ fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_p
     })
 }
 
-fn from_our_texel_format(reader: BufReader<File>) -> impl Iterator<Item = (String, f32)> {
+type EvaledFenIterator = Box<dyn Iterator<Item = (String, f32)>>;
+
+fn from_our_texel_format(reader: BufReader<File>) -> EvaledFenIterator {
     // texel format is <FEN>;<WDL>
-    reader.lines().filter_map(|line| {
+    Box::new(reader.lines().filter_map(|line| {
         line.ok().map(|line| {
             line.split_once(';').map(|(fen, wdl)| (fen.to_string(), wdl.parse().unwrap())).unwrap()
         })
-    })
+    }))
 }
 
-fn from_marlinflow_format(reader: BufReader<File>) -> impl Iterator<Item = (String, f32)> {
+fn from_marlinflow_format(reader: BufReader<File>) -> EvaledFenIterator {
     // marlinflow format is <FEN> | <EVAL> | <WDL>
-    reader.lines().filter_map(|line| {
+    Box::new(reader.lines().filter_map(|line| {
         line.ok().map(|line| {
             let (fen, rest) = line.split_once('|').unwrap();
             let fen = fen.trim().to_string();
             let outcome = rest.trim().split_once('|').unwrap().1.trim().parse().unwrap();
             (fen, outcome)
         })
-    })
+    }))
 }
 
 #[derive(Debug, Clone, Copy)]
