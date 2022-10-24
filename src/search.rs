@@ -208,7 +208,7 @@ impl Board {
             }
         }
 
-        debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true if the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
+        debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
         let excluded = t.excluded[self.height()];
 
