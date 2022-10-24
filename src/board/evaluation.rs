@@ -202,7 +202,15 @@ impl Board {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
-        t.nnue.evaluate(self.side)
+        let pov_score = t.nnue.evaluate(self.side);
+        let score = if self.side == WHITE { pov_score } else { -pov_score };
+        let score = self.preprocess_drawish_scores(score, nodes);
+
+        if self.side == WHITE {
+            score
+        } else {
+            -score
+        }
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
