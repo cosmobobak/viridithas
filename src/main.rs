@@ -66,16 +66,28 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::OurTexel, true)
-            .unwrap();
+        return nnue::convert::evaluate_fens(
+            path,
+            output_path,
+            nnue::convert::Format::OurTexel,
+            cli.nnuedepth,
+            true,
+        )
+        .unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
             let mut path = path.clone();
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::Marlinflow, true)
-            .unwrap();
+        return nnue::convert::evaluate_fens(
+            path,
+            output_path,
+            nnue::convert::Format::Marlinflow,
+            cli.nnuedepth,
+            true,
+        )
+        .unwrap();
     }
 
     if cli.info {

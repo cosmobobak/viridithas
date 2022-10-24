@@ -1,7 +1,8 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write, self},
-    path::Path, sync::atomic::{AtomicU64, self},
+    io::{self, BufRead, BufReader, BufWriter, Write},
+    path::Path,
+    sync::atomic::{self, AtomicU64},
 };
 
 use crate::{
@@ -11,17 +12,34 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>, filter_quiescent: bool, counter: &AtomicU64, printing_thread: bool) {
+fn batch_convert(
+    depth: i32,
+    fens: &[String],
+    evals: &mut Vec<i32>,
+    filter_quiescent: bool,
+    counter: &AtomicU64,
+    printing_thread: bool,
+    start_time: std::time::Instant,
+) {
     let mut pos = Board::default();
     let mut t = vec![ThreadData::new()];
+    let mut local_ticker = 0;
     pos.set_hash_size(16);
     pos.alloc_tables();
     if printing_thread {
-        print!("{c: >8} FENs converted.\r", c = counter.load(atomic::Ordering::SeqCst));
+        let c = counter.load(atomic::Ordering::SeqCst);
+        #[allow(clippy::cast_precision_loss)]
+        let ppersec = c as f64 / start_time.elapsed().as_secs_f64();
+        print!("{c: >8} FENs converted. ({ppersec:.2}/s)\r");
+        std::io::stdout().flush().unwrap();
     }
     for fen in fens {
-        if printing_thread && counter.load(atomic::Ordering::SeqCst) % 1000 == 0 {
-            print!("{c: >8} FENs converted.\r", c = counter.load(atomic::Ordering::SeqCst));
+        if printing_thread && local_ticker % 25 == 0 {
+            let c = counter.load(atomic::Ordering::SeqCst);
+            #[allow(clippy::cast_precision_loss)]
+            let ppersec = c as f64 / start_time.elapsed().as_secs_f64();
+            print!("{c: >8} FENs converted. ({ppersec:.2}/s)\r");
+            std::io::stdout().flush().unwrap();
         }
         pos.set_from_fen(fen).unwrap();
         if filter_quiescent && pos.in_check::<{ Board::US }>() {
@@ -38,11 +56,16 @@ fn batch_convert(depth: i32, fens: &[String], evals: &mut Vec<i32>, filter_quies
         if filter_quiescent && !bm.is_quiet() {
             continue;
         }
-        evals.push(score);  
+        evals.push(score);
         counter.fetch_add(1, atomic::Ordering::SeqCst);
+        local_ticker += 1;
     }
     if printing_thread {
-        println!("{} FENs converted.        ", counter.load(atomic::Ordering::SeqCst));
+        let c = counter.load(atomic::Ordering::SeqCst);
+        #[allow(clippy::cast_precision_loss)]
+        let ppersec = c as f64 / start_time.elapsed().as_secs_f64();
+        print!("{c: >8} FENs converted. ({ppersec:.2}/s)\r");
+        std::io::stdout().flush().unwrap();
     }
 }
 
@@ -50,29 +73,45 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
     format: Format,
+    depth: i32,
     filter_quiescent: bool,
 ) -> io::Result<()> {
     let input_file = File::open(input_file)?;
     let output_file = File::create(output_file)?;
     let reader = BufReader::new(input_file);
-    let (fens, outcomes) = match format {
-        Format::OurTexel => from_our_texel_format(reader)?,
-        Format::Marlinflow => from_marlinflow_format(reader)?,
+    let mut data_iterator: Box<dyn Iterator<Item = (String, f32)>> = match format {
+        Format::OurTexel => Box::new(from_our_texel_format(reader)),
+        Format::Marlinflow => Box::new(from_marlinflow_format(reader)),
     };
-    let evals = parallel_evaluate(&fens, filter_quiescent);
     let mut output = BufWriter::new(output_file);
-    for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
-        // data is written to conform with marlinflow's data format.
-        writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
+    let fens_processed = AtomicU64::new(0);
+    let start_time = std::time::Instant::now();
+    loop {
+        let mut fens = Vec::with_capacity(1000);
+        let mut outcomes = Vec::with_capacity(1000);
+        for _ in 0..100_000 {
+            if let Some((fen, outcome)) = data_iterator.next() {
+                fens.push(fen);
+                outcomes.push(outcome);
+            } else {
+                break;
+            }
+        }
+        if fens.is_empty() {
+            break;
+        }
+        let evals = parallel_evaluate(&fens, depth, filter_quiescent, &fens_processed, start_time);
+        for ((fen, outcome), eval) in fens.into_iter().zip(outcomes).zip(&evals) {
+            // data is written to conform with marlinflow's data format.
+            writeln!(output, "{fen} | {eval} | {outcome:.1}")?;
+        }
     }
     Ok(())
 }
 
-fn parallel_evaluate(fens: &[String], filter_quiescent: bool) -> Vec<i32> {
+fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<i32> {
     let chunk_size = fens.len() / num_cpus::get() + 1;
     let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
-    let counter = AtomicU64::new(0);
-    let counter_ref = &counter;
     std::thread::scope(|s| {
         let mut handles = Vec::new();
         let mut evals = Vec::with_capacity(fens.len());
@@ -80,7 +119,15 @@ fn parallel_evaluate(fens: &[String], filter_quiescent: bool) -> Vec<i32> {
             let printing_thread = i == 0;
             handles.push(s.spawn(move || {
                 let mut inner_evals = Vec::new();
-                batch_convert(10, chunk, &mut inner_evals, filter_quiescent, counter_ref, printing_thread);
+                batch_convert(
+                    depth,
+                    chunk,
+                    &mut inner_evals,
+                    filter_quiescent,
+                    fens_processed,
+                    printing_thread,
+                    start_time,
+                );
                 inner_evals
             }));
         }
@@ -91,34 +138,25 @@ fn parallel_evaluate(fens: &[String], filter_quiescent: bool) -> Vec<i32> {
     })
 }
 
-fn from_our_texel_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>, Vec<f32>)> {
-    let mut line = String::new();
-    let mut fens = Vec::new();
-    let mut outcomes = Vec::new();
+fn from_our_texel_format(reader: BufReader<File>) -> impl Iterator<Item = (String, f32)> {
     // texel format is <FEN>;<WDL>
-    while reader.read_line(&mut line)? > 0 {
-        let (fen, outcome) = line.trim().split_once(';').unwrap();
-        fens.push(fen.to_string());
-        outcomes.push(outcome.parse::<f32>().unwrap());
-        line.clear();
-    }
-    Ok((fens, outcomes))
+    reader.lines().filter_map(|line| {
+        line.ok().map(|line| {
+            line.split_once(';').map(|(fen, wdl)| (fen.to_string(), wdl.parse().unwrap())).unwrap()
+        })
+    })
 }
 
-fn from_marlinflow_format(mut reader: BufReader<File>) -> io::Result<(Vec<String>, Vec<f32>)> {
-    let mut line = String::new();
-    let mut fens = Vec::new();
-    let mut outcomes = Vec::new();
+fn from_marlinflow_format(reader: BufReader<File>) -> impl Iterator<Item = (String, f32)> {
     // marlinflow format is <FEN> | <EVAL> | <WDL>
-    while reader.read_line(&mut line)? > 0 {
-        let (fen, rest) = line.trim().split_once('|').unwrap();
-        let fen = fen.trim();
-        let outcome = rest.trim().split_once('|').unwrap().1.trim();
-        fens.push(fen.to_string());
-        outcomes.push(outcome.parse::<f32>().unwrap());
-        line.clear();
-    }
-    Ok((fens, outcomes))
+    reader.lines().filter_map(|line| {
+        line.ok().map(|line| {
+            let (fen, rest) = line.split_once('|').unwrap();
+            let fen = fen.trim().to_string();
+            let outcome = rest.trim().split_once('|').unwrap().1.trim().parse().unwrap();
+            (fen, outcome)
+        })
+    })
 }
 
 #[derive(Debug, Clone, Copy)]

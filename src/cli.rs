@@ -49,6 +49,9 @@ pub struct Cli {
     /// Path to an NNUE data file to reanalyse with the current evaluation parameters.
     #[clap(long, value_name = "PATH")]
     pub nnuereanalysepath: Option<std::path::PathBuf>,
+    /// Depth at which to do NNUE data generation.
+    #[clap(long, value_name = "DEPTH", default_value = "8")]
+    pub nnuedepth: i32,
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
