@@ -293,7 +293,7 @@ pub fn format_score(score: i32, turn: u8) -> String {
 fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
-    println!("option name Hash type spin default 4 min 1 max 1024");
+    println!("option name Hash type spin default 4 min 1 max 8192");
     for (id, default) in SearchParams::default().ids_with_values() {
         println!("option name {id} type spin default {default} min -999999 max 999999");
     }
