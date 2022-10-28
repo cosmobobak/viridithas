@@ -47,7 +47,7 @@ const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_2: i32 = 25;
 const FUTILITY_COEFF_1: i32 = 27;
-const FUTILITY_COEFF_0: i32 = 103;
+const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(8);
@@ -269,7 +269,7 @@ impl Board {
             && !in_check
             && excluded.is_null()
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
-            && depth >= 4.into()
+            && depth >= 3.into()
             && !self.last_move_was_nullmove()
             && self.zugzwang_unlikely()
         {
