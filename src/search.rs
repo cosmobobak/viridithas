@@ -170,6 +170,10 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(self.check_nnue_coherency(&t.nnue));
 
+        if depth <= ZERO_PLY {
+            return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
+        }
+
         if info.nodes.trailing_zeros() >= 12 {
             info.check_up();
             if info.stopped {
@@ -202,10 +206,6 @@ impl Board {
             if r_alpha >= r_beta {
                 return r_alpha;
             }
-        }
-
-        if depth <= ZERO_PLY {
-            return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
         }
 
         debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
