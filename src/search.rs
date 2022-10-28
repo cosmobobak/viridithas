@@ -39,7 +39,7 @@ use self::parameters::SearchParams;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 26;
-const RFP_MARGIN: i32 = 118;
+const RFP_MARGIN: i32 = 100;
 const RFP_IMPROVING_MARGIN: i32 = 76;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
