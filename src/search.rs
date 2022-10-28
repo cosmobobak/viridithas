@@ -48,7 +48,7 @@ const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_2: i32 = 25;
 const FUTILITY_COEFF_1: i32 = 27;
 const FUTILITY_COEFF_0: i32 = 103;
-const RFP_DEPTH: Depth = Depth::new(9);
+const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const LMP_DEPTH: Depth = Depth::new(3);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
@@ -230,9 +230,6 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search.
         };
 
-        // just enforcing immutability here.
-        let depth = depth;
-
         let in_check = self.in_check::<{ Self::US }>();
 
         let static_eval = if in_check {
@@ -280,7 +277,7 @@ impl Board {
                 return 0;
             }
             if score >= beta {
-                return beta;
+                depth -= 1;
             }
         }
 
