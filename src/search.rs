@@ -269,11 +269,11 @@ impl Board {
             && !in_check
             && excluded.is_null()
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
-            && depth >= 3.into()
+            && depth >= 4.into()
             && !self.last_move_was_nullmove()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = ((depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1)).max(ONE_PLY);
+            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
             let score = -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
