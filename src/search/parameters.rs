@@ -4,7 +4,7 @@ use crate::definitions::depth::Depth;
 
 use super::{
     ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_COEFF_2, FUTILITY_DEPTH,
-    LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
+    LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_VERIFICATION_DEPTH, NMP_IMPROVING_MARGIN,
     RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
     SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
 };
@@ -23,6 +23,7 @@ pub struct SearchParams {
     pub futility_coeff_0: i32,
     pub rfp_depth: Depth,
     pub nmp_base_reduction: Depth,
+    pub nmp_verification_depth: Depth,
     pub lmp_depth: Depth,
     pub tt_reduction_depth: Depth,
     pub futility_depth: Depth,
@@ -47,6 +48,7 @@ impl Default for SearchParams {
             futility_coeff_0: FUTILITY_COEFF_0,
             rfp_depth: RFP_DEPTH,
             nmp_base_reduction: NMP_BASE_REDUCTION,
+            nmp_verification_depth: NMP_VERIFICATION_DEPTH,
             lmp_depth: LMP_DEPTH,
             tt_reduction_depth: TT_REDUCTION_DEPTH,
             futility_depth: FUTILITY_DEPTH,
@@ -110,6 +112,7 @@ impl SearchParams {
             FUTILITY_COEFF_0 = [self.futility_coeff_0],
             RFP_DEPTH = [self.rfp_depth],
             NMP_BASE_REDUCTION = [self.nmp_base_reduction],
+            NMP_VERIFICATION_DEPTH = [self.nmp_verification_depth],
             LMP_DEPTH = [self.lmp_depth],
             TT_REDUCTION_DEPTH = [self.tt_reduction_depth],
             FUTILITY_DEPTH = [self.futility_depth],
@@ -146,6 +149,8 @@ impl SearchParams {
             [self.rfp_depth.into()],
             NMP_BASE_REDUCTION,
             [self.nmp_base_reduction.into()],
+            NMP_VERIFICATION_DEPTH,
+            [self.nmp_verification_depth.into()],
             LMP_DEPTH,
             [self.lmp_depth.into()],
             TT_REDUCTION_DEPTH,
