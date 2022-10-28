@@ -273,7 +273,7 @@ impl Board {
             && !self.last_move_was_nullmove()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
+            let nm_depth = ((depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1)).max(ONE_PLY);
             self.make_nullmove();
             let score = -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
@@ -281,17 +281,7 @@ impl Board {
                 return 0;
             }
             if score >= beta {
-                if depth >= self.sparams.nmp_verification_depth {
-                    let v = self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, beta - 1, beta);
-                    if info.stopped {
-                        return 0;
-                    }
-                    if v >= beta {
-                        return beta;
-                    }
-                } else {
-                    return beta;
-                }
+                return beta;
             }
         }
 
