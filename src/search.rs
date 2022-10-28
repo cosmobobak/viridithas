@@ -289,8 +289,9 @@ impl Board {
                     if v >= beta {
                         return beta;
                     }
+                } else {
+                    return beta;
                 }
-                return beta;
             }
         }
 
