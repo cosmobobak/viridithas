@@ -40,7 +40,7 @@ fn batch_convert(
             let c = counter.load(atomic::Ordering::SeqCst);
             #[allow(clippy::cast_precision_loss)]
             let ppersec = c as f64 / start_time.elapsed().as_secs_f64();
-            print!("{c: >8} FENs converted. ({ppersec:.2}/s)\r");
+            print!("{c: >8} FENs converted. ({ppersec:.2}/s)                                        \r");
             std::io::stdout().flush().unwrap();
         }
         pos.set_from_fen(fen).unwrap();
@@ -66,7 +66,7 @@ fn batch_convert(
         let c = counter.load(atomic::Ordering::SeqCst);
         #[allow(clippy::cast_precision_loss)]
         let ppersec = c as f64 / start_time.elapsed().as_secs_f64();
-        print!("{c: >8} FENs converted. ({ppersec:.2}/s)\r");
+        print!("{c: >8} FENs converted. ({ppersec:.2}/s)                                            \r");
         std::io::stdout().flush().unwrap();
     }
 }
