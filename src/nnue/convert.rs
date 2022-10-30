@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    board::Board,
+    board::{Board, evaluation::is_mate_score},
     definitions::depth::Depth,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
@@ -56,7 +56,7 @@ fn batch_convert(
             ..SearchInfo::default()
         };
         let (score, bm) = pos.search_position::<false>(&mut info, &mut t);
-        if filter_quiescent && !bm.is_quiet() {
+        if filter_quiescent && (!bm.is_quiet() || is_mate_score(score)) {
             evals.push(None);
             continue;
         }
