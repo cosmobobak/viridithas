@@ -184,10 +184,9 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
-    next_part
-        .ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?
-        .parse()
-        .map_err(|e| UciError::InvalidFormat(format!("value for {target} is not a number: {e}")))
+    let next_part = next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
+    let value = next_part.parse();
+    value.map_err(|e| UciError::InvalidFormat(format!("value for {target} is not a number: {e}, tried to parse {next_part}")))
 }
 
 struct SetOptions {
