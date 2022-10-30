@@ -1,0 +1,24 @@
+ideas for viri
+MAJOR: 
+- SMP
+- tablebases
+- docs
+- staged move generation (try TT move first at least)
+- type-safety overhaul
+
+MINOR:
+- update SearchInfo so that only one limit applies at once.
+- tune search parameters
+- tune move generation (check evasions?)
+- learn SPRT
+- criterion benchmarks
+- check out other engine's impls of countermoves and killer moves
+- unify pruning into skip_quiets
+- try linear repetition detection again.
+- replace all the false/true constgen stuff with a proper type.
+- history leaf pruning in LMR
+- alpha pruning
+- find a way not to do SEE ordering in qsearch (capture history)
+- put stuff into TT in qsearch.
+- increase maxdepth just in case.
+- fullwindow on big scores (+30?)
