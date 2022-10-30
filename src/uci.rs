@@ -122,8 +122,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
     let mut movetime: Option<u64> = None;
-    let mut clocks: [Option<u64>; 2] = [None, None];
-    let mut incs: [Option<u64>; 2] = [None, None];
+    let mut clocks: [Option<i64>; 2] = [None, None];
+    let mut incs: [Option<i64>; 2] = [None, None];
     let mut nodes: Option<u64> = None;
 
     let mut parts = text.split_ascii_whitespace();
@@ -159,6 +159,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
         let [our_inc, their_inc] = [incs[0].unwrap_or(0), incs[1].unwrap_or(0)];
+        let our_clock: u64 = our_clock.try_into().unwrap_or(0);
+        let their_clock: u64 = their_clock.try_into().unwrap_or(0);
+        let our_inc: u64 = our_inc.try_into().unwrap_or(0);
+        let their_inc: u64 = their_inc.try_into().unwrap_or(0);
         let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
         let (time_window, max_time_window) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
         info.limit = SearchLimit::Dynamic {
