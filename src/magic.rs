@@ -315,13 +315,21 @@ pub fn init_magics() {
     println!("Done!");
 }
 
+macro_rules! init_masks_with {
+    ($attack_function:ident) => {{
+        let mut masks = [0u64; 64];
+        cfor!(let mut square = 0; square < 64; square += 1; {
+            masks[square] = $attack_function(square as _);
+        });
+        masks
+    }};
+}
+
 unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
+    const BISHOP_MASKS: [u64; 64] = init_masks_with!(mask_bishop_attacks);
+    const ROOK_MASKS: [u64; 64] = init_masks_with!(mask_rook_attacks);
     // CONTRACT: take a lock before calling this function.
     for square in 0..64 {
-        // init masks
-        BISHOP_MASKS[square] = mask_bishop_attacks(square.try_into().unwrap());
-        ROOK_MASKS[square] = mask_rook_attacks(square.try_into().unwrap());
-
         // init the current mask
         let mask = if IS_BISHOP { BISHOP_MASKS[square] } else { ROOK_MASKS[square] };
 
@@ -368,8 +376,8 @@ pub fn initialise() {
     MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
-static mut BISHOP_MASKS: [u64; 64] = [0; 64];
-static mut ROOK_MASKS: [u64; 64] = [0; 64];
+static BISHOP_MASKS: [u64; 64] = init_masks_with!(mask_bishop_attacks);
+static ROOK_MASKS: [u64; 64] = init_masks_with!(mask_rook_attacks);
 
 static mut BISHOP_ATTACKS: [[u64; 512]; 64] = [[0; 512]; 64];
 #[allow(clippy::large_stack_arrays)]
@@ -518,7 +526,7 @@ pub fn get_bishop_attacks(sq: Square, blockers: u64) -> u64 {
             macros::inconceivable!();
         }
     }
-    let relevant_blockers = blockers & unsafe { BISHOP_MASKS[sq] };
+    let relevant_blockers = blockers & BISHOP_MASKS[sq];
     let data = relevant_blockers.wrapping_mul(BISHOP_MAGICS[sq]);
     let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
     unsafe {
@@ -539,7 +547,7 @@ pub fn get_rook_attacks(sq: Square, blockers: u64) -> u64 {
             macros::inconceivable!();
         }
     }
-    let relevant_blockers = blockers & unsafe { ROOK_MASKS[sq] };
+    let relevant_blockers = blockers & ROOK_MASKS[sq];
     let data = relevant_blockers.wrapping_mul(ROOK_MAGICS[sq]);
     let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
     unsafe {
