@@ -30,8 +30,7 @@ def main():
                     result = 0.5
                     draws += 1
                 else:
-                    print(f"Unknown result: {result}")
-                    exit(1)
+                    continue
                 nodes = game.mainline()
                 for node in nodes:
                     evaluation = node.comment
