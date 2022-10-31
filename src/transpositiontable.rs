@@ -2,7 +2,6 @@ use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
     definitions::{depth::CompactDepthStorage, depth::Depth, INFINITY, MAX_DEPTH},
-    macros,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,7 +191,7 @@ impl TranspositionTable {
 
         debug_assert!(score >= -INFINITY);
         match entry.flag {
-            HFlag::None => unsafe { macros::inconceivable!() },
+            HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
                 if !ROOT && score <= alpha {
                     ProbeResult::Cutoff(alpha) // never cutoff at root.
