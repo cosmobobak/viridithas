@@ -1,7 +1,6 @@
 
 import chess
 import chess.pgn
-import tqdm
 
 # read command line args
 import sys
@@ -14,12 +13,9 @@ OUT = sys.argv[2]
 def main():
     counter = 0
     wins, draws, losses = 0, 0, 0
-    pbar = tqdm.tqdm()
     with open(PGN, "r") as pgn:
         with open(OUT, "a") as texel_data:
             while True:
-                if counter & 0xFF == 0:
-                    pbar.update(0xFF)
                 game = chess.pgn.read_game(pgn)
                 if game is None: # EOF
                     break
@@ -44,7 +40,6 @@ def main():
                     board = node.board()
                     texel_data.write(f"{board.fen()};{result}\n")
                 counter += 1
-    pbar.close()
     
     print(f"Wins:   {wins}")
     print(f"Draws:  {draws}")
