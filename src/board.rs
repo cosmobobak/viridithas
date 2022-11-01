@@ -579,7 +579,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let sq_bb = 1 << sq.index();
+        let sq_bb = sq.bitboard();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let our_diags = self.pieces.bishopqueen::<IS_WHITE>();
@@ -704,7 +704,7 @@ impl Board {
 
         let piece_moved = self.piece_at(from);
 
-        let from_to_bb = 1 << from.index() | 1 << to.index();
+        let from_to_bb = from.bitboard() | to.bitboard();
         self.pieces.move_piece(from_to_bb, piece_moved);
 
         // if we're in debug mode, check that we actually find a matching piecelist entry.
@@ -1163,7 +1163,7 @@ impl Board {
 
         let to_sq_name = reg_match.get(4).unwrap().as_str();
         let to_square = to_sq_name.parse::<Square>().unwrap();
-        let to_bb = 1 << to_square.index();
+        let to_bb = to_square.bitboard();
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
@@ -1216,8 +1216,8 @@ impl Board {
             if m.promotion() as usize != promo.unwrap_or(0) {
                 continue;
             }
-            let m_from_bb = 1 << m.from().index();
-            let m_to_bb: u64 = 1 << m.to().index();
+            let m_from_bb = m.from().bitboard();
+            let m_to_bb = m.to().bitboard();
             if (m_from_bb & from_bb) != 0 && (m_to_bb & to_bb) != 0 {
                 if legal_move.is_some() {
                     return Err(AmbiguousSAN(san.to_string()));

@@ -216,7 +216,7 @@ impl Board {
         if self.ep_sq == Square::NO_SQUARE {
             return;
         }
-        let ep_bb = 1 << self.ep_sq.index();
+        let ep_bb = self.ep_sq.bitboard();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let attacks_west = if IS_WHITE {
             ep_bb.south_east_one() & our_pawns

@@ -367,7 +367,7 @@ impl BitBoard {
     }
 
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: u64) -> u64 {
-        let sq_bb = 1u64 << sq.index();
+        let sq_bb = sq.bitboard();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.b_pawns;
         let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.w_pawns;
         let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
