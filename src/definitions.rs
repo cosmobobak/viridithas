@@ -243,17 +243,17 @@ impl Square {
         self.0 as usize
     }
 
-    pub const fn add(self, offset: i8) -> Self {
+    pub const fn add(self, offset: u8) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-        let res = self.0 as i8 + offset;
-        debug_assert!(!(res < 0 || res >= 64), "Square::add overflowed");
+        let res = self.0 + offset;
+        debug_assert!(res < 64, "Square::add overflowed");
         Self(res as u8)
     }
 
-    pub const fn sub(self, offset: i8) -> Self {
+    pub const fn sub(self, offset: u8) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-        let res = self.0 as i8 - offset;
-        debug_assert!(!(res < 0 || res >= 64), "Square::sub overflowed");
+        let res = self.0 - offset;
+        debug_assert!(res < 64, "Square::sub overflowed");
         Self(res as u8)
     }
 

@@ -773,7 +773,7 @@ impl Board {
 
         if m.is_ep() {
             if side == WHITE {
-                self.clear_piece(to.add(-8));
+                self.clear_piece(to.sub(8));
             } else {
                 self.clear_piece(to.add(8));
             }
@@ -830,7 +830,7 @@ impl Board {
                     self.ep_sq = from.add(8);
                     debug_assert!(self.ep_sq.rank() == RANK_3);
                 } else {
-                    self.ep_sq = from.add(-8);
+                    self.ep_sq = from.sub(8);
                     debug_assert!(self.ep_sq.rank() == RANK_6);
                 }
                 hash_ep(&mut self.key, self.ep_sq);
@@ -934,7 +934,7 @@ impl Board {
 
         if m.is_ep() {
             if self.side == WHITE {
-                self.add_piece(to.add(-8), BP);
+                self.add_piece(to.sub(8), BP);
             } else {
                 self.add_piece(to.add(8), WP);
             }
@@ -983,7 +983,7 @@ impl Board {
         let to = m.to();
         t.nnue.push_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to.add(-8) } else { to.add(8) };
+            let ep_sq = if colour == WHITE { to.sub(8) } else { to.add(8) };
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, 1 ^ colour, ep_sq);
         } else if m.is_castle() {
             match to {
@@ -1022,7 +1022,7 @@ impl Board {
         let colour = self.turn();
         t.nnue.pop_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to.add(-8) } else { to.add(8) };
+            let ep_sq = if colour == WHITE { to.sub(8) } else { to.add(8) };
             t.nnue.update_pov_manual::<ACTIVATE>(PAWN, 1 ^ colour, ep_sq);
         } else if m.is_castle() {
             match to {
