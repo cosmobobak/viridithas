@@ -12,7 +12,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-fn batch_convert(
+fn batch_convert<const USE_NNUE: bool>(
     depth: i32,
     fens: &[String],
     evals: &mut Vec<Option<i32>>,
@@ -55,7 +55,7 @@ fn batch_convert(
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::default()
         };
-        let (score, bm) = pos.search_position::<false>(&mut info, &mut t);
+        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t);
         if filter_quiescent && (!bm.is_quiet() || is_mate_score(score)) {
             evals.push(None);
             continue;
@@ -77,6 +77,7 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     format: Format,
     depth: i32,
     filter_quiescent: bool,
+    use_nnue: bool,
 ) -> io::Result<()> {
     let reader = BufReader::new(File::open(input_file)?);
     let mut output = BufWriter::new(File::create(output_file)?);
@@ -102,7 +103,7 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
         if fens.is_empty() {
             break;
         }
-        let evals = parallel_evaluate(&fens, depth, filter_quiescent, &fens_processed, start_time);
+        let evals = parallel_evaluate(&fens, depth, filter_quiescent, use_nnue, &fens_processed, start_time);
         for ((fen, outcome), eval) in fens.iter().zip(&outcomes).zip(&evals) {
             if let Some(eval) = eval {
                 // data is written to conform with marlinflow's data format.
@@ -114,7 +115,7 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
-fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
+fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, use_nnue: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
     let chunk_size = fens.len() / num_cpus::get() + 1;
     let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
     std::thread::scope(|s| {
@@ -124,15 +125,27 @@ fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, fens_p
             let printing_thread = i == 0;
             handles.push(s.spawn(move || {
                 let mut inner_evals = Vec::new();
-                batch_convert(
-                    depth,
-                    chunk,
-                    &mut inner_evals,
-                    filter_quiescent,
-                    fens_processed,
-                    printing_thread,
-                    start_time,
-                );
+                if use_nnue {
+                    batch_convert::<true>(
+                        depth,
+                        chunk,
+                        &mut inner_evals,
+                        filter_quiescent,
+                        fens_processed,
+                        printing_thread,
+                        start_time,
+                    );
+                } else {
+                    batch_convert::<false>(
+                        depth,
+                        chunk,
+                        &mut inner_evals,
+                        filter_quiescent,
+                        fens_processed,
+                        printing_thread,
+                        start_time,
+                    );
+                }
                 inner_evals
             }));
         }

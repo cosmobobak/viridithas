@@ -72,6 +72,7 @@ fn main() {
             nnue::convert::Format::OurTexel,
             cli.nnuedepth,
             true,
+            true,
         )
         .unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
@@ -85,6 +86,7 @@ fn main() {
             output_path,
             nnue::convert::Format::Marlinflow,
             cli.nnuedepth,
+            true,
             true,
         )
         .unwrap();
