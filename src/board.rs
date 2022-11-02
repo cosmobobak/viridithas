@@ -227,8 +227,8 @@ impl Board {
         debug_assert_eq!(self.piece_lists[WK as usize].len(), 1);
         debug_assert_eq!(self.piece_lists[BK as usize].len(), 1);
         let sq = match side {
-            WHITE => *self.piece_lists[WK as usize].first().unwrap(),
-            BLACK => *self.piece_lists[BK as usize].first().unwrap(),
+            WHITE => self.piece_lists[WK as usize][0],
+            BLACK => self.piece_lists[BK as usize][0],
             _ => unsafe { macros::inconceivable!() },
         };
         debug_assert!(sq < Square::NO_SQUARE);
@@ -1373,7 +1373,7 @@ impl Board {
             loop {
                 let score = self.alpha_beta::<true, true, USE_NNUE>(
                     info,
-                    thread_data.first_mut().unwrap(),
+                    &mut thread_data[0],
                     Depth::new(i_depth),
                     aspiration_window.alpha,
                     aspiration_window.beta,
@@ -1401,7 +1401,7 @@ impl Board {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
                         info,
-                        thread_data.first_mut().unwrap(),
+                        &mut thread_data[0],
                         most_recent_move,
                         most_recent_score,
                         Depth::new(i_depth),

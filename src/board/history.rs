@@ -134,7 +134,7 @@ impl Board {
     /// Add a killer move.
     pub fn insert_killer(&mut self, m: Move) {
         debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
-        let entry = unsafe { self.killer_move_table.get_unchecked_mut(self.height) };
+        let entry = &mut self.killer_move_table[self.height];
         entry[1] = entry[0];
         entry[0] = m;
     }
