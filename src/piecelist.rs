@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Index};
 
 use crate::{definitions::Square, macros};
 
@@ -12,10 +12,6 @@ pub struct PieceList {
 impl PieceList {
     pub const fn new() -> Self {
         Self { data: [Square::NO_SQUARE; 10], len: 0 }
-    }
-
-    pub fn first(&self) -> Option<&Square> {
-        self.data[..self.len as usize].first()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Square> {
@@ -86,5 +82,13 @@ impl Display for PieceList {
             .collect::<Vec<_>>()
             .join(", ");
         write!(f, "[{}]", repr)
+    }
+}
+
+impl Index<usize> for PieceList {
+    type Output = Square;
+
+    fn index(&self, idx: usize) -> &Self::Output {
+        &self.data[..self.len as usize][idx]
     }
 }
