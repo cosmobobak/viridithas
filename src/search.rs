@@ -45,8 +45,8 @@ const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_2: i32 = 25;
-const FUTILITY_COEFF_1: i32 = 27;
+const FUTILITY_COEFF_2: i32 = 0;
+const FUTILITY_COEFF_1: i32 = 150;
 const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
@@ -361,7 +361,7 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !PV && !is_interesting && quiet_moves_made > 1 && do_fut_pruning
+            if !PV && quiet_moves_made > 1 && !is_interesting && do_fut_pruning
             {
                 self.unmake_move_nnue(t);
                 continue;
