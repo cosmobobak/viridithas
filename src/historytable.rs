@@ -33,7 +33,7 @@ const fn piece_index(piece: u8) -> u8 {
 }
 
 const fn history_bonus(depth: Depth) -> i32 {
-    depth.squared() + depth.round()
+    depth.round()
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
