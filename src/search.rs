@@ -355,14 +355,14 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            if do_lmp && quiet_moves_made >= lmp_threshold {
-                self.unmake_move_nnue(t);
-                continue;
-            }
-            if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 200 + 200 * lmr_depth.round() < alpha {
-                self.unmake_move_nnue(t);
-                continue;
-            }
+            // if do_lmp && quiet_moves_made >= lmp_threshold {
+            //     self.unmake_move_nnue(t);
+            //     continue;
+            // }
+            // if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 200 + 200 * lmr_depth.round() < alpha {
+            //     self.unmake_move_nnue(t);
+            //     continue;
+            // }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !ROOT
