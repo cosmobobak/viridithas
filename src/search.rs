@@ -361,7 +361,7 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && self.do_futility_pruning(depth - lmr_reduction + 3, static_eval, alpha, beta)
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && self.do_futility_pruning(depth - lmr_reduction + 1, static_eval, alpha, beta)
             {
                 self.unmake_move_nnue(t);
                 continue;
