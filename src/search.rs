@@ -44,7 +44,7 @@ const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
-const LMP_BASE_MOVES: i32 = 2;
+const LMP_BASE_MOVES: i32 = 3;
 const FUTILITY_COEFF_2: i32 = 25;
 const FUTILITY_COEFF_1: i32 = 27;
 const FUTILITY_COEFF_0: i32 = 80;
@@ -355,10 +355,10 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            // if do_lmp && quiet_moves_made >= lmp_threshold {
-            //     self.unmake_move_nnue(t);
-            //     continue;
-            // }
+            if do_lmp && quiet_moves_made >= lmp_threshold {
+                self.unmake_move_nnue(t);
+                continue;
+            }
             // if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 200 + 200 * lmr_depth.round() < alpha {
             //     self.unmake_move_nnue(t);
             //     continue;
