@@ -359,7 +359,7 @@ impl Board {
                 self.unmake_move_nnue(t);
                 continue;
             }
-            if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 100 + 300 * lmr_depth.round() < alpha {
+            if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 200 + 200 * lmr_depth.round() < alpha {
                 self.unmake_move_nnue(t);
                 continue;
             }
