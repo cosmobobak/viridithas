@@ -39,15 +39,15 @@ use self::parameters::SearchParams;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 26;
-const RFP_MARGIN: i32 = 67;
-const RFP_IMPROVING_MARGIN: i32 = 53;
-const NMP_IMPROVING_MARGIN: i32 = 74;
+const RFP_MARGIN: i32 = 80;
+const RFP_IMPROVING_MARGIN: i32 = 57;
+const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_2: i32 = 24;
-const FUTILITY_COEFF_1: i32 = 30;
-const FUTILITY_COEFF_0: i32 = 94;
+const FUTILITY_COEFF_2: i32 = 25;
+const FUTILITY_COEFF_1: i32 = 27;
+const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(8);
@@ -56,8 +56,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(4);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
-const LMR_BASE: f64 = 84.0;
-const LMR_DIVISION: f64 = 250.0;
+const LMR_BASE: f64 = 77.0;
+const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
     pub fn quiescence<const USE_NNUE: bool>(
@@ -357,14 +357,6 @@ impl Board {
             if do_lmp && quiet_moves_made >= lmp_threshold {
                 self.unmake_move_nnue(t);
                 break; // okay to break because captures are ordered first.
-            }
-
-            // futility pruning
-            // if the static eval is too low, we might just skip the move.
-            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
-            {
-                self.unmake_move_nnue(t);
-                continue;
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
