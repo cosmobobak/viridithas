@@ -322,6 +322,10 @@ impl Board {
         }
         let mut root_nodecount_record = Vec::new();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
+            if ordering_score < 0 && depth < Depth::new(5) {
+                move_picker.skip_ordering();
+            }
+
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
@@ -342,6 +346,8 @@ impl Board {
                 println!("info currmove {m} currmovenumber {} nodes {}", moves_made, info.nodes);
             }
 
+            let lmr_reduction = self.lmr_table.get(depth, moves_made);
+            let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
             let is_promotion = m.is_promo();
@@ -363,9 +369,9 @@ impl Board {
             }
 
             // history leaf pruning
-            // if !PV && !is_interesting && moves_made >= 5 {
-
-            // }
+            if !PV && !is_interesting && moves_made >= 5 && lmr_depth == ZERO_PLY && ordering_score < 0 {
+                continue;
+            }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !ROOT
