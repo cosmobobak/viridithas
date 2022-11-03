@@ -299,8 +299,6 @@ impl Board {
         let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared()) * imp_2x;
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
-        // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = self.do_futility_pruning(depth, static_eval, alpha, beta);
 
         if let Some(tt_hit) = &tt_hit {
             if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
@@ -346,6 +344,8 @@ impl Board {
             if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
                 println!("info currmove {m} currmovenumber {} nodes {}", moves_made, info.nodes);
             }
+            
+            let lmr_reduction = self.lmr_table.get(depth, moves_made);
 
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
@@ -361,7 +361,7 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && do_fut_pruning
+            if !(PV || is_capture || is_promotion || in_check || moves_made <= 1) && self.do_futility_pruning(depth - lmr_reduction, static_eval, alpha, beta)
             {
                 self.unmake_move_nnue(t);
                 continue;
@@ -398,7 +398,7 @@ impl Board {
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
-                    let mut r = self.lmr_table.get(depth, moves_made);
+                    let mut r = lmr_reduction;
                     r += i32::from(!PV);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
