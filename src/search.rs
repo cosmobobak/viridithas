@@ -369,7 +369,7 @@ impl Board {
             }
 
             // history leaf pruning
-            if !PV && !is_interesting && moves_made >= 5 && lmr_depth == ZERO_PLY && ordering_score < 0 {
+            if !PV && !is_interesting && moves_made >= 5 && lmr_depth <= ONE_PLY && ordering_score < 0 {
                 continue;
             }
 
