@@ -44,7 +44,7 @@ const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
-const LMP_BASE_MOVES: i32 = 3;
+const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_2: i32 = 25;
 const FUTILITY_COEFF_1: i32 = 27;
 const FUTILITY_COEFF_0: i32 = 80;
@@ -296,7 +296,7 @@ impl Board {
 
         let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared()) * imp_2x;
+        let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared());
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
 
