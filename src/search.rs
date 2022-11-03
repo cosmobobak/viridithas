@@ -322,10 +322,6 @@ impl Board {
         }
         let mut root_nodecount_record = Vec::new();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
-            if ordering_score < 0 && depth < Depth::new(5) {
-                move_picker.skip_ordering();
-            }
-
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
@@ -365,6 +361,11 @@ impl Board {
                 self.unmake_move_nnue(t);
                 continue;
             }
+
+            // history leaf pruning
+            // if !PV && !is_interesting && moves_made >= 5 {
+
+            // }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !ROOT
