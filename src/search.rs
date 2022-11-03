@@ -53,7 +53,7 @@ const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(8);
 const LMP_DEPTH: Depth = Depth::new(3);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
-const FUTILITY_DEPTH: Depth = Depth::new(4);
+const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
@@ -359,7 +359,7 @@ impl Board {
                 self.unmake_move_nnue(t);
                 continue;
             }
-            if !PV && !is_interesting && lmr_depth < Depth::new(10) && static_eval + 100 + 150 * lmr_depth.round() < alpha {
+            if !PV && !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + 100 + 300 * lmr_depth.round() < alpha {
                 self.unmake_move_nnue(t);
                 continue;
             }
@@ -643,17 +643,6 @@ impl Board {
 
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
-    }
-
-    fn do_futility_pruning(&self, depth: Depth, static_eval: i32, a: i32, b: i32) -> bool {
-        if depth > self.sparams.futility_depth || is_mate_score(a) || is_mate_score(b) {
-            return false;
-        }
-        let depth = depth.round();
-        let margin = depth * depth * self.sparams.futility_coeff_2
-            + depth * self.sparams.futility_coeff_1
-            + self.sparams.futility_coeff_0;
-        static_eval + margin < a
     }
 }
 
