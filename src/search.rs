@@ -346,6 +346,7 @@ impl Board {
             }
             
             let lmr_reduction = self.lmr_table.get(depth, moves_made);
+            let lmr_depth = (depth - lmr_reduction).max(ZERO_PLY);
 
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
@@ -355,6 +356,10 @@ impl Board {
             quiet_moves_made += i32::from(!is_interesting);
 
             if do_lmp && quiet_moves_made >= lmp_threshold {
+                self.unmake_move_nnue(t);
+                continue;
+            }
+            if !PV && !is_interesting && lmr_depth < Depth::new(10) && static_eval + 100 + 150 * lmr_depth.round() < alpha {
                 self.unmake_move_nnue(t);
                 continue;
             }
