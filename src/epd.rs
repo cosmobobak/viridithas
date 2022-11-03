@@ -82,7 +82,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data);
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
-        let failinfo = if passed { "".into() } else { format!(", program chose {bm}") };
+        let failinfo = if passed { String::new() } else { format!(", program chose {bm}") };
         let move_strings = best_moves.iter().map(
             |&m| if m == bm { format!("{CONTROL_GREEN}{m}{CONTROL_RESET}") } else { m.to_string() }
         ).collect::<Vec<_>>();
