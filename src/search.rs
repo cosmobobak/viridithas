@@ -45,7 +45,6 @@ const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_2: i32 = 0;
 const FUTILITY_COEFF_1: i32 = 130;
 const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
@@ -653,8 +652,7 @@ impl Board {
             return false;
         }
         let depth = depth.round();
-        let margin = depth * depth * self.sparams.futility_coeff_2
-            + depth * self.sparams.futility_coeff_1
+        let margin = depth * self.sparams.futility_coeff_1
             + self.sparams.futility_coeff_0;
         static_eval + margin < a
     }

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::definitions::depth::Depth;
 
 use super::{
-    ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_COEFF_2, FUTILITY_DEPTH,
+    ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH,
     LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_VERIFICATION_DEPTH, NMP_IMPROVING_MARGIN,
     RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
     SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
@@ -18,7 +18,6 @@ pub struct SearchParams {
     pub see_quiet_margin: i32,
     pub see_tactical_margin: i32,
     pub lmp_base_moves: i32,
-    pub futility_coeff_2: i32,
     pub futility_coeff_1: i32,
     pub futility_coeff_0: i32,
     pub rfp_depth: Depth,
@@ -43,7 +42,6 @@ impl Default for SearchParams {
             see_quiet_margin: SEE_QUIET_MARGIN,
             see_tactical_margin: SEE_TACTICAL_MARGIN,
             lmp_base_moves: LMP_BASE_MOVES,
-            futility_coeff_2: FUTILITY_COEFF_2,
             futility_coeff_1: FUTILITY_COEFF_1,
             futility_coeff_0: FUTILITY_COEFF_0,
             rfp_depth: RFP_DEPTH,
@@ -107,7 +105,6 @@ impl SearchParams {
             SEE_QUIET_MARGIN = [self.see_quiet_margin],
             SEE_TACTICAL_MARGIN = [self.see_tactical_margin],
             LMP_BASE_MOVES = [self.lmp_base_moves],
-            FUTILITY_COEFF_2 = [self.futility_coeff_2],
             FUTILITY_COEFF_1 = [self.futility_coeff_1],
             FUTILITY_COEFF_0 = [self.futility_coeff_0],
             RFP_DEPTH = [self.rfp_depth],
@@ -139,8 +136,6 @@ impl SearchParams {
             [self.see_tactical_margin.into()],
             LMP_BASE_MOVES,
             [self.lmp_base_moves.into()],
-            FUTILITY_COEFF_2,
-            [self.futility_coeff_2.into()],
             FUTILITY_COEFF_1,
             [self.futility_coeff_1.into()],
             FUTILITY_COEFF_0,

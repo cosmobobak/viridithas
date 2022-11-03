@@ -23,3 +23,4 @@ MINOR:
 - fullwindow on big scores (+30?)
 - capture history
 - screw with lmp-base-moves
+- extend futility further
