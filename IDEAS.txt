@@ -14,11 +14,12 @@ MINOR:
 - criterion benchmarks
 - check out other engine's impls of countermoves and killer moves
 - unify pruning into skip_quiets
-- try linear repetition detection again.
 - replace all the false/true constgen stuff with a proper type.
 - history leaf pruning in LMR
 - alpha pruning
-- find a way not to do SEE ordering in qsearch (capture history)
+- find a way not to do SEE ordering in qsearch
 - put stuff into TT in qsearch.
 - increase maxdepth just in case.
 - fullwindow on big scores (+30?)
+- capture history
+- screw with lmp-base-moves
