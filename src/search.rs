@@ -281,9 +281,6 @@ impl Board {
             }
         }
 
-        let mut move_list = MoveList::new();
-        self.generate_moves(&mut move_list);
-
         let original_alpha = alpha;
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
@@ -306,10 +303,10 @@ impl Board {
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let mut move_picker = MovePicker::<false>::new(tt_move);
         if ROOT {
-            if depth == Depth::new(1) {
+            if depth == ONE_PLY {
                 t.root_moves = self.legal_moves().into_iter().map(|m| (m, 0)).collect();
             }
-            move_picker.score_by(&t.root_moves);
+            move_picker.score_by(&t.root_moves, self);
         }
         let mut root_nodecount_record = Vec::new();
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
