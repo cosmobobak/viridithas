@@ -34,8 +34,8 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
 
     pub fn score_by(&mut self, pre_ordered: &[(Move, u64)], position: &mut Board) {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        if self.stage != Stage::GenerateMoves {
-            self.stage = Stage::GenerateMoves;
+        if self.stage != Stage::YieldMoves {
+            self.stage = Stage::YieldMoves;
             self.tt_move = Move::NULL;
             if CAPTURES_ONLY {
                 position.generate_captures(&mut self.movelist);
