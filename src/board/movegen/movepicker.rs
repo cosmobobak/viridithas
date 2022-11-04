@@ -66,23 +66,7 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             if position.is_pseudo_legal(self.tt_move) {
-                {
-                    let mut test_movelist = MoveList::new();
-                    position.generate_moves(&mut test_movelist);
-                    let in_movelist = test_movelist.iter().any(
-                        |&m| m == self.tt_move
-                    );
-                    assert!(in_movelist, "TT move was not pseudolegal, but was accepted by is_pseudo_legal\nTT move: {}/{:?} Board: {}", self.tt_move, self.tt_move, position.fen());
-                }
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
-            }
-            {
-                let mut test_movelist = MoveList::new();
-                position.generate_moves(&mut test_movelist);
-                let in_movelist = test_movelist.iter().any(
-                    |&m| m == self.tt_move
-                );
-                assert!(!in_movelist, "TT move was pseudolegal, but was rejected by is_pseudo_legal\nTT move: {}/{:?} Board: {}", self.tt_move, self.tt_move, position.fen());
             }
         }
         if self.stage == Stage::GenerateMoves {
