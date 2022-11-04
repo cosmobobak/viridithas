@@ -661,10 +661,13 @@ impl Board {
                 let one_forward = from.pawn_push(self.side);
                 return self.piece_at(one_forward) == PIECE_EMPTY && to == one_forward.pawn_push(self.side);
             } else if captured_piece == PIECE_EMPTY {
-                return to == from.pawn_push(self.side);
+                return to == from.pawn_push(self.side) && self.piece_at(to) == PIECE_EMPTY;
             }
             // pawn capture
-            return to == from.pawn_right(self.side) || to == from.pawn_left(self.side);
+            if self.side == WHITE {
+                return pawn_attacks::<true>(from.bitboard()) & self.pieces.their_pieces::<true>() != 0;
+            }
+            return pawn_attacks::<false>(from.bitboard()) & self.pieces.their_pieces::<false>() != 0;
         }
 
         to.bitboard() & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied()) != BB_NONE
