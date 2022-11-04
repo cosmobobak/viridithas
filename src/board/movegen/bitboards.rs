@@ -431,7 +431,18 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: u64) -> u64 {
         QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
         KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
         KING => lookups::get_jumping_piece_attack::<KING>(sq),
-        _ => unsafe { macros::inconceivable!() },
+        _ => panic!("Invalid piece type"),
+    }
+}
+
+pub fn attacks_by_type(pt: u8, sq: Square, blockers: u64) -> u64 {
+    match pt {
+        BISHOP => magic::get_bishop_attacks(sq, blockers),
+        ROOK => magic::get_rook_attacks(sq, blockers),
+        QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
+        KING => lookups::get_jumping_piece_attack::<KING>(sq),
+        _ => panic!("Invalid piece type: {pt}"),
     }
 }
 
