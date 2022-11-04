@@ -640,6 +640,14 @@ impl Board {
             return false;
         }
 
+        if type_of(moved_piece) != PAWN && (m.is_pawn_start() || m.is_ep() || m.is_promo()) {
+            return false;
+        }
+
+        if type_of(moved_piece) != KING && m.is_castle() {
+            return false;
+        }
+
         let captured_piece = self.piece_at(to);
 
         if colour_of(captured_piece) == self.side {
@@ -1104,6 +1112,7 @@ impl Board {
         t.nnue.efficiently_update_from_move(piece, colour, from, to);
 
         if m.is_promo() {
+            // this seems like an inefficiency.
             let promo = type_of(m.promotion());
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, to);
             t.nnue.efficiently_update_manual::<ACTIVATE>(promo, colour, to);
