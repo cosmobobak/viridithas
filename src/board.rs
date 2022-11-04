@@ -673,9 +673,9 @@ impl Board {
             }
             // pawn capture
             if self.side == WHITE {
-                return pawn_attacks::<true>(from.bitboard()) & self.pieces.their_pieces::<true>() != 0;
+                return pawn_attacks::<true>(from.bitboard()) & to.bitboard() != 0;
             }
-            return pawn_attacks::<false>(from.bitboard()) & self.pieces.their_pieces::<false>() != 0;
+            return pawn_attacks::<false>(from.bitboard()) & to.bitboard() != 0;
         }
 
         to.bitboard() & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied()) != BB_NONE
