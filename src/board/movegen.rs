@@ -3,8 +3,7 @@ pub mod movepicker;
 
 pub use self::bitboards::{BitLoop, BB_NONE};
 use self::{
-    bitboards::{BitShiftExt, BB_RANK_2, BB_RANK_7, first_square},
-    movepicker::MovePicker,
+    bitboards::{BitShiftExt, BB_RANK_2, BB_RANK_7, first_square}
 };
 
 use super::Board;
@@ -54,10 +53,6 @@ impl MoveList {
         Self { moves: [DEFAULT; MAX_POSITION_MOVES], count: 0 }
     }
 
-    pub fn lookup_by_move(&mut self, m: Move) -> Option<&mut MoveListEntry> {
-        unsafe { self.moves.get_unchecked_mut(..self.count).iter_mut().find(|e| e.entry == m) }
-    }
-
     pub fn push(&mut self, m: Move, score: i32) {
         // it's quite dangerous to do this,
         // but this function is very much in the
@@ -71,10 +66,6 @@ impl MoveList {
 
     pub fn iter(&self) -> impl Iterator<Item = &Move> {
         self.moves[..self.count].iter().map(|e| &e.entry)
-    }
-
-    pub fn init_movepicker(&mut self) -> MovePicker {
-        MovePicker::new(&mut self.moves, self.count)
     }
 }
 

@@ -11,7 +11,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            MoveListEntry, TT_MOVE_SCORE,
+            MoveListEntry, movepicker::MovePicker,
         },
         Board,
     },
@@ -108,11 +108,8 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
-        let mut move_list = MoveList::new();
-        self.generate_captures(&mut move_list);
-
-        let mut move_picker = move_list.init_movepicker();
-        while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next() {
+        let mut move_picker = MovePicker::<true>::new(Move::NULL);
+        while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
@@ -301,19 +298,13 @@ impl Board {
         // whether to skip quiet moves (as they would be futile).
         let do_fut_pruning = self.do_futility_pruning(depth, static_eval, alpha, beta);
 
-        if let Some(tt_hit) = &tt_hit {
-            if let Some(movelist_entry) = move_list.lookup_by_move(tt_hit.tt_move) {
-                // set the move-ordering score of the TT-move to a very high value.
-                movelist_entry.score = TT_MOVE_SCORE;
-            }
-        }
-
         let see_table = [
             self.sparams.see_tactical_margin * depth.squared(),
             self.sparams.see_quiet_margin * depth.round(),
         ];
 
-        let mut move_picker = move_list.init_movepicker();
+        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
+        let mut move_picker = MovePicker::<false>::new(tt_move);
         if ROOT {
             if depth == Depth::new(1) {
                 t.root_moves = self.legal_moves().into_iter().map(|m| (m, 0)).collect();
@@ -321,7 +312,7 @@ impl Board {
             move_picker.score_by(&t.root_moves);
         }
         let mut root_nodecount_record = Vec::new();
-        while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next() {
+        while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
             }
