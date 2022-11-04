@@ -301,13 +301,7 @@ impl Board {
 
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let mut move_picker = MovePicker::<false>::new(tt_move);
-        if ROOT {
-            if depth == ONE_PLY {
-                t.root_moves = self.legal_moves().into_iter().map(|m| (m, 0)).collect();
-            }
-            move_picker.score_by(&t.root_moves, self);
-        }
-        let mut root_nodecount_record = Vec::new();
+
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
@@ -379,7 +373,6 @@ impl Board {
                 extension = Depth::from(gives_check);
             };
 
-            let nodes_before = info.nodes;
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
@@ -419,10 +412,6 @@ impl Board {
                 }
             }
             self.unmake_move_nnue(t);
-            let nodes_used = info.nodes - nodes_before;
-            if ROOT {
-                root_nodecount_record.push((m, nodes_used));
-            }
 
             if info.stopped {
                 return 0;
@@ -458,9 +447,6 @@ impl Board {
                             self.tt_store::<ROOT>(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        if ROOT {
-                            t.order_root_moves(&root_nodecount_record);
-                        }
                         return beta;
                     }
                 }
@@ -505,9 +491,6 @@ impl Board {
             }
         }
 
-        if ROOT {
-            t.order_root_moves(&root_nodecount_record);
-        }
         alpha
     }
 

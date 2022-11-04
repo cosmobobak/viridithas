@@ -37,36 +37,29 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
     pub fn skip_ordering(&mut self) {
         self.skip_ordering = true;
     }
-
-    pub fn score_by(&mut self, pre_ordered: &[(Move, u64)], position: &mut Board) {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        if self.stage != Stage::YieldMoves {
-            self.stage = Stage::YieldMoves;
-            self.tt_move = Move::NULL;
-            if CAPTURES_ONLY {
-                position.generate_captures(&mut self.movelist);
-            } else {
-                position.generate_moves(&mut self.movelist);
-            }
-        }
-        self.movelist.moves.iter_mut().for_each(|m| {
-            if m.score == TT_MOVE_SCORE {
-                return;
-            }
-            let score = pre_ordered
-                .iter()
-                .position(|p| p.0 == m.entry)
-                .map_or(-1_000_000, |idx| 256 - idx as i32);
-            m.score = score;
-        });
-    }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &mut Board) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             if position.is_pseudo_legal(self.tt_move) {
+                {
+                    let mut test_movelist = MoveList::new();
+                    position.generate_moves(&mut test_movelist);
+                    let in_movelist = test_movelist.iter().any(
+                        |&m| m == self.tt_move
+                    );
+                    assert!(in_movelist, "TT move was not pseudolegal, but was accepted by is_pseudo_legal\nTT move: {}/{:?} Board: {}", self.tt_move, self.tt_move, position.fen());
+                }
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
+            }
+            {
+                let mut test_movelist = MoveList::new();
+                position.generate_moves(&mut test_movelist);
+                let in_movelist = test_movelist.iter().any(
+                    |&m| m == self.tt_move
+                );
+                assert!(!in_movelist, "TT move was pseudolegal, but was rejected by is_pseudo_legal\nTT move: {}/{:?} Board: {}", self.tt_move, self.tt_move, position.fen());
             }
         }
         if self.stage == Stage::GenerateMoves {
