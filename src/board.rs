@@ -694,7 +694,7 @@ impl Board {
             (WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
             (BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
             (BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
-            (colour, target_sq) => panic!("Invalid castling target square {:?} for colour {}", target_sq, colour),
+            (colour, target_sq) => panic!("Invalid castling target square {} for colour {}", target_sq, colour),
         };
         if target_castling_perm == 0 {
             return false;
