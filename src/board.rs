@@ -663,6 +663,10 @@ impl Board {
         }
 
         if type_of(moved_piece) == PAWN {
+            let should_be_promoting = to > Square::H7 || to < Square::A2;
+            if should_be_promoting && !m.is_promo() {
+                return false;
+            }
             if m.is_ep() {
                 return to == self.ep_sq;
             } else if m.is_pawn_start() {

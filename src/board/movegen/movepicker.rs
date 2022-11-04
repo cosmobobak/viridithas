@@ -17,7 +17,6 @@ pub struct MovePicker<const CAPTURES_ONLY: bool> {
     skip_ordering: bool,
     stage: Stage,
     tt_move: Move,
-    tt_move_was_legal: bool,
 }
 
 impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
@@ -28,7 +27,6 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
             skip_ordering: false, 
             tt_move, 
             stage: Stage::TTMove,
-            tt_move_was_legal: false,
         }
     }
 
@@ -68,7 +66,6 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             if position.is_pseudo_legal(self.tt_move) {
-                self.tt_move_was_legal = true;
                 {
                     let mut test_movelist = MoveList::new();
                     position.generate_moves(&mut test_movelist);
@@ -104,7 +101,6 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
             let &m = unsafe { self.movelist.moves.get_unchecked(self.index) };
             self.index += 1;
             if m.entry == self.tt_move {
-                assert!(self.tt_move_was_legal, "TT move was not legal: {} in {}", m.entry, position.fen());
                 return self.next(position);
             }
             return Some(m);
@@ -141,7 +137,6 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         self.index += 1;
 
         if m.entry == self.tt_move {
-            assert!(self.tt_move_was_legal, "TT move was not legal: {} in {}", m.entry, position.fen());
             self.next(position)
         } else {
             Some(m)
