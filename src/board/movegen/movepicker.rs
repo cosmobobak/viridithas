@@ -59,9 +59,9 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
     pub fn next(&mut self, position: &mut Board) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
-            // if position.is_pseudo_legal(self.tt_move) {
-            //     return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
-            // }
+            if position.is_pseudo_legal(self.tt_move) {
+                return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
+            }
         }
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::YieldMoves;
