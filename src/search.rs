@@ -3,7 +3,6 @@ pub mod parameters;
 use std::time::Duration;
 
 use crate::{
-    board::movegen::MoveList,
     board::{
         evaluation::{
             self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE,

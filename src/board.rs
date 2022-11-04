@@ -650,7 +650,7 @@ impl Board {
 
         let captured_piece = self.piece_at(to);
 
-        if colour_of(captured_piece) == self.side {
+        if captured_piece != PIECE_EMPTY && colour_of(captured_piece) == self.side {
             return false;
         }
 
@@ -702,7 +702,7 @@ impl Board {
             (WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
             (BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
             (BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
-            (colour, target_sq) => panic!("Invalid castling target square {} for colour {}", target_sq, colour),
+            (_, _) => return false,
         };
         if target_castling_perm == 0 {
             return false;

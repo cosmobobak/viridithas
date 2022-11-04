@@ -16,12 +16,20 @@ pub struct MovePicker<const CAPTURES_ONLY: bool> {
     index: usize,
     skip_ordering: bool,
     stage: Stage,
-    tt_move: Move
+    tt_move: Move,
+    tt_move_was_legal: bool,
 }
 
 impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
     pub const fn new(tt_move: Move) -> Self {
-        Self { movelist: MoveList::new(), index: 0, skip_ordering: false, tt_move, stage: Stage::TTMove }
+        Self { 
+            movelist: MoveList::new(), 
+            index: 0, 
+            skip_ordering: false, 
+            tt_move, 
+            stage: Stage::TTMove,
+            tt_move_was_legal: false,
+        }
     }
 
     pub fn moves_made(&self) -> &[MoveListEntry] {
@@ -60,6 +68,7 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             if position.is_pseudo_legal(self.tt_move) {
+                self.tt_move_was_legal = true;
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
             }
         }
@@ -79,6 +88,7 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
             let &m = unsafe { self.movelist.moves.get_unchecked(self.index) };
             self.index += 1;
             if m.entry == self.tt_move {
+                assert!(self.tt_move_was_legal, "TT move was not legal: {} in {}", m.entry, position.fen());
                 return self.next(position);
             }
             return Some(m);
@@ -115,6 +125,7 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         self.index += 1;
 
         if m.entry == self.tt_move {
+            assert!(self.tt_move_was_legal, "TT move was not legal: {} in {}", m.entry, position.fen());
             self.next(position)
         } else {
             Some(m)
