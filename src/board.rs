@@ -620,6 +620,95 @@ impl Board {
         false
     }
 
+    /// Checks whether a move is pseudo-legal
+    /// This means that it is a legal move, except for the fact that it might leave the king in check.
+    pub fn is_pseudo_legal(&self, m: Move) -> bool {
+        if m.is_null() {
+            return false;
+        }
+
+        let from = m.from();
+        let to = m.to();
+
+        let moved_piece = self.piece_at(from);
+
+        if moved_piece == PIECE_EMPTY {
+            return false;
+        }
+
+        if colour_of(moved_piece) != self.side {
+            return false;
+        }
+
+        let captured_piece = self.piece_at(to);
+
+        if colour_of(captured_piece) == self.side {
+            return false;
+        }
+
+        if captured_piece != m.capture() {
+            return false;
+        }
+
+        if m.is_castle() {
+            return self.is_pseudo_legal_castling(to);
+        }
+
+        if type_of(moved_piece) == PAWN {
+            if m.is_ep() {
+                return to == self.ep_sq;
+            } else if m.is_pawn_start() {
+                let one_forward = from.pawn_push(self.side);
+                return self.piece_at(one_forward) == PIECE_EMPTY && to == one_forward.pawn_push(self.side);
+            } else if captured_piece == PIECE_EMPTY {
+                return to == from.pawn_push(self.side);
+            }
+            // pawn capture
+            return to == from.pawn_right(self.side) || to == from.pawn_left(self.side);
+        }
+
+        to.bitboard() & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied()) != BB_NONE
+    }
+
+    pub fn is_pseudo_legal_castling(&self, to: Square) -> bool {
+        const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
+        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
+        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+        let occupied = self.pieces.occupied();
+
+        assert!(to == Square::C1 || to == Square::G1 || to == Square::C8 || to == Square::G8);
+
+        // illegal if
+        // - we don't have castling rights on the target square
+        // - we're in check
+        // - there are pieces between the king and the rook
+        // - the king passes through a square that is attacked by the opponent
+        // - the king ends up in check (not checked here)
+
+        let (target_castling_perm, occ_mask, from_sq, next_sq) = match (self.side, to) {
+            (WHITE, Square::C1) => (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1),
+            (WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
+            (BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
+            (BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
+            (colour, target_sq) => panic!("Invalid castling target square {:?} for colour {}", target_sq, colour),
+        };
+        if target_castling_perm == 0 {
+            return false;
+        }
+        if occupied & occ_mask != 0 {
+            return false;
+        }
+        if self.sq_attacked(from_sq, 1 ^ self.side) {
+            return false;
+        }
+        if self.sq_attacked(next_sq, 1 ^ self.side) {
+            return false;
+        }
+
+        true
+    }
+
     /// Checks if a move is legal in the current position.
     /// Because moves must be played and unplayed, this method
     /// requires a mutable reference to the position.
@@ -646,7 +735,14 @@ impl Board {
     fn clear_piece(&mut self, sq: Square) {
         debug_assert!(sq.on_board());
         let piece = self.piece_at(sq);
-        debug_assert!(piece_valid(piece));
+        debug_assert!(
+            piece_valid(piece), 
+            "Invalid piece at {}: {}, board {}, last move was {}", 
+            sq,
+            piece,
+            self.fen(),
+            self.history.last().map_or("None".to_string(), |h| h.m.to_string())
+        );
         let piece_type = type_of(piece);
         debug_assert!(piece_type_valid(piece_type));
 
