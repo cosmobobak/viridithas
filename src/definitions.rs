@@ -264,6 +264,30 @@ impl Square {
     pub const fn bitboard(self) -> u64 {
         1 << self.0
     }
+
+    pub const fn pawn_push(self, side: u8) -> Self {
+        if side == WHITE {
+            self.add(8)
+        } else {
+            self.sub(8)
+        }
+    }
+
+    pub const fn pawn_right(self, side: u8) -> Self {
+        if side == WHITE {
+            self.add(9)
+        } else {
+            self.sub(7)
+        }
+    }
+
+    pub const fn pawn_left(self, side: u8) -> Self {
+        if side == WHITE {
+            self.add(7)
+        } else {
+            self.sub(9)
+        }
+    }
 }
 
 impl Display for Square {
