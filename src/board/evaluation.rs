@@ -203,7 +203,7 @@ impl Board {
         let v = t.nnue.evaluate(self.side);
 
         // dampen the score when the fifty move rule is close to being triggered
-        v * (100 - i32::from(self.fifty_move_counter)) / 100
+        v * (200 - i32::from(self.fifty_move_counter)) / 200
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
