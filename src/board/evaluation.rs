@@ -203,10 +203,8 @@ impl Board {
         let v = t.nnue.evaluate(self.side);
         let psqt = self.pst_vals.value(self.phase());
         let complexity = (v - psqt).abs();
-        let v = v + complexity / 20;
-
-        // dampen the score when the fifty move rule is close to being triggered
-        v * (200 - i32::from(self.fifty_move_counter)) / 200
+        
+        v + complexity / 20
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
