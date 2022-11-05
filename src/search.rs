@@ -350,7 +350,7 @@ impl Board {
             }
 
             // history leaf pruning
-            if !PV && !is_interesting && moves_made > 1 && lmr_depth <= ONE_PLY * 3 && ordering_score < (-200 * (depth.round() - 1)) {
+            if !PV && !is_interesting && moves_made > 1 && lmr_depth <= ONE_PLY * 2 && ordering_score < (-500 * (depth.round() - 1)) {
                 self.unmake_move_nnue(t);
                 continue;
             }
