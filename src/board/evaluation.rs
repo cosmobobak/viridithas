@@ -202,7 +202,7 @@ impl Board {
 
         let v = t.nnue.evaluate(self.side);
 
-        // dampen the score when the fifty move rule is close to being triggered
+        // dampen the score as the fifty move counter increases
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
