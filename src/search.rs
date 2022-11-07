@@ -256,7 +256,7 @@ impl Board {
             && depth <= self.sparams.rfp_depth
             && static_eval - rfp_margin > beta
         {
-            return static_eval - rfp_margin;
+            return static_eval;
         }
 
         // null-move pruning.
@@ -276,7 +276,7 @@ impl Board {
                 return 0;
             }
             if score >= beta {
-                return beta;
+                return score;
             }
         }
 
