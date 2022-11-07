@@ -107,7 +107,7 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
-        let mut move_picker = MovePicker::<true, true>::new(Move::NULL);
+        let mut move_picker = MovePicker::<true, false>::new(Move::NULL);
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
