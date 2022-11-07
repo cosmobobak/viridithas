@@ -276,7 +276,7 @@ impl Board {
                 return 0;
             }
             if score >= beta {
-                return score;
+                return beta;
             }
         }
 
