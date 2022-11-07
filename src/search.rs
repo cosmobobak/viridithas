@@ -150,7 +150,7 @@ impl Board {
             self.tt_store::<false>(best_move, best_score, HFlag::Exact, ZERO_PLY);
         }
 
-        best_score
+        std::cmp::max(stand_pat, best_score)
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
