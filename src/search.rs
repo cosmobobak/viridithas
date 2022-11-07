@@ -136,7 +136,7 @@ impl Board {
                 if score > alpha {
                     if score >= beta {
                         self.tt_store::<false>(best_move, beta, HFlag::LowerBound, ZERO_PLY);
-                        return beta;
+                        return score;
                     }
                     alpha = score;
                 }
@@ -150,7 +150,7 @@ impl Board {
             self.tt_store::<false>(best_move, best_score, HFlag::Exact, ZERO_PLY);
         }
 
-        alpha
+        best_score
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
@@ -493,7 +493,6 @@ impl Board {
             }
         }
 
-        assert!(best_score > -INFINITY, "best_score was not raised");
         best_score
     }
 
