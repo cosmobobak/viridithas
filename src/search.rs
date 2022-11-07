@@ -231,8 +231,13 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
 
+        let last_move_was_null = self.last_move_was_nullmove();
+
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+        } else if last_move_was_null {
+            // if the last move was a null move, we can use the negative of the last eval.
+            -t.evals[self.height() - 1]
         } else {
             self.evaluate::<USE_NNUE>(t, info.nodes)
         };
@@ -262,10 +267,10 @@ impl Board {
         // null-move pruning.
         if !PV
             && !in_check
+            && !last_move_was_null
             && excluded.is_null()
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
-            && !self.last_move_was_nullmove()
             && self.zugzwang_unlikely()
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
