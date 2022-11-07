@@ -107,7 +107,7 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
-        let mut move_picker = MovePicker::<true>::new(Move::NULL);
+        let mut move_picker = MovePicker::<true, true>::new(Move::NULL);
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -136,7 +136,7 @@ impl Board {
                 if score > alpha {
                     if score >= beta {
                         self.tt_store::<false>(best_move, beta, HFlag::LowerBound, ZERO_PLY);
-                        return score;
+                        return beta;
                     }
                     alpha = score;
                 }
@@ -150,7 +150,7 @@ impl Board {
             self.tt_store::<false>(best_move, best_score, HFlag::Exact, ZERO_PLY);
         }
 
-        std::cmp::max(stand_pat, best_score)
+        alpha
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
@@ -302,7 +302,7 @@ impl Board {
         ];
 
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
-        let mut move_picker = MovePicker::<false>::new(tt_move);
+        let mut move_picker = MovePicker::<false, true>::new(tt_move);
 
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
             if ordering_score < 0 && depth < Depth::new(5) {
@@ -449,7 +449,7 @@ impl Board {
                             self.tt_store::<ROOT>(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        return score;
+                        return beta;
                     }
                 }
             }
@@ -493,7 +493,7 @@ impl Board {
             }
         }
 
-        best_score
+        alpha
     }
 
     fn update_history_metrics<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {

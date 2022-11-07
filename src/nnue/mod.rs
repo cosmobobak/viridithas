@@ -468,7 +468,7 @@ mod tests {
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
+        board.generate_moves::<false>(&mut ml);
         t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
@@ -492,7 +492,7 @@ mod tests {
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
+        board.generate_moves::<false>(&mut ml);
         t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
@@ -516,7 +516,7 @@ mod tests {
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
+        board.generate_moves::<false>(&mut ml);
         t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
@@ -540,7 +540,7 @@ mod tests {
         board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
+        board.generate_moves::<false>(&mut ml);
         t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;

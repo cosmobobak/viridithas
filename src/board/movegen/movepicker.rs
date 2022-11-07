@@ -11,7 +11,7 @@ enum Stage {
     YieldMoves,
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool> {
+pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     movelist: MoveList,
     index: usize,
     skip_ordering: bool,
@@ -19,7 +19,7 @@ pub struct MovePicker<const CAPTURES_ONLY: bool> {
     tt_move: Move,
 }
 
-impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
+impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
     pub const fn new(tt_move: Move) -> Self {
         Self { 
             movelist: MoveList::new(), 
@@ -49,9 +49,9 @@ impl<const CAPTURES_ONLY: bool> MovePicker<CAPTURES_ONLY> {
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::YieldMoves;
             if CAPTURES_ONLY {
-                position.generate_captures(&mut self.movelist);
+                position.generate_captures::<DO_SEE>(&mut self.movelist);
             } else {
-                position.generate_moves(&mut self.movelist);
+                position.generate_moves::<DO_SEE>(&mut self.movelist);
             }
         }
         // If we have already tried all moves, return None.

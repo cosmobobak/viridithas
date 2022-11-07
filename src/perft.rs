@@ -14,7 +14,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     }
 
     let mut ml = MoveList::new();
-    pos.generate_moves(&mut ml);
+    pos.generate_moves::<false>(&mut ml);
 
     let mut count = 0;
     for &m in ml.iter() {
@@ -72,7 +72,7 @@ mod tests {
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
+            pos.generate_moves::<false>(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
                 if pos.make_move(m) {
@@ -97,7 +97,7 @@ mod tests {
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
+            pos.generate_moves::<false>(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
                 if pos.make_move(m) {
@@ -121,7 +121,7 @@ mod tests {
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
+            pos.generate_moves::<false>(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
                 if pos.make_move(m) {
