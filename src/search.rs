@@ -107,6 +107,11 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
+        let in_check = self.in_check::<{ Self::US }>();
+        if in_check {
+            return self.alpha_beta::<false, false, USE_NNUE>(info, t, ONE_PLY, alpha, beta);
+        }
+
         let mut move_picker = MovePicker::<true, false>::new(Move::NULL);
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
             let worst_case =
