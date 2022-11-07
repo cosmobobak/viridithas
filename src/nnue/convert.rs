@@ -12,19 +12,17 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-fn batch_convert(
+fn batch_convert<const USE_NNUE: bool>(
     depth: i32,
     fens: &[String],
+    evals: &mut Vec<Option<i32>>,
     filter_quiescent: bool,
     counter: &AtomicU64,
     printing_thread: bool,
     start_time: std::time::Instant,
-    use_nnue: bool,
-) -> Vec<Option<i32>> {
-    let mut evals = Vec::with_capacity(fens.len());
+) {
     let mut pos = Board::default();
     let mut t = vec![ThreadData::new()];
-    t.iter_mut().for_each(|td| td.use_nnue = use_nnue);
     let mut local_ticker = 0;
     pos.set_hash_size(16);
     pos.alloc_tables();
@@ -57,7 +55,7 @@ fn batch_convert(
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::default()
         };
-        let (score, bm) = pos.search_position(&mut info, &mut t);
+        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t);
         if filter_quiescent && (!bm.is_quiet() || is_mate_score(score)) {
             evals.push(None);
             continue;
@@ -71,7 +69,6 @@ fn batch_convert(
         print!("{c: >8} FENs converted. ({ppersec:.2}/s)                                            \r");
         std::io::stdout().flush().unwrap();
     }
-    evals
 }
 
 pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
@@ -127,15 +124,29 @@ fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, use_nn
         for (i, chunk) in chunks.into_iter().enumerate() {
             let printing_thread = i == 0;
             handles.push(s.spawn(move || {
-                batch_convert(
-                    depth,
-                    chunk,
-                    filter_quiescent,
-                    fens_processed,
-                    printing_thread,
-                    start_time,
-                    use_nnue,
-                )
+                let mut inner_evals = Vec::new();
+                if use_nnue {
+                    batch_convert::<true>(
+                        depth,
+                        chunk,
+                        &mut inner_evals,
+                        filter_quiescent,
+                        fens_processed,
+                        printing_thread,
+                        start_time,
+                    );
+                } else {
+                    batch_convert::<false>(
+                        depth,
+                        chunk,
+                        &mut inner_evals,
+                        filter_quiescent,
+                        fens_processed,
+                        printing_thread,
+                        start_time,
+                    );
+                }
+                inner_evals
             }));
         }
         for handle in handles {

@@ -79,7 +79,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
             limit: SearchLimit::Time(time),
             ..SearchInfo::default()
         };
-        let (_, bm) = board.search_position(&mut info, &mut thread_data);
+        let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data);
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed { String::new() } else { format!(", program chose {bm}") };

@@ -1453,7 +1453,7 @@ impl Board {
 
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
-    pub fn search_position(
+    pub fn search_position<const USE_NNUE: bool>(
         &mut self,
         info: &mut SearchInfo,
         thread_data: &mut [ThreadData],
@@ -1483,7 +1483,7 @@ impl Board {
             }
             // aspiration loop:
             loop {
-                let score = self.alpha_beta::<true, true>(
+                let score = self.alpha_beta::<true, true, USE_NNUE>(
                     info,
                     &mut thread_data[0],
                     Depth::new(i_depth),

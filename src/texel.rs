@@ -32,7 +32,6 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
     let mut t = ThreadData::new();
-    t.use_nnue = false;
     pos.set_hash_size(1);
     pos.alloc_tables();
     pos.set_eval_params(params.clone());
@@ -42,7 +41,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
             // don't use NNUE, this only works for HCE.
-            let pov_score = Board::quiescence(&mut pos, &mut info, &mut t, -INFINITY, INFINITY);
+            let pov_score = Board::quiescence::<false>(&mut pos, &mut info, &mut t, -INFINITY, INFINITY);
             let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)

@@ -201,13 +201,14 @@ impl Board {
         }
 
         let v = t.nnue.evaluate(self.side);
-
-        // dampen the score as the fifty move counter increases
-        v * (100 - i32::from(self.fifty_move_counter)) / 100
+        let psqt = self.pst_vals.value(self.phase());
+        let complexity = (v - psqt).abs();
+        
+        v + complexity / 20
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
-        if t.use_nnue {
+    pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        if USE_NNUE {
             self.evaluate_nnue(t, nodes)
         } else {
             self.evaluate_classical(nodes)

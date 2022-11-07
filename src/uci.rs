@@ -5,7 +5,7 @@ use std::{
     sync::{
         atomic::{self, AtomicBool},
         mpsc,
-    }, time::Instant, str::ParseBoolError,
+    }, time::Instant,
 };
 
 use crate::{
@@ -51,12 +51,6 @@ impl From<ParseFloatError> for UciError {
 impl From<ParseIntError> for UciError {
     fn from(pie: ParseIntError) -> Self {
         Self::ParseOption(pie.to_string())
-    }
-}
-
-impl From<ParseBoolError> for UciError {
-    fn from(pbe: ParseBoolError) -> Self {
-        Self::ParseOption(pbe.to_string())
     }
 }
 
@@ -202,26 +196,6 @@ where
 struct SetOptions {
     pub search_config: SearchParams,
     pub hash_mb: Option<usize>,
-    pub use_nnue: bool,
-}
-
-impl Default for SetOptions {
-    fn default() -> Self {
-        Self {
-            search_config: SearchParams::default(),
-            hash_mb: None,
-            use_nnue: true,
-        }
-    }
-}
-
-impl SetOptions {
-    fn default_from_params(params: &SearchParams) -> Self {
-        Self {
-            search_config: params.clone(),
-            ..Self::default()
-        }
-    }
 }
 
 fn parse_setoption(
@@ -267,10 +241,8 @@ fn parse_setoption(
     if found_match {
         return Ok(out);
     }
-    // handle non-search parameters:
     match opt_name {
         "Hash" => out.hash_mb = Some(opt_value.parse()?),
-        "UseNNUE" => out.use_nnue = opt_value.parse()?,
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -325,7 +297,6 @@ fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("option name Hash type spin default 4 min 1 max 8192");
-    println!("option name UseNNUE type check default true");
     for (id, default) in SearchParams::default().ids_with_values() {
         println!("option name {id} type spin default {default} min -999999 max 999999");
     }
@@ -375,20 +346,19 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate(&mut thread_data[0], 0));
+                println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
                 Ok(())
             }
             input if input.starts_with("setoption") => parse_setoption(
                 input,
                 &mut info,
-                SetOptions::default_from_params(&pos.sparams),
+                SetOptions { search_config: pos.sparams.clone(), hash_mb: None },
             )
             .map(|config| {
                 pos.set_search_params(config.search_config);
                 if let Some(hash_mb) = config.hash_mb {
                     pos.set_hash_size(hash_mb);
                 }
-                thread_data.iter_mut().for_each(|td| td.use_nnue = config.use_nnue);
             }),
             input if input.starts_with("position") => {
                 let res = parse_position(input, &mut pos);
@@ -402,7 +372,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
-                    pos.search_position(&mut info, &mut thread_data);
+                    pos.search_position::<true>(&mut info, &mut thread_data);
                 }
                 res
             }
