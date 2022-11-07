@@ -235,9 +235,6 @@ impl Board {
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
-        } else if last_move_was_null {
-            // if the last move was a null move, we can use the negative of the last eval.
-            -t.evals[self.height() - 1]
         } else {
             self.evaluate::<USE_NNUE>(t, info.nodes)
         };
@@ -452,7 +449,7 @@ impl Board {
                             self.tt_store::<ROOT>(best_move, beta, HFlag::LowerBound, depth);
                         }
 
-                        return beta;
+                        return score;
                     }
                 }
             }

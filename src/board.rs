@@ -1003,7 +1003,7 @@ impl Board {
 
     pub fn last_move_was_nullmove(&self) -> bool {
         if let Some(Undo { m, .. }) = self.history.last() {
-            *m == Move::NULL
+            m.is_null()
         } else {
             false
         }
