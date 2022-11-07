@@ -493,7 +493,8 @@ impl Board {
             }
         }
 
-        alpha
+        assert!(best_score > -INFINITY, "best_score was not raised");
+        best_score
     }
 
     fn update_history_metrics<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
