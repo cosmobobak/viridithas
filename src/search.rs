@@ -248,15 +248,15 @@ impl Board {
             !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
         // beta-pruning. (reverse futility pruning)
+        let rfp_margin = self.sparams.rfp_margin * depth
+                + i32::from(improving) * self.sparams.rfp_improving_margin;
         if !PV
             && !in_check
             && excluded.is_null()
             && depth <= self.sparams.rfp_depth
-            && static_eval - self.sparams.rfp_margin * depth
-                + i32::from(improving) * self.sparams.rfp_improving_margin
-                > beta
+            && static_eval - rfp_margin > beta
         {
-            return static_eval;
+            return static_eval - rfp_margin;
         }
 
         // null-move pruning.

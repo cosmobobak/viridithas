@@ -25,3 +25,4 @@ MINOR:
 - screw with lmp-base-moves
 - extend futility further
 - dedicated rootsearch function, maybe extend movepicker to handle the root.
+- uci bench extension
