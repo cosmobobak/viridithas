@@ -350,9 +350,6 @@ pub fn main_loop(params: EvalParams) {
     let mut thread_data = Vec::new();
     thread_data.push(ThreadData::new());
 
-    // TODO: do anything other than this:
-    let mut use_nnue = true;
-
     loop {
         std::io::stdout().flush().unwrap();
         let line = stdin.recv().expect("Couldn't read from stdin");
@@ -378,7 +375,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
+                println!("{}", pos.evaluate(&mut thread_data[0], 0));
                 Ok(())
             }
             input if input.starts_with("setoption") => parse_setoption(
@@ -391,8 +388,7 @@ pub fn main_loop(params: EvalParams) {
                 if let Some(hash_mb) = config.hash_mb {
                     pos.set_hash_size(hash_mb);
                 }
-                // TODO: don't do this:
-                use_nnue = config.use_nnue;
+                thread_data.iter_mut().for_each(|td| td.use_nnue = config.use_nnue);
             }),
             input if input.starts_with("position") => {
                 let res = parse_position(input, &mut pos);
@@ -406,11 +402,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
-                    if use_nnue {
-                        pos.search_position::<true>(&mut info, &mut thread_data);
-                    } else {
-                        pos.search_position::<false>(&mut info, &mut thread_data);
-                    }
+                    pos.search_position(&mut info, &mut thread_data);
                 }
                 res
             }

@@ -206,8 +206,8 @@ impl Board {
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
-    pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
-        if USE_NNUE {
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        if t.use_nnue {
             self.evaluate_nnue(t, nodes)
         } else {
             self.evaluate_classical(nodes)
