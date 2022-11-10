@@ -212,7 +212,7 @@ impl Board {
         let simple = self.simple_evaluation();
         let complexity = (v - simple).abs();
         
-        v + complexity / 10
+        v + complexity / 20
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
