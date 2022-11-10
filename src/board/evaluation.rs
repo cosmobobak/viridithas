@@ -210,6 +210,11 @@ impl Board {
 
         let v = t.nnue.evaluate(self.side);
         let simple = self.simple_evaluation();
+        let simple = if self.side == WHITE {
+            simple
+        } else {
+            -simple
+        };
         let complexity = (v - simple).abs();
         
         v + complexity / 20
