@@ -204,7 +204,7 @@ impl Board {
         let psqt = self.pst_vals.value(self.phase());
         let complexity = (v - psqt).abs();
         
-        v + complexity / 10
+        v + complexity / 40
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
