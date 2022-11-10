@@ -1,0 +1,22 @@
+NET ID | general concept                          | notes
+-----------------------------------------------------------------------------------------
+     0 | first network 90% eval, 10% WDL          | much weaker than the HCE.
+-----------------------------------------------------------------------------------------
+     1 | second network, same data as net 0, but  | net used in v3.0.0, crushes HCE.
+       | data was shuffled, which fixed problems. |
+-----------------------------------------------------------------------------------------
+     2 | third network, pure WDL.                 | none
+-----------------------------------------------------------------------------------------
+     3 | fourth network, pure evaluation.         | none
+-----------------------------------------------------------------------------------------
+     4 | fifth network, 50/50 WDL/eval.           | none
+-----------------------------------------------------------------------------------------
+  5-10 | fiddling with parameters and data        | nothing improved on net 1.
+-----------------------------------------------------------------------------------------
+    11 | filtering of noisy positions, more data. | first improvement on net 1, ~20 Elo.
+-----------------------------------------------------------------------------------------
+    12 | net-11 data reanalyzed with net-11.      | +50 Elo, worried about overfitting.
+       |                                          | net used in v4.0.0.
+-----------------------------------------------------------------------------------------
+    13 | lichess-elite games analysed with HCE,   | ???
+       | merged with the net-12 data.             |
