@@ -162,7 +162,7 @@ impl Board {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
-        let material = self.material[WHITE as usize] - self.material[BLACK as usize];
+        let material = self.material();
         let pst = self.pst_vals;
 
         let pawn_structure = self.pawn_structure_term();
@@ -195,16 +195,24 @@ impl Board {
         }
     }
 
+    fn material(&self) -> S {
+        self.material[WHITE as usize] - self.material[BLACK as usize]
+    }
+
+    fn simple_evaluation(&self) -> i32 {
+        (self.pst_vals + self.material()).value(self.phase())
+    }
+
     pub fn evaluate_nnue(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
         let v = t.nnue.evaluate(self.side);
-        let psqt = self.pst_vals.value(self.phase());
-        let complexity = (v - psqt).abs();
+        let simple = self.simple_evaluation();
+        let complexity = (v - simple).abs();
         
-        v + complexity / 40
+        v + complexity / 10
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
