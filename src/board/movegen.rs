@@ -91,7 +91,7 @@ impl Display for MoveList {
 
 impl Board {
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_pawn_caps<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -148,7 +148,7 @@ impl Board {
         }
     }
 
-    fn generate_ep<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_ep<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #![allow(clippy::cast_possible_truncation)]
         if self.ep_sq == Square::NO_SQUARE {
             return;
@@ -180,7 +180,7 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_pawn_forward<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares =
@@ -215,7 +215,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_forward_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
@@ -236,24 +236,24 @@ impl Board {
         }
     }
 
-    pub fn generate_moves<const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    pub fn generate_moves(&self, move_list: &mut MoveList) {
         debug_assert!(self.movegen_ready);
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         if self.side == WHITE {
-            self.generate_moves_for::<true, DO_SEE>(move_list);
+            self.generate_moves_for::<true>(move_list);
         } else {
-            self.generate_moves_for::<false, DO_SEE>(move_list);
+            self.generate_moves_for::<false>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_moves_for<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    pub fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        self.generate_pawn_forward::<IS_WHITE, DO_SEE>(move_list);
-        self.generate_pawn_caps::<IS_WHITE, DO_SEE>(move_list);
-        self.generate_ep::<IS_WHITE, DO_SEE>(move_list);
+        self.generate_pawn_forward::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();
@@ -317,25 +317,25 @@ impl Board {
         self.generate_castling_moves_for::<IS_WHITE>(move_list);
     }
 
-    pub fn generate_captures<const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures(&self, move_list: &mut MoveList) {
         if self.side == WHITE {
-            self.generate_captures_for::<true, DO_SEE>(move_list);
+            self.generate_captures_for::<true>(move_list);
         } else {
-            self.generate_captures_for::<false, DO_SEE>(move_list);
+            self.generate_captures_for::<false>(move_list);
         }
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_for<const IS_WHITE: bool, const DO_SEE: bool>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         // promotions
-        self.generate_forward_promos::<IS_WHITE, DO_SEE>(move_list);
+        self.generate_forward_promos::<IS_WHITE>(move_list);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<IS_WHITE, DO_SEE>(move_list);
-        self.generate_ep::<IS_WHITE, DO_SEE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();

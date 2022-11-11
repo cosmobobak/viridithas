@@ -723,7 +723,7 @@ impl Board {
     #[allow(clippy::wrong_self_convention)]
     pub fn is_legal(&mut self, move_to_check: Move) -> bool {
         let mut list = MoveList::new();
-        self.generate_moves::<false>(&mut list);
+        self.generate_moves(&mut list);
 
         for &m in list.iter() {
             if !self.make_move(m) {
@@ -1213,7 +1213,7 @@ impl Board {
         let to = Square::from_rank_file(san_bytes[3] - b'1', san_bytes[2] - b'a');
 
         let mut list = MoveList::new();
-        self.generate_moves::<false>(&mut list);
+        self.generate_moves(&mut list);
 
         let res = list
             .iter()
@@ -1308,7 +1308,7 @@ impl Board {
         }
 
         let mut ml = MoveList::new();
-        self.generate_moves::<false>(&mut ml);
+        self.generate_moves(&mut ml);
 
         let mut legal_move = None;
         for &m in ml.iter() {
@@ -1604,7 +1604,7 @@ impl Board {
 
     pub fn legal_moves(&mut self) -> Vec<Move> {
         let mut move_list = MoveList::new();
-        self.generate_moves::<false>(&mut move_list);
+        self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
         for &m in move_list.iter() {
             if self.make_move(m) {

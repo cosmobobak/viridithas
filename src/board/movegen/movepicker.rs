@@ -55,9 +55,9 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::YieldMoves;
             if CAPTURES_ONLY {
-                position.generate_captures::<DO_SEE>(&mut self.movelist);
+                position.generate_captures(&mut self.movelist);
             } else {
-                position.generate_moves::<DO_SEE>(&mut self.movelist);
+                position.generate_moves(&mut self.movelist);
             }
         }
         // If we have already tried all moves, return None.
@@ -66,12 +66,12 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         } else if self.skip_ordering {
             // If we are skipping ordering, just return the next move.
             let entry = unsafe { self.movelist.moves.get_unchecked_mut(self.index) };
-            let score = Self::score_entry(t, position, entry);
+            entry.score = 0;
             self.index += 1;
             if entry.mov == self.tt_move {
                 return self.next(position, t);
             }
-            return Some(MoveListEntry { mov: entry.mov, score });
+            return Some(*entry);
         }
 
         // SAFETY: self.index is always in bounds.
