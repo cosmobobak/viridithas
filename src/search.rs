@@ -321,10 +321,6 @@ impl Board {
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
-            if ordering_score < 0 && depth < Depth::new(5) {
-                move_picker.skip_ordering();
-            }
-
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])

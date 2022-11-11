@@ -41,10 +41,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     pub fn moves_made(&self) -> &[MoveListEntry] {
         &self.movelist.moves[..self.index]
     }
-
-    pub fn skip_ordering(&mut self) {
-        self.skip_ordering = true;
-    }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &mut Board, t: &ThreadData) -> Option<MoveListEntry> {
