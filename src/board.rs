@@ -296,7 +296,7 @@ impl Board {
         self.minor_piece_counts.fill(0);
         self.material.fill(S(0, 0));
         self.piece_lists.iter_mut().for_each(PieceList::clear);
-        self.side = Colour::Both as u8;
+        self.side = Colour::White as u8;
         self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
         self.height = 0;

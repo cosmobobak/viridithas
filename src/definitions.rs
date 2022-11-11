@@ -104,7 +104,6 @@ pub mod Rank {
 pub enum Colour {
     White = 0,
     Black,
-    Both,
 }
 
 pub const WHITE: u8 = Colour::White as u8;
