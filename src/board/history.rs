@@ -62,81 +62,73 @@ impl ThreadData {
     /// Add a move to the follow-up history table.
     pub fn add_followup_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        for (table, history_distance) in self.followup_history.iter_mut().zip([2, 4, 6]) {
-            let past_idx = match pos.history.len().checked_sub(history_distance) {
-                Some(idx) => idx,
-                None => continue,
-            };
-            let move_to_follow_up = pos.history[past_idx].m;
-            let prev_move = pos.history[past_idx + 1].m;
-            if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
-                return;
-            }
-            let tpa_to = move_to_follow_up.to();
-            // getting the previous piece type is a little awkward,
-            // because follow-up history looks two ply into the past,
-            // meaning that the piece on the target square of the move
-            // two ply ago may have been captured.
-            let tpa_piece = {
-                let capture = prev_move.capture();
-                // determine where to find the piece_t info:
-                // we don't need to worry about ep-captures because
-                // we just blanket filter them out with the null checks.
-                if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
-                    // the opponent captured a piece on this square, so we can use the capture.
-                    capture
-                } else {
-                    // the opponent didn't capture a piece on this square, so it's still on the board.
-                    pos.piece_at(tpa_to)
-                }
-            };
-            let to = m.to();
-            let piece = pos.moved_piece(m);
-
-            let val = table.get_mut(tpa_piece, tpa_to, piece, to);
-            update_history::<IS_GOOD>(val, depth);
+        let two_ply_ago = match pos.history.len().checked_sub(2) {
+            Some(idx) => idx,
+            None => return,
+        };
+        let move_to_follow_up = pos.history[two_ply_ago].m;
+        let prev_move = pos.history[two_ply_ago + 1].m;
+        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
+            return;
         }
+        let tpa_to = move_to_follow_up.to();
+        // getting the previous piece type is a little awkward,
+        // because follow-up history looks two ply into the past,
+        // meaning that the piece on the target square of the move
+        // two ply ago may have been captured.
+        let tpa_piece = {
+            let capture = prev_move.capture();
+            // determine where to find the piece_t info:
+            // we don't need to worry about ep-captures because
+            // we just blanket filter them out with the null checks.
+            if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
+                // the opponent captured a piece on this square, so we can use the capture.
+                capture
+            } else {
+                // the opponent didn't capture a piece on this square, so it's still on the board.
+                pos.piece_at(tpa_to)
+            }
+        };
+        let to = m.to();
+        let piece = pos.moved_piece(m);
+
+        let val = self.followup_history.get_mut(tpa_piece, tpa_to, piece, to);
+        update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the follow-up history score for a move.
     pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let mut total = 0;
-        for (table, history_distance) in self.followup_history.iter().zip([2, 4, 6]) {
-            let past_idx = match pos.history.len().checked_sub(history_distance) {
-                Some(idx) => idx,
-                None => continue,
-            };
-            let move_to_follow_up = pos.history[past_idx].m;
-            let prev_move = pos.history[past_idx + 1].m;
-            if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
-                return 0;
-            }
-            let tpa_to = move_to_follow_up.to();
-            // getting the previous piece type is a little awkward,
-            // because follow-up history looks two ply into the past,
-            // meaning that the piece on the target square of the move
-            // two ply ago may have been captured.
-            let tpa_piece = {
-                let capture = prev_move.capture();
-                // determine where to find the piece_t info:
-                // we don't need to worry about ep-captures because
-                // we just blanket filter them out with the null checks.
-                if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
-                    // the opponent captured a piece on this square, so we can use the capture.
-                    capture
-                } else {
-                    // the opponent didn't capture a piece on this square, so it's still on the board.
-                    pos.piece_at(tpa_to)
-                }
-            };
-            let to = m.to();
-            let piece = pos.moved_piece(m);
-
-            let score = table.get(tpa_piece, tpa_to, piece, to);
-
-            total += score;
+        let two_ply_ago = match pos.history.len().checked_sub(2) {
+            Some(idx) => idx,
+            None => return 0,
+        };
+        let move_to_follow_up = pos.history[two_ply_ago].m;
+        let prev_move = pos.history[two_ply_ago + 1].m;
+        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
+            return 0;
         }
-        total
+        let tpa_to = move_to_follow_up.to();
+        // getting the previous piece type is a little awkward,
+        // because follow-up history looks two ply into the past,
+        // meaning that the piece on the target square of the move
+        // two ply ago may have been captured.
+        let tpa_piece = {
+            let capture = prev_move.capture();
+            // determine where to find the piece_t info:
+            // we don't need to worry about ep-captures because
+            // we just blanket filter them out with the null checks.
+            if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
+                // the opponent captured a piece on this square, so we can use the capture.
+                capture
+            } else {
+                // the opponent didn't capture a piece on this square, so it's still on the board.
+                pos.piece_at(tpa_to)
+            }
+        };
+        let to = m.to();
+        let piece = pos.moved_piece(m);
+
+        self.followup_history.get(tpa_piece, tpa_to, piece, to)
     }
 
     /// Add a killer move.

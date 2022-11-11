@@ -58,8 +58,20 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             self.stage = Stage::YieldMoves;
             if CAPTURES_ONLY {
                 position.generate_captures(&mut self.movelist);
+                for entry in &mut self.movelist.moves[..self.movelist.count] {
+                    entry.score = Self::score_capture(t, position, entry.mov);
+                }
             } else {
                 position.generate_moves(&mut self.movelist);
+                for entry in &mut self.movelist.moves[..self.movelist.count] {
+                    let m = entry.mov;
+                    let score = if m.is_quiet() {
+                        Self::score_quiet(&self.killers, t, position, m)
+                    } else {
+                        Self::score_capture(t, position, m)
+                    };
+                    entry.score = score;
+                }
             }
         }
         // If we have already tried all moves, return None.
@@ -77,15 +89,13 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
 
         // SAFETY: self.index is always in bounds.
-        let first_entry = unsafe { self.movelist.moves.get_unchecked_mut(self.index) };
-        let mut best_score = Self::score_entry(&self.killers, t, position, first_entry);
+        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
         let mut best_num = self.index;
 
         // find the best move in the unsorted portion of the movelist.
         for index in self.index + 1..self.movelist.count {
             // SAFETY: self.count is always less than 256, and self.index is always in bounds.
-            let m = unsafe { self.movelist.moves.get_unchecked_mut(index) };
-            let score = Self::score_entry(&self.killers, t, position, m);
+            let score = unsafe { self.movelist.moves.get_unchecked(index).score };
             if score > best_score {
                 best_score = score;
                 best_num = index;
