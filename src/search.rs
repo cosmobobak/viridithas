@@ -107,7 +107,15 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
-        let mut move_picker = MovePicker::<true, true>::new(Move::NULL);
+        let curr_killers = t.killer_move_table[self.height()];
+        let prev_killer = if height > 2 {
+            t.killer_move_table[self.height() - 2][0]
+        } else {
+            Move::NULL
+        };
+        let killers = [curr_killers[0], curr_killers[1], prev_killer];
+
+        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
         while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -301,8 +309,16 @@ impl Board {
             self.sparams.see_quiet_margin * depth.round(),
         ];
 
+        let curr_killers = t.killer_move_table[self.height()];
+        let prev_killer = if height > 2 {
+            t.killer_move_table[self.height() - 2][0]
+        } else {
+            Move::NULL
+        };
+        let killers = [curr_killers[0], curr_killers[1], prev_killer];
+
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
-        let mut move_picker = MovePicker::<false, true>::new(tt_move);
+        let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
             if ordering_score < 0 && depth < Depth::new(5) {

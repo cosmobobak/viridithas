@@ -23,16 +23,18 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     skip_ordering: bool,
     stage: Stage,
     tt_move: Move,
+    killers: [Move; 3],
 }
 
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
-    pub const fn new(tt_move: Move) -> Self {
+    pub const fn new(tt_move: Move, killers: [Move; 3]) -> Self {
         Self { 
             movelist: MoveList::new(), 
             index: 0, 
             skip_ordering: false, 
             tt_move, 
             stage: Stage::TTMove,
+            killers,
         }
     }
 
@@ -76,14 +78,14 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         // SAFETY: self.index is always in bounds.
         let first_entry = unsafe { self.movelist.moves.get_unchecked_mut(self.index) };
-        let mut best_score = Self::score_entry(t, position, first_entry);
+        let mut best_score = Self::score_entry(&self.killers, t, position, first_entry);
         let mut best_num = self.index;
 
         // find the best move in the unsorted portion of the movelist.
         for index in self.index + 1..self.movelist.count {
             // SAFETY: self.count is always less than 256, and self.index is always in bounds.
             let m = unsafe { self.movelist.moves.get_unchecked_mut(index) };
-            let score = Self::score_entry(t, position, m);
+            let score = Self::score_entry(&self.killers, t, position, m);
             if score > best_score {
                 best_score = score;
                 best_num = index;
@@ -113,13 +115,13 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
-    pub fn score_entry(t: &ThreadData, pos: &Board, entry: &mut MoveListEntry) -> i32 {
+    pub fn score_entry(killers: &[Move; 3], t: &ThreadData, pos: &Board, entry: &mut MoveListEntry) -> i32 {
         if entry.score != MoveList::UNSCORED {
             return entry.score;
         }
         let m = entry.mov;
         let score = if m.is_quiet() {
-            Self::score_quiet(t, pos, m)
+            Self::score_quiet(killers, t, pos, m)
         } else {
             Self::score_capture(t, pos, m)
         };
@@ -127,17 +129,15 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         score
     }
 
-    pub fn score_quiet(t: &ThreadData, pos: &Board, m: Move) -> i32 {
-        let killer_entry = t.killer_move_table[pos.height];
-
-        if killer_entry[0] == m {
+    pub fn score_quiet(killers: &[Move; 3], t: &ThreadData, pos: &Board, m: Move) -> i32 {
+        if killers[0] == m {
             FIRST_ORDER_KILLER_SCORE
-        } else if killer_entry[1] == m {
+        } else if killers[1] == m {
             SECOND_ORDER_KILLER_SCORE
         } else if t.is_countermove(pos, m) {
             // move that refuted the previous move
             COUNTER_MOVE_SCORE
-        } else if t.is_third_order_killer(pos, m) {
+        } else if killers[2] == m {
             // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {

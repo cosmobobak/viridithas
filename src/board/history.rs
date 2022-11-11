@@ -138,10 +138,4 @@ impl ThreadData {
         entry[1] = entry[0];
         entry[0] = m;
     }
-
-    /// Determine if a move is a third-order killer move.
-    /// The third-order killer is the first killer from the previous move (two ply ago)
-    pub(super) fn is_third_order_killer(&self, pos: &Board, m: Move) -> bool {
-        pos.height > 2 && self.killer_move_table[pos.height - 2][0] == m
-    }
 }
