@@ -1,18 +1,18 @@
 use crate::{
     chessmove::Move,
     definitions::{depth::Depth, MAX_DEPTH, PIECE_EMPTY},
-    historytable::update_history,
+    historytable::update_history, threadlocal::ThreadData,
 };
 
 use super::Board;
 
-impl Board {
+impl ThreadData {
     /// Add a move to the history table.
-    pub fn add_history<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
-        let piece_moved = self.moved_piece(m);
+    pub fn add_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
+        let piece_moved = pos.moved_piece(m);
         debug_assert!(
             crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY,
-            "Invalid piece moved by move {m} in position \n{self}"
+            "Invalid piece moved by move {m} in position \n{pos}"
         );
         let to = m.to();
         let val = self.history_table.get_mut(piece_moved, to);
@@ -20,16 +20,16 @@ impl Board {
     }
 
     /// Get the history score for a move.
-    pub(super) fn history_score(&self, m: Move) -> i32 {
-        let piece_moved = self.moved_piece(m);
+    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i32 {
+        let piece_moved = pos.moved_piece(m);
         let to = m.to();
         self.history_table.get(piece_moved, to)
     }
 
     /// Add a move to the countermove history table.
-    pub fn insert_countermove(&mut self, m: Move) {
-        debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
-        let prev_move = if let Some(undo) = self.history.last() {
+    pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let prev_move = if let Some(undo) = pos.history.last() {
             undo.m
         } else {
             return;
@@ -38,14 +38,14 @@ impl Board {
             return;
         }
         let prev_to = prev_move.to();
-        let prev_piece = self.piece_at(prev_to);
+        let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
     /// Get the countermove history score for a move.
-    pub(super) fn is_countermove(&self, m: Move) -> bool {
-        let prev_move = if let Some(undo) = self.history.last() {
+    pub(super) fn is_countermove(&self, pos: &Board, m: Move) -> bool {
+        let prev_move = if let Some(undo) = pos.history.last() {
             undo.m
         } else {
             return false;
@@ -54,20 +54,20 @@ impl Board {
             return false;
         }
         let prev_to = prev_move.to();
-        let prev_piece = self.piece_at(prev_to);
+        let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.get(prev_piece, prev_to) == m
     }
 
     /// Add a move to the follow-up history table.
-    pub fn add_followup_history<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
-        debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
-        let two_ply_ago = match self.history.len().checked_sub(2) {
+    pub fn add_followup_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let two_ply_ago = match pos.history.len().checked_sub(2) {
             Some(idx) => idx,
             None => return,
         };
-        let move_to_follow_up = self.history[two_ply_ago].m;
-        let prev_move = self.history[two_ply_ago + 1].m;
+        let move_to_follow_up = pos.history[two_ply_ago].m;
+        let prev_move = pos.history[two_ply_ago + 1].m;
         if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
             return;
         }
@@ -86,24 +86,24 @@ impl Board {
                 capture
             } else {
                 // the opponent didn't capture a piece on this square, so it's still on the board.
-                self.piece_at(tpa_to)
+                pos.piece_at(tpa_to)
             }
         };
         let to = m.to();
-        let piece = self.moved_piece(m);
+        let piece = pos.moved_piece(m);
 
         let val = self.followup_history.get_mut(tpa_piece, tpa_to, piece, to);
         update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the follow-up history score for a move.
-    pub(super) fn followup_history_score(&self, m: Move) -> i32 {
-        let two_ply_ago = match self.history.len().checked_sub(2) {
+    pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let two_ply_ago = match pos.history.len().checked_sub(2) {
             Some(idx) => idx,
             None => return 0,
         };
-        let move_to_follow_up = self.history[two_ply_ago].m;
-        let prev_move = self.history[two_ply_ago + 1].m;
+        let move_to_follow_up = pos.history[two_ply_ago].m;
+        let prev_move = pos.history[two_ply_ago + 1].m;
         if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
             return 0;
         }
@@ -122,26 +122,26 @@ impl Board {
                 capture
             } else {
                 // the opponent didn't capture a piece on this square, so it's still on the board.
-                self.piece_at(tpa_to)
+                pos.piece_at(tpa_to)
             }
         };
         let to = m.to();
-        let piece = self.moved_piece(m);
+        let piece = pos.moved_piece(m);
 
         self.followup_history.get(tpa_piece, tpa_to, piece, to)
     }
 
     /// Add a killer move.
-    pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.height < MAX_DEPTH.ply_to_horizon());
-        let entry = &mut self.killer_move_table[self.height];
+    pub fn insert_killer(&mut self, pos: &Board, m: Move) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let entry = &mut self.killer_move_table[pos.height];
         entry[1] = entry[0];
         entry[0] = m;
     }
 
     /// Determine if a move is a third-order killer move.
     /// The third-order killer is the first killer from the previous move (two ply ago)
-    pub(super) fn is_third_order_killer(&self, m: Move) -> bool {
-        self.height > 2 && self.killer_move_table[self.height - 2][0] == m
+    pub(super) fn is_third_order_killer(&self, pos: &Board, m: Move) -> bool {
+        pos.height > 2 && self.killer_move_table[pos.height - 2][0] == m
     }
 }

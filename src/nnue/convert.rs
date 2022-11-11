@@ -26,6 +26,9 @@ fn batch_convert<const USE_NNUE: bool>(
     let mut local_ticker = 0;
     pos.set_hash_size(16);
     pos.alloc_tables();
+    for thread in &mut t {
+        thread.alloc_tables();
+    }
     if printing_thread {
         let c = counter.load(atomic::Ordering::SeqCst);
         #[allow(clippy::cast_precision_loss)]

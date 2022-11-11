@@ -72,7 +72,10 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         let EpdPosition { fen, best_moves, id } = &position;
         board.set_from_fen(fen).unwrap();
         board.alloc_tables();
-        thread_data.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&board));
+        for t in &mut thread_data {
+            t.nnue.refresh_acc(&board);
+            t.alloc_tables();
+        }
         
         let mut info = SearchInfo {
             print_to_stdout: false,

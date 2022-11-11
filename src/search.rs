@@ -108,7 +108,7 @@ impl Board {
         let mut best_score = -INFINITY;
 
         let mut move_picker = MovePicker::<true, true>::new(Move::NULL);
-        while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
+        while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
@@ -304,7 +304,7 @@ impl Board {
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let mut move_picker = MovePicker::<false, true>::new(tt_move);
 
-        while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
+        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
             if ordering_score < 0 && depth < Depth::new(5) {
                 move_picker.skip_ordering();
             }
@@ -433,14 +433,14 @@ impl Board {
                         info.failhigh += 1;
 
                         if best_move.is_quiet() {
-                            self.insert_killer(best_move);
-                            self.insert_countermove(best_move);
-                            self.update_history_metrics::<true>(best_move, depth);
+                            t.insert_killer(self, best_move);
+                            t.insert_countermove(self, best_move);
+                            self.update_history_metrics::<true>(t, best_move, depth);
 
                             // decrease the history of the non-capture moves that came before the cutoff move.
                             let ms = move_picker.moves_made();
-                            for e in ms.iter().filter(|e| e.entry.is_quiet()) {
-                                self.update_history_metrics::<false>(e.entry, depth);
+                            for e in ms.iter().filter(|e| e.mov.is_quiet()) {
+                                self.update_history_metrics::<false>(t, e.mov, depth);
                             }
                         }
 
@@ -474,16 +474,16 @@ impl Board {
             // as if we had, we would have returned early,
             // so this is a PV-node
             if best_move.is_quiet() {
-                self.insert_killer(best_move);
-                self.insert_countermove(best_move);
-                self.update_history_metrics::<true>(best_move, depth);
+                t.insert_killer(self, best_move);
+                t.insert_countermove(self, best_move);
+                self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the non-capture moves that came before the best move.
                 let ms = move_picker.moves_made();
                 for e in
-                    ms.iter().take_while(|m| m.entry != best_move).filter(|e| e.entry.is_quiet())
+                    ms.iter().take_while(|m| m.mov != best_move).filter(|e| e.mov.is_quiet())
                 {
-                    self.update_history_metrics::<false>(e.entry, depth);
+                    self.update_history_metrics::<false>(t, e.mov, depth);
                 }
             }
 
@@ -495,9 +495,9 @@ impl Board {
         alpha
     }
 
-    fn update_history_metrics<const IS_GOOD: bool>(&mut self, m: Move, depth: Depth) {
-        self.add_history::<IS_GOOD>(m, depth);
-        self.add_followup_history::<IS_GOOD>(m, depth);
+    fn update_history_metrics<const IS_GOOD: bool>(&mut self, t: &mut ThreadData, m: Move, depth: Depth) {
+        t.add_history::<IS_GOOD>(self, m, depth);
+        t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
     pub fn is_singular<const USE_NNUE: bool>(

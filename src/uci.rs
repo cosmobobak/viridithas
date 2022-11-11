@@ -321,6 +321,10 @@ pub fn main_loop(params: EvalParams) {
     let mut thread_data = Vec::new();
     thread_data.push(ThreadData::new());
 
+    for td in &mut thread_data {
+        td.alloc_tables();
+    }
+
     loop {
         std::io::stdout().flush().unwrap();
         let line = stdin.recv().expect("Couldn't read from stdin");
@@ -343,6 +347,9 @@ pub fn main_loop(params: EvalParams) {
             "ucinewgame" => {
                 let res = parse_position("position startpos\n", &mut pos);
                 pos.clear_tt();
+                for td in &mut thread_data {
+                    td.alloc_tables();
+                }
                 res
             }
             "eval" => {

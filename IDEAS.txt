@@ -11,14 +11,11 @@ MINOR:
 - tune search parameters
 - tune move generation (check evasions?)
 - learn SPRT
-- criterion benchmarks
 - check out other engine's impls of countermoves and killer moves
 - unify pruning into skip_quiets
 - replace all the false/true constgen stuff with a proper type.
-- history leaf pruning in LMR
 - alpha pruning
 - find a way not to do SEE ordering in qsearch
-- put stuff into TT in qsearch.
 - increase maxdepth just in case.
 - fullwindow on big scores (+30?)
 - capture history
@@ -26,3 +23,5 @@ MINOR:
 - extend futility further
 - dedicated rootsearch function, maybe extend movepicker to handle the root.
 - uci bench extension
+- remove `as` casts and unsafe code
+- use maths for MVVLVA instead of lookups

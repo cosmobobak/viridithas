@@ -34,6 +34,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut t = ThreadData::new();
     pos.set_hash_size(1);
     pos.alloc_tables();
+    t.alloc_tables();
     pos.set_eval_params(params.clone());
     data.iter()
         .map(|TrainingExample { fen, outcome }| {

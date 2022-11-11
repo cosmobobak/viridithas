@@ -28,7 +28,6 @@ use crate::{
         KNIGHT, MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
-    historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     lookups::{
         piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
     },
@@ -104,10 +103,6 @@ pub struct Board {
 
     principal_variation: Vec<Move>,
 
-    history_table: HistoryTable,
-    killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
-    counter_move_table: MoveTable,
-    followup_history: DoubleHistoryTable,
     tt: TranspositionTable,
     hashtable_bytes: usize,
 
@@ -176,10 +171,6 @@ impl Board {
             repetition_cache: Vec::new(),
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::new(),
-            history_table: HistoryTable::new(),
-            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
-            counter_move_table: MoveTable::new(),
-            followup_history: DoubleHistoryTable::new(),
             pst_vals: S(0, 0),
             tt: TranspositionTable::new(),
             hashtable_bytes: 4 * 1024 * 1024,
@@ -1378,19 +1369,11 @@ impl Board {
     }
 
     pub fn setup_tables_for_search(&mut self) {
-        self.history_table.age_entries();
-        self.followup_history.age_entries();
-        self.killer_move_table.fill([Move::NULL; 2]);
-        self.counter_move_table.clear();
         self.height = 0;
         self.tt.clear_for_search(self.hashtable_bytes);
     }
 
     pub fn alloc_tables(&mut self) {
-        self.history_table.clear();
-        self.followup_history.clear();
-        self.counter_move_table.clear();
-        self.killer_move_table.fill([Move::NULL; 2]);
         self.tt.clear_for_search(self.hashtable_bytes);
         self.height = 0;
         self.movegen_ready = true;
@@ -1460,6 +1443,9 @@ impl Board {
     ) -> (i32, Move) {
         self.setup_tables_for_search();
         info.setup_for_search();
+        for td in thread_data.iter_mut() {
+            td.setup_tables_for_search();
+        }
 
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
