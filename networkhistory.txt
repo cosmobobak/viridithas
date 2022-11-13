@@ -18,5 +18,5 @@ NET ID | general concept                          | notes
     12 | net-11 data reanalyzed with net-11.      | +50 Elo, worried about overfitting.
        |                                          | net used in v4.0.0.
 -----------------------------------------------------------------------------------------
-    13 | lichess-elite games analysed with HCE,   | ???
+    13 | lichess-elite games analysed with HCE,   | +20 Elo.
        | merged with the net-12 data.             |
