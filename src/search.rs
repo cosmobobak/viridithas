@@ -108,6 +108,7 @@ impl Board {
         let mut best_score = -INFINITY;
 
         let killers = self.get_killers();
+        debug_assert_ne!(killers[0], killers[1]);
 
         let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {

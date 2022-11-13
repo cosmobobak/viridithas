@@ -43,13 +43,21 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     }
 
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        m == self.tt_move || m == self.killers[0] || m == self.killers[1]
+        if CAPTURES_ONLY {
+            m == self.tt_move
+        } else {
+            m == self.tt_move || m == self.killers[0] || m == self.killers[1]
+        }
     }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &mut Board) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
-            self.stage = Stage::Killer1;
+            self.stage = if CAPTURES_ONLY {
+                Stage::GenerateMoves
+            } else {
+                Stage::Killer1
+            };
             if position.is_pseudo_legal(self.tt_move) {
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
             }
