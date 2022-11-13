@@ -32,14 +32,18 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             movelist: MoveList::new(), 
             index: 0, 
             skip_ordering: false, 
-            tt_move, 
             stage: Stage::TTMove,
             killers,
+            tt_move,
         }
     }
 
     pub fn moves_made(&self) -> &[MoveListEntry] {
         &self.movelist.moves[..self.index]
+    }
+
+    pub fn was_tried_lazily(&self, m: Move) -> bool {
+        m == self.tt_move
     }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
@@ -114,7 +118,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         self.index += 1;
 
-        if m.mov == self.tt_move {
+        if self.was_tried_lazily(m.mov) {
             self.next(position, t)
         } else {
             Some(m)
