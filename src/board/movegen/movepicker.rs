@@ -38,10 +38,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         &self.movelist.moves[..self.index]
     }
 
-    pub fn skip_ordering(&mut self) {
-        self.skip_ordering = true;
-    }
-
     pub fn was_tried_lazily(&self, m: Move) -> bool {
         #![allow(clippy::if_same_then_else, clippy::branches_sharing_code)]
         if CAPTURES_ONLY {
