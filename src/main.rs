@@ -90,6 +90,13 @@ fn main() {
             true,
         )
         .unwrap();
+    } else if let Some(path) = cli.dedup {
+        let output_path = cli.output.unwrap_or_else(|| {
+            let mut path = path.clone();
+            path.set_extension("nnuedata");
+            path
+        });
+        return nnue::convert::dedup(path, output_path).unwrap();
     }
 
     if cli.info {

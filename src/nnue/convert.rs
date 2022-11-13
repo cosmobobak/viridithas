@@ -118,6 +118,32 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
+pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
+    input_file: P1,
+    output_file: P2,
+) -> io::Result<()> {
+    let reader = BufReader::new(File::open(input_file)?);
+    let mut output = BufWriter::new(File::create(output_file)?);
+    let mut data = reader.lines().filter_map(|line| {
+        line.ok().map(|line| {
+            let split_index = line.bytes().position(|b| b == b' ').unwrap();
+            (split_index, line)
+        })
+    }).collect::<Vec<_>>();
+
+    data.sort_unstable_by(|(i1, l1), (i2, l2)| {
+        l1[..i1 + 2].cmp(&l2[..i2 + 2])
+    });
+    data.dedup_by(|(i1, l1), (i2, l2)| {
+        l1[..*i1 + 2] == l2[..*i2 + 2]
+    });
+    // write deduplicated data to output file.
+    for (_, line) in data {
+        writeln!(output, "{}", line)?;
+    }
+    output.flush()
+}
+
 fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, use_nnue: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
     let chunk_size = fens.len() / num_cpus::get() + 1;
     let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
