@@ -41,6 +41,10 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     pub fn skip_ordering(&mut self) {
         self.skip_ordering = true;
     }
+
+    pub fn was_tried_lazily(&self, m: Move) -> bool {
+        m == self.tt_move || m == self.killers[0] || m == self.killers[1]
+    }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &mut Board) -> Option<MoveListEntry> {
@@ -79,7 +83,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             // If we are skipping ordering, just return the next move.
             let &m = unsafe { self.movelist.moves.get_unchecked(self.index) };
             self.index += 1;
-            if m.entry == self.tt_move {
+            if self.was_tried_lazily(m.entry) {
                 return self.next(position);
             }
             return Some(m);
@@ -115,7 +119,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         self.index += 1;
 
-        if m.entry == self.tt_move {
+        if self.was_tried_lazily(m.entry) {
             self.next(position)
         } else {
             Some(m)
