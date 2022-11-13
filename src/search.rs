@@ -110,7 +110,7 @@ impl Board {
         let killers = self.get_killers();
         debug_assert_ne!(killers[0], killers[1]);
 
-        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
+        let mut move_picker = MovePicker::<true, true>::new(Move::NULL);
         while let Some(MoveListEntry { entry: m, score: _ }) = move_picker.next(self) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -304,9 +304,11 @@ impl Board {
             self.sparams.see_quiet_margin * depth.round(),
         ];
 
-        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let killers = self.get_killers();
-        let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
+        debug_assert_ne!(killers[0], killers[1]);
+
+        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
+        let mut move_picker = MovePicker::<false, true>::new(tt_move);
 
         while let Some(MoveListEntry { entry: m, score: ordering_score }) = move_picker.next(self) {
             if best_score > -MINIMUM_MATE_SCORE

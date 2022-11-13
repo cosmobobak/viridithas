@@ -7,8 +7,6 @@ use super::MoveListEntry;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     TTMove,
-    _Killer1,
-    _Killer2,
     GenerateMoves,
     YieldMoves,
 }
@@ -19,18 +17,16 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     skip_ordering: bool,
     stage: Stage,
     tt_move: Move,
-    _killers: [Move; 2],
 }
 
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
-    pub const fn new(tt_move: Move, killers: [Move; 2]) -> Self {
+    pub const fn new(tt_move: Move) -> Self {
         Self { 
             movelist: MoveList::new(), 
             index: 0, 
             skip_ordering: false, 
             stage: Stage::TTMove,
             tt_move,
-            _killers: killers,
         }
     }
 
@@ -39,12 +35,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     }
 
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        #![allow(clippy::if_same_then_else, clippy::branches_sharing_code)]
-        if CAPTURES_ONLY {
-            m == self.tt_move
-        } else {
-            m == self.tt_move// || m == self.killers[0] || m == self.killers[1]
-        }
+        m == self.tt_move
     }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
@@ -55,20 +46,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
             }
         }
-        // if self.stage == Stage::Killer1 {
-        //     self.stage = Stage::Killer2;
-        //     let killer = self.killers[0];
-        //     if killer != self.tt_move && position.is_pseudo_legal(killer) {
-        //         return Some(MoveListEntry { entry: killer, score: FIRST_ORDER_KILLER_SCORE });
-        //     }
-        // }
-        // if self.stage == Stage::Killer2 {
-        //     self.stage = Stage::GenerateMoves;
-        //     let killer = self.killers[1];
-        //     if killer != self.tt_move && position.is_pseudo_legal(killer) {
-        //         return Some(MoveListEntry { entry: killer, score: SECOND_ORDER_KILLER_SCORE });
-        //     }
-        // }
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::YieldMoves;
             if CAPTURES_ONLY {
