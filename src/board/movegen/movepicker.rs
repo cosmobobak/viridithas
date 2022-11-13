@@ -1,4 +1,4 @@
-use crate::{chessmove::Move, board::Board};
+use crate::{chessmove::Move, board::{Board, movegen::{FIRST_ORDER_KILLER_SCORE, SECOND_ORDER_KILLER_SCORE}}};
 
 use super::{TT_MOVE_SCORE, MoveList};
 
@@ -7,6 +7,8 @@ use super::MoveListEntry;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     TTMove,
+    Killer1,
+    Killer2,
     GenerateMoves,
     YieldMoves,
 }
@@ -17,16 +19,18 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     skip_ordering: bool,
     stage: Stage,
     tt_move: Move,
+    killers: [Move; 2],
 }
 
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
-    pub const fn new(tt_move: Move) -> Self {
+    pub const fn new(tt_move: Move, killers: [Move; 2]) -> Self {
         Self { 
             movelist: MoveList::new(), 
             index: 0, 
             skip_ordering: false, 
-            tt_move, 
             stage: Stage::TTMove,
+            tt_move, 
+            killers,
         }
     }
 
@@ -41,9 +45,23 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &mut Board) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
-            self.stage = Stage::GenerateMoves;
+            self.stage = Stage::Killer1;
             if position.is_pseudo_legal(self.tt_move) {
                 return Some(MoveListEntry { entry: self.tt_move, score: TT_MOVE_SCORE });
+            }
+        }
+        if self.stage == Stage::Killer1 {
+            self.stage = Stage::Killer2;
+            let killer = self.killers[0];
+            if killer != self.tt_move && position.is_pseudo_legal(killer) {
+                return Some(MoveListEntry { entry: killer, score: FIRST_ORDER_KILLER_SCORE });
+            }
+        }
+        if self.stage == Stage::Killer2 {
+            self.stage = Stage::GenerateMoves;
+            let killer = self.killers[1];
+            if killer != self.tt_move && position.is_pseudo_legal(killer) {
+                return Some(MoveListEntry { entry: killer, score: SECOND_ORDER_KILLER_SCORE });
             }
         }
         if self.stage == Stage::GenerateMoves {

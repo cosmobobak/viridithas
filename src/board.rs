@@ -1377,6 +1377,10 @@ impl Board {
             + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
+    pub const fn get_killers(&self) -> [Move; 2] {
+        self.killer_move_table[self.height]
+    }
+
     pub fn setup_tables_for_search(&mut self) {
         self.history_table.age_entries();
         self.followup_history.age_entries();
