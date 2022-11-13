@@ -125,20 +125,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
-    pub fn score_entry(killers: &[Move; 3], t: &ThreadData, pos: &Board, entry: &mut MoveListEntry) -> i32 {
-        if entry.score != MoveList::UNSCORED {
-            return entry.score;
-        }
-        let m = entry.mov;
-        let score = if m.is_quiet() {
-            Self::score_quiet(killers, t, pos, m)
-        } else {
-            Self::score_capture(t, pos, m)
-        };
-        entry.score = score;
-        score
-    }
-
     pub fn score_quiet(killers: &[Move; 3], t: &ThreadData, pos: &Board, m: Move) -> i32 {
         if killers[0] == m {
             FIRST_ORDER_KILLER_SCORE

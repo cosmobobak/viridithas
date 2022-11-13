@@ -1368,10 +1368,6 @@ impl Board {
             + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
-    pub const fn get_killers(&self) -> [Move; 2] {
-        self.killer_move_table[self.height]
-    }
-
     pub fn setup_tables_for_search(&mut self) {
         self.height = 0;
         self.tt.clear_for_search(self.hashtable_bytes);
