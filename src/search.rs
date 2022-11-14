@@ -179,7 +179,8 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(self.check_nnue_coherency(&t.nnue));
 
-        if depth <= ZERO_PLY {
+        let in_check = self.in_check::<{ Self::US }>();
+        if depth <= ZERO_PLY && !in_check {
             return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
         }
 
@@ -241,8 +242,6 @@ impl Board {
 
         // just enforcing immutability here.
         let depth = depth;
-
-        let in_check = self.in_check::<{ Self::US }>();
 
         let last_move_was_null = self.last_move_was_nullmove();
 
