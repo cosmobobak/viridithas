@@ -5,12 +5,12 @@ use std::time::Duration;
 use crate::{
     board::{
         evaluation::{
-            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE,
-            MINIMUM_MATE_SCORE,
+            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_MATE_SCORE,
         },
         movegen::{
             bitboards::{self, lsb},
-            MoveListEntry, movepicker::MovePicker,
+            movepicker::MovePicker,
+            MoveListEntry,
         },
         Board,
     },
@@ -161,11 +161,8 @@ impl Board {
 
     fn get_killer_set(&self, t: &mut ThreadData) -> [Move; 3] {
         let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer = if self.height() > 2 {
-            t.killer_move_table[self.height() - 2][0]
-        } else {
-            Move::NULL
-        };
+        let prev_killer =
+            if self.height() > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };
         [curr_killers[0], curr_killers[1], prev_killer]
     }
 
@@ -288,7 +285,8 @@ impl Board {
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let score = -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
+            let score =
+                -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -318,17 +316,15 @@ impl Board {
         ];
 
         let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer = if height > 2 {
-            t.killer_move_table[self.height() - 2][0]
-        } else {
-            Move::NULL
-        };
+        let prev_killer =
+            if height > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };
         let killers = [curr_killers[0], curr_killers[1], prev_killer];
 
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
-        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
+        {
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
@@ -346,7 +342,7 @@ impl Board {
             }
             moves_made += 1;
             if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {} nodes {}", moves_made, info.nodes);
+                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
             }
 
             let lmr_reduction = self.lmr_table.get(depth, moves_made);
@@ -371,7 +367,12 @@ impl Board {
             }
 
             // history leaf pruning
-            if !PV && !is_interesting && moves_made > 1 && lmr_depth <= ONE_PLY * 2 && ordering_score < (-500 * (depth.round() - 1)) {
+            if !PV
+                && !is_interesting
+                && moves_made > 1
+                && lmr_depth <= ONE_PLY * 2
+                && ordering_score < (-500 * (depth.round() - 1))
+            {
                 self.unmake_move_nnue(t);
                 continue;
             }
@@ -397,8 +398,13 @@ impl Board {
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score =
-                    -self.alpha_beta::<PV, false, USE_NNUE>(info, t, depth + extension - 1, -beta, -alpha);
+                score = -self.alpha_beta::<PV, false, USE_NNUE>(
+                    info,
+                    t,
+                    depth + extension - 1,
+                    -beta,
+                    -alpha,
+                );
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
@@ -500,9 +506,7 @@ impl Board {
 
                 // decrease the history of the non-capture moves that came before the best move.
                 let ms = move_picker.moves_made();
-                for e in
-                    ms.iter().take_while(|m| m.mov != best_move).filter(|e| e.mov.is_quiet())
-                {
+                for e in ms.iter().take_while(|m| m.mov != best_move).filter(|e| e.mov.is_quiet()) {
                     self.update_history_metrics::<false>(t, e.mov, depth);
                 }
             }
@@ -515,7 +519,12 @@ impl Board {
         alpha
     }
 
-    fn update_history_metrics<const IS_GOOD: bool>(&mut self, t: &mut ThreadData, m: Move, depth: Depth) {
+    fn update_history_metrics<const IS_GOOD: bool>(
+        &mut self,
+        t: &mut ThreadData,
+        m: Move,
+        depth: Depth,
+    ) {
         t.add_history::<IS_GOOD>(self, m, depth);
         t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
@@ -533,8 +542,13 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move_nnue(t);
         t.excluded[self.height()] = m;
-        let value =
-            self.alpha_beta::<false, false, USE_NNUE>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+        let value = self.alpha_beta::<false, false, USE_NNUE>(
+            info,
+            t,
+            reduced_depth,
+            reduced_beta - 1,
+            reduced_beta,
+        );
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move_nnue(m, t);
@@ -555,8 +569,13 @@ impl Board {
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value =
-            self.alpha_beta::<false, true, true>(info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+        let value = self.alpha_beta::<false, true, true>(
+            info,
+            t,
+            reduced_depth,
+            reduced_beta - 1,
+            reduced_beta,
+        );
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
         value < reduced_beta
@@ -651,8 +670,7 @@ impl Board {
             return false;
         }
         let depth = depth.round();
-        let margin = depth * self.sparams.futility_coeff_1
-            + self.sparams.futility_coeff_0;
+        let margin = depth * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
         static_eval + margin < a
     }
 }
