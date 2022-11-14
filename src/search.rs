@@ -96,7 +96,7 @@ impl Board {
         let stand_pat = self.evaluate::<USE_NNUE>(t, info.nodes);
 
         if stand_pat >= beta {
-            return beta;
+            return stand_pat;
         }
 
         if stand_pat > alpha {
@@ -138,7 +138,7 @@ impl Board {
                 if score > alpha {
                     if score >= beta {
                         self.tt_store::<false>(best_move, beta, HFlag::LowerBound, ZERO_PLY);
-                        return beta;
+                        return score;
                     }
                     alpha = score;
                 }
