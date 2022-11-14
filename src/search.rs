@@ -99,11 +99,11 @@ impl Board {
             return stand_pat;
         }
 
+        let original_alpha = alpha;
         if stand_pat > alpha {
             alpha = stand_pat;
         }
 
-        let original_alpha = alpha;
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
 
