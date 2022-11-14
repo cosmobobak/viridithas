@@ -105,7 +105,7 @@ impl Board {
 
         let original_alpha = alpha;
         let mut best_move = Move::NULL;
-        let mut best_score = -INFINITY;
+        let mut best_score = stand_pat;
 
         let killers = self.get_killer_set(t);
 
