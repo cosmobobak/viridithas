@@ -96,6 +96,7 @@ impl Board {
         let stand_pat = self.evaluate::<USE_NNUE>(t, info.nodes);
 
         if stand_pat >= beta {
+            // return stand_pat instead of beta, this is fail-soft
             return stand_pat;
         }
 
@@ -126,6 +127,7 @@ impl Board {
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
                 self.unmake_move_nnue(t);
+                // don't bother failing soft, at_least is not really trustworthy.
                 return beta;
             }
 
@@ -136,23 +138,25 @@ impl Board {
                 best_score = score;
                 best_move = m;
                 if score > alpha {
-                    if score >= beta {
-                        self.tt_store::<false>(best_move, beta, HFlag::LowerBound, ZERO_PLY);
-                        return score;
-                    }
                     alpha = score;
+                }
+                if alpha >= beta {
+                    break; // fail-high
                 }
             }
         }
 
-        if alpha == original_alpha {
-            // we didn't raise alpha, so this is an all-node
-            self.tt_store::<false>(best_move, alpha, HFlag::UpperBound, ZERO_PLY);
+        let flag = if best_score >= beta {
+            HFlag::LowerBound
+        } else if best_score > original_alpha {
+            HFlag::Exact
         } else {
-            self.tt_store::<false>(best_move, best_score, HFlag::Exact, ZERO_PLY);
-        }
+            HFlag::UpperBound
+        };
 
-        alpha
+        self.tt_store::<false>(best_move, best_score, flag, ZERO_PLY);
+
+        best_score
     }
 
     fn get_killer_set(&self, t: &mut ThreadData) -> [Move; 3] {
