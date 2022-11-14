@@ -107,13 +107,7 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
 
-        let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer = if height > 2 {
-            t.killer_move_table[self.height() - 2][0]
-        } else {
-            Move::NULL
-        };
-        let killers = [curr_killers[0], curr_killers[1], prev_killer];
+        let killers = self.get_killer_set(t);
 
         let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
         while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
@@ -159,6 +153,16 @@ impl Board {
         }
 
         alpha
+    }
+
+    fn get_killer_set(&self, t: &mut ThreadData) -> [Move; 3] {
+        let curr_killers = t.killer_move_table[self.height()];
+        let prev_killer = if self.height() > 2 {
+            t.killer_move_table[self.height() - 2][0]
+        } else {
+            Move::NULL
+        };
+        [curr_killers[0], curr_killers[1], prev_killer]
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
