@@ -20,3 +20,6 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     13 | lichess-elite games analysed with HCE,   | +20 Elo.
        | merged with the net-12 data.             |
+-----------------------------------------------------------------------------------------
+    14 | net-13 data reanalyzed with net-13,      | +25 Elo.
+       | deduplicated using a new tool i wrote.   | 
