@@ -10,11 +10,12 @@ const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 const MOVEGEN_SEE_THRESHOLD: i32 = 0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Stage {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Stage {
     TTMove,
     GenerateMoves,
-    YieldMoves,
+    YieldMovesGoodSEE,
+    YieldMovesBadSEE,
 }
 
 pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
@@ -38,6 +39,10 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
+    pub const fn stage(&self) -> Stage {
+        self.stage
+    }
+
     pub fn moves_made(&self) -> &[MoveListEntry] {
         &self.movelist.moves[..self.index]
     }
@@ -55,7 +60,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             }
         }
         if self.stage == Stage::GenerateMoves {
-            self.stage = Stage::YieldMoves;
+            self.stage = Stage::YieldMovesGoodSEE;
             if CAPTURES_ONLY {
                 position.generate_captures(&mut self.movelist);
                 for entry in &mut self.movelist.moves[..self.movelist.count] {
@@ -79,13 +84,15 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             return None;
         } else if self.skip_ordering {
             // If we are skipping ordering, just return the next move.
-            let entry = unsafe { self.movelist.moves.get_unchecked_mut(self.index) };
-            entry.score = 0;
+            let entry = unsafe { *self.movelist.moves.get_unchecked(self.index) };
             self.index += 1;
-            if entry.mov == self.tt_move {
+            if self.was_tried_lazily(entry.mov) {
                 return self.next(position, t);
             }
-            return Some(*entry);
+            if entry.score < WINNING_CAPTURE_SCORE {
+                self.stage = Stage::YieldMovesBadSEE;
+            }
+            return Some(entry);
         }
 
         // SAFETY: self.index is always in bounds.
@@ -121,6 +128,9 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         if self.was_tried_lazily(m.mov) {
             self.next(position, t)
         } else {
+            if m.score < WINNING_CAPTURE_SCORE {
+                self.stage = Stage::YieldMovesBadSEE;
+            }
             Some(m)
         }
     }

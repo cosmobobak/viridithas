@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::MovePicker,
+            movepicker::{MovePicker, Stage},
             MoveListEntry,
         },
         Board,
@@ -183,6 +183,7 @@ impl Board {
         if depth <= ZERO_PLY && !in_check {
             return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
         }
+        depth = depth.max(ZERO_PLY);
 
         if info.nodes.trailing_zeros() >= 12 {
             info.check_up();
@@ -205,7 +206,7 @@ impl Board {
 
             // are we too deep?
             if height > MAX_DEPTH.round() - 1 {
-                return self.evaluate::<USE_NNUE>(t, info.nodes);
+                return if in_check { 0 } else { self.evaluate::<USE_NNUE>(t, info.nodes) };
             }
 
             // mate-distance pruning.
@@ -326,6 +327,7 @@ impl Board {
         {
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
+                && move_picker.stage() > Stage::YieldMovesBadSEE
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
