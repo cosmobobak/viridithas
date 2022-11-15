@@ -14,8 +14,7 @@ const MOVEGEN_SEE_THRESHOLD: i32 = 0;
 pub enum Stage {
     TTMove,
     GenerateMoves,
-    YieldMovesGoodSEE,
-    YieldMovesBadSEE,
+    YieldMoves
 }
 
 pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
@@ -56,7 +55,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             }
         }
         if self.stage == Stage::GenerateMoves {
-            self.stage = Stage::YieldMovesGoodSEE;
+            self.stage = Stage::YieldMoves;
             if CAPTURES_ONLY {
                 position.generate_captures(&mut self.movelist);
                 for entry in &mut self.movelist.moves[..self.movelist.count] {
@@ -84,9 +83,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             self.index += 1;
             if self.was_tried_lazily(entry.mov) {
                 return self.next(position, t);
-            }
-            if entry.score < WINNING_CAPTURE_SCORE {
-                self.stage = Stage::YieldMovesBadSEE;
             }
             return Some(entry);
         }
@@ -124,9 +120,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         if self.was_tried_lazily(m.mov) {
             self.next(position, t)
         } else {
-            if m.score < WINNING_CAPTURE_SCORE {
-                self.stage = Stage::YieldMovesBadSEE;
-            }
             Some(m)
         }
     }
