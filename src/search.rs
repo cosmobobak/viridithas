@@ -327,7 +327,7 @@ impl Board {
         {
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
-                && move_picker.stage() > Stage::YieldMovesBadSEE
+                && move_picker.stage() > Stage::YieldMovesGoodSEE
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
