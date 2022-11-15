@@ -118,6 +118,8 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
+/// Deduplicate a Marlinflow dataset by board.
+/// This deduplicates based on the first two parts of FENs, which are the board and the side to move.
 pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
