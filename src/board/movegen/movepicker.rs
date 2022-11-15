@@ -39,10 +39,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
-    pub const fn stage(&self) -> Stage {
-        self.stage
-    }
-
     pub fn moves_made(&self) -> &[MoveListEntry] {
         &self.movelist.moves[..self.index]
     }

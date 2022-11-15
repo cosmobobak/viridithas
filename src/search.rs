@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{MovePicker, Stage},
+            movepicker::MovePicker,
             MoveListEntry,
         },
         Board,
@@ -327,7 +327,7 @@ impl Board {
         {
             if best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
-                && move_picker.stage() > Stage::YieldMovesGoodSEE
+                // && move_picker.stage() > Stage::YieldMovesGoodSEE
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
