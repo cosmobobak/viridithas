@@ -25,3 +25,4 @@ MINOR:
 - uci bench extension
 - remove `as` casts and unsafe code
 - use maths for MVVLVA instead of lookups
+- things in hashkey: turn, rule50 / 8.
