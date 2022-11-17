@@ -217,7 +217,9 @@ impl Board {
         };
         let complexity = (v - simple).abs();
         
-        v + complexity / 20
+        let v = v + complexity / 20;
+
+        v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {

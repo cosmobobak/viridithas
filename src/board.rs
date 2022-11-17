@@ -29,7 +29,7 @@ use crate::{
     },
     errors::{FenParseError, MoveParseError},
     lookups::{
-        piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
+        piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP, FIFTY_MOVE_KEYS,
     },
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
@@ -189,11 +189,15 @@ impl Board {
     }
 
     pub fn tt_store<const ROOT: bool>(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
-        self.tt.store::<ROOT>(self.key, self.height, best_move, score, flag, depth);
+        let rule50_idx = self.fifty_move_counter as usize / 8;
+        let key = self.key ^ FIFTY_MOVE_KEYS[rule50_idx];
+        self.tt.store::<ROOT>(key, self.height, best_move, score, flag, depth);
     }
 
     pub fn tt_probe<const ROOT: bool>(&self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        self.tt.probe::<ROOT>(self.key, self.height, alpha, beta, depth)
+        let rule50_idx = self.fifty_move_counter as usize / 8;
+        let key = self.key ^ FIFTY_MOVE_KEYS[rule50_idx];
+        self.tt.probe::<ROOT>(key, self.height, alpha, beta, depth)
     }
 
     /// Nuke the transposition table.
