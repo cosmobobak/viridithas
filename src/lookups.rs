@@ -138,6 +138,7 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
 pub static PIECE_KEYS: [[u64; 64]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
+#[allow(dead_code)]
 pub static FIFTY_MOVE_KEYS: [u64; 13] = init_hash_keys().3;
 
 /// knights, bishops, rooks, and queens.
