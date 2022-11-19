@@ -70,6 +70,7 @@ impl Iterator for BitLoop {
             None
         } else {
             // faster if we have bmi (maybe)
+            // SAFETY: the trailing_zeros of a u64 cannot exceed 64
             let lsb: u8 = unsafe { self.value.trailing_zeros().try_into().unwrap_unchecked() };
             self.value ^= 1 << lsb;
             Some(Square::new(lsb))
