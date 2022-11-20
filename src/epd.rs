@@ -30,7 +30,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     while reader.read_line(&mut line).expect("Got invalid UTF-8") > 0 {
         let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>();
         let fen = fen.join(" ");
-        board.set_from_fen(&fen).unwrap();
+        board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
         let fen_out = board.fen();
         assert_eq!(fen, fen_out);
         let best_move_idx =
