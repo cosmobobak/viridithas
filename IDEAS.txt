@@ -26,3 +26,5 @@ MINOR:
 - remove `as` casts and unsafe code
 - use maths for MVVLVA instead of lookups
 - things in hashkey: turn, rule50 / 8.
+- perft divide
+- preorder root nodes with eval, sort during search by moving bestmoves to front. (can be made easy with rootnode movepicker specialisation)
