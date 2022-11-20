@@ -13,4 +13,14 @@ macro_rules! inconceivable {
     }};
 }
 
+macro_rules! max {
+    ($a:expr, $b:expr) => {
+        if $a > $b {
+            $a
+        } else {
+            $b
+        }
+    };
+}
+
 pub(crate) use inconceivable;

@@ -67,14 +67,6 @@ pub const fn colour_of(piece: u8) -> u8 {
     }
 }
 
-pub const fn u8max(a: u8, b: u8) -> u8 {
-    if a > b {
-        a
-    } else {
-        b
-    }
-}
-
 #[allow(non_snake_case, dead_code)]
 pub mod File {
     pub const FILE_A: u8 = 0;
@@ -214,7 +206,7 @@ impl Square {
     }
 
     pub const fn distance(a: Self, b: Self) -> u8 {
-        u8max(a.file().abs_diff(b.file()), a.rank().abs_diff(b.rank()))
+        max!(a.file().abs_diff(b.file()), a.rank().abs_diff(b.rank()))
     }
 
     pub const fn le(self, other: Self) -> bool {
