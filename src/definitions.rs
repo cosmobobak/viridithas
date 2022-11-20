@@ -209,22 +209,6 @@ impl Square {
         max!(a.file().abs_diff(b.file()), a.rank().abs_diff(b.rank()))
     }
 
-    pub const fn le(self, other: Self) -> bool {
-        self.0 <= other.0
-    }
-
-    pub const fn ge(self, other: Self) -> bool {
-        self.0 >= other.0
-    }
-
-    pub const fn lt(self, other: Self) -> bool {
-        self.0 < other.0
-    }
-
-    pub const fn gt(self, other: Self) -> bool {
-        self.0 > other.0
-    }
-
     pub const fn signed_inner(self) -> i8 {
         #![allow(clippy::cast_possible_wrap)]
         self.0 as i8
@@ -279,6 +263,15 @@ impl Square {
             self.sub(9)
         }
     }
+    
+    #[rustfmt::skip]
+    pub const fn le(self, other: Self) -> bool { self.0 <= other.0 }
+    #[rustfmt::skip]
+    pub const fn ge(self, other: Self) -> bool { self.0 >= other.0 }
+    #[rustfmt::skip]
+    pub const fn lt(self, other: Self) -> bool { self.0 < other.0  }
+    #[rustfmt::skip]
+    pub const fn gt(self, other: Self) -> bool { self.0 > other.0  }
 }
 
 impl Display for Square {
