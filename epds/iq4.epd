@@ -13,7 +13,7 @@ rr4k1/2q2ppp/p1b1p3/2b1pPPN/1p2P1R1/3B3Q/PPP4P/1K1R4 w - - bm Nf6+; id "9.5.IQ.1
 4r3/pbrq1p1k/1p3Bpp/3pPn2/5PQ1/P6R/1P4PP/1B3RK1 w - - bm Rh5 Qg5; id "13.5.IQ.1051";
 r1r3k1/1p1b1nq1/6p1/pN1p4/P2Np2R/1P2P3/1Q3PP1/1K5R w - - bm Nd6; id "14.5.IQ.1065";
 r2q1rk1/pb2Bppp/4p3/1p6/2pnP1n1/6N1/PPPN2PP/R1Q1RBK1 b - - bm Qb6; id "15.5.IQ.1072";
-6k1/5qp1/pN5p/3pRp2/3QnP2/2r4P/r5P1/6RK b - - bm Qh5 Nf2+; id "16.5.IQ.1073";
+6k1/5qp1/pN5p/3pRp2/3QnP2/2r4P/r5P1/6RK b - - bm Qh5 Nf2+ Rd3; id "16.5.IQ.1073";
 2b2rk1/pp2R1bp/1qpp2p1/6N1/2P2PP1/3Q1B2/PP4PK/8 w - - bm Bd5+; id "17.5.IQ.1074";
 r4qk1/1b3rpp/1pn1p3/p1b5/2P5/2NQ1N2/PP2BPPP/3R1RK1 b - - bm Ne5; id "20.5.IQ.1078";
 5rk1/5pp1/3b4/1pp2qB1/4R2Q/1BPn4/1P3PPP/6K1 b - -  bm Bf4 Ra8; id "22.5.IQ.1091";
@@ -54,14 +54,14 @@ r2qrn2/1p2nbkp/2p1pp2/p7/3PP1BN/2N4R/PP1Q1P2/2KR4 w - - bm Qh6+; id "58.6.IQ.976
 r2qk2r/1pp2ppp/p3pnn1/6N1/1B1P2P1/1Q2P2P/PP3PK1/R6R b kq - bm Nh4+; id "59.6.IQ.978";
 7R/5Q2/6pp/4rp1k/P3P3/5Pb1/4KPq1/3R4 w - - bm Rxh6+; id "60.6.IQ.980";
 rnb4r/p1pq1Pkp/1pn1p1p1/3p2N1/3P4/P1PB3Q/2P2PPP/R1B1K2R w KQ - bm Qh6+; id "61.6.IQ.981";
-4rr1k/pQ4pp/8/7q/2B2BbP/P1P2nP1/5PK1/R6R b - - bm Rxf4; id "62.6.IQ.999";
+4rr1k/pQ4pp/8/7q/2B2BbP/P1P2nP1/5PK1/R6R b - - bm Rxf4 Ne5; id "62.6.IQ.999";
 1k6/p1p3Q1/2qp1P2/2p5/rp6/3P3P/1BP1rP2/2KR3R b - - bm Ra1+; id "63.6.IQ.1002";
 4r3/1r2ppk1/p2p1np1/2qP4/PpP5/1P1Q4/2B1R1PP/5R1K w - - bm Rxf6; id "64.6.IQ.1018";
 4r3/5pk1/2Q2n2/3B2pp/2b2q2/P6P/6P1/R2R2K1 b - - bm Ng4; id "65.6.IQ.1025";
 6rk/6bp/p3p1r1/3p4/4p3/2P1N1Pq/PP2QP1P/4RRK1 b - - bm Bxc3 Bf8; id "66.6.IQ.1029";
 r1r1q2k/pp3pbp/4p3/2npPp1Q/3P1P1N/2P2RR1/P1P3PP/6K1 w - - bm Rxg7; id "67.6.IQ.1038";
 2R5/r3b1k1/p2p4/P1pPp2p/6q1/2P2N1r/4Q1P1/5RK1 w - - bm Nxe5; id "68.6.IQ.1042";
-r1bn1r2/1pp3k1/p2p3p/6p1/2qNB3/2P2PP1/P1Q2KP1/1R5R w - - bm Rxh6; id "69.6.IQ.1052";
+r1bn1r2/1pp3k1/p2p3p/6p1/2qNB3/2P2PP1/P1Q2KP1/1R5R w - - bm Rxh6 Bxb7; id "69.6.IQ.1052";
 r4rk1/pp3pbp/3Qbnp1/q1p5/4P1P1/2N1BP2/PPP4P/2KR1B1R b - - bm Nxe4; id "70.6.IQ.1053";
 r5k1/4p2p/pp1qNnp1/2pPb3/2P1p1P1/4B3/PP1Q2P1/5R1K w - - bm Bxc5; id "71.6.IQ.1059";
 r7/1pqbr1pk/p1n4p/5p1P/2P1p3/2B3R1/PP1Q1PP1/1B2R1K1 w - - bm Rxe4; id "72.6.IQ.1063";
@@ -181,4 +181,3 @@ r5k1/1p3p1p/p1pqrPp1/3bN3/8/P1P3Q1/1P4PP/4RRK1 w - - bm Nxf7; id "193.10.IQ.1231
 rnb2rk1/pp3p1p/3q2pQ/3pN3/2pP4/2PB4/P1P2PPP/4RRK1 w - - bm Nxf7; id "199.11.IQ.1232";
 r1q2r1k/p1ppb1p1/1p2p1Qp/3n3P/3PN3/2P1B3/PP3PP1/3R1RK1 w - - bm Bxh6; id "200.11.IQ.1261";
 r4rk1/pp2qpp1/2p1bn1p/8/1bP4Q/5N1P/PPB2PP1/R1BR2K1 w - - bm Bxh6; id "201.11.IQ.1263";
-
