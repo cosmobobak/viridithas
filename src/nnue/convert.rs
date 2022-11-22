@@ -128,7 +128,7 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     let mut output = BufWriter::new(File::create(output_file)?);
     let mut data = reader.lines().filter_map(|line| {
         line.ok().map(|line| {
-            let split_index = line.bytes().position(|b| b == b' ' || b == b';').unwrap();
+            let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
             (split_index, line)
         })
     }).collect::<Vec<_>>();
