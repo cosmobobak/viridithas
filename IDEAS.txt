@@ -29,3 +29,4 @@ MINOR:
 - perft divide
 - preorder root nodes with eval, sort during search by moving bestmoves to front. (can be made easy with rootnode movepicker specialisation)
 - try to reduce attr use, it's ugly.
+- make FEN conversion not halt singlethreaded when writing to file. or generally.
