@@ -118,7 +118,7 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
-/// Deduplicate a Marlinflow dataset by board.
+/// Deduplicate a dataset by board.
 /// This deduplicates based on the first two parts of FENs, which are the board and the side to move.
 pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
@@ -128,7 +128,7 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     let mut output = BufWriter::new(File::create(output_file)?);
     let mut data = reader.lines().filter_map(|line| {
         line.ok().map(|line| {
-            let split_index = line.bytes().position(|b| b == b' ').unwrap();
+            let split_index = line.bytes().position(|b| b == b' ' || b == b';').unwrap();
             (split_index, line)
         })
     }).collect::<Vec<_>>();
@@ -139,10 +139,12 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     data.dedup_by(|(i1, l1), (i2, l2)| {
         l1[..*i1 + 2] == l2[..*i2 + 2]
     });
+
     // write deduplicated data to output file.
     for (_, line) in data {
-        writeln!(output, "{}", line)?;
+        writeln!(output, "{line}")?;
     }
+
     output.flush()
 }
 
