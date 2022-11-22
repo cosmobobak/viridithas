@@ -126,6 +126,8 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
 ) -> io::Result<()> {
     let reader = BufReader::new(File::open(input_file)?);
     let mut output = BufWriter::new(File::create(output_file)?);
+
+    // would be cool to use an arena allocator for the Strings.
     let mut data = reader.lines().filter_map(|line| {
         line.ok().map(|line| {
             let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
