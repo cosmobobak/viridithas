@@ -1,6 +1,7 @@
 NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
      0 | first network 90% eval, 10% WDL          | much weaker than the HCE.
+       | 30 epochs, batch size 16384, lr 1e-2     | 
 -----------------------------------------------------------------------------------------
      1 | second network, same data as net 0, but  | net used in v3.0.0, crushes HCE.
        | data was shuffled, which fixed problems. |
@@ -23,3 +24,6 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     14 | net-13 data reanalyzed with net-13,      | +25 Elo.
        | deduplicated using a new tool i wrote.   | 
+-----------------------------------------------------------------------------------------
+    15 | same as net-14, but trying 120 epochs,   | -41.6 +/- 7.5 Elo, LOS: 0.0 %
+       | and batch size 8192.                     | vs net-14.
