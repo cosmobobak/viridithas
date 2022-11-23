@@ -134,8 +134,8 @@ impl ThreadData {
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let entry = &mut self.killer_move_table[pos.height];
-        entry[1] = entry[0];
-        entry[0] = m;
+        let idx = pos.height;
+        self.killer_move_table[idx][1] = self.killer_move_table[idx][0];
+        self.killer_move_table[idx][0] = m;
     }
 }
