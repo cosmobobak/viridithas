@@ -262,6 +262,9 @@ impl Board {
         let improving =
             !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
+        // clear the deeper killers.
+        t.killer_move_table[self.height() + 1] = [Move::NULL; 2];
+
         // beta-pruning. (reverse futility pruning)
         if !PV
             && !in_check
