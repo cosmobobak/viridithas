@@ -350,16 +350,14 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            if best_score > -MINIMUM_MATE_SCORE && do_lmp && moves_made >= lmp_threshold && !is_interesting {
-                self.unmake_move_nnue(t);
-                break; // okay to break because captures are ordered first.
+            if best_score > -MINIMUM_MATE_SCORE && do_lmp && moves_made >= lmp_threshold {
+                move_picker.skip_quiets = true;
             }
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
             if !PV && quiet_moves_made > 1 && !is_interesting && static_eval + fp_margin <= alpha {
-                self.unmake_move_nnue(t);
-                continue;
+                move_picker.skip_quiets = true;
             }
 
             // history leaf pruning

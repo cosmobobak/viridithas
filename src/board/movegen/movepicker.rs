@@ -20,10 +20,10 @@ pub enum Stage {
 pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     movelist: MoveList,
     index: usize,
-    skip_ordering: bool,
     stage: Stage,
     tt_move: Move,
     killers: [Move; 3],
+    pub skip_quiets: bool,
 }
 
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
@@ -31,10 +31,10 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         Self { 
             movelist: MoveList::new(), 
             index: 0, 
-            skip_ordering: false, 
             stage: Stage::TTMove,
             killers,
             tt_move,
+            skip_quiets: false,
         }
     }
 
@@ -77,14 +77,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         // If we have already tried all moves, return None.
         if self.index == self.movelist.count {
             return None;
-        } else if self.skip_ordering {
-            // If we are skipping ordering, just return the next move.
-            let entry = unsafe { *self.movelist.moves.get_unchecked(self.index) };
-            self.index += 1;
-            if self.was_tried_lazily(entry.mov) {
-                return self.next(position, t);
-            }
-            return Some(entry);
         }
 
         // SAFETY: self.index is always in bounds.
@@ -117,7 +109,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         self.index += 1;
 
-        if self.was_tried_lazily(m.mov) {
+        if self.was_tried_lazily(m.mov) || (m.mov.is_quiet() && self.skip_quiets) {
             self.next(position, t)
         } else {
             Some(m)
