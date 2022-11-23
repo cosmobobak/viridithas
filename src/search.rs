@@ -669,7 +669,7 @@ impl Board {
         if depth > self.sparams.futility_depth || is_mate_score(a) || is_mate_score(b) {
             return false;
         }
-        let depth = depth.round() + i32::from(improving);
+        let depth = depth.round() - 1 + 2 * i32::from(improving);
         let margin = depth * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
         static_eval + margin < a
     }
