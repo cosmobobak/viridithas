@@ -302,9 +302,8 @@ impl Board {
         let mut moves_made = 0;
         let mut quiet_moves_made = 0;
 
-        let imp_2x = 1 + i32::from(improving);
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = (self.sparams.lmp_base_moves + depth.squared()) * imp_2x;
+        let lmp_threshold = self.lmr_table.getp(depth, improving);
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
         // whether to skip quiet moves (as they would be futile).
@@ -342,7 +341,7 @@ impl Board {
                 println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
             }
 
-            let lmr_reduction = self.lmr_table.get(depth, moves_made);
+            let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_capture = m.is_capture();
             let gives_check = self.in_check::<{ Self::US }>();
@@ -351,7 +350,7 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
             quiet_moves_made += i32::from(!is_interesting);
 
-            if do_lmp && quiet_moves_made >= lmp_threshold {
+            if best_score > -MINIMUM_MATE_SCORE && do_lmp && quiet_moves_made >= lmp_threshold {
                 self.unmake_move_nnue(t);
                 break; // okay to break because captures are ordered first.
             }
@@ -409,7 +408,7 @@ impl Board {
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
-                    let mut r = self.lmr_table.get(depth, moves_made);
+                    let mut r = self.lmr_table.getr(depth, moves_made);
                     r += i32::from(!PV);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
@@ -676,29 +675,39 @@ pub const fn draw_score(nodes: u64) -> i32 {
     (nodes & 0b11) as i32 - 2
 }
 
-pub struct LMRTable {
-    table: [[i32; 64]; 64],
+pub struct LMTable {
+    rtable: [[i32; 64]; 64],
+    ptable: [[i32; 12]; 2],
 }
 
-impl LMRTable {
+impl LMTable {
     pub fn new(config: &SearchParams) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-        let mut out = Self { table: [[0; 64]; 64] };
+        let mut out = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         for depth in 1..64 {
             for played in 1..64 {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
-                out.table[depth][played] = (base + ld * lp / division) as i32;
+                out.rtable[depth][played] = (base + ld * lp / division) as i32;
             }
+        }
+        for depth in 1..12 {
+            out.ptable[0][depth] = (2.5 + 2.0 * depth as f64 * depth as f64 / 4.5) as i32;
+            out.ptable[1][depth] = (4.0 + 4.0 * depth as f64 * depth as f64 / 4.5) as i32;
         }
         out
     }
 
-    pub fn get(&self, depth: Depth, moves_made: usize) -> i32 {
+    pub fn getr(&self, depth: Depth, moves_made: usize) -> i32 {
         let depth = depth.ply_to_horizon().min(63);
         let played = moves_made.min(63);
-        self.table[depth][played]
+        self.rtable[depth][played]
+    }
+
+    pub fn getp(&self, depth: Depth, improving: bool) -> i32 {
+        let depth = depth.ply_to_horizon().min(11);
+        self.ptable[usize::from(improving)][depth]
     }
 }
 

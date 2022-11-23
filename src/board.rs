@@ -108,7 +108,7 @@ pub struct Board {
 
     eparams: evaluation::parameters::EvalParams,
     pub sparams: SearchParams,
-    pub lmr_table: search::LMRTable,
+    pub lmr_table: search::LMTable,
 
     movegen_ready: bool,
 }
@@ -176,7 +176,7 @@ impl Board {
             hashtable_bytes: 4 * 1024 * 1024,
             eparams: evaluation::parameters::EvalParams::default(),
             sparams: SearchParams::default(),
-            lmr_table: search::LMRTable::new(&SearchParams::default()),
+            lmr_table: search::LMTable::new(&SearchParams::default()),
             movegen_ready: false,
         };
         out.reset();
@@ -185,7 +185,7 @@ impl Board {
 
     pub fn set_search_params(&mut self, config: SearchParams) {
         self.sparams = config;
-        self.lmr_table = search::LMRTable::new(&self.sparams);
+        self.lmr_table = search::LMTable::new(&self.sparams);
     }
 
     pub fn tt_store<const ROOT: bool>(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
