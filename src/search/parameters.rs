@@ -6,7 +6,7 @@ use super::{
     ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH,
     LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_VERIFICATION_DEPTH, NMP_IMPROVING_MARGIN,
     RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
-    SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
+    SINGULARITY_DEPTH, TT_REDUCTION_DEPTH, ALPHA_MARGIN, ALPHA_PRUNING_DEPTH,
 };
 
 #[derive(Clone, Debug)]
@@ -14,6 +14,7 @@ pub struct SearchParams {
     pub aspiration_window: i32,
     pub rfp_margin: i32,
     pub rfp_improving_margin: i32,
+    pub alpha_margin: i32,
     pub nmp_improving_margin: i32,
     pub see_quiet_margin: i32,
     pub see_tactical_margin: i32,
@@ -21,6 +22,7 @@ pub struct SearchParams {
     pub futility_coeff_1: i32,
     pub futility_coeff_0: i32,
     pub rfp_depth: Depth,
+    pub alpha_pruning_depth: Depth,
     pub nmp_base_reduction: Depth,
     pub nmp_verification_depth: Depth,
     pub lmp_depth: Depth,
@@ -38,6 +40,7 @@ impl Default for SearchParams {
             aspiration_window: ASPIRATION_WINDOW,
             rfp_margin: RFP_MARGIN,
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
+            alpha_margin: ALPHA_MARGIN,
             nmp_improving_margin: NMP_IMPROVING_MARGIN,
             see_quiet_margin: SEE_QUIET_MARGIN,
             see_tactical_margin: SEE_TACTICAL_MARGIN,
@@ -45,6 +48,7 @@ impl Default for SearchParams {
             futility_coeff_1: FUTILITY_COEFF_1,
             futility_coeff_0: FUTILITY_COEFF_0,
             rfp_depth: RFP_DEPTH,
+            alpha_pruning_depth: ALPHA_PRUNING_DEPTH,
             nmp_base_reduction: NMP_BASE_REDUCTION,
             nmp_verification_depth: NMP_VERIFICATION_DEPTH,
             lmp_depth: LMP_DEPTH,

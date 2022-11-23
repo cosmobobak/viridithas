@@ -40,6 +40,7 @@ use self::parameters::SearchParams;
 pub const ASPIRATION_WINDOW: i32 = 26;
 const RFP_MARGIN: i32 = 80;
 const RFP_IMPROVING_MARGIN: i32 = 57;
+const ALPHA_MARGIN: i32 = 3000;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
@@ -47,6 +48,7 @@ const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_1: i32 = 120;
 const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
+const ALPHA_PRUNING_DEPTH: Depth = Depth::new(5);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(8);
 const LMP_DEPTH: Depth = Depth::new(3);
@@ -272,6 +274,16 @@ impl Board {
                 > beta
         {
             return static_eval;
+        }
+
+        // alpha-pruning. (static futility pruning)
+        if !PV
+            && !in_check
+            && excluded.is_null()
+            && depth <= self.sparams.alpha_pruning_depth
+            && static_eval + self.sparams.alpha_margin <= alpha 
+        {
+            return static_eval
         }
 
         // null-move pruning.
