@@ -308,7 +308,7 @@ impl Board {
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
         // whether to skip quiet moves (as they would be futile).
-        let do_fut_pruning = self.do_futility_pruning(depth, static_eval, improving, alpha, beta);
+        let fp_margin = self.futility_margin(depth, improving, alpha, beta);
 
         let see_table = [
             self.sparams.see_tactical_margin * depth.squared(),
@@ -361,7 +361,7 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !PV && quiet_moves_made > 1 && !is_interesting && do_fut_pruning && ordering_score < 0 {
+            if !PV && quiet_moves_made > 1 && !is_interesting && static_eval + fp_margin <= alpha {
                 self.unmake_move_nnue(t);
                 continue;
             }
@@ -665,13 +665,12 @@ impl Board {
         self.turn() != colour
     }
 
-    fn do_futility_pruning(&self, depth: Depth, static_eval: i32, improving: bool, a: i32, b: i32) -> bool {
+    fn futility_margin(&self, depth: Depth, improving: bool, a: i32, b: i32) -> i32 {
         if depth > self.sparams.futility_depth || is_mate_score(a) || is_mate_score(b) {
-            return false;
+            return INFINITY;
         }
         let depth = depth.round() + i32::from(improving);
-        let margin = depth * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
-        static_eval + margin < a
+        depth * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0
     }
 }
 
