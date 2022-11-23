@@ -318,10 +318,7 @@ impl Board {
             self.sparams.see_quiet_margin * depth.round(),
         ];
 
-        let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer =
-            if height > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };
-        let killers = [curr_killers[0], curr_killers[1], prev_killer];
+        let killers = self.get_killer_set(t);
 
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
