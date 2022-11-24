@@ -300,12 +300,11 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
         let mut moves_made = 0;
-        let mut quiet_moves_made = 0;
 
         // number of quiet moves to try before we start pruning
         let lmp_threshold = self.lmr_table.getp(depth, improving);
         // whether late move pruning is sound in this position.
-        let do_lmp = !PV && !ROOT && depth <= self.sparams.lmp_depth && !in_check;
+        let do_lmp = !PV && !ROOT && !in_check;
         // whether to skip quiet moves (as they would be futile).
         let fp_margin = self.futility_margin(depth, improving, alpha, beta);
 
@@ -348,15 +347,14 @@ impl Board {
             let is_promotion = m.is_promo();
 
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
-            quiet_moves_made += i32::from(!is_interesting);
 
-            if best_score > -MINIMUM_MATE_SCORE && do_lmp && moves_made >= lmp_threshold {
+            if best_score > -MINIMUM_MATE_SCORE && do_lmp && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
                 move_picker.skip_quiets = true;
             }
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !PV && quiet_moves_made > 1 && !is_interesting && static_eval + fp_margin <= alpha {
+            if !PV && !is_interesting && static_eval + fp_margin <= alpha {
                 move_picker.skip_quiets = true;
             }
 
