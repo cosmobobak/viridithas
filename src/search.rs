@@ -305,8 +305,6 @@ impl Board {
         let lmp_threshold = self.lmr_table.getp(depth, improving);
         // whether late move pruning is sound in this position.
         let do_lmp = !PV && !ROOT && !in_check;
-        // whether to skip quiet moves (as they would be futile).
-        let fp_margin = self.futility_margin(depth, improving, alpha, beta);
 
         let see_table = [
             self.sparams.see_tactical_margin * depth.squared(),
@@ -354,7 +352,8 @@ impl Board {
 
             // futility pruning
             // if the static eval is too low, we might just skip the move.
-            if !PV && !is_interesting && static_eval + fp_margin <= alpha {
+            let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
+            if !PV && lmr_depth < self.sparams.futility_depth && !is_interesting && static_eval + fp_margin <= alpha {
                 move_picker.skip_quiets = true;
             }
 
@@ -655,14 +654,6 @@ impl Board {
 
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
-    }
-
-    fn futility_margin(&self, depth: Depth, improving: bool, a: i32, b: i32) -> i32 {
-        if depth > self.sparams.futility_depth || is_mate_score(a) || is_mate_score(b) {
-            return INFINITY;
-        }
-        let depth = depth.round() + i32::from(improving);
-        depth * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0
     }
 }
 
