@@ -35,3 +35,5 @@ MINOR:
 - more guards on mate scores (mostly for puzzlesolving)
 - optimise rep detection using https://github.com/official-stockfish/Stockfish/blob/f5a31b7e576e2e56825fcfdff75c739ed545e852/src/position.cpp#L874-L890
 - try TT move first in qsearch
+- "go mate X"
+- fix currmovenumber bug
