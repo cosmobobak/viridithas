@@ -32,3 +32,4 @@ MINOR:
 - make FEN conversion not halt singlethreaded when writing to file. or generally.
 - localised prefix optimisation for deduping
 - replace uses of iter().position() with a linear map type.
+- more guards on mate scores (mostly for puzzlesolving)
