@@ -27,3 +27,6 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     15 | same as net-14, but trying 120 epochs,   | -41.6 +/- 7.5 Elo, LOS: 0.0 %
        | and batch size 8192.                     | vs net-14.
+-----------------------------------------------------------------------------------------
+    16 | same as net-14, but trying 80 epochs,    | 111.6 +/- 18.4 Elo, LOS: 100.0 %
+       | and lr drop at 30 epochs                 | vs net-14.
