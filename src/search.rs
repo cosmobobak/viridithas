@@ -115,20 +115,21 @@ impl Board {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
+            if !self.make_move_nnue(m, t) {
+                continue;
+            }
+            info.nodes += 1;
+
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
             // the worst case for a capture is that we lose the capturing piece immediately.
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             // we have to do this after make_move, because the move has to be legal.
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
+                self.unmake_move_nnue(t);
                 // don't bother failing soft, at_least is not really trustworthy.
                 return beta;
             }
-
-            if !self.make_move_nnue(m, t) {
-                continue;
-            }
-            info.nodes += 1;
 
             let score = -self.quiescence::<USE_NNUE>(info, t, -beta, -alpha);
             self.unmake_move_nnue(t);
