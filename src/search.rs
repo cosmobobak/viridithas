@@ -303,8 +303,6 @@ impl Board {
 
         // number of quiet moves to try before we start pruning
         let lmp_threshold = self.lmr_table.getp(depth, improving);
-        // whether late move pruning is sound in this position.
-        let do_lmp = !PV && !ROOT && !in_check;
 
         let see_table = [
             self.sparams.see_tactical_margin * depth.squared(),
@@ -318,7 +316,7 @@ impl Board {
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
-            if best_score > -MINIMUM_MATE_SCORE
+            if !ROOT && best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
@@ -347,10 +345,10 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
             // lmp, fp, and hlp.
-            if !PV && best_score > -MINIMUM_MATE_SCORE {
+            if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if do_lmp && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
