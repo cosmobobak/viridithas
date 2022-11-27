@@ -8,8 +8,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-pub const MOVEGEN_SEE_THRESHOLD: i32 = 0;
-pub const QSEARCH_SEE_THRESHOLD: i32 = 170;
+const MOVEGEN_SEE_THRESHOLD: i32 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -24,19 +23,17 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     stage: Stage,
     tt_move: Move,
     killers: [Move; 3],
-    see_threshold: i32,
     pub skip_quiets: bool,
 }
 
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
-    pub const fn new(tt_move: Move, killers: [Move; 3], see_threshold: i32) -> Self {
+    pub const fn new(tt_move: Move, killers: [Move; 3]) -> Self {
         Self { 
             movelist: MoveList::new(), 
             index: 0, 
             stage: Stage::TTMove,
             killers,
             tt_move,
-            see_threshold,
             skip_quiets: false,
         }
     }
@@ -62,7 +59,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             if CAPTURES_ONLY {
                 position.generate_captures(&mut self.movelist);
                 for entry in &mut self.movelist.moves[..self.movelist.count] {
-                    entry.score = Self::score_capture(t, self.see_threshold, position, entry.mov);
+                    entry.score = Self::score_capture(t, position, entry.mov);
                 }
             } else {
                 position.generate_moves(&mut self.movelist);
@@ -71,7 +68,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
                     let score = if m.is_quiet() {
                         Self::score_quiet(&self.killers, t, position, m)
                     } else {
-                        Self::score_capture(t, self.see_threshold, position, m)
+                        Self::score_capture(t, position, m)
                     };
                     entry.score = score;
                 }
@@ -137,29 +134,25 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
-    pub fn score_capture(_t: &ThreadData, see_threshold: i32, pos: &Board, m: Move) -> i32 {
+    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move) -> i32 {
         if m.is_promo() {
             let mut score = lookups::get_mvv_lva_score(m.promotion(), PAWN);
-            if !DO_SEE || pos.static_exchange_eval(m, see_threshold) {
+            if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }
             score
         } else if m.is_ep() {
             let mut score = 1050; // the score for PxP in MVVLVA
-            if !DO_SEE || pos.static_exchange_eval(m, see_threshold) {
+            if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }
             score
         } else {
             let mut score = lookups::get_mvv_lva_score(m.capture(), pos.piece_at(m.from()));
-            if !DO_SEE || pos.static_exchange_eval(m, see_threshold) {
+            if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }
             score
         }
     }
-}
-
-pub const fn is_winning_exchange_score(score: i32) -> bool {
-    score >= WINNING_CAPTURE_SCORE
 }
