@@ -333,7 +333,8 @@ impl Board {
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1
                     + self.sparams.futility_coeff_0;
-                if m.is_quiet()
+                if !PV 
+                    && m.is_quiet()
                     && lmr_depth < self.sparams.futility_depth
                     && static_eval + fp_margin <= alpha
                 {
@@ -342,7 +343,8 @@ impl Board {
 
                 // history leaf pruning
                 // if the history score is too low, we skip the move.
-                if m.is_quiet()
+                if !PV 
+                    && m.is_quiet()
                     && moves_made > 1
                     && lmr_depth <= ONE_PLY * 2
                     && ordering_score < (-500 * (depth.round() - 1))
