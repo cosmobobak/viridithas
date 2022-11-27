@@ -88,16 +88,10 @@ impl Board {
             return self.evaluate::<USE_NNUE>(t, info.nodes);
         }
 
-        // probe the TT.
-        let tt_hit = match self.tt_probe::<false>(alpha, beta, ZERO_PLY) {
-            ProbeResult::Cutoff(s) => {
-                return s;
-            }
-            ProbeResult::Hit(tt_hit) => Some(tt_hit),
-            ProbeResult::Nothing => {
-                None
-            }
-        };
+        // probe the TT and see if we get a cutoff.
+        if let ProbeResult::Cutoff(s) = self.tt_probe::<false>(alpha, beta, ZERO_PLY) {
+            return s;
+        }
 
         let stand_pat = self.evaluate::<USE_NNUE>(t, info.nodes);
 
@@ -115,9 +109,8 @@ impl Board {
         let mut best_score = stand_pat;
 
         let killers = self.get_killer_set(t);
-        let tt_move = tt_hit.map_or(Move::NULL, |hit| hit.tt_move);
 
-        let mut move_picker = MovePicker::<true, true>::new(tt_move, killers);
+        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
         while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -739,22 +732,22 @@ impl AspirationWindow {
     }
 
     pub fn widen_down(&mut self) {
-        let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
+        self.alpha_fails += 1;
+        let margin = ASPIRATION_WINDOW << self.alpha_fails;
         if margin > evaluation::QUEEN_VALUE.0 {
             self.alpha = -INFINITY;
             return;
         }
         self.alpha = self.midpoint - margin;
-        self.alpha_fails += 1;
     }
 
     pub fn widen_up(&mut self) {
-        let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
+        self.beta_fails += 1;
+        let margin = ASPIRATION_WINDOW << self.beta_fails;
         if margin > evaluation::QUEEN_VALUE.0 {
             self.beta = INFINITY;
             return;
         }
         self.beta = self.midpoint + margin;
-        self.beta_fails += 1;
     }
 }
