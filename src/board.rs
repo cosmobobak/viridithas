@@ -23,14 +23,11 @@ use crate::{
         depth::Depth,
         type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
-        Square,
-        Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING,
-        KNIGHT, MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        Square, Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING, KNIGHT,
+        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
-    lookups::{
-        piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP,
-    },
+    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
@@ -188,7 +185,13 @@ impl Board {
         self.lmr_table = search::LMTable::new(&self.sparams);
     }
 
-    pub fn tt_store<const ROOT: bool>(&mut self, best_move: Move, score: i32, flag: HFlag, depth: Depth) {
+    pub fn tt_store<const ROOT: bool>(
+        &mut self,
+        best_move: Move,
+        score: i32,
+        flag: HFlag,
+        depth: Depth,
+    ) {
         // let rule50_idx = self.fifty_move_counter as usize / 8;
         // let key = self.key ^ FIFTY_MOVE_KEYS[rule50_idx];
         self.tt.store::<ROOT>(self.key, self.height, best_move, score, flag, depth);
@@ -242,6 +245,51 @@ impl Board {
             let king_sq = self.king_sq(self.side ^ 1);
             self.sq_attacked(king_sq, self.side)
         }
+    }
+
+    pub fn maybe_gives_check(&self, mov: Move) -> bool {
+        let piece = self.piece_at(mov.from());
+        let piece_type = type_of(piece);
+        let stm = self.side;
+
+        let opponent_king = self.king_sq(stm ^ 1);
+        let blockers = self.pieces.occupied() ^ mov.bitboard();
+
+        // direct check:
+        let attacks_from_dest = if piece_type == PAWN {
+            if stm == WHITE {
+                pawn_attacks::<true>(mov.to().bitboard())
+            } else {
+                pawn_attacks::<false>(mov.to().bitboard())
+            }
+        } else {
+            bitboards::attacks_by_type(piece_type, mov.to(), blockers)
+        };
+        if attacks_from_dest & opponent_king.bitboard() != 0 {
+            return true;
+        }
+
+        // discovered check:
+        let ortho = bitboards::attacks::<ROOK>(opponent_king, blockers);
+        let diag = bitboards::attacks::<BISHOP>(opponent_king, blockers);
+        let our_orthos = if stm == WHITE {
+            self.pieces.rookqueen::<true>()
+        } else {
+            self.pieces.rookqueen::<false>()
+        };
+        let our_diags = if stm == WHITE {
+            self.pieces.bishopqueen::<true>()
+        } else {
+            self.pieces.bishopqueen::<false>()
+        };
+        if ortho & our_orthos != 0 {
+            return true;
+        }
+        if diag & our_diags != 0 {
+            return true;
+        }
+
+        false
     }
 
     pub fn zero_height(&mut self) {
@@ -666,7 +714,8 @@ impl Board {
                 return to == self.ep_sq;
             } else if m.is_pawn_start() {
                 let one_forward = from.pawn_push(self.side);
-                return self.piece_at(one_forward) == PIECE_EMPTY && to == one_forward.pawn_push(self.side);
+                return self.piece_at(one_forward) == PIECE_EMPTY
+                    && to == one_forward.pawn_push(self.side);
             } else if captured_piece == PIECE_EMPTY {
                 return to == from.pawn_push(self.side) && self.piece_at(to) == PIECE_EMPTY;
             }
@@ -677,14 +726,18 @@ impl Board {
             return pawn_attacks::<false>(from.bitboard()) & to.bitboard() != 0;
         }
 
-        to.bitboard() & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied()) != BB_NONE
+        to.bitboard()
+            & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied())
+            != BB_NONE
     }
 
     pub fn is_pseudo_legal_castling(&self, to: Square) -> bool {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const WQ_FREESPACE: u64 =
+            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+        const BQ_FREESPACE: u64 =
+            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
 
         assert!(to == Square::C1 || to == Square::G1 || to == Square::C8 || to == Square::G8);
@@ -746,8 +799,8 @@ impl Board {
         debug_assert!(sq.on_board());
         let piece = self.piece_at(sq);
         debug_assert!(
-            piece_valid(piece), 
-            "Invalid piece at {}: {}, board {}, last move was {}", 
+            piece_valid(piece),
+            "Invalid piece at {}: {}, board {}, last move was {}",
             sq,
             piece,
             self.fen(),
@@ -1093,10 +1146,18 @@ impl Board {
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, 1 ^ colour, ep_sq);
         } else if m.is_castle() {
             match to {
-                Square::C1 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1),
-                Square::C8 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8),
-                Square::G1 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1),
-                Square::G8 => t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8),
+                Square::C1 => {
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1)
+                }
+                Square::C8 => {
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8)
+                }
+                Square::G1 => {
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1)
+                }
+                Square::G8 => {
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8)
+                }
                 _ => {
                     panic!("Invalid castle move");
                 }
@@ -1565,7 +1626,11 @@ impl Board {
     }
 
     fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo) {
-        #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        #![allow(
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation
+        )]
         let nps = (info.nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         let mut bound = BOUND;
         if self.turn() == BLACK {

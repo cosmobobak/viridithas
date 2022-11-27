@@ -84,6 +84,10 @@ impl Move {
     pub const fn is_queenside_castling(self) -> bool {
         self.is_castle() && matches!(self.to(), Square::C1 | Square::C8)
     }
+
+    pub const fn bitboard(self) -> u64 {
+        self.from().bitboard() | self.to().bitboard()
+    }
 }
 
 impl Display for Move {

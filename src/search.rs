@@ -320,9 +320,10 @@ impl Board {
 
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
+            let maybe_gives_check = self.maybe_gives_check(m);
 
             // lmp, fp, and hlp.
-            if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
+            if !ROOT && !PV && !in_check && !maybe_gives_check && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
