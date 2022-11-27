@@ -9,7 +9,7 @@ const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 pub const MOVEGEN_SEE_THRESHOLD: i32 = 0;
-pub const QSEARCH_SEE_THRESHOLD: i32 = 0;
+pub const QSEARCH_SEE_THRESHOLD: i32 = 170;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
