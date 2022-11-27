@@ -306,10 +306,8 @@ impl Board {
     }
 
     pub const fn zugzwang_unlikely(&self) -> bool {
-        self.num_pt_ct::<QUEEN>() == 0
-            && self.num_pt_ct::<ROOK>() == 0
-            && self.num_pt_ct::<BISHOP>() == 0
-            && self.num_pt_ct::<KNIGHT>() == 0
+        const ENDGAME_PHASE: i32 = game_phase(3, 0, 0, 2, 0);
+        self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
     }
 
     fn bishop_pair_term(&self) -> S {
