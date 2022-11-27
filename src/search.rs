@@ -322,29 +322,25 @@ impl Board {
 
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
-            let is_capture = m.is_capture();
-            let is_promotion = m.is_promo();
-
-            let is_interesting = is_capture || is_promotion || in_check;
 
             // lmp, fp, and hlp.
-            if !ROOT && !PV && best_score > -MINIMUM_MATE_SCORE {
+            if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if !in_check && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
-                if !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + fp_margin <= alpha {
+                if m.is_quiet() && lmr_depth < self.sparams.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
 
                 // history leaf pruning
                 // if the history score is too low, we skip the move.
-                if !is_interesting
+                if m.is_quiet()
                     && moves_made > 1
                     && lmr_depth <= ONE_PLY * 2
                     && ordering_score < (-500 * (depth.round() - 1))
@@ -354,6 +350,7 @@ impl Board {
             }
 
             // static exchange evaluation pruning
+            // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
             if !ROOT && best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
