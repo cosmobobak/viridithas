@@ -316,30 +316,19 @@ impl Board {
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
+            if excluded == m {
+                continue;
+            }
             if !ROOT && best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
                 continue;
             }
-
-            if !self.make_move_nnue(m, t) {
-                continue;
-            }
-            info.nodes += 1;
-            if excluded == m {
-                self.unmake_move_nnue(t);
-                continue;
-            }
-            moves_made += 1;
-            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
-            }
-
+            
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_capture = m.is_capture();
-            let gives_check = self.in_check::<{ Self::US }>();
             let is_promotion = m.is_promo();
 
             let is_interesting = is_capture || is_promotion || in_check;
@@ -366,9 +355,17 @@ impl Board {
                     && lmr_depth <= ONE_PLY * 2
                     && ordering_score < (-500 * (depth.round() - 1))
                 {
-                    self.unmake_move_nnue(t);
                     continue;
                 }
+            }
+
+            if !self.make_move_nnue(m, t) {
+                continue;
+            }
+            info.nodes += 1;
+            moves_made += 1;
+            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
@@ -386,6 +383,7 @@ impl Board {
                 let is_singular = self.is_singular::<USE_NNUE>(info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
             } else if !ROOT {
+                let gives_check = self.in_check::<{ Self::US }>();
                 extension = Depth::from(gives_check);
             };
 
