@@ -319,13 +319,7 @@ impl Board {
             if excluded == m {
                 continue;
             }
-            if !ROOT && best_score > -MINIMUM_MATE_SCORE
-                && depth <= self.sparams.see_depth
-                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
-            {
-                continue;
-            }
-            
+
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_capture = m.is_capture();
@@ -357,6 +351,14 @@ impl Board {
                 {
                     continue;
                 }
+            }
+
+            // static exchange evaluation pruning
+            if !ROOT && best_score > -MINIMUM_MATE_SCORE
+                && depth <= self.sparams.see_depth
+                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
+            {
+                continue;
             }
 
             if !self.make_move_nnue(m, t) {
