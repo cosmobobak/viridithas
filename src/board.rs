@@ -1147,16 +1147,16 @@ impl Board {
         } else if m.is_castle() {
             match to {
                 Square::C1 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1)
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1);
                 }
                 Square::C8 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8)
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8);
                 }
                 Square::G1 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1)
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1);
                 }
                 Square::G8 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8)
+                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8);
                 }
                 _ => {
                     panic!("Invalid castle move");
