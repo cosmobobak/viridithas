@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::MovePicker,
+            movepicker::{MovePicker, MOVEGEN_SEE_THRESHOLD, QSEARCH_SEE_THRESHOLD, is_winning_exchange_score},
             MoveListEntry,
         },
         Board,
@@ -110,8 +110,12 @@ impl Board {
 
         let killers = self.get_killer_set(t);
 
-        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
-        while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
+        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers, QSEARCH_SEE_THRESHOLD);
+        while let Some(MoveListEntry { mov: m, score }) = move_picker.next(self, t) {
+            if !is_winning_exchange_score(score) {
+                continue;
+            }
+
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
@@ -310,7 +314,7 @@ impl Board {
         let killers = self.get_killer_set(t);
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
 
-        let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
+        let mut move_picker = MovePicker::<false, true>::new(tt_move, killers, MOVEGEN_SEE_THRESHOLD);
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
