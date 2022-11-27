@@ -308,8 +308,8 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
+
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
@@ -331,8 +331,12 @@ impl Board {
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
-                if m.is_quiet() && lmr_depth < self.sparams.futility_depth && static_eval + fp_margin <= alpha {
+                let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1
+                    + self.sparams.futility_coeff_0;
+                if m.is_quiet()
+                    && lmr_depth < self.sparams.futility_depth
+                    && static_eval + fp_margin <= alpha
+                {
                     move_picker.skip_quiets = true;
                 }
 
@@ -349,7 +353,8 @@ impl Board {
 
             // static exchange evaluation pruning
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
-            if !ROOT && best_score > -MINIMUM_MATE_SCORE
+            if !ROOT
+                && best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
             {
@@ -671,7 +676,11 @@ pub struct LMTable {
 
 impl LMTable {
     pub fn new(config: &SearchParams) -> Self {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss
+        )]
         let mut out = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         for depth in 1..64 {
