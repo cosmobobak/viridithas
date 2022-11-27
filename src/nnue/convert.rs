@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{self, BufRead, BufReader, BufWriter, Write},
     path::Path,
-    sync::atomic::{self, AtomicU64},
+    sync::atomic::{self, AtomicU64}, collections::hash_map::DefaultHasher, ops::Range,
 };
 
 use crate::{
@@ -118,6 +118,44 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
+/// A container to optimise the comparison of strings.
+struct QuicklySortableString {
+    /// The string to be sorted.
+    pub string: String,
+    /// The substring that we are deduping based on.
+    pub view: Range<usize>,
+    /// The hash of the substring.
+    pub hash: u64,
+}
+
+impl QuicklySortableString {
+    pub fn new(string: String, view: Range<usize>) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        let interesting_range = &string[view.clone()];
+        interesting_range.hash(&mut hasher);
+        Self {
+            string,
+            view,
+            hash: hasher.finish(),
+        }
+    }
+
+    /// Compare the substring of the two strings.
+    pub fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.hash.cmp(&other.hash).then_with(|| {
+            let a = &self.string[self.view.clone()];
+            let b = &other.string[other.view.clone()];
+            a.cmp(b)
+        })
+    }
+
+    /// Get a reference to the backing string.
+    pub fn as_str(&self) -> &str {
+        &self.string
+    }
+}
+
 /// Deduplicate a dataset by board.
 /// This deduplicates based on the first two parts of FENs, which are the board and the side to move.
 pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
@@ -126,28 +164,33 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
 ) -> io::Result<()> {
     let reader = BufReader::new(File::open(input_file)?);
     let mut output = BufWriter::new(File::create(output_file)?);
+    let start_time = std::time::Instant::now();
 
     // would be cool to use an arena allocator for the Strings.
     let mut data = reader.lines().filter_map(|line| {
         line.ok().map(|line| {
             let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
-            (split_index, line)
+            QuicklySortableString::new(line, 0..(split_index + 2))
         })
     }).collect::<Vec<_>>();
 
-    data.sort_unstable_by(|(i1, l1), (i2, l2)| {
-        l1[..i1 + 2].cmp(&l2[..i2 + 2])
-    });
-    data.dedup_by(|(i1, l1), (i2, l2)| {
-        l1[..*i1 + 2] == l2[..*i2 + 2]
-    });
+    let n = data.len();
+
+    data.sort_unstable_by(QuicklySortableString::cmp);
+    data.dedup_by(|a, b| a.cmp(b) == std::cmp::Ordering::Equal);
 
     // write deduplicated data to output file.
-    for (_, line) in data {
+    for line in data {
+        let line = line.as_str();
         writeln!(output, "{line}")?;
     }
 
-    output.flush()
+    let res = output.flush();
+
+    let elapsed = start_time.elapsed();
+    println!("Deduplicated {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
+    res
 }
 
 fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, use_nnue: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
