@@ -737,22 +737,22 @@ impl AspirationWindow {
     }
 
     pub fn widen_down(&mut self) {
-        self.alpha_fails += 1;
-        let margin = ASPIRATION_WINDOW << self.alpha_fails;
+        let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.alpha = -INFINITY;
             return;
         }
         self.alpha = self.midpoint - margin;
+        self.alpha_fails += 1;
     }
 
     pub fn widen_up(&mut self) {
-        self.beta_fails += 1;
-        let margin = ASPIRATION_WINDOW << self.beta_fails;
+        let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.beta = INFINITY;
             return;
         }
         self.beta = self.midpoint + margin;
+        self.beta_fails += 1;
     }
 }
