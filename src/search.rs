@@ -342,7 +342,7 @@ impl Board {
             let gives_check = self.in_check::<{ Self::US }>();
             let is_promotion = m.is_promo();
 
-            let is_interesting = is_capture || is_promotion || gives_check || in_check;
+            let is_interesting = is_capture || is_promotion || in_check;
 
             // lmp, fp, and hlp.
             if !ROOT && !PV && best_score > -MINIMUM_MATE_SCORE {
