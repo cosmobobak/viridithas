@@ -345,17 +345,17 @@ impl Board {
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
             // lmp, fp, and hlp.
-            if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
+            if !ROOT && !PV && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
+                if !in_check && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
-                if !PV && lmr_depth < self.sparams.futility_depth && !is_interesting && static_eval + fp_margin <= alpha {
+                if !is_interesting && lmr_depth < self.sparams.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
 
