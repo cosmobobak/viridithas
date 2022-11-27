@@ -509,7 +509,7 @@ impl Board {
     }
 
     fn rfp_margin(&mut self, depth: Depth, improving: bool) -> i32 {
-        self.sparams.rfp_margin * depth + i32::from(improving) * self.sparams.rfp_improving_margin
+        self.sparams.rfp_margin * depth - i32::from(improving) * self.sparams.rfp_improving_margin
     }
 
     fn update_history_metrics<const IS_GOOD: bool>(
