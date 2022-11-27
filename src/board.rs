@@ -247,6 +247,7 @@ impl Board {
         }
     }
 
+    #[allow(dead_code)]
     pub fn maybe_gives_check(&self, mov: Move) -> bool {
         let piece = self.piece_at(mov.from());
         let piece_type = type_of(piece);
