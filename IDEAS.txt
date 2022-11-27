@@ -33,3 +33,4 @@ MINOR:
 - localised prefix optimisation for deduping
 - replace uses of iter().position() with a linear map type.
 - more guards on mate scores (mostly for puzzlesolving)
+- endgame material combination guarding. (see if SF has any good "winnability" tricks)
