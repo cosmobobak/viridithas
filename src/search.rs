@@ -346,26 +346,31 @@ impl Board {
 
             let is_interesting = is_capture || is_promotion || gives_check || in_check;
 
-            if best_score > -MINIMUM_MATE_SCORE && do_lmp && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
-                move_picker.skip_quiets = true;
-            }
+            // lmp, fp, and hlp.
+            if !PV && best_score > -MINIMUM_MATE_SCORE {
+                // late move pruning
+                // if we have made too many moves, we start skipping moves.
+                if do_lmp && lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
+                    move_picker.skip_quiets = true;
+                }
 
-            // futility pruning
-            // if the static eval is too low, we might just skip the move.
-            let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
-            if !PV && lmr_depth < self.sparams.futility_depth && !is_interesting && static_eval + fp_margin <= alpha {
-                move_picker.skip_quiets = true;
-            }
+                // futility pruning
+                // if the static eval is too low, we start skipping moves.
+                let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1 + self.sparams.futility_coeff_0;
+                if !PV && lmr_depth < self.sparams.futility_depth && !is_interesting && static_eval + fp_margin <= alpha {
+                    move_picker.skip_quiets = true;
+                }
 
-            // history leaf pruning
-            if !PV
-                && !is_interesting
-                && moves_made > 1
-                && lmr_depth <= ONE_PLY * 2
-                && ordering_score < (-500 * (depth.round() - 1))
-            {
-                self.unmake_move_nnue(t);
-                continue;
+                // history leaf pruning
+                // if the history score is too low, we skip the move.
+                if !is_interesting
+                    && moves_made > 1
+                    && lmr_depth <= ONE_PLY * 2
+                    && ordering_score < (-500 * (depth.round() - 1))
+                {
+                    self.unmake_move_nnue(t);
+                    continue;
+                }
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
