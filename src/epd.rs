@@ -68,10 +68,9 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
     let mut thread_data = vec![ThreadData::new()];
     let mut successes = 0;
-    for position in positions {
-        let EpdPosition { fen, best_moves, id } = &position;
-        board.set_from_fen(fen).unwrap();
-        board.alloc_tables();
+    for EpdPosition { fen, best_moves, id } in positions {
+        board.set_from_fen(&fen).unwrap();
+        board.clear_tt();
         for t in &mut thread_data {
             t.nnue.refresh_acc(&board);
             t.alloc_tables();
@@ -79,7 +78,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         
         let mut info = SearchInfo {
             print_to_stdout: false,
-            limit: SearchLimit::Time(time),
+            limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
             ..SearchInfo::default()
         };
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data);

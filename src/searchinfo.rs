@@ -3,13 +3,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::definitions::depth::Depth;
+use crate::{definitions::depth::Depth, chessmove::Move};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
     Depth(Depth),
     Time(u64),
+    TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
     Dynamic {
         our_clock: u64,
@@ -129,7 +130,7 @@ impl<'a> SearchInfo<'a> {
                     self.stopped = true;
                 }
             }
-            SearchLimit::Time(time_window) | SearchLimit::Dynamic { time_window, .. } => {
+            SearchLimit::Time(time_window) | SearchLimit::Dynamic { time_window, .. } | SearchLimit::TimeOrCorrectMoves(time_window, _) => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
@@ -146,6 +147,14 @@ impl<'a> SearchInfo<'a> {
                 self.quit = true;
             }
         };
+    }
+
+    pub fn check_if_best_move_found(&mut self, best_move: Move) {
+        if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
+            if correct_moves.contains(&best_move) {
+                self.stopped = true;
+            }
+        }
     }
 
     /// If we have used enough time that stopping after finishing a depth would be good here.
