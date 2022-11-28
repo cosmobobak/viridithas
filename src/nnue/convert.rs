@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{self, BufRead, BufReader, BufWriter, Write},
     path::Path,
-    sync::atomic::{self, AtomicU64}, collections::hash_map::DefaultHasher, ops::Range,
+    sync::atomic::{self, AtomicU64}, collections::hash_map::DefaultHasher, ops::Range, error::Error,
 };
 
 use crate::{
@@ -162,41 +162,62 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
 ) -> io::Result<()> {
+    #![allow(clippy::cast_precision_loss)]
+    let start_time = std::time::Instant::now();
     let all_data = std::fs::read_to_string(input_file)?; // we need everything in memory anyway
+    let mb = all_data.len() as f64 / 1_000_000.0;
+    let elapsed = start_time.elapsed();
+    println!("Read {mb:.0} bytes in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    dedup_inner(output_file, &all_data)
+}
+
+/// Merge two datasets, deduplicating by boards, according to the same criterion as `nnue::convert::dedup`.
+pub fn merge<P1, P2, P3>(path_1: P1, path_2: P2, output: P3) -> Result<(), Box<dyn Error>>
+where
+    P1: AsRef<Path>,
+    P2: AsRef<Path>,
+    P3: AsRef<Path>,
+{
+    #![allow(clippy::cast_precision_loss)]
+    use std::io::Read;
+    let start_time = std::time::Instant::now();
+    let mut f1 = File::open(path_1)?;
+    let mut f2 = File::open(path_2)?;
+    let mut buffer = Vec::new();
+    f1.read_to_end(&mut buffer)?;
+    f2.read_to_end(&mut buffer)?;
+    let all_data = String::from_utf8(buffer)?;
+    let mb = all_data.len() as f64 / 1_000_000.0;
+    let elapsed = start_time.elapsed();
+    println!("Read {mb:.0} bytes in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    Ok(dedup_inner(output, &all_data)?)
+}
+
+fn dedup_inner<P2: AsRef<Path>>(output_file: P2, all_data: &str) -> Result<(), io::Error> {
     let mut output = BufWriter::new(File::create(output_file)?);
     let start_time = std::time::Instant::now();
-
-    // would be cool to use an arena allocator for the Strings.
     let mut data = all_data.lines().map(|line| {
         let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
         QuicklySortableString::new(line, 0..(split_index + 2))
     }).collect::<Vec<_>>();
-
     let n = data.len();
-
     let elapsed = start_time.elapsed();
-    println!("Read {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    println!("Hashed {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
     let start_time = std::time::Instant::now();
-
     data.sort_unstable_by(QuicklySortableString::cmp);
     data.dedup_by(|a, b| a.cmp(b) == std::cmp::Ordering::Equal);
-
     let n = data.len();
     let elapsed = start_time.elapsed();
     println!("Sorted and deduped down to {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
     let start_time = std::time::Instant::now();
-
     // write deduplicated data to output file.
     for line in data {
         let line = line.as_str();
         writeln!(output, "{line}")?;
     }
-
     let res = output.flush();
-
     let elapsed = start_time.elapsed();
     println!("Wrote {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
-
     res
 }
 

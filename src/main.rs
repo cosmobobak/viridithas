@@ -48,6 +48,9 @@ fn main() {
             board::evaluation::parameters::EvalParams::from_file(p).unwrap()
         });
 
+    assert_eq!(cli.merge.len(), 2, "merge requires exactly two paths");
+    assert_eq!(cli.jsontobin.len(), 2, "jsontobin requires exactly two paths");
+
     if cli.gensource {
         return piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
     }
@@ -97,6 +100,14 @@ fn main() {
             path
         });
         return nnue::convert::dedup(path, output_path).unwrap();
+    } else if let [path_1, path_2] = cli.merge.as_slice() {
+        let output_path = cli.output.unwrap_or_else(|| {
+            // create merged.nnuedata in the current directory
+            let mut path = std::path::PathBuf::from(".");
+            path.push("merged.nnuedata");
+            path
+        });
+        return nnue::convert::merge(path_1, path_2, output_path).unwrap();
     }
 
     if cli.info {
@@ -127,11 +138,8 @@ fn main() {
         return epd::gamut(epd_path, eparams, cli.epdtime);
     }
 
-    if !cli.jsontobin.is_empty() {
-        if let [json_path, bin_path] = cli.jsontobin.as_slice() {
-            return nnue::convert_json_to_binary(json_path, bin_path);
-        }
-        panic!("jsontobin takes exactly two arguments");
+    if let [json_path, bin_path] = cli.jsontobin.as_slice() {
+        return nnue::convert_json_to_binary(json_path, bin_path);
     }
 
     uci::main_loop(eparams);

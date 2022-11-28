@@ -64,4 +64,7 @@ pub struct Cli {
     /// Deduplicate an NNUE data file by removing duplicate positions.
     #[clap(long, value_name = "PATH")]
     pub dedup: Option<std::path::PathBuf>,
+    /// Merge and deduplicate two NNUE data files
+    #[clap(long, value_name = "PATH")]
+    pub merge: Vec<std::path::PathBuf>,
 }
