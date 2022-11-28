@@ -63,14 +63,12 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
                 }
             } else {
                 position.generate_moves(&mut self.movelist);
-                for entry in &mut self.movelist.moves[..self.movelist.count] {
-                    let m = entry.mov;
-                    let score = if m.is_quiet() {
-                        Self::score_quiet(&self.killers, t, position, m)
+                for e in &mut self.movelist.moves[..self.movelist.count] {
+                    e.score = if e.mov.is_quiet() {
+                        Self::score_quiet(&self.killers, t, position, e.mov)
                     } else {
-                        Self::score_capture(t, position, m)
+                        Self::score_capture(t, position, e.mov)
                     };
-                    entry.score = score;
                 }
             }
         }
