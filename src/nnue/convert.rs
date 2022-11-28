@@ -176,8 +176,17 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     let n = data.len();
 
+    let elapsed = start_time.elapsed();
+    println!("Read {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    let start_time = std::time::Instant::now();
+
     data.sort_unstable_by(QuicklySortableString::cmp);
     data.dedup_by(|a, b| a.cmp(b) == std::cmp::Ordering::Equal);
+
+    let n = data.len();
+    let elapsed = start_time.elapsed();
+    println!("Sorted and deduped down to {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    let start_time = std::time::Instant::now();
 
     // write deduplicated data to output file.
     for line in data {
@@ -188,7 +197,7 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     let res = output.flush();
 
     let elapsed = start_time.elapsed();
-    println!("Deduplicated {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    println!("Wrote {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
     res
 }
