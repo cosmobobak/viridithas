@@ -48,8 +48,8 @@ fn main() {
             board::evaluation::parameters::EvalParams::from_file(p).unwrap()
         });
 
-    assert_eq!(cli.merge.len(), 2, "merge requires exactly two paths");
-    assert_eq!(cli.jsontobin.len(), 2, "jsontobin requires exactly two paths");
+    assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
+    assert!([0, 2].contains(&cli.jsontobin.len()), "jsontobin requires exactly two paths");
 
     if cli.gensource {
         return piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
