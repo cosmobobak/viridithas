@@ -3,7 +3,6 @@ MAJOR:
 - SMP
 - tablebases
 - docs
-- staged move generation (try TT move first at least)
 - type-safety overhaul
 
 MINOR:
@@ -12,16 +11,11 @@ MINOR:
 - tune move generation (check evasions?)
 - learn SPRT
 - check out other engine's impls of countermoves and killer moves
-- unify pruning into skip_quiets
 - replace all the false/true constgen stuff with a proper type.
 - alpha pruning
-- find a way not to do SEE ordering in qsearch
 - increase maxdepth just in case.
 - fullwindow on big scores (+30?)
 - capture history
-- screw with lmp-base-moves
-- extend futility further
-- dedicated rootsearch function, maybe extend movepicker to handle the root.
 - uci bench extension
 - remove `as` casts and unsafe code
 - use maths for MVVLVA instead of lookups
@@ -30,7 +24,6 @@ MINOR:
 - preorder root nodes with eval, sort during search by moving bestmoves to front. (can be made easy with rootnode movepicker specialisation)
 - try to reduce attr use, it's ugly.
 - make FEN conversion not halt singlethreaded when writing to file. or generally.
-- localised prefix optimisation for deduping
 - replace uses of iter().position() with a linear map type.
 - more guards on mate scores (mostly for puzzlesolving)
 - endgame material combination guarding. (see if SF has any good "winnability" tricks)
