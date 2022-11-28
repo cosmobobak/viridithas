@@ -38,3 +38,4 @@ MINOR:
 - "go mate X"
 - fix currmovenumber bug
 - the slow part of deduplication is the file I/O, consider mmap?.
+- move evalparams and sparams into ThreadData.
