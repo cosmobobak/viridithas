@@ -119,17 +119,17 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
 }
 
 /// A container to optimise the comparison of strings.
-struct QuicklySortableString {
+struct QuicklySortableString<'a> {
     /// The string to be sorted.
-    pub string: String,
+    pub string: &'a str,
     /// The substring that we are deduping based on.
     pub view: Range<usize>,
     /// The hash of the substring.
     pub hash: u64,
 }
 
-impl QuicklySortableString {
-    pub fn new(string: String, view: Range<usize>) -> Self {
+impl<'a> QuicklySortableString<'a> {
+    pub fn new(string: &'a str, view: Range<usize>) -> Self {
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         let interesting_range = &string[view.clone()];
@@ -151,8 +151,8 @@ impl QuicklySortableString {
     }
 
     /// Get a reference to the backing string.
-    pub fn as_str(&self) -> &str {
-        &self.string
+    pub const fn as_str(&self) -> &str {
+        self.string
     }
 }
 
@@ -162,16 +162,14 @@ pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
     input_file: P1,
     output_file: P2,
 ) -> io::Result<()> {
-    let reader = BufReader::new(File::open(input_file)?);
+    let all_data = std::fs::read_to_string(input_file)?; // we need everything in memory anyway
     let mut output = BufWriter::new(File::create(output_file)?);
     let start_time = std::time::Instant::now();
 
     // would be cool to use an arena allocator for the Strings.
-    let mut data = reader.lines().filter_map(|line| {
-        line.ok().map(|line| {
-            let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
-            QuicklySortableString::new(line, 0..(split_index + 2))
-        })
+    let mut data = all_data.lines().map(|line| {
+        let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
+        QuicklySortableString::new(line, 0..(split_index + 2))
     }).collect::<Vec<_>>();
 
     let n = data.len();
