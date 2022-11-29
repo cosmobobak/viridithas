@@ -326,7 +326,6 @@ impl Board {
         }
 
         debug_assert!(self.castle_perm <= 15);
-
         hash_castling(&mut key, self.castle_perm);
 
         key
@@ -354,7 +353,7 @@ impl Board {
 
     pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
         if !fen.is_ascii() {
-            return Err(format!("FEN string is not ASCII: {}", fen));
+            return Err(format!("FEN string is not ASCII: {fen}"));
         }
 
         let mut rank = Rank::RANK_8;
@@ -415,13 +414,9 @@ impl Board {
         let mut info_parts = info_part[1..].split(|&c| c == b' ');
 
         self.set_side(info_parts.next())?;
-
         self.set_castling(info_parts.next())?;
-
         self.set_ep(info_parts.next())?;
-
         self.set_halfmove(info_parts.next())?;
-
         self.set_fullmove(info_parts.next())?;
 
         self.key = self.generate_pos_key();
@@ -1345,13 +1340,13 @@ impl Board {
 
         if let Some(file) = reg_match.get(2) {
             let fname = file.as_str().as_bytes()[0];
-            let file = b"abcdefgh".iter().position(|&c| c == fname).unwrap();
+            let file = usize::from(fname - b'a');
             from_bb &= BB_FILES[file];
         }
 
         if let Some(rank) = reg_match.get(3) {
             let rname = rank.as_str().as_bytes()[0];
-            let rank = b"12345678".iter().position(|&c| c == rname).unwrap();
+            let rank = usize::from(rname - b'1');
             from_bb &= BB_RANKS[rank];
         }
 
