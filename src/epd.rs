@@ -27,32 +27,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let mut positions = Vec::new();
 
     for line in text.lines() {
-        let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>();
-        let fen = fen.join(" ");
-        board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
-        let fen_out = board.fen();
-        assert_eq!(fen, fen_out);
-        let best_move_idx =
-            line.find("bm").unwrap_or_else(|| panic!("no bestmove found in {line}"));
-        let best_moves = &line[best_move_idx + 3..];
-        let end_of_best_moves =
-            best_moves.find(';').unwrap_or_else(|| panic!("no end of bestmove found in {line}"));
-        let best_moves = &best_moves[..end_of_best_moves].split(' ').collect::<Vec<_>>();
-        let best_moves = best_moves
-            .iter()
-            .map(|best_move| {
-                board
-                    .parse_san(best_move)
-                    .unwrap_or_else(|err| panic!("invalid bestmove: {best_move}, {err}"))
-            })
-            .collect::<Vec<_>>();
-        let id_idx = line.find("id").unwrap_or_else(|| panic!("no id found in {line}"));
-        let id = line[id_idx + 4..]
-            .split(|c| c == '"')
-            .next()
-            .unwrap_or_else(|| panic!("no id found in {line}"))
-            .to_string();
-        positions.push(EpdPosition { fen, best_moves, id });
+        positions.push(parse_epd(line, &mut board));
     }
 
     let n_positions = positions.len();
@@ -60,7 +35,35 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
 
     let successes = run_on_positions(positions, board, time);
 
-    println!("{}/{} passed", successes, n_positions);
+    println!("{successes}/{n_positions} passed");
+}
+
+fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
+    let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>().join(" ");
+    board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
+    let fen_out = board.fen();
+    assert_eq!(fen, fen_out);
+    let best_move_idx =
+        line.find("bm").unwrap_or_else(|| panic!("no bestmove found in {line}"));
+    let best_moves = &line[best_move_idx + 3..];
+    let end_of_best_moves =
+        best_moves.find(';').unwrap_or_else(|| panic!("no end of bestmove found in {line}"));
+    let best_moves = &best_moves[..end_of_best_moves].split(' ').collect::<Vec<_>>();
+    let best_moves = best_moves
+        .iter()
+        .map(|best_move| {
+            board
+                .parse_san(best_move)
+                .unwrap_or_else(|err| panic!("invalid bestmove: {best_move}, {err}"))
+        })
+        .collect::<Vec<_>>();
+    let id_idx = line.find("id").unwrap_or_else(|| panic!("no id found in {line}"));
+    let id = line[id_idx + 4..]
+        .split(|c| c == '"')
+        .next()
+        .unwrap_or_else(|| panic!("no id found in {line}"))
+        .to_string();
+    EpdPosition { fen, best_moves, id }
 }
 
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
