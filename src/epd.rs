@@ -1,4 +1,4 @@
-use std::{io::BufRead, path::Path};
+use std::path::Path;
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
@@ -21,13 +21,12 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let mut board = Board::new();
     board.alloc_tables();
     board.set_eval_params(params);
-    let file = std::fs::File::open(epd_path).unwrap();
-    let mut reader = std::io::BufReader::new(file);
+    let raw_text = std::fs::read_to_string(epd_path).unwrap();
+    let text = raw_text.trim();
 
-    let mut line = String::new();
     let mut positions = Vec::new();
 
-    while reader.read_line(&mut line).expect("Got invalid UTF-8") > 0 {
+    for line in text.lines() {
         let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>();
         let fen = fen.join(" ");
         board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
@@ -54,7 +53,6 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
             .unwrap_or_else(|| panic!("no id found in {line}"))
             .to_string();
         positions.push(EpdPosition { fen, best_moves, id });
-        line.clear();
     }
 
     let n_positions = positions.len();
@@ -70,6 +68,8 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
     let maxidlen = positions.iter().map(|pos| pos.id.len()).max().unwrap();
+    let n = positions.len();
+    let start_time = std::time::Instant::now();
     for EpdPosition { fen, best_moves, id } in positions {
         board.set_from_fen(&fen).unwrap();
         board.clear_tt();
@@ -100,5 +100,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
             successes += 1;
         }
     }
+    let elapsed = start_time.elapsed();
+    println!("{n} positions in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
     successes
 }
