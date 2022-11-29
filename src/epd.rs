@@ -68,6 +68,8 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
     let mut thread_data = vec![ThreadData::new()];
     let mut successes = 0;
+    let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
+    let maxidlen = positions.iter().map(|pos| pos.id.len()).max().unwrap();
     for EpdPosition { fen, best_moves, id } in positions {
         board.set_from_fen(&fen).unwrap();
         board.clear_tt();
@@ -84,14 +86,15 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data);
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
-        let failinfo = if passed { String::new() } else { format!(", program chose {bm}") };
+        let failinfo = if passed { String::new() } else { format!(", {CONTROL_RED}program chose {bm}{CONTROL_RESET}") };
         let move_strings = best_moves.iter().map(
             |&m| if m == bm { format!("{CONTROL_GREEN}{m}{CONTROL_RESET}") } else { m.to_string() }
-        ).collect::<Vec<_>>();
+        ).collect::<Vec<_>>().join(", ");
         println!(
-            "{id} {color}{}{CONTROL_RESET} {fen} [{}]{failinfo}",
+            "{id:midl$} {color}{}{CONTROL_RESET} {fen:mfl$} [{move_strings}]{failinfo}",
             if passed { "PASS" } else { "FAIL" },
-            move_strings.join(", "),
+            midl = maxidlen,
+            mfl = maxfenlen,
         );
         if passed {
             successes += 1;
