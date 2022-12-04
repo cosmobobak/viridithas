@@ -33,3 +33,4 @@ MINOR:
 - the slow part of deduplication is the file I/O, consider mmap?.
 - move evalparams and sparams into ThreadData.
 - nullmove verification search
+- record percentage of position where TT move saves movegen - similar for captures when we get staged movegen.
