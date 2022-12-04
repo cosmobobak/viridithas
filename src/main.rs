@@ -28,6 +28,7 @@ mod threadlocal;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod image;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -140,6 +141,15 @@ fn main() {
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {
         return nnue::convert_json_to_binary(json_path, bin_path);
+    }
+
+    if cli.visnnue {
+        // create folder for the images
+        let path = std::path::PathBuf::from("nnue-visualisations");
+        std::fs::create_dir_all(&path).unwrap();
+        return for neuron in 0..crate::nnue::HIDDEN {
+            crate::nnue::NNUE.visualise_neuron(neuron, &path);
+        }
     }
 
     uci::main_loop(eparams);

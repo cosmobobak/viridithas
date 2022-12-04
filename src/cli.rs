@@ -67,4 +67,7 @@ pub struct Cli {
     /// Merge and deduplicate two NNUE data files
     #[clap(long, value_name = "PATH")]
     pub merge: Vec<std::path::PathBuf>,
+    /// Visualise the NNUE.
+    #[clap(long)]
+    pub visnnue: bool,
 }

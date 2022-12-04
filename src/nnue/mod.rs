@@ -4,7 +4,8 @@ use serde_json::Value;
 
 use crate::{
     board::{movegen::BitLoop, Board},
-    definitions::{BLACK, KING, PAWN, WHITE, Square},
+    definitions::{Square, BLACK, KING, PAWN, WHITE},
+    image::Image,
     lookups::piece_from_cotype,
 };
 
@@ -14,7 +15,7 @@ mod accumulator;
 pub mod convert;
 
 const INPUT: usize = 768;
-const HIDDEN: usize = 256;
+pub const HIDDEN: usize = 256;
 const CR_MIN: i16 = 0;
 const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
@@ -47,6 +48,49 @@ pub struct NNUEParams {
 }
 
 impl NNUEParams {
+    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // remap pieces to keep opposite colours together
+        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
+        assert!(neuron < HIDDEN);
+        let starting_idx = neuron * INPUT;
+        let slice = &self.feature_weights[starting_idx..starting_idx + INPUT];
+
+        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+
+        for (piece, chunk) in slice.chunks(64).enumerate() {
+            let piece = PIECE_REMAPPING[piece];
+            let piece_colour = piece % 2;
+            let piece_type = piece / 2;
+            let (max, min) = if piece_type == 0 {
+                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            } else {
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            };
+            let weight_to_colour = |weight: i16| -> u32 {
+                let x = f32::from(weight - min) / f32::from(max - min);
+                let g = (x * 255.0) as u32;
+                let b = (x * 255.0) as u32 / 2;
+                let r = 255 - g;
+                (r << 16) + (g << 8) + b
+            };
+            for (square, &weight) in chunk.iter().enumerate() {
+                let row = square / 8;
+                let col = square % 8;
+                let colour = if (row == 0 || row == 7) && piece_type == 0 {
+                    0 // pawns on first and last rank are always 0
+                } else {
+                    weight_to_colour(weight)
+                };
+                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
+            }
+        }
+
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
     pub fn from_json(path: impl AsRef<std::path::Path>) -> Box<Self> {
         #![allow(clippy::cast_possible_truncation)]
         fn weight<const LEN: usize>(
@@ -180,7 +224,13 @@ impl NNUEState {
         }
     }
 
-    pub fn efficiently_update_from_move(&mut self, piece: u8, colour: u8, from: Square, to: Square) {
+    pub fn efficiently_update_from_move(
+        &mut self,
+        piece: u8,
+        colour: u8,
+        from: Square,
+        to: Square,
+    ) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
@@ -329,7 +379,12 @@ impl NNUEState {
         self.black_pov[black_idx_to] = 1;
     }
 
-    pub fn update_pov_manual<const IS_ACTIVATE: bool>(&mut self, piece: u8, colour: u8, sq: Square) {
+    pub fn update_pov_manual<const IS_ACTIVATE: bool>(
+        &mut self,
+        piece: u8,
+        colour: u8,
+        sq: Square,
+    ) {
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
 
