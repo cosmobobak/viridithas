@@ -1,7 +1,9 @@
 NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
      0 | first network 90% eval, 10% WDL          | much weaker than the HCE.
-       | 30 epochs, batch size 16384, lr 1e-2     | 
+       | 30 epochs, batch size 16384, lr 1e-2     |
+       | trained on the mountain of games from    |
+       | old Viridithas 2.X.X versions            |
 -----------------------------------------------------------------------------------------
      1 | second network, same data as net 0, but  | net used in v3.0.0, crushes HCE.
        | data was shuffled, which fixed problems. |
