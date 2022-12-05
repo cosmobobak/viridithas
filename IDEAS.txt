@@ -34,3 +34,5 @@ MINOR:
 - move evalparams and sparams into ThreadData.
 - nullmove verification search
 - record percentage of position where TT move saves movegen - similar for captures when we get staged movegen.
+- fix make_move_nnue wasting time
+- retry lazy move ordering
