@@ -36,3 +36,4 @@ MINOR:
 - record percentage of position where TT move saves movegen - similar for captures when we get staged movegen.
 - fix make_move_nnue wasting time
 - retry lazy move ordering
+- multipv. put the moves in ThreadData and use ROOT.
