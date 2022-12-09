@@ -16,9 +16,7 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Square,
-        BB, BISHOP, BKCA, BN, BQ, BQCA, BR, KING, KNIGHT, PIECE_EMPTY, ROOK, WB, WHITE, WKCA,
-        WN, WQ, WQCA, WR,
+        Square, BISHOP, BKCA, BQCA, KING, KNIGHT, PIECE_EMPTY, ROOK, WHITE, WKCA, WQCA, QUEEN,
     },
     magic::MAGICS_READY,
     validate::piece_valid,
@@ -122,28 +120,16 @@ impl Board {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            if IS_WHITE {
-                for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
-                }
-            } else {
-                for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
-                }
+            for &promo in &[QUEEN, KNIGHT, ROOK, BISHOP] {
+                move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
             }
         }
         for from in BitLoop::new(attacks_east & promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            if IS_WHITE {
-                for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
-                }
-            } else {
-                for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
-                }
+            for &promo in &[QUEEN, KNIGHT, ROOK, BISHOP] {
+                move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
             }
         }
     }
@@ -203,14 +189,8 @@ impl Board {
         }
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            if IS_WHITE {
-                for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
-                }
-            } else {
-                for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
-                }
+            for &promo in &[QUEEN, KNIGHT, ROOK, BISHOP] {
+                move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
             }
         }
     }
@@ -224,14 +204,8 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            if IS_WHITE {
-                for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(sq, to, promo, 0));
-                }
-            } else {
-                for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(sq, to, promo, 0));
-                }
+            for &promo in &[QUEEN, KNIGHT, ROOK, BISHOP] {
+                move_list.push(Move::new(sq, to, promo, 0));
             }
         }
     }
