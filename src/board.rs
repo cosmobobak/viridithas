@@ -1519,10 +1519,10 @@ impl Board {
         let mut most_recent_move = legal_moves[0];
         let mut most_recent_score = 0;
         let mut aspiration_window = AspirationWindow::new();
-        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
+        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         'deepening: for i_depth in 1..=max_depth {
             // consider stopping early if we've neatly completed a depth:
             if i_depth > 8 && info.in_game() && info.is_past_opt_time() {

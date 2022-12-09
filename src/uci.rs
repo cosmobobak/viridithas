@@ -3,7 +3,7 @@ use std::{
     io::Write,
     num::{ParseFloatError, ParseIntError},
     sync::{
-        atomic::{self, AtomicBool},
+        atomic::{self, AtomicBool, Ordering, AtomicUsize},
         mpsc,
     }, time::Instant,
 };
@@ -243,6 +243,11 @@ fn parse_setoption(
     }
     match opt_name {
         "Hash" => out.hash_mb = Some(opt_value.parse()?),
+        "MultiPV" => {
+            let value: usize = opt_value.parse()?;
+            assert!(value > 0 && value <= 500, "MultiPV value must be between 1 and 500");
+            MULTI_PV.store(value, Ordering::SeqCst);
+        },
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -297,10 +302,16 @@ fn print_uci_response() {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("option name Hash type spin default 4 min 1 max 8192");
+    // println!("option name MultiPV type spin default 1 min 1 max 500");
     for (id, default) in SearchParams::default().ids_with_values() {
         println!("option name {id} type spin default {default} min -999999 max 999999");
     }
     println!("uciok");
+}
+
+pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
+pub fn is_multipv() -> bool {
+    MULTI_PV.load(Ordering::SeqCst) > 1
 }
 
 pub fn main_loop(params: EvalParams) {

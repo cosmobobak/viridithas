@@ -21,7 +21,7 @@ use crate::{
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult},
+    transpositiontable::{HFlag, ProbeResult}, uci,
 };
 
 use self::parameters::SearchParams;
@@ -312,8 +312,13 @@ impl Board {
 
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
-        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
-        {
+        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
+            if ROOT && uci::is_multipv() {
+                // handle multi-pv
+                if t.multi_pv_excluded.contains(&m) {
+                    continue;
+                }
+            }
             if excluded == m {
                 continue;
             }
