@@ -205,7 +205,7 @@ impl Board {
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             for &promo in &[QUEEN, KNIGHT, ROOK, BISHOP] {
-                move_list.push(Move::new(sq, to, promo, 0));
+                move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
             }
         }
     }
