@@ -1,9 +1,11 @@
+use std::fmt::Display;
+
 use crate::{
     definitions::{
         colour_of, type_of, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR, Square,
+        WHITE, WK, WN, WP, WQ, WR, Square, PIECE_EMPTY,
     },
-    lookups, macros, magic,
+    lookups::{self, piece_char}, macros, magic,
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
@@ -78,7 +80,7 @@ impl Iterator for BitLoop {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct BitBoard {
     w_pawns: u64,
     w_knights: u64,
@@ -384,6 +386,62 @@ impl BitBoard {
             | orth_attackers
             | king_attackers
     }
+
+    const fn piece_at(&self, sq: Square) -> u8 {
+        let sq_bb = sq.bitboard();
+        if self.w_pawns & sq_bb != 0 {
+            WP
+        } else if self.w_knights & sq_bb != 0 {
+            WN
+        } else if self.w_bishops & sq_bb != 0 {
+            WB
+        } else if self.w_rooks & sq_bb != 0 {
+            WR
+        } else if self.w_queens & sq_bb != 0 {
+            WQ
+        } else if self.w_king & sq_bb != 0 {
+            WK
+        } else if self.b_pawns & sq_bb != 0 {
+            BP
+        } else if self.b_knights & sq_bb != 0 {
+            BN
+        } else if self.b_bishops & sq_bb != 0 {
+            BB
+        } else if self.b_rooks & sq_bb != 0 {
+            BR
+        } else if self.b_queens & sq_bb != 0 {
+            BQ
+        } else if self.b_king & sq_bb != 0 {
+            BK
+        } else {
+            PIECE_EMPTY
+        }
+    }
+
+    fn any_bbs_overlapping(&self) -> bool {
+        let bbs = [
+            self.w_pawns,
+            self.w_knights,
+            self.w_bishops,
+            self.w_rooks,
+            self.w_queens,
+            self.w_king,
+            self.b_pawns,
+            self.b_knights,
+            self.b_bishops,
+            self.b_rooks,
+            self.b_queens,
+            self.b_king,
+        ];
+        for i in 0..bbs.len() {
+            for j in i + 1..bbs.len() {
+                if bbs[i] & bbs[j] != 0 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 pub trait BitShiftExt {
@@ -468,5 +526,27 @@ pub fn print_bb(bb: u64) {
             }
         }
         println!();
+    }
+}
+
+impl Display for BitBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for rank in (0..=7).rev() {
+            for file in 0..=7 {
+                let sq = Square::from_rank_file(rank, file);
+                let piece = self.piece_at(sq);
+                let piece_char = piece_char(piece);
+                if let Some(symbol) = piece_char {
+                    write!(f, " {symbol}")?;
+                } else {
+                    write!(f, " .")?;
+                }
+            }
+            writeln!(f)?;
+        }
+        if self.any_bbs_overlapping() {
+            writeln!(f, "WARNING: Some bitboards are overlapping")?;
+        }
+        Ok(())
     }
 }

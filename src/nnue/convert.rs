@@ -59,7 +59,7 @@ fn batch_convert<const USE_NNUE: bool>(
             ..SearchInfo::default()
         };
         let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t);
-        if filter_quiescent && (!bm.is_quiet() || is_mate_score(score)) {
+        if filter_quiescent && (pos.is_tactical(bm) || is_mate_score(score)) {
             evals.push(None);
             continue;
         }

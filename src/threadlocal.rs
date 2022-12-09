@@ -26,10 +26,12 @@ impl ThreadData {
         }
     }
 
+    #[allow(dead_code)]
     pub fn add_multipv_excluded(&mut self, m: Move) {
         self.multi_pv_excluded.push(m);
     }
 
+    #[allow(dead_code)]
     pub fn clear_multipv_excluded(&mut self) {
         self.multi_pv_excluded.clear();
     }

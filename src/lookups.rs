@@ -174,7 +174,7 @@ pub const fn piece_from_cotype(colour: u8, ty: u8) -> u8 {
 }
 
 static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";
-pub static PROMO_CHAR_LOOKUP: [u8; 13] = *b"XXnbrqXXnbrqX";
+pub static PROMO_CHAR_LOOKUP: [u8; 7] = *b"XXnbrqX";
 
 pub fn piece_char(piece: u8) -> Option<char> {
     PIECE_CHARS.get(piece as usize).map(|&c| c as char)

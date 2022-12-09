@@ -110,13 +110,13 @@ impl Board {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            move_list.push(Move::new(from, to, cap, PIECE_EMPTY, 0));
+            move_list.push(Move::new(from, to, PIECE_EMPTY, 0));
         }
         for from in BitLoop::new(attacks_east & !promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             let cap = self.piece_at(to);
             debug_assert!(piece_valid(cap));
-            move_list.push(Move::new(from, to, cap, PIECE_EMPTY, 0));
+            move_list.push(Move::new(from, to, PIECE_EMPTY, 0));
         }
         for from in BitLoop::new(attacks_west & promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
@@ -124,11 +124,11 @@ impl Board {
             debug_assert!(piece_valid(cap));
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(from, to, cap, promo, 0));
+                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(from, to, cap, promo, 0));
+                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
                 }
             }
         }
@@ -138,11 +138,11 @@ impl Board {
             debug_assert!(piece_valid(cap));
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(from, to, cap, promo, 0));
+                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(from, to, cap, promo, 0));
+                    move_list.push(Move::new(from, to, promo, Move::PROMO_FLAG));
                 }
             }
         }
@@ -169,13 +169,13 @@ impl Board {
         if attacks_west != 0 {
             let from_sq = first_square(attacks_west);
             move_list.push(
-                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
+                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG),
             );
         }
         if attacks_east != 0 {
             let from_sq = first_square(attacks_east);
             move_list.push(
-                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, PIECE_EMPTY, Move::EP_MASK),
+                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG),
             );
         }
     }
@@ -193,23 +193,23 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            move_list.push(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0));
+            move_list.push(Move::new(sq, to, PIECE_EMPTY, 0));
         }
         for sq in BitLoop::new(double_pushable_pawns) {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             move_list.push(
-                Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, Move::PAWN_START_MASK),
+                Move::new(sq, to, PIECE_EMPTY, 0),
             );
         }
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(sq, to, PIECE_EMPTY, promo, 0));
+                    move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(sq, to, PIECE_EMPTY, promo, 0));
+                    move_list.push(Move::new(sq, to, promo, Move::PROMO_FLAG));
                 }
             }
         }
@@ -226,11 +226,11 @@ impl Board {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if IS_WHITE {
                 for &promo in &[WQ, WN, WR, WB] {
-                    move_list.push(Move::new(sq, to, PIECE_EMPTY, promo, 0));
+                    move_list.push(Move::new(sq, to, promo, 0));
                 }
             } else {
                 for &promo in &[BQ, BN, BR, BB] {
-                    move_list.push(Move::new(sq, to, PIECE_EMPTY, promo, 0));
+                    move_list.push(Move::new(sq, to, promo, 0));
                 }
             }
         }
@@ -244,6 +244,7 @@ impl Board {
         } else {
             self.generate_moves_for::<false>(move_list);
         }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
@@ -263,11 +264,11 @@ impl Board {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0),
+                    Move::new(sq, to, PIECE_EMPTY, 0),
                 );
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0));
+                move_list.push(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -277,11 +278,11 @@ impl Board {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0));
+                move_list.push(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -292,11 +293,11 @@ impl Board {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0));
+                move_list.push(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -306,11 +307,11 @@ impl Board {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push(Move::new(sq, to, PIECE_EMPTY, PIECE_EMPTY, 0));
+                move_list.push(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -344,7 +345,7 @@ impl Board {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
         }
@@ -355,7 +356,7 @@ impl Board {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
         }
@@ -367,7 +368,7 @@ impl Board {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
         }
@@ -379,7 +380,7 @@ impl Board {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
                 move_list.push(
-                    Move::new(sq, to, self.piece_at(to), PIECE_EMPTY, 0)
+                    Move::new(sq, to, PIECE_EMPTY, 0)
                 );
             }
         }
@@ -406,7 +407,7 @@ impl Board {
                 && !self.sq_attacked_by::<false>(Square::F1)
             {
                 move_list.push(
-                    Move::new(Square::E1, Square::G1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK)
+                    Move::new(Square::E1, Square::G1, PIECE_EMPTY, Move::CASTLE_FLAG)
                 );
             }
 
@@ -416,7 +417,7 @@ impl Board {
                 && !self.sq_attacked_by::<false>(Square::D1)
             {
                 move_list.push(
-                    Move::new(Square::E1, Square::C1, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK)
+                    Move::new(Square::E1, Square::C1, PIECE_EMPTY, Move::CASTLE_FLAG)
                 );
             }
         } else {
@@ -426,7 +427,7 @@ impl Board {
                 && !self.sq_attacked_by::<true>(Square::F8)
             {
                 move_list.push(
-                    Move::new(Square::E8, Square::G8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK)
+                    Move::new(Square::E8, Square::G8, PIECE_EMPTY, Move::CASTLE_FLAG)
                 );
             }
 
@@ -436,7 +437,7 @@ impl Board {
                 && !self.sq_attacked_by::<true>(Square::D8)
             {
                 move_list.push(
-                    Move::new(Square::E8, Square::C8, PIECE_EMPTY, PIECE_EMPTY, Move::CASTLE_MASK)
+                    Move::new(Square::E8, Square::C8, PIECE_EMPTY, Move::CASTLE_FLAG)
                 );
             }
         }

@@ -604,7 +604,7 @@ impl Board {
 
         if m.is_promo() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += get_see_value(type_of(m.promotion())) - get_see_value(PAWN);
+            value += get_see_value(m.promotion_type()) - get_see_value(PAWN);
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
             value = get_see_value(PAWN);

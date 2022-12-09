@@ -600,12 +600,13 @@ mod tests {
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
         for &m in ml.iter() {
-            println!();
+            println!("{m}");
             if !board.make_move_nnue(m, &mut t) {
                 continue;
             }
-            println!("{m}");
+            println!("made move");
             board.unmake_move_nnue(&mut t);
+            println!("unmade move");
             for i in 0..768 {
                 if initial_white[i] != t.nnue.white_pov[i] {
                     eprintln!("{i}: {} != {}", initial_white[i], t.nnue.white_pov[i]);

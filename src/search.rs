@@ -325,6 +325,7 @@ impl Board {
 
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
+            let is_quiet = !self.is_tactical(m);
 
             // lmp, fp, and hlp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
@@ -338,7 +339,7 @@ impl Board {
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1
                     + self.sparams.futility_coeff_0;
-                if m.is_quiet()
+                if is_quiet
                     && lmr_depth < self.sparams.futility_depth
                     && static_eval + fp_margin <= alpha
                 {
@@ -347,7 +348,7 @@ impl Board {
 
                 // history leaf pruning
                 // if the history score is too low, we skip the move.
-                if m.is_quiet()
+                if is_quiet
                     && moves_made > 1
                     && lmr_depth <= ONE_PLY * 2
                     && ordering_score < (-500 * (depth.round() - 1))
@@ -361,7 +362,7 @@ impl Board {
             if !ROOT
                 && best_score > -MINIMUM_MATE_SCORE
                 && depth <= self.sparams.see_depth
-                && !self.static_exchange_eval(m, see_table[usize::from(m.is_quiet())])
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
             }
@@ -407,7 +408,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
-                    && m.is_quiet()
+                    && is_quiet
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
@@ -457,15 +458,17 @@ impl Board {
                         }
                         info.failhigh += 1;
 
-                        if best_move.is_quiet() {
+                        if !self.is_tactical(best_move) {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
                             self.update_history_metrics::<true>(t, best_move, depth);
 
                             // decrease the history of the non-capture moves that came before the cutoff move.
                             let ms = move_picker.moves_made();
-                            for e in ms.iter().filter(|e| e.mov.is_quiet()) {
-                                self.update_history_metrics::<false>(t, e.mov, depth);
+                            for e in ms {
+                                if !self.is_tactical(e.mov) {
+                                    self.update_history_metrics::<false>(t, e.mov, depth);
+                                }
                             }
                         }
 
@@ -498,15 +501,17 @@ impl Board {
             // we raised alpha, and didn't raise beta
             // as if we had, we would have returned early,
             // so this is a PV-node
-            if best_move.is_quiet() {
+            if !self.is_tactical(best_move) {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
                 self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the non-capture moves that came before the best move.
                 let ms = move_picker.moves_made();
-                for e in ms.iter().take_while(|m| m.mov != best_move).filter(|e| e.mov.is_quiet()) {
-                    self.update_history_metrics::<false>(t, e.mov, depth);
+                for e in ms.iter().take_while(|m| m.mov != best_move) {
+                    if !self.is_tactical(e.mov) {
+                        self.update_history_metrics::<false>(t, e.mov, depth);
+                    }
                 }
             }
 
@@ -589,7 +594,7 @@ impl Board {
         let to = m.to();
 
         let mut next_victim =
-            if m.is_promo() { type_of(m.promotion()) } else { type_of(self.piece_at(from)) };
+            if m.is_promo() { m.promotion_type() } else { type_of(self.piece_at(from)) };
 
         let mut balance = self.estimated_see(m) - threshold;
 

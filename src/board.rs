@@ -13,7 +13,7 @@ use regex::Regex;
 use crate::{
     board::movegen::{
         bitboards::{
-            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7,
+            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7, BB_RANK_4, BB_RANK_5,
         },
         MoveList,
     },
@@ -24,7 +24,7 @@ use crate::{
         type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
         Square, Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING, KNIGHT,
-        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR, make_piece,
     },
     errors::{FenParseError, MoveParseError},
     lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
@@ -211,6 +211,11 @@ impl Board {
 
     pub const fn ep_sq(&self) -> Square {
         self.ep_sq
+    }
+
+    #[allow(dead_code)]
+    pub const fn hashkey(&self) -> u64 {
+        self.key
     }
 
     pub fn set_hash_size(&mut self, mb: usize) {
@@ -679,7 +684,7 @@ impl Board {
             return false;
         }
 
-        if type_of(moved_piece) != PAWN && (m.is_pawn_start() || m.is_ep() || m.is_promo()) {
+        if type_of(moved_piece) != PAWN && (self.is_double_pawn_push(m) || m.is_ep() || m.is_promo()) {
             return false;
         }
 
@@ -693,7 +698,7 @@ impl Board {
             return false;
         }
 
-        if captured_piece != m.capture() {
+        if captured_piece != self.captured_piece(m) {
             return false;
         }
 
@@ -708,7 +713,7 @@ impl Board {
             }
             if m.is_ep() {
                 return to == self.ep_sq;
-            } else if m.is_pawn_start() {
+            } else if self.is_double_pawn_push(m) {
                 let one_forward = from.pawn_push(self.side);
                 return self.piece_at(one_forward) == PIECE_EMPTY
                     && to == one_forward.pawn_push(self.side);
@@ -897,6 +902,42 @@ impl Board {
         unsafe { *self.piece_array.get_unchecked(m.from().index()) }
     }
 
+    /// Gets the piece that will be captured by the given move.
+    pub fn captured_piece(&self, m: Move) -> u8 {
+        debug_assert!(m.to().on_board());
+        unsafe { *self.piece_array.get_unchecked(m.to().index()) }
+    }
+
+    /// Determines whether this move would be a capture in the current position.
+    pub fn is_capture(&self, m: Move) -> bool {
+        debug_assert!(m.from().on_board());
+        debug_assert!(m.to().on_board());
+        self.captured_piece(m) != PIECE_EMPTY
+    }
+
+    /// Determines whether this move would be a double pawn push in the current position.
+    pub fn is_double_pawn_push(&self, m: Move) -> bool {
+        debug_assert!(m.from().on_board());
+        debug_assert!(m.to().on_board());
+        let from = m.from();
+        let piece_moved = self.piece_at(from);
+        if type_of(piece_moved) != PAWN {
+            return false;
+        }
+        if from.bitboard() & BB_RANK_2 != 0 {
+            return (m.to().bitboard() & BB_RANK_4) != 0;
+        }
+        if from.bitboard() & BB_RANK_7 != 0 {
+            return (m.to().bitboard() & BB_RANK_5) != 0;
+        }
+        false
+    }
+
+    /// Determines whether this move would be tactical in the current position.
+    pub fn is_tactical(&self, m: Move) -> bool {
+        m.is_promo() || self.is_capture(m)
+    }
+
     /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: Square) -> u8 {
         debug_assert!(sq.on_board());
@@ -918,11 +959,13 @@ impl Board {
         let to = m.to();
         let side = self.side;
         let piece = self.moved_piece(m);
+        let captured = self.captured_piece(m);
 
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
         debug_assert!(side_valid(side));
         debug_assert!(piece_valid(piece), "piece: {:?}", piece);
+        debug_assert!(captured == PIECE_EMPTY || piece_valid(captured), "captured: {:?}", captured);
 
         let saved_key = self.key;
 
@@ -956,6 +999,7 @@ impl Board {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
+            capture: captured,
         });
         self.repetition_cache.push(saved_key);
 
@@ -966,7 +1010,6 @@ impl Board {
         // reinsert the castling rights
         hash_castling(&mut self.key, self.castle_perm);
 
-        let captured = m.capture();
         self.fifty_move_counter += 1;
 
         if captured != PIECE_EMPTY {
@@ -980,7 +1023,7 @@ impl Board {
 
         if piece == WP || piece == BP {
             self.fifty_move_counter = 0;
-            if m.is_pawn_start() {
+            if self.is_double_pawn_push(m) {
                 if side == WHITE {
                     self.ep_sq = from.add(8);
                     debug_assert!(self.ep_sq.rank() == RANK_3);
@@ -994,13 +1037,12 @@ impl Board {
 
         self.move_piece(from, to);
 
-        let promoted_piece = m.promotion();
-
-        if promoted_piece != PIECE_EMPTY {
-            debug_assert!(piece_valid(promoted_piece));
-            debug_assert!(promoted_piece != WP && promoted_piece != BP);
+        if m.is_promo() {
+            let promo = make_piece(side, m.promotion_type());
+            debug_assert!(piece_valid(promo));
+            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
             self.clear_piece(to);
-            self.add_piece(to, promoted_piece);
+            self.add_piece(to, promo);
         }
 
         self.side ^= 1;
@@ -1028,6 +1070,7 @@ impl Board {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
+            capture: PIECE_EMPTY,
         });
 
         if self.ep_sq != Square::NO_SQUARE {
@@ -1060,7 +1103,7 @@ impl Board {
         self.height -= 1;
         self.ply -= 1;
 
-        let Undo { m, castle_perm, ep_square, fifty_move_counter } =
+        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture } =
             self.history.pop().expect("No move to unmake!");
 
         let from = m.from();
@@ -1107,17 +1150,18 @@ impl Board {
 
         self.move_piece(to, from);
 
-        let captured = m.capture();
-        if captured != PIECE_EMPTY {
-            debug_assert!(piece_valid(captured));
-            self.add_piece(to, captured);
+        if capture != PIECE_EMPTY {
+            debug_assert!(piece_valid(capture));
+            self.add_piece(to, capture);
         }
 
-        if m.promotion() != PIECE_EMPTY {
-            debug_assert!(piece_valid(m.promotion()));
-            debug_assert!(m.promotion() != WP && m.promotion() != BP);
+        if m.is_promo() {
+            let promotion = make_piece(self.side, m.promotion_type());
+            debug_assert!(piece_valid(promotion));
+            debug_assert!(promotion != WP && promotion != BP && promotion != WK && promotion != BK);
+            debug_assert_eq!(colour_of(promotion), colour_of(self.piece_at(from)));
             self.clear_piece(from);
-            self.add_piece(from, if colour_of(m.promotion()) == WHITE { WP } else { BP });
+            self.add_piece(from, if self.side == WHITE { WP } else { BP });
         }
 
         let key = self.repetition_cache.pop().expect("No key to unmake!");
@@ -1130,6 +1174,7 @@ impl Board {
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let piece = type_of(self.moved_piece(m));
         let colour = self.turn();
+        let capture = self.captured_piece(m);
         let res = self.make_move(m);
         if !res {
             return false;
@@ -1160,16 +1205,16 @@ impl Board {
             }
         }
 
-        if m.is_capture() {
-            let captured = type_of(m.capture());
-            t.nnue.efficiently_update_manual::<DEACTIVATE>(captured, 1 ^ colour, to);
+        if capture != PIECE_EMPTY {
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(type_of(capture), 1 ^ colour, to);
         }
 
         t.nnue.efficiently_update_from_move(piece, colour, from, to);
 
         if m.is_promo() {
             // this seems like an inefficiency.
-            let promo = type_of(m.promotion());
+            let promo = m.promotion_type();
+            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, to);
             t.nnue.efficiently_update_manual::<ACTIVATE>(promo, colour, to);
         }
@@ -1200,16 +1245,16 @@ impl Board {
             }
         }
         if m.is_promo() {
-            let promo = type_of(m.promotion());
+            let promo = m.promotion_type();
             debug_assert!(piece_valid(promo));
-            debug_assert!(promo != WP && promo != BP);
+            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
             t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
             t.nnue.update_pov_manual::<ACTIVATE>(PAWN, colour, to);
         }
         t.nnue.update_pov_move(piece, colour, to, from);
-        let captured = m.capture();
-        if captured != PIECE_EMPTY {
-            t.nnue.update_pov_manual::<ACTIVATE>(type_of(captured), 1 ^ colour, to);
+        let capture = self.captured_piece(m);
+        if capture != PIECE_EMPTY {
+            t.nnue.update_pov_manual::<ACTIVATE>(type_of(capture), 1 ^ colour, to);
         }
     }
 
@@ -1226,8 +1271,10 @@ impl Board {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        let Undo { m: _, castle_perm, ep_square, fifty_move_counter } =
+        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture } =
             self.history.pop().expect("No move to unmake!");
+
+        debug_assert_eq!(capture, PIECE_EMPTY);
 
         self.castle_perm = castle_perm;
         self.ep_sq = ep_square;
@@ -1283,7 +1330,7 @@ impl Board {
                 m.from() == from
                     && m.to() == to
                     && (san_bytes.len() == 4
-                        || PROMO_CHAR_LOOKUP[m.promotion() as usize] == san_bytes[4])
+                        || PROMO_CHAR_LOOKUP[m.safe_promotion_type() as usize] == san_bytes[4])
             })
             .ok_or_else(|| IllegalMove(uci.to_string()));
 
@@ -1377,7 +1424,8 @@ impl Board {
                 continue;
             }
             self.unmake_move();
-            if m.promotion() as usize != promo.unwrap_or(0) {
+            let promotion = make_piece(self.side, m.safe_promotion_type());
+            if promotion as usize != promo.unwrap_or(0) {
                 continue;
             }
             let m_from_bb = m.from().bitboard();

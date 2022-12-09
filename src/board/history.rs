@@ -77,7 +77,7 @@ impl ThreadData {
         // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
-            let capture = prev_move.capture();
+            let capture = pos.captured_piece(prev_move);
             // determine where to find the piece_t info:
             // we don't need to worry about ep-captures because
             // we just blanket filter them out with the null checks.
@@ -113,7 +113,7 @@ impl ThreadData {
         // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
-            let capture = prev_move.capture();
+            let capture = pos.captured_piece(prev_move);
             // determine where to find the piece_t info:
             // we don't need to worry about ep-captures because
             // we just blanket filter them out with the null checks.

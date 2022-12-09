@@ -1,4 +1,4 @@
-use crate::{chessmove::Move, board::Board, threadlocal::ThreadData, lookups, definitions::PAWN};
+use crate::{chessmove::Move, board::Board, threadlocal::ThreadData, lookups, definitions::{PAWN, make_piece}};
 
 use super::{MoveList, MoveListEntry};
 
@@ -64,10 +64,10 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             } else {
                 position.generate_moves(&mut self.movelist);
                 for e in &mut self.movelist.moves[..self.movelist.count] {
-                    e.score = if e.mov.is_quiet() {
-                        Self::score_quiet(&self.killers, t, position, e.mov)
-                    } else {
+                    e.score = if position.is_tactical(e.mov) {
                         Self::score_capture(t, position, e.mov)
+                    } else {
+                        Self::score_quiet(self.killers, t, position, e.mov)
                     };
                 }
             }
@@ -107,14 +107,14 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         self.index += 1;
 
-        if self.was_tried_lazily(m.mov) || (m.mov.is_quiet() && self.skip_quiets) {
+        if self.was_tried_lazily(m.mov) || (!position.is_tactical(m.mov) && self.skip_quiets) {
             self.next(position, t)
         } else {
             Some(m)
         }
     }
 
-    pub fn score_quiet(killers: &[Move; 3], t: &ThreadData, pos: &Board, m: Move) -> i32 {
+    pub fn score_quiet(killers: [Move; 3], t: &ThreadData, pos: &Board, m: Move) -> i32 {
         if killers[0] == m {
             FIRST_ORDER_KILLER_SCORE
         } else if killers[1] == m {
@@ -133,8 +133,9 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     }
 
     pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move) -> i32 {
+        let turn = pos.turn();
         if m.is_promo() {
-            let mut score = lookups::get_mvv_lva_score(m.promotion(), PAWN);
+            let mut score = lookups::get_mvv_lva_score(make_piece(turn, m.promotion_type()), PAWN);
             if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }
@@ -146,7 +147,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             }
             score
         } else {
-            let mut score = lookups::get_mvv_lva_score(m.capture(), pos.piece_at(m.from()));
+            let mut score = lookups::get_mvv_lva_score(pos.captured_piece(m), pos.piece_at(m.from()));
             if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }

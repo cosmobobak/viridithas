@@ -4,7 +4,7 @@ use std::{fmt::{Display, self}, str::FromStr};
 
 use crate::{
     board::evaluation::MATE_SCORE,
-    chessmove::Move,
+    chessmove::Move, validate::piece_type_valid,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -64,6 +64,16 @@ pub const fn colour_of(piece: u8) -> u8 {
     match piece {
         WP | WN | WB | WR | WQ | WK => WHITE,
         _ => BLACK,
+    }
+}
+
+pub const fn make_piece(colour: u8, piece_type: u8) -> u8 {
+    debug_assert!(colour == WHITE || colour == BLACK);
+    debug_assert!(piece_type_valid(piece_type));
+    if colour == WHITE {
+        piece_type
+    } else {
+        piece_type + 6
     }
 }
 
@@ -298,7 +308,7 @@ impl FromStr for Square {
             .ok_or("Invalid square name")
     }
 }
-impl From<Square> for u32 {
+impl From<Square> for u16 {
     fn from(square: Square) -> Self {
         Self::from(square.0)
     }
@@ -315,6 +325,7 @@ pub struct Undo {
     pub castle_perm: u8,
     pub ep_square: Square,
     pub fifty_move_counter: u8,
+    pub capture: u8,
 }
 
 mod tests {

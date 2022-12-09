@@ -59,6 +59,9 @@ pub fn gamut() {
 }
 
 mod tests {
+    #![allow(unused_imports)]
+    use crate::{chessmove::Move, definitions::Square};
+
 
     #[test]
     fn perft_hard_position() {
@@ -131,5 +134,47 @@ mod tests {
             }
             legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
+    }
+
+    #[test]
+    fn simple_move_undoability() {
+        use super::*;
+        crate::magic::initialise();
+        let mut pos = Board::new();
+        pos.alloc_tables();
+        pos.set_startpos();
+        let e4 = Move::new(Square::E2, Square::E4, 0, 0);
+        let bitboard_before = pos.pieces;
+        println!("{bitboard_before}");
+        let hashkey_before = pos.hashkey();
+        pos.make_move(e4);
+        assert_ne!(pos.pieces, bitboard_before);
+        println!("{bb_after}", bb_after = pos.pieces);
+        assert_ne!(pos.hashkey(), hashkey_before);
+        pos.unmake_move();
+        assert_eq!(pos.pieces, bitboard_before);
+        println!("{bb_returned}", bb_returned = pos.pieces);
+        assert_eq!(pos.hashkey(), hashkey_before);
+    }
+
+    #[test]
+    fn simple_capture_undoability() {
+        use super::*;
+        crate::magic::initialise();
+        let mut pos = Board::new();
+        pos.alloc_tables();
+        pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2").unwrap();
+        let exd5 = Move::new(Square::E4, Square::D5, 0, 0);
+        let bitboard_before = pos.pieces;
+        println!("{bitboard_before}");
+        let hashkey_before = pos.hashkey();
+        pos.make_move(exd5);
+        assert_ne!(pos.pieces, bitboard_before);
+        println!("{bb_after}", bb_after = pos.pieces);
+        assert_ne!(pos.hashkey(), hashkey_before);
+        pos.unmake_move();
+        assert_eq!(pos.pieces, bitboard_before);
+        println!("{bb_returned}", bb_returned = pos.pieces);
+        assert_eq!(pos.hashkey(), hashkey_before);
     }
 }
