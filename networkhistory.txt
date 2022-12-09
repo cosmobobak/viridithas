@@ -39,3 +39,5 @@ NET ID | general concept                          | notes
     18 | re-evaluated whole net-17 data with      | 23.9 +/- 7.2, LOS: 100.0 %
        | net-17.                                  | vs net-17.
 -----------------------------------------------------------------------------------------
+    19 | same as net-18, but with 90% WDL focus.  |
+       | not intended to gain, just to test.      |
