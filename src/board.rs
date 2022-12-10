@@ -675,6 +675,8 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
+        let capture = self.captured_piece(m);
+        let is_capture = capture != PIECE_EMPTY;
 
         if moved_piece == PIECE_EMPTY {
             return false;
@@ -692,16 +694,6 @@ impl Board {
             return false;
         }
 
-        let captured_piece = self.piece_at(to);
-
-        if captured_piece != PIECE_EMPTY && colour_of(captured_piece) == self.side {
-            return false;
-        }
-
-        if captured_piece != self.captured_piece(m) {
-            return false;
-        }
-
         if m.is_castle() {
             return self.is_pseudo_legal_castling(to);
         }
@@ -716,8 +708,8 @@ impl Board {
             } else if self.is_double_pawn_push(m) {
                 let one_forward = from.pawn_push(self.side);
                 return self.piece_at(one_forward) == PIECE_EMPTY
-                    && to == one_forward.pawn_push(self.side);
-            } else if captured_piece == PIECE_EMPTY {
+                    && to == one_forward.pawn_push(self.side) && !is_capture;
+            } else if !is_capture {
                 return to == from.pawn_push(self.side) && self.piece_at(to) == PIECE_EMPTY;
             }
             // pawn capture
