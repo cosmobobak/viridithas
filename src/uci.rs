@@ -298,13 +298,15 @@ pub fn format_score(score: i32, turn: u8) -> String {
     }
 }
 
-fn print_uci_response() {
+fn print_uci_response(full: bool) {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("option name Hash type spin default 4 min 1 max 8192");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
-    for (id, default) in SearchParams::default().ids_with_values() {
-        println!("option name {id} type spin default {default} min -999999 max 999999");
+    if full {
+        for (id, default) in SearchParams::default().ids_with_values() {
+            println!("option name {id} type spin default {default} min -999999 max 999999");
+        }
     }
     println!("uciok");
 }
@@ -315,8 +317,6 @@ pub fn is_multipv() -> bool {
 }
 
 pub fn main_loop(params: EvalParams) {
-    print_uci_response();
-
     let mut pos = Board::new();
 
     pos.alloc_tables();
@@ -344,7 +344,11 @@ pub fn main_loop(params: EvalParams) {
         let res = match input {
             "\n" => continue,
             "uci" => {
-                print_uci_response();
+                print_uci_response(false);
+                Ok(())
+            }
+            "ucifull" => {
+                print_uci_response(true);
                 Ok(())
             }
             "isready" => {
