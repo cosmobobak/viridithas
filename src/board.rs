@@ -920,23 +920,21 @@ impl Board {
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
         debug_assert!(m.from().on_board());
         debug_assert!(m.to().on_board());
-        let from = m.from();
-        let piece_moved = self.piece_at(from);
-        if type_of(piece_moved) != PAWN {
+        let from_bb = m.from().bitboard();
+        if from_bb & (BB_RANK_2 | BB_RANK_7) == 0 {
             return false;
         }
-        if from.bitboard() & BB_RANK_2 != 0 {
-            return (m.to().bitboard() & BB_RANK_4) != 0;
+        let to_bb = m.to().bitboard();
+        if to_bb & (BB_RANK_4 | BB_RANK_5) == 0 {
+            return false;
         }
-        if from.bitboard() & BB_RANK_7 != 0 {
-            return (m.to().bitboard() & BB_RANK_5) != 0;
-        }
-        false
+        let piece_moved = self.moved_piece(m);
+        type_of(piece_moved) == PAWN
     }
 
     /// Determines whether this move would be tactical in the current position.
     pub fn is_tactical(&self, m: Move) -> bool {
-        m.is_promo() || self.is_capture(m)
+        m.is_promo() || m.is_ep() || self.is_capture(m)
     }
 
     /// Gets the piece at the given square.

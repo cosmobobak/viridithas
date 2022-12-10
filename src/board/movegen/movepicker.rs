@@ -68,9 +68,12 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
             } else {
                 position.generate_moves(&mut self.movelist);
                 for e in &mut self.movelist.moves[..self.movelist.count] {
-                    e.score = if position.is_tactical(e.mov) {
+                    e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
+                        debug_assert!(position.is_tactical(e.mov), "move {} is not tactical in \"{fen}\"", e.mov, fen = position.fen());
                         Self::score_capture(t, position, e.mov)
                     } else {
+                        debug_assert_eq!(e.score, MoveListEntry::QUIET_SENTINEL);
+                        debug_assert!(!position.is_tactical(e.mov), "move {} is tactical in \"{fen}\"", e.mov, fen = position.fen());
                         Self::score_quiet(self.killers, t, position, e.mov)
                     };
                 }
