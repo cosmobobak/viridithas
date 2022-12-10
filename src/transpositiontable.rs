@@ -255,3 +255,13 @@ const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
     }
     score
 }
+
+mod tests {
+    #![allow(unused_imports)]
+    use super::*;
+
+    #[test]
+    fn tt_entries_are_one_word() {
+        assert_eq!(std::mem::size_of::<TTEntry>(), 8);
+    }
+}
