@@ -675,8 +675,9 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let capture = self.captured_piece(m);
-        let is_capture = capture != PIECE_EMPTY;
+        let captured_piece = self.piece_at(to);
+        let is_capture = captured_piece != PIECE_EMPTY;
+        let is_pawn_double_push = self.is_double_pawn_push(m);
 
         if moved_piece == PIECE_EMPTY {
             return false;
@@ -686,11 +687,19 @@ impl Board {
             return false;
         }
 
-        if type_of(moved_piece) != PAWN && (self.is_double_pawn_push(m) || m.is_ep() || m.is_promo()) {
+        if is_capture && colour_of(captured_piece) == self.side {
+            return false;
+        }
+
+        if type_of(moved_piece) != PAWN && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
             return false;
         }
 
         if type_of(moved_piece) != KING && m.is_castle() {
+            return false;
+        }
+
+        if is_capture && is_pawn_double_push {
             return false;
         }
 
@@ -705,12 +714,12 @@ impl Board {
             }
             if m.is_ep() {
                 return to == self.ep_sq;
-            } else if self.is_double_pawn_push(m) {
+            } else if is_pawn_double_push {
                 let one_forward = from.pawn_push(self.side);
                 return self.piece_at(one_forward) == PIECE_EMPTY
-                    && to == one_forward.pawn_push(self.side) && !is_capture;
+                    && to == one_forward.pawn_push(self.side);
             } else if !is_capture {
-                return to == from.pawn_push(self.side) && self.piece_at(to) == PIECE_EMPTY;
+                return to == from.pawn_push(self.side) && captured_piece == PIECE_EMPTY;
             }
             // pawn capture
             if self.side == WHITE {

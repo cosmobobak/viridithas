@@ -50,9 +50,13 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     pub fn next(&mut self, position: &mut Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
+            // let mut temp_ml = MoveList::new();
+            // position.generate_moves(&mut temp_ml);
             if position.is_pseudo_legal(self.tt_move) {
+                // debug_assert!(temp_ml.iter().any(|&mov| mov == self.tt_move), "tt_move is not pseudo legal: got {} in position {}", self.tt_move, position.fen());
                 return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
             }
+            // debug_assert!(temp_ml.iter().all(|&mov| mov != self.tt_move), "tt_move is pseudo legal but was rejected: got {} in position {}", self.tt_move, position.fen());
         }
         if self.stage == Stage::GenerateMoves {
             self.stage = Stage::YieldMoves;
