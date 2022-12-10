@@ -112,8 +112,9 @@ fn main() {
     }
 
     if cli.info {
-        println!("name: {NAME}");
-        println!("version: {VERSION}");
+        println!("{NAME} {VERSION}");
+        println!("Compiled with architecture: {}", std::env::consts::ARCH);
+        println!("Compiled for OS: {}", std::env::consts::OS);
         println!(
             "number of evaluation parameters: {}",
             board::evaluation::parameters::EvalParams::default().vectorise().len()
