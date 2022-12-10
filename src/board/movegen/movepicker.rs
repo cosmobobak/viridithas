@@ -38,10 +38,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
     }
 
-    pub fn moves_made(&self) -> &[MoveListEntry] {
-        &self.movelist.moves[..self.index]
-    }
-
     pub fn was_tried_lazily(&self, m: Move) -> bool {
         m == self.tt_move
     }
@@ -114,7 +110,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
 
         self.index += 1;
 
-        if self.was_tried_lazily(m.mov) || (!position.is_tactical(m.mov) && self.skip_quiets) {
+        if self.was_tried_lazily(m.mov) || (m.score < WINNING_CAPTURE_SCORE && self.skip_quiets) {
             self.next(position, t)
         } else {
             Some(m)

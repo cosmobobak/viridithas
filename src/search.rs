@@ -10,14 +10,14 @@ use crate::{
         movegen::{
             bitboards::{self, lsb},
             movepicker::MovePicker,
-            MoveListEntry,
+            MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
     },
     chessmove::Move,
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
-        PAWN, QUEEN, ROOK,
+        PAWN, QUEEN, ROOK, StaticVec,
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
@@ -312,6 +312,8 @@ impl Board {
 
         let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
 
+        let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
+        let mut tacticals_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
             if ROOT && uci::is_multipv() {
                 // handle multi-pv
@@ -326,6 +328,11 @@ impl Board {
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
+            if is_quiet {
+                quiets_tried.push(m);
+            } else {
+                tacticals_tried.push(m);
+            }
 
             // lmp, fp, and hlp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
@@ -458,17 +465,16 @@ impl Board {
                         }
                         info.failhigh += 1;
 
-                        if !self.is_tactical(best_move) {
+                        if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
                             self.update_history_metrics::<true>(t, best_move, depth);
 
                             // decrease the history of the non-capture moves that came before the cutoff move.
-                            let ms = move_picker.moves_made();
-                            for e in ms {
-                                if !self.is_tactical(e.mov) {
-                                    self.update_history_metrics::<false>(t, e.mov, depth);
-                                }
+                            let qs = quiets_tried.as_slice();
+                            let qs = &qs[..qs.len() - 1];
+                            for &q in qs {
+                                self.update_history_metrics::<false>(t, q, depth);
                             }
                         }
 
@@ -507,11 +513,10 @@ impl Board {
                 self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the non-capture moves that came before the best move.
-                let ms = move_picker.moves_made();
-                for e in ms.iter().take_while(|m| m.mov != best_move) {
-                    if !self.is_tactical(e.mov) {
-                        self.update_history_metrics::<false>(t, e.mov, depth);
-                    }
+                let qs = quiets_tried.as_slice();
+                let qs = &qs[..qs.len() - 1];
+                for &q in qs {
+                    self.update_history_metrics::<false>(t, q, depth);
                 }
             }
 
