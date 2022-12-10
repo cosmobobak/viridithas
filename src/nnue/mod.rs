@@ -48,6 +48,10 @@ pub struct NNUEParams {
 }
 
 impl NNUEParams {
+    pub const fn num_params() -> usize {
+        INPUT * HIDDEN + HIDDEN + HIDDEN * 2 + 1 // don't duplicate the feature weights
+    }
+
     pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together

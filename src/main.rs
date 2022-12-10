@@ -115,14 +115,9 @@ fn main() {
         println!("{NAME} {VERSION}");
         println!("Compiled with architecture: {}", std::env::consts::ARCH);
         println!("Compiled for OS: {}", std::env::consts::OS);
-        println!(
-            "number of evaluation parameters: {}",
-            board::evaluation::parameters::EvalParams::default().vectorise().len()
-        );
-        println!(
-            "size of a transposition table entry: {}",
-            std::mem::size_of::<transpositiontable::TTEntry>()
-        );
+        println!("number of HCE parameters: {}", board::evaluation::parameters::EvalParams::default().vectorise().len());
+        println!("number of NNUE parameters: {}", nnue::NNUEParams::num_params());
+        println!("size of a transposition table entry: {}", std::mem::size_of::<transpositiontable::TTEntry>());
         return;
     }
 
