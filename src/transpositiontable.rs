@@ -50,14 +50,21 @@ impl TTEntry {
 
 impl From<u64> for TTEntry {
     fn from(data: u64) -> Self {
-        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
-        unsafe { std::mem::transmute(data) }
+        const HFLAG_MASK: u64 = 0b1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_0000_0011;
+        //                        ^-----------------^ ^-----------------^ ^-----------------^ ^-------^ ^-------^
+        //                                key                move                score          depth     flag
+        // HFLAG_MASK is used to ensure that HFlag always lies in the range [0, 3], which are the only valid
+        // bitpatterns of HFlag.
+
+        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types,
+        //         and we ensure that we never construct out-of-range HFlags.
+        unsafe { std::mem::transmute(data & HFLAG_MASK) }
     }
 }
 
 impl From<TTEntry> for u64 {
     fn from(entry: TTEntry) -> Self {
-        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
+        // SAFETY: This is safe because all bitpatterns of `u64` are valid.
         unsafe { std::mem::transmute(entry) }
     }
 }
