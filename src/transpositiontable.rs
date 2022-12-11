@@ -57,7 +57,7 @@ impl From<u64> for TTEntry {
         // bitpatterns of HFlag.
 
         // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types,
-        //         and we ensure that we never construct out-of-range HFlags.
+        //         except for HFlag and we ensure that we never construct out-of-range HFlags.
         unsafe { std::mem::transmute(data & HFLAG_MASK) }
     }
 }
