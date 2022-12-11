@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
@@ -5,6 +7,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum HFlag {
     None = 0,
     UpperBound = 1,
@@ -26,6 +29,7 @@ impl_from_hflag!(u8);
 impl_from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
 pub struct TTEntry {
     pub key: u16,                   // 16 bits
     pub m: Move,                    // 16 bits
@@ -44,11 +48,25 @@ impl TTEntry {
     };
 }
 
+impl From<u64> for TTEntry {
+    fn from(data: u64) -> Self {
+        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
+        unsafe { std::mem::transmute(data) }
+    }
+}
+
+impl From<TTEntry> for u64 {
+    fn from(entry: TTEntry) -> Self {
+        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
+        unsafe { std::mem::transmute(entry) }
+    }
+}
+
 const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 #[derive(Debug)]
 pub struct TranspositionTable {
-    table: Vec<TTEntry>,
+    table: Vec<AtomicU64>,
 }
 
 pub struct TTHit {
@@ -84,23 +102,23 @@ impl TranspositionTable {
 
     pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
-        self.table.resize(new_len, TTEntry::NULL);
+        self.table.resize_with(new_len, || AtomicU64::new(TTEntry::NULL.into()));
         self.table.shrink_to_fit();
-        self.table.fill(TTEntry::NULL);
+        self.table.iter_mut().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
     }
 
     pub fn clear_for_search(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
         if self.table.len() != new_len {
-            self.table.resize(new_len, TTEntry::NULL);
+            self.table.resize_with(new_len, || AtomicU64::new(TTEntry::NULL.into()));
             self.table.shrink_to_fit();
-            self.table.fill(TTEntry::NULL);
+            self.table.iter_mut().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
         }
         // else do nothing.
     }
 
     pub fn store<const ROOT: bool>(
-        &mut self,
+        &self,
         key: u64,
         ply: usize,
         mut best_move: Move,
@@ -116,7 +134,7 @@ impl TranspositionTable {
 
         let index = self.wrap_key(key);
         let key = Self::pack_key(key);
-        let entry = &mut self.table[index];
+        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if best_move.is_null() {
             best_move = entry.m;
@@ -134,17 +152,19 @@ impl TranspositionTable {
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
-        if ROOT || entry.key != key
+        if ROOT
+            || entry.key != key
             || flag == Exact && entry.flag != Exact
             || insert_depth * 3 >= record_depth * 2
         {
-            *entry = TTEntry {
+            let write = TTEntry {
                 key,
                 m: best_move,
                 score: score.try_into().unwrap(),
                 depth: depth.try_into().unwrap(),
                 flag,
             };
+            self.table[index].store(write.into(), Ordering::SeqCst);
         }
     }
 
@@ -165,7 +185,7 @@ impl TranspositionTable {
         debug_assert!(beta >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let entry = &self.table[index];
+        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if entry.key != key {
             return ProbeResult::Nothing;
@@ -232,7 +252,11 @@ impl TranspositionTable {
     }
 
     pub fn hashfull(&self) -> usize {
-        self.table.iter().take(1000).filter(|e| e.key != 0).count()
+        self.table
+            .iter()
+            .take(1000)
+            .filter(|e| <u64 as Into<TTEntry>>::into(e.load(Ordering::Relaxed)).key != 0)
+            .count()
     }
 }
 
