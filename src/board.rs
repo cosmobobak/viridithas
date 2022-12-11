@@ -36,7 +36,7 @@ use crate::{
     search::{self, parameters::SearchParams, AspirationWindow},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TTHit, TranspositionTable},
+    transpositiontable::{ProbeResult, TTHit, TranspositionTableView},
     uci::format_score,
     validate::{piece_type_valid, piece_valid, side_valid},
 };
@@ -100,14 +100,9 @@ pub struct Board {
 
     principal_variation: Vec<Move>,
 
-    tt: TranspositionTable,
-    hashtable_bytes: usize,
-
     eparams: evaluation::parameters::EvalParams,
     pub sparams: SearchParams,
     pub lmr_table: search::LMTable,
-
-    movegen_ready: bool,
 }
 
 impl Debug for Board {
@@ -169,12 +164,9 @@ impl Board {
             piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::new(),
             pst_vals: S(0, 0),
-            tt: TranspositionTable::new(),
-            hashtable_bytes: 4 * 1024 * 1024,
             eparams: evaluation::parameters::EvalParams::default(),
             sparams: SearchParams::default(),
             lmr_table: search::LMTable::new(&SearchParams::default()),
-            movegen_ready: false,
         };
         out.reset();
         out
@@ -185,30 +177,6 @@ impl Board {
         self.lmr_table = search::LMTable::new(&self.sparams);
     }
 
-    pub fn tt_store<const ROOT: bool>(
-        &mut self,
-        best_move: Move,
-        score: i32,
-        flag: HFlag,
-        depth: Depth,
-    ) {
-        // let rule50_idx = self.fifty_move_counter as usize / 8;
-        // let key = self.key ^ FIFTY_MOVE_KEYS[rule50_idx];
-        self.tt.store::<ROOT>(self.key, self.height, best_move, score, flag, depth);
-    }
-
-    pub fn tt_probe<const ROOT: bool>(&self, alpha: i32, beta: i32, depth: Depth) -> ProbeResult {
-        // let rule50_idx = self.fifty_move_counter as usize / 8;
-        // let key = self.key ^ FIFTY_MOVE_KEYS[rule50_idx];
-        self.tt.probe::<ROOT>(self.key, self.height, alpha, beta, depth)
-    }
-
-    /// Nuke the transposition table.
-    /// This wipes all entries in the table, don't call it during a search.
-    pub fn clear_tt(&mut self) {
-        self.tt.resize(self.hashtable_bytes);
-    }
-
     pub const fn ep_sq(&self) -> Square {
         self.ep_sq
     }
@@ -216,11 +184,6 @@ impl Board {
     #[allow(dead_code)]
     pub const fn hashkey(&self) -> u64 {
         self.key
-    }
-
-    pub fn set_hash_size(&mut self, mb: usize) {
-        self.hashtable_bytes = mb * 1024 * 1024;
-        self.clear_tt();
     }
 
     pub fn king_sq(&self, side: u8) -> Square {
@@ -1476,22 +1439,11 @@ impl Board {
             + self.piece_lists[PIECE_TYPE as usize + 6].len()
     }
 
-    pub fn setup_tables_for_search(&mut self) {
-        self.height = 0;
-        self.tt.clear_for_search(self.hashtable_bytes);
-    }
-
-    pub fn alloc_tables(&mut self) {
-        self.tt.clear_for_search(self.hashtable_bytes);
-        self.height = 0;
-        self.movegen_ready = true;
-    }
-
-    fn regenerate_pv_line(&mut self, depth: i32) {
+    fn regenerate_pv_line(&mut self, depth: i32, tt: TranspositionTableView) {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
-            self.tt_probe::<true>(-INFINITY, INFINITY, MAX_DEPTH)
+            tt.probe::<true>(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH)
         {
             if self.principal_variation.len() < depth.try_into().unwrap()
                 && self.is_legal(tt_move)
@@ -1548,8 +1500,8 @@ impl Board {
         &mut self,
         info: &mut SearchInfo,
         thread_data: &mut [ThreadData],
+        tt: TranspositionTableView,
     ) -> (i32, Move) {
-        self.setup_tables_for_search();
         info.setup_for_search();
         for td in thread_data.iter_mut() {
             td.setup_tables_for_search();
@@ -1578,6 +1530,7 @@ impl Board {
             // aspiration loop:
             loop {
                 let score = self.alpha_beta::<true, true, USE_NNUE>(
+                    tt,
                     info,
                     &mut thread_data[0],
                     Depth::new(i_depth),
@@ -1601,12 +1554,13 @@ impl Board {
                 let score_string = format_score(score, self.turn());
 
                 most_recent_score = score;
-                self.regenerate_pv_line(i_depth);
+                self.regenerate_pv_line(i_depth, tt);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
+                        tt,
                         info,
                         &mut thread_data[0],
                         most_recent_move,
@@ -1629,7 +1583,7 @@ impl Board {
                     if info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
-                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info);
+                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info, tt);
                     }
                     aspiration_window.widen_down();
                     if !fail_increment && info.in_game() {
@@ -1643,13 +1597,13 @@ impl Board {
                     if info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
-                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info);
+                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info, tt);
                     }
                     aspiration_window.widen_up();
                     continue;
                 }
                 if info.print_to_stdout {
-                    self.readout_info::<EXACT>(&score_string, i_depth, info);
+                    self.readout_info::<EXACT>(&score_string, i_depth, info, tt);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -1669,7 +1623,7 @@ impl Board {
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
-    fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo) {
+    fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo, tt: TranspositionTableView) {
         #![allow(
             clippy::cast_precision_loss,
             clippy::cast_sign_loss,
@@ -1690,7 +1644,7 @@ impl Board {
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis(),
-                self.tt.hashfull(),
+                tt.hashfull(),
             );
         } else if bound == LOWER_BOUND {
             print!(
@@ -1698,7 +1652,7 @@ impl Board {
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis(),
-                self.tt.hashfull(),
+                tt.hashfull(),
             );
         } else {
             print!(
@@ -1706,7 +1660,7 @@ impl Board {
                 info.seldepth.ply_to_horizon(),
                 info.nodes,
                 info.start_time.elapsed().as_millis(),
-                self.tt.hashfull(),
+                tt.hashfull(),
             );
         }
         self.print_pv();

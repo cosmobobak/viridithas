@@ -7,9 +7,9 @@ use std::{
 
 use crate::{
     board::{Board, evaluation::is_mate_score},
-    definitions::depth::Depth,
+    definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, transpositiontable::TranspositionTable,
 };
 
 fn batch_convert<const USE_NNUE: bool>(
@@ -22,10 +22,10 @@ fn batch_convert<const USE_NNUE: bool>(
     start_time: std::time::Instant,
 ) {
     let mut pos = Board::default();
+    let mut tt = TranspositionTable::new();
+    tt.resize(16 * MEGABYTE);
     let mut t = vec![ThreadData::new()];
     let mut local_ticker = 0;
-    pos.set_hash_size(16);
-    pos.alloc_tables();
     for thread in &mut t {
         thread.alloc_tables();
     }
@@ -58,7 +58,7 @@ fn batch_convert<const USE_NNUE: bool>(
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::default()
         };
-        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t);
+        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t, tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_mate_score(score)) {
             evals.push(None);
             continue;

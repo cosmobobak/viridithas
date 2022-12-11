@@ -11,6 +11,7 @@ pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: depth::Depth = depth::Depth::new(128);
 pub const MAX_PLY: usize = MAX_DEPTH.ply_to_horizon();
 pub const INFINITY: i32 = MATE_SCORE * 2;
+pub const MEGABYTE: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

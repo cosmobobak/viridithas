@@ -21,7 +21,7 @@ use crate::{
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult}, uci,
+    transpositiontable::{HFlag, ProbeResult, TranspositionTableView}, uci,
 };
 
 use self::parameters::SearchParams;
@@ -60,6 +60,7 @@ const LMR_DIVISION: f64 = 243.0;
 impl Board {
     pub fn quiescence<const USE_NNUE: bool>(
         &mut self,
+        tt: TranspositionTableView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut alpha: i32,
@@ -89,7 +90,7 @@ impl Board {
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) = self.tt_probe::<false>(alpha, beta, ZERO_PLY) {
+        if let ProbeResult::Cutoff(s) = tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY) {
             return s;
         }
 
@@ -131,7 +132,7 @@ impl Board {
                 return beta;
             }
 
-            let score = -self.quiescence::<USE_NNUE>(info, t, -beta, -alpha);
+            let score = -self.quiescence::<USE_NNUE>(tt, info, t, -beta, -alpha);
             self.unmake_move_nnue(t);
 
             if score > best_score {
@@ -154,7 +155,7 @@ impl Board {
             HFlag::UpperBound
         };
 
-        self.tt_store::<false>(best_move, best_score, flag, ZERO_PLY);
+        tt.store::<false>(self.hashkey(), self.height(), best_move, best_score, flag, ZERO_PLY);
 
         best_score
     }
@@ -169,6 +170,7 @@ impl Board {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn alpha_beta<const PV: bool, const ROOT: bool, const USE_NNUE: bool>(
         &mut self,
+        tt: TranspositionTableView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut depth: Depth,
@@ -181,7 +183,7 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<USE_NNUE>(info, t, alpha, beta);
+            return self.quiescence::<USE_NNUE>(tt, info, t, alpha, beta);
         }
         depth = depth.max(ZERO_PLY);
 
@@ -224,7 +226,7 @@ impl Board {
         let excluded = t.excluded[self.height()];
 
         let tt_hit = if excluded.is_null() {
-            match self.tt_probe::<ROOT>(alpha, beta, depth) {
+            match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth) {
                 ProbeResult::Cutoff(s) => {
                     return s;
                 }
@@ -284,7 +286,7 @@ impl Board {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
             let score =
-                -self.alpha_beta::<PV, false, USE_NNUE>(info, t, nm_depth, -beta, -beta + 1);
+                -self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -395,7 +397,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular::<USE_NNUE>(info, t, m, tt_value, depth);
+                let is_singular = self.is_singular::<USE_NNUE>(tt, info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
             } else if !ROOT {
                 let gives_check = self.in_check::<{ Self::US }>();
@@ -406,6 +408,7 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 score = -self.alpha_beta::<PV, false, USE_NNUE>(
+                    tt,
                     info,
                     t,
                     depth + extension - 1,
@@ -427,6 +430,7 @@ impl Board {
                 };
                 // perform a zero-window search
                 score = -self.alpha_beta::<false, false, USE_NNUE>(
+                    tt,
                     info,
                     t,
                     depth + extension - r,
@@ -437,6 +441,7 @@ impl Board {
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
                     score = -self.alpha_beta::<PV, false, USE_NNUE>(
+                        tt,
                         info,
                         t,
                         depth + extension - 1,
@@ -479,7 +484,7 @@ impl Board {
                         }
 
                         if excluded.is_null() {
-                            self.tt_store::<ROOT>(best_move, beta, HFlag::LowerBound, depth);
+                            tt.store::<ROOT>(self.hashkey(), self.height(), best_move, beta, HFlag::LowerBound, depth);
                         }
 
                         return beta;
@@ -501,7 +506,7 @@ impl Board {
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
-                self.tt_store::<ROOT>(best_move, alpha, HFlag::UpperBound, depth);
+                tt.store::<ROOT>(self.hashkey(), self.height(), best_move, alpha, HFlag::UpperBound, depth);
             }
         } else {
             // we raised alpha, and didn't raise beta
@@ -521,7 +526,7 @@ impl Board {
             }
 
             if excluded.is_null() {
-                self.tt_store::<ROOT>(best_move, best_score, HFlag::Exact, depth);
+                tt.store::<ROOT>(self.hashkey(), self.height(), best_move, best_score, HFlag::Exact, depth);
             }
         }
 
@@ -544,6 +549,7 @@ impl Board {
 
     pub fn is_singular<const USE_NNUE: bool>(
         &mut self,
+        tt: TranspositionTableView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         m: Move,
@@ -556,6 +562,7 @@ impl Board {
         self.unmake_move_nnue(t);
         t.excluded[self.height()] = m;
         let value = self.alpha_beta::<false, false, USE_NNUE>(
+            tt,
             info,
             t,
             reduced_depth,
@@ -571,6 +578,7 @@ impl Board {
     /// function called at root to modify time control if only one move is good.
     pub fn is_forced<const MARGIN: i32>(
         &mut self,
+        tt: TranspositionTableView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         m: Move,
@@ -583,6 +591,7 @@ impl Board {
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value = self.alpha_beta::<false, true, true>(
+            tt,
             info,
             t,
             reduced_depth,

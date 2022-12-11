@@ -219,7 +219,6 @@ impl Board {
     }
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
-        debug_assert!(self.movegen_ready);
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         if self.side == WHITE {
             self.generate_moves_for::<true>(move_list);

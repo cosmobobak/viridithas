@@ -76,6 +76,11 @@ pub struct TranspositionTable {
     table: Vec<AtomicU64>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TranspositionTableView<'a> {
+    table: &'a [AtomicU64],
+}
+
 pub struct TTHit {
     pub tt_move: Move,
     pub tt_depth: Depth,
@@ -94,19 +99,6 @@ impl TranspositionTable {
         Self { table: Vec::new() }
     }
 
-    fn wrap_key(&self, key: u64) -> usize {
-        #![allow(clippy::cast_possible_truncation)]
-        let key = u128::from(key);
-        let len = self.table.len() as u128;
-        // fixed-point multiplication trick!
-        ((key * len) >> 64) as usize
-    }
-
-    const fn pack_key(key: u64) -> u16 {
-        #![allow(clippy::cast_possible_truncation)]
-        key as u16
-    }
-
     pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
         self.table.resize_with(new_len, || AtomicU64::new(TTEntry::NULL.into()));
@@ -114,14 +106,27 @@ impl TranspositionTable {
         self.table.iter_mut().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
     }
 
-    pub fn clear_for_search(&mut self, bytes: usize) {
-        let new_len = bytes / TT_ENTRY_SIZE;
-        if self.table.len() != new_len {
-            self.table.resize_with(new_len, || AtomicU64::new(TTEntry::NULL.into()));
-            self.table.shrink_to_fit();
-            self.table.iter_mut().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
-        }
-        // else do nothing.
+    pub fn clear(&self) {
+        self.table.iter().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
+    }
+
+    const fn pack_key(key: u64) -> u16 {
+        #![allow(clippy::cast_possible_truncation)]
+        key as u16
+    }
+
+    pub fn view(&self) -> TranspositionTableView {
+        TranspositionTableView { table: &self.table }
+    }
+}
+
+impl<'a> TranspositionTableView<'a> {
+    fn wrap_key(&self, key: u64) -> usize {
+        #![allow(clippy::cast_possible_truncation)]
+        let key = u128::from(key);
+        let len = self.table.len() as u128;
+        // fixed-point multiplication trick!
+        ((key * len) >> 64) as usize
     }
 
     pub fn store<const ROOT: bool>(
@@ -140,7 +145,7 @@ impl TranspositionTable {
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         let index = self.wrap_key(key);
-        let key = Self::pack_key(key);
+        let key = TranspositionTable::pack_key(key);
         let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if best_move.is_null() {
@@ -184,7 +189,7 @@ impl TranspositionTable {
         depth: Depth,
     ) -> ProbeResult {
         let index = self.wrap_key(key);
-        let key = Self::pack_key(key);
+        let key = TranspositionTable::pack_key(key);
 
         debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);

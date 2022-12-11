@@ -524,7 +524,6 @@ mod tests {
     fn pov_preserved() {
         crate::magic::initialise();
         let mut board = crate::board::Board::default();
-        board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
@@ -548,7 +547,6 @@ mod tests {
             "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
         )
         .unwrap();
-        board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
@@ -572,7 +570,6 @@ mod tests {
             "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
         )
         .unwrap();
-        board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
@@ -596,7 +593,6 @@ mod tests {
             "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
         )
         .unwrap();
-        board.alloc_tables();
         let mut t = crate::threadlocal::ThreadData::new();
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);

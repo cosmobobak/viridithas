@@ -4,7 +4,7 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     searchinfo::{SearchInfo, SearchLimit},
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, transpositiontable::TranspositionTable, definitions::MEGABYTE,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -19,7 +19,6 @@ struct EpdPosition {
 
 pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let mut board = Board::new();
-    board.alloc_tables();
     board.set_eval_params(params);
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
@@ -67,6 +66,8 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
 }
 
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
+    let mut tt = TranspositionTable::new();
+    tt.resize(4 * MEGABYTE);
     let mut thread_data = vec![ThreadData::new()];
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
@@ -75,7 +76,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
     let start_time = std::time::Instant::now();
     for EpdPosition { fen, best_moves, id } in positions {
         board.set_from_fen(&fen).unwrap();
-        board.clear_tt();
+        tt.clear();
         for t in &mut thread_data {
             t.nnue.refresh_acc(&board);
             t.alloc_tables();
@@ -86,7 +87,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) ->
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
             ..SearchInfo::default()
         };
-        let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data);
+        let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed { String::new() } else { format!(", {CONTROL_RED}program chose {bm}{CONTROL_RESET}") };

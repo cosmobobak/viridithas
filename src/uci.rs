@@ -13,13 +13,15 @@ use crate::{
         evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE},
         Board,
     },
-    definitions::{BLACK, WHITE},
+    definitions::{BLACK, WHITE, MEGABYTE},
     errors::{FenParseError, MoveParseError},
     search::parameters::SearchParams,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
-    NAME, VERSION,
+    NAME, VERSION, transpositiontable::TranspositionTable,
 };
+
+const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
 
 enum UciError {
     ParseOption(String),
@@ -301,7 +303,7 @@ pub fn format_score(score: i32, turn: u8) -> String {
 fn print_uci_response(full: bool) {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
-    println!("option name Hash type spin default 4 min 1 max 8192");
+    println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max 8192");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -319,7 +321,8 @@ pub fn is_multipv() -> bool {
 pub fn main_loop(params: EvalParams) {
     let mut pos = Board::new();
 
-    pos.alloc_tables();
+    let mut tt = TranspositionTable::new();
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let mut info = SearchInfo::default();
 
@@ -361,7 +364,7 @@ pub fn main_loop(params: EvalParams) {
             }
             "ucinewgame" => {
                 let res = parse_position("position startpos\n", &mut pos);
-                pos.clear_tt();
+                tt.clear();
                 for td in &mut thread_data {
                     td.alloc_tables();
                 }
@@ -371,17 +374,21 @@ pub fn main_loop(params: EvalParams) {
                 println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
                 Ok(())
             }
-            input if input.starts_with("setoption") => parse_setoption(
-                input,
-                &mut info,
-                SetOptions { search_config: pos.sparams.clone(), hash_mb: None },
-            )
-            .map(|config| {
-                pos.set_search_params(config.search_config);
-                if let Some(hash_mb) = config.hash_mb {
-                    pos.set_hash_size(hash_mb);
+            input if input.starts_with("setoption") => {
+                let pre_config = SetOptions { search_config: pos.sparams.clone(), hash_mb: None };
+                let res = parse_setoption(input, &mut info, pre_config);
+                match res {
+                    Ok(conf) => {
+                        pos.set_search_params(conf.search_config);
+                        if let Some(hash_mb) = conf.hash_mb {
+                            let new_size = hash_mb * MEGABYTE;
+                            tt.resize(new_size);
+                        }
+                        Ok(())
+                    }
+                    err => err.map(|_| ()),
                 }
-            }),
+            },
             input if input.starts_with("position") => {
                 let res = parse_position(input, &mut pos);
                 if res.is_ok() {
@@ -394,7 +401,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
-                    pos.search_position::<true>(&mut info, &mut thread_data);
+                    pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
                 }
                 res
             }
