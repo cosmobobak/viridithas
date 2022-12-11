@@ -50,7 +50,7 @@ impl TTEntry {
 
 impl From<u64> for TTEntry {
     fn from(data: u64) -> Self {
-        const HFLAG_MASK: u64 = 0b1100_0000_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111;
+        const HFLAG_MASK: u64 = 0b0000_0011_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111;
         //                        ^-------^ ^-------^ ^-----------------^ ^-----------------^ ^-----------------^ 
         //                          flag      depth      score (16 bits)      move (16 bits)      key (16 bits)
         // HFLAG_MASK is used to ensure that HFlag always lies in the range [0, 3], which are the only valid
