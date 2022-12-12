@@ -1386,7 +1386,11 @@ impl Board {
                 continue;
             }
             self.unmake_move();
-            let promotion = make_piece(self.side, m.safe_promotion_type());
+            let promotion = if m.is_promo() {
+                make_piece(self.side, m.safe_promotion_type())
+            } else {
+                PIECE_EMPTY
+            };
             if promotion as usize != promo.unwrap_or(0) {
                 continue;
             }
