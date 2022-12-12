@@ -17,7 +17,7 @@ struct EpdPosition {
     id: String,
 }
 
-pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
+pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64, hash: usize) {
     let mut board = Board::new();
     board.set_eval_params(params);
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
@@ -32,7 +32,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64) {
     let n_positions = positions.len();
     println!("successfully parsed {n_positions} positions!");
 
-    let successes = run_on_positions(positions, board, time);
+    let successes = run_on_positions(positions, board, time, hash);
 
     println!("{successes}/{n_positions} passed");
 }
@@ -65,9 +65,9 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
     EpdPosition { fen, best_moves, id }
 }
 
-fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64) -> i32 {
+fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize) -> i32 {
     let mut tt = TranspositionTable::new();
-    tt.resize(4 * MEGABYTE);
+    tt.resize(hash * MEGABYTE);
     let mut thread_data = vec![ThreadData::new()];
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();

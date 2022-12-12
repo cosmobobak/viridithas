@@ -43,6 +43,9 @@ pub struct Cli {
     /// Time in milliseconds to search for each move when doing an epd test suite.
     #[clap(long, value_name = "MS", default_value = "3000")]
     pub epdtime: u64,
+    /// Hash size in MB to use when doing an epd test suite.
+    #[clap(long, value_name = "MB", default_value = "4")]
+    pub epdhash: usize,
     /// Path to a WDL data file to evaluate for NNUE data.
     #[clap(long, value_name = "PATH")]
     pub nnueconversionpath: Option<std::path::PathBuf>,
