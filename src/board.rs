@@ -13,7 +13,8 @@ use regex::Regex;
 use crate::{
     board::movegen::{
         bitboards::{
-            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_7, BB_RANK_4, BB_RANK_5,
+            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_4,
+            BB_RANK_5, BB_RANK_7,
         },
         MoveList,
     },
@@ -21,10 +22,10 @@ use crate::{
     definitions::{
         colour_of,
         depth::Depth,
-        type_of, Colour, File,
+        make_piece, type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
         Square, Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING, KNIGHT,
-        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR, make_piece,
+        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
     lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
@@ -1519,8 +1520,10 @@ impl Board {
             info.set_time_window(0);
         }
 
-        let mut most_recent_move = legal_moves[0];
-        let mut most_recent_score = 0;
+        // don't produce weird scores if there's one legal option
+        // and we're going to instamove.
+        let (mut most_recent_move, mut most_recent_score) =
+            tt.probe_for_provisional_info(self.key).unwrap_or((legal_moves[0], 0));
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -1543,12 +1546,12 @@ impl Board {
                 );
                 info.check_up();
                 info.check_if_best_move_found(most_recent_move);
-                if info.stopped {
+                if i_depth > 1 && info.stopped {
                     break 'deepening;
                 }
                 if is_mate_score(score) && i_depth > 10 {
                     mate_counter += 1;
-                    if info.in_game() && mate_counter >= 3 {
+                    if i_depth > 1 && info.in_game() && mate_counter >= 3 {
                         break 'deepening;
                     }
                 } else {
@@ -1577,7 +1580,7 @@ impl Board {
                         info.multiply_time_window(0.25);
                     }
                     info.check_up();
-                    if info.stopped {
+                    if i_depth > 1 && info.stopped {
                         break 'deepening;
                     }
                 }
@@ -1627,7 +1630,13 @@ impl Board {
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
-    fn readout_info<const BOUND: u8>(&self, sstring: &str, depth: i32, info: &SearchInfo, tt: TranspositionTableView) {
+    fn readout_info<const BOUND: u8>(
+        &self,
+        sstring: &str,
+        depth: i32,
+        info: &SearchInfo,
+        tt: TranspositionTableView,
+    ) {
         #![allow(
             clippy::cast_precision_loss,
             clippy::cast_sign_loss,

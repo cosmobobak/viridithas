@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::{
     board::evaluation::MINIMUM_MATE_SCORE,
     chessmove::Move,
-    definitions::{depth::CompactDepthStorage, depth::Depth, INFINITY, MAX_DEPTH},
+    definitions::{depth::{CompactDepthStorage, ZERO_PLY}, depth::Depth, INFINITY, MAX_DEPTH},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,6 +260,18 @@ impl<'a> TranspositionTableView<'a> {
                     ProbeResult::Cutoff(score) // never cutoff at root.
                 }
             }
+        }
+    }
+
+    pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
+        let result = self.probe::<true>(key, 0, -INFINITY, INFINITY, ZERO_PLY);
+        match result {
+            ProbeResult::Hit(TTHit {
+                tt_move,
+                tt_value,
+                ..
+            }) => Some((tt_move, tt_value)),
+            _ => None,
         }
     }
 
