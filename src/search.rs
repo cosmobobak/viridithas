@@ -286,7 +286,7 @@ impl Board {
             && depth >= 3.into()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1) - std::cmp::min(3, (static_eval - beta) / 200);
+            let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 6 - std::cmp::min(3, (static_eval - beta) / 200);
             self.make_nullmove();
             let null_score =
                 -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
