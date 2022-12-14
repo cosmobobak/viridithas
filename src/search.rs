@@ -305,7 +305,7 @@ impl Board {
                 let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.nmp_side_disabled = NO_COLOUR;
                 if veri_score >= beta {
-                    return veri_score;
+                    return beta;
                 }
             }
         }
