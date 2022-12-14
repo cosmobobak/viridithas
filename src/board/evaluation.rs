@@ -306,8 +306,7 @@ impl Board {
     }
 
     pub const fn zugzwang_unlikely(&self) -> bool {
-        const ENDGAME_PHASE: i32 = game_phase(3, 0, 0, 2, 0);
-        self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
+        self.big_piece_counts[self.side as usize] > 0
     }
 
     fn bishop_pair_term(&self) -> S {
