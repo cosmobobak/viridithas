@@ -281,26 +281,23 @@ impl Board {
             && !in_check
             && !last_move_was_null
             && excluded.is_null()
+            && t.nmp_side_disabled != us
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
-            && t.nmp_side_disabled != us
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let mut null_score =
+            let null_score =
                 -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
             }
             if null_score >= beta {
-                if null_score > MINIMUM_MATE_SCORE {
-                    null_score = beta; // it doesn't make any sense to get mated by a null move.
-                }
                 // unconditionally cutoff if we're inside verification search, or if we're just too shallow.
                 if t.nmp_side_disabled != NO_COLOUR || (depth < Depth::new(12) && !is_mate_score(beta)) {
-                    return null_score;
+                    return beta;
                 } 
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled for our side.
@@ -308,7 +305,7 @@ impl Board {
                 let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.nmp_side_disabled = NO_COLOUR;
                 if veri_score >= beta {
-                    return null_score;
+                    return veri_score;
                 }
             }
         }
