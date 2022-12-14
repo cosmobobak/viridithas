@@ -111,6 +111,7 @@ pub enum Colour {
 
 pub const WHITE: u8 = Colour::White as u8;
 pub const BLACK: u8 = Colour::Black as u8;
+pub const NO_COLOUR: u8 = 2;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct Square(u8);

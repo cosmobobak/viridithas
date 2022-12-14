@@ -17,7 +17,7 @@ use crate::{
     chessmove::Move,
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
-        PAWN, QUEEN, ROOK, StaticVec,
+        PAWN, QUEEN, ROOK, StaticVec, NO_COLOUR,
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
@@ -282,17 +282,28 @@ impl Board {
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
+            && t.nmp_side_disabled != self.turn()
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
-            let score =
+            let null_score =
                 -self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
             }
-            if score >= beta {
-                return beta;
+            if null_score >= beta {
+                if depth < Depth::new(10) && !is_mate_score(beta) {
+                    return beta; // just cut off if we're too shallow.
+                } 
+                // verify that it's *actually* fine to prune,
+                // by doing a search with NMP disabled for our side.
+                t.nmp_side_disabled = self.turn();
+                let veri_score = self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                t.nmp_side_disabled = NO_COLOUR;
+                if veri_score >= beta {
+                    return beta;
+                }
             }
         }
 
