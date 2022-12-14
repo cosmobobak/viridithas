@@ -274,6 +274,8 @@ impl Board {
             return static_eval;
         }
 
+        let us = self.turn();
+
         // null-move pruning.
         if !PV
             && !in_check
@@ -282,7 +284,7 @@ impl Board {
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
-            && t.nmp_side_disabled != self.turn()
+            && t.nmp_side_disabled != us
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
@@ -298,7 +300,7 @@ impl Board {
                 } 
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled for our side.
-                t.nmp_side_disabled = self.turn();
+                t.nmp_side_disabled = us;
                 let veri_score = self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.nmp_side_disabled = NO_COLOUR;
                 if veri_score >= beta {
