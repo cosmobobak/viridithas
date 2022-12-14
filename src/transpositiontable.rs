@@ -29,13 +29,42 @@ impl_from_hflag!(u8);
 impl_from_hflag!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgeAndFlag {
+    data: u8,
+}
+
+impl AgeAndFlag {
+    const NULL: Self = Self { data: 0 };
+
+    const fn new(age: u8, flag: HFlag) -> Self {
+        Self {
+            data: (age << 2) | flag as u8,
+        }
+    }
+
+    const fn age(self) -> u8 {
+        self.data >> 2
+    }
+
+    fn flag(self) -> HFlag {
+        match self.data & 0b11 {
+            0 => HFlag::None,
+            1 => HFlag::UpperBound,
+            2 => HFlag::LowerBound,
+            3 => HFlag::Exact,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct TTEntry {
     pub key: u16,                   // 16 bits
     pub m: Move,                    // 16 bits
     pub score: i16,                 // 16 bits
     pub depth: CompactDepthStorage, // 8 bits
-    pub flag: HFlag,                // 4 bits (8 with padding)
+    pub age_and_flag: AgeAndFlag,   // 6 + 2 bits
 }
 
 impl TTEntry {
@@ -44,21 +73,14 @@ impl TTEntry {
         m: Move::NULL,
         score: 0,
         depth: CompactDepthStorage::NULL,
-        flag: HFlag::None,
+        age_and_flag: AgeAndFlag::NULL,
     };
 }
 
 impl From<u64> for TTEntry {
     fn from(data: u64) -> Self {
-        const HFLAG_MASK: u64 = 0b0000_0011_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111;
-        //                        ^-------^ ^-------^ ^-----------------^ ^-----------------^ ^-----------------^ 
-        //                          flag      depth      score (16 bits)      move (16 bits)      key (16 bits)
-        // HFLAG_MASK is used to ensure that HFlag always lies in the range [0, 3], which are the only valid
-        // bitpatterns of HFlag.
-
-        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types,
-        //         except for HFlag and we ensure that we never construct out-of-range HFlags.
-        unsafe { std::mem::transmute(data & HFLAG_MASK) }
+        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
+        unsafe { std::mem::transmute(data) }
     }
 }
 
@@ -74,11 +96,13 @@ const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 #[derive(Debug)]
 pub struct TranspositionTable {
     table: Vec<AtomicU64>,
+    age: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct TranspositionTableView<'a> {
     table: &'a [AtomicU64],
+    age: u8,
 }
 
 pub struct TTHit {
@@ -96,7 +120,7 @@ pub enum ProbeResult {
 
 impl TranspositionTable {
     pub const fn new() -> Self {
-        Self { table: Vec::new() }
+        Self { table: Vec::new(), age: 0 }
     }
 
     pub fn resize(&mut self, bytes: usize) {
@@ -116,7 +140,11 @@ impl TranspositionTable {
     }
 
     pub fn view(&self) -> TranspositionTableView {
-        TranspositionTableView { table: &self.table }
+        TranspositionTableView { table: &self.table, age: self.age }
+    }
+
+    pub fn increase_age(&mut self) {
+        self.age = (self.age + 1) & 0b11_1111; // keep age in range [0, 63]
     }
 }
 
@@ -159,14 +187,14 @@ impl<'a> TranspositionTableView<'a> {
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
-        let record_flag_bonus = i32::from(entry.flag);
+        let record_flag_bonus = i32::from(entry.age_and_flag.flag());
 
         let insert_depth = depth + insert_flag_bonus;
         let record_depth = record_depth + record_flag_bonus;
 
         if ROOT
             || entry.key != key
-            || flag == Exact && entry.flag != Exact
+            || flag == Exact && entry.age_and_flag.flag() != Exact
             || insert_depth * 3 >= record_depth * 2
         {
             let write = TTEntry {
@@ -174,7 +202,7 @@ impl<'a> TranspositionTableView<'a> {
                 m: best_move,
                 score: score.try_into().unwrap(),
                 depth: depth.try_into().unwrap(),
-                flag,
+                age_and_flag: AgeAndFlag::new(self.age, flag),
             };
             self.table[index].store(write.into(), Ordering::SeqCst);
         }
@@ -212,7 +240,7 @@ impl<'a> TranspositionTableView<'a> {
             return ProbeResult::Hit(TTHit {
                 tt_move: m,
                 tt_depth: e_depth,
-                tt_bound: entry.flag,
+                tt_bound: entry.age_and_flag.flag(),
                 tt_value: entry.score.into(),
             });
         }
@@ -222,7 +250,7 @@ impl<'a> TranspositionTableView<'a> {
         let score = reconstruct_mate_score(entry.score.into(), ply);
 
         debug_assert!(score >= -INFINITY);
-        match entry.flag {
+        match entry.age_and_flag.flag() {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
                 if !ROOT && score <= alpha {
@@ -306,10 +334,26 @@ const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
 
 mod tests {
     #![allow(unused_imports)]
+    use crate::definitions::Square;
+
     use super::*;
 
     #[test]
     fn tt_entries_are_one_word() {
         assert_eq!(std::mem::size_of::<TTEntry>(), 8);
+    }
+
+    #[test]
+    fn tt_entry_roundtrip() {
+        let entry = TTEntry {
+            key: 0x1234,
+            m: Move::new(Square::A1, Square::A2, 0, 0),
+            score: 0,
+            depth: ZERO_PLY.try_into().unwrap(),
+            age_and_flag: AgeAndFlag::new(0, HFlag::Exact),
+        };
+        let packed: u64 = entry.into();
+        let unpacked: TTEntry = packed.into();
+        assert_eq!(entry, unpacked);
     }
 }

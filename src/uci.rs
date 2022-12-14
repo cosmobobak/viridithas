@@ -401,6 +401,7 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
+                    tt.increase_age();
                     pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
                 }
                 res
