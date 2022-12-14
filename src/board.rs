@@ -1543,7 +1543,9 @@ impl Board {
                     aspiration_window.beta,
                 );
                 info.check_up();
-                info.check_if_best_move_found(most_recent_move);
+                if i_depth > 2 { 
+                    info.check_if_best_move_found(most_recent_move);
+                }
                 if i_depth > 1 && info.stopped {
                     break 'deepening;
                 }
