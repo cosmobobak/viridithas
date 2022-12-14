@@ -26,6 +26,9 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     pub skip_quiets: bool,
 }
 
+pub type MainMovePicker = MovePicker<false, true>;
+pub type CapturePicker = MovePicker<true, true>;
+
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
     pub const fn new(tt_move: Move, killers: [Move; 3]) -> Self {
         Self { 

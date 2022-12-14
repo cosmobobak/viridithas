@@ -16,7 +16,7 @@ use crate::{
             self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_4,
             BB_RANK_5, BB_RANK_7,
         },
-        MoveList,
+        MoveList, movepicker::MainMovePicker,
     },
     chessmove::Move,
     definitions::{
@@ -48,7 +48,7 @@ const EXACT: u8 = 3;
 
 use self::{
     evaluation::{is_mate_score, score::S},
-    movegen::{bitboards::BitBoard, movepicker::MovePicker},
+    movegen::bitboards::BitBoard,
 };
 
 static SAN_REGEX_INIT: Once = Once::new();
@@ -1633,7 +1633,7 @@ impl Board {
 
     fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
         let (m, score) = tt.probe_for_provisional_info(self.key).unwrap_or((Move::NULL, 0));
-        let mut mp = MovePicker::<false, true>::new(m, self.get_killer_set(thread_data));
+        let mut mp = MainMovePicker::new(m, self.get_killer_set(thread_data));
         let mut maybe_legal = m;
         while !legal_moves.contains(&maybe_legal) {
             if let Some(next_picked) = mp.next(self, thread_data) {

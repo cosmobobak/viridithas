@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::MovePicker,
+            movepicker::{MainMovePicker, CapturePicker},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -111,7 +111,7 @@ impl Board {
 
         let killers = self.get_killer_set(t);
 
-        let mut move_picker = MovePicker::<true, true>::new(Move::NULL, killers);
+        let mut move_picker = CapturePicker::new(Move::NULL, killers);
         while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -312,7 +312,7 @@ impl Board {
         let killers = self.get_killer_set(t);
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
 
-        let mut move_picker = MovePicker::<false, true>::new(tt_move, killers);
+        let mut move_picker = MainMovePicker::new(tt_move, killers);
 
         let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
         let mut tacticals_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
