@@ -1408,9 +1408,6 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        if self.fifty_move_counter < 4 {
-            return false; // optimisation: if the fifty move counter is less than 4, then there cannot be a repetition.
-        }
         for (key, undo) in self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2) {
             if *key == self.key {
                 return true;
