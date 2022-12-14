@@ -192,13 +192,15 @@ impl<'a> TranspositionTableView<'a> {
         // preferentially overwrite entries that are from searches on previous positions in the game.
         let age_differential = (i32::from(self.age) + 64 - i32::from(entry.age_and_flag.age())) & 0b11_1111;
 
-        let insert_depth = depth + insert_flag_bonus + (age_differential * age_differential) / 4;
-        let record_depth = record_depth + record_flag_bonus;
+        // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
+        // but to ensure that *really* old entries are overwritten even if they are of high depth.
+        let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4;
+        let record_prority = record_depth + record_flag_bonus;
 
         if ROOT
             || entry.key != key
             || flag == Exact && entry.age_and_flag.flag() != Exact
-            || insert_depth * 3 >= record_depth * 2
+            || insert_priority * 3 >= record_prority * 2
         {
             let write = TTEntry {
                 key,
