@@ -160,7 +160,7 @@ impl Board {
         best_score
     }
 
-    fn get_killer_set(&self, t: &mut ThreadData) -> [Move; 3] {
+    pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 3] {
         let curr_killers = t.killer_move_table[self.height()];
         let prev_killer =
             if self.height() > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };

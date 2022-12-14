@@ -48,7 +48,7 @@ const EXACT: u8 = 3;
 
 use self::{
     evaluation::{is_mate_score, score::S},
-    movegen::bitboards::BitBoard,
+    movegen::{bitboards::BitBoard, movepicker::MovePicker},
 };
 
 static SAN_REGEX_INIT: Once = Once::new();
@@ -1522,8 +1522,8 @@ impl Board {
 
         // don't produce weird scores if there's one legal option
         // and we're going to instamove.
-        let (mut most_recent_move, mut most_recent_score) =
-            tt.probe_for_provisional_info(self.key).unwrap_or((legal_moves[0], 0));
+        let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_data[0], &legal_moves);
+        
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -1627,7 +1627,23 @@ impl Board {
             println!("bestmove {most_recent_move}");
         }
 
+        assert!(legal_moves.contains(&most_recent_move), "search returned an illegal move.");
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
+    }
+
+    fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
+        let (m, score) = tt.probe_for_provisional_info(self.key).unwrap_or((Move::NULL, 0));
+        let mut mp = MovePicker::<false, true>::new(m, self.get_killer_set(thread_data));
+        let mut maybe_legal = m;
+        while !legal_moves.contains(&maybe_legal) {
+            if let Some(next_picked) = mp.next(self, thread_data) {
+                maybe_legal = next_picked.mov;
+            } else {
+                break;
+            }
+        }
+        assert!(legal_moves.contains(&maybe_legal), "no legal moves found");
+        (maybe_legal, score)
     }
 
     fn readout_info<const BOUND: u8>(

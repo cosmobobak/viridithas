@@ -43,7 +43,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
     }
     
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
-    pub fn next(&mut self, position: &mut Board, t: &ThreadData) -> Option<MoveListEntry> {
+    pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             // let mut temp_ml = MoveList::new();
