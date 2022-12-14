@@ -289,19 +289,19 @@ impl Board {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
             let null_score =
-                -self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
             }
             if null_score >= beta {
-                if depth < Depth::new(10) && !is_mate_score(beta) {
+                if t.nmp_side_disabled != NO_COLOUR || (depth < Depth::new(10) && !is_mate_score(beta)) {
                     return beta; // just cut off if we're too shallow.
                 } 
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled for our side.
                 t.nmp_side_disabled = us;
-                let veri_score = self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.nmp_side_disabled = NO_COLOUR;
                 if veri_score >= beta {
                     return beta;
@@ -395,7 +395,7 @@ impl Board {
             info.nodes += 1;
             moves_made += 1;
             if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
+                println!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {}", info.nodes, lmr_depth);
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
