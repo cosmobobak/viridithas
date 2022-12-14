@@ -48,7 +48,7 @@ const FUTILITY_COEFF_1: i32 = 90;
 const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(4);
-const NMP_VERIFICATION_DEPTH: Depth = Depth::new(8);
+const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
@@ -286,7 +286,7 @@ impl Board {
             && depth >= 3.into()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
+            let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1) - std::cmp::min(3, (static_eval - beta) / 200);
             self.make_nullmove();
             let null_score =
                 -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
@@ -296,7 +296,7 @@ impl Board {
             }
             if null_score >= beta {
                 // unconditionally cutoff if we're inside verification search, or if we're just too shallow.
-                if t.nmp_side_disabled != NO_COLOUR || (depth < Depth::new(12) && !is_mate_score(beta)) {
+                if t.nmp_side_disabled != NO_COLOUR || (depth < self.sparams.nmp_verification_depth && !is_mate_score(beta)) {
                     return beta;
                 } 
                 // verify that it's *actually* fine to prune,
@@ -305,7 +305,7 @@ impl Board {
                 let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.nmp_side_disabled = NO_COLOUR;
                 if veri_score >= beta {
-                    return beta;
+                    return veri_score;
                 }
             }
         }
