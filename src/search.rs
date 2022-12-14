@@ -285,6 +285,7 @@ impl Board {
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
+            && tt_hit.as_ref().map_or(true, |hit| !(hit.tt_bound == HFlag::UpperBound) || hit.tt_value >= beta)
         {
             let nm_depth = (depth - self.sparams.nmp_base_reduction) - (depth / 3 - 1);
             self.make_nullmove();
