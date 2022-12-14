@@ -192,7 +192,7 @@ impl<'a> TranspositionTableView<'a> {
         // preferentially overwrite entries that are from searches on previous positions in the game.
         let age_differential = (i32::from(self.age) + 64 - i32::from(entry.age_and_flag.age())) & 0b11_1111;
 
-        let insert_depth = depth + insert_flag_bonus + age_differential;
+        let insert_depth = depth + insert_flag_bonus + (age_differential * age_differential) / 4;
         let record_depth = record_depth + record_flag_bonus;
 
         if ROOT
