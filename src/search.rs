@@ -47,7 +47,7 @@ const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_1: i32 = 90;
 const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
-const NMP_BASE_REDUCTION: Depth = Depth::new(4);
+const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
@@ -286,7 +286,7 @@ impl Board {
             && depth >= 3.into()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 6 - std::cmp::min(3, (static_eval - beta) / 200);
+            let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 3;
             self.make_nullmove();
             let null_score =
                 -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
