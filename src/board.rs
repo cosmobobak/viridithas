@@ -28,7 +28,7 @@ use crate::{
         MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
-    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
+    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP, FIFTY_MOVE_KEYS},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
@@ -182,9 +182,8 @@ impl Board {
         self.ep_sq
     }
 
-    #[allow(dead_code)]
-    pub const fn hashkey(&self) -> u64 {
-        self.key
+    pub fn hashkey(&self) -> u64 {
+        self.key ^ FIFTY_MOVE_KEYS[self.fifty_move_counter as usize / 8]
     }
 
     pub fn king_sq(&self, side: u8) -> Square {
