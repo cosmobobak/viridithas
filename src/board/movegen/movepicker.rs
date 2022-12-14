@@ -68,23 +68,35 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
         }
 
         // SAFETY: self.index is always in bounds.
-        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
+        let first_entry = unsafe { self.movelist.moves.get_unchecked_mut(self.index) };
+        let mut best_score = first_entry.score;
+        if best_score == MoveListEntry::TACTICAL_SENTINEL {
+            debug_assert!(position.is_tactical(first_entry.mov), "move {} is not tactical in \"{fen}\"", first_entry.mov, fen = position.fen());
+            best_score = Self::score_capture(t, position, first_entry.mov);
+            first_entry.score = best_score;
+        } else if !CAPTURES_ONLY && first_entry.score == MoveListEntry::QUIET_SENTINEL {
+            debug_assert!(!position.is_tactical(first_entry.mov), "move {} is tactical in \"{fen}\"", first_entry.mov, fen = position.fen());
+            best_score = Self::score_quiet(self.killers, t, position, first_entry.mov);
+            first_entry.score = best_score;
+        }
         let mut best_num = self.index;
 
         // find the best move in the unsorted portion of the movelist.
         for index in self.index + 1..self.movelist.count {
             // SAFETY: self.count is always less than 256, and self.index is always in bounds.
             let e = unsafe { self.movelist.moves.get_unchecked_mut(index) };
-            let e: &mut MoveListEntry = e;
-            let position = position;
-            if e.score == MoveListEntry::TACTICAL_SENTINEL {
+            let mut score = e.score;
+            if score == MoveListEntry::TACTICAL_SENTINEL {
                 debug_assert!(position.is_tactical(e.mov), "move {} is not tactical in \"{fen}\"", e.mov, fen = position.fen());
-                e.score = Self::score_capture(t, position, e.mov);
+                score = Self::score_capture(t, position, e.mov);
+                e.score = score;
             } else if !CAPTURES_ONLY && e.score == MoveListEntry::QUIET_SENTINEL {
                 debug_assert!(!position.is_tactical(e.mov), "move {} is tactical in \"{fen}\"", e.mov, fen = position.fen());
-                e.score = Self::score_quiet(self.killers, t, position, e.mov);
+                score = Self::score_quiet(self.killers, t, position, e.mov);
+                e.score = score;
             }
-            let score = e.score;
+            debug_assert_ne!(score, MoveListEntry::TACTICAL_SENTINEL);
+            debug_assert_ne!(score, MoveListEntry::QUIET_SENTINEL);
             if score > best_score {
                 best_score = score;
                 best_num = index;
