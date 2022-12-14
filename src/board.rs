@@ -28,7 +28,7 @@ use crate::{
         MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
     },
     errors::{FenParseError, MoveParseError},
-    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP, FIFTY_MOVE_KEYS},
+    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
@@ -182,8 +182,8 @@ impl Board {
         self.ep_sq
     }
 
-    pub fn hashkey(&self) -> u64 {
-        self.key ^ FIFTY_MOVE_KEYS[self.fifty_move_counter as usize / 8]
+    pub const fn hashkey(&self) -> u64 {
+        self.key
     }
 
     pub fn king_sq(&self, side: u8) -> Square {
@@ -1408,8 +1408,7 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        // search backward because
-        for (key, undo) in self.repetition_cache.iter().rev().zip(self.history.iter().rev()) {
+        for (key, undo) in self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2) {
             if *key == self.key {
                 return true;
             }
