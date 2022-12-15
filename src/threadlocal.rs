@@ -1,9 +1,9 @@
-use crate::{chessmove::Move, definitions::{MAX_PLY, MAX_DEPTH, NO_COLOUR}, nnue, historytable::{HistoryTable, MoveTable, DoubleHistoryTable}};
+use crate::{chessmove::Move, definitions::{MAX_PLY, MAX_DEPTH}, nnue, historytable::{HistoryTable, MoveTable, DoubleHistoryTable}};
 
 pub struct ThreadData {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
-    pub nmp_side_disabled: u8,
+    pub do_nmp: bool,
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::NNUEState>,
 
@@ -18,7 +18,7 @@ impl ThreadData {
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
-            nmp_side_disabled: NO_COLOUR,
+            do_nmp: true,
             multi_pv_excluded: Vec::new(),
             nnue: Box::new(nnue::NNUEState::new()),
             history_table: HistoryTable::new(),

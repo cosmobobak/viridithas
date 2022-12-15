@@ -17,7 +17,7 @@ use crate::{
     chessmove::Move,
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
-        PAWN, QUEEN, ROOK, StaticVec, NO_COLOUR,
+        PAWN, QUEEN, ROOK, StaticVec,
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
@@ -274,14 +274,12 @@ impl Board {
             return static_eval;
         }
 
-        let us = self.turn();
-
         // null-move pruning.
         if !PV
             && !in_check
             && !last_move_was_null
             && excluded.is_null()
-            && t.nmp_side_disabled != us
+            && t.do_nmp
             && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
@@ -295,15 +293,15 @@ impl Board {
                 return 0;
             }
             if null_score >= beta {
-                // unconditionally cutoff if we're inside verification search, or if we're just too shallow.
-                if t.nmp_side_disabled != NO_COLOUR || (depth < self.sparams.nmp_verification_depth && !is_mate_score(beta)) {
+                // unconditionally cutoff if we're just too shallow.
+                if depth < self.sparams.nmp_verification_depth && !is_mate_score(beta) {
                     return beta;
                 } 
                 // verify that it's *actually* fine to prune,
-                // by doing a search with NMP disabled for our side.
-                t.nmp_side_disabled = us;
+                // by doing a search with NMP disabled.
+                t.do_nmp = false;
                 let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
-                t.nmp_side_disabled = NO_COLOUR;
+                t.do_nmp = true;
                 if veri_score >= beta {
                     return veri_score;
                 }
