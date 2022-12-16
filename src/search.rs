@@ -9,19 +9,20 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{MainMovePicker, CapturePicker},
+            movepicker::{CapturePicker, MainMovePicker},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
     },
     chessmove::Move,
     definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, BISHOP, INFINITY, KING, MAX_DEPTH,
-        PAWN, QUEEN, ROOK, StaticVec,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, StaticVec, BISHOP, INFINITY, KING,
+        MAX_DEPTH, PAWN, QUEEN, ROOK,
     },
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TranspositionTableView}, uci,
+    transpositiontable::{HFlag, ProbeResult, TranspositionTableView},
+    uci,
 };
 
 use self::parameters::SearchParams;
@@ -90,7 +91,9 @@ impl Board {
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) = tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY) {
+        if let ProbeResult::Cutoff(s) =
+            tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY)
+        {
             return s;
         }
 
@@ -296,11 +299,18 @@ impl Board {
                 // unconditionally cutoff if we're just too shallow.
                 if depth < self.sparams.nmp_verification_depth && !is_mate_score(beta) {
                     return beta;
-                } 
+                }
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled.
                 t.do_nmp = false;
-                let veri_score = self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                let veri_score = self.alpha_beta::<false, false, USE_NNUE>(
+                    tt,
+                    info,
+                    t,
+                    nm_depth,
+                    beta - 1,
+                    beta,
+                );
                 t.do_nmp = true;
                 if veri_score >= beta {
                     return veri_score;
@@ -322,17 +332,16 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-        let tt_move = if ROOT {
-            Move::NULL
-        } else {
-            tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move)
-        };
+        let tt_move =
+            if ROOT { Move::NULL } else { tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move) };
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
         let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
-        let mut tacticals_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
-        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
+        let mut tacticals_tried =
+            StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
+        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
+        {
             if ROOT && uci::is_multipv() {
                 // handle multi-pv
                 if t.multi_pv_excluded.contains(&m) {
@@ -400,7 +409,7 @@ impl Board {
             if ROOT {
                 t.add_root_move(m);
                 if info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                    print!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {lmr_depth}", info.nodes);
+                    print!("info currmove {m} currmovenumber {moves_made:len$} nodes {} lmrdepth {lmr_depth}", info.nodes, len = t.root_move_ordering.len() / 10);
                     // flush stdout so we can see the output
                     std::io::Write::flush(&mut std::io::stdout()).unwrap();
                 }
@@ -513,7 +522,14 @@ impl Board {
                         }
 
                         if excluded.is_null() {
-                            tt.store::<ROOT>(self.hashkey(), self.height(), best_move, beta, HFlag::LowerBound, depth);
+                            tt.store::<ROOT>(
+                                self.hashkey(),
+                                self.height(),
+                                best_move,
+                                beta,
+                                HFlag::LowerBound,
+                                depth,
+                            );
                         }
 
                         return beta;
@@ -535,7 +551,14 @@ impl Board {
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
-                tt.store::<ROOT>(self.hashkey(), self.height(), best_move, alpha, HFlag::UpperBound, depth);
+                tt.store::<ROOT>(
+                    self.hashkey(),
+                    self.height(),
+                    best_move,
+                    alpha,
+                    HFlag::UpperBound,
+                    depth,
+                );
             }
         } else {
             // we raised alpha, and didn't raise beta
@@ -555,7 +578,14 @@ impl Board {
             }
 
             if excluded.is_null() {
-                tt.store::<ROOT>(self.hashkey(), self.height(), best_move, best_score, HFlag::Exact, depth);
+                tt.store::<ROOT>(
+                    self.hashkey(),
+                    self.height(),
+                    best_move,
+                    best_score,
+                    HFlag::Exact,
+                    depth,
+                );
             }
         }
 

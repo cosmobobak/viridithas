@@ -102,7 +102,8 @@ impl ThreadData {
     pub fn record_subtree_nodecount(&mut self, mov: Move, nodecount: u64) {
         let adjusted_nodecount: i32 = (nodecount / 55).try_into().unwrap_or(i32::MAX);
         if let Some(index) = self.root_move_ordering.iter().position(|(m, _)| *m == mov) {
-            self.root_move_ordering[index].1 = adjusted_nodecount;
+            let curr = self.root_move_ordering[index].1;
+            self.root_move_ordering[index].1 = curr.saturating_add(adjusted_nodecount);
         } else {
             panic!("Tried to record subtree nodecount for a move that wasn't in the root move ordering list!")
         }
