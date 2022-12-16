@@ -1563,6 +1563,7 @@ impl Board {
                 most_recent_score = score;
                 self.regenerate_pv_line(i_depth, tt);
                 most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
+                thread_data[0].inject_new_best_move(most_recent_move);
 
                 if i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;

@@ -322,7 +322,11 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
+        let tt_move = if ROOT {
+            Move::NULL
+        } else {
+            tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move)
+        };
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
@@ -393,8 +397,13 @@ impl Board {
             }
             info.nodes += 1;
             moves_made += 1;
-            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {lmr_depth}", info.nodes);
+            if ROOT {
+                t.add_root_move(m);
+                if info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+                    print!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {lmr_depth}", info.nodes);
+                    // flush stdout so we can see the output
+                    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                }
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
@@ -415,7 +424,7 @@ impl Board {
                 let gives_check = self.in_check::<{ Self::US }>();
                 extension = Depth::from(gives_check);
             };
-
+            let pre_search_nodecount = info.nodes;
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
@@ -466,6 +475,14 @@ impl Board {
 
             if info.stopped {
                 return 0;
+            }
+
+            let subtree_size = info.nodes - pre_search_nodecount;
+            if ROOT {
+                t.record_subtree_nodecount(m, subtree_size);
+                if info.print_to_stdout && info.time_since_start() > Duration::from_secs(6) {
+                    println!(" subtree {subtree_size}");
+                }
             }
 
             if score > best_score {

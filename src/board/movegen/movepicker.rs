@@ -1,4 +1,10 @@
-use crate::{chessmove::Move, board::Board, threadlocal::ThreadData, lookups, definitions::{PAWN, make_piece}};
+use crate::{
+    board::Board,
+    chessmove::Move,
+    definitions::{make_piece, PAWN},
+    lookups,
+    threadlocal::ThreadData,
+};
 
 use super::{MoveList, MoveListEntry};
 
@@ -15,7 +21,7 @@ pub const ILLEGAL_MOVE_SCORE: i32 = -TT_MOVE_SCORE;
 pub enum Stage {
     TTMove,
     GenerateMoves,
-    YieldMoves
+    YieldMoves,
 }
 
 pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> {
@@ -30,11 +36,13 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT:
 pub type MainMovePicker<const ROOT: bool> = MovePicker<false, true, ROOT>;
 pub type CapturePicker = MovePicker<true, true, false>;
 
-impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker<CAPTURES_ONLY, DO_SEE, ROOT> {
+impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
+    MovePicker<CAPTURES_ONLY, DO_SEE, ROOT>
+{
     pub const fn new(tt_move: Move, killers: [Move; 3]) -> Self {
-        Self { 
-            movelist: MoveList::new(), 
-            index: 0, 
+        Self {
+            movelist: MoveList::new(),
+            index: 0,
             stage: Stage::TTMove,
             killers,
             tt_move,
@@ -43,15 +51,16 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker
     }
 
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        m == self.tt_move
+        !ROOT && m == self.tt_move
     }
-    
+
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             // let mut temp_ml = MoveList::new();
             // position.generate_moves(&mut temp_ml);
+            debug_assert!(if ROOT { self.tt_move == Move::NULL } else { true });
             if position.is_pseudo_legal(self.tt_move) {
                 // debug_assert!(temp_ml.iter().any(|&mov| mov == self.tt_move), "tt_move is not pseudo legal: got {} in position {}", self.tt_move, position.fen());
                 return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
@@ -65,32 +74,30 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker
                 for entry in &mut self.movelist.moves[..self.movelist.count] {
                     entry.score = Self::score_capture(t, position, entry.mov);
                 }
-            } else /*if !ROOT*/ {
+            } else {
                 position.generate_moves(&mut self.movelist);
-                for e in &mut self.movelist.moves[..self.movelist.count] {
-                    e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
-                        debug_assert!(position.is_tactical(e.mov), "move {} is not tactical in \"{fen}\"", e.mov, fen = position.fen());
-                        Self::score_capture(t, position, e.mov)
-                    } else {
-                        debug_assert_eq!(e.score, MoveListEntry::QUIET_SENTINEL);
-                        debug_assert!(!position.is_tactical(e.mov), "move {} is tactical in \"{fen}\"", e.mov, fen = position.fen());
-                        Self::score_quiet(self.killers, t, position, e.mov)
-                    };
+                if ROOT {
+                    // Root move generation is special because we need to sort the moves by score.
+                    for e in &mut self.movelist.moves[..self.movelist.count] {
+                        // horrible integer width jank abound.
+                        // this is done because we score by nodecounts, and we want to avoid
+                        // high nodecounts overcoming the special bestmove ordering scores,
+                        // so i64s are used inside ThreadData, but we want to avoid i64s
+                        // in the MoveListEntry struct, so we divide by 55 to get scores
+                        // that preserve relative ordering, but are small enough to fit
+                        // in an i32.
+                        e.score = t.score_at_root(e.mov);
+                    }
+                } else {
+                    for e in &mut self.movelist.moves[..self.movelist.count] {
+                        e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
+                            Self::score_capture(t, position, e.mov)
+                        } else {
+                            Self::score_quiet(self.killers, t, position, e.mov)
+                        };
+                    }
                 }
-            } /*else {
-                // Root move generation is special because we need to sort the moves by score.
-                position.generate_moves(&mut self.movelist);
-                for e in &mut self.movelist.moves[..self.movelist.count] {
-                    // horrible integer width jank abound.
-                    // this is done because we score by nodecounts, and we want to avoid
-                    // high-nodecount overcoming the special bestmove ordering scores,
-                    // so i64s are used inside ThreadData, but we want to avoid i64s
-                    // in the MoveListEntry struct, so we divide by 55 to get scores
-                    // that preserve relative ordering, but are small enough to fit
-                    // in an i32.
-                    e.score = t.score_at_root(e.mov);
-                }
-            }*/
+            }
         }
         // If we have already tried all moves, return None.
         if self.index == self.movelist.count {
@@ -111,10 +118,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker
             }
         }
 
-        debug_assert!(self.index < self.movelist.count);
-        debug_assert!(best_num < self.movelist.count);
-        debug_assert!(best_num >= self.index);
-
         // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
         let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
 
@@ -122,7 +125,8 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker
         // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
         // and self.index is always in bounds.
         unsafe {
-            *self.movelist.moves.get_unchecked_mut(best_num) = *self.movelist.moves.get_unchecked(self.index);
+            *self.movelist.moves.get_unchecked_mut(best_num) =
+                *self.movelist.moves.get_unchecked(self.index);
         }
 
         self.index += 1;
@@ -167,7 +171,8 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker
             }
             score
         } else {
-            let mut score = lookups::get_mvv_lva_score(pos.captured_piece(m), pos.piece_at(m.from()));
+            let mut score =
+                lookups::get_mvv_lva_score(pos.captured_piece(m), pos.piece_at(m.from()));
             if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
                 score += WINNING_CAPTURE_SCORE;
             }

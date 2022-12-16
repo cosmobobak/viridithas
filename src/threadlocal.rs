@@ -107,6 +107,13 @@ impl ThreadData {
             panic!("Tried to record subtree nodecount for a move that wasn't in the root move ordering list!")
         }
     }
+
+    /// Add a legal root move to the root move ordering list.
+    pub fn add_root_move(&mut self, mov: Move) {
+        if !self.root_move_ordering.iter().any(|(m, _)| *m == mov) {
+            self.root_move_ordering.push((mov, 0));
+        }
+    }
 }
 
 mod tests {
