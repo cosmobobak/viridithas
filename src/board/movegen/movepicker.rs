@@ -85,7 +85,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
                             Self::score_quiet(self.killers, t, position, e.mov)
                         };
                         let subtree_score = t.score_at_root(e.mov);
-                        e.score = subtree_score + normal_ordering_score;
+                        e.score = subtree_score.checked_add(normal_ordering_score).unwrap();
                     }
                 } else {
                     for e in &mut self.movelist.moves[..self.movelist.count] {
