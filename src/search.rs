@@ -511,23 +511,25 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<true>(t, best_move, depth, false);
+                            self.update_history_metrics::<true, false>(t, best_move, depth);
 
                             // decrease the history of the quiet moves that came before the cutoff move.
                             let qs = quiets_tried.as_slice();
                             let qs = &qs[..qs.len() - 1];
                             for &m in qs {
-                                self.update_history_metrics::<false>(t, m, depth, false);
+                                self.update_history_metrics::<false, false>(t, m, depth);
                             }
                         } else {
-                            self.update_history_metrics::<true>(t, best_move, depth, true);
+                            self.update_history_metrics::<true, true>(t, best_move, depth);
+                        }
 
-                            // decrease the history of the tactical moves that came before the best move.
-                            let ts = tacticals_tried.as_slice();
-                            let ts = &ts[..ts.len() - 1];
-                            for &m in ts {
-                                self.update_history_metrics::<false>(t, m, depth, true);
-                            }
+                        // decrease the history of the tactical moves that came before the best move.
+                        let mut ts = tacticals_tried.as_slice();
+                        if !is_quiet {
+                            ts = &ts[..ts.len() - 1];
+                        }
+                        for &m in ts {
+                            self.update_history_metrics::<false, true>(t, m, depth);
                         }
 
                         if excluded.is_null() {
@@ -577,23 +579,25 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<true>(t, best_move, depth, false);
+                self.update_history_metrics::<true, false>(t, best_move, depth);
 
                 // decrease the history of the quiet moves that came before the best move.
                 let qs = quiets_tried.as_slice();
                 let qs = &qs[..qs.len() - 1];
                 for &m in qs {
-                    self.update_history_metrics::<false>(t, m, depth, false);
+                    self.update_history_metrics::<false, false>(t, m, depth);
                 }
             } else {
-                self.update_history_metrics::<true>(t, best_move, depth, true);
+                self.update_history_metrics::<true, true>(t, best_move, depth);
+            }
 
-                // decrease the history of the tactical moves that came before the best move.
-                let ts = tacticals_tried.as_slice();
-                let ts = &ts[..ts.len() - 1];
-                for &m in ts {
-                    self.update_history_metrics::<false>(t, m, depth, true);
-                }
+            // decrease the history of the tactical moves that came before the best move.
+            let mut ts = tacticals_tried.as_slice();
+            if !bm_quiet {
+                ts = &ts[..ts.len() - 1];
+            }
+            for &m in ts {
+                self.update_history_metrics::<false, true>(t, m, depth);
             }
 
             if excluded.is_null() {
@@ -615,14 +619,13 @@ impl Board {
         self.sparams.rfp_margin * depth - i32::from(improving) * self.sparams.rfp_improving_margin
     }
 
-    fn update_history_metrics<const IS_GOOD: bool>(
+    fn update_history_metrics<const IS_GOOD: bool, const TACTICAL: bool>(
         &mut self,
         t: &mut ThreadData,
         m: Move,
         depth: Depth,
-        tactical: bool,
     ) {
-        if tactical {
+        if TACTICAL {
             t.add_capture_history::<IS_GOOD>(self, m, depth);
         } else {
             t.add_history::<IS_GOOD>(self, m, depth);
