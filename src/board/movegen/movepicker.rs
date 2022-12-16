@@ -12,6 +12,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+const BASE_CAPTURE_SCORE: i32 = 1000;
 const MOVEGEN_SEE_THRESHOLD: i32 = 0;
 pub const ILLEGAL_MOVE_SCORE: i32 = -TT_MOVE_SCORE;
 
@@ -154,7 +155,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
     }
 
     pub fn score_capture(t: &ThreadData, pos: &Board, m: Move) -> i32 {
-        let mut score = t.capture_history_score(pos, m);
+        let mut score = t.capture_history_score(pos, m) + BASE_CAPTURE_SCORE;
         if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
         }
