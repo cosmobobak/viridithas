@@ -54,6 +54,8 @@ impl ThreadData {
         self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
+        self.root_move_ordering.clear();
+        self.previous_bestmoves.clear();
     }
 
     pub fn setup_tables_for_search(&mut self) {
@@ -61,6 +63,8 @@ impl ThreadData {
         self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
+        self.root_move_ordering.clear();
+        self.previous_bestmoves.clear();
     }
 
     /// Get the score of a move at the root of the search.
