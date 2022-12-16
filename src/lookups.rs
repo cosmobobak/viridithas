@@ -3,8 +3,7 @@
 use crate::{
     definitions::{
         File::{FILE_A, FILE_H},
-        Rank::{RANK_1, RANK_8},
-        BK, KING, KNIGHT, WP, Square,
+        Rank::{RANK_1, RANK_8}, KING, KNIGHT, Square,
     },
     rng::XorShiftState,
 };
@@ -180,30 +179,13 @@ pub fn piece_char(piece: u8) -> Option<char> {
     PIECE_CHARS.get(piece as usize).map(|&c| c as char)
 }
 
-/// The score of this piece, for MVV/LVA move ordering.
-const VICTIM_SCORE: [i32; 13] =
-    [0, 1000, 2000, 3000, 4000, 5000, 6000, 1000, 2000, 3000, 4000, 5000, 6000];
-
-const fn mvvlva_init() -> [[i32; 13]; 13] {
-    let mut mvvlva = [[0; 13]; 13];
-    let mut attacker = WP as usize;
-    while attacker <= BK as usize {
-        let mut victim = WP as usize;
-        while victim <= BK as usize {
-            mvvlva[victim][attacker] = VICTIM_SCORE[victim] + 60 - VICTIM_SCORE[attacker] / 100;
-            victim += 1;
-        }
-        attacker += 1;
-    }
-    mvvlva
+fn victim_score(piece: u8) -> i32 {
+    i32::from(1 + (piece - 1) % 6) * 1000
 }
 
 /// The score of this pair of pieces, for MVV/LVA move ordering.
-static MVV_LVA_SCORE: [[i32; 13]; 13] = mvvlva_init();
 pub fn get_mvv_lva_score(victim: u8, attacker: u8) -> i32 {
-    debug_assert!(victim < 13);
-    debug_assert!(attacker < 13);
-    unsafe { *MVV_LVA_SCORE.get_unchecked(victim as usize).get_unchecked(attacker as usize) }
+    victim_score(victim) + 60 - victim_score(attacker) / 100
 }
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {

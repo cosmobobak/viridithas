@@ -511,16 +511,14 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<true, false>(t, best_move, depth);
+                            self.update_history_metrics::<true>(t, best_move, depth);
 
                             // decrease the history of the quiet moves that came before the cutoff move.
                             let qs = quiets_tried.as_slice();
                             let qs = &qs[..qs.len() - 1];
                             for &m in qs {
-                                self.update_history_metrics::<false, false>(t, m, depth);
+                                self.update_history_metrics::<false>(t, m, depth);
                             }
-                        } else {
-                            self.update_history_metrics::<true, true>(t, best_move, depth);
                         }
 
                         if excluded.is_null() {
@@ -570,16 +568,14 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<true, false>(t, best_move, depth);
+                self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the quiet moves that came before the best move.
                 let qs = quiets_tried.as_slice();
                 let qs = &qs[..qs.len() - 1];
                 for &m in qs {
-                    self.update_history_metrics::<false, false>(t, m, depth);
+                    self.update_history_metrics::<false>(t, m, depth);
                 }
-            } else {
-                self.update_history_metrics::<true, true>(t, best_move, depth);
             }
 
             if excluded.is_null() {
@@ -601,18 +597,14 @@ impl Board {
         self.sparams.rfp_margin * depth - i32::from(improving) * self.sparams.rfp_improving_margin
     }
 
-    fn update_history_metrics<const IS_GOOD: bool, const TACTICAL: bool>(
+    fn update_history_metrics<const IS_GOOD: bool>(
         &mut self,
         t: &mut ThreadData,
         m: Move,
         depth: Depth,
     ) {
-        if TACTICAL {
-            t.add_capture_history::<IS_GOOD>(self, m, depth);
-        } else {
-            t.add_history::<IS_GOOD>(self, m, depth);
-            t.add_followup_history::<IS_GOOD>(self, m, depth);
-        }
+        t.add_history::<IS_GOOD>(self, m, depth);
+        t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
     pub fn is_singular<const USE_NNUE: bool>(
