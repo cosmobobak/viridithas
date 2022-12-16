@@ -324,7 +324,7 @@ impl Board {
         let killers = self.get_killer_set(t);
         let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
 
-        let mut move_picker = MainMovePicker::new(tt_move, killers);
+        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
         let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
         let mut tacticals_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);

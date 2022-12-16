@@ -9,6 +9,7 @@ const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 const MOVEGEN_SEE_THRESHOLD: i32 = 0;
+pub const ILLEGAL_MOVE_SCORE: i32 = -TT_MOVE_SCORE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -17,7 +18,7 @@ pub enum Stage {
     YieldMoves
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
+pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> {
     movelist: MoveList,
     index: usize,
     stage: Stage,
@@ -26,10 +27,10 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool> {
     pub skip_quiets: bool,
 }
 
-pub type MainMovePicker = MovePicker<false, true>;
-pub type CapturePicker = MovePicker<true, true>;
+pub type MainMovePicker<const ROOT: bool> = MovePicker<false, true, ROOT>;
+pub type CapturePicker = MovePicker<true, true, false>;
 
-impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO_SEE> {
+impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> MovePicker<CAPTURES_ONLY, DO_SEE, ROOT> {
     pub const fn new(tt_move: Move, killers: [Move; 3]) -> Self {
         Self { 
             movelist: MoveList::new(), 
@@ -64,7 +65,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
                 for entry in &mut self.movelist.moves[..self.movelist.count] {
                     entry.score = Self::score_capture(t, position, entry.mov);
                 }
-            } else {
+            } else /*if !ROOT*/ {
                 position.generate_moves(&mut self.movelist);
                 for e in &mut self.movelist.moves[..self.movelist.count] {
                     e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
@@ -76,7 +77,20 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool> MovePicker<CAPTURES_ONLY, DO
                         Self::score_quiet(self.killers, t, position, e.mov)
                     };
                 }
-            }
+            } /*else {
+                // Root move generation is special because we need to sort the moves by score.
+                position.generate_moves(&mut self.movelist);
+                for e in &mut self.movelist.moves[..self.movelist.count] {
+                    // horrible integer width jank abound.
+                    // this is done because we score by nodecounts, and we want to avoid
+                    // high-nodecount overcoming the special bestmove ordering scores,
+                    // so i64s are used inside ThreadData, but we want to avoid i64s
+                    // in the MoveListEntry struct, so we divide by 55 to get scores
+                    // that preserve relative ordering, but are small enough to fit
+                    // in an i32.
+                    e.score = t.score_at_root(e.mov);
+                }
+            }*/
         }
         // If we have already tried all moves, return None.
         if self.index == self.movelist.count {

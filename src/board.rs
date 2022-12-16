@@ -1633,7 +1633,7 @@ impl Board {
 
     fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
         let (m, score) = tt.probe_for_provisional_info(self.key).unwrap_or((Move::NULL, 0));
-        let mut mp = MainMovePicker::new(m, self.get_killer_set(thread_data));
+        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data));
         let mut maybe_legal = m;
         while !legal_moves.contains(&maybe_legal) {
             if let Some(next_picked) = mp.next(self, thread_data) {
