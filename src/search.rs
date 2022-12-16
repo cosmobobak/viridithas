@@ -523,15 +523,6 @@ impl Board {
                             self.update_history_metrics::<true, true>(t, best_move, depth);
                         }
 
-                        // decrease the history of the tactical moves that came before the best move.
-                        let mut ts = tacticals_tried.as_slice();
-                        if !is_quiet {
-                            ts = &ts[..ts.len() - 1];
-                        }
-                        for &m in ts {
-                            self.update_history_metrics::<false, true>(t, m, depth);
-                        }
-
                         if excluded.is_null() {
                             tt.store::<ROOT>(
                                 self.hashkey(),
@@ -589,15 +580,6 @@ impl Board {
                 }
             } else {
                 self.update_history_metrics::<true, true>(t, best_move, depth);
-            }
-
-            // decrease the history of the tactical moves that came before the best move.
-            let mut ts = tacticals_tried.as_slice();
-            if !bm_quiet {
-                ts = &ts[..ts.len() - 1];
-            }
-            for &m in ts {
-                self.update_history_metrics::<false, true>(t, m, depth);
             }
 
             if excluded.is_null() {
