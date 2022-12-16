@@ -51,9 +51,9 @@ impl ThreadData {
 
     pub fn alloc_tables(&mut self) {
         self.history_table.clear();
+        self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
-        self.followup_history.clear();
     }
 
     pub fn setup_tables_for_search(&mut self) {
