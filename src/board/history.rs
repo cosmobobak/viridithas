@@ -7,7 +7,7 @@ use crate::{
 use super::Board;
 
 impl ThreadData {
-    /// Add a move to the history table.
+    /// Add a quiet move to the history table.
     pub fn add_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
         let piece_moved = pos.moved_piece(m);
         debug_assert!(
@@ -19,11 +19,30 @@ impl ThreadData {
         update_history::<IS_GOOD>(val, depth);
     }
 
-    /// Get the history score for a move.
+    /// Add a tactical move to the capture history table.
+    pub fn add_capture_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
+        let piece_moved = pos.moved_piece(m);
+        debug_assert!(
+            crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY,
+            "Invalid piece moved by move {m} in position \n{pos}"
+        );
+        let to = m.to();
+        let val = self.capture_history.get_mut(piece_moved, to);
+        update_history::<IS_GOOD>(val, depth);
+    }
+
+    /// Get the history score for a quiet move.
     pub(super) fn history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.moved_piece(m);
         let to = m.to();
         self.history_table.get(piece_moved, to)
+    }
+
+    /// Get the capture history score for a tactical move.
+    pub(super) fn capture_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let piece_moved = pos.moved_piece(m);
+        let to = m.to();
+        self.capture_history.get(piece_moved, to)
     }
 
     /// Add a move to the countermove history table.

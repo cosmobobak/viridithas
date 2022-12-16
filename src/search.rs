@@ -511,13 +511,22 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<true>(t, best_move, depth);
+                            self.update_history_metrics::<true>(t, best_move, depth, false);
 
-                            // decrease the history of the non-capture moves that came before the cutoff move.
+                            // decrease the history of the quiet moves that came before the cutoff move.
                             let qs = quiets_tried.as_slice();
                             let qs = &qs[..qs.len() - 1];
-                            for &q in qs {
-                                self.update_history_metrics::<false>(t, q, depth);
+                            for &m in qs {
+                                self.update_history_metrics::<false>(t, m, depth, false);
+                            }
+                        } else {
+                            self.update_history_metrics::<true>(t, best_move, depth, true);
+
+                            // decrease the history of the tactical moves that came before the best move.
+                            let ts = tacticals_tried.as_slice();
+                            let ts = &ts[..ts.len() - 1];
+                            for &m in ts {
+                                self.update_history_metrics::<false>(t, m, depth, true);
                             }
                         }
 
@@ -564,16 +573,26 @@ impl Board {
             // we raised alpha, and didn't raise beta
             // as if we had, we would have returned early,
             // so this is a PV-node
-            if !self.is_tactical(best_move) {
+            let bm_quiet = !self.is_tactical(best_move);
+            if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<true>(t, best_move, depth);
+                self.update_history_metrics::<true>(t, best_move, depth, false);
 
-                // decrease the history of the non-capture moves that came before the best move.
+                // decrease the history of the quiet moves that came before the best move.
                 let qs = quiets_tried.as_slice();
                 let qs = &qs[..qs.len() - 1];
-                for &q in qs {
-                    self.update_history_metrics::<false>(t, q, depth);
+                for &m in qs {
+                    self.update_history_metrics::<false>(t, m, depth, false);
+                }
+            } else {
+                self.update_history_metrics::<true>(t, best_move, depth, true);
+
+                // decrease the history of the tactical moves that came before the best move.
+                let ts = tacticals_tried.as_slice();
+                let ts = &ts[..ts.len() - 1];
+                for &m in ts {
+                    self.update_history_metrics::<false>(t, m, depth, true);
                 }
             }
 
@@ -601,9 +620,14 @@ impl Board {
         t: &mut ThreadData,
         m: Move,
         depth: Depth,
+        tactical: bool,
     ) {
-        t.add_history::<IS_GOOD>(self, m, depth);
-        t.add_followup_history::<IS_GOOD>(self, m, depth);
+        if tactical {
+            t.add_capture_history::<IS_GOOD>(self, m, depth);
+        } else {
+            t.add_history::<IS_GOOD>(self, m, depth);
+            t.add_followup_history::<IS_GOOD>(self, m, depth);
+        }
     }
 
     pub fn is_singular<const USE_NNUE: bool>(

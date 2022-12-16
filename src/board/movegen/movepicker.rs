@@ -1,8 +1,6 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{make_piece, PAWN},
-    lookups,
     threadlocal::ThreadData,
 };
 
@@ -155,16 +153,8 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         }
     }
 
-    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move) -> i32 {
-        let turn = pos.turn();
-        let mut score;
-        if m.is_promo() {
-            score = lookups::get_mvv_lva_score(make_piece(turn, m.promotion_type()), PAWN);
-        } else if m.is_ep() {
-            score = 1050; // the score for PxP in MVVLVA
-        } else {
-            score = lookups::get_mvv_lva_score(pos.captured_piece(m), pos.piece_at(m.from()));
-        }
+    pub fn score_capture(t: &ThreadData, pos: &Board, m: Move) -> i32 {
+        let mut score = t.capture_history_score(pos, m);
         if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
         }

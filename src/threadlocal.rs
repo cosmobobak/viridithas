@@ -8,9 +8,10 @@ pub struct ThreadData {
     pub nnue: Box<nnue::NNUEState>,
 
     pub history_table: HistoryTable,
+    pub followup_history: DoubleHistoryTable,
+    pub capture_history: HistoryTable,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
     pub counter_move_table: MoveTable,
-    pub followup_history: DoubleHistoryTable,
 
     /// A record of the size of the game subtree under each root move
     /// in the last iteration of the search. This is used to order the
@@ -31,9 +32,10 @@ impl ThreadData {
             multi_pv_excluded: Vec::new(),
             nnue: Box::new(nnue::NNUEState::new()),
             history_table: HistoryTable::new(),
+            followup_history: DoubleHistoryTable::new(),
+            capture_history: HistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
-            followup_history: DoubleHistoryTable::new(),
             root_move_ordering: Vec::new(),
             previous_bestmoves: Vec::new(),
         }
@@ -52,6 +54,7 @@ impl ThreadData {
     pub fn alloc_tables(&mut self) {
         self.history_table.clear();
         self.followup_history.clear();
+        self.capture_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
         self.root_move_ordering.clear();
@@ -61,6 +64,7 @@ impl ThreadData {
     pub fn setup_tables_for_search(&mut self) {
         self.history_table.age_entries();
         self.followup_history.age_entries();
+        self.capture_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
         self.root_move_ordering.clear();
