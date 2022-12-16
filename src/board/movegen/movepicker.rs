@@ -79,14 +79,13 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
                 if ROOT {
                     // Root move generation is special because we need to sort the moves by score.
                     for e in &mut self.movelist.moves[..self.movelist.count] {
-                        // horrible integer width jank abound.
-                        // this is done because we score by nodecounts, and we want to avoid
-                        // high nodecounts overcoming the special bestmove ordering scores,
-                        // so i64s are used inside ThreadData, but we want to avoid i64s
-                        // in the MoveListEntry struct, so we divide by 55 to get scores
-                        // that preserve relative ordering, but are small enough to fit
-                        // in an i32.
-                        e.score = t.score_at_root(e.mov);
+                        let normal_ordering_score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
+                            Self::score_capture(t, position, e.mov)
+                        } else {
+                            Self::score_quiet(self.killers, t, position, e.mov)
+                        };
+                        let subtree_score = t.score_at_root(e.mov);
+                        e.score = subtree_score + normal_ordering_score;
                     }
                 } else {
                     for e in &mut self.movelist.moves[..self.movelist.count] {
