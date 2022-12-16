@@ -1,7 +1,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{make_piece, PAWN},
+    definitions::{make_piece, PAWN, QUEEN},
     lookups,
     threadlocal::ThreadData,
 };
@@ -167,6 +167,9 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         }
         if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
+        }
+        if m.is_promo() && m.promotion_type() == QUEEN {
+            score += WINNING_CAPTURE_SCORE / 2;
         }
         score
     }
