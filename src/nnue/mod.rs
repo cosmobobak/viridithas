@@ -107,7 +107,7 @@ impl NNUEParams {
             for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
                 for (j, weight) in output.as_array().unwrap().iter().enumerate() {
                     let index =
-                        if flip { (j * stride + i) as usize } else { (i * stride + j) as usize };
+                        if flip { j * stride + i } else { i * stride + j };
                     let value = weight.as_f64().unwrap();
                     weight_array[index] = (value * f64::from(k)) as i16;
                 }

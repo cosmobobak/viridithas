@@ -394,7 +394,7 @@ impl Board {
             info.nodes += 1;
             moves_made += 1;
             if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                println!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {}", info.nodes, lmr_depth);
+                println!("info currmove {m} currmovenumber {moves_made} nodes {} lmrdepth {lmr_depth}", info.nodes);
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {

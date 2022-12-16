@@ -518,7 +518,7 @@ pub fn print_bb(bb: u64) {
     for rank in (0..=7).rev() {
         for file in 0..=7 {
             let sq = crate::lookups::filerank_to_square(file, rank);
-            assert!(sq < 64, "sq64: {}, sq: {}, file: {}, rank: {}", sq, sq, file, rank);
+            assert!(sq < 64, "sq64: {sq}, sq: {sq}, file: {file}, rank: {rank}");
             if bb & (1 << sq) == 0 {
                 print!(" .");
             } else {

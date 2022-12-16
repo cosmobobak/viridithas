@@ -80,7 +80,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     params_to_tune: Option<&[usize]>,
 ) -> PVec {
     if let Some(ptt) = params_to_tune {
-        println!("limiting tuning to params: {:?}", ptt);
+        println!("limiting tuning to params: {ptt:?}");
     }
     #[allow(clippy::cast_possible_truncation)]
     let nudge_size = |iteration: i32| -> i32 {
@@ -92,7 +92,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     let best_params = starting_point.to_vec();
     let mut best_params = PVec { mse: cost_function(&best_params), params: best_params };
     let initial_err = best_params.mse;
-    println!("initial error: {}", initial_err);
+    println!("initial error: {initial_err}");
     let mut improved = true;
     let mut iteration = 1;
     println!("Initialised in {:.1}s", init_start_time.elapsed().as_secs_f64());
@@ -141,7 +141,7 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
         }
         EvalParams::save_param_vec(
             &best_params.params,
-            &format!("params/localsearch{iteration:0>3}.txt"),
+            format!("params/localsearch{iteration:0>3}.txt"),
         );
         iteration += 1;
     }

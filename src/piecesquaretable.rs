@@ -20,7 +20,7 @@ pub fn render_pst_table(pst: &PieceSquareTable) {
             for col in 0..8 {
                 let sq = row * 8 + col;
                 let pst_val = pst[piece][sq].0;
-                print!("{:>5}", pst_val);
+                print!("{pst_val:>5}");
             }
             println!();
         }
@@ -30,7 +30,7 @@ pub fn render_pst_table(pst: &PieceSquareTable) {
             for col in 0..8 {
                 let sq = row * 8 + col;
                 let pst_val = pst[piece][sq].1;
-                print!("{:>5}", pst_val);
+                print!("{pst_val:>5}");
             }
             println!();
         }

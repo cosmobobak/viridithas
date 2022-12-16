@@ -34,7 +34,7 @@ impl Board {
                         sq,
                         piece_char(piece)
                             .map(|c| c.to_string())
-                            .unwrap_or(format!("unknown piece: {}", piece)),
+                            .unwrap_or(format!("unknown piece: {piece}")),
                         piece_char(self.piece_at(sq))
                             .map(|c| c.to_string())
                             .unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
@@ -87,7 +87,7 @@ impl Board {
                     return Err(format!(
                         "bitboard / piece array coherency corrupt: expected square {} to be '{}' but was '{}'",
                         sq,
-                        piece_char(piece).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", piece)),
+                        piece_char(piece).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {piece}")),
                         piece_char(self.piece_at(sq)).map(|c| c.to_string()).unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
                     ));
                 }

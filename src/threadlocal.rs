@@ -12,6 +12,9 @@ pub struct ThreadData {
     pub counter_move_table: MoveTable,
     pub followup_history: DoubleHistoryTable,
 
+    /// A record of the size of the game subtree under each root move
+    /// in the last iteration of the search. This is used to order the
+    /// root moves in the next iteration.
     pub root_move_ordering: Vec<(Move, i32)>,
     /// The previous bestmoves in shallower searches.
     /// idx[0] is the actual best move found last search,

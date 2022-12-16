@@ -62,7 +62,7 @@ impl Display for SearchParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Search parameters:")?;
         for (id, value) in self.ids_with_values() {
-            writeln!(f, "    {}: {}", id, value)?;
+            writeln!(f, "    {id}: {value}")?;
         }
         Ok(())
     }

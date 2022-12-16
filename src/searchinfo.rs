@@ -104,7 +104,7 @@ impl<'a> SearchInfo<'a> {
             SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = millis;
             }
-            other => panic!("Unexpected search limit: {:?}", other),
+            other => panic!("Unexpected search limit: {other:?}"),
         }
     }
 
@@ -118,7 +118,7 @@ impl<'a> SearchInfo<'a> {
             SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = (*time_window as f64 * factor) as u64;
             }
-            other => panic!("Unexpected search limit: {:?}", other),
+            other => panic!("Unexpected search limit: {other:?}"),
         }
     }
 

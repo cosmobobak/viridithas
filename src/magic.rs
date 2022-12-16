@@ -285,7 +285,7 @@ pub fn init_magics() {
     println!("static BISHOP_MAGICS: [u64; 64] = [");
     for (square, &relbits) in BISHOP_REL_BITS.iter().enumerate() {
         let magic = find_magic(square as i32, relbits, true);
-        let magic_str = format!("{:016X}", magic);
+        let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
         let magic_str = magic_str
@@ -301,7 +301,7 @@ pub fn init_magics() {
     println!("static ROOK_MAGICS: [u64; 64] = [");
     for (square, &relbits) in ROOK_REL_BITS.iter().enumerate() {
         let magic = find_magic(square as i32, relbits, false);
-        let magic_str = format!("{:016X}", magic);
+        let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
         let magic_str = magic_str

@@ -100,7 +100,7 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
             for file in FILE_A..=FILE_D {
                 let sq = Square::from_rank_file(rank, file);
                 let val = pst[piece as usize][sq.index()];
-                print!("{}, ", val);
+                print!("{val}, ");
             }
             println!("],");
         }
@@ -120,7 +120,7 @@ static P_BONUS: [[S; 8]; 8] = [
         for file in FILE_A..=FILE_H {
             let sq = Square::from_rank_file(rank, file);
             let val = pst[WP as usize][sq.index()];
-            print!("{}, ", val);
+            print!("{val}, ");
         }
         println!("],");
     }

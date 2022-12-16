@@ -170,7 +170,7 @@ pub fn piece_name(piece: u8) -> Option<&'static str> {
 }
 
 pub const fn piece_from_cotype(colour: u8, ty: u8) -> u8 {
-    (colour * 6 + ty) as u8
+    colour * 6 + ty
 }
 
 static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";

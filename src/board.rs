@@ -439,7 +439,7 @@ impl Board {
                         write!(fen, "{counter}").unwrap();
                     }
                     counter = 0;
-                    fen.push(piece_char(piece).unwrap() as char);
+                    fen.push(piece_char(piece).unwrap());
                 }
             }
             if counter != 0 {
@@ -518,8 +518,8 @@ impl Board {
                 if ep_sq.len() != 2 {
                     return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
                 }
-                let file = ep_sq[0] as u8 - b'a';
-                let rank = ep_sq[1] as u8 - b'1';
+                let file = ep_sq[0] - b'a';
+                let rank = ep_sq[1] - b'1';
                 if !((File::FILE_A..=File::FILE_H).contains(&file)
                     && (Rank::RANK_1..=Rank::RANK_8).contains(&rank))
                 {
@@ -926,8 +926,8 @@ impl Board {
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
         debug_assert!(side_valid(side));
-        debug_assert!(piece_valid(piece), "piece: {:?}", piece);
-        debug_assert!(captured == PIECE_EMPTY || piece_valid(captured), "captured: {:?}", captured);
+        debug_assert!(piece_valid(piece), "piece: {piece:?}");
+        debug_assert!(captured == PIECE_EMPTY || piece_valid(captured), "captured: {captured:?}");
 
         let saved_key = self.key;
 
@@ -1729,7 +1729,7 @@ impl Display for Board {
             for file in (File::FILE_A)..=(File::FILE_H) {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                write!(f, "{} ", piece_char(piece).unwrap() as char)?;
+                write!(f, "{} ", piece_char(piece).unwrap())?;
             }
             writeln!(f)?;
         }

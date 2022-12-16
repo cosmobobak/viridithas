@@ -81,7 +81,7 @@ impl Display for PieceList {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "[{}]", repr)
+        write!(f, "[{repr}]")
     }
 }
 

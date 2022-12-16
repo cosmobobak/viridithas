@@ -89,8 +89,8 @@ impl HistoryTable {
             .sum::<f64>()
             .sqrt()
             / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        println!("mean: {}", mean);
-        println!("stdev: {}", stdev);
+        println!("mean: {mean}");
+        println!("stdev: {stdev}");
         println!("max: {}", self.table.iter().flatten().copied().max().unwrap());
         let nonzero = self.table.iter().flatten().copied().filter(|x| *x != 0).collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
@@ -103,8 +103,8 @@ impl HistoryTable {
             .sum::<f64>()
             .sqrt()
             / (nonzero.len() as f64);
-        println!("nz mean: {}", nz_mean);
-        println!("nz stdev: {}", nz_stdev);
+        println!("nz mean: {nz_mean}");
+        println!("nz stdev: {nz_stdev}");
     }
 }
 
@@ -166,8 +166,8 @@ impl DoubleHistoryTable {
             .sum::<f64>()
             .sqrt()
             / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        println!("mean: {}", mean);
-        println!("stdev: {}", stdev);
+        println!("mean: {mean}");
+        println!("stdev: {stdev}");
         println!("max: {}", self.table.iter().copied().max().unwrap());
         let nonzero = self.table.iter().copied().filter(|x| *x != 0).collect::<Vec<_>>();
         println!("nonzero: {}", nonzero.len());
@@ -180,8 +180,8 @@ impl DoubleHistoryTable {
             .sum::<f64>()
             .sqrt()
             / (nonzero.len() as f64);
-        println!("nz mean: {}", nz_mean);
-        println!("nz stdev: {}", nz_stdev);
+        println!("nz mean: {nz_mean}");
+        println!("nz stdev: {nz_stdev}");
     }
 }
 

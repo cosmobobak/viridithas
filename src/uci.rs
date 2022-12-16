@@ -221,7 +221,7 @@ fn parse_setoption(
     let opt_name = parts.next().ok_or_else(|| {
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
-    parts.next().map_or_else(|| panic!("no value after \"setoption name {opt_name}\""), |s| assert!(s == "value", "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {}", s));
+    parts.next().map_or_else(|| panic!("no value after \"setoption name {opt_name}\""), |s| assert!(s == "value", "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {s}"));
     let opt_value = parts.next().ok_or_else(|| {
         UnexpectedCommandTermination(format!(
             "no option value given after \"setoption name {opt_name} value\""

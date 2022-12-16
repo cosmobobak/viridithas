@@ -60,7 +60,7 @@ impl Move {
     }
 
     pub const fn is_promo(self) -> bool {
-        ((self.data & Self::PROMO_FLAG) == Self::PROMO_FLAG) as bool
+        (self.data & Self::PROMO_FLAG) == Self::PROMO_FLAG
     }
 
     pub const fn is_ep(self) -> bool {
@@ -139,7 +139,7 @@ mod tests {
     fn test_simple_move() {
         use super::*;
         let m = Move::new(Square::A1, Square::B2, 0, 0);
-        println!("{:?}", m);
+        println!("{m:?}");
         println!("bitpattern: {:016b}", m.data);
         assert_eq!(m.from(), Square::A1);
         assert_eq!(m.to(), Square::B2);
@@ -154,7 +154,7 @@ mod tests {
     fn test_promotion() {
         use super::*;
         let m = Move::new(Square::A7, Square::A8, QUEEN, Move::PROMO_FLAG);
-        println!("{:?}", m);
+        println!("{m:?}");
         println!("bitpattern: {:016b}", m.data);
         assert_eq!(m.from(), Square::A7);
         assert_eq!(m.to(), Square::A8);

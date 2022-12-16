@@ -233,14 +233,14 @@ impl Square {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self.0 + offset;
         debug_assert!(res < 64, "Square::add overflowed");
-        Self(res as u8)
+        Self(res)
     }
 
     pub const fn sub(self, offset: u8) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self.0 - offset;
         debug_assert!(res < 64, "Square::sub overflowed");
-        Self(res as u8)
+        Self(res)
     }
 
     pub const fn on_board(self) -> bool {
@@ -305,7 +305,7 @@ impl FromStr for Square {
             .iter()
             .position(|&name| name == s)
             .and_then(|index| -> Option<u8> { index.try_into().ok() })
-            .map(|index| Self::new(index as u8))
+            .map(Self::new)
             .ok_or("Invalid square name")
     }
 }
