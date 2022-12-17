@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE, MOVEGEN_SEE_THRESHOLD},
+            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
