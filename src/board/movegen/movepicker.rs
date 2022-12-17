@@ -51,7 +51,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
     }
 
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        !ROOT && m == self.tt_move
+        m == self.tt_move
     }
 
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
@@ -60,7 +60,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             self.stage = Stage::GenerateMoves;
             // let mut temp_ml = MoveList::new();
             // position.generate_moves(&mut temp_ml);
-            debug_assert!(if ROOT { self.tt_move == Move::NULL } else { true });
             if position.is_pseudo_legal(self.tt_move) {
                 // debug_assert!(temp_ml.iter().any(|&mov| mov == self.tt_move), "tt_move is not pseudo legal: got {} in position {}", self.tt_move, position.fen());
                 return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
@@ -84,8 +83,8 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
                         } else {
                             Self::score_quiet(self.killers, t, position, e.mov)
                         };
-                        let subtree_score = t.score_at_root(e.mov);
-                        e.score = subtree_score.checked_add(normal_ordering_score).unwrap();
+                        let root_score = t.score_at_root(e.mov);
+                        e.score = root_score.checked_add(normal_ordering_score).unwrap();
                     }
                 } else {
                     for e in &mut self.movelist.moves[..self.movelist.count] {

@@ -332,8 +332,7 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-        let tt_move =
-            if ROOT { Move::NULL } else { tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move) };
+        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
