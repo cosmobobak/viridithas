@@ -22,7 +22,7 @@ use crate::{
     validate::piece_valid,
 };
 
-pub const MAX_POSITION_MOVES: usize = 256;
+pub const MAX_POSITION_MOVES: usize = 218;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
