@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE, MOVEGEN_SEE_THRESHOLD},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -346,7 +346,7 @@ impl Board {
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
-            let is_winning_see = ordering_score > WINNING_CAPTURE_SCORE;
+            let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
             if is_quiet {
                 quiets_tried.push(m);
             } else {
@@ -416,9 +416,16 @@ impl Board {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
                 let is_singular = self.is_singular::<USE_NNUE>(tt, info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
-            } else if !ROOT {
-                let gives_check = self.in_check::<{ Self::US }>();
-                extension = Depth::from(gives_check);
+            } else if !ROOT && self.in_check::<{ Self::US }>() { // here in_check determines if the move gives check
+                // extend checks with SEE > 0
+                // only captures are automatically SEE'd in the movepicker,
+                // so we need to SEE quiets here.
+                let is_good_see = if is_quiet {
+                    self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD)
+                } else {
+                    is_winning_capture
+                };
+                extension = Depth::from(is_good_see);
             };
 
             let mut score;
@@ -435,7 +442,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
-                    && (is_quiet || !is_winning_see)
+                    && (is_quiet || !is_winning_capture)
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
