@@ -421,7 +421,7 @@ impl Board {
                 // only captures are automatically SEE'd in the movepicker,
                 // so we need to SEE quiets here.
                 let is_good_see = if is_quiet {
-                    self.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD)
+                    self.static_exchange_eval(m, -1)
                 } else {
                     is_winning_capture
                 };
