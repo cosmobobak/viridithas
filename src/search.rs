@@ -409,9 +409,7 @@ impl Board {
             if ROOT {
                 t.add_root_move(m);
                 if info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                    print!("info currmove {m} currmovenumber {moves_made:len$} nodes {} lmrdepth {lmr_depth}", info.nodes, len = t.root_move_ordering.len() / 10);
-                    // flush stdout so we can see the output
-                    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                    println!("info currmove {m} currmovenumber {moves_made:len$} nodes {}", info.nodes, len = t.root_move_ordering.len() / 10);
                 }
             }
 
@@ -489,9 +487,6 @@ impl Board {
             let subtree_size = info.nodes - pre_search_nodecount;
             if ROOT {
                 t.record_subtree_nodecount(m, subtree_size);
-                if info.print_to_stdout && info.time_since_start() > Duration::from_secs(6) {
-                    println!(" subtree {subtree_size}");
-                }
             }
 
             if score > best_score {
