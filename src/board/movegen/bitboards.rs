@@ -453,6 +453,7 @@ pub trait BitShiftExt {
     fn west_one(self) -> Self;
     fn north_one(self) -> Self;
     fn south_one(self) -> Self;
+    fn first_square(self) -> Square;
 }
 
 impl BitShiftExt for u64 {
@@ -479,6 +480,11 @@ impl BitShiftExt for u64 {
     }
     fn south_one(self) -> Self {
         self >> 8
+    }
+    fn first_square(self) -> Square {
+        #![allow(clippy::cast_possible_truncation)]
+        debug_assert!(self != 0, "Tried to get first square of empty bitboard");
+        Square::new(self.trailing_zeros() as u8)
     }
 }
 

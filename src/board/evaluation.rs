@@ -328,7 +328,7 @@ impl Board {
         let white_pawns = self.pieces.pawns::<true>();
         let black_pawns = self.pieces.pawns::<false>();
 
-        for &white_pawn_loc in self.piece_lists[WP as usize].iter() {
+        for white_pawn_loc in BitLoop::new(white_pawns) {
             if ISOLATED_BB[white_pawn_loc.index()] & white_pawns == 0 {
                 w_score -= self.eparams.isolated_pawn_malus;
             }
@@ -339,7 +339,7 @@ impl Board {
             }
         }
 
-        for &black_pawn_loc in self.piece_lists[BP as usize].iter() {
+        for black_pawn_loc in BitLoop::new(black_pawns) {
             if ISOLATED_BB[black_pawn_loc.index()] & black_pawns == 0 {
                 b_score -= self.eparams.isolated_pawn_malus;
             }
@@ -377,7 +377,7 @@ impl Board {
 
     fn rook_open_file_term(&self) -> S {
         let mut score = S(0, 0);
-        for &rook_sq in self.piece_lists[WR as usize].iter() {
+        for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score += self.eparams.rook_open_file_bonus;
@@ -385,7 +385,7 @@ impl Board {
                 score += self.eparams.rook_half_open_file_bonus;
             }
         }
-        for &rook_sq in self.piece_lists[BR as usize].iter() {
+        for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score -= self.eparams.rook_open_file_bonus;
@@ -398,7 +398,7 @@ impl Board {
 
     fn queen_open_file_term(&self) -> S {
         let mut score = S(0, 0);
-        for &queen_sq in self.piece_lists[WQ as usize].iter() {
+        for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score += self.eparams.queen_open_file_bonus;
@@ -406,7 +406,7 @@ impl Board {
                 score += self.eparams.queen_half_open_file_bonus;
             }
         }
-        for &queen_sq in self.piece_lists[BQ as usize].iter() {
+        for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score -= self.eparams.queen_open_file_bonus;

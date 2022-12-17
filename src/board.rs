@@ -14,7 +14,7 @@ use crate::{
     board::movegen::{
         bitboards::{
             self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_4,
-            BB_RANK_5, BB_RANK_7,
+            BB_RANK_5, BB_RANK_7, BitShiftExt,
         },
         MoveList, movepicker::MainMovePicker,
     },
@@ -32,7 +32,6 @@ use crate::{
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
-    piecelist::PieceList,
     piecesquaretable::pst_value,
     search::{self, parameters::SearchParams, AspirationWindow},
     searchinfo::SearchInfo,
@@ -72,8 +71,6 @@ pub struct Board {
     pub(crate) pieces: BitBoard,
     /// An array to accelerate piece_at().
     piece_array: [u8; 64],
-    /// Piece lists that allow pieces to be located quickly.
-    piece_lists: [PieceList; 13],
     /// The side to move.
     side: u8,
     /// The en passant square.
@@ -162,7 +159,6 @@ impl Board {
             castle_perm: 0,
             history: Vec::new(),
             repetition_cache: Vec::new(),
-            piece_lists: [PieceList::new(); 13],
             principal_variation: Vec::new(),
             pst_vals: S(0, 0),
             eparams: evaluation::parameters::EvalParams::default(),
@@ -190,11 +186,9 @@ impl Board {
         debug_assert!(side == WHITE || side == BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);
         debug_assert_eq!(self.pieces.king::<false>().count_ones(), 1);
-        debug_assert_eq!(self.piece_lists[WK as usize].len(), 1);
-        debug_assert_eq!(self.piece_lists[BK as usize].len(), 1);
         let sq = match side {
-            WHITE => self.piece_lists[WK as usize][0],
-            BLACK => self.piece_lists[BK as usize][0],
+            WHITE => self.pieces.king::<true>().first_square(),
+            BLACK => self.pieces.king::<false>().first_square(),
             _ => unsafe { macros::inconceivable!() },
         };
         debug_assert!(sq < Square::NO_SQUARE);
@@ -306,7 +300,6 @@ impl Board {
         self.major_piece_counts.fill(0);
         self.minor_piece_counts.fill(0);
         self.material.fill(S(0, 0));
-        self.piece_lists.iter_mut().for_each(PieceList::clear);
         self.side = Colour::White as u8;
         self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
@@ -792,8 +785,6 @@ impl Board {
                 self.minor_piece_counts[colour as usize] -= 1;
             }
         }
-
-        self.piece_lists[piece as usize].remove(sq);
     }
 
     fn add_piece(&mut self, sq: Square, piece: u8) {
@@ -818,8 +809,6 @@ impl Board {
                 self.minor_piece_counts[colour as usize] += 1;
             }
         }
-
-        self.piece_lists[piece as usize].insert(sq);
     }
 
     fn move_piece(&mut self, from: Square, to: Square) {
@@ -831,10 +820,6 @@ impl Board {
         let from_to_bb = from.bitboard() | to.bitboard();
         self.pieces.move_piece(from_to_bb, piece_moved);
 
-        // if we're in debug mode, check that we actually find a matching piecelist entry.
-        #[cfg(debug_assertions)]
-        let mut t_piece_num = false;
-
         hash_piece(&mut self.key, piece_moved, from);
         hash_piece(&mut self.key, piece_moved, to);
 
@@ -842,22 +827,6 @@ impl Board {
         *self.piece_at_mut(to) = piece_moved;
         self.pst_vals -= pst_value(piece_moved, from, &self.eparams.piece_square_tables);
         self.pst_vals += pst_value(piece_moved, to, &self.eparams.piece_square_tables);
-
-        for sq in self.piece_lists[piece_moved as usize].iter_mut() {
-            if *sq == from {
-                *sq = to;
-                #[cfg(debug_assertions)]
-                {
-                    t_piece_num = true;
-                }
-                break;
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(t_piece_num);
-        }
     }
 
     /// Gets the piece that will be moved by the given move.
@@ -1426,7 +1395,8 @@ impl Board {
     }
 
     pub const fn num(&self, piece: u8) -> u8 {
-        self.piece_lists[piece as usize].len()
+        #![allow(clippy::cast_possible_truncation)]
+        self.pieces.piece_bb(piece).count_ones() as u8
     }
 
     pub const fn num_pt(&self, pt: u8) -> u8 {
@@ -1434,12 +1404,14 @@ impl Board {
     }
 
     pub const fn num_ct<const PIECE: u8>(&self) -> u8 {
-        self.piece_lists[PIECE as usize].len()
+        #![allow(clippy::cast_possible_truncation)]
+        self.pieces.piece_bb(PIECE).count_ones() as u8
     }
 
     pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
-        self.piece_lists[PIECE_TYPE as usize].len()
-            + self.piece_lists[PIECE_TYPE as usize + 6].len()
+        #![allow(clippy::cast_possible_truncation)]
+        self.pieces.piece_bb(PIECE_TYPE).count_ones() as u8
+            + self.pieces.piece_bb(PIECE_TYPE + 6).count_ones() as u8
     }
 
     fn regenerate_pv_line(&mut self, depth: i32, tt: TranspositionTableView) {

@@ -10,7 +10,6 @@ use crate::{
     errors::PositionValidityError,
     lookups::{piece_char, piece_name, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
     nnue::NNUEState,
-    piecelist::PieceList,
 };
 
 use super::{movegen::bitboards::BitLoop, Board};
@@ -19,29 +18,10 @@ impl Board {
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
-        let mut piece_num = [0u8; 13];
         let mut big_pce = [0, 0];
         let mut maj_pce = [0, 0];
         let mut min_pce = [0, 0];
         let mut material = [S(0, 0), S(0, 0)];
-
-        // check piece lists
-        for piece in WP..=BK {
-            for &sq in self.piece_lists[piece as usize].iter() {
-                if self.piece_at(sq) != piece {
-                    return Err(format!(
-                        "piece list corrupt: expected square {} to be '{}' but was '{}'",
-                        sq,
-                        piece_char(piece)
-                            .map(|c| c.to_string())
-                            .unwrap_or(format!("unknown piece: {piece}")),
-                        piece_char(self.piece_at(sq))
-                            .map(|c| c.to_string())
-                            .unwrap_or(format!("unknown piece: {}", self.piece_at(sq)))
-                    ));
-                }
-            }
-        }
 
         // check turn
         if self.side != WHITE && self.side != BLACK {
@@ -55,7 +35,6 @@ impl Board {
             if piece == PIECE_EMPTY {
                 continue;
             }
-            piece_num[piece as usize] += 1;
             let colour = colour_of(piece);
             if PIECE_BIG[piece as usize] {
                 big_pce[colour as usize] += 1;
@@ -67,16 +46,6 @@ impl Board {
                 min_pce[colour as usize] += 1;
             }
             material[colour as usize] += self.eparams.piece_values[piece as usize];
-        }
-
-        if piece_num[1..].to_vec()
-            != self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
-        {
-            return Err(format!(
-                "piece counts are corrupt: expected {:?}, got {:?}",
-                &piece_num[1..],
-                &self.piece_lists[1..].iter().map(PieceList::len).collect::<Vec<_>>()
-            ));
         }
 
         // check bitboard / piece array coherency

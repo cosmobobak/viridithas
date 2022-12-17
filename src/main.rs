@@ -18,7 +18,6 @@ mod magic;
 mod makemove;
 mod nnue;
 mod perft;
-mod piecelist;
 mod piecesquaretable;
 mod rng;
 mod search;
