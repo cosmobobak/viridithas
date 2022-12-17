@@ -1171,14 +1171,14 @@ impl Board {
             t.nnue.efficiently_update_manual::<DEACTIVATE>(type_of(capture), 1 ^ colour, to);
         }
 
-        t.nnue.efficiently_update_from_move(piece, colour, from, to);
-
         if m.is_promo() {
             // this seems like an inefficiency.
             let promo = m.promotion_type();
             debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
-            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, to);
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, from);
             t.nnue.efficiently_update_manual::<ACTIVATE>(promo, colour, to);
+        } else {
+            t.nnue.efficiently_update_from_move(piece, colour, from, to);
         }
 
         true
