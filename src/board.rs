@@ -1534,7 +1534,7 @@ impl Board {
             }
             // aspiration loop:
             loop {
-                let score = self.alpha_beta::<true, true, USE_NNUE>(
+                let score = self.root_search::<USE_NNUE>(
                     tt,
                     info,
                     &mut thread_data[0],

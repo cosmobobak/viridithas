@@ -289,8 +289,7 @@ impl Board {
         {
             let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 3;
             self.make_nullmove();
-            let null_score =
-                -self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+            let null_score = -self.zw_search::<USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -303,14 +302,7 @@ impl Board {
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled.
                 t.do_nmp = false;
-                let veri_score = self.alpha_beta::<false, false, USE_NNUE>(
-                    tt,
-                    info,
-                    t,
-                    nm_depth,
-                    beta - 1,
-                    beta,
-                );
+                let veri_score = self.zw_search::<USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.do_nmp = true;
                 if veri_score >= beta {
                     return veri_score;
@@ -428,11 +420,11 @@ impl Board {
                 let gives_check = self.in_check::<{ Self::US }>();
                 extension = Depth::from(gives_check);
             };
-            
+
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.alpha_beta::<PV, false, USE_NNUE>(
+                score = -self.fullwindow_search::<PV, USE_NNUE>(
                     tt,
                     info,
                     t,
@@ -449,12 +441,13 @@ impl Board {
                 {
                     let mut r = self.lmr_table.getr(depth, moves_made);
                     r += i32::from(!PV);
+                    r -= i32::from(!is_quiet);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score = -self.alpha_beta::<false, false, USE_NNUE>(
+                score = -self.zw_search::<USE_NNUE>(
                     tt,
                     info,
                     t,
@@ -465,7 +458,7 @@ impl Board {
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<PV, false, USE_NNUE>(
+                    score = -self.fullwindow_search::<PV, USE_NNUE>(
                         tt,
                         info,
                         t,
@@ -608,14 +601,8 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move_nnue(t);
         t.excluded[self.height()] = m;
-        let value = self.alpha_beta::<false, false, USE_NNUE>(
-            tt,
-            info,
-            t,
-            reduced_depth,
-            reduced_beta - 1,
-            reduced_beta,
-        );
+        let value =
+            self.zw_search::<USE_NNUE>(tt, info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move_nnue(m, t);
@@ -732,6 +719,42 @@ impl Board {
 
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
+    }
+
+    pub fn root_search<const USE_NNUE: bool>(
+        &mut self,
+        tt: TranspositionTableView,
+        info: &mut SearchInfo,
+        t: &mut ThreadData,
+        depth: Depth,
+        alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        self.alpha_beta::<true, true, USE_NNUE>(tt, info, t, depth, alpha, beta)
+    }
+
+    pub fn zw_search<const USE_NNUE: bool>(
+        &mut self,
+        tt: TranspositionTableView,
+        info: &mut SearchInfo,
+        t: &mut ThreadData,
+        depth: Depth,
+        alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, depth, alpha, beta)
+    }
+
+    pub fn fullwindow_search<const PV: bool, const USE_NNUE: bool>(
+        &mut self,
+        tt: TranspositionTableView,
+        info: &mut SearchInfo,
+        t: &mut ThreadData,
+        depth: Depth,
+        alpha: i32,
+        beta: i32,
+    ) -> i32 {
+        self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, depth, alpha, beta)
     }
 }
 
