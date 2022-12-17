@@ -15,7 +15,6 @@ const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 const MOVEGEN_SEE_THRESHOLD: i32 = 0;
-pub const ILLEGAL_MOVE_SCORE: i32 = -TT_MOVE_SCORE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -75,25 +74,12 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
                 }
             } else {
                 position.generate_moves(&mut self.movelist);
-                if ROOT {
-                    // Root move generation is special because we need to sort the moves by score.
-                    for e in &mut self.movelist.moves[..self.movelist.count] {
-                        let normal_ordering_score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
-                            Self::score_capture(t, position, e.mov)
-                        } else {
-                            Self::score_quiet(self.killers, t, position, e.mov)
-                        };
-                        let root_score = t.score_at_root(e.mov);
-                        e.score = root_score.checked_add(normal_ordering_score).unwrap();
-                    }
-                } else {
-                    for e in &mut self.movelist.moves[..self.movelist.count] {
-                        e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
-                            Self::score_capture(t, position, e.mov)
-                        } else {
-                            Self::score_quiet(self.killers, t, position, e.mov)
-                        };
-                    }
+                for e in &mut self.movelist.moves[..self.movelist.count] {
+                    e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
+                        Self::score_capture(t, position, e.mov)
+                    } else {
+                        Self::score_quiet(self.killers, t, position, e.mov)
+                    };
                 }
             }
         }

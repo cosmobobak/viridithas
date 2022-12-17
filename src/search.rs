@@ -405,11 +405,8 @@ impl Board {
             }
             info.nodes += 1;
             moves_made += 1;
-            if ROOT {
-                t.add_root_move(m);
-                if info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                    println!("info currmove {m} currmovenumber {moves_made:len$} nodes {}", info.nodes, len = t.root_moves.len() / 10);
-                }
+            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+                println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
