@@ -59,7 +59,7 @@ const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
 impl Board {
-    pub fn quiescence<const USE_NNUE: bool>(
+    pub fn quiescence<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -87,7 +87,7 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate::<USE_NNUE>(t, info.nodes);
+            return self.evaluate::<NNUE>(t, info.nodes);
         }
 
         // probe the TT and see if we get a cutoff.
@@ -97,7 +97,7 @@ impl Board {
             return s;
         }
 
-        let stand_pat = self.evaluate::<USE_NNUE>(t, info.nodes);
+        let stand_pat = self.evaluate::<NNUE>(t, info.nodes);
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
@@ -119,7 +119,7 @@ impl Board {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
-            if !self.make_move_nnue(m, t) {
+            if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
             info.nodes += 1;
@@ -130,13 +130,13 @@ impl Board {
             // we have to do this after make_move, because the move has to be legal.
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
-                self.unmake_move_nnue(t);
+                self.unmake_move::<NNUE>(t);
                 // don't bother failing soft, at_least is not really trustworthy.
                 return beta;
             }
 
-            let score = -self.quiescence::<USE_NNUE>(tt, info, t, -beta, -alpha);
-            self.unmake_move_nnue(t);
+            let score = -self.quiescence::<NNUE>(tt, info, t, -beta, -alpha);
+            self.unmake_move::<NNUE>(t);
 
             if score > best_score {
                 best_score = score;
@@ -171,7 +171,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn alpha_beta<const PV: bool, const ROOT: bool, const USE_NNUE: bool>(
+    pub fn alpha_beta<const PV: bool, const ROOT: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -186,7 +186,7 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<USE_NNUE>(tt, info, t, alpha, beta);
+            return self.quiescence::<NNUE>(tt, info, t, alpha, beta);
         }
         depth = depth.max(ZERO_PLY);
 
@@ -211,7 +211,7 @@ impl Board {
 
             // are we too deep?
             if height > MAX_DEPTH.round() - 1 {
-                return if in_check { 0 } else { self.evaluate::<USE_NNUE>(t, info.nodes) };
+                return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
             }
 
             // mate-distance pruning.
@@ -254,7 +254,7 @@ impl Board {
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else {
-            self.evaluate::<USE_NNUE>(t, info.nodes)
+            self.evaluate::<NNUE>(t, info.nodes)
         };
 
         t.evals[self.height()] = static_eval;
@@ -289,7 +289,7 @@ impl Board {
         {
             let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 3;
             self.make_nullmove();
-            let null_score = -self.zw_search::<USE_NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+            let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
             if info.stopped {
                 return 0;
@@ -302,7 +302,7 @@ impl Board {
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled.
                 t.do_nmp = false;
-                let veri_score = self.zw_search::<USE_NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.do_nmp = true;
                 if veri_score >= beta {
                     return veri_score;
@@ -393,7 +393,7 @@ impl Board {
                 continue;
             }
 
-            if !self.make_move_nnue(m, t) {
+            if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
             info.nodes += 1;
@@ -414,7 +414,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular::<USE_NNUE>(tt, info, t, m, tt_value, depth);
+                let is_singular = self.is_singular::<NNUE>(tt, info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
             } else if !ROOT && self.in_check::<{ Self::US }>() { // here in_check determines if the move gives check
                 // extend checks with SEE > 0
@@ -431,7 +431,7 @@ impl Board {
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.fullwindow_search::<PV, USE_NNUE>(
+                score = -self.fullwindow_search::<PV, NNUE>(
                     tt,
                     info,
                     t,
@@ -453,7 +453,7 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score = -self.zw_search::<USE_NNUE>(
+                score = -self.zw_search::<NNUE>(
                     tt,
                     info,
                     t,
@@ -464,7 +464,7 @@ impl Board {
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.fullwindow_search::<PV, USE_NNUE>(
+                    score = -self.fullwindow_search::<PV, NNUE>(
                         tt,
                         info,
                         t,
@@ -474,7 +474,7 @@ impl Board {
                     );
                 }
             }
-            self.unmake_move_nnue(t);
+            self.unmake_move::<NNUE>(t);
 
             if info.stopped {
                 return 0;
@@ -593,7 +593,7 @@ impl Board {
         t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
-    pub fn is_singular<const USE_NNUE: bool>(
+    pub fn is_singular<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -605,13 +605,13 @@ impl Board {
         let reduced_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
-        self.unmake_move_nnue(t);
+        self.unmake_move::<NNUE>(t);
         t.excluded[self.height()] = m;
         let value =
-            self.zw_search::<USE_NNUE>(tt, info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+            self.zw_search::<NNUE>(tt, info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
-        self.make_move_nnue(m, t);
+        self.make_move::<NNUE>(m, t);
         value < reduced_beta
     }
 
@@ -727,7 +727,7 @@ impl Board {
         self.turn() != colour
     }
 
-    pub fn root_search<const USE_NNUE: bool>(
+    pub fn root_search<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -736,10 +736,10 @@ impl Board {
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<true, true, USE_NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<true, true, NNUE>(tt, info, t, depth, alpha, beta)
     }
 
-    pub fn zw_search<const USE_NNUE: bool>(
+    pub fn zw_search<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -748,10 +748,10 @@ impl Board {
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<false, false, USE_NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<false, false, NNUE>(tt, info, t, depth, alpha, beta)
     }
 
-    pub fn fullwindow_search<const PV: bool, const USE_NNUE: bool>(
+    pub fn fullwindow_search<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -760,7 +760,7 @@ impl Board {
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<PV, false, USE_NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<PV, false, NNUE>(tt, info, t, depth, alpha, beta)
     }
 }
 

@@ -741,10 +741,10 @@ impl Board {
         self.generate_moves(&mut list);
 
         for &m in list.iter() {
-            if !self.make_move(m) {
+            if !self.make_move_hce(m) {
                 continue;
             }
-            self.unmake_move();
+            self.unmake_move_hce();
             if m == move_to_check {
                 return true;
             }
@@ -882,7 +882,7 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    pub fn make_move(&mut self, m: Move) -> bool {
+    pub fn make_move_hce(&mut self, m: Move) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -984,50 +984,14 @@ impl Board {
 
         // reversed in_check fn, as we have now swapped sides
         if self.in_check::<{ Self::THEM }>() {
-            self.unmake_move();
+            self.unmake_move_hce();
             return false;
         }
 
         true
     }
 
-    pub fn make_nullmove(&mut self) {
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
-        debug_assert!(!self.in_check::<{ Self::US }>());
-
-        self.history.push(Undo {
-            m: Move::NULL,
-            castle_perm: self.castle_perm,
-            ep_square: self.ep_sq,
-            fifty_move_counter: self.fifty_move_counter,
-            capture: PIECE_EMPTY,
-        });
-
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
-        }
-
-        self.ep_sq = Square::NO_SQUARE;
-
-        self.side ^= 1;
-        self.ply += 1;
-        self.height += 1;
-        hash_side(&mut self.key);
-
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
-    }
-
-    pub fn last_move_was_nullmove(&self) -> bool {
-        if let Some(Undo { m, .. }) = self.history.last() {
-            m.is_null()
-        } else {
-            false
-        }
-    }
-
-    pub fn unmake_move(&mut self) {
+    pub fn unmake_move_hce(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1102,11 +1066,72 @@ impl Board {
         self.check_validity().unwrap();
     }
 
+    pub fn make_nullmove(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+        debug_assert!(!self.in_check::<{ Self::US }>());
+
+        self.history.push(Undo {
+            m: Move::NULL,
+            castle_perm: self.castle_perm,
+            ep_square: self.ep_sq,
+            fifty_move_counter: self.fifty_move_counter,
+            capture: PIECE_EMPTY,
+        });
+
+        if self.ep_sq != Square::NO_SQUARE {
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        self.ep_sq = Square::NO_SQUARE;
+
+        self.side ^= 1;
+        self.ply += 1;
+        self.height += 1;
+        hash_side(&mut self.key);
+
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+    }
+
+    pub fn unmake_nullmove(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+
+        self.height -= 1;
+        self.ply -= 1;
+
+        if self.ep_sq != Square::NO_SQUARE {
+            // this might be unreachable, but that's ok.
+            // the branch predictor will hopefully figure it out.
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture } =
+            self.history.pop().expect("No move to unmake!");
+
+        debug_assert_eq!(capture, PIECE_EMPTY);
+
+        self.castle_perm = castle_perm;
+        self.ep_sq = ep_square;
+        self.fifty_move_counter = fifty_move_counter;
+
+        if self.ep_sq != Square::NO_SQUARE {
+            hash_ep(&mut self.key, self.ep_sq);
+        }
+
+        self.side ^= 1;
+        hash_side(&mut self.key);
+
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
+    }
+
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let piece = type_of(self.moved_piece(m));
         let colour = self.turn();
         let capture = self.captured_piece(m);
-        let res = self.make_move(m);
+        let res = self.make_move_hce(m);
         if !res {
             return false;
         }
@@ -1154,7 +1179,7 @@ impl Board {
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
         let m = self.history.last().unwrap().m;
-        self.unmake_move();
+        self.unmake_move_hce();
         let piece = type_of(self.moved_piece(m));
         let from = m.from();
         let to = m.to();
@@ -1189,37 +1214,28 @@ impl Board {
         }
     }
 
-    pub fn unmake_nullmove(&mut self) {
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
-
-        self.height -= 1;
-        self.ply -= 1;
-
-        if self.ep_sq != Square::NO_SQUARE {
-            // this might be unreachable, but that's ok.
-            // the branch predictor will hopefully figure it out.
-            hash_ep(&mut self.key, self.ep_sq);
+    pub fn make_move<const USE_NNUE: bool>(&mut self, m: Move, t: &mut ThreadData) -> bool {
+        if USE_NNUE {
+            self.make_move_nnue(m, t)
+        } else {
+            self.make_move_hce(m)
         }
+    }
 
-        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture } =
-            self.history.pop().expect("No move to unmake!");
-
-        debug_assert_eq!(capture, PIECE_EMPTY);
-
-        self.castle_perm = castle_perm;
-        self.ep_sq = ep_square;
-        self.fifty_move_counter = fifty_move_counter;
-
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
+    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData) {
+        if USE_NNUE {
+            self.unmake_move_nnue(t);
+        } else {
+            self.unmake_move_hce();
         }
+    }
 
-        self.side ^= 1;
-        hash_side(&mut self.key);
-
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+    pub fn last_move_was_nullmove(&self) -> bool {
+        if let Some(Undo { m, .. }) = self.history.last() {
+            m.is_null()
+        } else {
+            false
+        }
     }
 
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
@@ -1351,10 +1367,10 @@ impl Board {
 
         let mut legal_move = None;
         for &m in ml.iter() {
-            if !self.make_move(m) {
+            if !self.make_move_hce(m) {
                 continue;
             }
-            self.unmake_move();
+            self.unmake_move_hce();
             let promotion = if m.is_promo() {
                 make_piece(self.side, m.safe_promotion_type())
             } else {
@@ -1424,7 +1440,7 @@ impl Board {
                 && self.is_legal(tt_move)
                 && !self.is_draw()
             {
-                self.make_move(tt_move);
+                self.make_move_hce(tt_move);
                 self.principal_variation.push(tt_move);
             } else {
                 break;
@@ -1432,7 +1448,7 @@ impl Board {
         }
 
         for _ in 0..self.principal_variation.len() {
-            self.unmake_move();
+            self.unmake_move_hce();
         }
     }
 
@@ -1675,8 +1691,8 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
         for &m in move_list.iter() {
-            if self.make_move(m) {
-                self.unmake_move();
+            if self.make_move_hce(m) {
+                self.unmake_move_hce();
                 legal_moves.push(m);
             }
         }

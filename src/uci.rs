@@ -112,7 +112,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     for san in parts {
         pos.zero_height(); // stuff breaks really hard without this lmao
         let m = pos.parse_uci(san)?;
-        pos.make_move(m);
+        pos.make_move_hce(m);
     }
     pos.zero_height();
     // eprintln!("{}", pos);

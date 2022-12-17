@@ -18,11 +18,11 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter() {
-        if !pos.make_move(m) {
+        if !pos.make_move_hce(m) {
             continue;
         }
         count += perft(pos, depth - 1);
-        pos.unmake_move();
+        pos.unmake_move_hce();
     }
 
     count
@@ -76,9 +76,9 @@ mod tests {
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
-                if pos.make_move(m) {
+                if pos.make_move_hce(m) {
                     legal.push(m);
-                    pos.unmake_move();
+                    pos.unmake_move_hce();
                 }
             }
             legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
@@ -100,9 +100,9 @@ mod tests {
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
-                if pos.make_move(m) {
+                if pos.make_move_hce(m) {
                     legal.push(m);
-                    pos.unmake_move();
+                    pos.unmake_move_hce();
                 }
             }
             legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
@@ -123,9 +123,9 @@ mod tests {
             pos.generate_moves(&mut ml);
             let mut legal = vec![];
             for &m in ml.iter() {
-                if pos.make_move(m) {
+                if pos.make_move_hce(m) {
                     legal.push(m);
-                    pos.unmake_move();
+                    pos.unmake_move_hce();
                 }
             }
             legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
@@ -142,11 +142,11 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move(e4);
+        pos.make_move_hce(e4);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
-        pos.unmake_move();
+        pos.unmake_move_hce();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
         assert_eq!(pos.hashkey(), hashkey_before);
@@ -162,11 +162,11 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move(exd5);
+        pos.make_move_hce(exd5);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
-        pos.unmake_move();
+        pos.unmake_move_hce();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
         assert_eq!(pos.hashkey(), hashkey_before);
