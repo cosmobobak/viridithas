@@ -448,7 +448,6 @@ impl Board {
                 {
                     let mut r = self.lmr_table.getr(depth, moves_made);
                     r += i32::from(!PV);
-                    r += i32::from(in_check && type_of(self.moved_piece(m)) == KING);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
