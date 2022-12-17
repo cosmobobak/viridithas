@@ -98,7 +98,7 @@ Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingl
 
 [marlinflow](https://github.com/dsekercioglu/marlinflow), which is responsible for all neural network training for Viridithas.
 
-[build-badge]:https://img.shields.io/github/workflow/status/cosmobobak/virtue/Rust?logo=github&style=for-the-badge
+[build-badge]:https://img.shields.io/github/actions/workflow/status/cosmobobak/virtue/rust.yml?branch=master&logo=github&style=for-the-badge
 [build-link]:https://github.com/cosmobobak/virtue/actions/workflows/rust.yml
 [commits-badge]:https://img.shields.io/github/commits-since/cosmobobak/virtue/latest?style=for-the-badge
 [commits-link]:https://github.com/cosmobobak/virtue/commits/master
