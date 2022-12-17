@@ -9,7 +9,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker},
+            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -354,6 +354,7 @@ impl Board {
             let lmr_reduction = self.lmr_table.getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
+            let is_winning_see = ordering_score > WINNING_CAPTURE_SCORE;
             if is_quiet {
                 quiets_tried.push(m);
             } else {
@@ -442,7 +443,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
-                    && is_quiet
+                    && (is_quiet || !is_winning_see)
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
