@@ -12,10 +12,8 @@ pub struct ThreadData {
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
     pub counter_move_table: MoveTable,
 
-    /// A record of the size of the game subtree under each root move
-    /// in the last iteration of the search. This is used to order the
-    /// root moves in the next iteration.
-    pub root_move_ordering: Vec<(Move, i32)>,
+    /// A record of the size of the legal root moves.
+    pub root_moves: Vec<Move>,
     /// The previous bestmoves in shallower searches.
     /// idx[0] is the actual best move found last search,
     /// the rest are the previous bestmoves ordered by recency.
@@ -34,7 +32,7 @@ impl ThreadData {
             followup_history: DoubleHistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
-            root_move_ordering: Vec::new(),
+            root_moves: Vec::new(),
             previous_bestmoves: Vec::new(),
         }
     }
@@ -54,7 +52,7 @@ impl ThreadData {
         self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
-        self.root_move_ordering.clear();
+        self.root_moves.clear();
         self.previous_bestmoves.clear();
     }
 
@@ -63,7 +61,7 @@ impl ThreadData {
         self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
-        self.root_move_ordering.clear();
+        self.root_moves.clear();
         self.previous_bestmoves.clear();
     }
 
@@ -76,10 +74,10 @@ impl ThreadData {
         if let Some(index) = self.previous_bestmoves.iter().position(|m| *m == mov) {
             let index: i32 = index.try_into().unwrap();
             TT_MOVE_SCORE / (index + 1) // full score for index 0, 1/2 score for index 1, etc.
-        } else if let Some(&(_, score)) = self.root_move_ordering.iter().find(|(m, _)| *m == mov) {
-            score
+        } else if self.root_moves.contains(&mov) {
+            0
         } else {
-            ILLEGAL_MOVE_SCORE
+            ILLEGAL_MOVE_SCORE // illegal moves are always last
         }
     }
 
@@ -101,22 +99,10 @@ impl ThreadData {
         }
     }
 
-    /// Record a subtree nodecount for a root move, to be used for
-    /// root move ordering.
-    pub fn record_subtree_nodecount(&mut self, mov: Move, nodecount: u64) {
-        let adjusted_nodecount: i32 = (nodecount / 55).try_into().unwrap_or(i32::MAX);
-        if let Some(index) = self.root_move_ordering.iter().position(|(m, _)| *m == mov) {
-            let curr = self.root_move_ordering[index].1;
-            self.root_move_ordering[index].1 = curr.saturating_add(adjusted_nodecount);
-        } else {
-            panic!("Tried to record subtree nodecount for a move that wasn't in the root move ordering list!")
-        }
-    }
-
     /// Add a legal root move to the root move ordering list.
     pub fn add_root_move(&mut self, mov: Move) {
-        if !self.root_move_ordering.iter().any(|(m, _)| *m == mov) {
-            self.root_move_ordering.push((mov, 0));
+        if !self.root_moves.contains(&mov) {
+            self.root_moves.push(mov);
         }
     }
 }

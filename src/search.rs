@@ -409,7 +409,7 @@ impl Board {
             if ROOT {
                 t.add_root_move(m);
                 if info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
-                    println!("info currmove {m} currmovenumber {moves_made:len$} nodes {}", info.nodes, len = t.root_move_ordering.len() / 10);
+                    println!("info currmove {m} currmovenumber {moves_made:len$} nodes {}", info.nodes, len = t.root_moves.len() / 10);
                 }
             }
 
@@ -431,7 +431,7 @@ impl Board {
                 let gives_check = self.in_check::<{ Self::US }>();
                 extension = Depth::from(gives_check);
             };
-            let pre_search_nodecount = info.nodes;
+            
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
@@ -482,11 +482,6 @@ impl Board {
 
             if info.stopped {
                 return 0;
-            }
-
-            let subtree_size = info.nodes - pre_search_nodecount;
-            if ROOT {
-                t.record_subtree_nodecount(m, subtree_size);
             }
 
             if score > best_score {
