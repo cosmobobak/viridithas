@@ -997,14 +997,14 @@ impl Board {
             }
         }
 
-        self.move_piece(from, to);
-
         if m.is_promo() {
             let promo = make_piece(side, m.promotion_type());
             debug_assert!(piece_valid(promo));
             debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
-            self.clear_piece(to);
+            self.clear_piece(from);
             self.add_piece(to, promo);
+        } else {
+            self.move_piece(from, to);
         }
 
         self.side ^= 1;
@@ -1110,20 +1110,20 @@ impl Board {
             }
         }
 
-        self.move_piece(to, from);
-
-        if capture != PIECE_EMPTY {
-            debug_assert!(piece_valid(capture));
-            self.add_piece(to, capture);
-        }
-
         if m.is_promo() {
             let promotion = make_piece(self.side, m.promotion_type());
             debug_assert!(piece_valid(promotion));
             debug_assert!(promotion != WP && promotion != BP && promotion != WK && promotion != BK);
-            debug_assert_eq!(colour_of(promotion), colour_of(self.piece_at(from)));
-            self.clear_piece(from);
+            debug_assert_eq!(colour_of(promotion), colour_of(self.piece_at(to)));
+            self.clear_piece(to);
             self.add_piece(from, if self.side == WHITE { WP } else { BP });
+        } else {
+            self.move_piece(to, from);
+        }
+
+        if capture != PIECE_EMPTY {
+            debug_assert!(piece_valid(capture));
+            self.add_piece(to, capture);
         }
 
         let key = self.repetition_cache.pop().expect("No key to unmake!");
@@ -1172,7 +1172,6 @@ impl Board {
         }
 
         if m.is_promo() {
-            // this seems like an inefficiency.
             let promo = m.promotion_type();
             debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
             t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, from);
@@ -1211,9 +1210,10 @@ impl Board {
             debug_assert!(piece_valid(promo));
             debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
             t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
-            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, colour, to);
+            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, colour, from);
+        } else {
+            t.nnue.update_pov_move(piece, colour, to, from);
         }
-        t.nnue.update_pov_move(piece, colour, to, from);
         let capture = self.captured_piece(m);
         if capture != PIECE_EMPTY {
             t.nnue.update_pov_manual::<ACTIVATE>(type_of(capture), 1 ^ colour, to);
