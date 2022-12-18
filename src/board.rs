@@ -1519,6 +1519,7 @@ impl Board {
         let mut board_info_copies =
             rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
         let total_nodes = AtomicU64::new(0);
+        
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
                 let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, bestmove, score, &total_nodes);
