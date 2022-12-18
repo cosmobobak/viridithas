@@ -1553,6 +1553,7 @@ impl Board {
             search_results.push(main_thread_handle.join().unwrap());
             search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
         });
+        global_stopped.store(false, Ordering::SeqCst);
 
         (most_recent_move, most_recent_score) = search_results[0];
 
