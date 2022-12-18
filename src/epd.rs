@@ -68,7 +68,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize) -> i32 {
     let mut tt = TranspositionTable::new();
     tt.resize(hash * MEGABYTE);
-    let mut thread_data = vec![ThreadData::new()];
+    let mut thread_data = vec![ThreadData::new(0)];
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
     let maxidlen = positions.iter().map(|pos| pos.id.len()).max().unwrap();

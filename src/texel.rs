@@ -33,7 +33,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut info = SearchInfo::default();
     let mut tt = TranspositionTable::new();
     tt.resize(MEGABYTE);
-    let mut t = ThreadData::new();
+    let mut t = ThreadData::new(0);
     t.alloc_tables();
     unsafe { set_eval_params(params.clone()); }
     data.iter()

@@ -398,7 +398,7 @@ impl Board {
             }
             info.nodes += 1;
             moves_made += 1;
-            if ROOT && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+            if ROOT && t.thread_id == 0 && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
 

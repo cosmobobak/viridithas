@@ -24,7 +24,7 @@ fn batch_convert<const USE_NNUE: bool>(
     let mut pos = Board::default();
     let mut tt = TranspositionTable::new();
     tt.resize(16 * MEGABYTE);
-    let mut t = vec![ThreadData::new()];
+    let mut t = vec![ThreadData::new(0)];
     let mut local_ticker = 0;
     for thread in &mut t {
         thread.alloc_tables();

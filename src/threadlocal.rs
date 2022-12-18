@@ -12,10 +12,12 @@ pub struct ThreadData {
     pub followup_history: DoubleHistoryTable,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
     pub counter_move_table: MoveTable,
+
+    pub thread_id: usize,
 }
 
 impl ThreadData {
-    pub fn new() -> Self {
+    pub fn new(id: usize) -> Self {
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
@@ -26,6 +28,7 @@ impl ThreadData {
             followup_history: DoubleHistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
+            thread_id: id,
         }
     }
 

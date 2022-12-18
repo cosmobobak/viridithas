@@ -344,7 +344,7 @@ pub fn main_loop(params: EvalParams) {
     info.set_stdin(&stdin);
 
     let mut thread_data = Vec::new();
-    thread_data.push(ThreadData::new());
+    thread_data.push(ThreadData::new(0));
 
     for td in &mut thread_data {
         td.alloc_tables();
@@ -396,7 +396,7 @@ pub fn main_loop(params: EvalParams) {
                             tt.resize(new_size);
                         }
                         if let Some(threads) = conf.threads {
-                            thread_data.resize(threads, ThreadData::new());
+                            thread_data = (0..threads).map(ThreadData::new).collect();
                             for td in &mut thread_data {
                                 td.alloc_tables();
                             }
