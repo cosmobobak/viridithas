@@ -22,7 +22,7 @@ use crate::{
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TranspositionTableView},
-    uci,
+    uci, search::parameters::{get_search_params, get_lm_table}, cfor,
 };
 
 use self::parameters::SearchParams;
@@ -236,7 +236,7 @@ impl Board {
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction.
-                    if PV && depth >= self.sparams.tt_reduction_depth {
+                    if PV && depth >= get_search_params().tt_reduction_depth {
                         depth -= 1;
                     }
                     None
@@ -271,8 +271,8 @@ impl Board {
         if !PV
             && !in_check
             && excluded.is_null()
-            && depth <= self.sparams.rfp_depth
-            && static_eval - self.rfp_margin(depth, improving) > beta
+            && depth <= get_search_params().rfp_depth
+            && static_eval - Self::rfp_margin(depth, improving) > beta
         {
             return static_eval;
         }
@@ -283,11 +283,11 @@ impl Board {
             && !last_move_was_null
             && excluded.is_null()
             && t.do_nmp
-            && static_eval + i32::from(improving) * self.sparams.nmp_improving_margin >= beta
+            && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin >= beta
             && depth >= 3.into()
             && self.zugzwang_unlikely()
         {
-            let nm_depth = depth - self.sparams.nmp_base_reduction - depth / 3;
+            let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
             self.make_nullmove();
             let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
@@ -296,7 +296,7 @@ impl Board {
             }
             if null_score >= beta {
                 // unconditionally cutoff if we're just too shallow.
-                if depth < self.sparams.nmp_verification_depth && !is_mate_score(beta) {
+                if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
                     return beta;
                 }
                 // verify that it's *actually* fine to prune,
@@ -316,11 +316,11 @@ impl Board {
         let mut moves_made = 0;
 
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = self.lmr_table.getp(depth, improving);
+        let lmp_threshold = get_lm_table().getp(depth, improving);
 
         let see_table = [
-            self.sparams.see_tactical_margin * depth.squared(),
-            self.sparams.see_quiet_margin * depth.round(),
+            get_search_params().see_tactical_margin * depth.squared(),
+            get_search_params().see_quiet_margin * depth.round(),
         ];
 
         let killers = self.get_killer_set(t);
@@ -343,7 +343,7 @@ impl Board {
                 continue;
             }
 
-            let lmr_reduction = self.lmr_table.getr(depth, moves_made);
+            let lmr_reduction = get_lm_table().getr(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
@@ -357,16 +357,16 @@ impl Board {
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= self.sparams.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= get_search_params().lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth.round() * self.sparams.futility_coeff_1
-                    + self.sparams.futility_coeff_0;
+                let fp_margin = lmr_depth.round() * get_search_params().futility_coeff_1
+                    + get_search_params().futility_coeff_0;
                 if is_quiet
-                    && lmr_depth < self.sparams.futility_depth
+                    && lmr_depth < get_search_params().futility_depth
                     && static_eval + fp_margin <= alpha
                 {
                     move_picker.skip_quiets = true;
@@ -387,7 +387,7 @@ impl Board {
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
             if !ROOT
                 && best_score > -MINIMUM_MATE_SCORE
-                && depth <= self.sparams.see_depth
+                && depth <= get_search_params().see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
@@ -404,7 +404,7 @@ impl Board {
 
             let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
                 !ROOT
-                    && depth >= self.sparams.singularity_depth
+                    && depth >= get_search_params().singularity_depth
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
@@ -446,7 +446,7 @@ impl Board {
                     && depth >= 3.into()
                     && moves_made >= (2 + usize::from(PV))
                 {
-                    let mut r = self.lmr_table.getr(depth, moves_made);
+                    let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
@@ -579,8 +579,8 @@ impl Board {
         alpha
     }
 
-    fn rfp_margin(&mut self, depth: Depth, improving: bool) -> i32 {
-        self.sparams.rfp_margin * depth - i32::from(improving) * self.sparams.rfp_improving_margin
+    fn rfp_margin(depth: Depth, improving: bool) -> i32 {
+        get_search_params().rfp_margin * depth - i32::from(improving) * get_search_params().rfp_improving_margin
     }
 
     fn update_history_metrics<const IS_GOOD: bool>(
@@ -775,6 +775,11 @@ pub struct LMTable {
 }
 
 impl LMTable {
+    pub const NULL: Self = Self {
+        rtable: [[0; 64]; 64],
+        ptable: [[0; 12]; 2],
+    };
+
     pub fn new(config: &SearchParams) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
@@ -783,17 +788,17 @@ impl LMTable {
         )]
         let mut out = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
-        for depth in 1..64 {
-            for played in 1..64 {
+        cfor!(let mut depth = 1; depth < 64; depth += 1; {
+            cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
                 out.rtable[depth][played] = (base + ld * lp / division) as i32;
-            }
-        }
-        for depth in 1..12 {
+            });
+        });
+        cfor!(let mut depth = 1; depth < 12; depth += 1; {
             out.ptable[0][depth] = (2.5 + 2.0 * depth as f64 * depth as f64 / 4.5) as usize;
             out.ptable[1][depth] = (4.0 + 4.0 * depth as f64 * depth as f64 / 4.5) as usize;
-        }
+        });
         out
     }
 

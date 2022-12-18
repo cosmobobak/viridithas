@@ -8,6 +8,8 @@ use crate::{
     rng::XorShiftState,
 };
 
+/// Implements a C-style for loop, for use in const fn.
+#[macro_export]
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
         {

@@ -36,8 +36,8 @@ pub struct EvalParams {
     pub king_danger_piece_weights: [i32; 8],
 }
 
-impl Default for EvalParams {
-    fn default() -> Self {
+impl EvalParams {
+    pub const fn default() -> Self {
         Self {
             piece_values: PIECE_VALUES,
             isolated_pawn_malus: ISOLATED_PAWN_MALUS,

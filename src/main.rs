@@ -40,6 +40,7 @@ fn main() {
 
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
+    unsafe { search::parameters::set_search_params(search::parameters::SearchParams::default()); }
 
     let cli = <cli::Cli as clap::Parser>::parse();
 

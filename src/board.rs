@@ -11,13 +11,13 @@ use std::{
 use regex::Regex;
 
 use crate::{
-    board::movegen::{
+    board::{movegen::{
         bitboards::{
             self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_4,
             BB_RANK_5, BB_RANK_7, BitShiftExt,
         },
         MoveList, movepicker::MainMovePicker,
-    },
+    }, evaluation::get_eval_params},
     chessmove::Move,
     definitions::{
         colour_of,
@@ -33,7 +33,7 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
-    search::{self, parameters::SearchParams, AspirationWindow},
+    search::AspirationWindow,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{ProbeResult, TTHit, TranspositionTableView},
@@ -66,6 +66,7 @@ fn get_san_regex() -> &'static Regex {
     }
 }
 
+#[derive(Clone)]
 pub struct Board {
     /// The bitboards of all the pieces on the board.
     pub(crate) pieces: BitBoard,
@@ -97,10 +98,6 @@ pub struct Board {
     repetition_cache: Vec<u64>,
 
     principal_variation: Vec<Move>,
-
-    eparams: evaluation::parameters::EvalParams,
-    pub sparams: SearchParams,
-    pub lmr_table: search::LMTable,
 }
 
 impl Debug for Board {
@@ -161,17 +158,9 @@ impl Board {
             repetition_cache: Vec::new(),
             principal_variation: Vec::new(),
             pst_vals: S(0, 0),
-            eparams: evaluation::parameters::EvalParams::default(),
-            sparams: SearchParams::default(),
-            lmr_table: search::LMTable::new(&SearchParams::default()),
         };
         out.reset();
         out
-    }
-
-    pub fn set_search_params(&mut self, config: SearchParams) {
-        self.sparams = config;
-        self.lmr_table = search::LMTable::new(&self.sparams);
     }
 
     pub const fn ep_sq(&self) -> Square {
@@ -774,8 +763,8 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = PIECE_EMPTY;
-        self.material[colour as usize] -= self.eparams.piece_values[piece as usize];
-        self.pst_vals -= pst_value(piece, sq, &self.eparams.piece_square_tables);
+        self.material[colour as usize] -= get_eval_params().piece_values[piece as usize];
+        self.pst_vals -= pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] -= 1;
@@ -798,8 +787,8 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.material[colour as usize] += self.eparams.piece_values[piece as usize];
-        self.pst_vals += pst_value(piece, sq, &self.eparams.piece_square_tables);
+        self.material[colour as usize] += get_eval_params().piece_values[piece as usize];
+        self.pst_vals += pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
         if PIECE_BIG[piece as usize] {
             self.big_piece_counts[colour as usize] += 1;
@@ -825,8 +814,8 @@ impl Board {
 
         *self.piece_at_mut(from) = PIECE_EMPTY;
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals -= pst_value(piece_moved, from, &self.eparams.piece_square_tables);
-        self.pst_vals += pst_value(piece_moved, to, &self.eparams.piece_square_tables);
+        self.pst_vals -= pst_value(piece_moved, from, &get_eval_params().piece_square_tables);
+        self.pst_vals += pst_value(piece_moved, to, &get_eval_params().piece_square_tables);
     }
 
     /// Gets the piece that will be moved by the given move.

@@ -10,12 +10,12 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE},
+        evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE, set_eval_params},
         Board,
     },
     definitions::{BLACK, WHITE, MEGABYTE},
     errors::{FenParseError, MoveParseError},
-    search::parameters::SearchParams,
+    search::parameters::{SearchParams, get_search_params, set_search_params},
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
     NAME, VERSION, transpositiontable::TranspositionTable,
@@ -326,7 +326,7 @@ pub fn main_loop(params: EvalParams) {
 
     let mut info = SearchInfo::default();
 
-    pos.set_eval_params(params);
+    unsafe { set_eval_params(params); }
 
     let stdin = std::sync::Mutex::new(stdin_reader());
 
@@ -375,11 +375,11 @@ pub fn main_loop(params: EvalParams) {
                 Ok(())
             }
             input if input.starts_with("setoption") => {
-                let pre_config = SetOptions { search_config: pos.sparams.clone(), hash_mb: None };
+                let pre_config = SetOptions { search_config: get_search_params().clone(), hash_mb: None };
                 let res = parse_setoption(input, &mut info, pre_config);
                 match res {
                     Ok(conf) => {
-                        pos.set_search_params(conf.search_config);
+                        unsafe { set_search_params(conf.search_config); }
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
                             tt.resize(new_size);

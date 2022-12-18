@@ -7,7 +7,7 @@ use std::{
 use rand::prelude::SliceRandom;
 
 use crate::{
-    board::{evaluation::parameters::EvalParams, Board},
+    board::{evaluation::{parameters::EvalParams, set_eval_params}, Board},
     definitions::{INFINITY, WHITE, MEGABYTE},
     searchinfo::SearchInfo,
     threadlocal::ThreadData, transpositiontable::TranspositionTable,
@@ -35,7 +35,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     tt.resize(MEGABYTE);
     let mut t = ThreadData::new();
     t.alloc_tables();
-    pos.set_eval_params(params.clone());
+    unsafe { set_eval_params(params.clone()); }
     data.iter()
         .map(|TrainingExample { fen, outcome }| {
             // set_from_fen does not allocate, so it should be pretty fast.

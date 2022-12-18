@@ -6,8 +6,21 @@ use super::{
     ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH,
     LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_VERIFICATION_DEPTH, NMP_IMPROVING_MARGIN,
     RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
-    SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
+    SINGULARITY_DEPTH, TT_REDUCTION_DEPTH, LMTable,
 };
+
+pub static mut SEARCH_PARAMS: SearchParams = SearchParams::default();
+pub static mut LM_TABLE: LMTable = LMTable::NULL;
+pub unsafe fn set_search_params(params: SearchParams) {
+    LM_TABLE = LMTable::new(&params);
+    SEARCH_PARAMS = params;
+}
+pub fn get_search_params() -> &'static SearchParams {
+    unsafe { &SEARCH_PARAMS }
+}
+pub fn get_lm_table() -> &'static LMTable {
+    unsafe { &LM_TABLE }
+}
 
 #[derive(Clone, Debug)]
 pub struct SearchParams {
@@ -32,8 +45,8 @@ pub struct SearchParams {
     pub lmr_division: f64,
 }
 
-impl Default for SearchParams {
-    fn default() -> Self {
+impl SearchParams {
+    pub const fn default() -> Self {
         Self {
             aspiration_window: ASPIRATION_WINDOW,
             rfp_margin: RFP_MARGIN,

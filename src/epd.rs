@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{
-    board::{evaluation::parameters::EvalParams, Board},
+    board::{evaluation::{parameters::EvalParams, set_eval_params}, Board},
     chessmove::Move,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData, transpositiontable::TranspositionTable, definitions::MEGABYTE,
@@ -19,7 +19,7 @@ struct EpdPosition {
 
 pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64, hash: usize) {
     let mut board = Board::new();
-    board.set_eval_params(params);
+    unsafe { set_eval_params(params); }
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
 

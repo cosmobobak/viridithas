@@ -4,13 +4,13 @@ use crate::{
         File::{FILE_A, FILE_D, FILE_H},
         Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
         BLACK, WHITE, WK, WN, WP, Square,
-    },
+    }, cfor,
 };
 
 use super::PieceSquareTable;
 
 // Scores are explicit for files A to D, implicitly mirrored for E to H.
-static BONUS: [[[S; 4]; 8]; 7] = [
+const BONUS: [[[S; 4]; 8]; 7] = [
     [[S::NULL; 4]; 8],
     [[S::NULL; 4]; 8],
     [
@@ -71,7 +71,7 @@ static BONUS: [[[S; 4]; 8]; 7] = [
 ];
 
 #[rustfmt::skip]
-static P_BONUS: [[S; 8]; 8] = [
+const P_BONUS: [[S; 8]; 8] = [
     // Pawn (asymmetric distribution)
     [ S::NULL; 8 ],
     [ S(-18, 46), S(-27, 39), S(-15, 31), S(-5, -10), S(-7, 41), S(68, 25), S(63, 11), S(2, 2), ],
@@ -128,13 +128,13 @@ static P_BONUS: [[S; 8]; 8] = [
     println!("];");
 }
 
-pub fn construct_piece_square_table() -> PieceSquareTable {
+pub const fn construct_piece_square_table() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
-    for colour in [WHITE, BLACK] {
+    cfor!(let mut colour = 0; colour < 2; colour += 1; {
         let offset = if colour == BLACK { 7 } else { 1 };
         let multiplier = if colour == BLACK { -1 } else { 1 };
-        for pieces_idx in 0..6 {
-            for pst_idx in 0..64 {
+        cfor!(let mut pieces_idx = 0; pieces_idx < 6; pieces_idx += 1; {
+            cfor!(let mut pst_idx = 0; pst_idx < 64; pst_idx += 1; {
                 let pst_idx = Square::new(pst_idx);
                 let sq = if colour == WHITE { pst_idx } else { pst_idx.flip_rank() };
                 let r = pst_idx.rank() as usize;
@@ -147,8 +147,8 @@ pub fn construct_piece_square_table() -> PieceSquareTable {
                 };
                 let S(mg, eg) = value;
                 pst[pieces_idx + offset][sq.index()] = S(mg * multiplier, eg * multiplier);
-            }
-        }
-    }
+            });
+        });
+    });
     pst
 }

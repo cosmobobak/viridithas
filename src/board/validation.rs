@@ -12,7 +12,7 @@ use crate::{
     nnue::NNUEState,
 };
 
-use super::{movegen::bitboards::BitLoop, Board};
+use super::{movegen::bitboards::BitLoop, Board, evaluation::get_eval_params};
 
 impl Board {
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
@@ -45,7 +45,7 @@ impl Board {
             if PIECE_MIN[piece as usize] {
                 min_pce[colour as usize] += 1;
             }
-            material[colour as usize] += self.eparams.piece_values[piece as usize];
+            material[colour as usize] += get_eval_params().piece_values[piece as usize];
         }
 
         // check bitboard / piece array coherency
