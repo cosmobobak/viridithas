@@ -328,7 +328,7 @@ pub fn main_loop(params: EvalParams) {
 
     pos.set_eval_params(params);
 
-    let stdin = stdin_reader();
+    let stdin = std::sync::Mutex::new(stdin_reader());
 
     info.set_stdin(&stdin);
 
@@ -341,7 +341,7 @@ pub fn main_loop(params: EvalParams) {
 
     loop {
         std::io::stdout().flush().unwrap();
-        let line = stdin.recv().expect("Couldn't read from stdin");
+        let line = stdin.lock().unwrap().recv().expect("Couldn't read from stdin");
         let input = line.trim();
 
         let res = match input {

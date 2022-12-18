@@ -1,5 +1,5 @@
 use std::{
-    sync::mpsc,
+    sync::{mpsc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -62,7 +62,7 @@ pub struct SearchInfo<'a> {
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,
     /// A handle to a receiver for stdin.
-    pub stdin_rx: Option<&'a mpsc::Receiver<String>>,
+    pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
     /// Form of the search limit.
@@ -94,7 +94,7 @@ impl<'a> SearchInfo<'a> {
         self.failhigh_first = 0;
     }
 
-    pub fn set_stdin(&mut self, stdin_rx: &'a mpsc::Receiver<String>) {
+    pub fn set_stdin(&mut self, stdin_rx: &'a Mutex<mpsc::Receiver<String>>) {
         self.stdin_rx = Some(stdin_rx);
     }
 
@@ -140,7 +140,7 @@ impl<'a> SearchInfo<'a> {
                 }
             }
         }
-        if let Some(Ok(cmd)) = self.stdin_rx.map(mpsc::Receiver::try_recv) {
+        if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             self.stopped = true;
             let cmd = cmd.trim();
             if cmd == "quit" {

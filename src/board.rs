@@ -5,7 +5,7 @@ pub mod validation;
 
 use std::{
     fmt::{Debug, Display, Formatter, Write},
-    sync::Once,
+    sync::Once, thread,
 };
 
 use regex::Regex;
@@ -1509,7 +1509,33 @@ impl Board {
         // don't produce weird scores if there's one legal option
         // and we're going to instamove.
         let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_data[0], &legal_moves);
-        
+
+        // start search threads:
+        thread::scope(|s| {
+            let main_thread_handle = s.spawn(|| {
+                self.iterative_deepening::<USE_NNUE, true>(info, tt, &mut thread_data[0], &mut most_recent_move, &mut most_recent_score);
+                info.stopped = true;
+            });
+            // for (i, thread) in thread_data.iter_mut().enumerate().skip(1) {
+            //     let mut board = self.clone();
+            //     let mut info = info.clone();
+            //     let tt = tt.clone();
+            //     s.spawn(move |_| {
+            //         board.iterative_deepening::<USE_NNUE, false>(&mut info, tt, thread, &mut most_recent_move, &mut most_recent_score);
+            //     });
+            // }
+            main_thread_handle.join().unwrap();
+        });
+
+        if info.print_to_stdout {
+            println!("bestmove {most_recent_move}");
+        }
+
+        assert!(legal_moves.contains(&most_recent_move), "search returned an illegal move.");
+        (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
+    }
+
+    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(&mut self, info: &mut SearchInfo, tt: TranspositionTableView, thread: &mut ThreadData, most_recent_move: &mut Move, most_recent_score: &mut i32) {
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -1517,7 +1543,7 @@ impl Board {
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         'deepening: for i_depth in 1..=max_depth {
             // consider stopping early if we've neatly completed a depth:
-            if i_depth > 8 && info.in_game() && info.is_past_opt_time() {
+            if MAIN_THREAD && i_depth > 8 && info.in_game() && info.is_past_opt_time() {
                 break 'deepening;
             }
             // aspiration loop:
@@ -1525,41 +1551,41 @@ impl Board {
                 let score = self.root_search::<USE_NNUE>(
                     tt,
                     info,
-                    &mut thread_data[0],
+                    thread,
                     Depth::new(i_depth),
                     aspiration_window.alpha,
                     aspiration_window.beta,
                 );
                 info.check_up();
-                if i_depth > 2 { 
-                    info.check_if_best_move_found(most_recent_move);
+                if MAIN_THREAD && i_depth > 2 { 
+                    info.check_if_best_move_found(*most_recent_move);
                 }
                 if i_depth > 1 && info.stopped {
                     break 'deepening;
                 }
-                if is_mate_score(score) && i_depth > 10 {
+                if MAIN_THREAD && is_mate_score(score) && i_depth > 10 {
                     mate_counter += 1;
                     if i_depth > 1 && info.in_game() && mate_counter >= 3 {
                         break 'deepening;
                     }
-                } else {
+                } else if MAIN_THREAD {
                     mate_counter = 0;
                 }
 
                 let score_string = format_score(score, self.turn());
 
-                most_recent_score = score;
+                *most_recent_score = score;
                 self.regenerate_pv_line(i_depth, tt);
-                most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
+                *most_recent_move = *self.principal_variation.first().unwrap_or(most_recent_move);
 
-                if i_depth > 8 && !forcing_time_reduction && info.in_game() {
+                if MAIN_THREAD && i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced::<200>(
                         tt,
                         info,
-                        &mut thread_data[0],
-                        most_recent_move,
-                        most_recent_score,
+                        thread,
+                        *most_recent_move,
+                        *most_recent_score,
                         Depth::new(i_depth),
                     );
                     info.seldepth = saved_seldepth;
@@ -1575,13 +1601,13 @@ impl Board {
 
                 if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
                     // fail low
-                    if info.print_to_stdout {
+                    if MAIN_THREAD && info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info, tt);
                     }
                     aspiration_window.widen_down();
-                    if !fail_increment && info.in_game() {
+                    if MAIN_THREAD && !fail_increment && info.in_game() {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }
@@ -1589,7 +1615,7 @@ impl Board {
                 }
                 if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
                     // fail high
-                    if info.print_to_stdout {
+                    if MAIN_THREAD && info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info, tt);
@@ -1597,7 +1623,7 @@ impl Board {
                     aspiration_window.widen_up();
                     continue;
                 }
-                if info.print_to_stdout {
+                if MAIN_THREAD && info.print_to_stdout {
                     self.readout_info::<EXACT>(&score_string, i_depth, info, tt);
                 }
 
@@ -1605,18 +1631,11 @@ impl Board {
             }
 
             if i_depth > 4 {
-                aspiration_window = AspirationWindow::from_last_score(most_recent_score);
+                aspiration_window = AspirationWindow::from_last_score(*most_recent_score);
             } else {
                 aspiration_window = AspirationWindow::new();
             }
         }
-
-        if info.print_to_stdout {
-            println!("bestmove {most_recent_move}");
-        }
-
-        assert!(legal_moves.contains(&most_recent_move), "search returned an illegal move.");
-        (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
     fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
