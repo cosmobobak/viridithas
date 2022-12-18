@@ -1507,7 +1507,7 @@ impl Board {
 
         // don't produce weird scores if there's one legal option
         // and we're going to instamove.
-        let (mut most_recent_move, mut most_recent_score) =
+        let (mut bestmove, mut score) =
             self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
 
         let global_stopped = info.stopped;
@@ -1521,32 +1521,18 @@ impl Board {
         let total_nodes = AtomicU64::new(0);
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
-                let res = self.iterative_deepening::<USE_NNUE, true>(
-                    info,
-                    tt,
-                    t1,
-                    most_recent_move,
-                    most_recent_score,
-                    &total_nodes,
-                );
+                let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, bestmove, score, &total_nodes);
                 global_stopped.store(true, Ordering::SeqCst);
                 res
             });
-            #[allow(clippy::needless_collect)]
             // we need to eagerly start the threads or nothing will happen
+            #[allow(clippy::needless_collect)]
             let helper_handles = rest
                 .iter_mut()
                 .zip(board_info_copies.iter_mut())
-                .map(|(thread, (board, info))| {
+                .map(|(t, (board, info))| {
                     s.spawn(|| {
-                        board.iterative_deepening::<USE_NNUE, false>(
-                            info,
-                            tt,
-                            thread,
-                            most_recent_move,
-                            most_recent_score,
-                            &total_nodes,
-                        )
+                        board.iterative_deepening::<USE_NNUE, false>(info, tt, t, bestmove, score, &total_nodes)
                     })
                 })
                 .collect::<Vec<_>>();
@@ -1555,26 +1541,26 @@ impl Board {
         });
         global_stopped.store(false, Ordering::SeqCst);
 
-        (most_recent_move, most_recent_score) = search_results[0];
+        (bestmove, score) = search_results[0];
 
         if info.print_to_stdout {
-            println!("bestmove {most_recent_move}");
+            println!("bestmove {bestmove}");
         }
 
-        assert!(legal_moves.contains(&most_recent_move), "search returned an illegal move.");
-        (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
+        assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
+        (if self.side == WHITE { score } else { -score }, bestmove)
     }
 
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
         &mut self,
         info: &mut SearchInfo,
         tt: TranspositionTableView,
-        thread: &mut ThreadData,
-        mut most_recent_move: Move,
-        mut most_recent_score: i32,
+        t: &mut ThreadData,
+        mut bestmove: Move,
+        mut score: i32,
         total_nodes: &AtomicU64,
     ) -> (Move, i32) {
-        let mut aspiration_window = AspirationWindow::new();
+        let mut asp_window = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
@@ -1582,93 +1568,98 @@ impl Board {
         let starting_depth = if MAIN_THREAD {
             1
         } else {
+            // induce symmetry breaking in the helper threads
             rand::Rng::gen_range(&mut rand::thread_rng(), 2..=4).min(max_depth)
         };
-        'deepening: for i_depth in starting_depth..=max_depth {
+        'deepening: for d in starting_depth..=max_depth {
             // consider stopping early if we've neatly completed a depth:
-            if MAIN_THREAD && i_depth > 8 && info.in_game() && info.is_past_opt_time() {
+            if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
                 break 'deepening;
             }
+            let depth = Depth::new(d);
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
-                let score = self.root_search::<USE_NNUE>(tt, info, thread, Depth::new(i_depth), aspiration_window.alpha, aspiration_window.beta);
+                let v = self.root_search::<USE_NNUE>(tt, info, t, depth, asp_window.alpha, asp_window.beta);
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
-                if MAIN_THREAD && i_depth > 2 {
-                    info.check_if_best_move_found(most_recent_move);
+                if MAIN_THREAD && d > 2 {
+                    info.check_if_best_move_found(bestmove);
                 }
-                if i_depth > 1 && info.stopped() {
+                if d > 1 && info.stopped() {
                     break 'deepening;
                 }
-                if MAIN_THREAD && is_mate_score(score) && i_depth > 10 {
+                if MAIN_THREAD && is_mate_score(v) && d > 10 {
                     mate_counter += 1;
-                    if i_depth > 1 && info.in_game() && mate_counter >= 3 {
+                    if d > 1 && info.in_game() && mate_counter >= 3 {
                         break 'deepening;
                     }
                 } else if MAIN_THREAD {
                     mate_counter = 0;
                 }
 
-                let score_string = format_score(score, self.turn());
+                let score_string = format_score(v, self.turn());
 
-                most_recent_score = score;
-                self.regenerate_pv_line(i_depth, tt);
-                most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
+                score = v;
+                self.regenerate_pv_line(d, tt);
+                bestmove = *self.principal_variation.first().unwrap_or(&bestmove);
 
-                if MAIN_THREAD && i_depth > 8 && !forcing_time_reduction && info.in_game() {
+                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, thread, most_recent_move, most_recent_score, Depth::new(i_depth));
+                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
                     info.seldepth = saved_seldepth;
                     if forced {
                         forcing_time_reduction = true;
                         info.multiply_time_window(0.25);
                     }
                     info.check_up();
-                    if i_depth > 1 && info.stopped() {
+                    if d > 1 && info.stopped() {
                         break 'deepening;
                     }
                 }
 
-                if aspiration_window.alpha != -INFINITY && score <= aspiration_window.alpha {
+                if asp_window.alpha != -INFINITY && v <= asp_window.alpha {
                     // fail low
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
-                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
+                        self.readout_info::<UPPER_BOUND>(&score_string, d, info, tt, total_nodes);
                     }
-                    aspiration_window.widen_down();
+                    asp_window.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }
                     continue;
                 }
-                if aspiration_window.beta != INFINITY && score >= aspiration_window.beta {
+                if asp_window.beta != INFINITY && v >= asp_window.beta {
                     // fail high
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
-                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
+                        self.readout_info::<LOWER_BOUND>(&score_string, d, info, tt, total_nodes);
                     }
-                    aspiration_window.widen_up();
+                    asp_window.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
-                    self.readout_info::<EXACT>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
+                    let total_nodes = total_nodes.load(Ordering::SeqCst);
+                    self.readout_info::<EXACT>(&score_string, d, info, tt, total_nodes);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
             }
 
-            if i_depth > 4 {
-                aspiration_window = AspirationWindow::from_last_score(most_recent_score);
+            if d > 4 {
+                asp_window = AspirationWindow::from_last_score(score);
             } else {
-                aspiration_window = AspirationWindow::new();
+                asp_window = AspirationWindow::infinite();
             }
         }
-        (most_recent_move, most_recent_score)
+        (bestmove, score)
     }
 
     fn initial_move_and_score(

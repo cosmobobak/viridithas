@@ -819,7 +819,7 @@ pub struct AspirationWindow {
 }
 
 impl AspirationWindow {
-    pub const fn new() -> Self {
+    pub const fn infinite() -> Self {
         Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
