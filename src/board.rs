@@ -5,7 +5,7 @@ pub mod validation;
 
 use std::{
     fmt::{Debug, Display, Formatter, Write},
-    sync::Once, thread,
+    sync::{Once, atomic::{AtomicU64, Ordering}}, thread,
 };
 
 use regex::Regex;
@@ -1479,11 +1479,11 @@ impl Board {
     pub fn search_position<const USE_NNUE: bool>(
         &mut self,
         info: &mut SearchInfo,
-        thread_data: &mut [ThreadData],
+        thread_headers: &mut [ThreadData],
         tt: TranspositionTableView,
     ) -> (i32, Move) {
         info.setup_for_search();
-        for td in thread_data.iter_mut() {
+        for td in thread_headers.iter_mut() {
             td.setup_tables_for_search();
         }
 
@@ -1497,24 +1497,35 @@ impl Board {
 
         // don't produce weird scores if there's one legal option
         // and we're going to instamove.
-        let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_data[0], &legal_moves);
+        let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
 
+        let mut search_results = Vec::with_capacity(thread_headers.len());
         // start search threads:
+        let (t1, rest) = thread_headers.split_first_mut().unwrap();
+        let board_copy = self.clone();
+        let info_copy = info.clone();
+        let mut board_info_copies = rest
+            .iter()
+            .map(|_| (board_copy.clone(), info_copy.clone()))
+            .collect::<Vec<_>>();
+        let total_nodes = AtomicU64::new(0);
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
-                self.iterative_deepening::<USE_NNUE, true>(info, tt, &mut thread_data[0], &mut most_recent_move, &mut most_recent_score);
+                let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, most_recent_move, most_recent_score, &total_nodes);
                 info.stopped = true;
+                res
             });
-            // for (i, thread) in thread_data.iter_mut().enumerate().skip(1) {
-            //     let mut board = self.clone();
-            //     let mut info = info.clone();
-            //     let tt = tt.clone();
-            //     s.spawn(move |_| {
-            //         board.iterative_deepening::<USE_NNUE, false>(&mut info, tt, thread, &mut most_recent_move, &mut most_recent_score);
-            //     });
-            // }
-            main_thread_handle.join().unwrap();
+            #[allow(clippy::needless_collect)] // we need to eagerly start the threads or nothing will happen
+            let helper_handles = rest.iter_mut().zip(board_info_copies.iter_mut()).map(|(thread, (board, info))| {
+                s.spawn(|| {
+                    board.iterative_deepening::<USE_NNUE, false>(info, tt, thread, most_recent_move, most_recent_score, &total_nodes)
+                })
+            }).collect::<Vec<_>>();
+            search_results.push(main_thread_handle.join().unwrap());
+            search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
         });
+
+        (most_recent_move, most_recent_score) = search_results[0];
 
         if info.print_to_stdout {
             println!("bestmove {most_recent_move}");
@@ -1524,19 +1535,30 @@ impl Board {
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
-    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(&mut self, info: &mut SearchInfo, tt: TranspositionTableView, thread: &mut ThreadData, most_recent_move: &mut Move, most_recent_score: &mut i32) {
+    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(&mut self, info: &mut SearchInfo, tt: TranspositionTableView, thread: &mut ThreadData, mut most_recent_move: Move, mut most_recent_score: i32, total_nodes: &AtomicU64) -> (Move, i32) {
+        if MAIN_THREAD {
+            println!("started main thread search");
+        } else {
+            println!("started helper thread search");
+        }
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
-        'deepening: for i_depth in 1..=max_depth {
+        let starting_depth = if MAIN_THREAD {
+            1
+        } else {
+            rand::Rng::gen_range(&mut rand::thread_rng(), 2..=4).min(max_depth)
+        };
+        'deepening: for i_depth in starting_depth..=max_depth {
             // consider stopping early if we've neatly completed a depth:
             if MAIN_THREAD && i_depth > 8 && info.in_game() && info.is_past_opt_time() {
                 break 'deepening;
             }
             // aspiration loop:
             loop {
+                let nodes_before = info.nodes;
                 let score = self.root_search::<USE_NNUE>(
                     tt,
                     info,
@@ -1545,9 +1567,11 @@ impl Board {
                     aspiration_window.alpha,
                     aspiration_window.beta,
                 );
+                let nodes = info.nodes - nodes_before;
+                total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
                 if MAIN_THREAD && i_depth > 2 { 
-                    info.check_if_best_move_found(*most_recent_move);
+                    info.check_if_best_move_found(most_recent_move);
                 }
                 if i_depth > 1 && info.stopped {
                     break 'deepening;
@@ -1563,9 +1587,9 @@ impl Board {
 
                 let score_string = format_score(score, self.turn());
 
-                *most_recent_score = score;
+                most_recent_score = score;
                 self.regenerate_pv_line(i_depth, tt);
-                *most_recent_move = *self.principal_variation.first().unwrap_or(most_recent_move);
+                most_recent_move = *self.principal_variation.first().unwrap_or(&most_recent_move);
 
                 if MAIN_THREAD && i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
@@ -1573,8 +1597,8 @@ impl Board {
                         tt,
                         info,
                         thread,
-                        *most_recent_move,
-                        *most_recent_score,
+                        most_recent_move,
+                        most_recent_score,
                         Depth::new(i_depth),
                     );
                     info.seldepth = saved_seldepth;
@@ -1593,7 +1617,7 @@ impl Board {
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
-                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info, tt);
+                        self.readout_info::<UPPER_BOUND>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
                     }
                     aspiration_window.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -1607,24 +1631,25 @@ impl Board {
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
-                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info, tt);
+                        self.readout_info::<LOWER_BOUND>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
                     }
                     aspiration_window.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
-                    self.readout_info::<EXACT>(&score_string, i_depth, info, tt);
+                    self.readout_info::<EXACT>(&score_string, i_depth, info, tt, total_nodes.load(Ordering::SeqCst));
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
             }
 
             if i_depth > 4 {
-                aspiration_window = AspirationWindow::from_last_score(*most_recent_score);
+                aspiration_window = AspirationWindow::from_last_score(most_recent_score);
             } else {
                 aspiration_window = AspirationWindow::new();
             }
         }
+        (most_recent_move, most_recent_score)
     }
 
     fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
@@ -1648,13 +1673,14 @@ impl Board {
         depth: i32,
         info: &SearchInfo,
         tt: TranspositionTableView,
+        total_nodes: u64,
     ) {
         #![allow(
             clippy::cast_precision_loss,
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        let nps = (info.nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
+        let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         let mut bound = BOUND;
         if self.turn() == BLACK {
             bound = match bound {
@@ -1667,7 +1693,7 @@ impl Board {
             print!(
                 "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
-                info.nodes,
+                total_nodes,
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
@@ -1675,7 +1701,7 @@ impl Board {
             print!(
                 "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
-                info.nodes,
+                total_nodes,
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
@@ -1683,7 +1709,7 @@ impl Board {
             print!(
                 "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
-                info.nodes,
+                total_nodes,
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );

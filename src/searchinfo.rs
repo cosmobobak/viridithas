@@ -46,6 +46,7 @@ impl SearchLimit {
 }
 
 #[allow(clippy::struct_excessive_bools)]
+#[derive(Clone)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
     pub start_time: Instant,

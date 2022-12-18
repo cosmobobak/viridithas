@@ -180,7 +180,7 @@ impl NNUEParams {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NNUEState {
     pub white_pov: [i16; INPUT],
     pub black_pov: [i16; INPUT],

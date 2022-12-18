@@ -198,6 +198,7 @@ where
 struct SetOptions {
     pub search_config: SearchParams,
     pub hash_mb: Option<usize>,
+    pub threads: Option<usize>,
 }
 
 fn parse_setoption(
@@ -244,7 +245,16 @@ fn parse_setoption(
         return Ok(out);
     }
     match opt_name {
-        "Hash" => out.hash_mb = Some(opt_value.parse()?),
+        "Hash" => {
+            let value = opt_value.parse()?;
+            assert!(value > 0 && value <= 8192, "Hash value must be between 1 and 8192");
+            out.hash_mb = Some(value);
+        }
+        "Threads" => {
+            let value = opt_value.parse()?;
+            assert!(value > 0 && value <= 512, "Threads value must be between 1 and 512");
+            out.threads = Some(value);
+        }
         "MultiPV" => {
             let value: usize = opt_value.parse()?;
             assert!(value > 0 && value <= 500, "MultiPV value must be between 1 and 500");
@@ -304,6 +314,7 @@ fn print_uci_response(full: bool) {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max 8192");
+    println!("option name Threads type spin default 1 min 1 max 512");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -375,7 +386,7 @@ pub fn main_loop(params: EvalParams) {
                 Ok(())
             }
             input if input.starts_with("setoption") => {
-                let pre_config = SetOptions { search_config: get_search_params().clone(), hash_mb: None };
+                let pre_config = SetOptions { search_config: get_search_params().clone(), hash_mb: None, threads: None };
                 let res = parse_setoption(input, &mut info, pre_config);
                 match res {
                     Ok(conf) => {
@@ -383,6 +394,12 @@ pub fn main_loop(params: EvalParams) {
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
                             tt.resize(new_size);
+                        }
+                        if let Some(threads) = conf.threads {
+                            thread_data.resize(threads, ThreadData::new());
+                            for td in &mut thread_data {
+                                td.alloc_tables();
+                            }
                         }
                         Ok(())
                     }

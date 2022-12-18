@@ -42,7 +42,7 @@ pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
     *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct HistoryTable {
     table: Box<[[i32; BOARD_N_SQUARES]]>,
 }
@@ -108,7 +108,7 @@ impl HistoryTable {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DoubleHistoryTable {
     table: Vec<i32>,
 }
@@ -185,6 +185,7 @@ impl DoubleHistoryTable {
     }
 }
 
+#[derive(Clone)]
 pub struct MoveTable {
     table: Vec<Move>,
 }

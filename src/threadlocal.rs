@@ -1,5 +1,6 @@
 use crate::{chessmove::Move, definitions::{MAX_PLY, MAX_DEPTH}, nnue, historytable::{HistoryTable, MoveTable, DoubleHistoryTable}};
 
+#[derive(Clone)]
 pub struct ThreadData {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
