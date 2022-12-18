@@ -339,6 +339,7 @@ pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn main_loop(params: EvalParams) {
     let mut pos = Board::new();
 
