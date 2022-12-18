@@ -57,9 +57,11 @@ fn batch_convert<const USE_NNUE: bool>(
         }
         // no NNUE for generating training data.
         t.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&pos));
-        let mut info = SearchInfo::default();
-        info.print_to_stdout = false;
-        info.limit = SearchLimit::Depth(Depth::new(depth));
+        let mut info = SearchInfo {
+            print_to_stdout: false,
+            limit: SearchLimit::Depth(Depth::new(depth)),
+            ..Default::default()
+        };
         let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t, tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_mate_score(score)) {
             evals.push(None);

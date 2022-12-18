@@ -1510,7 +1510,7 @@ impl Board {
         let (mut most_recent_move, mut most_recent_score) =
             self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
 
-        let global_stopped = info.global_stopped;
+        let global_stopped = info.stopped;
         let mut search_results = Vec::with_capacity(thread_headers.len());
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();

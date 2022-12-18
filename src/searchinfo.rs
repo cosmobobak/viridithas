@@ -58,7 +58,7 @@ pub struct SearchInfo<'a> {
     /// Signal to quit the search.
     pub quit: bool,
     /// Signal to stop the search.
-    stopped: bool,
+    pub stopped: &'static AtomicBool,
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
     /// The number of fail-highs that occured on the first move searched.
@@ -71,8 +71,6 @@ pub struct SearchInfo<'a> {
     pub print_to_stdout: bool,
     /// Form of the search limit.
     pub limit: SearchLimit,
-    /// Global atomic stop flag.
-    pub global_stopped: &'static AtomicBool,
 }
 
 static GLOBAL_STOPPED: AtomicBool = AtomicBool::new(false);
@@ -83,21 +81,20 @@ impl Default for SearchInfo<'_> {
             start_time: Instant::now(),
             nodes: 0,
             quit: false,
-            stopped: false,
+            stopped: &GLOBAL_STOPPED,
             failhigh: 0,
             failhigh_first: 0,
             seldepth: 0.into(),
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),
-            global_stopped: &GLOBAL_STOPPED,
         }
     }
 }
 
 impl<'a> SearchInfo<'a> {
     pub fn setup_for_search(&mut self) {
-        self.stopped = false;
+        self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
         self.failhigh = 0;
         self.failhigh_first = 0;
@@ -136,7 +133,7 @@ impl<'a> SearchInfo<'a> {
             SearchLimit::Depth(_) | SearchLimit::Infinite => {}
             SearchLimit::Nodes(nodes) => {
                 if self.nodes >= nodes {
-                    self.stopped = true;
+                    self.stopped.store(true, Ordering::SeqCst);
                 }
             }
             SearchLimit::Time(time_window)
@@ -147,12 +144,12 @@ impl<'a> SearchInfo<'a> {
                 #[allow(clippy::cast_possible_truncation)]
                 let elapsed_millis = elapsed.as_millis() as u64;
                 if elapsed_millis >= time_window {
-                    self.stopped = true;
+                    self.stopped.store(true, Ordering::SeqCst);
                 }
             }
         }
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
-            self.stopped = true;
+            self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
             if cmd == "quit" {
                 self.quit = true;
@@ -161,13 +158,13 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn stopped(&self) -> bool {
-        self.stopped || self.global_stopped.load(Ordering::SeqCst)
+        self.stopped.load(Ordering::SeqCst)
     }
 
     pub fn check_if_best_move_found(&mut self, best_move: Move) {
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
-                self.stopped = true;
+                self.stopped.store(true, Ordering::SeqCst);
             }
         }
     }
