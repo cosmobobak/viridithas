@@ -72,7 +72,7 @@ impl Board {
 
         if info.nodes.trailing_zeros() >= 12 {
             info.check_up();
-            if info.stopped {
+            if info.stopped() {
                 return 0;
             }
         }
@@ -192,7 +192,7 @@ impl Board {
 
         if info.nodes.trailing_zeros() >= 12 {
             info.check_up();
-            if info.stopped {
+            if info.stopped() {
                 return 0;
             }
         }
@@ -291,7 +291,7 @@ impl Board {
             self.make_nullmove();
             let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
             self.unmake_nullmove();
-            if info.stopped {
+            if info.stopped() {
                 return 0;
             }
             if null_score >= beta {
@@ -476,7 +476,7 @@ impl Board {
             }
             self.unmake_move::<NNUE>(t);
 
-            if info.stopped {
+            if info.stopped() {
                 return 0;
             }
 

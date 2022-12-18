@@ -1,5 +1,5 @@
 use std::{
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Mutex, atomic::{AtomicBool, Ordering}},
     time::{Duration, Instant},
 };
 
@@ -55,7 +55,7 @@ pub struct SearchInfo<'a> {
     /// Signal to quit the search.
     pub quit: bool,
     /// Signal to stop the search.
-    pub stopped: bool,
+    stopped: bool,
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
     /// The number of fail-highs that occured on the first move searched.
@@ -68,6 +68,8 @@ pub struct SearchInfo<'a> {
     pub print_to_stdout: bool,
     /// Form of the search limit.
     pub limit: SearchLimit,
+    /// Global atomic stop flag.
+    pub global_stopped: Option<&'a AtomicBool>,
 }
 
 impl Default for SearchInfo<'_> {
@@ -83,6 +85,7 @@ impl Default for SearchInfo<'_> {
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),
+            global_stopped: None,
         }
     }
 }
@@ -97,6 +100,10 @@ impl<'a> SearchInfo<'a> {
 
     pub fn set_stdin(&mut self, stdin_rx: &'a Mutex<mpsc::Receiver<String>>) {
         self.stdin_rx = Some(stdin_rx);
+    }
+
+    pub fn set_global_stopped(&mut self, global_stopped: &'a AtomicBool) {
+        self.global_stopped = Some(global_stopped);
     }
 
     pub fn set_time_window(&mut self, millis: u64) {
@@ -148,6 +155,10 @@ impl<'a> SearchInfo<'a> {
                 self.quit = true;
             }
         };
+    }
+
+    pub fn stopped(&self) -> bool {
+        self.stopped || self.global_stopped.map_or(false, |s| s.load(Ordering::SeqCst))
     }
 
     pub fn check_if_best_move_found(&mut self, best_move: Move) {

@@ -1499,6 +1499,7 @@ impl Board {
         // and we're going to instamove.
         let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
 
+        let global_stopped = &info.global_stopped.unwrap();
         let mut search_results = Vec::with_capacity(thread_headers.len());
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
@@ -1512,7 +1513,7 @@ impl Board {
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
                 let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, most_recent_move, most_recent_score, &total_nodes);
-                info.stopped = true;
+                global_stopped.store(true, Ordering::SeqCst);
                 res
             });
             #[allow(clippy::needless_collect)] // we need to eagerly start the threads or nothing will happen
@@ -1568,7 +1569,7 @@ impl Board {
                 if MAIN_THREAD && i_depth > 2 { 
                     info.check_if_best_move_found(most_recent_move);
                 }
-                if i_depth > 1 && info.stopped {
+                if i_depth > 1 && info.stopped() {
                     break 'deepening;
                 }
                 if MAIN_THREAD && is_mate_score(score) && i_depth > 10 {
@@ -1602,7 +1603,7 @@ impl Board {
                         info.multiply_time_window(0.25);
                     }
                     info.check_up();
-                    if i_depth > 1 && info.stopped {
+                    if i_depth > 1 && info.stopped() {
                         break 'deepening;
                     }
                 }

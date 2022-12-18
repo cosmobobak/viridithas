@@ -82,11 +82,9 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
             t.alloc_tables();
         }
         
-        let mut info = SearchInfo {
-            print_to_stdout: false,
-            limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
-            ..SearchInfo::default()
-        };
+        let mut info = SearchInfo::default();
+        info.print_to_stdout = false;
+        info.limit = SearchLimit::TimeOrCorrectMoves(time, best_moves.clone());
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
