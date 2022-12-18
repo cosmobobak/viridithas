@@ -348,9 +348,6 @@ pub fn main_loop(params: EvalParams) {
 
     let mut info = SearchInfo::default();
 
-    let global_stopped = AtomicBool::new(false);
-    info.set_global_stopped(&global_stopped);
-
     unsafe {
         set_eval_params(params);
     }

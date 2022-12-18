@@ -133,7 +133,7 @@ fn main() {
     }
 
     if let Some(epd_path) = cli.epdpath {
-        return epd::gamut(epd_path, eparams, cli.epdtime, cli.epdhash);
+        return epd::gamut(epd_path, eparams, cli.epdtime, cli.epdhash, cli.epdthreads);
     }
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {

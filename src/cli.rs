@@ -46,6 +46,9 @@ pub struct Cli {
     /// Hash size in MB to use when doing an epd test suite.
     #[clap(long, value_name = "MB", default_value = "4")]
     pub epdhash: usize,
+    /// Number of threads to use when doing an epd test suite.
+    #[clap(long, value_name = "N_THREADS", default_value = "1")]
+    pub epdthreads: usize,
     /// Path to a WDL data file to evaluate for NNUE data.
     #[clap(long, value_name = "PATH")]
     pub nnueconversionpath: Option<std::path::PathBuf>,

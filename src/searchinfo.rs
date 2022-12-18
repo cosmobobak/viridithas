@@ -72,8 +72,10 @@ pub struct SearchInfo<'a> {
     /// Form of the search limit.
     pub limit: SearchLimit,
     /// Global atomic stop flag.
-    pub global_stopped: Option<&'a AtomicBool>,
+    pub global_stopped: &'static AtomicBool,
 }
+
+static GLOBAL_STOPPED: AtomicBool = AtomicBool::new(false);
 
 impl Default for SearchInfo<'_> {
     fn default() -> Self {
@@ -88,7 +90,7 @@ impl Default for SearchInfo<'_> {
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),
-            global_stopped: None,
+            global_stopped: &GLOBAL_STOPPED,
         }
     }
 }
@@ -103,10 +105,6 @@ impl<'a> SearchInfo<'a> {
 
     pub fn set_stdin(&mut self, stdin_rx: &'a Mutex<mpsc::Receiver<String>>) {
         self.stdin_rx = Some(stdin_rx);
-    }
-
-    pub fn set_global_stopped(&mut self, global_stopped: &'a AtomicBool) {
-        self.global_stopped = Some(global_stopped);
     }
 
     pub fn set_time_window(&mut self, millis: u64) {
@@ -163,7 +161,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn stopped(&self) -> bool {
-        self.stopped || self.global_stopped.map_or(false, |s| s.load(Ordering::SeqCst))
+        self.stopped || self.global_stopped.load(Ordering::SeqCst)
     }
 
     pub fn check_if_best_move_found(&mut self, best_move: Move) {
