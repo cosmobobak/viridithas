@@ -1536,11 +1536,6 @@ impl Board {
     }
 
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(&mut self, info: &mut SearchInfo, tt: TranspositionTableView, thread: &mut ThreadData, mut most_recent_move: Move, mut most_recent_score: i32, total_nodes: &AtomicU64) -> (Move, i32) {
-        if MAIN_THREAD {
-            println!("started main thread search");
-        } else {
-            println!("started helper thread search");
-        }
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
