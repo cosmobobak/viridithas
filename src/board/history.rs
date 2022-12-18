@@ -1,7 +1,8 @@
 use crate::{
     chessmove::Move,
     definitions::{depth::Depth, MAX_DEPTH, PIECE_EMPTY},
-    historytable::update_history, threadlocal::ThreadData,
+    historytable::update_history,
+    threadlocal::ThreadData,
 };
 
 use super::Board;
@@ -18,7 +19,7 @@ impl ThreadData {
         let val = self.history_table.get_mut(piece_moved, to);
         update_history::<IS_GOOD>(val, depth);
     }
-    
+
     /// Get the history score for a quiet move.
     pub(super) fn history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.moved_piece(m);
@@ -60,7 +61,12 @@ impl ThreadData {
     }
 
     /// Add a move to the follow-up history table.
-    pub fn add_followup_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
+    pub fn add_followup_history<const IS_GOOD: bool>(
+        &mut self,
+        pos: &Board,
+        m: Move,
+        depth: Depth,
+    ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
         let two_ply_ago = match pos.history.len().checked_sub(2) {
             Some(idx) => idx,

@@ -1,10 +1,8 @@
 pub mod bitboards;
 pub mod movepicker;
 
+use self::bitboards::{first_square, BitShiftExt, BB_RANK_2, BB_RANK_7};
 pub use self::bitboards::{BitLoop, BB_NONE};
-use self::{
-    bitboards::{BitShiftExt, BB_RANK_2, BB_RANK_7, first_square}
-};
 
 use super::Board;
 
@@ -16,7 +14,7 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Square, BISHOP, BKCA, BQCA, KING, KNIGHT, PIECE_EMPTY, ROOK, WHITE, WKCA, WQCA, QUEEN,
+        Square, BISHOP, BKCA, BQCA, KING, KNIGHT, PIECE_EMPTY, QUEEN, ROOK, WHITE, WKCA, WQCA,
     },
     magic::MAGICS_READY,
     validate::piece_valid,
@@ -52,11 +50,8 @@ impl MoveList {
         // but this function is very much in the
         // hot path.
         debug_assert!(self.count < MAX_POSITION_MOVES);
-        let score = if TACTICAL {
-            MoveListEntry::TACTICAL_SENTINEL
-        } else {
-            MoveListEntry::QUIET_SENTINEL
-        };
+        let score =
+            if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
         unsafe {
             *self.moves.get_unchecked_mut(self.count) = MoveListEntry { mov: m, score };
         }
@@ -85,12 +80,7 @@ impl Display for MoveList {
         for m in &self.moves[0..self.count - 1] {
             writeln!(f, "  {} ${}, ", m.mov, m.score)?;
         }
-        writeln!(
-            f,
-            "  {} ${}",
-            self.moves[self.count - 1].mov,
-            self.moves[self.count - 1].score
-        )?;
+        writeln!(f, "  {} ${}", self.moves[self.count - 1].mov, self.moves[self.count - 1].score)?;
         write!(f, "]")
     }
 }
@@ -162,15 +152,11 @@ impl Board {
 
         if attacks_west != 0 {
             let from_sq = first_square(attacks_west);
-            move_list.push::<true>(
-                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG),
-            );
+            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG));
         }
         if attacks_east != 0 {
             let from_sq = first_square(attacks_east);
-            move_list.push::<true>(
-                Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG),
-            );
+            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG));
         }
     }
 
@@ -191,9 +177,7 @@ impl Board {
         }
         for sq in BitLoop::new(double_pushable_pawns) {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
-            move_list.push::<false>(
-                Move::new(sq, to, PIECE_EMPTY, 0),
-            );
+            move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
         }
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
@@ -244,9 +228,7 @@ impl Board {
         for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0),
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
             for to in BitLoop::new(moves & freespace) {
                 move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
@@ -258,9 +240,7 @@ impl Board {
         for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
             for to in BitLoop::new(moves & freespace) {
                 move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
@@ -273,9 +253,7 @@ impl Board {
         for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
             for to in BitLoop::new(moves & freespace) {
                 move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
@@ -287,9 +265,7 @@ impl Board {
         for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
             for to in BitLoop::new(moves & freespace) {
                 move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
@@ -325,9 +301,7 @@ impl Board {
         for sq in BitLoop::new(our_knights) {
             let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -336,9 +310,7 @@ impl Board {
         for sq in BitLoop::new(our_king) {
             let moves = bitboards::attacks::<KING>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -348,9 +320,7 @@ impl Board {
         for sq in BitLoop::new(our_diagonal_sliders) {
             let moves = bitboards::attacks::<BISHOP>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
 
@@ -360,9 +330,7 @@ impl Board {
         for sq in BitLoop::new(our_orthogonal_sliders) {
             let moves = bitboards::attacks::<ROOK>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(
-                    Move::new(sq, to, PIECE_EMPTY, 0)
-                );
+                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
             }
         }
     }
@@ -377,9 +345,11 @@ impl Board {
 
     pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const WQ_FREESPACE: u64 =
+            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+        const BQ_FREESPACE: u64 =
+            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
         if IS_WHITE {
             if self.castle_perm & WKCA != 0
@@ -387,9 +357,12 @@ impl Board {
                 && !self.sq_attacked_by::<false>(Square::E1)
                 && !self.sq_attacked_by::<false>(Square::F1)
             {
-                move_list.push::<false>(
-                    Move::new(Square::E1, Square::G1, PIECE_EMPTY, Move::CASTLE_FLAG)
-                );
+                move_list.push::<false>(Move::new(
+                    Square::E1,
+                    Square::G1,
+                    PIECE_EMPTY,
+                    Move::CASTLE_FLAG,
+                ));
             }
 
             if self.castle_perm & WQCA != 0
@@ -397,9 +370,12 @@ impl Board {
                 && !self.sq_attacked_by::<false>(Square::E1)
                 && !self.sq_attacked_by::<false>(Square::D1)
             {
-                move_list.push::<false>(
-                    Move::new(Square::E1, Square::C1, PIECE_EMPTY, Move::CASTLE_FLAG)
-                );
+                move_list.push::<false>(Move::new(
+                    Square::E1,
+                    Square::C1,
+                    PIECE_EMPTY,
+                    Move::CASTLE_FLAG,
+                ));
             }
         } else {
             if self.castle_perm & BKCA != 0
@@ -407,9 +383,12 @@ impl Board {
                 && !self.sq_attacked_by::<true>(Square::E8)
                 && !self.sq_attacked_by::<true>(Square::F8)
             {
-                move_list.push::<false>(
-                    Move::new(Square::E8, Square::G8, PIECE_EMPTY, Move::CASTLE_FLAG)
-                );
+                move_list.push::<false>(Move::new(
+                    Square::E8,
+                    Square::G8,
+                    PIECE_EMPTY,
+                    Move::CASTLE_FLAG,
+                ));
             }
 
             if self.castle_perm & BQCA != 0
@@ -417,9 +396,12 @@ impl Board {
                 && !self.sq_attacked_by::<true>(Square::E8)
                 && !self.sq_attacked_by::<true>(Square::D8)
             {
-                move_list.push::<false>(
-                    Move::new(Square::E8, Square::C8, PIECE_EMPTY, Move::CASTLE_FLAG)
-                );
+                move_list.push::<false>(Move::new(
+                    Square::E8,
+                    Square::C8,
+                    PIECE_EMPTY,
+                    Move::CASTLE_FLAG,
+                ));
             }
         }
     }

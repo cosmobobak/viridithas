@@ -1,10 +1,11 @@
 use crate::{
     board::evaluation::score::S,
+    cfor,
     definitions::{
         File::{FILE_A, FILE_D, FILE_H},
         Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
-        BLACK, WHITE, WK, WN, WP, Square,
-    }, cfor,
+        Square, BLACK, WHITE, WK, WN, WP,
+    },
 };
 
 use super::PieceSquareTable;

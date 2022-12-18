@@ -3,7 +3,8 @@
 use crate::{
     definitions::{
         File::{FILE_A, FILE_H},
-        Rank::{RANK_1, RANK_8}, KING, KNIGHT, Square,
+        Rank::{RANK_1, RANK_8},
+        Square, KING, KNIGHT,
     },
     rng::XorShiftState,
 };
@@ -254,9 +255,9 @@ mod tests {
 
     #[test]
     fn python_chess_validation() {
+        use crate::definitions::Square;
         use crate::definitions::{KING, KNIGHT};
         use crate::lookups::get_jumping_piece_attack;
-        use crate::definitions::Square;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(get_jumping_piece_attack::<KNIGHT>(Square::new(0)), 132_096);

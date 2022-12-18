@@ -14,15 +14,17 @@ use crate::{
         },
         Board,
     },
+    cfor,
     chessmove::Move,
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, StaticVec, BISHOP, INFINITY, KING,
         MAX_DEPTH, PAWN, QUEEN, ROOK,
     },
+    search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TranspositionTableView},
-    uci, search::parameters::{get_search_params, get_lm_table}, cfor,
+    uci,
 };
 
 use self::parameters::SearchParams;
@@ -398,7 +400,11 @@ impl Board {
             }
             info.nodes += 1;
             moves_made += 1;
-            if ROOT && t.thread_id == 0 && info.print_to_stdout && info.time_since_start() > Duration::from_secs(5) {
+            if ROOT
+                && t.thread_id == 0
+                && info.print_to_stdout
+                && info.time_since_start() > Duration::from_secs(5)
+            {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
 
@@ -416,15 +422,13 @@ impl Board {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
                 let is_singular = self.is_singular::<NNUE>(tt, info, t, m, tt_value, depth);
                 extension = Depth::from(is_singular);
-            } else if !ROOT && self.in_check::<{ Self::US }>() { // here in_check determines if the move gives check
+            } else if !ROOT && self.in_check::<{ Self::US }>() {
+                // here in_check determines if the move gives check
                 // extend checks with SEE > 0
                 // only captures are automatically SEE'd in the movepicker,
                 // so we need to SEE quiets here.
-                let is_good_see = if is_quiet {
-                    self.static_exchange_eval(m, -1)
-                } else {
-                    is_winning_capture
-                };
+                let is_good_see =
+                    if is_quiet { self.static_exchange_eval(m, -1) } else { is_winning_capture };
                 extension = Depth::from(is_good_see);
             };
 
@@ -453,14 +457,8 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score = -self.zw_search::<NNUE>(
-                    tt,
-                    info,
-                    t,
-                    depth + extension - r,
-                    -alpha - 1,
-                    -alpha,
-                );
+                score =
+                    -self.zw_search::<NNUE>(tt, info, t, depth + extension - r, -alpha - 1, -alpha);
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
@@ -580,7 +578,8 @@ impl Board {
     }
 
     fn rfp_margin(depth: Depth, improving: bool) -> i32 {
-        get_search_params().rfp_margin * depth - i32::from(improving) * get_search_params().rfp_improving_margin
+        get_search_params().rfp_margin * depth
+            - i32::from(improving) * get_search_params().rfp_improving_margin
     }
 
     fn update_history_metrics<const IS_GOOD: bool>(
@@ -775,10 +774,7 @@ pub struct LMTable {
 }
 
 impl LMTable {
-    pub const NULL: Self = Self {
-        rtable: [[0; 64]; 64],
-        ptable: [[0; 12]; 2],
-    };
+    pub const NULL: Self = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
 
     pub fn new(config: &SearchParams) -> Self {
         #![allow(

@@ -1,10 +1,15 @@
 use std::path::Path;
 
 use crate::{
-    board::{evaluation::{parameters::EvalParams, set_eval_params}, Board},
+    board::{
+        evaluation::{parameters::EvalParams, set_eval_params},
+        Board,
+    },
     chessmove::Move,
+    definitions::MEGABYTE,
     searchinfo::{SearchInfo, SearchLimit},
-    threadlocal::ThreadData, transpositiontable::TranspositionTable, definitions::MEGABYTE,
+    threadlocal::ThreadData,
+    transpositiontable::TranspositionTable,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -19,7 +24,9 @@ struct EpdPosition {
 
 pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64, hash: usize) {
     let mut board = Board::new();
-    unsafe { set_eval_params(params); }
+    unsafe {
+        set_eval_params(params);
+    }
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
 
@@ -42,8 +49,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
     board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
     let fen_out = board.fen();
     assert_eq!(fen, fen_out);
-    let best_move_idx =
-        line.find("bm").unwrap_or_else(|| panic!("no bestmove found in {line}"));
+    let best_move_idx = line.find("bm").unwrap_or_else(|| panic!("no bestmove found in {line}"));
     let best_moves = &line[best_move_idx + 3..];
     let end_of_best_moves =
         best_moves.find(';').unwrap_or_else(|| panic!("no end of bestmove found in {line}"));
@@ -81,21 +87,30 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
             t.nnue.refresh_acc(&board);
             t.alloc_tables();
         }
-        
+
         let mut info = SearchInfo::default();
         info.print_to_stdout = false;
         info.limit = SearchLimit::TimeOrCorrectMoves(time, best_moves.clone());
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
-        let failinfo = if passed { 
+        let failinfo = if passed {
             format!(" {:.1}s", info.start_time.elapsed().as_secs_f64())
-        } else { 
+        } else {
             format!(", {CONTROL_RED}program chose {bm}{CONTROL_RESET}")
         };
-        let move_strings = best_moves.iter().map(
-            |&m| if m == bm { format!("{CONTROL_GREEN}{m}{CONTROL_RESET}") } else { m.to_string() }
-        ).collect::<Vec<_>>().join(", ");
+        let move_strings =
+            best_moves
+                .iter()
+                .map(|&m| {
+                    if m == bm {
+                        format!("{CONTROL_GREEN}{m}{CONTROL_RESET}")
+                    } else {
+                        m.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
         println!(
             "{id:midl$} {color}{}{CONTROL_RESET} {fen:mfl$} [{move_strings}]{failinfo}",
             if passed { "PASS" } else { "FAIL" },

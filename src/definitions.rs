@@ -1,11 +1,11 @@
 pub mod depth;
 
-use std::{fmt::{Display, self}, str::FromStr};
-
-use crate::{
-    board::evaluation::MATE_SCORE,
-    chessmove::Move, validate::piece_type_valid,
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
 };
+
+use crate::{board::evaluation::MATE_SCORE, chessmove::Move, validate::piece_type_valid};
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: depth::Depth = depth::Depth::new(128);
@@ -230,14 +230,22 @@ impl Square {
     }
 
     pub const fn add(self, offset: u8) -> Self {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self.0 + offset;
         debug_assert!(res < 64, "Square::add overflowed");
         Self(res)
     }
 
     pub const fn sub(self, offset: u8) -> Self {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self.0 - offset;
         debug_assert!(res < 64, "Square::sub overflowed");
         Self(res)
@@ -274,7 +282,7 @@ impl Square {
             self.sub(9)
         }
     }
-    
+
     #[rustfmt::skip]
     pub const fn le(self, other: Self) -> bool { self.0 <= other.0 }
     #[rustfmt::skip]
@@ -336,10 +344,7 @@ pub struct StaticVec<T: Copy, const N: usize> {
 
 impl<T: Copy, const N: usize> StaticVec<T, N> {
     pub const fn new_from_default(default: T) -> Self {
-        Self {
-            data: [default; N],
-            len: 0,
-        }
+        Self { data: [default; N], len: 0 }
     }
 
     pub fn push(&mut self, item: T) {

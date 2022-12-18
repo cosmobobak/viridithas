@@ -2,10 +2,11 @@ use std::fmt::Display;
 
 use crate::{
     definitions::{
-        colour_of, type_of, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR, Square, PIECE_EMPTY,
+        colour_of, type_of, Square, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN,
+        PIECE_EMPTY, QUEEN, ROOK, WB, WHITE, WK, WN, WP, WQ, WR,
     },
-    lookups::{self, piece_char}, macros, magic,
+    lookups::{self, piece_char},
+    macros, magic,
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;

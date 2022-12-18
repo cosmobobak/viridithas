@@ -7,10 +7,14 @@ use std::{
 use rand::prelude::SliceRandom;
 
 use crate::{
-    board::{evaluation::{parameters::EvalParams, set_eval_params}, Board},
-    definitions::{INFINITY, WHITE, MEGABYTE},
+    board::{
+        evaluation::{parameters::EvalParams, set_eval_params},
+        Board,
+    },
+    definitions::{INFINITY, MEGABYTE, WHITE},
     searchinfo::SearchInfo,
-    threadlocal::ThreadData, transpositiontable::TranspositionTable,
+    threadlocal::ThreadData,
+    transpositiontable::TranspositionTable,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -35,14 +39,23 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     tt.resize(MEGABYTE);
     let mut t = ThreadData::new(0);
     t.alloc_tables();
-    unsafe { set_eval_params(params.clone()); }
+    unsafe {
+        set_eval_params(params.clone());
+    }
     data.iter()
         .map(|TrainingExample { fen, outcome }| {
             // set_from_fen does not allocate, so it should be pretty fast.
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
             // don't use NNUE, this only works for HCE.
-            let pov_score = Board::quiescence::<false>(&mut pos, tt.view(), &mut info, &mut t, -INFINITY, INFINITY);
+            let pov_score = Board::quiescence::<false>(
+                &mut pos,
+                tt.view(),
+                &mut info,
+                &mut t,
+                -INFINITY,
+                INFINITY,
+            );
             let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)
@@ -59,9 +72,7 @@ fn compute_mse(data: &[TrainingExample], params: &[i32], k: f64) -> f64 {
     let total = std::thread::scope(|s| {
         let mut handles = Vec::new();
         for chunk in chunks {
-            handles.push(s.spawn(|| {
-                total_squared_error(chunk, &params, k)
-            }));
+            handles.push(s.spawn(|| total_squared_error(chunk, &params, k)));
         }
         handles.into_iter().map(|h| h.join().unwrap()).sum::<f64>()
     });

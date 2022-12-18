@@ -1,5 +1,7 @@
-use std::{fs::File, io::{BufWriter, Write}};
-
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 pub struct Image {
     data: Vec<u32>,
@@ -9,11 +11,7 @@ pub struct Image {
 
 impl Image {
     pub fn zeroed(width: usize, height: usize) -> Self {
-        Self {
-            data: vec![0; width * height],
-            height,
-            width,
-        }
+        Self { data: vec![0; width * height], height, width }
     }
 
     pub fn rows(&self) -> impl Iterator<Item = &[u32]> {
@@ -44,10 +42,10 @@ impl Image {
 
     // Write the image to a TGA file with the given name.
     // Format specification: http://www.gamers.org/dEngine/quake3/TGA.txt
-    pub fn save_as_tga<P>(&self, filename: P) 
-      where
+    pub fn save_as_tga<P>(&self, filename: P)
+    where
         P: AsRef<std::path::Path>,
-      {
+    {
         #![allow(clippy::cast_possible_truncation)]
         let file = File::create(&filename).unwrap();
         // use a buffered writer
@@ -72,11 +70,8 @@ impl Image {
 
         for row in self.rows() {
             for &loc in row.iter() {
-                let pixel: [u8; 3] = [
-                    (loc & 0xFF) as u8,
-                    (loc >> 8 & 0xFF) as u8,
-                    (loc >> 16 & 0xFF) as u8,
-                ];
+                let pixel: [u8; 3] =
+                    [(loc & 0xFF) as u8, (loc >> 8 & 0xFF) as u8, (loc >> 16 & 0xFF) as u8];
                 writer.write_all(&pixel).unwrap();
             }
         }

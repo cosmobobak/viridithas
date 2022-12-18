@@ -3,22 +3,24 @@ use std::{
     io::Write,
     num::{ParseFloatError, ParseIntError},
     sync::{
-        atomic::{self, AtomicBool, Ordering, AtomicUsize},
+        atomic::{self, AtomicBool, AtomicUsize, Ordering},
         mpsc,
-    }, time::Instant,
+    },
+    time::Instant,
 };
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, parameters::EvalParams, MATE_SCORE, set_eval_params},
+        evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE},
         Board,
     },
-    definitions::{BLACK, WHITE, MEGABYTE},
+    definitions::{BLACK, MEGABYTE, WHITE},
     errors::{FenParseError, MoveParseError},
-    search::parameters::{SearchParams, get_search_params, set_search_params},
+    search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
-    NAME, VERSION, transpositiontable::TranspositionTable,
+    transpositiontable::TranspositionTable,
+    NAME, VERSION,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
@@ -142,7 +144,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
             "wtime" => clocks[pos.turn() as usize] = Some(part_parse("wtime", parts.next())?),
-            "btime"  => clocks[1 ^ pos.turn() as usize] = Some(part_parse("btime", parts.next())?),
+            "btime" => clocks[1 ^ pos.turn() as usize] = Some(part_parse("btime", parts.next())?),
             "winc" => incs[pos.turn() as usize] = Some(part_parse("winc", parts.next())?),
             "binc" => incs[1 ^ pos.turn() as usize] = Some(part_parse("binc", parts.next())?),
             "infinite" => info.limit = SearchLimit::Infinite,
@@ -166,7 +168,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
         let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
-        let (time_window, max_time_window) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+        let (time_window, max_time_window) =
+            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
         info.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
@@ -174,10 +177,12 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             their_inc,
             moves_to_go,
             max_time_window,
-            time_window
+            time_window,
         };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
-        return Err(UciError::InvalidFormat("at least one of [wtime, btime, winc, binc] provided, but not all.".into()));
+        return Err(UciError::InvalidFormat(
+            "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
+        ));
     }
 
     info.start_time = Instant::now();
@@ -190,9 +195,14 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Display,
 {
-    let next_part = next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
+    let next_part =
+        next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
     let value = next_part.parse();
-    value.map_err(|e| UciError::InvalidFormat(format!("value for {target} is not a number: {e}, tried to parse {next_part}")))
+    value.map_err(|e| {
+        UciError::InvalidFormat(format!(
+            "value for {target} is not a number: {e}, tried to parse {next_part}"
+        ))
+    })
 }
 
 struct SetOptions {
@@ -259,7 +269,7 @@ fn parse_setoption(
             let value: usize = opt_value.parse()?;
             assert!(value > 0 && value <= 500, "MultiPV value must be between 1 and 500");
             MULTI_PV.store(value, Ordering::SeqCst);
-        },
+        }
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -336,11 +346,13 @@ pub fn main_loop(params: EvalParams) {
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let mut info = SearchInfo::default();
-    
+
     let global_stopped = AtomicBool::new(false);
     info.set_global_stopped(&global_stopped);
 
-    unsafe { set_eval_params(params); }
+    unsafe {
+        set_eval_params(params);
+    }
 
     let stdin = std::sync::Mutex::new(stdin_reader());
 
@@ -389,11 +401,17 @@ pub fn main_loop(params: EvalParams) {
                 Ok(())
             }
             input if input.starts_with("setoption") => {
-                let pre_config = SetOptions { search_config: get_search_params().clone(), hash_mb: None, threads: None };
+                let pre_config = SetOptions {
+                    search_config: get_search_params().clone(),
+                    hash_mb: None,
+                    threads: None,
+                };
                 let res = parse_setoption(input, &mut info, pre_config);
                 match res {
                     Ok(conf) => {
-                        unsafe { set_search_params(conf.search_config); }
+                        unsafe {
+                            set_search_params(conf.search_config);
+                        }
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
                             tt.resize(new_size);
@@ -408,7 +426,7 @@ pub fn main_loop(params: EvalParams) {
                     }
                     err => err.map(|_| ()),
                 }
-            },
+            }
             input if input.starts_with("position") => {
                 let res = parse_position(input, &mut pos);
                 if res.is_ok() {

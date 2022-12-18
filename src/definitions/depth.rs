@@ -23,7 +23,7 @@ impl Depth {
     pub const fn from_raw(raw: i32) -> Self {
         Self(raw)
     }
-    
+
     pub fn is_valid(self) -> bool {
         (ZERO_PLY..=MAX_DEPTH).contains(&self)
     }

@@ -1,15 +1,19 @@
 use std::{
+    collections::hash_map::DefaultHasher,
+    error::Error,
     fs::File,
     io::{self, BufRead, BufReader, BufWriter, Write},
+    ops::Range,
     path::Path,
-    sync::atomic::{self, AtomicU64}, collections::hash_map::DefaultHasher, ops::Range, error::Error,
+    sync::atomic::{self, AtomicU64},
 };
 
 use crate::{
-    board::{Board, evaluation::is_mate_score},
+    board::{evaluation::is_mate_score, Board},
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
-    threadlocal::ThreadData, transpositiontable::TranspositionTable,
+    threadlocal::ThreadData,
+    transpositiontable::TranspositionTable,
 };
 
 fn batch_convert<const USE_NNUE: bool>(
@@ -104,7 +108,14 @@ pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
         if fens.is_empty() {
             break;
         }
-        let evals = parallel_evaluate(&fens, depth, filter_quiescent, use_nnue, &fens_processed, start_time);
+        let evals = parallel_evaluate(
+            &fens,
+            depth,
+            filter_quiescent,
+            use_nnue,
+            &fens_processed,
+            start_time,
+        );
         for ((fen, outcome), eval) in fens.iter().zip(&outcomes).zip(&evals) {
             if let Some(eval) = eval {
                 // data is written to conform with marlinflow's data format.
@@ -132,11 +143,7 @@ impl<'a> QuicklySortableString<'a> {
         let mut hasher = DefaultHasher::new();
         let interesting_range = &string[view.clone()];
         interesting_range.hash(&mut hasher);
-        Self {
-            string,
-            view,
-            hash: hasher.finish(),
-        }
+        Self { string, view, hash: hasher.finish() }
     }
 
     /// Compare the substring of the two strings.
@@ -156,10 +163,7 @@ impl<'a> QuicklySortableString<'a> {
 
 /// Deduplicate a dataset by board.
 /// This deduplicates based on the first two parts of FENs, which are the board and the side to move.
-pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(
-    input_file: P1,
-    output_file: P2,
-) -> io::Result<()> {
+pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(input_file: P1, output_file: P2) -> io::Result<()> {
     #![allow(clippy::cast_precision_loss)]
     let start_time = std::time::Instant::now();
     let all_data = std::fs::read_to_string(input_file)?; // we need everything in memory anyway
@@ -194,10 +198,13 @@ where
 fn dedup_inner<P2: AsRef<Path>>(output_file: P2, all_data: &str) -> Result<(), io::Error> {
     let mut output = BufWriter::new(File::create(output_file)?);
     let start_time = std::time::Instant::now();
-    let mut data = all_data.lines().map(|line| {
-        let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
-        QuicklySortableString::new(line, 0..(split_index + 2))
-    }).collect::<Vec<_>>();
+    let mut data = all_data
+        .lines()
+        .map(|line| {
+            let split_index = line.bytes().position(|b| b == b' ').unwrap(); // the space between the board part and the "w/b" part.
+            QuicklySortableString::new(line, 0..(split_index + 2))
+        })
+        .collect::<Vec<_>>();
     let n = data.len();
     let elapsed = start_time.elapsed();
     println!("Hashed {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
@@ -206,7 +213,11 @@ fn dedup_inner<P2: AsRef<Path>>(output_file: P2, all_data: &str) -> Result<(), i
     data.dedup_by(|a, b| a.cmp(b) == std::cmp::Ordering::Equal);
     let n = data.len();
     let elapsed = start_time.elapsed();
-    println!("Sorted and deduped down to {n} lines in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    println!(
+        "Sorted and deduped down to {n} lines in {}.{:03}s",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
     let start_time = std::time::Instant::now();
     // write deduplicated data to output file.
     for line in data {
@@ -219,7 +230,14 @@ fn dedup_inner<P2: AsRef<Path>>(output_file: P2, all_data: &str) -> Result<(), i
     res
 }
 
-fn parallel_evaluate(fens: &[String], depth: i32, filter_quiescent: bool, use_nnue: bool, fens_processed: &AtomicU64, start_time: std::time::Instant) -> Vec<Option<i32>> {
+fn parallel_evaluate(
+    fens: &[String],
+    depth: i32,
+    filter_quiescent: bool,
+    use_nnue: bool,
+    fens_processed: &AtomicU64,
+    start_time: std::time::Instant,
+) -> Vec<Option<i32>> {
     let chunk_size = fens.len() / num_cpus::get() + 1;
     let chunks = fens.chunks(chunk_size).collect::<Vec<_>>();
     std::thread::scope(|s| {

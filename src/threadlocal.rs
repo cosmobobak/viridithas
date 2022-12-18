@@ -1,4 +1,9 @@
-use crate::{chessmove::Move, definitions::{MAX_PLY, MAX_DEPTH}, nnue, historytable::{HistoryTable, MoveTable, DoubleHistoryTable}};
+use crate::{
+    chessmove::Move,
+    definitions::{MAX_DEPTH, MAX_PLY},
+    historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
+    nnue,
+};
 
 #[derive(Clone)]
 pub struct ThreadData {

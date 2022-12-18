@@ -3,16 +3,15 @@ use crate::{
     definitions::{
         colour_of, type_of,
         Rank::{RANK_3, RANK_6},
-        Square,
-        BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN, ROOK, WB,
-        WHITE, WK, WN, WP, WQ, WR,
+        Square, BB, BISHOP, BK, BLACK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, PIECE_EMPTY, QUEEN,
+        ROOK, WB, WHITE, WK, WN, WP, WQ, WR,
     },
     errors::PositionValidityError,
     lookups::{piece_char, piece_name, PIECE_BIG, PIECE_MAJ, PIECE_MIN},
     nnue::NNUEState,
 };
 
-use super::{movegen::bitboards::BitLoop, Board, evaluation::get_eval_params};
+use super::{evaluation::get_eval_params, movegen::bitboards::BitLoop, Board};
 
 impl Board {
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines, dead_code)]
@@ -203,7 +202,9 @@ impl Board {
     }
 
     pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
-        for (colour, piece_type, square) in nn.active_features().map(NNUEState::feature_loc_to_parts) {
+        for (colour, piece_type, square) in
+            nn.active_features().map(NNUEState::feature_loc_to_parts)
+        {
             let piece_type = piece_type + 1; // shift into the correct range, because we reserve 0 for NO_PIECE
             let piece_on_board = self.piece_at(square);
             let actual_colour = colour_of(piece_on_board);

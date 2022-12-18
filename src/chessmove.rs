@@ -1,8 +1,9 @@
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::{
-    definitions::{Square, PIECE_EMPTY, KNIGHT, BISHOP, ROOK, QUEEN},
-    lookups::PROMO_CHAR_LOOKUP, validate::piece_type_valid,
+    definitions::{Square, BISHOP, KNIGHT, PIECE_EMPTY, QUEEN, ROOK},
+    lookups::PROMO_CHAR_LOOKUP,
+    validate::piece_type_valid,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -11,28 +12,24 @@ pub struct Move {
 }
 
 impl Move {
-    const FROM_MASK: u16 =            0b0000_0000_0011_1111;
-    const TO_MASK: u16 =              0b0000_1111_1100_0000;
-    const PROMO_MASK: u16 =           0b0011_0000_0000_0000;
-    pub const EP_FLAG: u16 =          0b0100_0000_0000_0000;
-    pub const CASTLE_FLAG: u16 =      0b1000_0000_0000_0000;
-    pub const PROMO_FLAG: u16 =       0b1100_0000_0000_0000;
+    const FROM_MASK: u16 = 0b0000_0000_0011_1111;
+    const TO_MASK: u16 = 0b0000_1111_1100_0000;
+    const PROMO_MASK: u16 = 0b0011_0000_0000_0000;
+    pub const EP_FLAG: u16 = 0b0100_0000_0000_0000;
+    pub const CASTLE_FLAG: u16 = 0b1000_0000_0000_0000;
+    pub const PROMO_FLAG: u16 = 0b1100_0000_0000_0000;
     pub const NULL: Self = Self { data: 0 };
 
     pub fn new(from: Square, to: Square, promotion: u8, flags: u16) -> Self {
-        debug_assert!(
-            (flags & (Self::EP_FLAG | Self::CASTLE_FLAG | Self::PROMO_FLAG)) == flags
-        );
+        debug_assert!((flags & (Self::EP_FLAG | Self::CASTLE_FLAG | Self::PROMO_FLAG)) == flags);
         debug_assert!(u16::from(from) & 0b11_1111 == u16::from(from));
         debug_assert!(u16::from(to) & 0b11_1111 == u16::from(to));
-        debug_assert!(promotion == PIECE_EMPTY && flags != Self::PROMO_FLAG || piece_type_valid(promotion) && flags == Self::PROMO_FLAG);
+        debug_assert!(
+            promotion == PIECE_EMPTY && flags != Self::PROMO_FLAG
+                || piece_type_valid(promotion) && flags == Self::PROMO_FLAG
+        );
         let promotion = promotion.wrapping_sub(2) & 0b11; // can't promote to NO_PIECE or PAWN
-        Self {
-            data: u16::from(from)
-                | (u16::from(to) << 6)
-                | (u16::from(promotion) << 12)
-                | flags,
-        }
+        Self { data: u16::from(from) | (u16::from(to) << 6) | (u16::from(promotion) << 12) | flags }
     }
 
     pub const fn from(self) -> Square {
@@ -90,10 +87,15 @@ impl Move {
 
     pub const fn is_valid(self) -> bool {
         let promotion = self.safe_promotion_type();
-        if promotion != PIECE_EMPTY && !self.is_promo() { // promotion type is set but not a promotion move
+        if promotion != PIECE_EMPTY && !self.is_promo() {
+            // promotion type is set but not a promotion move
             return false;
         }
-        promotion == PIECE_EMPTY || promotion == KNIGHT || promotion == BISHOP || promotion == ROOK || promotion == QUEEN
+        promotion == PIECE_EMPTY
+            || promotion == KNIGHT
+            || promotion == BISHOP
+            || promotion == ROOK
+            || promotion == QUEEN
     }
 }
 
@@ -133,7 +135,10 @@ impl Debug for Move {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{definitions::QUEEN, board::movegen::{BitLoop, bitboards::BB_ALL}};
+    use crate::{
+        board::movegen::{bitboards::BB_ALL, BitLoop},
+        definitions::QUEEN,
+    };
 
     #[test]
     fn test_simple_move() {

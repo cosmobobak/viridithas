@@ -1,8 +1,6 @@
 use std::{error::Error, fmt::Display, path::Path};
 
-use crate::{
-    definitions::{BP, KING, KNIGHT, WK, WN, WP, Square},
-};
+use crate::definitions::{Square, BP, KING, KNIGHT, WK, WN, WP};
 
 use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,

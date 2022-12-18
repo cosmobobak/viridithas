@@ -61,7 +61,6 @@ mod tests {
     #![allow(unused_imports)]
     use crate::{chessmove::Move, definitions::Square};
 
-
     #[test]
     fn perft_hard_position() {
         use super::*;

@@ -13,6 +13,7 @@ mod definitions;
 mod epd;
 mod errors;
 mod historytable;
+mod image;
 mod lookups;
 mod magic;
 mod makemove;
@@ -27,7 +28,6 @@ mod threadlocal;
 mod transpositiontable;
 mod uci;
 mod validate;
-mod image;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -40,7 +40,9 @@ fn main() {
 
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
-    unsafe { search::parameters::set_search_params(search::parameters::SearchParams::default()); }
+    unsafe {
+        search::parameters::set_search_params(search::parameters::SearchParams::default());
+    }
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
@@ -70,14 +72,7 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(
-            path,
-            output_path,
-            nnue::convert::Format::OurTexel,
-            cli.nnuedepth,
-            true,
-            true,
-        )
+        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::OurTexel, cli.nnuedepth, true, true)
         .unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
@@ -115,9 +110,15 @@ fn main() {
         println!("{NAME} {VERSION}");
         println!("Compiled with architecture: {}", std::env::consts::ARCH);
         println!("Compiled for OS: {}", std::env::consts::OS);
-        println!("Number of HCE parameters: {}", board::evaluation::parameters::EvalParams::default().vectorise().len());
+        println!(
+            "Number of HCE parameters: {}",
+            board::evaluation::parameters::EvalParams::default().vectorise().len()
+        );
         println!("Number of NNUE parameters: {}", nnue::NNUEParams::num_params());
-        println!("Size of a transposition table entry: {} bytes", std::mem::size_of::<transpositiontable::TTEntry>());
+        println!(
+            "Size of a transposition table entry: {} bytes",
+            std::mem::size_of::<transpositiontable::TTEntry>()
+        );
         return;
     }
 
@@ -145,7 +146,7 @@ fn main() {
         std::fs::create_dir_all(&path).unwrap();
         return for neuron in 0..crate::nnue::HIDDEN {
             crate::nnue::NNUE.visualise_neuron(neuron, &path);
-        }
+        };
     }
 
     uci::main_loop(eparams);

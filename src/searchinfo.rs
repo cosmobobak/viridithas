@@ -1,9 +1,12 @@
 use std::{
-    sync::{mpsc, Mutex, atomic::{AtomicBool, Ordering}},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Mutex,
+    },
     time::{Duration, Instant},
 };
 
-use crate::{definitions::depth::Depth, chessmove::Move};
+use crate::{chessmove::Move, definitions::depth::Depth};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -138,7 +141,9 @@ impl<'a> SearchInfo<'a> {
                     self.stopped = true;
                 }
             }
-            SearchLimit::Time(time_window) | SearchLimit::Dynamic { time_window, .. } | SearchLimit::TimeOrCorrectMoves(time_window, _) => {
+            SearchLimit::Time(time_window)
+            | SearchLimit::Dynamic { time_window, .. }
+            | SearchLimit::TimeOrCorrectMoves(time_window, _) => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]

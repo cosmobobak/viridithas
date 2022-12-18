@@ -5,19 +5,27 @@ pub mod validation;
 
 use std::{
     fmt::{Debug, Display, Formatter, Write},
-    sync::{Once, atomic::{AtomicU64, Ordering}}, thread,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Once,
+    },
+    thread,
 };
 
 use regex::Regex;
 
 use crate::{
-    board::{movegen::{
-        bitboards::{
-            self, pawn_attacks, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2, BB_RANK_4,
-            BB_RANK_5, BB_RANK_7, BitShiftExt,
+    board::{
+        evaluation::get_eval_params,
+        movegen::{
+            bitboards::{
+                self, pawn_attacks, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
+                BB_RANK_4, BB_RANK_5, BB_RANK_7,
+            },
+            movepicker::MainMovePicker,
+            MoveList,
         },
-        MoveList, movepicker::MainMovePicker,
-    }, evaluation::get_eval_params},
+    },
     chessmove::Move,
     definitions::{
         colour_of,
@@ -1382,7 +1390,9 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        for (key, undo) in self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2) {
+        for (key, undo) in
+            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
+        {
             if *key == self.key {
                 return true;
             }
@@ -1497,7 +1507,8 @@ impl Board {
 
         // don't produce weird scores if there's one legal option
         // and we're going to instamove.
-        let (mut most_recent_move, mut most_recent_score) = self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
+        let (mut most_recent_move, mut most_recent_score) =
+            self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
 
         let global_stopped = &info.global_stopped.unwrap();
         let mut search_results = Vec::with_capacity(thread_headers.len());
@@ -1505,23 +1516,40 @@ impl Board {
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
         let board_copy = self.clone();
         let info_copy = info.clone();
-        let mut board_info_copies = rest
-            .iter()
-            .map(|_| (board_copy.clone(), info_copy.clone()))
-            .collect::<Vec<_>>();
+        let mut board_info_copies =
+            rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
         let total_nodes = AtomicU64::new(0);
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
-                let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, most_recent_move, most_recent_score, &total_nodes);
+                let res = self.iterative_deepening::<USE_NNUE, true>(
+                    info,
+                    tt,
+                    t1,
+                    most_recent_move,
+                    most_recent_score,
+                    &total_nodes,
+                );
                 global_stopped.store(true, Ordering::SeqCst);
                 res
             });
-            #[allow(clippy::needless_collect)] // we need to eagerly start the threads or nothing will happen
-            let helper_handles = rest.iter_mut().zip(board_info_copies.iter_mut()).map(|(thread, (board, info))| {
-                s.spawn(|| {
-                    board.iterative_deepening::<USE_NNUE, false>(info, tt, thread, most_recent_move, most_recent_score, &total_nodes)
+            #[allow(clippy::needless_collect)]
+            // we need to eagerly start the threads or nothing will happen
+            let helper_handles = rest
+                .iter_mut()
+                .zip(board_info_copies.iter_mut())
+                .map(|(thread, (board, info))| {
+                    s.spawn(|| {
+                        board.iterative_deepening::<USE_NNUE, false>(
+                            info,
+                            tt,
+                            thread,
+                            most_recent_move,
+                            most_recent_score,
+                            &total_nodes,
+                        )
+                    })
                 })
-            }).collect::<Vec<_>>();
+                .collect::<Vec<_>>();
             search_results.push(main_thread_handle.join().unwrap());
             search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
         });
@@ -1536,7 +1564,15 @@ impl Board {
         (if self.side == WHITE { most_recent_score } else { -most_recent_score }, most_recent_move)
     }
 
-    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(&mut self, info: &mut SearchInfo, tt: TranspositionTableView, thread: &mut ThreadData, mut most_recent_move: Move, mut most_recent_score: i32, total_nodes: &AtomicU64) -> (Move, i32) {
+    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
+        &mut self,
+        info: &mut SearchInfo,
+        tt: TranspositionTableView,
+        thread: &mut ThreadData,
+        mut most_recent_move: Move,
+        mut most_recent_score: i32,
+        total_nodes: &AtomicU64,
+    ) -> (Move, i32) {
         let mut aspiration_window = AspirationWindow::new();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -1555,18 +1591,11 @@ impl Board {
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
-                let score = self.root_search::<USE_NNUE>(
-                    tt,
-                    info,
-                    thread,
-                    Depth::new(i_depth),
-                    aspiration_window.alpha,
-                    aspiration_window.beta,
-                );
+                let score = self.root_search::<USE_NNUE>(tt, info, thread, Depth::new(i_depth), aspiration_window.alpha, aspiration_window.beta);
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
-                if MAIN_THREAD && i_depth > 2 { 
+                if MAIN_THREAD && i_depth > 2 {
                     info.check_if_best_move_found(most_recent_move);
                 }
                 if i_depth > 1 && info.stopped() {
@@ -1589,14 +1618,7 @@ impl Board {
 
                 if MAIN_THREAD && i_depth > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(
-                        tt,
-                        info,
-                        thread,
-                        most_recent_move,
-                        most_recent_score,
-                        Depth::new(i_depth),
-                    );
+                    let forced = self.is_forced::<200>(tt, info, thread, most_recent_move, most_recent_score, Depth::new(i_depth));
                     info.seldepth = saved_seldepth;
                     if forced {
                         forcing_time_reduction = true;
@@ -1648,7 +1670,12 @@ impl Board {
         (most_recent_move, most_recent_score)
     }
 
-    fn initial_move_and_score(&self, tt: TranspositionTableView, thread_data: &ThreadData, legal_moves: &[Move]) -> (Move, i32) {
+    fn initial_move_and_score(
+        &self,
+        tt: TranspositionTableView,
+        thread_data: &ThreadData,
+        legal_moves: &[Move],
+    ) -> (Move, i32) {
         let (m, score) = tt.probe_for_provisional_info(self.key).unwrap_or((Move::NULL, 0));
         let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data));
         let mut maybe_legal = m;

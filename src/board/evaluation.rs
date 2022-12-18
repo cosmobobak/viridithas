@@ -10,8 +10,8 @@ use crate::{
     board::Board,
     chessmove::Move,
     definitions::{
-        type_of, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN, ROOK, WB,
-        WHITE, WN, WP, WQ, WR, Square,
+        type_of, Square, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN,
+        ROOK, WB, WHITE, WN, WP, WQ, WR,
     },
     lookups::{init_eval_masks, init_passed_isolated_bb},
     search::draw_score,
@@ -160,7 +160,6 @@ pub const fn is_mate_score(score: i32) -> bool {
 }
 
 impl Board {
-
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
@@ -178,7 +177,8 @@ impl Board {
         let queen_files = self.queen_open_file_term();
         let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = Self::score_kingdanger(danger_info);
-        let tempo = if self.turn() == WHITE { get_eval_params().tempo } else { -get_eval_params().tempo };
+        let tempo =
+            if self.turn() == WHITE { get_eval_params().tempo } else { -get_eval_params().tempo };
 
         let mut score = material;
         score += pst;
@@ -217,13 +217,9 @@ impl Board {
 
         let v = t.nnue.evaluate(self.side);
         let simple = self.simple_evaluation();
-        let simple = if self.side == WHITE {
-            simple
-        } else {
-            -simple
-        };
+        let simple = if self.side == WHITE { simple } else { -simple };
         let complexity = (v - simple).abs();
-        
+
         v + complexity / 20
     }
 

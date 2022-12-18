@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, BOARD_N_SQUARES, PIECE_EMPTY, Square},
+    definitions::{depth::Depth, Square, BOARD_N_SQUARES, PIECE_EMPTY},
     validate::piece_valid,
 };
 

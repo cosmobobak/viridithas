@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::{macros, rng::XorShiftState, definitions::Square};
+use crate::{definitions::Square, macros, rng::XorShiftState};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
