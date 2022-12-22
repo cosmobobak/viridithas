@@ -169,10 +169,11 @@ impl Board {
         let mut fail_increment = false;
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let starting_depth = if MAIN_THREAD {
-            1
+            1i32
         } else {
             // induce symmetry breaking in the helper threads
-            rand::Rng::gen_range(&mut rand::thread_rng(), 2..=4).min(max_depth)
+            let id: i32 = t.thread_id.try_into().unwrap();
+            1 + id % 10
         };
         'deepening: for d in starting_depth..=max_depth {
             // consider stopping early if we've neatly completed a depth:
