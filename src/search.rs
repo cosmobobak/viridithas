@@ -330,7 +330,7 @@ impl Board {
         let killers = self.get_killer_set(t);
 
         let mut move_picker = CapturePicker::new(Move::NULL, killers);
-        while let Some(MoveListEntry { mov: m, score: _ }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
