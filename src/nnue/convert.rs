@@ -193,7 +193,7 @@ where
     let all_data = String::from_utf8(buffer)?;
     let mb = all_data.len() as f64 / 1_000_000.0;
     let elapsed = start_time.elapsed();
-    println!("Read {mb:.0} bytes in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+    println!("Read {mb:.0} megabytes in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
     Ok(dedup_inner(output, &all_data)?)
 }
 

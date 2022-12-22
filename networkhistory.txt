@@ -41,3 +41,6 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     19 | same as net-18, but with 90% WDL focus.  | -75.3 +/- 8.0, LOS: 0.0 %
        | not intended to gain, just to test.      | vs net-18.
+-----------------------------------------------------------------------------------------
+    20 | trained on 320K net-18 self-play games   |
+       | from the uhobook, eval'd with net-18.    | vs net-18.
