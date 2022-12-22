@@ -85,6 +85,15 @@ A small bonus is given for being the side-to-move in a position.
 #### Texel Tuning
 The weights of the evaluation function are tuned on Viridithas's own self-play games.
 
+# Evaluation Development History/Originality (HCE/NNUE)
+- First evaluation was a simple piece value / psqt table approach, using values from PeSTO. (as far as I remember)
+- Early in development, a local-search texel tuning module was developed, and trained on the Lichess Elite dataset, removing the PeSTO values with increased strength.
+- Many new evaluation terms were added during development, and were continually re-tuned on Viridithas's self-play games.
+- The first NNUE was trained on a dataset of games played by Viridithas 2.7.0, 2.6.0, and 2.5.0, all rescored with a development version of Viridithas 2.7.0 at low depth.
+- Subsequent networks were trained on additional self-play games by subsequent versions of Viridithas. The 13th-generation network, and many since, include positions from the Lichess Elite dataset rescored by Viridithas.
+
+In summary, the originality of the data for training Viridithas's NNUE is strong - it is about ~60% games played by Viridithas against himself, 35% positions from human games, and something like ~5% games played in a Viridithas 2.7.0 vs. StockNemo 5.0.0.0 test match I ran on my own hardware. Most importantly, I have never trained on the evaluation output of any engine other than Viridithas.
+
 # Thanks and Acknowledgements
 [python-chess](https://github.com/niklasf/python-chess), without which I would never have been able to gain a love for chess programming.
 
