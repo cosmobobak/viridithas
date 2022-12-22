@@ -5,11 +5,7 @@ pub mod validation;
 
 use std::{
     fmt::{Debug, Display, Formatter, Write},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Once,
-    },
-    thread,
+    sync::Once,
 };
 
 use regex::Regex;
@@ -22,15 +18,12 @@ use crate::{
                 self, pawn_attacks, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
                 BB_RANK_4, BB_RANK_5, BB_RANK_7,
             },
-            movepicker::MainMovePicker,
             MoveList,
         },
     },
     chessmove::Move,
     definitions::{
-        colour_of,
-        depth::Depth,
-        make_piece, type_of, Colour, File,
+        colour_of, make_piece, type_of, Colour, File,
         Rank::{self, RANK_3, RANK_6},
         Square, Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING, KNIGHT,
         MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
@@ -41,22 +34,12 @@ use crate::{
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
-    search::AspirationWindow,
-    searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{ProbeResult, TTHit, TranspositionTableView},
-    uci::format_score,
     validate::{piece_type_valid, piece_valid, side_valid},
 };
 
-const UPPER_BOUND: u8 = 1;
-const LOWER_BOUND: u8 = 2;
-const EXACT: u8 = 3;
-
-use self::{
-    evaluation::{is_mate_score, score::S},
-    movegen::bitboards::BitBoard,
-};
+use self::{evaluation::score::S, movegen::bitboards::BitBoard};
 
 static SAN_REGEX_INIT: Once = Once::new();
 static mut SAN_REGEX: Option<Regex> = None;
@@ -177,6 +160,10 @@ impl Board {
 
     pub const fn hashkey(&self) -> u64 {
         self.key
+    }
+
+    pub fn principal_variation(&self) -> &[Move] {
+        &self.principal_variation
     }
 
     pub fn king_sq(&self, side: u8) -> Square {
@@ -1429,7 +1416,7 @@ impl Board {
             + self.pieces.piece_bb(PIECE_TYPE + 6).count_ones() as u8
     }
 
-    fn regenerate_pv_line(&mut self, depth: i32, tt: TranspositionTableView) {
+    pub fn regenerate_pv_line(&mut self, depth: i32, tt: TranspositionTableView) {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
@@ -1455,7 +1442,7 @@ impl Board {
         &self.principal_variation
     }
 
-    fn print_pv(&self) {
+    pub fn print_pv(&self) {
         for &m in self.get_pv_line() {
             print!("{m} ");
         }
@@ -1482,258 +1469,6 @@ impl Board {
         let features = [a, b, a * b, a * a, b * b, 1.0];
         let prediction = WEIGHTS.iter().zip(features.iter()).map(|(w, f)| w * f).sum::<f64>();
         prediction.round().max(2.0) as u64
-    }
-
-    /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
-    #[allow(clippy::too_many_lines)]
-    pub fn search_position<const USE_NNUE: bool>(
-        &mut self,
-        info: &mut SearchInfo,
-        thread_headers: &mut [ThreadData],
-        tt: TranspositionTableView,
-    ) -> (i32, Move) {
-        info.setup_for_search();
-        for td in thread_headers.iter_mut() {
-            td.setup_tables_for_search();
-        }
-
-        let legal_moves = self.legal_moves();
-        if legal_moves.is_empty() {
-            return (0, Move::NULL);
-        }
-        if info.in_game() && legal_moves.len() == 1 {
-            info.set_time_window(0);
-        }
-
-        // don't produce weird scores if there's one legal option
-        // and we're going to instamove.
-        let (mut bestmove, mut score) =
-            self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
-
-        let global_stopped = info.stopped;
-        let mut search_results = Vec::with_capacity(thread_headers.len());
-        // start search threads:
-        let (t1, rest) = thread_headers.split_first_mut().unwrap();
-        let board_copy = self.clone();
-        let info_copy = info.clone();
-        let mut board_info_copies =
-            rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
-        let total_nodes = AtomicU64::new(0);
-        
-        thread::scope(|s| {
-            let main_thread_handle = s.spawn(|| {
-                let res = self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, bestmove, score, &total_nodes);
-                global_stopped.store(true, Ordering::SeqCst);
-                res
-            });
-            // we need to eagerly start the threads or nothing will happen
-            #[allow(clippy::needless_collect)]
-            let helper_handles = rest
-                .iter_mut()
-                .zip(board_info_copies.iter_mut())
-                .map(|(t, (board, info))| {
-                    s.spawn(|| {
-                        board.iterative_deepening::<USE_NNUE, false>(info, tt, t, bestmove, score, &total_nodes)
-                    })
-                })
-                .collect::<Vec<_>>();
-            search_results.push(main_thread_handle.join().unwrap());
-            search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
-        });
-        global_stopped.store(false, Ordering::SeqCst);
-
-        (bestmove, score) = search_results[0];
-
-        if info.print_to_stdout {
-            println!("bestmove {bestmove}");
-        }
-
-        assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
-        (if self.side == WHITE { score } else { -score }, bestmove)
-    }
-
-    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
-        &mut self,
-        info: &mut SearchInfo,
-        tt: TranspositionTableView,
-        t: &mut ThreadData,
-        mut bestmove: Move,
-        mut score: i32,
-        total_nodes: &AtomicU64,
-    ) -> (Move, i32) {
-        let mut asp_window = AspirationWindow::infinite();
-        let mut mate_counter = 0;
-        let mut forcing_time_reduction = false;
-        let mut fail_increment = false;
-        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
-        let starting_depth = if MAIN_THREAD {
-            1
-        } else {
-            // induce symmetry breaking in the helper threads
-            rand::Rng::gen_range(&mut rand::thread_rng(), 2..=4).min(max_depth)
-        };
-        'deepening: for d in starting_depth..=max_depth {
-            // consider stopping early if we've neatly completed a depth:
-            if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
-                break 'deepening;
-            }
-            let depth = Depth::new(d);
-            // aspiration loop:
-            loop {
-                let nodes_before = info.nodes;
-                let v = self.root_search::<USE_NNUE>(tt, info, t, depth, asp_window.alpha, asp_window.beta);
-                let nodes = info.nodes - nodes_before;
-                total_nodes.fetch_add(nodes, Ordering::SeqCst);
-                info.check_up();
-                if MAIN_THREAD && d > 2 {
-                    info.check_if_best_move_found(bestmove);
-                }
-                if d > 1 && info.stopped() {
-                    break 'deepening;
-                }
-                if MAIN_THREAD && is_mate_score(v) && d > 10 {
-                    mate_counter += 1;
-                    if d > 1 && info.in_game() && mate_counter >= 3 {
-                        break 'deepening;
-                    }
-                } else if MAIN_THREAD {
-                    mate_counter = 0;
-                }
-
-                let score_string = format_score(v, self.turn());
-
-                score = v;
-                self.regenerate_pv_line(d, tt);
-                bestmove = *self.principal_variation.first().unwrap_or(&bestmove);
-
-                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
-                    let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
-                    info.seldepth = saved_seldepth;
-                    if forced {
-                        forcing_time_reduction = true;
-                        info.multiply_time_window(0.25);
-                    }
-                    info.check_up();
-                    if d > 1 && info.stopped() {
-                        break 'deepening;
-                    }
-                }
-
-                if asp_window.alpha != -INFINITY && v <= asp_window.alpha {
-                    // fail low
-                    if MAIN_THREAD && info.print_to_stdout {
-                        // this is an upper bound, because we're going to widen the window downward,
-                        // and find a lower score (in theory).
-                        let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<UPPER_BOUND>(&score_string, d, info, tt, total_nodes);
-                    }
-                    asp_window.widen_down();
-                    if MAIN_THREAD && !fail_increment && info.in_game() {
-                        fail_increment = true;
-                        info.multiply_time_window(1.5);
-                    }
-                    continue;
-                }
-                if asp_window.beta != INFINITY && v >= asp_window.beta {
-                    // fail high
-                    if MAIN_THREAD && info.print_to_stdout {
-                        // this is a lower bound, because we're going to widen the window upward,
-                        // and find a higher score (in theory).
-                        let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<LOWER_BOUND>(&score_string, d, info, tt, total_nodes);
-                    }
-                    asp_window.widen_up();
-                    continue;
-                }
-                if MAIN_THREAD && info.print_to_stdout {
-                    let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info::<EXACT>(&score_string, d, info, tt, total_nodes);
-                }
-
-                break; // we got an exact score, so we can stop the aspiration loop.
-            }
-
-            if d > 4 {
-                asp_window = AspirationWindow::from_last_score(score);
-            } else {
-                asp_window = AspirationWindow::infinite();
-            }
-        }
-        (bestmove, score)
-    }
-
-    fn initial_move_and_score(
-        &self,
-        tt: TranspositionTableView,
-        thread_data: &ThreadData,
-        legal_moves: &[Move],
-    ) -> (Move, i32) {
-        let (m, score) = tt.probe_for_provisional_info(self.key).unwrap_or((Move::NULL, 0));
-        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data));
-        let mut maybe_legal = m;
-        while !legal_moves.contains(&maybe_legal) {
-            if let Some(next_picked) = mp.next(self, thread_data) {
-                maybe_legal = next_picked.mov;
-            } else {
-                break;
-            }
-        }
-        assert!(legal_moves.contains(&maybe_legal), "no legal moves found");
-        (maybe_legal, score)
-    }
-
-    fn readout_info<const BOUND: u8>(
-        &self,
-        sstring: &str,
-        depth: i32,
-        info: &SearchInfo,
-        tt: TranspositionTableView,
-        total_nodes: u64,
-    ) {
-        #![allow(
-            clippy::cast_precision_loss,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_truncation
-        )]
-        let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
-        let mut bound = BOUND;
-        if self.turn() == BLACK {
-            bound = match bound {
-                UPPER_BOUND => LOWER_BOUND,
-                LOWER_BOUND => UPPER_BOUND,
-                _ => EXACT,
-            };
-        }
-        if bound == UPPER_BOUND {
-            print!(
-                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
-                info.seldepth.ply_to_horizon(),
-                total_nodes,
-                info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
-            );
-        } else if bound == LOWER_BOUND {
-            print!(
-                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
-                info.seldepth.ply_to_horizon(),
-                total_nodes,
-                info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
-            );
-        } else {
-            print!(
-                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
-                info.seldepth.ply_to_horizon(),
-                total_nodes,
-                info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
-            );
-        }
-        self.print_pv();
-        // #[allow(clippy::cast_precision_loss)]
-        // let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
-        // eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 
     pub fn legal_moves(&mut self) -> Vec<Move> {

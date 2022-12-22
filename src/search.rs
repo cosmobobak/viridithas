@@ -1,6 +1,10 @@
 pub mod parameters;
 
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::Duration,
+};
 
 use crate::{
     board::{
@@ -17,8 +21,8 @@ use crate::{
     cfor,
     chessmove::Move,
     definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, StaticVec, BISHOP, INFINITY, KING,
-        MAX_DEPTH, PAWN, QUEEN, ROOK,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, StaticVec, BISHOP, BLACK, INFINITY,
+        KING, MAX_DEPTH, PAWN, QUEEN, ROOK, WHITE,
     },
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
@@ -60,7 +64,215 @@ const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
+const UPPER_BOUND: u8 = 1;
+const LOWER_BOUND: u8 = 2;
+const EXACT: u8 = 3;
+
 impl Board {
+    /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
+    #[allow(clippy::too_many_lines)]
+    pub fn search_position<const USE_NNUE: bool>(
+        &mut self,
+        info: &mut SearchInfo,
+        thread_headers: &mut [ThreadData],
+        tt: TranspositionTableView,
+    ) -> (i32, Move) {
+        info.setup_for_search();
+        for td in thread_headers.iter_mut() {
+            td.setup_tables_for_search();
+        }
+
+        let legal_moves = self.legal_moves();
+        if legal_moves.is_empty() {
+            return (0, Move::NULL);
+        }
+        if info.in_game() && legal_moves.len() == 1 {
+            info.set_time_window(0);
+        }
+
+        // don't produce weird scores if there's one legal option
+        // and we're going to instamove.
+        let (mut bestmove, mut score) =
+            self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
+
+        let global_stopped = info.stopped;
+        let mut search_results = Vec::with_capacity(thread_headers.len());
+        // start search threads:
+        let (t1, rest) = thread_headers.split_first_mut().unwrap();
+        let board_copy = self.clone();
+        let info_copy = info.clone();
+        let mut board_info_copies =
+            rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
+        let total_nodes = AtomicU64::new(0);
+
+        thread::scope(|s| {
+            let main_thread_handle = s.spawn(|| {
+                let res = self.iterative_deepening::<USE_NNUE, true>(
+                    info,
+                    tt,
+                    t1,
+                    bestmove,
+                    score,
+                    &total_nodes,
+                );
+                global_stopped.store(true, Ordering::SeqCst);
+                res
+            });
+            // we need to eagerly start the threads or nothing will happen
+            #[allow(clippy::needless_collect)]
+            let helper_handles = rest
+                .iter_mut()
+                .zip(board_info_copies.iter_mut())
+                .map(|(t, (board, info))| {
+                    s.spawn(|| {
+                        board.iterative_deepening::<USE_NNUE, false>(
+                            info,
+                            tt,
+                            t,
+                            bestmove,
+                            score,
+                            &total_nodes,
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            search_results.push(main_thread_handle.join().unwrap());
+            search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
+        });
+        global_stopped.store(false, Ordering::SeqCst);
+
+        (bestmove, score) = search_results[0];
+
+        if info.print_to_stdout {
+            println!("bestmove {bestmove}");
+        }
+
+        assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
+        (if self.turn() == WHITE { score } else { -score }, bestmove)
+    }
+
+    /// Performs the iterative deepening search. 
+    /// Returns the score of the position, from the side to move's perspective, and the best move.
+    /// For Lazy SMP, the main thread calls this function with `MAIN_THREAD = true`, and the helper threads with `MAIN_THREAD = false`.
+    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
+        &mut self,
+        info: &mut SearchInfo,
+        tt: TranspositionTableView,
+        t: &mut ThreadData,
+        mut bestmove: Move,
+        mut score: i32,
+        total_nodes: &AtomicU64,
+    ) -> (Move, i32) {
+        let mut asp_window = AspirationWindow::infinite();
+        let mut mate_counter = 0;
+        let mut forcing_time_reduction = false;
+        let mut fail_increment = false;
+        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
+        let starting_depth = if MAIN_THREAD {
+            1
+        } else {
+            // induce symmetry breaking in the helper threads
+            rand::Rng::gen_range(&mut rand::thread_rng(), 2..=4).min(max_depth)
+        };
+        'deepening: for d in starting_depth..=max_depth {
+            // consider stopping early if we've neatly completed a depth:
+            if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
+                break 'deepening;
+            }
+            let depth = Depth::new(d);
+            // aspiration loop:
+            loop {
+                let nodes_before = info.nodes;
+                let v = self.root_search::<USE_NNUE>(
+                    tt,
+                    info,
+                    t,
+                    depth,
+                    asp_window.alpha,
+                    asp_window.beta,
+                );
+                let nodes = info.nodes - nodes_before;
+                total_nodes.fetch_add(nodes, Ordering::SeqCst);
+                info.check_up();
+                if MAIN_THREAD && d > 2 {
+                    info.check_if_best_move_found(bestmove);
+                }
+                if d > 1 && info.stopped() {
+                    break 'deepening;
+                }
+                if MAIN_THREAD && is_mate_score(v) && d > 10 {
+                    mate_counter += 1;
+                    if d > 1 && info.in_game() && mate_counter >= 3 {
+                        break 'deepening;
+                    }
+                } else if MAIN_THREAD {
+                    mate_counter = 0;
+                }
+
+                let score_string = uci::format_score(v, self.turn());
+
+                score = v;
+                self.regenerate_pv_line(d, tt);
+                bestmove = *self.principal_variation().first().unwrap_or(&bestmove);
+
+                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
+                    let saved_seldepth = info.seldepth;
+                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+                    info.seldepth = saved_seldepth;
+                    if forced {
+                        forcing_time_reduction = true;
+                        info.multiply_time_window(0.25);
+                    }
+                    info.check_up();
+                    if d > 1 && info.stopped() {
+                        break 'deepening;
+                    }
+                }
+
+                if asp_window.alpha != -INFINITY && v <= asp_window.alpha {
+                    // fail low
+                    if MAIN_THREAD && info.print_to_stdout {
+                        // this is an upper bound, because we're going to widen the window downward,
+                        // and find a lower score (in theory).
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
+                        self.readout_info::<UPPER_BOUND>(&score_string, d, info, tt, total_nodes);
+                    }
+                    asp_window.widen_down();
+                    if MAIN_THREAD && !fail_increment && info.in_game() {
+                        fail_increment = true;
+                        info.multiply_time_window(1.5);
+                    }
+                    continue;
+                }
+                if asp_window.beta != INFINITY && v >= asp_window.beta {
+                    // fail high
+                    if MAIN_THREAD && info.print_to_stdout {
+                        // this is a lower bound, because we're going to widen the window upward,
+                        // and find a higher score (in theory).
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
+                        self.readout_info::<LOWER_BOUND>(&score_string, d, info, tt, total_nodes);
+                    }
+                    asp_window.widen_up();
+                    continue;
+                }
+                if MAIN_THREAD && info.print_to_stdout {
+                    let total_nodes = total_nodes.load(Ordering::SeqCst);
+                    self.readout_info::<EXACT>(&score_string, d, info, tt, total_nodes);
+                }
+
+                break; // we got an exact score, so we can stop the aspiration loop.
+            }
+
+            if d > 4 {
+                asp_window = AspirationWindow::from_last_score(score);
+            } else {
+                asp_window = AspirationWindow::infinite();
+            }
+        }
+        (bestmove, score)
+    }
+
+    /// Perform a tactical resolution search, searching only captures and promotions.
     pub fn quiescence<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
@@ -165,6 +377,7 @@ impl Board {
         best_score
     }
 
+    /// Get the two killer moves for this position, and the best killer for the position two ply ago.
     pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 3] {
         let curr_killers = t.killer_move_table[self.height()];
         let prev_killer =
@@ -172,6 +385,7 @@ impl Board {
         [curr_killers[0], curr_killers[1], prev_killer]
     }
 
+    /// Perform alpha-beta minimax search.
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn alpha_beta<const PV: bool, const ROOT: bool, const NNUE: bool>(
         &mut self,
@@ -577,11 +791,13 @@ impl Board {
         alpha
     }
 
+    /// The margin for Reverse Futility Pruning.
     fn rfp_margin(depth: Depth, improving: bool) -> i32 {
         get_search_params().rfp_margin * depth
             - i32::from(improving) * get_search_params().rfp_improving_margin
     }
 
+    /// Update the history and followup history tables.
     fn update_history_metrics<const IS_GOOD: bool>(
         &mut self,
         t: &mut ThreadData,
@@ -592,6 +808,8 @@ impl Board {
         t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
+    /// Test if a move is singular - that is, if it is a move that is
+    /// significantly better than the rest of the moves in a position.
     pub fn is_singular<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
@@ -614,7 +832,9 @@ impl Board {
         value < reduced_beta
     }
 
-    /// function called at root to modify time control if only one move is good.
+    /// Test if a move is *forced* - that is, if it is a move that is
+    /// significantly better than the rest of the moves in a position,
+    /// by a margin of at least `MARGIN`. (typically ~200cp).
     pub fn is_forced<const MARGIN: i32>(
         &mut self,
         tt: TranspositionTableView,
@@ -642,6 +862,11 @@ impl Board {
         value < reduced_beta
     }
 
+    /// See if a move looks like it would initiate a winning exchange.
+    /// This function simulates flowing all moves on to the target square of 
+    /// the given move, from least to most valueable moved piece, and returns 
+    /// true if the exchange comes out with a material advantage of at 
+    /// least `threshold`.
     pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
@@ -726,6 +951,7 @@ impl Board {
         self.turn() != colour
     }
 
+    /// root alpha-beta search.
     pub fn root_search<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
@@ -738,6 +964,7 @@ impl Board {
         self.alpha_beta::<true, true, NNUE>(tt, info, t, depth, alpha, beta)
     }
 
+    /// zero-window alpha-beta search.
     pub fn zw_search<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
@@ -750,6 +977,7 @@ impl Board {
         self.alpha_beta::<false, false, NNUE>(tt, info, t, depth, alpha, beta)
     }
 
+    /// full-window alpha-beta search.
     pub fn fullwindow_search<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
@@ -760,6 +988,82 @@ impl Board {
         beta: i32,
     ) -> i32 {
         self.alpha_beta::<PV, false, NNUE>(tt, info, t, depth, alpha, beta)
+    }
+
+    /// Get an initial move and score for the current position from the TT
+    /// and the movepicker.
+    fn initial_move_and_score(
+        &self,
+        tt: TranspositionTableView,
+        thread_data: &ThreadData,
+        legal_moves: &[Move],
+    ) -> (Move, i32) {
+        let (m, score) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
+        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data));
+        let mut maybe_legal = m;
+        while !legal_moves.contains(&maybe_legal) {
+            if let Some(next_picked) = mp.next(self, thread_data) {
+                maybe_legal = next_picked.mov;
+            } else {
+                break;
+            }
+        }
+        assert!(legal_moves.contains(&maybe_legal), "no legal moves found");
+        (maybe_legal, score)
+    }
+
+    /// Print the info about an iteration of the search.
+    fn readout_info<const BOUND: u8>(
+        &self,
+        sstring: &str,
+        depth: i32,
+        info: &SearchInfo,
+        tt: TranspositionTableView,
+        total_nodes: u64,
+    ) {
+        #![allow(
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation
+        )]
+        let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
+        let mut bound = BOUND;
+        if self.turn() == BLACK {
+            bound = match bound {
+                UPPER_BOUND => LOWER_BOUND,
+                LOWER_BOUND => UPPER_BOUND,
+                _ => EXACT,
+            };
+        }
+        if bound == UPPER_BOUND {
+            print!(
+                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
+                info.seldepth.ply_to_horizon(),
+                total_nodes,
+                info.start_time.elapsed().as_millis(),
+                tt.hashfull(),
+            );
+        } else if bound == LOWER_BOUND {
+            print!(
+                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
+                info.seldepth.ply_to_horizon(),
+                total_nodes,
+                info.start_time.elapsed().as_millis(),
+                tt.hashfull(),
+            );
+        } else {
+            print!(
+                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
+                info.seldepth.ply_to_horizon(),
+                total_nodes,
+                info.start_time.elapsed().as_millis(),
+                tt.hashfull(),
+            );
+        }
+        self.print_pv();
+        // #[allow(clippy::cast_precision_loss)]
+        // let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
+        // eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
     }
 }
 
