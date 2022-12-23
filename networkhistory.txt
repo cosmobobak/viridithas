@@ -47,4 +47,4 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     21 | those 320K net-18 games mixed in to the  | 
        | big pile of data use to train net-18.    |
-       | NOTE: not shuffled properly :/           |
+       | NOTE/WARN: shuffled based on FEN hash.   |
