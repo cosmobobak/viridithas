@@ -45,6 +45,9 @@ NET ID | general concept                          | notes
     20 | trained on 320K net-18 self-play games   | -106.2 +/- 21.2, LOS: 0.0 %
        | from the uhobook, eval'd with net-18.    | vs net-18.
 -----------------------------------------------------------------------------------------
-    21 | those 320K net-18 games mixed in to the  | 
-       | big pile of data use to train net-18.    |
+    21 | those 320K net-18 games mixed in to the  | 7.6 +/- 6.5, LOS: 98.9 %
+       | big pile of data use to train net-18.    | vs net-18.
        | NOTE/WARN: shuffled based on FEN hash.   |
+-----------------------------------------------------------------------------------------
+    22 | net 21 data re-evaluated with HCE at     | 
+       | depth 8.                                 |
