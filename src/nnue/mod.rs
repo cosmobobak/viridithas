@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::{
     board::{movegen::BitLoop, Board},
     definitions::{Square, BLACK, KING, PAWN, WHITE},
-    image::Image,
+    image::{Image, self},
     lookups::piece_from_cotype,
 };
 
@@ -73,11 +73,9 @@ impl NNUEParams {
                 (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
             };
             let weight_to_colour = |weight: i16| -> u32 {
-                let x = f32::from(weight - min) / f32::from(max - min);
-                let g = (x * 255.0) as u32;
-                let b = (x * 255.0) as u32 / 2;
-                let r = 255 - g;
-                (r << 16) + (g << 8) + b
+                let intensity = f32::from(weight - min) / f32::from(max - min);
+                let idx = (intensity * 255.0).round() as u8;
+                image::inferno_colour_map(idx)
             };
             for (square, &weight) in chunk.iter().enumerate() {
                 let row = square / 8;
