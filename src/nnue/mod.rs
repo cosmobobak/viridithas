@@ -1,4 +1,4 @@
-use std::{array::{from_mut, self}, fs, mem};
+use std::{array::from_mut, fs, mem};
 
 use serde_json::Value;
 
@@ -187,11 +187,11 @@ pub struct NNUEState {
 }
 
 impl NNUEState {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             white_pov: [0; INPUT],
             black_pov: [0; INPUT],
-            accumulators: array::from_fn(|_| Accumulator::new()),
+            accumulators: [Accumulator::new(); ACC_STACK_SIZE],
             current_acc: 0,
         }
     }
