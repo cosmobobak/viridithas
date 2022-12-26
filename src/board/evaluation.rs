@@ -210,7 +210,7 @@ impl Board {
         (self.pst_vals + self.material()).value(self.phase())
     }
 
-    pub fn evaluate_nnue(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
@@ -225,7 +225,7 @@ impl Board {
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
-    pub fn evaluate<const USE_NNUE: bool>(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate<const USE_NNUE: bool>(&self, t: &ThreadData, nodes: u64) -> i32 {
         if USE_NNUE {
             self.evaluate_nnue(t, nodes)
         } else {
