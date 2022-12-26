@@ -223,6 +223,7 @@ impl<'a> TranspositionTableView<'a> {
         alpha: i32,
         beta: i32,
         depth: Depth,
+        fifty_move_rule_near: bool,
     ) -> ProbeResult {
         let index = self.wrap_key(key);
         let key = TranspositionTable::pack_key(key);
@@ -261,7 +262,7 @@ impl<'a> TranspositionTableView<'a> {
         match entry.age_and_flag.flag() {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
-                if !ROOT && score <= alpha {
+                if !ROOT && score <= alpha && !fifty_move_rule_near {
                     ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -273,7 +274,7 @@ impl<'a> TranspositionTableView<'a> {
                 }
             }
             HFlag::LowerBound => {
-                if !ROOT && score >= beta {
+                if !ROOT && score >= beta && !fifty_move_rule_near {
                     ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -285,7 +286,7 @@ impl<'a> TranspositionTableView<'a> {
                 }
             }
             HFlag::Exact => {
-                if ROOT {
+                if ROOT || fifty_move_rule_near {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
@@ -300,7 +301,7 @@ impl<'a> TranspositionTableView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe::<true>(key, 0, -INFINITY, INFINITY, ZERO_PLY);
+        let result = self.probe::<true>(key, 0, -INFINITY, INFINITY, ZERO_PLY, false);
         match result {
             ProbeResult::Hit(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
             _ => None,

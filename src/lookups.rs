@@ -25,10 +25,9 @@ macro_rules! cfor {
     }
 }
 
-const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64, [u64; 13]) {
+const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
     let mut state = XorShiftState::new();
     let mut piece_keys = [[0; 64]; 13];
-    let mut fiftymove_keys = [0; 13];
     cfor!(let mut index = 0; index < 13; index += 1; {
         cfor!(let mut sq = 0; sq < 64; sq += 1; {
             let key;
@@ -43,14 +42,9 @@ const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64, [u64; 13]) {
         castle_keys[index] = key;
     });
     let key;
-    (key, state) = state.next_self();
+    (key, _) = state.next_self();
     let side_key = key;
-    cfor!(let mut index = 0; index < 13; index += 1; {
-        let key;
-        (key, state) = state.next_self();
-        fiftymove_keys[index] = key;
-    });
-    (piece_keys, castle_keys, side_key, fiftymove_keys)
+    (piece_keys, castle_keys, side_key)
 }
 
 pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
@@ -140,7 +134,6 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
 pub static PIECE_KEYS: [[u64; 64]; 13] = init_hash_keys().0;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
 pub const SIDE_KEY: u64 = init_hash_keys().2;
-pub static FIFTY_MOVE_KEYS: [u64; 13] = init_hash_keys().3;
 
 /// knights, bishops, rooks, and queens.
 pub static PIECE_BIG: [bool; 13] =

@@ -307,7 +307,7 @@ impl Board {
 
         // probe the TT and see if we get a cutoff.
         if let ProbeResult::Cutoff(s) =
-            tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY)
+            tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false)
         {
             return s;
         }
@@ -444,9 +444,9 @@ impl Board {
         debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
         let excluded = t.excluded[self.height()];
-
+        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_null() {
-            match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth) {
+            match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth, fifty_move_rule_near) {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {

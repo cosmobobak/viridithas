@@ -31,7 +31,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
     macros,
-    makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS, hash_in_fiftymove, hash_fiftymove},
+    makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
     threadlocal::ThreadData,
@@ -275,7 +275,6 @@ impl Board {
         hash_castling(&mut key, self.castle_perm);
 
         debug_assert!(self.fifty_move_counter < 100);
-        hash_in_fiftymove(&mut key, self.fifty_move_counter);
 
         key
     }
@@ -928,7 +927,6 @@ impl Board {
         // reinsert the castling rights
         hash_castling(&mut self.key, self.castle_perm);
 
-        let fifty_move_counter_before = self.fifty_move_counter;
         self.fifty_move_counter += 1;
 
         if captured != PIECE_EMPTY {
@@ -967,8 +965,6 @@ impl Board {
         self.side ^= 1;
         hash_side(&mut self.key);
 
-        hash_fiftymove(&mut self.key, fifty_move_counter_before, self.fifty_move_counter);
-
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -997,9 +993,6 @@ impl Board {
         if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
         }
-
-        // update the fifty move hash
-        hash_fiftymove(&mut self.key, self.fifty_move_counter, fifty_move_counter);
 
         // hash out the castling to insert it again after updating rights.
         hash_castling(&mut self.key, self.castle_perm);
@@ -1429,7 +1422,7 @@ impl Board {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
-            tt.probe::<true>(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH)
+            tt.probe::<true>(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH, false)
         {
             if self.principal_variation.len() < depth.try_into().unwrap()
                 && self.is_legal(tt_move)
@@ -1491,6 +1484,10 @@ impl Board {
             }
         }
         legal_moves
+    }
+
+    pub const fn fifty_move_counter(&self) -> u8 {
+        self.fifty_move_counter
     }
 }
 
