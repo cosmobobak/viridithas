@@ -468,6 +468,8 @@ impl Board {
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+        } else if !excluded.is_null() {
+            t.evals[self.height()] // if we're in a singular-verification search, we already have the static eval.
         } else {
             self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };

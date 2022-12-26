@@ -28,6 +28,7 @@ mod threadlocal;
 mod transpositiontable;
 mod uci;
 mod validate;
+mod tablebases;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
