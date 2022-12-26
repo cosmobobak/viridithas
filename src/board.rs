@@ -166,6 +166,11 @@ impl Board {
         &self.principal_variation
     }
 
+    pub const fn n_men(&self) -> u8 {
+        #![allow(clippy::cast_possible_truncation)]
+        self.pieces.occupied().count_ones() as u8
+    }
+
     pub fn king_sq(&self, side: u8) -> Square {
         debug_assert!(side == WHITE || side == BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);

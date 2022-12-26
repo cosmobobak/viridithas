@@ -197,7 +197,7 @@ impl NNUEState {
     }
 
     pub fn push_acc(&mut self) {
-        self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc].clone();
+        self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc];
         self.current_acc += 1;
     }
 

@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Accumulator<const HIDDEN: usize> {
     pub white: [i16; HIDDEN],
     pub black: [i16; HIDDEN],
