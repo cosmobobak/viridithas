@@ -452,7 +452,7 @@ impl Board {
                 ProbeResult::Nothing => {
                     // TT-reduction.
                     if PV && depth >= get_search_params().tt_reduction_depth {
-                        depth -= 1;
+                        depth -= 2;
                     }
                     None
                 }
@@ -468,8 +468,6 @@ impl Board {
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
-        } else if let Some(TTHit { tt_value, tt_bound: HFlag::Exact, .. }) = tt_hit.as_ref() {
-            *tt_value // use the TT value if we have an exact score.
         } else {
             self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };
