@@ -49,5 +49,8 @@ NET ID | general concept                          | notes
        | big pile of data use to train net-18.    | vs net-18.
        | NOTE/WARN: shuffled based on FEN hash.   |
 -----------------------------------------------------------------------------------------
-    22 | net 21 data re-evaluated with HCE at     | 
+    22 | net 21 data re-evaluated with HCE at     | about -10 elo vs net 21.
        | depth 8.                                 |
+-----------------------------------------------------------------------------------------
+    23 | net 22 data re-evaluated with net-22.    | 
+       | Hopefully will be less overfitted.       |
