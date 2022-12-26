@@ -5,7 +5,7 @@
 
 use crate::{
     definitions::{Square, PIECE_EMPTY},
-    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
+    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY, FIFTY_MOVE_KEYS},
 };
 
 pub fn hash_castling(key: &mut u64, castle_perm: u8) {
@@ -30,6 +30,33 @@ pub fn hash_ep(key: &mut u64, ep_sq: Square) {
     let ep_key =
         unsafe { *PIECE_KEYS.get_unchecked(PIECE_EMPTY as usize).get_unchecked(ep_sq.index()) };
     *key ^= ep_key;
+}
+
+pub fn hash_fiftymove(key: &mut u64, before: u8, after: u8) {
+    // fiftymove is in the range 0..100:
+    debug_assert!(before < 100);
+    debug_assert!(after < 100);
+    // we only change the hashkey in blocks of eight - if the fiftymove counter
+    // is not crossing an eight-move boundary, we don't update the hashkey.
+    let before_generation = before / 8;
+    let after_generation = after / 8;
+    if before_generation == after_generation {
+        return;
+    }
+    // get the two keys
+    let before_key = FIFTY_MOVE_KEYS[before_generation as usize];
+    let after_key = FIFTY_MOVE_KEYS[after_generation as usize];
+    // xor before in:
+    *key ^= before_key;
+    // xor after in:
+    *key ^= after_key;
+}
+
+pub fn hash_in_fiftymove(key: &mut u64, fifty_move_counter: u8) {
+    debug_assert!(fifty_move_counter < 100);
+    let generation = fifty_move_counter / 8;
+    let fiftymo_key = FIFTY_MOVE_KEYS[generation as usize];
+    *key ^= fiftymo_key;
 }
 
 #[rustfmt::skip]
