@@ -27,7 +27,7 @@ use crate::{
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TranspositionTableView, TTHit},
+    transpositiontable::{HFlag, ProbeResult, TranspositionTableView},
     uci,
 };
 
@@ -452,7 +452,7 @@ impl Board {
                 ProbeResult::Nothing => {
                     // TT-reduction.
                     if PV && depth >= get_search_params().tt_reduction_depth {
-                        depth -= 2;
+                        depth -= 1;
                     }
                     None
                 }
