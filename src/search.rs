@@ -468,8 +468,10 @@ impl Board {
 
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+        } else if let Some(tt_hit) = tt_hit.as_ref() {
+            tt_hit.tt_value // use the TT value if we have one.
         } else {
-            self.evaluate::<NNUE>(t, info.nodes)
+            self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };
 
         t.evals[self.height()] = static_eval;
