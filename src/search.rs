@@ -447,9 +447,7 @@ impl Board {
 
         let tt_hit = if excluded.is_null() {
             match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth) {
-                ProbeResult::Cutoff(s) => {
-                    return s;
-                }
+                ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction.
