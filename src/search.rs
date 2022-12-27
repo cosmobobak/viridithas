@@ -13,7 +13,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE, Stage},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -634,7 +634,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                extension = self.singularity::<NNUE>(tt, info, t, m, tt_value, depth);
+                extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
             } else if !ROOT && self.in_check::<{ Self::US }>() {
                 // here in_check determines if the move gives check
                 // extend checks with SEE > 0
@@ -809,14 +809,17 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn singularity<const NNUE: bool>(
+    #[allow(clippy::too_many_arguments)]
+    pub fn singularity<const ROOT: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         m: Move,
         tt_value: i32,
+        beta: i32,
         depth: Depth,
+        mp: &mut MainMovePicker<ROOT>,
     ) -> Depth {
         let reduced_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
@@ -828,6 +831,9 @@ impl Board {
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move::<NNUE>(m, t);
+        if value >= reduced_beta && reduced_beta >= beta {
+            mp.stage = Stage::Done; // multicut!!
+        }
         Depth::from(value < reduced_beta)
     }
 

@@ -21,12 +21,13 @@ pub enum Stage {
     TTMove,
     GenerateMoves,
     YieldMoves,
+    Done,
 }
 
 pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> {
     movelist: MoveList,
     index: usize,
-    stage: Stage,
+    pub stage: Stage,
     tt_move: Move,
     killers: [Move; 3],
     pub skip_quiets: bool,
@@ -55,6 +56,9 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
 
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
+        if self.stage == Stage::Done {
+            return None;
+        }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateMoves;
             if position.is_pseudo_legal(self.tt_move) {
