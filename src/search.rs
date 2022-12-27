@@ -637,6 +637,7 @@ impl Board {
                 extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
                 
                 if move_picker.stage == Stage::Done {
+                    self.unmake_move::<NNUE>(t);
                     return std::cmp::max(tt_value - depth.round(), -MATE_SCORE);
                 }
             } else if !ROOT && self.in_check::<{ Self::US }>() {
