@@ -346,8 +346,7 @@ impl Board {
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
                 self.unmake_move::<NNUE>(t);
-                // don't bother failing soft, at_least is not really trustworthy.
-                return beta;
+                return at_least;
             }
 
             let score = -self.quiescence::<NNUE>(tt, info, t, -beta, -alpha);
@@ -514,7 +513,7 @@ impl Board {
             if null_score >= beta {
                 // unconditionally cutoff if we're just too shallow.
                 if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
-                    return beta;
+                    return null_score;
                 }
                 // verify that it's *actually* fine to prune,
                 // by doing a search with NMP disabled.
@@ -522,7 +521,7 @@ impl Board {
                 let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
                 t.do_nmp = true;
                 if veri_score >= beta {
-                    return veri_score;
+                    return null_score;
                 }
             }
         }
@@ -737,9 +736,9 @@ impl Board {
         }
 
         if moves_made == 0 {
-            if !excluded.is_null() {
-                return alpha;
-            }
+            // if !excluded.is_null() {
+            //     return alpha;
+            // }
             if in_check {
                 return mated_in(height);
             }
