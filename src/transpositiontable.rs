@@ -65,8 +65,8 @@ pub struct TTEntry {
     pub key: u16,                   // 16 bits
     pub m: Move,                    // 16 bits
     pub score: i16,                 // 16 bits
-    pub depth: CompactDepthStorage, // 8 bits
-    pub age_and_flag: AgeAndFlag,   // 6 + 2 bits
+    pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
+    pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
 }
 
 impl TTEntry {
@@ -121,19 +121,21 @@ pub enum ProbeResult {
 }
 
 impl TranspositionTable {
+    const NULL_VALUE: u64 = 0;
+
     pub const fn new() -> Self {
         Self { table: Vec::new(), age: 0 }
     }
 
     pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
-        self.table.resize_with(new_len, || AtomicU64::new(TTEntry::NULL.into()));
+        self.table.resize_with(new_len, || AtomicU64::new(Self::NULL_VALUE));
         self.table.shrink_to_fit();
-        self.table.iter_mut().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
+        self.table.iter_mut().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     pub fn clear(&self) {
-        self.table.iter().for_each(|x| x.store(TTEntry::NULL.into(), Ordering::SeqCst));
+        self.table.iter().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     const fn pack_key(key: u64) -> u16 {
@@ -360,5 +362,12 @@ mod tests {
         let packed: u64 = entry.into();
         let unpacked: TTEntry = packed.into();
         assert_eq!(entry, unpacked);
+    }
+
+    #[test]
+    fn null_tt_entry_is_zero() {
+        let entry = TTEntry::NULL;
+        let packed: u64 = entry.into();
+        assert_eq!(packed, TranspositionTable::NULL_VALUE);
     }
 }
