@@ -71,7 +71,7 @@ pub struct Board {
     castle_perm: u8,
     /// The number of half moves made since the last capture or pawn advance.
     fifty_move_counter: u8,
-    /// The number of half made since the start of the game.
+    /// The number of half moves made since the start of the game.
     ply: usize,
 
     /// The Zobrist hash of the board.
@@ -166,10 +166,10 @@ impl Board {
         &self.principal_variation
     }
 
-    pub const fn n_men(&self) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.pieces.occupied().count_ones() as u8
-    }
+    // pub const fn n_men(&self) -> u8 {
+    //     #![allow(clippy::cast_possible_truncation)]
+    //     self.pieces.occupied().count_ones() as u8
+    // }
 
     pub fn king_sq(&self, side: u8) -> Square {
         debug_assert!(side == WHITE || side == BLACK);
