@@ -637,7 +637,6 @@ impl Board {
                 extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
                 
                 if move_picker.stage == Stage::Done {
-                    self.unmake_move::<NNUE>(t);
                     return std::cmp::max(tt_value - depth.round(), -MATE_SCORE);
                 }
             } else if !ROOT && self.in_check::<{ Self::US }>() {
@@ -834,12 +833,19 @@ impl Board {
         let value =
             self.zw_search::<NNUE>(tt, info, t, reduced_depth, reduced_beta - 1, reduced_beta);
         t.excluded[self.height()] = Move::NULL;
-        // re-make the singular move.
-        self.make_move::<NNUE>(m, t);
         if value >= reduced_beta && reduced_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
+        } else {
+            // re-make the singular move.
+            self.make_move::<NNUE>(m, t);
         }
-        Depth::from(value < reduced_beta)
+        if value < reduced_beta {
+            ONE_PLY // singular extension
+        } else if tt_value >= beta {
+            -ONE_PLY // somewhat multi-cut-y
+        } else {
+            ZERO_PLY // no extension
+        }
     }
 
     /// Test if a move is *forced* - that is, if it is a move that is

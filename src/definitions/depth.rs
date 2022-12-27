@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign, Neg},
     str::FromStr,
 };
 
@@ -57,6 +57,13 @@ impl Depth {
 
     pub const fn squared(self) -> i32 {
         self.0 * self.0 / Self::INNER_INCR_BY_PLY / Self::INNER_INCR_BY_PLY
+    }
+}
+
+impl Neg for Depth {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self(-self.0)
     }
 }
 
