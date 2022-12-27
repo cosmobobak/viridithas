@@ -635,8 +635,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                let is_singular = self.is_singular::<NNUE>(tt, info, t, m, tt_value, depth);
-                extension = Depth::from(is_singular);
+                extension = self.singularity::<NNUE>(tt, info, t, m, tt_value, depth);
             } else if !ROOT && self.in_check::<{ Self::US }>() {
                 // here in_check determines if the move gives check
                 // extend checks with SEE > 0
@@ -731,7 +730,7 @@ impl Board {
                             );
                         }
 
-                        return beta;
+                        return score;
                     }
                 }
             }
@@ -754,7 +753,7 @@ impl Board {
                     self.hashkey(),
                     self.height(),
                     best_move,
-                    alpha,
+                    best_score,
                     HFlag::UpperBound,
                     depth,
                 );
@@ -789,7 +788,7 @@ impl Board {
             }
         }
 
-        alpha
+        best_score
     }
 
     /// The margin for Reverse Futility Pruning.
@@ -809,9 +808,9 @@ impl Board {
         t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
-    /// Test if a move is singular - that is, if it is a move that is
+    /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn is_singular<const NNUE: bool>(
+    pub fn singularity<const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -819,7 +818,7 @@ impl Board {
         m: Move,
         tt_value: i32,
         depth: Depth,
-    ) -> bool {
+    ) -> Depth {
         let reduced_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
         let reduced_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
@@ -830,7 +829,7 @@ impl Board {
         t.excluded[self.height()] = Move::NULL;
         // re-make the singular move.
         self.make_move::<NNUE>(m, t);
-        value < reduced_beta
+        Depth::from(value < reduced_beta)
     }
 
     /// Test if a move is *forced* - that is, if it is a move that is
