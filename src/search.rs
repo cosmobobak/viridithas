@@ -628,7 +628,7 @@ impl Board {
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
-                    && tt_hit.tt_bound == HFlag::LowerBound
+                    && matches!(tt_hit.tt_bound, HFlag::LowerBound | HFlag::Exact)
             });
 
             let mut extension = ZERO_PLY;
