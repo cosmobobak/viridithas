@@ -736,10 +736,7 @@ impl Board {
         }
 
         if moves_made == 0 {
-            // if !excluded.is_null() {
-            //     return alpha;
-            // }
-            if in_check {
+            if in_check || excluded.is_null() { // lol
                 return mated_in(height);
             }
             return draw_score(info.nodes);
