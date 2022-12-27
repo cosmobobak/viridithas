@@ -635,6 +635,10 @@ impl Board {
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
                 extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
+                
+                if move_picker.stage == Stage::Done {
+                    return std::cmp::max(tt_value - depth.round(), -MATE_SCORE);
+                }
             } else if !ROOT && self.in_check::<{ Self::US }>() {
                 // here in_check determines if the move gives check
                 // extend checks with SEE > 0
