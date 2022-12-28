@@ -300,9 +300,11 @@ impl Board {
             return draw_score(info.nodes);
         }
 
+        let in_check = self.in_check::<{ Self::US }>();
+
         // are we too deep?
         if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate::<NNUE>(t, info.nodes);
+            return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
         }
 
         // probe the TT and see if we get a cutoff.
@@ -312,7 +314,11 @@ impl Board {
             return s;
         }
 
-        let stand_pat = self.evaluate::<NNUE>(t, info.nodes);
+        let stand_pat = if in_check {
+            -INFINITY // could be being mated!
+        } else {
+            self.evaluate::<NNUE>(t, info.nodes)
+        };
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
