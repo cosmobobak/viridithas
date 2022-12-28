@@ -336,15 +336,12 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
 
-        let killers = self.get_killer_set(t);
-
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, killers);
-        while let Some(MoveListEntry { mov: m, score: os }) = move_picker.next(self, t) {
-            if os < WINNING_CAPTURE_SCORE && !in_check {
-                continue;
-            }
-
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3]);
+        if !in_check {
+            move_picker.skip_quiets = true;
+        }
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 
