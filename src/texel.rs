@@ -48,7 +48,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             pos.set_from_fen(fen).unwrap();
             // quiescence is likely the source of all computation time.
             // don't use NNUE, this only works for HCE.
-            let pov_score = Board::quiescence::<false>(
+            let pov_score = Board::quiescence::<true, false>(
                 &mut pos,
                 tt.view(),
                 &mut info,
