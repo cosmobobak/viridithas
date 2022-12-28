@@ -335,6 +335,7 @@ impl Board {
 
         let killers = self.get_killer_set(t);
 
+        let mut moves_made = 0;
         let mut move_picker = CapturePicker::new(Move::NULL, killers);
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let worst_case =
@@ -343,6 +344,7 @@ impl Board {
             if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
+            moves_made += 1;
             info.nodes += 1;
 
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
@@ -368,6 +370,10 @@ impl Board {
                     break; // fail-high
                 }
             }
+        }
+
+        if moves_made == 0 && in_check { // lol
+            return mated_in(height);
         }
 
         let flag = if best_score >= beta {
