@@ -340,7 +340,11 @@ impl Board {
 
         let mut moves_made = 0;
         let mut move_picker = CapturePicker::new(Move::NULL, killers);
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, score: os }) = move_picker.next(self, t) {
+            if os < WINNING_CAPTURE_SCORE && !in_check {
+                continue;
+            }
+
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
 

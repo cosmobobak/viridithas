@@ -116,7 +116,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         self.index += 1;
 
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
-        if self.was_tried_lazily(m.mov) || (CAPTURES_ONLY || self.skip_quiets) && not_winning {
+        if self.was_tried_lazily(m.mov) || self.skip_quiets && not_winning {
             self.next(position, t)
         } else {
             Some(m)
