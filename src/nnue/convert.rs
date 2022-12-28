@@ -57,6 +57,7 @@ fn batch_convert<const USE_NNUE: bool>(
         }
         // no NNUE for generating training data.
         t.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&pos));
+        tt.clear();
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::Depth(Depth::new(depth)),
