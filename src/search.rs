@@ -274,7 +274,7 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    pub fn quiescence<const NNUE: bool>(
+    pub fn quiescence<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -308,10 +308,13 @@ impl Board {
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) =
-            tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false)
-        {
-            return s;
+        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let do_not_cut = PV || in_check || fifty_move_rule_near;
+        if !do_not_cut {
+            let tt_entry = tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
+            if let ProbeResult::Cutoff(s) = tt_entry {
+                return s;
+            }
         }
 
         let stand_pat = if in_check {
@@ -357,7 +360,7 @@ impl Board {
                 return at_least;
             }
 
-            let score = -self.quiescence::<NNUE>(tt, info, t, -beta, -alpha);
+            let score = -self.quiescence::<PV, NNUE>(tt, info, t, -beta, -alpha);
             self.unmake_move::<NNUE>(t);
 
             if score > best_score {
@@ -414,7 +417,7 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<NNUE>(tt, info, t, alpha, beta);
+            return self.quiescence::<PV, NNUE>(tt, info, t, alpha, beta);
         }
         depth = depth.max(ZERO_PLY);
 
