@@ -13,7 +13,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE, Stage},
+            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -152,7 +152,7 @@ impl Board {
         (if self.turn() == WHITE { score } else { -score }, bestmove)
     }
 
-    /// Performs the iterative deepening search. 
+    /// Performs the iterative deepening search.
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `MAIN_THREAD = true`, and the helper threads with `MAIN_THREAD = false`.
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
@@ -312,7 +312,8 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         if !do_not_cut {
-            let tt_entry = tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
+            let tt_entry =
+                tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
             if let ProbeResult::Cutoff(s) = tt_entry {
                 return s;
             }
@@ -377,7 +378,8 @@ impl Board {
             }
         }
 
-        if moves_made == 0 && in_check { // lol
+        if moves_made == 0 && in_check {
+            // lol
             return mated_in(height);
         }
 
@@ -462,7 +464,14 @@ impl Board {
         let excluded = t.excluded[self.height()];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_null() {
-            match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth, fifty_move_rule_near) {
+            match tt.probe::<ROOT>(
+                self.hashkey(),
+                self.height(),
+                alpha,
+                beta,
+                depth,
+                fifty_move_rule_near,
+            ) {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
@@ -501,14 +510,13 @@ impl Board {
             !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
         // whole-node pruning techniques:
-        if !PV
-            && !in_check
-            && excluded.is_null() {
+        if !PV && !in_check && excluded.is_null() {
             // razoring - just do qsearch at the frontier if the static eval is low enough.
-            if depth == ONE_PLY
-                && static_eval + get_search_params().razoring_margin < alpha
-            {
-                return self.quiescence::<false, NNUE>(tt, info, t, alpha, beta);
+            if depth == ONE_PLY && static_eval + get_search_params().razoring_margin < alpha {
+                let v = self.quiescence::<false, NNUE>(tt, info, t, alpha, beta);
+                if v < alpha {
+                    return v;
+                }
             }
 
             // beta-pruning. (reverse futility pruning)
@@ -521,7 +529,8 @@ impl Board {
             // null-move pruning.
             if !last_move_was_null
                 && t.do_nmp
-                && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin >= beta
+                && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin
+                    >= beta
                 && depth >= 3.into()
                 && self.zugzwang_unlikely()
             {
@@ -657,8 +666,17 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
-                
+                extension = self.singularity::<ROOT, NNUE>(
+                    tt,
+                    info,
+                    t,
+                    m,
+                    tt_value,
+                    beta,
+                    depth,
+                    &mut move_picker,
+                );
+
                 if move_picker.stage == Stage::Done {
                     return std::cmp::max(tt_value - 3 * depth.round(), -MATE_SCORE);
                 }
@@ -766,7 +784,8 @@ impl Board {
             if !excluded.is_null() {
                 return alpha;
             }
-            if in_check { // lol
+            if in_check {
+                // lol
                 return mated_in(height);
             }
             return draw_score(info.nodes);
@@ -902,9 +921,9 @@ impl Board {
     }
 
     /// See if a move looks like it would initiate a winning exchange.
-    /// This function simulates flowing all moves on to the target square of 
-    /// the given move, from least to most valueable moved piece, and returns 
-    /// true if the exchange comes out with a material advantage of at 
+    /// This function simulates flowing all moves on to the target square of
+    /// the given move, from least to most valueable moved piece, and returns
+    /// true if the exchange comes out with a material advantage of at
     /// least `threshold`.
     pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
         let from = m.from();
