@@ -45,6 +45,7 @@ use self::parameters::SearchParams;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 26;
+const RAZORING_MARGIN: i32 = 50;
 const RFP_MARGIN: i32 = 80;
 const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
@@ -499,45 +500,51 @@ impl Board {
         let improving =
             !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
-        // beta-pruning. (reverse futility pruning)
+        // whole-node pruning techniques:
         if !PV
             && !in_check
-            && excluded.is_null()
-            && depth <= get_search_params().rfp_depth
-            && static_eval - Self::rfp_margin(depth, improving) > beta
-        {
-            return static_eval;
-        }
-
-        // null-move pruning.
-        if !PV
-            && !in_check
-            && !last_move_was_null
-            && excluded.is_null()
-            && t.do_nmp
-            && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin >= beta
-            && depth >= 3.into()
-            && self.zugzwang_unlikely()
-        {
-            let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
-            self.make_nullmove();
-            let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
-            self.unmake_nullmove();
-            if info.stopped() {
-                return 0;
+            && excluded.is_null() {
+            // razoring - just do qsearch at the frontier if the static eval is low enough.
+            if depth == ONE_PLY
+                && static_eval + get_search_params().razoring_margin < alpha
+            {
+                return self.quiescence::<false, NNUE>(tt, info, t, alpha, beta);
             }
-            if null_score >= beta {
-                // unconditionally cutoff if we're just too shallow.
-                if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
-                    return null_score;
+
+            // beta-pruning. (reverse futility pruning)
+            if depth <= get_search_params().rfp_depth
+                && static_eval - Self::rfp_margin(depth, improving) > beta
+            {
+                return static_eval;
+            }
+
+            // null-move pruning.
+            if !last_move_was_null
+                && t.do_nmp
+                && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin >= beta
+                && depth >= 3.into()
+                && self.zugzwang_unlikely()
+            {
+                let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
+                self.make_nullmove();
+                let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                self.unmake_nullmove();
+                if info.stopped() {
+                    return 0;
                 }
-                // verify that it's *actually* fine to prune,
-                // by doing a search with NMP disabled.
-                t.do_nmp = false;
-                let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
-                t.do_nmp = true;
-                if veri_score >= beta {
-                    return null_score;
+                if null_score >= beta {
+                    // unconditionally cutoff if we're just too shallow.
+                    if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
+                        return null_score;
+                    }
+                    // verify that it's *actually* fine to prune,
+                    // by doing a search with NMP disabled.
+                    t.do_nmp = false;
+                    let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                    t.do_nmp = true;
+                    if veri_score >= beta {
+                        return null_score;
+                    }
                 }
             }
         }
@@ -685,7 +692,6 @@ impl Board {
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
-                    r += i32::from(!improving);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
