@@ -1,7 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![deny(missing_docs)]
 
-//! Viridithas II, a UCI chess engine written in Rust.
+//! Viridithas, a UCI chess engine written in Rust.
 
 #[macro_use]
 mod macros;
