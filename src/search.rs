@@ -65,10 +65,6 @@ const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
 
-const UPPER_BOUND: u8 = 1;
-const LOWER_BOUND: u8 = 2;
-const EXACT: u8 = 3;
-
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
@@ -237,7 +233,7 @@ impl Board {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<UPPER_BOUND>(&score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::UpperBound, &score_string, d, info, tt, total_nodes);
                     }
                     asp_window.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -252,14 +248,14 @@ impl Board {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<LOWER_BOUND>(&score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::LowerBound, &score_string, d, info, tt, total_nodes);
                     }
                     asp_window.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info::<EXACT>(&score_string, d, info, tt, total_nodes);
+                    self.readout_info(HFlag::Exact, &score_string, d, info, tt, total_nodes);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -1075,8 +1071,9 @@ impl Board {
     }
 
     /// Print the info about an iteration of the search.
-    fn readout_info<const BOUND: u8>(
+    fn readout_info(
         &self,
+        mut bound: HFlag,
         sstring: &str,
         depth: i32,
         info: &SearchInfo,
@@ -1089,15 +1086,14 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
-        let mut bound = BOUND;
         if self.turn() == BLACK {
             bound = match bound {
-                UPPER_BOUND => LOWER_BOUND,
-                LOWER_BOUND => UPPER_BOUND,
-                _ => EXACT,
+                HFlag::UpperBound => HFlag::LowerBound,
+                HFlag::LowerBound => HFlag::UpperBound,
+                _ => HFlag::Exact,
             };
         }
-        if bound == UPPER_BOUND {
+        if bound == HFlag::UpperBound {
             print!(
                 "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
@@ -1105,7 +1101,7 @@ impl Board {
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
-        } else if bound == LOWER_BOUND {
+        } else if bound == HFlag::LowerBound {
             print!(
                 "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
