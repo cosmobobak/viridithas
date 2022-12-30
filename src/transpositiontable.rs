@@ -172,7 +172,7 @@ impl<'a> TranspositionTableView<'a> {
     ) {
         use HFlag::Exact;
 
-        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
+        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
@@ -230,7 +230,7 @@ impl<'a> TranspositionTableView<'a> {
         let index = self.wrap_key(key);
         let key = TranspositionTable::pack_key(key);
 
-        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&depth), "depth: {depth}");
+        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);
         debug_assert!(alpha >= -INFINITY);
         debug_assert!(beta >= -INFINITY);
@@ -245,7 +245,7 @@ impl<'a> TranspositionTableView<'a> {
         let m = entry.m;
         let e_depth = entry.depth.into();
 
-        debug_assert!((0i32.into()..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
+        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
 
         if e_depth < depth {
             return ProbeResult::Hit(TTHit {

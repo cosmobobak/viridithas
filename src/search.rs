@@ -289,8 +289,9 @@ impl Board {
             }
         }
 
-        let height: i32 = self.height().try_into().unwrap();
-        info.seldepth = info.seldepth.max(Depth::from(height));
+        let height = self.height();
+        let key = self.hashkey();
+        info.seldepth = info.seldepth.max(Depth::from(i32::try_from(height).unwrap()));
 
         // check draw
         if self.is_draw() {
@@ -300,7 +301,7 @@ impl Board {
         let in_check = self.in_check::<{ Self::US }>();
 
         // are we too deep?
-        if height > (MAX_DEPTH - 1).round() {
+        if height > (MAX_DEPTH - 1).ply_to_horizon() {
             return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
         }
 
@@ -309,7 +310,7 @@ impl Board {
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         if !do_not_cut {
             let tt_entry =
-                tt.probe(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
+                tt.probe(key, height, alpha, beta, ZERO_PLY, false);
             if let ProbeResult::Cutoff(s) = tt_entry {
                 return s;
             }
@@ -387,17 +388,17 @@ impl Board {
             HFlag::UpperBound
         };
 
-        tt.store::<false>(self.hashkey(), self.height(), best_move, best_score, flag, ZERO_PLY);
+        tt.store::<false>(key, height, best_move, best_score, flag, ZERO_PLY);
 
         best_score
     }
 
     /// Get the two killer moves for this position, and the best killer for the position two ply ago.
     pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 3] {
-        let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer =
-            if self.height() > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };
-        [curr_killers[0], curr_killers[1], prev_killer]
+        let ply = self.height();
+        let curr = t.killer_move_table[ply];
+        let prev = if ply > 2 { t.killer_move_table[ply - 2][0] } else { Move::NULL };
+        [curr[0], curr[1], prev]
     }
 
     /// Perform alpha-beta minimax search.
@@ -428,11 +429,12 @@ impl Board {
             }
         }
 
-        let height: i32 = self.height().try_into().unwrap();
+        let key = self.hashkey();
+        let height = self.height();
 
         debug_assert_eq!(height == 0, ROOT);
 
-        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(height)) };
+        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(i32::try_from(height).unwrap())) };
 
         if !ROOT {
             // check draw
@@ -441,7 +443,7 @@ impl Board {
             }
 
             // are we too deep?
-            if height > MAX_DEPTH.round() - 1 {
+            if height > MAX_DEPTH.ply_to_horizon() - 1 {
                 return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
             }
 
@@ -462,7 +464,7 @@ impl Board {
         let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
             match tt.probe(
-                self.hashkey(),
+                key,
                 self.height(),
                 alpha,
                 beta,
@@ -758,7 +760,7 @@ impl Board {
 
                         if excluded.is_null() {
                             tt.store::<ROOT>(
-                                self.hashkey(),
+                                key,
                                 self.height(),
                                 best_move,
                                 beta,
@@ -788,7 +790,7 @@ impl Board {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
                 tt.store::<ROOT>(
-                    self.hashkey(),
+                    key,
                     self.height(),
                     best_move,
                     best_score,
@@ -816,7 +818,7 @@ impl Board {
 
             if excluded.is_null() {
                 tt.store::<ROOT>(
-                    self.hashkey(),
+                    key,
                     self.height(),
                     best_move,
                     best_score,
