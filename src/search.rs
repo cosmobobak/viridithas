@@ -12,7 +12,7 @@ use crate::{
             self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_MATE_SCORE,
         },
         movegen::{
-            bitboards::{self, lsb},
+            bitboards::{self, first_square},
             movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
@@ -309,7 +309,7 @@ impl Board {
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         if !do_not_cut {
             let tt_entry =
-                tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
+                tt.probe(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false);
             if let ProbeResult::Cutoff(s) = tt_entry {
                 return s;
             }
@@ -459,14 +459,15 @@ impl Board {
 
         let excluded = t.excluded[self.height()];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
-            match tt.probe::<ROOT>(
+            match tt.probe(
                 self.hashkey(),
                 self.height(),
                 alpha,
                 beta,
                 depth,
-                fifty_move_rule_near,
+                do_not_cut,
             ) {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
@@ -507,14 +508,6 @@ impl Board {
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
-            // razoring - just do qsearch at the frontier if the static eval is low enough.
-            if depth == ONE_PLY && static_eval + get_search_params().razoring_margin < alpha {
-                let v = self.quiescence::<false, NNUE>(tt, info, t, alpha, beta);
-                if v < alpha {
-                    return v;
-                }
-            }
-
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
@@ -975,7 +968,7 @@ impl Board {
                 }
             }
 
-            occupied ^= 1 << lsb(my_attackers & self.pieces.of_type(next_victim));
+            occupied ^= first_square(my_attackers & self.pieces.of_type(next_victim)).bitboard();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PAWN || next_victim == BISHOP || next_victim == QUEEN {

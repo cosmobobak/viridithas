@@ -218,14 +218,14 @@ impl<'a> TranspositionTableView<'a> {
         }
     }
 
-    pub fn probe<const ROOT: bool>(
+    pub fn probe(
         &self,
         key: u64,
         ply: usize,
         alpha: i32,
         beta: i32,
         depth: Depth,
-        fifty_move_rule_near: bool,
+        do_not_cut: bool,
     ) -> ProbeResult {
         let index = self.wrap_key(key);
         let key = TranspositionTable::pack_key(key);
@@ -264,7 +264,7 @@ impl<'a> TranspositionTableView<'a> {
         match entry.age_and_flag.flag() {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
-                if !ROOT && score <= alpha && !fifty_move_rule_near {
+                if score <= alpha && !do_not_cut {
                     ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -276,7 +276,7 @@ impl<'a> TranspositionTableView<'a> {
                 }
             }
             HFlag::LowerBound => {
-                if !ROOT && score >= beta && !fifty_move_rule_near {
+                if score >= beta && !do_not_cut {
                     ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
@@ -288,7 +288,7 @@ impl<'a> TranspositionTableView<'a> {
                 }
             }
             HFlag::Exact => {
-                if ROOT || fifty_move_rule_near {
+                if do_not_cut {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
@@ -303,7 +303,7 @@ impl<'a> TranspositionTableView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe::<true>(key, 0, -INFINITY, INFINITY, ZERO_PLY, false);
+        let result = self.probe(key, 0, -INFINITY, INFINITY, ZERO_PLY, true);
         match result {
             ProbeResult::Hit(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
             _ => None,
