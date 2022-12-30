@@ -520,6 +520,8 @@ impl Board {
             }
 
             // beta-pruning. (reverse futility pruning)
+            // if the static eval is too high, we can prune the node.
+            // this is a lot like stand_pat in quiescence search.
             if depth <= get_search_params().rfp_depth
                 && static_eval - Self::rfp_margin(depth, improving) > beta
             {
@@ -527,11 +529,13 @@ impl Board {
             }
 
             // null-move pruning.
+            // if we can give the opponent a free move while retaining 
+            // a score above beta, we can prune the node.
             if !last_move_was_null
-                && t.do_nmp
+                && depth >= 3.into()
                 && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin
                     >= beta
-                && depth >= 3.into()
+                && t.do_nmp
                 && self.zugzwang_unlikely()
             {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
