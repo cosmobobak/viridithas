@@ -45,7 +45,7 @@ use self::parameters::SearchParams;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 26;
-const RAZORING_MARGIN: i32 = 150;
+const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 80;
 const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
@@ -294,7 +294,7 @@ impl Board {
         }
 
         let height: i32 = self.height().try_into().unwrap();
-        info.seldepth = info.seldepth.max(height.into());
+        info.seldepth = info.seldepth.max(Depth::from(height));
 
         // check draw
         if self.is_draw() {
@@ -436,7 +436,7 @@ impl Board {
 
         debug_assert_eq!(height == 0, ROOT);
 
-        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(height.into()) };
+        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(height)) };
 
         if !ROOT {
             // check draw
@@ -532,7 +532,7 @@ impl Board {
             // if we can give the opponent a free move while retaining 
             // a score above beta, we can prune the node.
             if !last_move_was_null
-                && depth >= 3.into()
+                && depth >= Depth::new(3)
                 && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin
                     >= beta
                 && t.do_nmp
@@ -709,7 +709,7 @@ impl Board {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
                     && (is_quiet || !is_winning_capture)
-                    && depth >= 3.into()
+                    && depth >= Depth::new(3)
                     && moves_made >= (2 + usize::from(PV))
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
