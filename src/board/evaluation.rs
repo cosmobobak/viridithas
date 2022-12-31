@@ -47,11 +47,15 @@ pub fn get_see_value(piece: u8) -> i32 {
 /// e.g. if white has a mate in two ply, the output from a depth-5 search will be
 /// two less than `MATE_SCORE`.
 pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
-pub const fn mate_in(ply: i32) -> i32 {
-    MATE_SCORE - ply
+pub const fn mate_in(ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    debug_assert!(ply < MAX_DEPTH.ply_to_horizon());
+    MATE_SCORE - ply as i32
 }
-pub const fn mated_in(ply: i32) -> i32 {
-    -MATE_SCORE + ply
+pub const fn mated_in(ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    debug_assert!(ply < MAX_DEPTH.ply_to_horizon());
+    -MATE_SCORE + ply as i32
 }
 
 /// A threshold over which scores must be mate.
@@ -211,6 +215,8 @@ impl Board {
     }
 
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
+        debug_assert!(!self.in_check::<{ Self::US }>(), "evaluate_nnue called while in check");
+
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }

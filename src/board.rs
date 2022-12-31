@@ -1427,7 +1427,7 @@ impl Board {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =
-            tt.probe::<true>(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH, false)
+            tt.probe(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH, true)
         {
             if self.principal_variation.len() < depth.try_into().unwrap()
                 && self.is_legal(tt_move)

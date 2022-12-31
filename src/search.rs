@@ -12,8 +12,8 @@ use crate::{
             self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_MATE_SCORE,
         },
         movegen::{
-            bitboards::{self, lsb},
-            movepicker::{CapturePicker, MainMovePicker, WINNING_CAPTURE_SCORE, Stage},
+            bitboards::{self, first_square},
+            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -45,6 +45,7 @@ use self::parameters::SearchParams;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 pub const ASPIRATION_WINDOW: i32 = 26;
+const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 80;
 const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
@@ -63,10 +64,6 @@ const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 243.0;
-
-const UPPER_BOUND: u8 = 1;
-const LOWER_BOUND: u8 = 2;
-const EXACT: u8 = 3;
 
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
@@ -151,7 +148,7 @@ impl Board {
         (if self.turn() == WHITE { score } else { -score }, bestmove)
     }
 
-    /// Performs the iterative deepening search. 
+    /// Performs the iterative deepening search.
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `MAIN_THREAD = true`, and the helper threads with `MAIN_THREAD = false`.
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
@@ -236,7 +233,7 @@ impl Board {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<UPPER_BOUND>(&score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::UpperBound, &score_string, d, info, tt, total_nodes);
                     }
                     asp_window.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -251,14 +248,14 @@ impl Board {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info::<LOWER_BOUND>(&score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::LowerBound, &score_string, d, info, tt, total_nodes);
                     }
                     asp_window.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info::<EXACT>(&score_string, d, info, tt, total_nodes);
+                    self.readout_info(HFlag::Exact, &score_string, d, info, tt, total_nodes);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -274,7 +271,7 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    pub fn quiescence<const NNUE: bool>(
+    pub fn quiescence<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TranspositionTableView,
         info: &mut SearchInfo,
@@ -292,27 +289,38 @@ impl Board {
             }
         }
 
-        let height: i32 = self.height().try_into().unwrap();
-        info.seldepth = info.seldepth.max(height.into());
+        let height = self.height();
+        let key = self.hashkey();
+        info.seldepth = info.seldepth.max(Depth::from(i32::try_from(height).unwrap()));
 
         // check draw
         if self.is_draw() {
             return draw_score(info.nodes);
         }
 
+        let in_check = self.in_check::<{ Self::US }>();
+
         // are we too deep?
-        if height > (MAX_DEPTH - 1).round() {
-            return self.evaluate::<NNUE>(t, info.nodes);
+        if height > (MAX_DEPTH - 1).ply_to_horizon() {
+            return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
         }
 
         // probe the TT and see if we get a cutoff.
-        if let ProbeResult::Cutoff(s) =
-            tt.probe::<false>(self.hashkey(), self.height(), alpha, beta, ZERO_PLY, false)
-        {
-            return s;
+        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let do_not_cut = PV || in_check || fifty_move_rule_near;
+        if !do_not_cut {
+            let tt_entry =
+                tt.probe(key, height, alpha, beta, ZERO_PLY, false);
+            if let ProbeResult::Cutoff(s) = tt_entry {
+                return s;
+            }
         }
 
-        let stand_pat = self.evaluate::<NNUE>(t, info.nodes);
+        let stand_pat = if in_check {
+            -INFINITY // could be being mated!
+        } else {
+            self.evaluate::<NNUE>(t, info.nodes)
+        };
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
@@ -327,9 +335,11 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
 
-        let killers = self.get_killer_set(t);
-
-        let mut move_picker = CapturePicker::new(Move::NULL, killers);
+        let mut moves_made = 0;
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3]);
+        if !in_check {
+            move_picker.skip_quiets = true;
+        }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let worst_case =
                 self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
@@ -337,6 +347,7 @@ impl Board {
             if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
+            moves_made += 1;
             info.nodes += 1;
 
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
@@ -349,7 +360,7 @@ impl Board {
                 return at_least;
             }
 
-            let score = -self.quiescence::<NNUE>(tt, info, t, -beta, -alpha);
+            let score = -self.quiescence::<PV, NNUE>(tt, info, t, -beta, -alpha);
             self.unmake_move::<NNUE>(t);
 
             if score > best_score {
@@ -364,6 +375,11 @@ impl Board {
             }
         }
 
+        if moves_made == 0 && in_check {
+            // lol
+            return mated_in(height);
+        }
+
         let flag = if best_score >= beta {
             HFlag::LowerBound
         } else if best_score > original_alpha {
@@ -372,17 +388,17 @@ impl Board {
             HFlag::UpperBound
         };
 
-        tt.store::<false>(self.hashkey(), self.height(), best_move, best_score, flag, ZERO_PLY);
+        tt.store::<false>(key, height, best_move, best_score, flag, ZERO_PLY);
 
         best_score
     }
 
     /// Get the two killer moves for this position, and the best killer for the position two ply ago.
     pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 3] {
-        let curr_killers = t.killer_move_table[self.height()];
-        let prev_killer =
-            if self.height() > 2 { t.killer_move_table[self.height() - 2][0] } else { Move::NULL };
-        [curr_killers[0], curr_killers[1], prev_killer]
+        let ply = self.height();
+        let curr = t.killer_move_table[ply];
+        let prev = if ply > 2 { t.killer_move_table[ply - 2][0] } else { Move::NULL };
+        [curr[0], curr[1], prev]
     }
 
     /// Perform alpha-beta minimax search.
@@ -402,7 +418,7 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<NNUE>(tt, info, t, alpha, beta);
+            return self.quiescence::<PV, NNUE>(tt, info, t, alpha, beta);
         }
         depth = depth.max(ZERO_PLY);
 
@@ -413,11 +429,12 @@ impl Board {
             }
         }
 
-        let height: i32 = self.height().try_into().unwrap();
+        let key = self.hashkey();
+        let height = self.height();
 
         debug_assert_eq!(height == 0, ROOT);
 
-        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(height.into()) };
+        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(i32::try_from(height).unwrap())) };
 
         if !ROOT {
             // check draw
@@ -426,7 +443,7 @@ impl Board {
             }
 
             // are we too deep?
-            if height > MAX_DEPTH.round() - 1 {
+            if height > MAX_DEPTH.ply_to_horizon() - 1 {
                 return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
             }
 
@@ -444,8 +461,16 @@ impl Board {
 
         let excluded = t.excluded[self.height()];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
-            match tt.probe::<ROOT>(self.hashkey(), self.height(), alpha, beta, depth, fifty_move_rule_near) {
+            match tt.probe(
+                key,
+                self.height(),
+                alpha,
+                beta,
+                depth,
+                do_not_cut,
+            ) {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
@@ -483,45 +508,47 @@ impl Board {
         let improving =
             !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
 
-        // beta-pruning. (reverse futility pruning)
-        if !PV
-            && !in_check
-            && excluded.is_null()
-            && depth <= get_search_params().rfp_depth
-            && static_eval - Self::rfp_margin(depth, improving) > beta
-        {
-            return static_eval;
-        }
-
-        // null-move pruning.
-        if !PV
-            && !in_check
-            && !last_move_was_null
-            && excluded.is_null()
-            && t.do_nmp
-            && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin >= beta
-            && depth >= 3.into()
-            && self.zugzwang_unlikely()
-        {
-            let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
-            self.make_nullmove();
-            let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
-            self.unmake_nullmove();
-            if info.stopped() {
-                return 0;
+        // whole-node pruning techniques:
+        if !PV && !in_check && excluded.is_null() {
+            // beta-pruning. (reverse futility pruning)
+            // if the static eval is too high, we can prune the node.
+            // this is a lot like stand_pat in quiescence search.
+            if depth <= get_search_params().rfp_depth
+                && static_eval - Self::rfp_margin(depth, improving) > beta
+            {
+                return static_eval;
             }
-            if null_score >= beta {
-                // unconditionally cutoff if we're just too shallow.
-                if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
-                    return null_score;
+
+            // null-move pruning.
+            // if we can give the opponent a free move while retaining 
+            // a score above beta, we can prune the node.
+            if !last_move_was_null
+                && depth >= Depth::new(3)
+                && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin
+                    >= beta
+                && t.do_nmp
+                && self.zugzwang_unlikely()
+            {
+                let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
+                self.make_nullmove();
+                let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                self.unmake_nullmove();
+                if info.stopped() {
+                    return 0;
                 }
-                // verify that it's *actually* fine to prune,
-                // by doing a search with NMP disabled.
-                t.do_nmp = false;
-                let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
-                t.do_nmp = true;
-                if veri_score >= beta {
-                    return null_score;
+                if null_score >= beta {
+                    // unconditionally cutoff if we're just too shallow.
+                    if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
+                        return null_score;
+                    }
+                    // verify that it's *actually* fine to prune,
+                    // by doing a search with NMP disabled.
+                    t.do_nmp = false;
+                    let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                    t.do_nmp = true;
+                    if veri_score >= beta {
+                        return null_score;
+                    }
                 }
             }
         }
@@ -634,8 +661,17 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                extension = self.singularity::<ROOT, NNUE>(tt, info, t, m, tt_value, beta, depth, &mut move_picker);
-                
+                extension = self.singularity::<ROOT, NNUE>(
+                    tt,
+                    info,
+                    t,
+                    m,
+                    tt_value,
+                    beta,
+                    depth,
+                    &mut move_picker,
+                );
+
                 if move_picker.stage == Stage::Done {
                     return std::cmp::max(tt_value - 3 * depth.round(), -MATE_SCORE);
                 }
@@ -664,7 +700,7 @@ impl Board {
                 // calculation of LMR stuff
                 let r = if extension == ZERO_PLY
                     && (is_quiet || !is_winning_capture)
-                    && depth >= 3.into()
+                    && depth >= Depth::new(3)
                     && moves_made >= (2 + usize::from(PV))
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
@@ -724,7 +760,7 @@ impl Board {
 
                         if excluded.is_null() {
                             tt.store::<ROOT>(
-                                self.hashkey(),
+                                key,
                                 self.height(),
                                 best_move,
                                 beta,
@@ -743,7 +779,8 @@ impl Board {
             if !excluded.is_null() {
                 return alpha;
             }
-            if in_check { // lol
+            if in_check {
+                // lol
                 return mated_in(height);
             }
             return draw_score(info.nodes);
@@ -753,7 +790,7 @@ impl Board {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
                 tt.store::<ROOT>(
-                    self.hashkey(),
+                    key,
                     self.height(),
                     best_move,
                     best_score,
@@ -781,7 +818,7 @@ impl Board {
 
             if excluded.is_null() {
                 tt.store::<ROOT>(
-                    self.hashkey(),
+                    key,
                     self.height(),
                     best_move,
                     best_score,
@@ -879,9 +916,9 @@ impl Board {
     }
 
     /// See if a move looks like it would initiate a winning exchange.
-    /// This function simulates flowing all moves on to the target square of 
-    /// the given move, from least to most valueable moved piece, and returns 
-    /// true if the exchange comes out with a material advantage of at 
+    /// This function simulates flowing all moves on to the target square of
+    /// the given move, from least to most valueable moved piece, and returns
+    /// true if the exchange comes out with a material advantage of at
     /// least `threshold`.
     pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
         let from = m.from();
@@ -933,7 +970,7 @@ impl Board {
                 }
             }
 
-            occupied ^= 1 << lsb(my_attackers & self.pieces.of_type(next_victim));
+            occupied ^= first_square(my_attackers & self.pieces.of_type(next_victim)).bitboard();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PAWN || next_victim == BISHOP || next_victim == QUEEN {
@@ -1029,8 +1066,9 @@ impl Board {
     }
 
     /// Print the info about an iteration of the search.
-    fn readout_info<const BOUND: u8>(
+    fn readout_info(
         &self,
+        mut bound: HFlag,
         sstring: &str,
         depth: i32,
         info: &SearchInfo,
@@ -1043,15 +1081,14 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
-        let mut bound = BOUND;
         if self.turn() == BLACK {
             bound = match bound {
-                UPPER_BOUND => LOWER_BOUND,
-                LOWER_BOUND => UPPER_BOUND,
-                _ => EXACT,
+                HFlag::UpperBound => HFlag::LowerBound,
+                HFlag::LowerBound => HFlag::UpperBound,
+                _ => HFlag::Exact,
             };
         }
-        if bound == UPPER_BOUND {
+        if bound == HFlag::UpperBound {
             print!(
                 "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
@@ -1059,7 +1096,7 @@ impl Board {
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
-        } else if bound == LOWER_BOUND {
+        } else if bound == HFlag::LowerBound {
             print!(
                 "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),

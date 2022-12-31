@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{chessmove::Move, definitions::depth::Depth};
+use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -84,7 +84,7 @@ impl Default for SearchInfo<'_> {
             stopped: &GLOBAL_STOPPED,
             failhigh: 0,
             failhigh_first: 0,
-            seldepth: 0.into(),
+            seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),

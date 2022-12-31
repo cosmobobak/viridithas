@@ -5,8 +5,7 @@ use crate::{
         colour_of, type_of, Square, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN,
         PIECE_EMPTY, QUEEN, ROOK, WB, WHITE, WK, WN, WP, WQ, WR,
     },
-    lookups::{self, piece_char},
-    macros, magic,
+    lookups::{self, piece_char}, magic,
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
@@ -73,8 +72,9 @@ impl Iterator for BitLoop {
             None
         } else {
             // faster if we have bmi (maybe)
-            // SAFETY: the trailing_zeros of a u64 cannot exceed 64
-            let lsb: u8 = unsafe { self.value.trailing_zeros().try_into().unwrap_unchecked() };
+            // SOUNDNESS: the trailing_zeros of a u64 cannot exceed 64, which is less than u8::MAX
+            #[allow(clippy::cast_possible_truncation)]
+            let lsb: u8 = self.value.trailing_zeros() as u8;
             self.value ^= 1 << lsb;
             Some(Square::new(lsb))
         }
@@ -255,8 +255,7 @@ impl BitBoard {
                 BISHOP => self.w_bishops ^= from_to_bb,
                 ROOK => self.w_rooks ^= from_to_bb,
                 QUEEN => self.w_queens ^= from_to_bb,
-                KING => self.w_king ^= from_to_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.w_king ^= from_to_bb,
             }
         } else {
             self.black ^= from_to_bb;
@@ -266,8 +265,7 @@ impl BitBoard {
                 BISHOP => self.b_bishops ^= from_to_bb,
                 ROOK => self.b_rooks ^= from_to_bb,
                 QUEEN => self.b_queens ^= from_to_bb,
-                KING => self.b_king ^= from_to_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.b_king ^= from_to_bb,
             }
         }
     }
@@ -283,8 +281,7 @@ impl BitBoard {
                 BISHOP => self.w_bishops |= sq_bb,
                 ROOK => self.w_rooks |= sq_bb,
                 QUEEN => self.w_queens |= sq_bb,
-                KING => self.w_king |= sq_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.w_king |= sq_bb,
             }
         } else {
             self.black |= sq_bb;
@@ -294,8 +291,7 @@ impl BitBoard {
                 BISHOP => self.b_bishops |= sq_bb,
                 ROOK => self.b_rooks |= sq_bb,
                 QUEEN => self.b_queens |= sq_bb,
-                KING => self.b_king |= sq_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.b_king |= sq_bb,
             }
         }
     }
@@ -311,8 +307,7 @@ impl BitBoard {
                 BISHOP => self.w_bishops &= !sq_bb,
                 ROOK => self.w_rooks &= !sq_bb,
                 QUEEN => self.w_queens &= !sq_bb,
-                KING => self.w_king &= !sq_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.w_king &= !sq_bb,
             }
         } else {
             self.black &= !sq_bb;
@@ -322,8 +317,7 @@ impl BitBoard {
                 BISHOP => self.b_bishops &= !sq_bb,
                 ROOK => self.b_rooks &= !sq_bb,
                 QUEEN => self.b_queens &= !sq_bb,
-                KING => self.b_king &= !sq_bb,
-                _ => unsafe { macros::inconceivable!() },
+                _ => self.b_king &= !sq_bb,
             }
         }
     }
@@ -345,8 +339,7 @@ impl BitBoard {
             BB => self.b_bishops,
             BR => self.b_rooks,
             BQ => self.b_queens,
-            BK => self.b_king,
-            _ => unsafe { macros::inconceivable!() },
+            _ => self.b_king,
         }
     }
 
@@ -357,8 +350,7 @@ impl BitBoard {
             BISHOP => self.w_bishops | self.b_bishops,
             ROOK => self.w_rooks | self.b_rooks,
             QUEEN => self.w_queens | self.b_queens,
-            KING => self.w_king | self.b_king,
-            _ => unsafe { macros::inconceivable!() },
+            _ => self.w_king | self.b_king,
         }
     }
 

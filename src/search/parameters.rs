@@ -6,7 +6,7 @@ use super::{
     LMTable, ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
     LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
     NMP_VERIFICATION_DEPTH, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH,
-    SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
+    SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH, RAZORING_MARGIN,
 };
 
 pub static mut SEARCH_PARAMS: SearchParams = SearchParams::default();
@@ -25,6 +25,7 @@ pub fn get_lm_table() -> &'static LMTable {
 #[derive(Clone, Debug)]
 pub struct SearchParams {
     pub aspiration_window: i32,
+    pub razoring_margin: i32,
     pub rfp_margin: i32,
     pub rfp_improving_margin: i32,
     pub nmp_improving_margin: i32,
@@ -49,6 +50,7 @@ impl SearchParams {
     pub const fn default() -> Self {
         Self {
             aspiration_window: ASPIRATION_WINDOW,
+            razoring_margin: RAZORING_MARGIN,
             rfp_margin: RFP_MARGIN,
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
             nmp_improving_margin: NMP_IMPROVING_MARGIN,
@@ -112,6 +114,7 @@ impl SearchParams {
     pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser)> {
         id_parser_gen![
             ASPIRATION_WINDOW = [self.aspiration_window],
+            RAZORING_MARGIN = [self.razoring_margin],
             RFP_MARGIN = [self.rfp_margin],
             RFP_IMPROVING_MARGIN = [self.rfp_improving_margin],
             NMP_IMPROVING_MARGIN = [self.nmp_improving_margin],
@@ -137,6 +140,8 @@ impl SearchParams {
         id_value_gen![
             ASPIRATION_WINDOW,
             [self.aspiration_window.into()],
+            RAZORING_MARGIN,
+            [self.razoring_margin.into()],
             RFP_MARGIN,
             [self.rfp_margin.into()],
             RFP_IMPROVING_MARGIN,
