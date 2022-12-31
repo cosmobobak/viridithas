@@ -357,7 +357,7 @@ mod tests {
             m: Move::new(Square::A1, Square::A2, 0, 0),
             score: 0,
             depth: ZERO_PLY.try_into().unwrap(),
-            age_and_flag: AgeAndFlag::new(0, HFlag::Exact),
+            age_and_flag: AgeAndFlag::new(63, HFlag::Exact),
         };
         let packed: u64 = entry.into();
         let unpacked: TTEntry = packed.into();
