@@ -145,7 +145,11 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         let turn = pos.turn();
         let mut score;
         if m.is_promo() {
-            score = lookups::get_mvv_lva_score(make_piece(turn, m.promotion_type()), PAWN);
+            if m.promotion_type() == QUEEN {
+                score = lookups::get_mvv_lva_score(make_piece(turn, QUEEN), PAWN);
+            } else {
+                score = -WINNING_CAPTURE_SCORE; // basically no point looking at these.
+            }
         } else if m.is_ep() {
             score = 1050; // the score for PxP in MVVLVA
         } else {
