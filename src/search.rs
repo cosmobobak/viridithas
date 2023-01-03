@@ -511,7 +511,7 @@ impl Board {
                 && depth >= Depth::new(3)
                 && static_eval + i32::from(improving) * get_search_params().nmp_improving_margin
                     >= beta
-                && t.do_nmp
+                && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
@@ -529,18 +529,14 @@ impl Board {
                     }
                     // verify that it's *actually* fine to prune,
                     // by doing a search with NMP disabled.
-                    t.do_nmp = false;
+                    // we disallow NMP for the side to move, 
+                    // and if we hit the other side deeper in the tree
+                    // with sufficient depth, we'll disallow it for them too.
+                    t.ban_nmp_for(self.turn());
                     let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
-                    t.do_nmp = true;
+                    t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
-                    }
-
-                    // mate threat extension - if doing nothing mates us,
-                    // i.e. null_score < -MINIMUM_MATE_SCORE, then we should
-                    // extend the search by one ply.
-                    if null_score < -MINIMUM_MATE_SCORE {
-                        depth += 1;
                     }
                 }
             }

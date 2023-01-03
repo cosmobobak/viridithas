@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{MAX_DEPTH, MAX_PLY},
+    definitions::{MAX_DEPTH, MAX_PLY, WHITE},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
 };
@@ -9,7 +9,7 @@ use crate::{
 pub struct ThreadData {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
-    pub do_nmp: bool,
+    pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::NNUEState>,
 
@@ -22,11 +22,14 @@ pub struct ThreadData {
 }
 
 impl ThreadData {
+    const WHITE_BANNED_NMP: u8 = 0b01;
+    const BLACK_BANNED_NMP: u8 = 0b10;
+
     pub fn new(id: usize) -> Self {
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
-            do_nmp: true,
+            banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
             nnue: Box::new(nnue::NNUEState::new()),
             history_table: HistoryTable::new(),
@@ -37,14 +40,28 @@ impl ThreadData {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn add_multipv_excluded(&mut self, m: Move) {
-        self.multi_pv_excluded.push(m);
+    pub fn ban_nmp_for(&mut self, color: u8) {
+        self.banned_nmp |= if color == WHITE {
+            Self::WHITE_BANNED_NMP
+        } else {
+            Self::BLACK_BANNED_NMP
+        };
     }
 
-    #[allow(dead_code)]
-    pub fn clear_multipv_excluded(&mut self) {
-        self.multi_pv_excluded.clear();
+    pub fn unban_nmp_for(&mut self, color: u8) {
+        self.banned_nmp &= if color == WHITE {
+            !Self::WHITE_BANNED_NMP
+        } else {
+            !Self::BLACK_BANNED_NMP
+        };
+    }
+
+    pub const fn nmp_banned_for(&self, color: u8) -> bool {
+        self.banned_nmp & if color == WHITE {
+            Self::WHITE_BANNED_NMP
+        } else {
+            Self::BLACK_BANNED_NMP
+        } != 0
     }
 
     pub fn alloc_tables(&mut self) {
