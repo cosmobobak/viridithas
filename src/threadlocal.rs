@@ -25,7 +25,7 @@ impl ThreadData {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
-    pub fn new(id: usize) -> Self {
+    pub fn new(thread_id: usize) -> Self {
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
@@ -36,7 +36,7 @@ impl ThreadData {
             followup_history: DoubleHistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
-            thread_id: id,
+            thread_id,
         }
     }
 
