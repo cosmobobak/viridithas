@@ -310,7 +310,7 @@ impl Board {
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         let tt_hit = match tt.probe(
             key,
-            self.height(),
+            height,
             alpha,
             beta,
             ZERO_PLY,
