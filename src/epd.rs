@@ -9,7 +9,7 @@ use crate::{
     definitions::MEGABYTE,
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
-    transpositiontable::TranspositionTable,
+    transpositiontable::TT,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -72,7 +72,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
 }
 
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize, threads: usize) -> i32 {
-    let mut tt = TranspositionTable::new();
+    let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
     let mut thread_data = (0..threads).map(ThreadData::new).collect::<Vec<_>>();
     let mut successes = 0;

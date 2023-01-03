@@ -19,7 +19,7 @@ use crate::{
     search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
-    transpositiontable::TranspositionTable,
+    transpositiontable::TT,
     NAME, VERSION,
 };
 
@@ -343,7 +343,7 @@ pub fn is_multipv() -> bool {
 pub fn main_loop(params: EvalParams) {
     let mut pos = Board::new();
 
-    let mut tt = TranspositionTable::new();
+    let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let mut info = SearchInfo::default();

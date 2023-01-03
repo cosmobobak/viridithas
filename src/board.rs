@@ -35,7 +35,7 @@ use crate::{
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
     threadlocal::ThreadData,
-    transpositiontable::{ProbeResult, TTHit, TranspositionTableView},
+    transpositiontable::{ProbeResult, TTHit, TTView},
     validate::{piece_type_valid, piece_valid, side_valid},
 };
 
@@ -1423,7 +1423,7 @@ impl Board {
             + self.pieces.piece_bb(PIECE_TYPE + 6).count_ones() as u8
     }
 
-    pub fn regenerate_pv_line(&mut self, depth: i32, tt: TranspositionTableView) {
+    pub fn regenerate_pv_line(&mut self, depth: i32, tt: TTView) {
         self.principal_variation.clear();
 
         while let ProbeResult::Hit(TTHit { tt_move, .. }) =

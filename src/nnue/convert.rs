@@ -13,7 +13,7 @@ use crate::{
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
-    transpositiontable::TranspositionTable,
+    transpositiontable::TT,
 };
 
 fn batch_convert<const USE_NNUE: bool>(
@@ -26,7 +26,7 @@ fn batch_convert<const USE_NNUE: bool>(
     start_time: std::time::Instant,
 ) {
     let mut pos = Board::default();
-    let mut tt = TranspositionTable::new();
+    let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let mut t = vec![ThreadData::new(0)];
     let mut local_ticker = 0;

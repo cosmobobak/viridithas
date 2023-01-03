@@ -96,13 +96,13 @@ impl From<TTEntry> for u64 {
 const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 #[derive(Debug)]
-pub struct TranspositionTable {
+pub struct TT {
     table: Vec<AtomicU64>,
     age: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TranspositionTableView<'a> {
+pub struct TTView<'a> {
     table: &'a [AtomicU64],
     age: u8,
 }
@@ -120,7 +120,7 @@ pub enum ProbeResult {
     Nothing,
 }
 
-impl TranspositionTable {
+impl TT {
     const NULL_VALUE: u64 = 0;
 
     pub const fn new() -> Self {
@@ -143,8 +143,8 @@ impl TranspositionTable {
         key as u16
     }
 
-    pub fn view(&self) -> TranspositionTableView {
-        TranspositionTableView { table: &self.table, age: self.age }
+    pub fn view(&self) -> TTView {
+        TTView { table: &self.table, age: self.age }
     }
 
     pub fn increase_age(&mut self) {
@@ -152,7 +152,7 @@ impl TranspositionTable {
     }
 }
 
-impl<'a> TranspositionTableView<'a> {
+impl<'a> TTView<'a> {
     fn wrap_key(&self, key: u64) -> usize {
         #![allow(clippy::cast_possible_truncation)]
         let key = u128::from(key);
@@ -177,7 +177,7 @@ impl<'a> TranspositionTableView<'a> {
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         let index = self.wrap_key(key);
-        let key = TranspositionTable::pack_key(key);
+        let key = TT::pack_key(key);
         let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if best_move.is_null() {
@@ -228,7 +228,7 @@ impl<'a> TranspositionTableView<'a> {
         do_not_cut: bool,
     ) -> ProbeResult {
         let index = self.wrap_key(key);
-        let key = TranspositionTable::pack_key(key);
+        let key = TT::pack_key(key);
 
         debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(alpha < beta);
@@ -368,6 +368,6 @@ mod tests {
     fn null_tt_entry_is_zero() {
         let entry = TTEntry::NULL;
         let packed: u64 = entry.into();
-        assert_eq!(packed, TranspositionTable::NULL_VALUE);
+        assert_eq!(packed, TT::NULL_VALUE);
     }
 }

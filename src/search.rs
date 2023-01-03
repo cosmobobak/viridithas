@@ -27,7 +27,7 @@ use crate::{
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TranspositionTableView},
+    transpositiontable::{HFlag, ProbeResult, TTView},
     uci,
 };
 
@@ -72,7 +72,7 @@ impl Board {
         &mut self,
         info: &mut SearchInfo,
         thread_headers: &mut [ThreadData],
-        tt: TranspositionTableView,
+        tt: TTView,
     ) -> (i32, Move) {
         info.setup_for_search();
         for td in thread_headers.iter_mut() {
@@ -154,13 +154,13 @@ impl Board {
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
         &mut self,
         info: &mut SearchInfo,
-        tt: TranspositionTableView,
+        tt: TTView,
         t: &mut ThreadData,
         mut bestmove: Move,
         mut score: i32,
         total_nodes: &AtomicU64,
     ) -> (Move, i32) {
-        let mut asp_window = AspirationWindow::infinite();
+        let mut aw = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
@@ -181,14 +181,7 @@ impl Board {
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
-                let v = self.root_search::<USE_NNUE>(
-                    tt,
-                    info,
-                    t,
-                    depth,
-                    asp_window.alpha,
-                    asp_window.beta,
-                );
+                let v = self.root_search::<USE_NNUE>(tt, info, t, depth, aw.alpha, aw.beta);
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
@@ -207,7 +200,7 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                let score_string = uci::format_score(v, self.turn());
+                let sstr = uci::format_score(v, self.turn());
 
                 score = v;
                 self.regenerate_pv_line(d, tt);
@@ -227,44 +220,44 @@ impl Board {
                     }
                 }
 
-                if asp_window.alpha != -INFINITY && v <= asp_window.alpha {
+                if aw.alpha != -INFINITY && v <= aw.alpha {
                     // fail low
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::UpperBound, &score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::UpperBound, &sstr, d, info, tt, total_nodes);
                     }
-                    asp_window.widen_down();
+                    aw.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }
                     continue;
                 }
-                if asp_window.beta != INFINITY && v >= asp_window.beta {
+                if aw.beta != INFINITY && v >= aw.beta {
                     // fail high
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::LowerBound, &score_string, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::LowerBound, &sstr, d, info, tt, total_nodes);
                     }
-                    asp_window.widen_up();
+                    aw.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(HFlag::Exact, &score_string, d, info, tt, total_nodes);
+                    self.readout_info(HFlag::Exact, &sstr, d, info, tt, total_nodes);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
             }
 
             if d > 4 {
-                asp_window = AspirationWindow::from_last_score(score);
+                aw = AspirationWindow::from_last_score(score);
             } else {
-                asp_window = AspirationWindow::infinite();
+                aw = AspirationWindow::infinite();
             }
         }
         (bestmove, score)
@@ -273,7 +266,7 @@ impl Board {
     /// Perform a tactical resolution search, searching only captures and promotions.
     pub fn quiescence<const PV: bool, const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut alpha: i32,
@@ -309,8 +302,7 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         if !do_not_cut {
-            let tt_entry =
-                tt.probe(key, height, alpha, beta, ZERO_PLY, false);
+            let tt_entry = tt.probe(key, height, alpha, beta, ZERO_PLY, false);
             if let ProbeResult::Cutoff(s) = tt_entry {
                 return s;
             }
@@ -405,7 +397,7 @@ impl Board {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn alpha_beta<const PV: bool, const ROOT: bool, const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut depth: Depth,
@@ -434,7 +426,11 @@ impl Board {
 
         debug_assert_eq!(height == 0, ROOT);
 
-        info.seldepth = if ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(i32::try_from(height).unwrap())) };
+        info.seldepth = if ROOT {
+            ZERO_PLY
+        } else {
+            info.seldepth.max(Depth::from(i32::try_from(height).unwrap()))
+        };
 
         if !ROOT {
             // check draw
@@ -463,14 +459,7 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
-            match tt.probe(
-                key,
-                height,
-                alpha,
-                beta,
-                depth,
-                do_not_cut,
-            ) {
+            match tt.probe(key, height, alpha, beta, depth, do_not_cut) {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
@@ -503,8 +492,7 @@ impl Board {
         // but we should be less agressive with alpha-reductions (eval is too low).
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
-        let improving =
-            !in_check && height >= 2 && static_eval >= t.evals[height - 2];
+        let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
@@ -520,7 +508,7 @@ impl Board {
             let last_move_was_null = self.last_move_was_nullmove();
 
             // null-move pruning.
-            // if we can give the opponent a free move while retaining 
+            // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
             if !last_move_was_null
                 && depth >= Depth::new(3)
@@ -531,7 +519,8 @@ impl Board {
             {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
                 self.make_nullmove();
-                let mut null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                let mut null_score =
+                    -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -793,14 +782,7 @@ impl Board {
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node
             if excluded.is_null() {
-                tt.store::<ROOT>(
-                    key,
-                    height,
-                    best_move,
-                    best_score,
-                    HFlag::UpperBound,
-                    depth,
-                );
+                tt.store::<ROOT>(key, height, best_move, best_score, HFlag::UpperBound, depth);
             }
         } else {
             // we raised alpha, and didn't raise beta
@@ -821,14 +803,7 @@ impl Board {
             }
 
             if excluded.is_null() {
-                tt.store::<ROOT>(
-                    key,
-                    height,
-                    best_move,
-                    best_score,
-                    HFlag::Exact,
-                    depth,
-                );
+                tt.store::<ROOT>(key, height, best_move, best_score, HFlag::Exact, depth);
             }
         }
 
@@ -857,7 +832,7 @@ impl Board {
     #[allow(clippy::too_many_arguments)]
     pub fn singularity<const ROOT: bool, const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         m: Move,
@@ -866,21 +841,20 @@ impl Board {
         depth: Depth,
         mp: &mut MainMovePicker<ROOT>,
     ) -> Depth {
-        let reduced_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
-        let reduced_depth = (depth - 1) / 2;
+        let r_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
+        let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move::<NNUE>(t);
         t.excluded[self.height()] = m;
-        let value =
-            self.zw_search::<NNUE>(tt, info, t, reduced_depth, reduced_beta - 1, reduced_beta);
+        let value = self.zw_search::<NNUE>(tt, info, t, r_depth, r_beta - 1, r_beta);
         t.excluded[self.height()] = Move::NULL;
-        if value >= reduced_beta && reduced_beta >= beta {
+        if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
         } else {
             // re-make the singular move.
             self.make_move::<NNUE>(m, t);
         }
-        if value < reduced_beta {
+        if value < r_beta {
             ONE_PLY // singular extension
         } else if tt_value >= beta {
             -ONE_PLY // somewhat multi-cut-y
@@ -894,29 +868,22 @@ impl Board {
     /// by a margin of at least `MARGIN`. (typically ~200cp).
     pub fn is_forced<const MARGIN: i32>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         m: Move,
         value: i32,
         depth: Depth,
     ) -> bool {
-        let reduced_beta = (value - MARGIN).max(-MATE_SCORE);
-        let reduced_depth = (depth - 1) / 2;
+        let r_beta = (value - MARGIN).max(-MATE_SCORE);
+        let r_depth = (depth - 1) / 2;
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value = self.alpha_beta::<false, true, true>(
-            tt,
-            info,
-            t,
-            reduced_depth,
-            reduced_beta - 1,
-            reduced_beta,
-        );
+        let value = self.alpha_beta::<false, true, true>(tt, info, t, r_depth, r_beta - 1, r_beta);
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
-        value < reduced_beta
+        value < r_beta
     }
 
     /// See if a move looks like it would initiate a winning exchange.
@@ -1011,7 +978,7 @@ impl Board {
     /// root alpha-beta search.
     pub fn root_search<const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
@@ -1024,7 +991,7 @@ impl Board {
     /// zero-window alpha-beta search.
     pub fn zw_search<const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
@@ -1037,7 +1004,7 @@ impl Board {
     /// full-window alpha-beta search.
     pub fn fullwindow_search<const PV: bool, const NNUE: bool>(
         &mut self,
-        tt: TranspositionTableView,
+        tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
@@ -1051,7 +1018,7 @@ impl Board {
     /// and the movepicker.
     fn initial_move_and_score(
         &self,
-        tt: TranspositionTableView,
+        tt: TTView,
         thread_data: &ThreadData,
         legal_moves: &[Move],
     ) -> (Move, i32) {
@@ -1076,7 +1043,7 @@ impl Board {
         sstring: &str,
         depth: i32,
         info: &SearchInfo,
-        tt: TranspositionTableView,
+        tt: TTView,
         total_nodes: u64,
     ) {
         #![allow(

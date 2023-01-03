@@ -14,7 +14,7 @@ use crate::{
     definitions::{INFINITY, MEGABYTE, WHITE},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::TranspositionTable,
+    transpositiontable::TT,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -35,7 +35,7 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) -> f64 {
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
-    let mut tt = TranspositionTable::new();
+    let mut tt = TT::new();
     tt.resize(MEGABYTE);
     let mut t = ThreadData::new(0);
     t.alloc_tables();
