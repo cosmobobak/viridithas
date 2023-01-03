@@ -459,13 +459,13 @@ impl Board {
 
         debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
 
-        let excluded = t.excluded[self.height()];
+        let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let do_not_cut = ROOT || PV || in_check || fifty_move_rule_near;
+        let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
             match tt.probe(
                 key,
-                self.height(),
+                height,
                 alpha,
                 beta,
                 depth,
@@ -488,17 +488,15 @@ impl Board {
         // just enforcing immutability here.
         let depth = depth;
 
-        let last_move_was_null = self.last_move_was_nullmove();
-
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
-            t.evals[self.height()] // if we're in a singular-verification search, we already have the static eval.
+            t.evals[height] // if we're in a singular-verification search, we already have the static eval.
         } else {
             self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };
 
-        t.evals[self.height()] = static_eval;
+        t.evals[height] = static_eval;
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
@@ -506,7 +504,7 @@ impl Board {
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
         let improving =
-            !in_check && self.height() >= 2 && static_eval >= t.evals[self.height() - 2];
+            !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
@@ -518,6 +516,8 @@ impl Board {
             {
                 return static_eval;
             }
+
+            let last_move_was_null = self.last_move_was_nullmove();
 
             // null-move pruning.
             // if we can give the opponent a free move while retaining 
@@ -531,12 +531,16 @@ impl Board {
             {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
                 self.make_nullmove();
-                let null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                let mut null_score = -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
                 }
                 if null_score >= beta {
+                    // it's unsound to return game-theoretic truth here:
+                    if null_score >= MINIMUM_MATE_SCORE {
+                        null_score = beta;
+                    }
                     // unconditionally cutoff if we're just too shallow.
                     if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
                         return null_score;
@@ -761,7 +765,7 @@ impl Board {
                         if excluded.is_null() {
                             tt.store::<ROOT>(
                                 key,
-                                self.height(),
+                                height,
                                 best_move,
                                 beta,
                                 HFlag::LowerBound,
@@ -791,7 +795,7 @@ impl Board {
             if excluded.is_null() {
                 tt.store::<ROOT>(
                     key,
-                    self.height(),
+                    height,
                     best_move,
                     best_score,
                     HFlag::UpperBound,
@@ -819,7 +823,7 @@ impl Board {
             if excluded.is_null() {
                 tt.store::<ROOT>(
                     key,
-                    self.height(),
+                    height,
                     best_move,
                     best_score,
                     HFlag::Exact,

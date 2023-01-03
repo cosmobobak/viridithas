@@ -26,3 +26,4 @@ MINOR:
 - record percentage of position where TT move saves movegen - similar for captures when we get staged movegen.
 - multipv. put the moves in ThreadData and use ROOT.
 - tune time-management multipliers at long TC.
+- Rust features to watch for: full const generics, const floating-point maths.
