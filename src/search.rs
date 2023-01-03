@@ -308,13 +308,18 @@ impl Board {
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
-        if !do_not_cut {
-            let tt_entry =
-                tt.probe(key, height, alpha, beta, ZERO_PLY, false);
-            if let ProbeResult::Cutoff(s) = tt_entry {
-                return s;
-            }
-        }
+        let tt_hit = match tt.probe(
+            key,
+            self.height(),
+            alpha,
+            beta,
+            ZERO_PLY,
+            do_not_cut,
+        ) {
+            ProbeResult::Cutoff(s) => return s,
+            ProbeResult::Hit(tt_hit) => Some(tt_hit),
+            ProbeResult::Nothing => None,
+        };
 
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
@@ -336,7 +341,9 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3]);
+
+        let tt_move = tt_hit.map_or(Move::NULL, |tt_hit| tt_hit.tt_move);
+        let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 3]);
         if !in_check {
             move_picker.skip_quiets = true;
         }
