@@ -474,9 +474,6 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search.
         };
 
-        // just enforcing immutability here.
-        let depth = depth;
-
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
@@ -519,17 +516,13 @@ impl Board {
             {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
                 self.make_nullmove();
-                let mut null_score =
+                let null_score =
                     -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
                 }
                 if null_score >= beta {
-                    // it's unsound to return game-theoretic truth here:
-                    if null_score >= MINIMUM_MATE_SCORE {
-                        null_score = beta;
-                    }
                     // unconditionally cutoff if we're just too shallow.
                     if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
                         return null_score;
@@ -541,6 +534,13 @@ impl Board {
                     t.do_nmp = true;
                     if veri_score >= beta {
                         return null_score;
+                    }
+
+                    // mate threat extension - if doing nothing mates us,
+                    // i.e. null_score < -MINIMUM_MATE_SCORE, then we should
+                    // extend the search by one ply.
+                    if null_score < -MINIMUM_MATE_SCORE {
+                        depth += 1;
                     }
                 }
             }
