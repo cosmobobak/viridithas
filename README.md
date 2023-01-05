@@ -1,6 +1,6 @@
 <div align="center">
 
-  ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](neuron_0.png)
+  ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](all_neurons.gif)
   
   [![Build][build-badge]][build-link]
   [![License][license-badge]][license-link]
