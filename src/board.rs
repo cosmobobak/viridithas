@@ -23,20 +23,20 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        colour_of, make_piece, type_of, Colour, File,
+        File,
         Rank::{self, RANK_3, RANK_6},
-        Square, Undo, BB, BISHOP, BK, BKCA, BLACK, BN, BP, BQ, BQCA, BR, INFINITY, KING, KNIGHT,
-        MAX_DEPTH, PAWN, PIECE_EMPTY, ROOK, WB, WHITE, WK, WKCA, WN, WP, WQ, WQCA, WR,
+        Square, Undo, BKCA, BQCA, INFINITY,
+        MAX_DEPTH, WKCA, WQCA,
     },
     errors::{FenParseError, MoveParseError},
-    lookups::{piece_char, PIECE_BIG, PIECE_MAJ, PROMO_CHAR_LOOKUP},
+    lookups::{PIECE_BIG, PIECE_MAJ},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
     threadlocal::ThreadData,
     transpositiontable::{ProbeResult, TTHit, TTView},
-    validate::{piece_type_valid, piece_valid, side_valid},
+    piece::{Piece, Colour, PieceType},
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -57,14 +57,14 @@ fn get_san_regex() -> &'static Regex {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Board {
     /// The bitboards of all the pieces on the board.
     pub(crate) pieces: BitBoard,
     /// An array to accelerate piece_at().
-    piece_array: [u8; 64],
+    piece_array: [Piece; 64],
     /// The side to move.
-    side: u8,
+    side: Colour,
     /// The en passant square.
     ep_sq: Square,
     /// The castling permissions.
@@ -111,21 +111,6 @@ impl Debug for Board {
     }
 }
 
-impl PartialEq for Board {
-    fn eq(&self, other: &Self) -> bool {
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
-        #[cfg(debug_assertions)]
-        other.check_validity().unwrap();
-        self.pieces == other.pieces
-            && self.side == other.side
-            && self.ep_sq == other.ep_sq
-            && self.fifty_move_counter == other.fifty_move_counter
-            && self.castle_perm == other.castle_perm
-            && self.key == other.key
-    }
-}
-
 impl Board {
     pub const STARTING_FEN: &'static str =
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -133,8 +118,8 @@ impl Board {
     pub fn new() -> Self {
         let mut out = Self {
             pieces: BitBoard::NULL,
-            piece_array: [0; 64],
-            side: 0,
+            piece_array: [Piece::EMPTY; 64],
+            side: Colour::WHITE,
             ep_sq: Square::NO_SQUARE,
             fifty_move_counter: 0,
             height: 0,
@@ -171,18 +156,18 @@ impl Board {
     //     self.pieces.occupied().count_ones() as u8
     // }
 
-    pub fn king_sq(&self, side: u8) -> Square {
-        debug_assert!(side == WHITE || side == BLACK);
+    pub fn king_sq(&self, side: Colour) -> Square {
+        debug_assert!(side == Colour::WHITE || side == Colour::BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);
         debug_assert_eq!(self.pieces.king::<false>().count_ones(), 1);
         let sq = match side {
-            WHITE => self.pieces.king::<true>().first_square(),
-            BLACK => self.pieces.king::<false>().first_square(),
+            Colour::WHITE => self.pieces.king::<true>().first_square(),
+            Colour::BLACK => self.pieces.king::<false>().first_square(),
             _ => unsafe { macros::inconceivable!() },
         };
         debug_assert!(sq < Square::NO_SQUARE);
-        debug_assert_eq!(colour_of(self.piece_at(sq)), side);
-        debug_assert_eq!(type_of(self.piece_at(sq)), KING);
+        debug_assert_eq!(self.piece_at(sq).colour(), side);
+        debug_assert_eq!(self.piece_at(sq).piece_type(), PieceType::KING);
         sq
     }
 
@@ -191,9 +176,9 @@ impl Board {
     pub fn in_check<const SIDE: u8>(&self) -> bool {
         if SIDE == Self::US {
             let king_sq = self.king_sq(self.side);
-            self.sq_attacked(king_sq, self.side ^ 1)
+            self.sq_attacked(king_sq, self.side.flip())
         } else {
-            let king_sq = self.king_sq(self.side ^ 1);
+            let king_sq = self.king_sq(self.side.flip());
             self.sq_attacked(king_sq, self.side)
         }
     }
@@ -201,15 +186,15 @@ impl Board {
     #[allow(dead_code)]
     pub fn maybe_gives_check(&self, mov: Move) -> bool {
         let piece = self.piece_at(mov.from());
-        let piece_type = type_of(piece);
+        let piece_type = piece.piece_type();
         let stm = self.side;
 
-        let opponent_king = self.king_sq(stm ^ 1);
+        let opponent_king = self.king_sq(stm.flip());
         let blockers = self.pieces.occupied() ^ mov.bitboard();
 
         // direct check:
-        let attacks_from_dest = if piece_type == PAWN {
-            if stm == WHITE {
+        let attacks_from_dest = if piece_type == PieceType::PAWN {
+            if stm == Colour::WHITE {
                 pawn_attacks::<true>(mov.to().bitboard())
             } else {
                 pawn_attacks::<false>(mov.to().bitboard())
@@ -222,14 +207,14 @@ impl Board {
         }
 
         // discovered check:
-        let ortho = bitboards::attacks::<ROOK>(opponent_king, blockers);
-        let diag = bitboards::attacks::<BISHOP>(opponent_king, blockers);
-        let our_orthos = if stm == WHITE {
+        let ortho = bitboards::attacks::<{ PieceType::ROOK.inner() }>(opponent_king, blockers);
+        let diag = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(opponent_king, blockers);
+        let our_orthos = if stm == Colour::WHITE {
             self.pieces.rookqueen::<true>()
         } else {
             self.pieces.rookqueen::<false>()
         };
-        let our_diags = if stm == WHITE {
+        let our_diags = if stm == Colour::WHITE {
             self.pieces.bishopqueen::<true>()
         } else {
             self.pieces.bishopqueen::<false>()
@@ -252,7 +237,7 @@ impl Board {
         self.height
     }
 
-    pub const fn turn(&self) -> u8 {
+    pub const fn turn(&self) -> Colour {
         self.side
     }
 
@@ -261,13 +246,12 @@ impl Board {
         let mut key = 0;
         for (sq, &piece) in self.piece_array.iter().enumerate() {
             let sq = Square::new(sq.try_into().unwrap());
-            if piece != PIECE_EMPTY {
-                debug_assert!((WP..=BK).contains(&piece));
+            if !piece.is_empty() {
                 hash_piece(&mut key, piece, sq);
             }
         }
 
-        if self.side == WHITE {
+        if self.side == Colour::WHITE {
             hash_side(&mut key);
         }
 
@@ -286,12 +270,12 @@ impl Board {
 
     pub fn reset(&mut self) {
         self.pieces.reset();
-        self.piece_array = [0; 64];
+        self.piece_array = [Piece::EMPTY; 64];
         self.big_piece_counts.fill(0);
         self.major_piece_counts.fill(0);
         self.minor_piece_counts.fill(0);
         self.material.fill(S(0, 0));
-        self.side = Colour::White as u8;
+        self.side = Colour::WHITE;
         self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
         self.height = 0;
@@ -324,20 +308,20 @@ impl Board {
             let mut count = 1;
             let piece;
             match c {
-                b'P' => piece = WP,
-                b'R' => piece = WR,
-                b'N' => piece = WN,
-                b'B' => piece = WB,
-                b'Q' => piece = WQ,
-                b'K' => piece = WK,
-                b'p' => piece = BP,
-                b'r' => piece = BR,
-                b'n' => piece = BN,
-                b'b' => piece = BB,
-                b'q' => piece = BQ,
-                b'k' => piece = BK,
+                b'P' => piece = Piece::WP,
+                b'R' => piece = Piece::WR,
+                b'N' => piece = Piece::WN,
+                b'B' => piece = Piece::WB,
+                b'Q' => piece = Piece::WQ,
+                b'K' => piece = Piece::WK,
+                b'p' => piece = Piece::BP,
+                b'r' => piece = Piece::BR,
+                b'n' => piece = Piece::BN,
+                b'b' => piece = Piece::BB,
+                b'q' => piece = Piece::BQ,
+                b'k' => piece = Piece::BK,
                 b'1'..=b'8' => {
-                    piece = PIECE_EMPTY;
+                    piece = Piece::EMPTY;
                     count = c - b'0';
                 }
                 b'/' => {
@@ -355,7 +339,7 @@ impl Board {
 
             for _ in 0..count {
                 let sq = Square::from_rank_file(rank, file);
-                if piece != PIECE_EMPTY {
+                if piece != Piece::EMPTY {
                     // this is only ever run once, as count is 1 for non-empty pieces.
                     self.add_piece(sq, piece);
                 }
@@ -380,14 +364,14 @@ impl Board {
         self.set_from_fen(Self::STARTING_FEN)
             .expect("for some reason, STARTING_FEN is now broken.");
         debug_assert_eq!(
-            self.material[WHITE as usize].0, self.material[BLACK as usize].0,
+            self.material[Colour::WHITE.index()].0, self.material[Colour::BLACK.index()].0,
             "mg_material is not equal, white: {}, black: {}",
-            self.material[WHITE as usize].0, self.material[BLACK as usize].0
+            self.material[Colour::WHITE.index()].0, self.material[Colour::BLACK.index()].0
         );
         debug_assert_eq!(
-            self.material[WHITE as usize].1, self.material[BLACK as usize].1,
+            self.material[Colour::WHITE.index()].1, self.material[Colour::BLACK.index()].1,
             "eg_material is not equal, white: {}, black: {}",
-            self.material[WHITE as usize].1, self.material[BLACK as usize].1
+            self.material[Colour::WHITE.index()].1, self.material[Colour::BLACK.index()].1
         );
         debug_assert_eq!(
             self.pst_vals.0, 0,
@@ -416,14 +400,14 @@ impl Board {
             for file in 0..8 {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                if piece == PIECE_EMPTY {
+                if piece == Piece::EMPTY {
                     counter += 1;
                 } else {
                     if counter != 0 {
                         write!(fen, "{counter}").unwrap();
                     }
                     counter = 0;
-                    fen.push(piece_char(piece).unwrap());
+                    fen.push(piece.char().unwrap());
                 }
             }
             if counter != 0 {
@@ -436,7 +420,7 @@ impl Board {
         }
 
         fen.push(' ');
-        fen.push(if self.side == WHITE { 'w' } else { 'b' });
+        fen.push(if self.side == Colour::WHITE { 'w' } else { 'b' });
         fen.push(' ');
         if self.castle_perm == 0 {
             fen.push('-');
@@ -461,15 +445,15 @@ impl Board {
 
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
-            None => return Err("FEN string is invalid, expected side part.".into()),
-            Some([b'w']) => WHITE,
-            Some([b'b']) => BLACK,
+            Some([b'w']) => Colour::WHITE,
+            Some([b'b']) => Colour::BLACK,
             Some(other) => {
                 return Err(format!(
                     "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
                     std::str::from_utf8(other).unwrap_or("<invalid utf8>")
                 ))
             }
+            None => return Err("FEN string is invalid, expected side part.".into()),
         };
         Ok(())
     }
@@ -547,7 +531,7 @@ impl Board {
                         "FEN string is invalid, expected fullmove number part to be a number"
                     })?;
                 self.ply = (fullmove_number - 1) * 2;
-                if self.side == BLACK {
+                if self.side == Colour::BLACK {
                     self.ply += 1;
                 }
             }
@@ -557,8 +541,8 @@ impl Board {
     }
 
     /// Determines if `sq` is attacked by `side`
-    pub fn sq_attacked(&self, sq: Square, side: u8) -> bool {
-        if side == WHITE {
+    pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
+        if side == Colour::WHITE {
             self.sq_attacked_by::<true>(sq)
         } else {
             self.sq_attacked_by::<false>(sq)
@@ -585,25 +569,25 @@ impl Board {
         }
 
         // knights
-        let knight_attacks_from_this_square = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
+        let knight_attacks_from_this_square = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
         if our_knights & knight_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // bishops, queens
-        let diag_attacks_from_this_square = bitboards::attacks::<BISHOP>(sq, blockers);
+        let diag_attacks_from_this_square = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
         if our_diags & diag_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square = bitboards::attacks::<ROOK>(sq, blockers);
+        let ortho_attacks_from_this_square = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
         if our_orthos & ortho_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square = bitboards::attacks::<KING>(sq, BB_NONE);
+        let king_attacks_from_this_square = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
         if our_king & king_attacks_from_this_square != BB_NONE {
             return true;
         }
@@ -623,26 +607,26 @@ impl Board {
 
         let moved_piece = self.piece_at(from);
         let captured_piece = self.piece_at(to);
-        let is_capture = captured_piece != PIECE_EMPTY;
+        let is_capture = captured_piece != Piece::EMPTY;
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
-        if moved_piece == PIECE_EMPTY {
+        if moved_piece == Piece::EMPTY {
             return false;
         }
 
-        if colour_of(moved_piece) != self.side {
+        if moved_piece.colour() != self.side {
             return false;
         }
 
-        if is_capture && colour_of(captured_piece) == self.side {
+        if is_capture && captured_piece.colour() == self.side {
             return false;
         }
 
-        if type_of(moved_piece) != PAWN && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
+        if moved_piece.piece_type() != PieceType::PAWN && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
             return false;
         }
 
-        if type_of(moved_piece) != KING && m.is_castle() {
+        if moved_piece.piece_type() != PieceType::KING && m.is_castle() {
             return false;
         }
 
@@ -654,7 +638,7 @@ impl Board {
             return self.is_pseudo_legal_castling(to);
         }
 
-        if type_of(moved_piece) == PAWN {
+        if moved_piece.piece_type() == PieceType::PAWN {
             let should_be_promoting = to > Square::H7 || to < Square::A2;
             if should_be_promoting && !m.is_promo() {
                 return false;
@@ -663,20 +647,20 @@ impl Board {
                 return to == self.ep_sq;
             } else if is_pawn_double_push {
                 let one_forward = from.pawn_push(self.side);
-                return self.piece_at(one_forward) == PIECE_EMPTY
+                return self.piece_at(one_forward) == Piece::EMPTY
                     && to == one_forward.pawn_push(self.side);
             } else if !is_capture {
-                return to == from.pawn_push(self.side) && captured_piece == PIECE_EMPTY;
+                return to == from.pawn_push(self.side) && captured_piece == Piece::EMPTY;
             }
             // pawn capture
-            if self.side == WHITE {
+            if self.side == Colour::WHITE {
                 return pawn_attacks::<true>(from.bitboard()) & to.bitboard() != 0;
             }
             return pawn_attacks::<false>(from.bitboard()) & to.bitboard() != 0;
         }
 
         to.bitboard()
-            & bitboards::attacks_by_type(type_of(moved_piece), from, self.pieces.occupied())
+            & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())
             != BB_NONE
     }
 
@@ -699,10 +683,10 @@ impl Board {
         // - the king ends up in check (not checked here)
 
         let (target_castling_perm, occ_mask, from_sq, next_sq) = match (self.side, to) {
-            (WHITE, Square::C1) => (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1),
-            (WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
-            (BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
-            (BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
+            (Colour::WHITE, Square::C1) => (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1),
+            (Colour::WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
+            (Colour::BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
+            (Colour::BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
             (_, _) => return false,
         };
         if target_castling_perm == 0 {
@@ -711,10 +695,10 @@ impl Board {
         if occupied & occ_mask != 0 {
             return false;
         }
-        if self.sq_attacked(from_sq, 1 ^ self.side) {
+        if self.sq_attacked(from_sq, self.side.flip()) {
             return false;
         }
-        if self.sq_attacked(next_sq, 1 ^ self.side) {
+        if self.sq_attacked(next_sq, self.side.flip()) {
             return false;
         }
 
@@ -748,56 +732,53 @@ impl Board {
         debug_assert!(sq.on_board());
         let piece = self.piece_at(sq);
         debug_assert!(
-            piece_valid(piece),
-            "Invalid piece at {}: {}, board {}, last move was {}",
+            !piece.is_empty(),
+            "Invalid piece at {}: {:?}, board {}, last move was {}",
             sq,
             piece,
             self.fen(),
             self.history.last().map_or("None".to_string(), |h| h.m.to_string())
         );
-        let piece_type = type_of(piece);
-        debug_assert!(piece_type_valid(piece_type));
 
         self.pieces.clear_piece_at(sq, piece);
 
-        let colour = colour_of(piece);
+        let colour = piece.colour();
 
         hash_piece(&mut self.key, piece, sq);
 
-        *self.piece_at_mut(sq) = PIECE_EMPTY;
-        self.material[colour as usize] -= get_eval_params().piece_values[piece as usize];
+        *self.piece_at_mut(sq) = Piece::EMPTY;
+        self.material[colour.index()] -= get_eval_params().piece_values[piece.index()];
         self.pst_vals -= pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
-        if PIECE_BIG[piece as usize] {
-            self.big_piece_counts[colour as usize] -= 1;
-            if PIECE_MAJ[piece as usize] {
-                self.major_piece_counts[colour as usize] -= 1;
+        if PIECE_BIG[piece.index()] {
+            self.big_piece_counts[colour.index()] -= 1;
+            if PIECE_MAJ[piece.index()] {
+                self.major_piece_counts[colour.index()] -= 1;
             } else {
-                self.minor_piece_counts[colour as usize] -= 1;
+                self.minor_piece_counts[colour.index()] -= 1;
             }
         }
     }
 
-    fn add_piece(&mut self, sq: Square, piece: u8) {
-        debug_assert!(piece_valid(piece));
+    fn add_piece(&mut self, sq: Square, piece: Piece) {
         debug_assert!(sq.on_board());
 
         self.pieces.set_piece_at(sq, piece);
 
-        let colour = colour_of(piece);
+        let colour = piece.colour();
 
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.material[colour as usize] += get_eval_params().piece_values[piece as usize];
+        self.material[colour.index()] += get_eval_params().piece_values[piece.index()];
         self.pst_vals += pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
-        if PIECE_BIG[piece as usize] {
-            self.big_piece_counts[colour as usize] += 1;
-            if PIECE_MAJ[piece as usize] {
-                self.major_piece_counts[colour as usize] += 1;
+        if PIECE_BIG[piece.index()] {
+            self.big_piece_counts[colour.index()] += 1;
+            if PIECE_MAJ[piece.index()] {
+                self.major_piece_counts[colour.index()] += 1;
             } else {
-                self.minor_piece_counts[colour as usize] += 1;
+                self.minor_piece_counts[colour.index()] += 1;
             }
         }
     }
@@ -814,20 +795,20 @@ impl Board {
         hash_piece(&mut self.key, piece_moved, from);
         hash_piece(&mut self.key, piece_moved, to);
 
-        *self.piece_at_mut(from) = PIECE_EMPTY;
+        *self.piece_at_mut(from) = Piece::EMPTY;
         *self.piece_at_mut(to) = piece_moved;
         self.pst_vals -= pst_value(piece_moved, from, &get_eval_params().piece_square_tables);
         self.pst_vals += pst_value(piece_moved, to, &get_eval_params().piece_square_tables);
     }
 
     /// Gets the piece that will be moved by the given move.
-    pub fn moved_piece(&self, m: Move) -> u8 {
+    pub fn moved_piece(&self, m: Move) -> Piece {
         debug_assert!(m.from().on_board());
         unsafe { *self.piece_array.get_unchecked(m.from().index()) }
     }
 
     /// Gets the piece that will be captured by the given move.
-    pub fn captured_piece(&self, m: Move) -> u8 {
+    pub fn captured_piece(&self, m: Move) -> Piece {
         debug_assert!(m.to().on_board());
         unsafe { *self.piece_array.get_unchecked(m.to().index()) }
     }
@@ -836,7 +817,7 @@ impl Board {
     pub fn is_capture(&self, m: Move) -> bool {
         debug_assert!(m.from().on_board());
         debug_assert!(m.to().on_board());
-        self.captured_piece(m) != PIECE_EMPTY
+        self.captured_piece(m) != Piece::EMPTY
     }
 
     /// Determines whether this move would be a double pawn push in the current position.
@@ -852,7 +833,7 @@ impl Board {
             return false;
         }
         let piece_moved = self.moved_piece(m);
-        type_of(piece_moved) == PAWN
+        piece_moved.piece_type() == PieceType::PAWN
     }
 
     /// Determines whether this move would be tactical in the current position.
@@ -861,13 +842,13 @@ impl Board {
     }
 
     /// Gets the piece at the given square.
-    pub fn piece_at(&self, sq: Square) -> u8 {
+    pub fn piece_at(&self, sq: Square) -> Piece {
         debug_assert!(sq.on_board());
         unsafe { *self.piece_array.get_unchecked(sq.index()) }
     }
 
     /// Gets a mutable reference to the piece at the given square.
-    pub fn piece_at_mut(&mut self, sq: Square) -> &mut u8 {
+    pub fn piece_at_mut(&mut self, sq: Square) -> &mut Piece {
         debug_assert!(sq.on_board());
         unsafe { self.piece_array.get_unchecked_mut(sq.index()) }
     }
@@ -885,14 +866,11 @@ impl Board {
 
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
-        debug_assert!(side_valid(side));
-        debug_assert!(piece_valid(piece), "piece: {piece:?}");
-        debug_assert!(captured == PIECE_EMPTY || piece_valid(captured), "captured: {captured:?}");
 
         let saved_key = self.key;
 
         if m.is_ep() {
-            if side == WHITE {
+            if side == Colour::WHITE {
                 self.clear_piece(to.sub(8));
             } else {
                 self.clear_piece(to.add(8));
@@ -934,8 +912,7 @@ impl Board {
 
         self.fifty_move_counter += 1;
 
-        if captured != PIECE_EMPTY {
-            debug_assert!(piece_valid(captured));
+        if captured != Piece::EMPTY {
             self.clear_piece(to);
             self.fifty_move_counter = 0;
         }
@@ -943,10 +920,10 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        if piece == WP || piece == BP {
+        if piece.piece_type() == PieceType::PAWN {
             self.fifty_move_counter = 0;
             if self.is_double_pawn_push(m) {
-                if side == WHITE {
+                if side == Colour::WHITE {
                     self.ep_sq = from.add(8);
                     debug_assert!(self.ep_sq.rank() == RANK_3);
                 } else {
@@ -958,16 +935,15 @@ impl Board {
         }
 
         if m.is_promo() {
-            let promo = make_piece(side, m.promotion_type());
-            debug_assert!(piece_valid(promo));
-            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
+            let promo = Piece::new(side, m.promotion_type());
+            debug_assert!(promo.piece_type().legal_promo());
             self.clear_piece(from);
             self.add_piece(to, promo);
         } else {
             self.move_piece(from, to);
         }
 
-        self.side ^= 1;
+        self.side = self.side.flip();
         hash_side(&mut self.key);
 
         #[cfg(debug_assertions)]
@@ -1013,14 +989,14 @@ impl Board {
         // reinsert the castling rights
         hash_castling(&mut self.key, self.castle_perm);
 
-        self.side ^= 1;
+        self.side = self.side.flip();
         hash_side(&mut self.key);
 
         if m.is_ep() {
-            if self.side == WHITE {
-                self.add_piece(to.sub(8), BP);
+            if self.side == Colour::WHITE {
+                self.add_piece(to.sub(8), Piece::BP);
             } else {
-                self.add_piece(to.add(8), WP);
+                self.add_piece(to.add(8), Piece::WP);
             }
         } else if m.is_castle() {
             match to {
@@ -1035,18 +1011,16 @@ impl Board {
         }
 
         if m.is_promo() {
-            let promotion = make_piece(self.side, m.promotion_type());
-            debug_assert!(piece_valid(promotion));
-            debug_assert!(promotion != WP && promotion != BP && promotion != WK && promotion != BK);
-            debug_assert_eq!(colour_of(promotion), colour_of(self.piece_at(to)));
+            let promotion = Piece::new(self.side, m.promotion_type());
+            debug_assert!(promotion.piece_type().legal_promo());
+            debug_assert_eq!(promotion.colour(), self.piece_at(to).colour());
             self.clear_piece(to);
-            self.add_piece(from, if self.side == WHITE { WP } else { BP });
+            self.add_piece(from, if self.side == Colour::WHITE { Piece::WP } else { Piece::BP });
         } else {
             self.move_piece(to, from);
         }
 
-        if capture != PIECE_EMPTY {
-            debug_assert!(piece_valid(capture));
+        if capture != Piece::EMPTY {
             self.add_piece(to, capture);
         }
 
@@ -1067,7 +1041,7 @@ impl Board {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
-            capture: PIECE_EMPTY,
+            capture: Piece::EMPTY,
         });
 
         if self.ep_sq != Square::NO_SQUARE {
@@ -1076,7 +1050,7 @@ impl Board {
 
         self.ep_sq = Square::NO_SQUARE;
 
-        self.side ^= 1;
+        self.side = self.side.flip();
         self.ply += 1;
         self.height += 1;
         hash_side(&mut self.key);
@@ -1101,7 +1075,7 @@ impl Board {
         let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture } =
             self.history.pop().expect("No move to unmake!");
 
-        debug_assert_eq!(capture, PIECE_EMPTY);
+        debug_assert_eq!(capture, Piece::EMPTY);
 
         self.castle_perm = castle_perm;
         self.ep_sq = ep_square;
@@ -1111,7 +1085,7 @@ impl Board {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        self.side ^= 1;
+        self.side = self.side.flip();
         hash_side(&mut self.key);
 
         #[cfg(debug_assertions)]
@@ -1119,7 +1093,7 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
-        let piece = type_of(self.moved_piece(m));
+        let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let capture = self.captured_piece(m);
         let res = self.make_move_hce(m);
@@ -1130,21 +1104,21 @@ impl Board {
         let to = m.to();
         t.nnue.push_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, 1 ^ colour, ep_sq);
+            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match to {
                 Square::C1 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A1, Square::D1);
+                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::A1, Square::D1);
                 }
                 Square::C8 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::A8, Square::D8);
+                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::A8, Square::D8);
                 }
                 Square::G1 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H1, Square::F1);
+                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::H1, Square::F1);
                 }
                 Square::G8 => {
-                    t.nnue.efficiently_update_from_move(ROOK, colour, Square::H8, Square::F8);
+                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::H8, Square::F8);
                 }
                 _ => {
                     panic!("Invalid castle move");
@@ -1152,17 +1126,17 @@ impl Board {
             }
         }
 
-        if capture != PIECE_EMPTY {
-            t.nnue.efficiently_update_manual::<DEACTIVATE>(type_of(capture), 1 ^ colour, to);
+        if capture != Piece::EMPTY {
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(capture.piece_type(), colour.flip(), to);
         }
 
         if m.is_promo() {
             let promo = m.promotion_type();
-            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
-            t.nnue.efficiently_update_manual::<DEACTIVATE>(PAWN, colour, from);
+            debug_assert!(promo.legal_promo());
+            t.nnue.efficiently_update_manual::<DEACTIVATE>(PieceType::PAWN, colour, from);
             t.nnue.efficiently_update_manual::<ACTIVATE>(promo, colour, to);
         } else {
-            t.nnue.efficiently_update_from_move(piece, colour, from, to);
+            t.nnue.efficiently_update_from_move(piece_type, colour, from, to);
         }
 
         true
@@ -1171,20 +1145,20 @@ impl Board {
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
         let m = self.history.last().unwrap().m;
         self.unmake_move_hce();
-        let piece = type_of(self.moved_piece(m));
+        let piece = self.moved_piece(m).piece_type();
         let from = m.from();
         let to = m.to();
         let colour = self.turn();
         t.nnue.pop_acc();
         if m.is_ep() {
-            let ep_sq = if colour == WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, 1 ^ colour, ep_sq);
+            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match to {
-                Square::C1 => t.nnue.update_pov_move(ROOK, colour, Square::D1, Square::A1),
-                Square::G8 => t.nnue.update_pov_move(ROOK, colour, Square::F8, Square::H8),
-                Square::C8 => t.nnue.update_pov_move(ROOK, colour, Square::D8, Square::A8),
-                Square::G1 => t.nnue.update_pov_move(ROOK, colour, Square::F1, Square::H1),
+                Square::C1 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D1, Square::A1),
+                Square::G8 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F8, Square::H8),
+                Square::C8 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D8, Square::A8),
+                Square::G1 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F1, Square::H1),
                 _ => {
                     panic!("Invalid castle move");
                 }
@@ -1192,16 +1166,15 @@ impl Board {
         }
         if m.is_promo() {
             let promo = m.promotion_type();
-            debug_assert!(piece_valid(promo));
-            debug_assert!(promo != WP && promo != BP && promo != WK && promo != BK);
+            debug_assert!(promo.legal_promo());
             t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
-            t.nnue.update_pov_manual::<ACTIVATE>(PAWN, colour, from);
+            t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour, from);
         } else {
             t.nnue.update_pov_move(piece, colour, to, from);
         }
         let capture = self.captured_piece(m);
-        if capture != PIECE_EMPTY {
-            t.nnue.update_pov_manual::<ACTIVATE>(type_of(capture), 1 ^ colour, to);
+        if capture != Piece::EMPTY {
+            t.nnue.update_pov_manual::<ACTIVATE>(capture.piece_type(), colour.flip(), to);
         }
     }
 
@@ -1268,7 +1241,7 @@ impl Board {
                 m.from() == from
                     && m.to() == to
                     && (san_bytes.len() == 4
-                        || PROMO_CHAR_LOOKUP[m.safe_promotion_type() as usize] == san_bytes[4])
+                        || m.safe_promotion_type().promo_char().unwrap() == san_bytes[4] as char)
             })
             .ok_or_else(|| IllegalMove(uci.to_string()));
 
@@ -1319,7 +1292,7 @@ impl Board {
             b"pnbrqk".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap()
         });
         if promo.is_some() {
-            let legal_mask = if self.side == WHITE { BB_RANK_7 } else { BB_RANK_2 };
+            let legal_mask = if self.side == Colour::WHITE { BB_RANK_7 } else { BB_RANK_2 };
             from_bb &= legal_mask;
         }
 
@@ -1336,11 +1309,10 @@ impl Board {
         }
 
         if let Some(piece) = reg_match.get(1) {
-            let piece = piece.as_str().as_bytes()[0];
-            let piece: u8 =
-                b".PNBRQK".iter().position(|&c| c == piece).unwrap().try_into().unwrap();
-            let whitepbb = self.pieces.piece_bb(piece);
-            let blackpbb = self.pieces.piece_bb(piece + 6);
+            let piece_char = piece.as_str().as_bytes()[0];
+            let piece_type = PieceType::from_symbol(piece_char).unwrap();
+            let whitepbb = self.pieces.piece_bb(Piece::new(Colour::WHITE, piece_type));
+            let blackpbb = self.pieces.piece_bb(Piece::new(Colour::BLACK, piece_type));
             from_bb &= whitepbb | blackpbb;
         } else {
             from_bb &= self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
@@ -1363,11 +1335,11 @@ impl Board {
             }
             self.unmake_move_hce();
             let promotion = if m.is_promo() {
-                make_piece(self.side, m.safe_promotion_type())
+                Piece::new(self.side, m.safe_promotion_type())
             } else {
-                PIECE_EMPTY
+                Piece::EMPTY
             };
-            if promotion as usize != promo.unwrap_or(0) {
+            if promotion.index() != promo.unwrap_or(0) {
                 continue;
             }
             let m_from_bb = m.from().bitboard();
@@ -1403,24 +1375,13 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub const fn num(&self, piece: u8) -> u8 {
+    pub const fn num(&self, piece: Piece) -> u8 {
         #![allow(clippy::cast_possible_truncation)]
         self.pieces.piece_bb(piece).count_ones() as u8
     }
 
-    pub const fn num_pt(&self, pt: u8) -> u8 {
-        self.num(pt) + self.num(pt + 6)
-    }
-
-    pub const fn num_ct<const PIECE: u8>(&self) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.pieces.piece_bb(PIECE).count_ones() as u8
-    }
-
-    pub const fn num_pt_ct<const PIECE_TYPE: u8>(&self) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.pieces.piece_bb(PIECE_TYPE).count_ones() as u8
-            + self.pieces.piece_bb(PIECE_TYPE + 6).count_ones() as u8
+    pub const fn num_pt(&self, pt: PieceType) -> u8 {
+        self.num(Piece::new(Colour::WHITE, pt)) + self.num(Piece::new(Colour::BLACK, pt))
     }
 
     pub fn regenerate_pv_line(&mut self, depth: i32, tt: TTView) {
@@ -1513,7 +1474,7 @@ impl Display for Board {
             for file in (File::FILE_A)..=(File::FILE_H) {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                write!(f, "{} ", piece_char(piece).unwrap())?;
+                write!(f, "{} ", piece.char().unwrap())?;
             }
             writeln!(f)?;
         }
@@ -1565,17 +1526,16 @@ mod tests {
     #[test]
     fn test_num_pt() {
         use super::Board;
-        use crate::definitions::{
-            BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN, QUEEN, ROOK, WB, WK, WN, WP, WQ, WR,
-        };
+        use crate::piece::Piece;
+        use crate::piece::PieceType;
         let board =
             Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1")
                 .unwrap();
 
-        for ((p1, p2), pt) in [WP, WN, WB, WR, WQ, WK]
+        for ((p1, p2), pt) in Piece::all().take(6)
             .into_iter()
-            .zip([BP, BN, BB, BR, BQ, BK])
-            .zip([PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING])
+            .zip(Piece::all().skip(6).take(6))
+            .zip(PieceType::all())
         {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }

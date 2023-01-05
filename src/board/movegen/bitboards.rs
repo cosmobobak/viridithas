@@ -1,11 +1,8 @@
 use std::fmt::Display;
 
 use crate::{
-    definitions::{
-        colour_of, type_of, Square, BB, BISHOP, BK, BN, BP, BQ, BR, KING, KNIGHT, PAWN,
-        PIECE_EMPTY, QUEEN, ROOK, WB, WHITE, WK, WN, WP, WQ, WR,
-    },
-    lookups::{self, piece_char}, magic,
+    definitions::Square,
+    lookups, magic, piece::{PieceType, Piece, Colour},
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
@@ -154,8 +151,8 @@ impl BitBoard {
         if IS_WHITE { self.w_pawns } else { self.b_pawns }
     }
 
-    pub const fn occupied_co(&self, colour: u8) -> u64 {
-        if colour == WHITE {
+    pub fn occupied_co(&self, colour: Colour) -> u64 {
+        if colour == Colour::WHITE {
             self.white
         } else {
             self.black
@@ -245,78 +242,78 @@ impl BitBoard {
         *self = Self::NULL;
     }
 
-    pub fn move_piece(&mut self, from_to_bb: u64, piece: u8) {
+    pub fn move_piece(&mut self, from_to_bb: u64, piece: Piece) {
         self.occupied ^= from_to_bb;
-        if colour_of(piece) == WHITE {
+        if piece.colour() == Colour::WHITE {
             self.white ^= from_to_bb;
-            match type_of(piece) {
-                PAWN => self.w_pawns ^= from_to_bb,
-                KNIGHT => self.w_knights ^= from_to_bb,
-                BISHOP => self.w_bishops ^= from_to_bb,
-                ROOK => self.w_rooks ^= from_to_bb,
-                QUEEN => self.w_queens ^= from_to_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.w_pawns ^= from_to_bb,
+                PieceType::KNIGHT => self.w_knights ^= from_to_bb,
+                PieceType::BISHOP => self.w_bishops ^= from_to_bb,
+                PieceType::ROOK => self.w_rooks ^= from_to_bb,
+                PieceType::QUEEN => self.w_queens ^= from_to_bb,
                 _ => self.w_king ^= from_to_bb,
             }
         } else {
             self.black ^= from_to_bb;
-            match type_of(piece) {
-                PAWN => self.b_pawns ^= from_to_bb,
-                KNIGHT => self.b_knights ^= from_to_bb,
-                BISHOP => self.b_bishops ^= from_to_bb,
-                ROOK => self.b_rooks ^= from_to_bb,
-                QUEEN => self.b_queens ^= from_to_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.b_pawns ^= from_to_bb,
+                PieceType::KNIGHT => self.b_knights ^= from_to_bb,
+                PieceType::BISHOP => self.b_bishops ^= from_to_bb,
+                PieceType::ROOK => self.b_rooks ^= from_to_bb,
+                PieceType::QUEEN => self.b_queens ^= from_to_bb,
                 _ => self.b_king ^= from_to_bb,
             }
         }
     }
 
-    pub fn set_piece_at(&mut self, sq: Square, piece: u8) {
+    pub fn set_piece_at(&mut self, sq: Square, piece: Piece) {
         let sq_bb = sq.bitboard();
         self.occupied |= sq_bb;
-        if colour_of(piece) == WHITE {
+        if piece.colour() == Colour::WHITE {
             self.white |= sq_bb;
-            match type_of(piece) {
-                PAWN => self.w_pawns |= sq_bb,
-                KNIGHT => self.w_knights |= sq_bb,
-                BISHOP => self.w_bishops |= sq_bb,
-                ROOK => self.w_rooks |= sq_bb,
-                QUEEN => self.w_queens |= sq_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.w_pawns |= sq_bb,
+                PieceType::KNIGHT => self.w_knights |= sq_bb,
+                PieceType::BISHOP => self.w_bishops |= sq_bb,
+                PieceType::ROOK => self.w_rooks |= sq_bb,
+                PieceType::QUEEN => self.w_queens |= sq_bb,
                 _ => self.w_king |= sq_bb,
             }
         } else {
             self.black |= sq_bb;
-            match type_of(piece) {
-                PAWN => self.b_pawns |= sq_bb,
-                KNIGHT => self.b_knights |= sq_bb,
-                BISHOP => self.b_bishops |= sq_bb,
-                ROOK => self.b_rooks |= sq_bb,
-                QUEEN => self.b_queens |= sq_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.b_pawns |= sq_bb,
+                PieceType::KNIGHT => self.b_knights |= sq_bb,
+                PieceType::BISHOP => self.b_bishops |= sq_bb,
+                PieceType::ROOK => self.b_rooks |= sq_bb,
+                PieceType::QUEEN => self.b_queens |= sq_bb,
                 _ => self.b_king |= sq_bb,
             }
         }
     }
 
-    pub fn clear_piece_at(&mut self, sq: Square, piece: u8) {
+    pub fn clear_piece_at(&mut self, sq: Square, piece: Piece) {
         let sq_bb = sq.bitboard();
         self.occupied &= !sq_bb;
-        if colour_of(piece) == WHITE {
+        if piece.colour() == Colour::WHITE {
             self.white &= !sq_bb;
-            match type_of(piece) {
-                PAWN => self.w_pawns &= !sq_bb,
-                KNIGHT => self.w_knights &= !sq_bb,
-                BISHOP => self.w_bishops &= !sq_bb,
-                ROOK => self.w_rooks &= !sq_bb,
-                QUEEN => self.w_queens &= !sq_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.w_pawns &= !sq_bb,
+                PieceType::KNIGHT => self.w_knights &= !sq_bb,
+                PieceType::BISHOP => self.w_bishops &= !sq_bb,
+                PieceType::ROOK => self.w_rooks &= !sq_bb,
+                PieceType::QUEEN => self.w_queens &= !sq_bb,
                 _ => self.w_king &= !sq_bb,
             }
         } else {
             self.black &= !sq_bb;
-            match type_of(piece) {
-                PAWN => self.b_pawns &= !sq_bb,
-                KNIGHT => self.b_knights &= !sq_bb,
-                BISHOP => self.b_bishops &= !sq_bb,
-                ROOK => self.b_rooks &= !sq_bb,
-                QUEEN => self.b_queens &= !sq_bb,
+            match piece.piece_type() {
+                PieceType::PAWN => self.b_pawns &= !sq_bb,
+                PieceType::KNIGHT => self.b_knights &= !sq_bb,
+                PieceType::BISHOP => self.b_bishops &= !sq_bb,
+                PieceType::ROOK => self.b_rooks &= !sq_bb,
+                PieceType::QUEEN => self.b_queens &= !sq_bb,
                 _ => self.b_king &= !sq_bb,
             }
         }
@@ -326,30 +323,30 @@ impl BitBoard {
         self.w_pawns | self.b_pawns != 0
     }
 
-    pub const fn piece_bb(&self, piece: u8) -> u64 {
+    pub const fn piece_bb(&self, piece: Piece) -> u64 {
         match piece {
-            WP => self.w_pawns,
-            WN => self.w_knights,
-            WB => self.w_bishops,
-            WR => self.w_rooks,
-            WQ => self.w_queens,
-            WK => self.w_king,
-            BP => self.b_pawns,
-            BN => self.b_knights,
-            BB => self.b_bishops,
-            BR => self.b_rooks,
-            BQ => self.b_queens,
+            Piece::WP => self.w_pawns,
+            Piece::WN => self.w_knights,
+            Piece::WB => self.w_bishops,
+            Piece::WR => self.w_rooks,
+            Piece::WQ => self.w_queens,
+            Piece::WK => self.w_king,
+            Piece::BP => self.b_pawns,
+            Piece::BN => self.b_knights,
+            Piece::BB => self.b_bishops,
+            Piece::BR => self.b_rooks,
+            Piece::BQ => self.b_queens,
             _ => self.b_king,
         }
     }
 
-    pub const fn of_type(&self, piece_type: u8) -> u64 {
+    pub const fn of_type(&self, piece_type: PieceType) -> u64 {
         match piece_type {
-            PAWN => self.w_pawns | self.b_pawns,
-            KNIGHT => self.w_knights | self.b_knights,
-            BISHOP => self.w_bishops | self.b_bishops,
-            ROOK => self.w_rooks | self.b_rooks,
-            QUEEN => self.w_queens | self.b_queens,
+            PieceType::PAWN => self.w_pawns | self.b_pawns,
+            PieceType::KNIGHT => self.w_knights | self.b_knights,
+            PieceType::BISHOP => self.w_bishops | self.b_bishops,
+            PieceType::ROOK => self.w_rooks | self.b_rooks,
+            PieceType::QUEEN => self.w_queens | self.b_queens,
             _ => self.w_king | self.b_king,
         }
     }
@@ -366,12 +363,12 @@ impl BitBoard {
         let sq_bb = sq.bitboard();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.b_pawns;
         let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.w_pawns;
-        let knight_attackers = attacks::<KNIGHT>(sq, BB_NONE) & (self.w_knights | self.b_knights);
-        let diag_attackers = attacks::<BISHOP>(sq, occupied)
+        let knight_attackers = attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE) & (self.w_knights | self.b_knights);
+        let diag_attackers = attacks::<{ PieceType::BISHOP.inner() }>(sq, occupied)
             & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
-        let orth_attackers = attacks::<ROOK>(sq, occupied)
+        let orth_attackers = attacks::<{ PieceType::ROOK.inner() }>(sq, occupied)
             & (self.w_rooks | self.b_rooks | self.w_queens | self.b_queens);
-        let king_attackers = attacks::<KING>(sq, BB_NONE) & (self.w_king | self.b_king);
+        let king_attackers = attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE) & (self.w_king | self.b_king);
         black_pawn_attackers
             | white_pawn_attackers
             | knight_attackers
@@ -380,34 +377,34 @@ impl BitBoard {
             | king_attackers
     }
 
-    const fn piece_at(&self, sq: Square) -> u8 {
+    const fn piece_at(&self, sq: Square) -> Piece {
         let sq_bb = sq.bitboard();
         if self.w_pawns & sq_bb != 0 {
-            WP
+            Piece::WP
         } else if self.w_knights & sq_bb != 0 {
-            WN
+            Piece::WN
         } else if self.w_bishops & sq_bb != 0 {
-            WB
+            Piece::WB
         } else if self.w_rooks & sq_bb != 0 {
-            WR
+            Piece::WR
         } else if self.w_queens & sq_bb != 0 {
-            WQ
+            Piece::WQ
         } else if self.w_king & sq_bb != 0 {
-            WK
+            Piece::WK
         } else if self.b_pawns & sq_bb != 0 {
-            BP
+            Piece::BP
         } else if self.b_knights & sq_bb != 0 {
-            BN
+            Piece::BN
         } else if self.b_bishops & sq_bb != 0 {
-            BB
+            Piece::BB
         } else if self.b_rooks & sq_bb != 0 {
-            BR
+            Piece::BR
         } else if self.b_queens & sq_bb != 0 {
-            BQ
+            Piece::BQ
         } else if self.b_king & sq_bb != 0 {
-            BK
+            Piece::BK
         } else {
-            PIECE_EMPTY
+            Piece::EMPTY
         }
     }
 
@@ -482,25 +479,25 @@ impl BitShiftExt for u64 {
 }
 
 pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: u64) -> u64 {
-    debug_assert!(PIECE_TYPE != PAWN);
-    match PIECE_TYPE {
-        BISHOP => magic::get_bishop_attacks(sq, blockers),
-        ROOK => magic::get_rook_attacks(sq, blockers),
-        QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
-        KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
-        KING => lookups::get_jumping_piece_attack::<KING>(sq),
+    debug_assert!(PieceType::new(PIECE_TYPE) != PieceType::PAWN);
+    match PieceType::new(PIECE_TYPE) {
+        PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
+        PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
+        PieceType::QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
+        PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
         _ => panic!("Invalid piece type"),
     }
 }
 
-pub fn attacks_by_type(pt: u8, sq: Square, blockers: u64) -> u64 {
+pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: u64) -> u64 {
     match pt {
-        BISHOP => magic::get_bishop_attacks(sq, blockers),
-        ROOK => magic::get_rook_attacks(sq, blockers),
-        QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
-        KNIGHT => lookups::get_jumping_piece_attack::<KNIGHT>(sq),
-        KING => lookups::get_jumping_piece_attack::<KING>(sq),
-        _ => panic!("Invalid piece type: {pt}"),
+        PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
+        PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
+        PieceType::QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
+        PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
+        _ => panic!("Invalid piece type: {pt:?}"),
     }
 }
 
@@ -534,7 +531,7 @@ impl Display for BitBoard {
             for file in 0..=7 {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                let piece_char = piece_char(piece);
+                let piece_char = piece.char();
                 if let Some(symbol) = piece_char {
                     write!(f, " {symbol}")?;
                 } else {

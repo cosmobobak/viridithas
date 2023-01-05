@@ -9,13 +9,10 @@ use score::S;
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{
-        type_of, Square, BB, BISHOP, BLACK, BN, BP, BQ, BR, KING, KNIGHT, MAX_DEPTH, PAWN, QUEEN,
-        ROOK, WB, WHITE, WN, WP, WQ, WR,
-    },
+    definitions::{Square, MAX_DEPTH},
     lookups::{init_eval_masks, init_passed_isolated_bb},
     search::draw_score,
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, piece::{PieceType, Colour, Piece},
 };
 
 use super::movegen::{
@@ -29,7 +26,7 @@ pub const BISHOP_VALUE: S = S(437, 491);
 pub const ROOK_VALUE: S = S(604, 805);
 pub const QUEEN_VALUE: S = S(1369, 1274);
 
-pub fn get_see_value(piece: u8) -> i32 {
+pub fn get_see_value(piece: PieceType) -> i32 {
     static SEE_PIECE_VALUES: [i32; 7] = [
         0,
         PAWN_VALUE.value(128),
@@ -39,7 +36,7 @@ pub fn get_see_value(piece: u8) -> i32 {
         QUEEN_VALUE.value(128),
         0,
     ];
-    SEE_PIECE_VALUES[piece as usize]
+    SEE_PIECE_VALUES[piece.index()]
 }
 
 /// The value of checkmate.
@@ -169,7 +166,7 @@ impl Board {
     /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate_classical(&self, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+            return if self.side == Colour::WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
         let material = self.material();
@@ -182,7 +179,7 @@ impl Board {
         let (mobility, threats, danger_info) = self.mobility_threats_kingdanger();
         let king_danger = Self::score_kingdanger(danger_info);
         let tempo =
-            if self.turn() == WHITE { get_eval_params().tempo } else { -get_eval_params().tempo };
+            if self.turn() == Colour::WHITE { get_eval_params().tempo } else { -get_eval_params().tempo };
 
         let mut score = material;
         score += pst;
@@ -199,7 +196,7 @@ impl Board {
 
         let score = self.preprocess_drawish_scores(score, nodes);
 
-        if self.side == WHITE {
+        if self.side == Colour::WHITE {
             score
         } else {
             -score
@@ -207,7 +204,7 @@ impl Board {
     }
 
     fn material(&self) -> S {
-        self.material[WHITE as usize] - self.material[BLACK as usize]
+        self.material[Colour::WHITE.index()] - self.material[Colour::BLACK.index()]
     }
 
     fn simple_evaluation(&self) -> i32 {
@@ -218,12 +215,12 @@ impl Board {
         debug_assert!(!self.in_check::<{ Self::US }>(), "evaluate_nnue called while in check");
 
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+            return if self.side == Colour::WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
 
         let v = t.nnue.evaluate(self.side);
         let simple = self.simple_evaluation();
-        let simple = if self.side == WHITE { simple } else { -simple };
+        let simple = if self.side == Colour::WHITE { simple } else { -simple };
         let complexity = (v - simple).abs();
 
         let v = v + complexity / 20;
@@ -241,23 +238,23 @@ impl Board {
 
     const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
         if IS_WHITE {
-            if self.major_piece_counts[WHITE as usize] != 0 {
+            if self.major_piece_counts[Colour::WHITE.index()] != 0 {
                 return false;
             }
-            if self.minor_piece_counts[WHITE as usize] > 1 {
+            if self.minor_piece_counts[Colour::WHITE.index()] > 1 {
                 return false;
             }
-            if self.num_ct::<WP>() != 0 {
+            if self.num(Piece::WP) != 0 {
                 return false;
             }
         } else {
-            if self.major_piece_counts[BLACK as usize] != 0 {
+            if self.major_piece_counts[Colour::BLACK.index()] != 0 {
                 return false;
             }
-            if self.minor_piece_counts[BLACK as usize] > 1 {
+            if self.minor_piece_counts[Colour::BLACK.index()] > 1 {
                 return false;
             }
-            if self.num_ct::<BP>() != 0 {
+            if self.num(Piece::BP) != 0 {
                 return false;
             }
         }
@@ -266,37 +263,37 @@ impl Board {
     }
 
     const fn is_material_draw(&self) -> bool {
-        if self.num_pt_ct::<ROOK>() == 0 && self.num_pt_ct::<QUEEN>() == 0 {
-            if self.num_pt_ct::<BISHOP>() == 0 {
-                if self.num_ct::<WN>() < 3 && self.num_ct::<BN>() < 3 {
+        if self.num_pt(PieceType::ROOK) == 0 && self.num_pt(PieceType::QUEEN) == 0 {
+            if self.num_pt(PieceType::BISHOP) == 0 {
+                if self.num(Piece::WN) < 3 && self.num(Piece::BN) < 3 {
                     return true;
                 }
-            } else if (self.num_pt_ct::<KNIGHT>() == 0
-                && self.num_ct::<WB>().abs_diff(self.num_ct::<BB>()) < 2)
-                || (self.num_ct::<WB>() + self.num_ct::<WN>() == 1
-                    && self.num_ct::<BB>() + self.num_ct::<BN>() == 1)
+            } else if (self.num_pt(PieceType::KNIGHT) == 0
+                && self.num(Piece::WB).abs_diff(self.num(Piece::BB)) < 2)
+                || (self.num(Piece::WB) + self.num(Piece::WN) == 1
+                    && self.num(Piece::BB) + self.num(Piece::BN) == 1)
             {
                 return true;
             }
-        } else if self.num_pt_ct::<QUEEN>() == 0 {
-            if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 1 {
-                if (self.num_ct::<WN>() + self.num_ct::<WB>()) < 2
-                    && (self.num_ct::<BN>() + self.num_ct::<BB>()) < 2
+        } else if self.num_pt(PieceType::QUEEN) == 0 {
+            if self.num(Piece::WR) == 1 && self.num(Piece::BR) == 1 {
+                if (self.num(Piece::WN) + self.num(Piece::WB)) < 2
+                    && (self.num(Piece::BN) + self.num(Piece::BB)) < 2
                 {
                     return true;
                 }
-            } else if self.num_ct::<WR>() == 1 && self.num_ct::<BR>() == 0 {
-                if (self.num_ct::<WN>() + self.num_ct::<WB>()) == 0
-                    && ((self.num_ct::<BN>() + self.num_ct::<BB>()) == 1
-                        || (self.num_ct::<BN>() + self.num_ct::<BB>()) == 2)
+            } else if self.num(Piece::WR) == 1 && self.num(Piece::BR) == 0 {
+                if (self.num(Piece::WN) + self.num(Piece::WB)) == 0
+                    && ((self.num(Piece::BN) + self.num(Piece::BB)) == 1
+                        || (self.num(Piece::BN) + self.num(Piece::BB)) == 2)
                 {
                     return true;
                 }
-            } else if self.num_ct::<WR>() == 0
-                && self.num_ct::<BR>() == 1
-                && (self.num_ct::<BN>() + self.num_ct::<BB>()) == 0
-                && ((self.num_ct::<WN>() + self.num_ct::<WB>()) == 1
-                    || (self.num_ct::<WN>() + self.num_ct::<WB>()) == 2)
+            } else if self.num(Piece::WR) == 0
+                && self.num(Piece::BR) == 1
+                && (self.num(Piece::BN) + self.num(Piece::BB)) == 0
+                && ((self.num(Piece::WN) + self.num(Piece::WB)) == 1
+                    || (self.num(Piece::WN) + self.num(Piece::WB)) == 2)
             {
                 return true;
             }
@@ -318,7 +315,7 @@ impl Board {
 
     pub const fn zugzwang_unlikely(&self) -> bool {
         const ENDGAME_PHASE: i32 = game_phase(3, 0, 0, 2, 0);
-        self.big_piece_counts[self.side as usize] > 0 && self.phase() < ENDGAME_PHASE
+        self.big_piece_counts[self.side.index()] > 0 && self.phase() < ENDGAME_PHASE
     }
 
     fn bishop_pair_term(&self) -> S {
@@ -382,7 +379,7 @@ impl Board {
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
         let pawns =
-            if SIDE == WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
+            if Colour::new(SIDE) == Colour::WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
         (mask & pawns) == 0
     }
 
@@ -392,7 +389,7 @@ impl Board {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score += get_eval_params().rook_open_file_bonus;
-            } else if self.is_file_halfopen::<WHITE>(file) {
+            } else if self.is_file_halfopen::<{ Colour::WHITE.inner() }>(file) {
                 score += get_eval_params().rook_half_open_file_bonus;
             }
         }
@@ -400,7 +397,7 @@ impl Board {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score -= get_eval_params().rook_open_file_bonus;
-            } else if self.is_file_halfopen::<BLACK>(file) {
+            } else if self.is_file_halfopen::<{ Colour::BLACK.inner() }>(file) {
                 score -= get_eval_params().rook_half_open_file_bonus;
             }
         }
@@ -413,7 +410,7 @@ impl Board {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score += get_eval_params().queen_open_file_bonus;
-            } else if self.is_file_halfopen::<WHITE>(file) {
+            } else if self.is_file_halfopen::<{ Colour::WHITE.inner() }>(file) {
                 score += get_eval_params().queen_half_open_file_bonus;
             }
         }
@@ -421,7 +418,7 @@ impl Board {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score -= get_eval_params().queen_open_file_bonus;
-            } else if self.is_file_halfopen::<BLACK>(file) {
+            } else if self.is_file_halfopen::<{ Colour::BLACK.inner() }>(file) {
                 score -= get_eval_params().queen_half_open_file_bonus;
             }
         }
@@ -431,11 +428,11 @@ impl Board {
     /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
     pub const fn phase(&self) -> i32 {
         // todo: this can be incrementally updated.
-        let pawns = self.num(WP) + self.num(BP);
-        let knights = self.num(WN) + self.num(BN);
-        let bishops = self.num(WB) + self.num(BB);
-        let rooks = self.num(WR) + self.num(BR);
-        let queens = self.num(WQ) + self.num(BQ);
+        let pawns = self.num(Piece::WP) + self.num(Piece::BP);
+        let knights = self.num(Piece::WN) + self.num(Piece::BN);
+        let bishops = self.num(Piece::WB) + self.num(Piece::BB);
+        let rooks = self.num(Piece::WR) + self.num(Piece::BR);
+        let queens = self.num(Piece::WQ) + self.num(Piece::BQ);
         game_phase(pawns, knights, bishops, rooks, queens)
     }
 
@@ -447,8 +444,8 @@ impl Board {
         let ptmul = &get_eval_params().king_danger_piece_weights;
         let mut mob_score = S(0, 0);
         let mut threat_score = S(0, 0);
-        let white_king_area = king_area::<true>(self.king_sq(WHITE));
-        let black_king_area = king_area::<false>(self.king_sq(BLACK));
+        let white_king_area = king_area::<true>(self.king_sq(Colour::WHITE));
+        let black_king_area = king_area::<false>(self.king_sq(Colour::BLACK));
         let white_pawn_attacks = self.pieces.pawn_attacks::<true>();
         let black_pawn_attacks = self.pieces.pawn_attacks::<false>();
         let white_minor = self.pieces.minors::<true>();
@@ -467,7 +464,7 @@ impl Board {
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
         for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
-            let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, BB_NONE);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -485,7 +482,7 @@ impl Board {
             mob_score += get_eval_params().knight_mobility_bonus[attacks];
         }
         for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
-            let attacks = attacks::<KNIGHT>(knight_sq, BB_NONE);
+            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, BB_NONE);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -503,7 +500,7 @@ impl Board {
             mob_score -= get_eval_params().knight_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
-            let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -521,7 +518,7 @@ impl Board {
             mob_score += get_eval_params().bishop_mobility_bonus[attacks];
         }
         for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
-            let attacks = attacks::<BISHOP>(bishop_sq, blockers);
+            let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -539,7 +536,7 @@ impl Board {
             mob_score -= get_eval_params().bishop_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
-            let attacks = attacks::<ROOK>(rook_sq, blockers);
+            let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -553,7 +550,7 @@ impl Board {
             mob_score += get_eval_params().rook_mobility_bonus[attacks];
         }
         for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
-            let attacks = attacks::<ROOK>(rook_sq, blockers);
+            let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -567,7 +564,7 @@ impl Board {
             mob_score -= get_eval_params().rook_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
-            let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -581,7 +578,7 @@ impl Board {
             mob_score += get_eval_params().queen_mobility_bonus[attacks];
         }
         for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
-            let attacks = attacks::<QUEEN>(queen_sq, blockers);
+            let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -611,14 +608,14 @@ impl Board {
 
     pub fn estimated_see(&self, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = get_see_value(type_of(self.piece_at(m.to())));
+        let mut value = get_see_value(self.piece_at(m.to()).piece_type());
 
         if m.is_promo() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += get_see_value(m.promotion_type()) - get_see_value(PAWN);
+            value += get_see_value(m.promotion_type()) - get_see_value(PieceType::PAWN);
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = get_see_value(PAWN);
+            value = get_see_value(PieceType::PAWN);
         }
 
         value
@@ -626,7 +623,7 @@ impl Board {
 }
 
 pub fn king_area<const IS_WHITE: bool>(king_sq: Square) -> u64 {
-    let king_attacks = attacks::<KING>(king_sq, BB_NONE);
+    let king_attacks = attacks::<{ PieceType::KING.inner() }>(king_sq, BB_NONE);
     let forward_area = if IS_WHITE { king_attacks.north_one() } else { king_attacks.south_one() };
     king_attacks | forward_area
 }
@@ -684,13 +681,13 @@ mod tests {
     #[test]
     fn startpos_bits_equality() {
         use crate::board::evaluation::score::S;
-
+        use crate::piece::Colour;
         crate::magic::initialise();
 
         let board = super::Board::default();
 
-        let material = board.material[crate::definitions::WHITE as usize]
-            - board.material[crate::definitions::BLACK as usize];
+        let material = board.material[Colour::WHITE.index()]
+            - board.material[Colour::BLACK.index()];
         let pst = board.pst_vals;
         let pawn_val = board.pawn_structure_term();
         let bishop_pair_val = board.bishop_pair_term();

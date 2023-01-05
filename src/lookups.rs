@@ -4,9 +4,9 @@ use crate::{
     definitions::{
         File::{FILE_A, FILE_H},
         Rank::{RANK_1, RANK_8},
-        Square, KING, KNIGHT,
+        Square,
     },
-    rng::XorShiftState,
+    rng::XorShiftState, piece::PieceType,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -151,35 +151,12 @@ pub const fn filerank_to_square(file: u8, rank: u8) -> u8 {
     file + rank * 8
 }
 
-/// The name of this piece.
-#[allow(dead_code)]
-static PIECE_NAMES: [&str; 13] = [
-    "NO_PIECE", "wpawn", "wknight", "wbishop", "wrook", "wqueen", "wking", "bpawn", "bknight",
-    "bbishop", "brook", "bqueen", "bking",
-];
-
-#[allow(dead_code)]
-pub fn piece_name(piece: u8) -> Option<&'static str> {
-    PIECE_NAMES.get(piece as usize).copied()
-}
-
-pub const fn piece_from_cotype(colour: u8, ty: u8) -> u8 {
-    colour * 6 + ty
-}
-
-static PIECE_CHARS: [u8; 13] = *b".PNBRQKpnbrqk";
-pub static PROMO_CHAR_LOOKUP: [u8; 7] = *b"XXnbrqX";
-
-pub fn piece_char(piece: u8) -> Option<char> {
-    PIECE_CHARS.get(piece as usize).map(|&c| c as char)
-}
-
-fn victim_score(piece: u8) -> i32 {
-    i32::from(1 + (piece - 1) % 6) * 1000
+fn victim_score(piece: PieceType) -> i32 {
+    i32::from(piece.inner()) * 1000
 }
 
 /// The score of this pair of pieces, for MVV/LVA move ordering.
-pub fn get_mvv_lva_score(victim: u8, attacker: u8) -> i32 {
+pub fn get_mvv_lva_score(victim: PieceType, attacker: PieceType) -> i32 {
     victim_score(victim) + 60 - victim_score(attacker) / 100
 }
 
@@ -215,11 +192,11 @@ static JUMPING_ATTACKS: [[u64; 64]; 7] = [
     init_jumping_attacks::<false>(), // king
 ];
 
-pub fn get_jumping_piece_attack<const PIECE: u8>(sq: Square) -> u64 {
-    debug_assert!(PIECE < 7);
+pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> u64 {
+    debug_assert!(PIECE_TYPE < 7);
     debug_assert!(sq.on_board());
-    debug_assert!(PIECE == KNIGHT || PIECE == KING);
-    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE as usize).get_unchecked(sq.index()) }
+    debug_assert!(PIECE_TYPE == PieceType::KNIGHT.inner() || PIECE_TYPE == PieceType::KING.inner());
+    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE_TYPE as usize).get_unchecked(sq.index()) }
 }
 
 mod tests {
@@ -248,14 +225,14 @@ mod tests {
     #[test]
     fn python_chess_validation() {
         use crate::definitions::Square;
-        use crate::definitions::{KING, KNIGHT};
         use crate::lookups::get_jumping_piece_attack;
+        use crate::piece::PieceType;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_jumping_piece_attack::<KNIGHT>(Square::new(0)), 132_096);
-        assert_eq!(get_jumping_piece_attack::<KNIGHT>(Square::new(63)), 9_077_567_998_918_656);
+        assert_eq!(get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(0)), 132_096);
+        assert_eq!(get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(63)), 9_077_567_998_918_656);
 
-        assert_eq!(get_jumping_piece_attack::<KING>(Square::new(0)), 770);
-        assert_eq!(get_jumping_piece_attack::<KING>(Square::new(63)), 4_665_729_213_955_833_856);
+        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)), 770);
+        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)), 4_665_729_213_955_833_856);
     }
 }

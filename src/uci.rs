@@ -14,7 +14,7 @@ use crate::{
         evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE},
         Board,
     },
-    definitions::{BLACK, MEGABYTE, WHITE},
+    definitions::MEGABYTE,
     errors::{FenParseError, MoveParseError},
     search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
@@ -143,10 +143,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "depth" => depth = Some(part_parse("depth", parts.next())?),
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
-            "wtime" => clocks[pos.turn() as usize] = Some(part_parse("wtime", parts.next())?),
-            "btime" => clocks[1 ^ pos.turn() as usize] = Some(part_parse("btime", parts.next())?),
-            "winc" => incs[pos.turn() as usize] = Some(part_parse("winc", parts.next())?),
-            "binc" => incs[1 ^ pos.turn() as usize] = Some(part_parse("binc", parts.next())?),
+            "wtime" => clocks[pos.turn().index()] = Some(part_parse("wtime", parts.next())?),
+            "btime" => clocks[pos.turn().flip().index()] = Some(part_parse("btime", parts.next())?),
+            "winc" => incs[pos.turn().index()] = Some(part_parse("winc", parts.next())?),
+            "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
             "infinite" => info.limit = SearchLimit::Infinite,
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
@@ -305,8 +305,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     std::mem::drop(sender);
 }
 
-pub fn format_score(score: i32, turn: u8) -> String {
-    assert!(turn == WHITE || turn == BLACK);
+pub fn format_score(score: i32) -> String {
     if is_mate_score(score) {
         let plies_to_mate = MATE_SCORE - score.abs();
         let moves_to_mate = (plies_to_mate + 1) / 2;

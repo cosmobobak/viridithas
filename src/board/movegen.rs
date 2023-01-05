@@ -14,10 +14,9 @@ use std::{
 use crate::{
     chessmove::Move,
     definitions::{
-        Square, BISHOP, BKCA, BQCA, KING, KNIGHT, PIECE_EMPTY, QUEEN, ROOK, WHITE, WKCA, WQCA,
+        Square, BKCA, BQCA, WKCA, WQCA,
     },
-    magic::MAGICS_READY,
-    validate::piece_valid,
+    magic::MAGICS_READY, piece::{PieceType, Colour},
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -104,29 +103,21 @@ impl Board {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         for from in BitLoop::new(attacks_west & !promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            let cap = self.piece_at(to);
-            debug_assert!(piece_valid(cap));
-            move_list.push::<true>(Move::new(from, to, PIECE_EMPTY, 0));
+            move_list.push::<true>(Move::new(from, to, PieceType::NO_PIECE_TYPE, 0));
         }
         for from in BitLoop::new(attacks_east & !promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            let cap = self.piece_at(to);
-            debug_assert!(piece_valid(cap));
-            move_list.push::<true>(Move::new(from, to, PIECE_EMPTY, 0));
+            move_list.push::<true>(Move::new(from, to, PieceType::NO_PIECE_TYPE, 0));
         }
         for from in BitLoop::new(attacks_west & promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            let cap = self.piece_at(to);
-            debug_assert!(piece_valid(cap));
-            for promo in [QUEEN, KNIGHT, ROOK, BISHOP] {
+            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
             }
         }
         for from in BitLoop::new(attacks_east & promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            let cap = self.piece_at(to);
-            debug_assert!(piece_valid(cap));
-            for promo in [QUEEN, KNIGHT, ROOK, BISHOP] {
+            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
             }
         }
@@ -152,11 +143,11 @@ impl Board {
 
         if attacks_west != 0 {
             let from_sq = first_square(attacks_west);
-            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG));
+            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PieceType::NO_PIECE_TYPE, Move::EP_FLAG));
         }
         if attacks_east != 0 {
             let from_sq = first_square(attacks_east);
-            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PIECE_EMPTY, Move::EP_FLAG));
+            move_list.push::<true>(Move::new(from_sq, self.ep_sq, PieceType::NO_PIECE_TYPE, Move::EP_FLAG));
         }
     }
 
@@ -173,15 +164,15 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+            move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
         }
         for sq in BitLoop::new(double_pushable_pawns) {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
-            move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+            move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
         }
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            for promo in [QUEEN, KNIGHT, ROOK, BISHOP] {
+            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new(sq, to, promo, Move::PROMO_FLAG));
             }
         }
@@ -196,7 +187,7 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            for promo in [QUEEN, KNIGHT, ROOK, BISHOP] {
+            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new(sq, to, promo, Move::PROMO_FLAG));
             }
         }
@@ -204,7 +195,7 @@ impl Board {
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
-        if self.side == WHITE {
+        if self.side == Colour::WHITE {
             self.generate_moves_for::<true>(move_list);
         } else {
             self.generate_moves_for::<false>(move_list);
@@ -226,24 +217,24 @@ impl Board {
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         let freespace = self.pieces.empty();
         for sq in BitLoop::new(our_knights) {
-            let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
         for sq in BitLoop::new(our_king) {
-            let moves = bitboards::attacks::<KING>(sq, BB_NONE);
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
@@ -251,24 +242,24 @@ impl Board {
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_diagonal_sliders) {
-            let moves = bitboards::attacks::<BISHOP>(sq, blockers);
+            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         for sq in BitLoop::new(our_orthogonal_sliders) {
-            let moves = bitboards::attacks::<ROOK>(sq, blockers);
+            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
             for to in BitLoop::new(moves & freespace) {
-                move_list.push::<false>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<false>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
@@ -276,7 +267,7 @@ impl Board {
     }
 
     pub fn generate_captures(&self, move_list: &mut MoveList) {
-        if self.side == WHITE {
+        if self.side == Colour::WHITE {
             self.generate_captures_for::<true>(move_list);
         } else {
             self.generate_captures_for::<false>(move_list);
@@ -299,18 +290,18 @@ impl Board {
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         for sq in BitLoop::new(our_knights) {
-            let moves = bitboards::attacks::<KNIGHT>(sq, BB_NONE);
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
         for sq in BitLoop::new(our_king) {
-            let moves = bitboards::attacks::<KING>(sq, BB_NONE);
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
@@ -318,9 +309,9 @@ impl Board {
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_diagonal_sliders) {
-            let moves = bitboards::attacks::<BISHOP>(sq, blockers);
+            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
 
@@ -328,15 +319,15 @@ impl Board {
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in BitLoop::new(our_orthogonal_sliders) {
-            let moves = bitboards::attacks::<ROOK>(sq, blockers);
+            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
             for to in BitLoop::new(moves & their_pieces) {
-                move_list.push::<true>(Move::new(sq, to, PIECE_EMPTY, 0));
+                move_list.push::<true>(Move::new(sq, to, PieceType::NO_PIECE_TYPE, 0));
             }
         }
     }
 
     pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
-        if self.side == WHITE {
+        if self.side == Colour::WHITE {
             self.generate_castling_moves_for::<true>(move_list);
         } else {
             self.generate_castling_moves_for::<false>(move_list);
@@ -360,7 +351,7 @@ impl Board {
                 move_list.push::<false>(Move::new(
                     Square::E1,
                     Square::G1,
-                    PIECE_EMPTY,
+                    PieceType::NO_PIECE_TYPE,
                     Move::CASTLE_FLAG,
                 ));
             }
@@ -373,7 +364,7 @@ impl Board {
                 move_list.push::<false>(Move::new(
                     Square::E1,
                     Square::C1,
-                    PIECE_EMPTY,
+                    PieceType::NO_PIECE_TYPE,
                     Move::CASTLE_FLAG,
                 ));
             }
@@ -386,7 +377,7 @@ impl Board {
                 move_list.push::<false>(Move::new(
                     Square::E8,
                     Square::G8,
-                    PIECE_EMPTY,
+                    PieceType::NO_PIECE_TYPE,
                     Move::CASTLE_FLAG,
                 ));
             }
@@ -399,16 +390,16 @@ impl Board {
                 move_list.push::<false>(Move::new(
                     Square::E8,
                     Square::C8,
-                    PIECE_EMPTY,
+                    PieceType::NO_PIECE_TYPE,
                     Move::CASTLE_FLAG,
                 ));
             }
         }
     }
 
-    pub fn _attackers_mask(&self, sq: Square, side: u8, blockers: u64) -> u64 {
+    pub fn _attackers_mask(&self, sq: Square, side: Colour, blockers: u64) -> u64 {
         let mut attackers = 0;
-        if side == WHITE {
+        if side == Colour::WHITE {
             let our_pawns = self.pieces.pawns::<true>();
             let west_attacks = our_pawns.north_west_one();
             let east_attacks = our_pawns.north_east_one();
@@ -422,37 +413,37 @@ impl Board {
             attackers |= pawn_attacks;
         }
 
-        let our_knights = if side == WHITE {
+        let our_knights = if side == Colour::WHITE {
             self.pieces.knights::<true>()
         } else {
             self.pieces.knights::<false>()
         };
 
-        let knight_attacks = bitboards::attacks::<KNIGHT>(sq, BB_NONE) & our_knights;
+        let knight_attacks = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE) & our_knights;
         attackers |= knight_attacks;
 
-        let our_diag_pieces = if side == WHITE {
+        let our_diag_pieces = if side == Colour::WHITE {
             self.pieces.bishopqueen::<true>()
         } else {
             self.pieces.bishopqueen::<false>()
         };
 
-        let diag_attacks = bitboards::attacks::<BISHOP>(sq, blockers) & our_diag_pieces;
+        let diag_attacks = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers) & our_diag_pieces;
         attackers |= diag_attacks;
 
-        let our_orth_pieces = if side == WHITE {
+        let our_orth_pieces = if side == Colour::WHITE {
             self.pieces.rookqueen::<true>()
         } else {
             self.pieces.rookqueen::<false>()
         };
 
-        let orth_attacks = bitboards::attacks::<ROOK>(sq, blockers) & our_orth_pieces;
+        let orth_attacks = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers) & our_orth_pieces;
         attackers |= orth_attacks;
 
         let our_king =
-            if side == WHITE { self.pieces.king::<true>() } else { self.pieces.king::<false>() };
+            if side == Colour::WHITE { self.pieces.king::<true>() } else { self.pieces.king::<false>() };
 
-        let king_attacks = bitboards::attacks::<KING>(sq, BB_NONE) & our_king;
+        let king_attacks = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE) & our_king;
         attackers |= king_attacks;
 
         attackers

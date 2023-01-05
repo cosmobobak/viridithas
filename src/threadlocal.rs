@@ -1,8 +1,8 @@
 use crate::{
     chessmove::Move,
-    definitions::{MAX_DEPTH, MAX_PLY, WHITE},
+    definitions::{MAX_DEPTH, MAX_PLY},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
-    nnue,
+    nnue, piece::Colour,
 };
 
 #[derive(Clone)]
@@ -40,24 +40,24 @@ impl ThreadData {
         }
     }
 
-    pub fn ban_nmp_for(&mut self, color: u8) {
-        self.banned_nmp |= if color == WHITE {
+    pub fn ban_nmp_for(&mut self, color: Colour) {
+        self.banned_nmp |= if color == Colour::WHITE {
             Self::WHITE_BANNED_NMP
         } else {
             Self::BLACK_BANNED_NMP
         };
     }
 
-    pub fn unban_nmp_for(&mut self, color: u8) {
-        self.banned_nmp &= if color == WHITE {
+    pub fn unban_nmp_for(&mut self, color: Colour) {
+        self.banned_nmp &= if color == Colour::WHITE {
             !Self::WHITE_BANNED_NMP
         } else {
             !Self::BLACK_BANNED_NMP
         };
     }
 
-    pub const fn nmp_banned_for(&self, color: u8) -> bool {
-        self.banned_nmp & if color == WHITE {
+    pub fn nmp_banned_for(&self, color: Colour) -> bool {
+        self.banned_nmp & if color == Colour::WHITE {
             Self::WHITE_BANNED_NMP
         } else {
             Self::BLACK_BANNED_NMP

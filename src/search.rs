@@ -21,14 +21,13 @@ use crate::{
     cfor,
     chessmove::Move,
     definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, type_of, StaticVec, BISHOP, BLACK, INFINITY,
-        KING, MAX_DEPTH, PAWN, QUEEN, ROOK, WHITE,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StaticVec, INFINITY, MAX_DEPTH,
     },
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTView},
-    uci,
+    uci, piece::{PieceType, Colour},
 };
 
 use self::parameters::SearchParams;
@@ -145,7 +144,7 @@ impl Board {
         }
 
         assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
-        (if self.turn() == WHITE { score } else { -score }, bestmove)
+        (if self.turn() == Colour::WHITE { score } else { -score }, bestmove)
     }
 
     /// Performs the iterative deepening search.
@@ -200,7 +199,7 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                let sstr = uci::format_score(v, self.turn());
+                let sstr = uci::format_score(v);
 
                 score = v;
                 self.regenerate_pv_line(d, tt);
@@ -334,7 +333,7 @@ impl Board {
         }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let worst_case =
-                self.estimated_see(m) - get_see_value(type_of(self.piece_at(m.from())));
+                self.estimated_see(m) - get_see_value(self.piece_at(m.from()).piece_type());
 
             if !self.make_move::<NNUE>(m, t) {
                 continue;
@@ -892,7 +891,7 @@ impl Board {
         let to = m.to();
 
         let mut next_victim =
-            if m.is_promo() { m.promotion_type() } else { type_of(self.piece_at(from)) };
+            if m.is_promo() { m.promotion_type() } else { self.piece_at(from).piece_type() };
 
         let mut balance = self.estimated_see(m) - threshold;
 
@@ -921,7 +920,7 @@ impl Board {
         let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;
 
         // after the move, it's the opponent's turn.
-        let mut colour = self.turn() ^ 1;
+        let mut colour = self.turn().flip();
 
         loop {
             let my_attackers = attackers & self.pieces.occupied_co(colour);
@@ -930,7 +929,7 @@ impl Board {
             }
 
             // find cheapest attacker
-            for victim in PAWN..=KING {
+            for victim in PieceType::all() {
                 next_victim = victim;
                 if my_attackers & self.pieces.of_type(victim) != 0 {
                     break;
@@ -940,18 +939,18 @@ impl Board {
             occupied ^= first_square(my_attackers & self.pieces.of_type(next_victim)).bitboard();
 
             // diagonal moves reveal bishops and queens:
-            if next_victim == PAWN || next_victim == BISHOP || next_victim == QUEEN {
-                attackers |= bitboards::attacks::<BISHOP>(to, occupied) & diag_sliders;
+            if next_victim == PieceType::PAWN || next_victim == PieceType::BISHOP || next_victim == PieceType::QUEEN {
+                attackers |= bitboards::attacks::<{ PieceType::BISHOP.inner() }>(to, occupied) & diag_sliders;
             }
 
             // orthogonal moves reveal rooks and queens:
-            if next_victim == ROOK || next_victim == QUEEN {
-                attackers |= bitboards::attacks::<ROOK>(to, occupied) & orth_sliders;
+            if next_victim == PieceType::ROOK || next_victim == PieceType::QUEEN {
+                attackers |= bitboards::attacks::<{ PieceType::ROOK.inner() }>(to, occupied) & orth_sliders;
             }
 
             attackers &= occupied;
 
-            colour ^= 1;
+            colour = colour.flip();
 
             balance = -balance - 1 - get_see_value(next_victim);
 
@@ -960,8 +959,8 @@ impl Board {
                 // As a slight optimisation for move legality checking, if our last attacking
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
-                if next_victim == KING && attackers & self.pieces.occupied_co(colour) != 0 {
-                    colour ^= 1;
+                if next_victim == PieceType::KING && attackers & self.pieces.occupied_co(colour) != 0 {
+                    colour = colour.flip();
                 }
                 break;
             }
@@ -1048,7 +1047,7 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
-        if self.turn() == BLACK {
+        if self.turn() == Colour::BLACK {
             bound = match bound {
                 HFlag::UpperBound => HFlag::LowerBound,
                 HFlag::LowerBound => HFlag::UpperBound,

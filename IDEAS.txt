@@ -27,3 +27,5 @@ MINOR:
 - multipv. put the moves in ThreadData and use ROOT.
 - tune time-management multipliers at long TC.
 - Rust features to watch for: full const generics, const floating-point maths.
+- root node eval oracle.
+- fix MDP.

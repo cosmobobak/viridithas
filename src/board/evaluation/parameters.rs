@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display, path::Path};
 
-use crate::definitions::{Square, BP, KING, KNIGHT, WK, WN, WP};
+use crate::{definitions::Square, piece::{Piece, PieceType}};
 
 use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,
@@ -126,9 +126,9 @@ impl EvalParams {
             .chain(self.queen_mobility_bonus.into_iter())
             .chain(self.passed_pawn_bonus.into_iter())
             // take the left halves of the white piece square tables, except for the pawn table.
-            .chain(self.piece_square_tables[WP as usize].iter().copied())
+            .chain(self.piece_square_tables[Piece::WP.index()].iter().copied())
             .chain(
-                self.piece_square_tables[(WN as usize)..=(WK as usize)]
+                self.piece_square_tables[(Piece::WN.index())..=(Piece::WK.index())]
                     .iter()
                     .flat_map(|x| x.chunks(4).step_by(2).flatten().copied()),
             )
@@ -190,11 +190,11 @@ impl EvalParams {
             let sq = Square::new(sq);
             let val =
                 s_iter.next().expect("failed to read pawn piece_square_table term from vector");
-            out.piece_square_tables[WP as usize][sq.index()] = val;
-            out.piece_square_tables[BP as usize][sq.flip_rank().index()] = -val;
+            out.piece_square_tables[Piece::WP.index()][sq.index()] = val;
+            out.piece_square_tables[Piece::BP.index()][sq.flip_rank().index()] = -val;
         }
         // load in the rest of the tables
-        for pt in KNIGHT..=KING {
+        for pt in PieceType::all().skip(1) {
             for sq in 0..64 {
                 let sq = Square::new(sq);
                 let file = sq.file();
@@ -203,15 +203,15 @@ impl EvalParams {
                     // the left-hand sides of the tables are loaded first, so we
                     // can safely load out of LHS to populate RHS.
                     let mirrored_sq = sq.flip_file();
-                    out.piece_square_tables[pt as usize][sq.index()] =
-                        out.piece_square_tables[pt as usize][mirrored_sq.index()];
-                    out.piece_square_tables[pt as usize + 6][sq.flip_rank().index()] =
-                        out.piece_square_tables[pt as usize + 6][mirrored_sq.flip_rank().index()];
+                    out.piece_square_tables[pt.index()][sq.index()] =
+                        out.piece_square_tables[pt.index()][mirrored_sq.index()];
+                    out.piece_square_tables[pt.index() + 6][sq.flip_rank().index()] =
+                        out.piece_square_tables[pt.index() + 6][mirrored_sq.flip_rank().index()];
                 } else {
                     let val =
                         s_iter.next().expect("failed to read piece_square_table term from vector");
-                    out.piece_square_tables[pt as usize][sq.index()] = val;
-                    out.piece_square_tables[pt as usize + 6][sq.flip_rank().index()] = -val;
+                    out.piece_square_tables[pt.index()][sq.index()] = val;
+                    out.piece_square_tables[pt.index() + 6][sq.flip_rank().index()] = -val;
                 }
             }
         }

@@ -30,7 +30,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 
 pub fn gamut() {
     // open perftsuite.epd
-    let f = File::open("perftsuite.epd").unwrap();
+    let f = File::open("epds/perftsuite.epd").unwrap();
     let mut pos = Board::new();
     for line in BufReader::new(f).lines() {
         let line = line.unwrap();
@@ -59,7 +59,7 @@ pub fn gamut() {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{chessmove::Move, definitions::Square};
+    use crate::{chessmove::Move, definitions::Square, piece::PieceType};
 
     #[test]
     fn perft_hard_position() {
@@ -137,7 +137,7 @@ mod tests {
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.set_startpos();
-        let e4 = Move::new(Square::E2, Square::E4, 0, 0);
+        let e4 = Move::new(Square::E2, Square::E4, PieceType::NO_PIECE_TYPE, 0);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
@@ -157,7 +157,7 @@ mod tests {
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2").unwrap();
-        let exd5 = Move::new(Square::E4, Square::D5, 0, 0);
+        let exd5 = Move::new(Square::E4, Square::D5, PieceType::NO_PIECE_TYPE, 0);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();

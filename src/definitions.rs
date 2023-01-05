@@ -5,78 +5,13 @@ use std::{
     str::FromStr,
 };
 
-use crate::{board::evaluation::MATE_SCORE, chessmove::Move, validate::piece_type_valid};
+use crate::{board::evaluation::MATE_SCORE, chessmove::Move, piece::{Colour, Piece}};
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: depth::Depth = depth::Depth::new(128);
 pub const MAX_PLY: usize = MAX_DEPTH.ply_to_horizon();
 pub const INFINITY: i32 = MATE_SCORE * 2;
 pub const MEGABYTE: usize = 1024 * 1024;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-#[rustfmt::skip]
-enum Piece {
-    Empty = 0,
-    WP, WN, WB, WR, WQ, WK,
-    BP, BN, BB, BR, BQ, BK,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-#[rustfmt::skip]
-enum PieceType {
-    Pawn = 1, Knight, Bishop, Rook, Queen, King,
-}
-
-pub const PIECE_EMPTY: u8 = Piece::Empty as u8;
-pub const WP: u8 = Piece::WP as u8;
-pub const WN: u8 = Piece::WN as u8;
-pub const WB: u8 = Piece::WB as u8;
-pub const WR: u8 = Piece::WR as u8;
-pub const WQ: u8 = Piece::WQ as u8;
-pub const WK: u8 = Piece::WK as u8;
-pub const BP: u8 = Piece::BP as u8;
-pub const BN: u8 = Piece::BN as u8;
-pub const BB: u8 = Piece::BB as u8;
-pub const BR: u8 = Piece::BR as u8;
-pub const BQ: u8 = Piece::BQ as u8;
-pub const BK: u8 = Piece::BK as u8;
-pub const PAWN: u8 = PieceType::Pawn as u8;
-pub const KNIGHT: u8 = PieceType::Knight as u8;
-pub const BISHOP: u8 = PieceType::Bishop as u8;
-pub const ROOK: u8 = PieceType::Rook as u8;
-pub const QUEEN: u8 = PieceType::Queen as u8;
-pub const KING: u8 = PieceType::King as u8;
-
-pub const fn type_of(piece: u8) -> u8 {
-    match piece {
-        WP | BP => PAWN,
-        WN | BN => KNIGHT,
-        WB | BB => BISHOP,
-        WR | BR => ROOK,
-        WQ | BQ => QUEEN,
-        WK | BK => KING,
-        _ => PIECE_EMPTY,
-    }
-}
-
-pub const fn colour_of(piece: u8) -> u8 {
-    match piece {
-        WP | WN | WB | WR | WQ | WK => WHITE,
-        _ => BLACK,
-    }
-}
-
-pub const fn make_piece(colour: u8, piece_type: u8) -> u8 {
-    debug_assert!(colour == WHITE || colour == BLACK);
-    debug_assert!(piece_type_valid(piece_type));
-    if colour == WHITE {
-        piece_type
-    } else {
-        piece_type + 6
-    }
-}
 
 #[allow(non_snake_case, dead_code)]
 pub mod File {
@@ -101,16 +36,6 @@ pub mod Rank {
     pub const RANK_7: u8 = 6;
     pub const RANK_8: u8 = 7;
 }
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Colour {
-    White = 0,
-    Black,
-}
-
-pub const WHITE: u8 = Colour::White as u8;
-pub const BLACK: u8 = Colour::Black as u8;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct Square(u8);
@@ -259,24 +184,24 @@ impl Square {
         1 << self.0
     }
 
-    pub const fn pawn_push(self, side: u8) -> Self {
-        if side == WHITE {
+    pub fn pawn_push(self, side: Colour) -> Self {
+        if side == Colour::WHITE {
             self.add(8)
         } else {
             self.sub(8)
         }
     }
 
-    pub const fn pawn_right(self, side: u8) -> Self {
-        if side == WHITE {
+    pub fn pawn_right(self, side: Colour) -> Self {
+        if side == Colour::WHITE {
             self.add(9)
         } else {
             self.sub(7)
         }
     }
 
-    pub const fn pawn_left(self, side: u8) -> Self {
-        if side == WHITE {
+    pub fn pawn_left(self, side: Colour) -> Self {
+        if side == Colour::WHITE {
             self.add(7)
         } else {
             self.sub(9)
@@ -291,6 +216,10 @@ impl Square {
     pub const fn lt(self, other: Self) -> bool { self.0 < other.0  }
     #[rustfmt::skip]
     pub const fn gt(self, other: Self) -> bool { self.0 > other.0  }
+
+    pub fn all() -> impl Iterator<Item = Self> {
+        (0..64).map(Self::new)
+    }
 }
 
 impl Display for Square {
@@ -334,7 +263,7 @@ pub struct Undo {
     pub castle_perm: u8,
     pub ep_square: Square,
     pub fifty_move_counter: u8,
-    pub capture: u8,
+    pub capture: Piece,
 }
 
 pub struct StaticVec<T: Copy, const N: usize> {

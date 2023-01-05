@@ -1,8 +1,8 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, MAX_DEPTH, PIECE_EMPTY},
+    definitions::{depth::Depth, MAX_DEPTH},
     historytable::update_history,
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, piece::Piece,
 };
 
 use super::Board;
@@ -12,7 +12,7 @@ impl ThreadData {
     pub fn add_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
         let piece_moved = pos.moved_piece(m);
         debug_assert!(
-            crate::validate::piece_valid(piece_moved) && piece_moved != PIECE_EMPTY,
+            piece_moved != Piece::EMPTY,
             "Invalid piece moved by move {m} in position \n{pos}"
         );
         let to = m.to();
@@ -87,7 +87,7 @@ impl ThreadData {
             // determine where to find the piece_t info:
             // we don't need to worry about ep-captures because
             // we just blanket filter them out with the null checks.
-            if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
+            if capture != Piece::EMPTY && prev_move.to() == tpa_to {
                 // the opponent captured a piece on this square, so we can use the capture.
                 capture
             } else {
@@ -123,7 +123,7 @@ impl ThreadData {
             // determine where to find the piece_t info:
             // we don't need to worry about ep-captures because
             // we just blanket filter them out with the null checks.
-            if capture != PIECE_EMPTY && prev_move.to() == tpa_to {
+            if capture != Piece::EMPTY && prev_move.to() == tpa_to {
                 // the opponent captured a piece on this square, so we can use the capture.
                 capture
             } else {

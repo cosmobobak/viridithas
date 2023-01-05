@@ -11,10 +11,10 @@ use crate::{
         evaluation::{parameters::EvalParams, set_eval_params},
         Board,
     },
-    definitions::{INFINITY, MEGABYTE, WHITE},
+    definitions::{INFINITY, MEGABYTE},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::TT,
+    transpositiontable::TT, piece::Colour,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -56,7 +56,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
                 -INFINITY,
                 INFINITY,
             );
-            let score = if pos.turn() == WHITE { pov_score } else { -pov_score };
+            let score = if pos.turn() == Colour::WHITE { pov_score } else { -pov_score };
             let prediction = sigmoid(f64::from(score), k);
             (*outcome - prediction).powi(2)
         })

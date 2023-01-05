@@ -4,8 +4,8 @@ use crate::{
     definitions::{
         File::{FILE_A, FILE_D, FILE_H},
         Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
-        Square, BLACK, WHITE, WK, WN, WP,
-    },
+        Square,
+    }, piece::{Piece, Colour},
 };
 
 use super::PieceSquareTable;
@@ -93,14 +93,14 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
     [[S::NULL; 4]; 8],"
     );
     let names = ["NULL", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"];
-    for piece in WN..=WK {
+    for piece in Piece::all().skip(1).take(5) { // white knight to white king
         println!("    [");
-        println!("        // {}", names[piece as usize]);
+        println!("        // {}", names[piece.index()]);
         for rank in RANK_1..=RANK_8 {
             print!("        [");
             for file in FILE_A..=FILE_D {
                 let sq = Square::from_rank_file(rank, file);
-                let val = pst[piece as usize][sq.index()];
+                let val = pst[piece.index()][sq.index()];
                 print!("{val}, ");
             }
             println!("],");
@@ -120,7 +120,7 @@ static P_BONUS: [[S; 8]; 8] = [
         print!("    [ ");
         for file in FILE_A..=FILE_H {
             let sq = Square::from_rank_file(rank, file);
-            let val = pst[WP as usize][sq.index()];
+            let val = pst[Piece::WP.index()][sq.index()];
             print!("{val}, ");
         }
         println!("],");
@@ -132,12 +132,12 @@ static P_BONUS: [[S; 8]; 8] = [
 pub const fn construct_piece_square_table() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
     cfor!(let mut colour = 0; colour < 2; colour += 1; {
-        let offset = if colour == BLACK { 7 } else { 1 };
-        let multiplier = if colour == BLACK { -1 } else { 1 };
+        let offset = if colour == Colour::BLACK.inner() { 7 } else { 1 };
+        let multiplier = if colour == Colour::BLACK.inner() { -1 } else { 1 };
         cfor!(let mut pieces_idx = 0; pieces_idx < 6; pieces_idx += 1; {
             cfor!(let mut pst_idx = 0; pst_idx < 64; pst_idx += 1; {
                 let pst_idx = Square::new(pst_idx);
-                let sq = if colour == WHITE { pst_idx } else { pst_idx.flip_rank() };
+                let sq = if colour == Colour::WHITE.inner() { pst_idx } else { pst_idx.flip_rank() };
                 let r = pst_idx.rank() as usize;
                 let f = pst_idx.file() as usize;
                 let value = if pieces_idx == 0 {

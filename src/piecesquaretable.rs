@@ -1,19 +1,19 @@
 pub mod tables;
 
-use crate::{board::evaluation::score::S, definitions::Square, lookups::piece_name};
+use crate::{board::evaluation::score::S, definitions::Square, piece::Piece};
 
 pub type PieceSquareTable = [[S; 64]; 13];
 
-pub fn pst_value(piece: u8, sq: Square, pst: &PieceSquareTable) -> S {
-    debug_assert!(crate::validate::piece_valid(piece));
+pub fn pst_value(piece: Piece, sq: Square, pst: &PieceSquareTable) -> S {
     debug_assert!(sq.on_board());
-    unsafe { *pst.get_unchecked(piece as usize).get_unchecked(sq.index()) }
+    unsafe { *pst.get_unchecked(piece.index()).get_unchecked(sq.index()) }
 }
 
 pub fn render_pst_table(pst: &PieceSquareTable) {
     #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
-    for piece in 0..13 {
-        println!("{}", piece_name(piece as u8).unwrap());
+    for piece in Piece::all() {
+        println!("{piece}");
+        let piece = piece.index();
         println!("mg eval on a1 (bottom left) {}", pst[piece][Square::A1.index()].0);
         for row in (0..8).rev() {
             print!("RANK {}: ", row + 1);
@@ -43,16 +43,17 @@ mod tests {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
         use super::*;
         let psts = super::tables::construct_piece_square_table();
-        for white_piece in 1..7 {
-            let white_pst = &psts[white_piece];
-            let black_pst = &psts[white_piece + 6];
+        for white_piece in Piece::all().take(6) {
+            let idx = white_piece.index();
+            let white_pst = &psts[idx];
+            let black_pst = &psts[idx + 6];
             for sq in 0..64 {
                 let sq = Square::new(sq);
                 assert_eq!(
                     white_pst[sq.index()],
                     -black_pst[sq.flip_rank().index()],
                     "pst mirroring failed on square {sq} for piece {}",
-                    piece_name(white_piece as u8).unwrap()
+                    white_piece
                 );
             }
         }
