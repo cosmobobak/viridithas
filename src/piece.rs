@@ -7,9 +7,9 @@ pub struct Colour {
 
 impl Debug for Colour {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.v {
-            0 => write!(f, "Colour::WHITE"),
-            1 => write!(f, "Colour::BLACK"),
+        match *self {
+            Self::WHITE => write!(f, "Colour::WHITE"),
+            Self::BLACK => write!(f, "Colour::BLACK"),
             _ => write!(f, "Colour::INVALID({})", self.v),
         }
     }
@@ -113,7 +113,10 @@ impl PieceType {
     }
 
     pub const fn legal_promo(self) -> bool {
-        self.v == Self::QUEEN.v || self.v == Self::KNIGHT.v || self.v == Self::BISHOP.v || self.v == Self::ROOK.v
+        self.v == Self::QUEEN.v
+            || self.v == Self::KNIGHT.v
+            || self.v == Self::BISHOP.v
+            || self.v == Self::ROOK.v
     }
 
     pub const fn promo_char(self) -> Option<char> {
@@ -173,6 +176,7 @@ impl Piece {
     pub const WR: Self = Self::new(Colour::WHITE, PieceType::ROOK);
     pub const WQ: Self = Self::new(Colour::WHITE, PieceType::QUEEN);
     pub const WK: Self = Self::new(Colour::WHITE, PieceType::KING);
+    
     pub const BP: Self = Self::new(Colour::BLACK, PieceType::PAWN);
     pub const BN: Self = Self::new(Colour::BLACK, PieceType::KNIGHT);
     pub const BB: Self = Self::new(Colour::BLACK, PieceType::BISHOP);
@@ -183,17 +187,26 @@ impl Piece {
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
         debug_assert!(colour.v < 2);
         debug_assert!(piece_type.v < 7);
-        Self {
-            v: colour.v * 6 + piece_type.v,
-        }
+        Self { v: colour.v * 6 + piece_type.v }
     }
 
     pub const fn colour(self) -> Colour {
-        Colour::new((self.v - 1) / 6)
+        match self {
+            Self::WP | Self::WN | Self::WB | Self::WR | Self::WQ | Self::WK => Colour::WHITE,
+            _ => Colour::BLACK,
+        }
     }
 
     pub const fn piece_type(self) -> PieceType {
-        PieceType::new((self.v - 1) % 6 + 1) // need to shift back and forth because of the empty piece
+        match self {
+            Self::WP | Self::BP => PieceType::PAWN,
+            Self::WN | Self::BN => PieceType::KNIGHT,
+            Self::WB | Self::BB => PieceType::BISHOP,
+            Self::WR | Self::BR => PieceType::ROOK,
+            Self::WQ | Self::BQ => PieceType::QUEEN,
+            Self::WK | Self::BK => PieceType::KING,
+            _ => PieceType::NO_PIECE_TYPE,
+        }
     }
 
     pub const fn index(self) -> usize {

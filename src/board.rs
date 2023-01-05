@@ -1467,14 +1467,12 @@ impl Default for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        writeln!(f, "Game Board:")?;
-
-        for rank in ((Rank::RANK_1)..=(Rank::RANK_8)).rev() {
+        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
             write!(f, "{} ", rank + 1)?;
-            for file in (File::FILE_A)..=(File::FILE_H) {
+            for file in File::FILE_A..=File::FILE_H {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                write!(f, "{} ", piece.char().unwrap())?;
+                write!(f, "{piece} ")?;
             }
             writeln!(f)?;
         }

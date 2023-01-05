@@ -117,7 +117,6 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
         pos.make_move_hce(m);
     }
     pos.zero_height();
-    // eprintln!("{}", pos);
     Ok(())
 }
 
@@ -340,7 +339,7 @@ pub fn is_multipv() -> bool {
 
 #[allow(clippy::too_many_lines)]
 pub fn main_loop(params: EvalParams) {
-    let mut pos = Board::new();
+    let mut pos = Board::default();
 
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
@@ -357,9 +356,9 @@ pub fn main_loop(params: EvalParams) {
 
     let mut thread_data = Vec::new();
     thread_data.push(ThreadData::new(0));
-
-    for td in &mut thread_data {
-        td.alloc_tables();
+    for t in &mut thread_data {
+        t.nnue.refresh_acc(&pos);
+        t.alloc_tables();
     }
 
     loop {
@@ -395,6 +394,10 @@ pub fn main_loop(params: EvalParams) {
             }
             "eval" => {
                 println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
+                Ok(())
+            }
+            "show" => {
+                println!("{pos}");
                 Ok(())
             }
             input if input.starts_with("setoption") => {
