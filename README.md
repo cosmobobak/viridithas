@@ -2,7 +2,7 @@
 
 <div align="center">
 
-  ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](logo.png)
+  ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](images/logo.png)
   
   [![Build][build-badge]][build-link]
   [![License][license-badge]][license-link]
