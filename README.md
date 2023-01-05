@@ -1,3 +1,5 @@
+# Viridithas, a UCI chess engine written in Rust.
+
 <div align="center">
 
   ![Visualisation of Neuron 0 in the 21th-gen Viridithas NNUE](logo.png)
@@ -8,8 +10,6 @@
   [![Commits][commits-badge]][commits-link]
   
 </div>
-
-# Viridithas, a UCI chess engine written in Rust.
 
 Viridithas is a free and open source chess engine and the successor to the original [Viridithas](https://github.com/cosmobobak/viridithas-chess).
 
