@@ -1511,7 +1511,7 @@ mod tests {
             io::{BufRead, BufReader},
         };
         crate::magic::initialise();
-        let fens = BufReader::new(File::open("perftsuite.epd").unwrap())
+        let fens = BufReader::new(File::open("epds/perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
             .collect::<Vec<_>>();
