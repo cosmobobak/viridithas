@@ -29,3 +29,4 @@ MINOR:
 - Rust features to watch for: full const generics, const floating-point maths.
 - root node eval oracle.
 - fix MDP.
+- in_check cacheing.
