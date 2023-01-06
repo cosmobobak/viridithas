@@ -4,7 +4,6 @@ MAJOR:
 -- root-optimal play (exclude all moves that change the game-theoretic value of the position)
 -- in-tree tablebase probing (use the tablebase to prune moves when the search hits TB positions)
 - docs
-- type-safety overhaul
 
 MINOR:
 - tune search parameters
