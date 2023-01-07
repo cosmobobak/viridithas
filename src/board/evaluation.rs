@@ -211,8 +211,7 @@ impl Board {
         (self.pst_vals + self.material()).value(self.phase())
     }
 
-    pub fn evaluate_nnue(&mut self, t: &ThreadData, nodes: u64) -> i32 {
-        #![allow(clippy::debug_assert_with_mut_call)]
+    pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         debug_assert!(!self.in_check::<{ Self::US }>(), "evaluate_nnue called while in check");
 
         if !self.pieces.any_pawns() && self.is_material_draw() {
@@ -229,7 +228,7 @@ impl Board {
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
-    pub fn evaluate<const USE_NNUE: bool>(&mut self, t: &ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate<const USE_NNUE: bool>(&self, t: &ThreadData, nodes: u64) -> i32 {
         if USE_NNUE {
             self.evaluate_nnue(t, nodes)
         } else {

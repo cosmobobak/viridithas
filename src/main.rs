@@ -29,7 +29,6 @@ mod transpositiontable;
 mod uci;
 mod tablebases;
 mod piece;
-mod cache;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
