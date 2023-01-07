@@ -57,3 +57,7 @@ NET ID | general concept                          | notes
 -----------------------------------------------------------------------------------------
     24 | net 21 data with 25% WDL focus.          | 16.1 +/- 7.6, LOS: 100.0 %
        |                                          | vs net-21.
+-----------------------------------------------------------------------------------------
+    25 | 320K net-24 self-play games from uhobook | ???? +/- ????, LOS: ???? %
+       | injected into net-24 data.               | vs net-24.
+       | NOTE/WARN: shuffled based on FEN hash.   |

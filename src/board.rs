@@ -36,7 +36,7 @@ use crate::{
     piecesquaretable::pst_value,
     threadlocal::ThreadData,
     transpositiontable::{ProbeResult, TTHit, TTView},
-    piece::{Piece, Colour, PieceType},
+    piece::{Piece, Colour, PieceType}, cache::InCheckCache,
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -89,6 +89,8 @@ pub struct Board {
     repetition_cache: Vec<u64>,
 
     principal_variation: Vec<Move>,
+
+    in_check_cache: InCheckCache,
 }
 
 impl Debug for Board {
@@ -134,6 +136,7 @@ impl Board {
             repetition_cache: Vec::new(),
             principal_variation: Vec::new(),
             pst_vals: S(0, 0),
+            in_check_cache: InCheckCache::new(),
         };
         out.reset();
         out
@@ -173,10 +176,16 @@ impl Board {
 
     pub const US: u8 = 0;
     pub const THEM: u8 = 1;
-    pub fn in_check<const SIDE: u8>(&self) -> bool {
+    pub fn in_check<const SIDE: u8>(&mut self) -> bool {
         if SIDE == Self::US {
+            // stm in check is cached:
+            if let Some(answer) = self.in_check_cache.get(self.hashkey()) {
+                return answer;
+            }
             let king_sq = self.king_sq(self.side);
-            self.sq_attacked(king_sq, self.side.flip())
+            let answer = self.sq_attacked(king_sq, self.side.flip());
+            self.in_check_cache.set(self.hashkey(), answer);
+            answer
         } else {
             let king_sq = self.king_sq(self.side.flip());
             self.sq_attacked(king_sq, self.side)
@@ -396,8 +405,8 @@ impl Board {
         let mut fen = String::with_capacity(60);
 
         let mut counter = 0;
-        for rank in (0..8).rev() {
-            for file in 0..8 {
+        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
+            for file in File::FILE_A..=File::FILE_H {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
                 if piece == Piece::EMPTY {
@@ -1032,6 +1041,7 @@ impl Board {
     }
 
     pub fn make_nullmove(&mut self) {
+        #![allow(clippy::debug_assert_with_mut_call)]
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
         debug_assert!(!self.in_check::<{ Self::US }>());
