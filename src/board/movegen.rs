@@ -44,13 +44,15 @@ impl MoveList {
         Self { moves: [DEFAULT; MAX_POSITION_MOVES], count: 0 }
     }
 
-    pub fn push<const TACTICAL: bool>(&mut self, m: Move) {
-        // it's quite dangerous to do this,
-        // but this function is very much in the
-        // hot path.
+    fn push<const TACTICAL: bool>(&mut self, m: Move) {
         debug_assert!(self.count < MAX_POSITION_MOVES);
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
+
+        // SAFETY: this function is only called inside this file, and only in a single
+        // move-generation cycle. The maximum number of pseudolegal moves that can exist
+        // in a chess position is 218, and self.count is always zeroed at the start of 
+        // movegen, so we can't ever exceed the bounds of self.moves.
         unsafe {
             *self.moves.get_unchecked_mut(self.count) = MoveListEntry { mov: m, score };
         }
@@ -195,6 +197,7 @@ impl Board {
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_moves_for::<true>(move_list);
         } else {
