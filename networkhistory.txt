@@ -62,5 +62,7 @@ NET ID | general concept                          | notes
        | injected into net-24 data.               | vs net-24.
        | NOTE/WARN: shuffled based on FEN hash.   | I don't really trust this net, weird results.
 --------------------------------------------------------------------------------------------------
-    26 | turns out those 320K games were eval'd   | 0.0 +/- 0.0, LOS: 50.0 %
+    26 | turns out those 320K games were eval'd   | 7.1 +/- 6.5, LOS: 98.3 %
        | with HCE, so we redid it.                | vs net-24.
+       | didn't pass SPRT, but it's still better. |
+--------------------------------------------------------------------------------------------------

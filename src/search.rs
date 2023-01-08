@@ -661,7 +661,7 @@ impl Board {
                 );
 
                 if move_picker.stage == Stage::Done {
-                    return std::cmp::max(tt_value - 3 * depth.round(), -MATE_SCORE);
+                    return Self::singularity_margin(tt_value, depth);
                 }
             } else if !ROOT && self.in_check::<{ Self::US }>() {
                 // here in_check determines if the move gives check
@@ -822,6 +822,11 @@ impl Board {
         t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
+    /// The reduced beta margin for Singular Extension.
+    fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
+        (tt_value - 3 * depth.round()).max(-MATE_SCORE)
+    }
+
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
     #[allow(clippy::too_many_arguments)]
@@ -836,7 +841,7 @@ impl Board {
         depth: Depth,
         mp: &mut MainMovePicker<ROOT>,
     ) -> Depth {
-        let r_beta = (tt_value - 3 * depth.round()).max(-MATE_SCORE);
+        let r_beta = Self::singularity_margin(tt_value, depth);
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move::<NNUE>(t);

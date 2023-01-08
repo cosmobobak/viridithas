@@ -29,3 +29,4 @@ MINOR:
 - root node eval oracle.
 - fix MDP.
 - in_check cacheing.
+- stdout-dependent tui.
