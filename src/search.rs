@@ -689,7 +689,7 @@ impl Board {
                 let r = if extension == ZERO_PLY
                     && (is_quiet || !is_winning_capture)
                     && depth >= Depth::new(3)
-                    && moves_made >= (2 + usize::from(PV))
+                    && moves_made >= (1 + usize::from(PV))
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
@@ -699,7 +699,7 @@ impl Board {
                 };
                 // perform a zero-window search
                 score =
-                    -self.zw_search::<NNUE>(tt, info, t, depth + extension - r, -alpha - 1, -alpha);
+                    -self.zw_search::<NNUE>(tt, info, t, depth + extension - r, -alpha - 1, -alpha) ;
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
