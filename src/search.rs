@@ -43,16 +43,17 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-pub const ASPIRATION_WINDOW: i32 = 26;
+const ASPIRATION_WINDOW: i32 = 20;
+const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
 const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 80;
 const RFP_IMPROVING_MARGIN: i32 = 57;
-const NMP_IMPROVING_MARGIN: i32 = 73;
+const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_1: i32 = 80;
-const FUTILITY_COEFF_0: i32 = 90;
+const FUTILITY_COEFF_1: i32 = 90;
+const FUTILITY_COEFF_0: i32 = 80;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
@@ -61,8 +62,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
-const LMR_BASE: f64 = 74.0;
-const LMR_DIVISION: f64 = 234.0;
+const LMR_BASE: f64 = 77.0;
+const LMR_DIVISION: f64 = 236.0;
 
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
@@ -253,7 +254,7 @@ impl Board {
                 break; // we got an exact score, so we can stop the aspiration loop.
             }
 
-            if d > 4 {
+            if depth > ASPIRATION_WINDOW_MIN_DEPTH {
                 aw = AspirationWindow::from_last_score(score);
             } else {
                 aw = AspirationWindow::infinite();
