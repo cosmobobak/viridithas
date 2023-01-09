@@ -27,7 +27,7 @@ use crate::{
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTView},
-    uci, piece::{PieceType, Colour}, isatty::{STDERR, self, STDOUT},
+    uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour},
 };
 
 use self::parameters::SearchParams;
@@ -632,7 +632,7 @@ impl Board {
                 && t.thread_id == 0
                 && info.print_to_stdout
                 && info.time_since_start() > Duration::from_secs(5)
-                && !isatty::isatty(STDERR) || !isatty::isatty(STDOUT)
+                && !PRETTY_PRINT.load(Ordering::SeqCst)
             {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }

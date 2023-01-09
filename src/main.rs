@@ -14,7 +14,6 @@ mod epd;
 mod errors;
 mod historytable;
 mod image;
-mod isatty;
 mod lookups;
 mod magic;
 mod makemove;
