@@ -14,7 +14,7 @@ use crate::{
         evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE},
         Board,
     },
-    definitions::MEGABYTE,
+    definitions::{MEGABYTE, MAX_DEPTH},
     errors::{FenParseError, MoveParseError},
     search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
@@ -126,6 +126,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     Ok(())
 }
 
+pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
 fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
@@ -153,9 +154,30 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "winc" => incs[pos.turn().index()] = Some(part_parse("winc", parts.next())?),
             "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
             "infinite" => info.limit = SearchLimit::Infinite,
+            "mate" => {
+                let mate_distance: i32 = part_parse("mate", parts.next())?;
+                let mate_distance = if pos.turn() == Colour::WHITE {
+                    mate_distance
+                } else {
+                    -mate_distance
+                };
+                let mate_distance: usize = if mate_distance > 0 {
+                    // mate is positive, so we will mate on our turn, so height will be odd:
+                    (mate_distance.abs() * 2 - 1).try_into().unwrap()
+                } else {
+                    // mate is negative, so they will mate on their turn, so height will be even:
+                    (mate_distance.abs() * 2).try_into().unwrap()
+                };
+                // add one because height is checked before mate
+                GO_MATE_MAX_DEPTH.store(mate_distance + 1, Ordering::SeqCst);
+                info.limit = SearchLimit::Mate(mate_distance);
+            }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
+    }
+    if !matches!(info.limit, SearchLimit::Mate(_)) {
+        GO_MATE_MAX_DEPTH.store(MAX_DEPTH.ply_to_horizon(), Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {

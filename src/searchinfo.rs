@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}};
+use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::{mated_in, mate_in}};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -15,6 +15,7 @@ pub enum SearchLimit {
     Time(u64),
     TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
+    Mate(usize),
     Dynamic {
         our_clock: u64,
         their_clock: u64,
@@ -130,7 +131,7 @@ impl<'a> SearchInfo<'a> {
 
     pub fn check_up(&mut self) {
         match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Infinite => {}
+            SearchLimit::Depth(_) | SearchLimit::Mate(_) | SearchLimit::Infinite => {}
             SearchLimit::Nodes(nodes) => {
                 if self.nodes >= nodes {
                     self.stopped.store(true, Ordering::SeqCst);
@@ -161,9 +162,21 @@ impl<'a> SearchInfo<'a> {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    pub fn check_if_best_move_found(&mut self, best_move: Move) {
+    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: i32) {
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
+                self.stopped.store(true, Ordering::SeqCst);
+            }
+        } else if let &SearchLimit::Mate(mate_ply) = &self.limit {
+            let expected_score = if mate_ply & 1 == 0 {
+                // mate in an even number of moves => we are getting mated
+                mated_in(mate_ply)
+            } else {
+                // mate in an odd number of moves => we are mating
+                mate_in(mate_ply)
+            };
+            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+            if value == expected_score && depth >= mate_ply as i32 {
                 self.stopped.store(true, Ordering::SeqCst);
             }
         }

@@ -266,6 +266,12 @@ pub struct Undo {
     pub capture: Piece,
 }
 
+pub enum CheckState {
+    None,
+    Check,
+    Checkmate,
+}
+
 pub struct StaticVec<T: Copy, const N: usize> {
     data: [T; N],
     len: usize,

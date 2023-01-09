@@ -26,7 +26,7 @@ use crate::{
         File,
         Rank::{self, RANK_3, RANK_6},
         Square, Undo, BKCA, BQCA, INFINITY,
-        MAX_DEPTH, WKCA, WQCA,
+        MAX_DEPTH, WKCA, WQCA, CheckState,
     },
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
@@ -1289,7 +1289,7 @@ impl Board {
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
-            b"pnbrqk".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap()
+            b"..NBRQ.".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap()
         });
         if promo.is_some() {
             let legal_mask = if self.side == Colour::WHITE { BB_RANK_7 } else { BB_RANK_2 };
@@ -1334,12 +1334,8 @@ impl Board {
                 continue;
             }
             self.unmake_move_hce();
-            let promotion = if m.is_promo() {
-                Piece::new(self.side, m.safe_promotion_type())
-            } else {
-                Piece::EMPTY
-            };
-            if promotion.index() != promo.unwrap_or(0) {
+            let legal_promo_t = m.safe_promotion_type();
+            if legal_promo_t.index() != promo.unwrap_or(0) {
                 continue;
             }
             let m_from_bb = m.from().bitboard();
@@ -1352,6 +1348,92 @@ impl Board {
             }
         }
         legal_move.ok_or_else(|| IllegalMove(san.to_string()))
+    }
+
+    pub fn san(&mut self, m: Move) -> Option<String> {
+        let to_sq = m.to();
+        let is_capture = !self.piece_at(to_sq).is_empty();
+        let moved_piece = self.piece_at(m.from());
+        let piece_prefix = match moved_piece.piece_type() {
+            PieceType::PAWN if !is_capture => "",
+            PieceType::PAWN => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
+            PieceType::KNIGHT => "N",
+            PieceType::BISHOP => "B",
+            PieceType::ROOK => "R",
+            PieceType::QUEEN => "Q",
+            PieceType::KING => "K",
+            PieceType::NO_PIECE_TYPE => return None,
+            _ => unreachable!(),
+        };
+        let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::PAWN {
+            0
+        } else {
+            bitboards::attacks_by_type(
+                moved_piece.piece_type(), 
+                to_sq,
+                self.pieces.occupied(),
+            ) & self.pieces.piece_bb(moved_piece)
+        };
+        let needs_disambiguation = possible_ambiguous_attackers.count_ones() > 1 && moved_piece.piece_type() != PieceType::PAWN;
+        let from_file = BB_FILES[m.from().file() as usize];
+        let from_rank = BB_RANKS[m.from().rank() as usize];
+        let can_be_disambiguated_by_file = (possible_ambiguous_attackers & from_file).count_ones() == 1;
+        let can_be_disambiguated_by_rank = (possible_ambiguous_attackers & from_rank).count_ones() == 1;
+        let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;
+        let must_be_disambiguated_by_file = needs_both || can_be_disambiguated_by_file;
+        let must_be_disambiguated_by_rank = needs_both || (can_be_disambiguated_by_rank && !can_be_disambiguated_by_file);
+        let disambiguator1 = if needs_disambiguation && must_be_disambiguated_by_file {
+            &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize]
+        } else {
+            ""
+        };
+        let disambiguator2 = if needs_disambiguation && must_be_disambiguated_by_rank {
+            &"12345678"[m.from().rank() as usize..=m.from().rank() as usize]
+        } else {
+            ""
+        };
+        let capture_sigil = if is_capture { "x" } else { "" };
+        let promo_str = match m.safe_promotion_type() {
+            PieceType::KNIGHT => "=N",
+            PieceType::BISHOP => "=B",
+            PieceType::ROOK => "=R",
+            PieceType::QUEEN => "=Q",
+            PieceType::NO_PIECE_TYPE => "",
+            _ => unreachable!(),
+        };
+        let check_char = match self.gives(m) {
+            CheckState::None => "",
+            CheckState::Check => "+",
+            CheckState::Checkmate => "#",
+        };
+        let san = format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
+        Some(san)
+    }
+
+    pub fn gives(&mut self, m: Move) -> CheckState {
+        if !self.make_move_hce(m) {
+            return CheckState::None;
+        }
+        let gives_check = self.in_check::<{ Self::US }>();
+        if gives_check {
+            let mut ml = MoveList::new();
+            self.generate_moves(&mut ml);
+            for &m in ml.iter() {
+                if !self.make_move_hce(m) {
+                    continue;
+                }
+                // we found a legal move, so m does not give checkmate.
+                self.unmake_move_hce();
+                self.unmake_move_hce();
+                return CheckState::Check;
+            }
+            // we didn't return, so there were no legal moves,
+            // so m gives checkmate.
+            self.unmake_move_hce();
+            return CheckState::Checkmate;
+        }
+        self.unmake_move_hce();
+        CheckState::None
     }
 
     /// Has the current position occurred before in the current game?
@@ -1415,6 +1497,20 @@ impl Board {
             print!("{m} ");
         }
         println!();
+    }
+
+    pub fn print_pv_san(&mut self) {
+        #![allow(clippy::unnecessary_to_owned)] // needed for ownership stuff
+        let mut moves_made = 0;
+        for m in self.get_pv_line().to_vec() {
+            print!("{} ", self.san(m).unwrap_or_else(|| "???".to_string()));
+            self.make_move_hce(m);
+            moves_made += 1;
+        }
+        println!();
+        for _ in 0..moves_made {
+            self.unmake_move_hce();
+        }
     }
 
     pub fn predicted_moves_left(&self) -> u64 {
@@ -1536,6 +1632,40 @@ mod tests {
             .zip(PieceType::all())
         {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
+        }
+    }
+
+    #[test]
+    fn test_san() {
+        use super::Board;
+        use std::{
+            fs::File,
+            io::{BufRead, BufReader},
+        };
+        
+        let f = File::open("epds/perftsuite.epd").unwrap();
+        let mut pos = Board::new();
+        let mut ml = crate::board::movegen::MoveList::new();
+        for line in BufReader::new(f).lines() {
+            let line = line.unwrap();
+            let fen = line.split_once(';').unwrap().0.trim();
+            pos.set_from_fen(fen).unwrap();
+            pos.generate_moves(&mut ml);
+            for &m in ml.iter() {
+                if !pos.make_move_hce(m) {
+                    continue;
+                }
+                pos.unmake_move_hce();
+                let san_repr = pos.san(m);
+                let san_repr = san_repr.unwrap();
+                let parsed_move = pos.parse_san(&san_repr);
+                assert_eq!(
+                    parsed_move, 
+                    Ok(m), 
+                    "{san_repr} != {m} in fen {}",
+                    pos.fen(),
+                );
+            }
         }
     }
 }

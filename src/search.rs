@@ -185,9 +185,6 @@ impl Board {
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
-                if MAIN_THREAD && d > 2 {
-                    info.check_if_best_move_found(bestmove);
-                }
                 if d > 1 && info.stopped() {
                     break 'deepening;
                 }
@@ -247,6 +244,9 @@ impl Board {
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(HFlag::Exact, v, d, info, tt, total_nodes);
+                }
+                if MAIN_THREAD && d > 2 {
+                    info.check_if_search_condition_met(bestmove, v, d);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -437,7 +437,8 @@ impl Board {
             }
 
             // are we too deep?
-            if height > MAX_DEPTH.ply_to_horizon() - 1 {
+            let max_height = MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+            if height >= max_height {
                 return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
             }
 
@@ -1037,7 +1038,7 @@ impl Board {
 
     /// Print the info about an iteration of the search.
     fn readout_info(
-        &self,
+        &mut self,
         mut bound: HFlag,
         v: i32,
         depth: i32,
@@ -1077,13 +1078,13 @@ impl Board {
         } else if bound == HFlag::Exact {
             let value = uci::pretty_format_score(v, self.turn());
             eprint!(
-                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} {knps}kn/s ",
+                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} {knps:5}kn/s ",
                 info.seldepth.ply_to_horizon(),
                 t = uci::format_time(info.start_time.elapsed().as_millis()),
                 knps = nps / 1000,
                 knodes = total_nodes / 1_000,
             );
-            self.print_pv();
+            self.print_pv_san();
         }
     }
 }
