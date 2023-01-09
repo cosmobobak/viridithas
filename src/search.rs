@@ -1051,8 +1051,8 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let sstr = uci::format_score(v);
-        let pretty_print = isatty::isatty(STDERR);
-        let uci_required = !pretty_print || !isatty::isatty(STDOUT);
+        let pretty_print = isatty::isatty(STDERR) && isatty::isatty(STDOUT);
+        let uci_required = !pretty_print;
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
