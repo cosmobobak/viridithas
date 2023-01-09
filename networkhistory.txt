@@ -66,8 +66,8 @@ NET ID | general concept                          | notes
        | with HCE, so we redid it.                | vs net-24.
        | didn't pass SPRT, but it's still better. |
 --------------------------------------------------------------------------------------------------
-    27 | net-26 data but 40% WDL focus.           | ???? +/- ????, LOS: ????
+    27 | net-26 data but 40% WDL focus.           | 8.0 +/- 6.6, LOS: 99.1 %
        |                                          | vs net-26.
 --------------------------------------------------------------------------------------------------
-    28 | same as net-{26|27} but with LR=5e-3.    | ???? +/- ????, LOS: ????
-       |                                          | vs net-{26|27}.
+    28 | same as net-27 but with LR=5e-3.         | ???? +/- ????, LOS: ????
+       |                                          | vs net-27.

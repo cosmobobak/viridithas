@@ -20,7 +20,7 @@ use crate::{
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION,
+    NAME, VERSION, piece::Colour,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
@@ -304,18 +304,87 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     std::mem::drop(sender);
 }
 
-pub fn format_score(score: i32) -> String {
-    if is_mate_score(score) {
-        let plies_to_mate = MATE_SCORE - score.abs();
-        let moves_to_mate = (plies_to_mate + 1) / 2;
-        if score > 0 {
-            format!("mate {moves_to_mate}")
+pub struct ScoreFormatWrapper(i32);
+impl Display for ScoreFormatWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if is_mate_score(self.0) {
+            let plies_to_mate = MATE_SCORE - self.0.abs();
+            let moves_to_mate = (plies_to_mate + 1) / 2;
+            if self.0 > 0 {
+                write!(f, "mate {moves_to_mate}")
+            } else {
+                write!(f, "mate -{moves_to_mate}")
+            }
         } else {
-            format!("mate -{moves_to_mate}")
+            write!(f, "cp {}", self.0)
         }
-    } else {
-        format!("cp {score}")
     }
+}
+pub const fn format_score(score: i32) -> ScoreFormatWrapper {
+    ScoreFormatWrapper(score)
+}
+pub struct PrettyScoreFormatWrapper(i32, Colour);
+impl Display for PrettyScoreFormatWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            -20..=20 => write!(f, "\u{001b}[0m")?, // drawish, no colour.
+            21..=100 => write!(f, "\u{001b}[38;5;10m")?, // slightly better for us, light green.
+            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?, // slightly better for them, light red.
+            101..=500 => write!(f, "\u{001b}[38;5;2m")?, // clearly better for us, green.
+            -10000..=-101 => write!(f, "\u{001b}[38;5;1m")?, // clearly/much better for them, red.
+            501..=10000 => write!(f, "\u{001b}[38;5;4m")?, // much better for us, blue.
+            _ => write!(f, "\u{001b}[38;5;219m")?, // probably a mate score, pink.
+        }
+        let white_pov = if self.1 == Colour::WHITE {
+            self.0
+        } else {
+            -self.0
+        };
+        if is_mate_score(white_pov) {
+            let plies_to_mate = MATE_SCORE - white_pov.abs();
+            let moves_to_mate = (plies_to_mate + 1) / 2;
+            if white_pov > 0 {
+                write!(f, "   #{moves_to_mate:<2}")?;
+            } else {
+                write!(f, "  #-{moves_to_mate:<2}")?;
+            }
+        } else {
+            // six chars wide: one for the sign, two for the pawn values,
+            // one for the decimal point, and two for the centipawn values
+            write!(f, "{:+6.2}", f64::from(white_pov) / 100.0)?;
+        }
+        write!(f, "\u{001b}[0m") // reset
+    }
+}
+pub const fn pretty_format_score(v: i32, c: Colour) -> PrettyScoreFormatWrapper {
+    PrettyScoreFormatWrapper(v, c)
+}
+
+pub struct HumanTimeFormatWrapper {
+    millis: u128,
+}
+impl Display for HumanTimeFormatWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let millis = self.millis;
+        let seconds = millis / 1000;
+        let minutes = seconds / 60;
+        let hours = minutes / 60;
+        let days = hours / 24;
+        if days > 0 {
+            write!(f, "{days:2}d{r_hours:02}h", r_hours = hours % 24)
+        } else if hours > 0 {
+            write!(f, "{hours:2}h{r_minutes:02}m", r_minutes = minutes % 60)
+        } else if minutes > 0 {
+            write!(f, "{minutes:2}m{r_seconds:02}s", r_seconds = seconds % 60)
+        } else if seconds > 0 {
+            write!(f, "{seconds:2}.{r_millis:02}s", r_millis = millis % 1000 / 10)
+        } else {
+            write!(f, "{millis:4}ms")
+        }
+    }
+}
+pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
+    HumanTimeFormatWrapper { millis }
 }
 
 fn print_uci_response(full: bool) {

@@ -14,21 +14,22 @@ mod epd;
 mod errors;
 mod historytable;
 mod image;
+mod isatty;
 mod lookups;
 mod magic;
 mod makemove;
 mod nnue;
 mod perft;
+mod piece;
 mod piecesquaretable;
 mod rng;
 mod search;
 mod searchinfo;
+mod tablebases;
 mod texel;
 mod threadlocal;
 mod transpositiontable;
 mod uci;
-mod tablebases;
-mod piece;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -73,8 +74,7 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(path, output_path, nnue::convert::Format::OurTexel, cli.nnuedepth, true, cli.nnuefornnue)
-        .unwrap();
+        return nnue::convert::evaluate_fens(path,output_path,nnue::convert::Format::OurTexel,cli.nnuedepth,true,cli.nnuefornnue).unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
             let mut path = path.clone();

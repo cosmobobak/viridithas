@@ -27,7 +27,7 @@ use crate::{
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTView},
-    uci, piece::{PieceType, Colour},
+    uci, piece::{PieceType, Colour}, isatty::{STDERR, self, STDOUT},
 };
 
 use self::parameters::SearchParams;
@@ -200,8 +200,6 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                let sstr = uci::format_score(v);
-
                 score = v;
                 self.regenerate_pv_line(d, tt);
                 bestmove = *self.principal_variation().first().unwrap_or(&bestmove);
@@ -226,7 +224,7 @@ impl Board {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::UpperBound, &sstr, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::UpperBound, v, d, info, tt, total_nodes);
                     }
                     aw.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -241,14 +239,14 @@ impl Board {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::LowerBound, &sstr, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::LowerBound, v, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(HFlag::Exact, &sstr, d, info, tt, total_nodes);
+                    self.readout_info(HFlag::Exact, v, d, info, tt, total_nodes);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -369,7 +367,7 @@ impl Board {
 
         if moves_made == 0 && in_check {
             // lol
-            return mated_in(height);
+            return mated_in(MAX_DEPTH.ply_to_horizon());
         }
 
         let flag = if best_score >= beta {
@@ -634,6 +632,7 @@ impl Board {
                 && t.thread_id == 0
                 && info.print_to_stdout
                 && info.time_since_start() > Duration::from_secs(5)
+                && !isatty::isatty(STDERR) || !isatty::isatty(STDOUT)
             {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
@@ -1040,7 +1039,7 @@ impl Board {
     fn readout_info(
         &self,
         mut bound: HFlag,
-        sstring: &str,
+        v: i32,
         depth: i32,
         info: &SearchInfo,
         tt: TTView,
@@ -1051,6 +1050,9 @@ impl Board {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
+        let sstr = uci::format_score(v);
+        let pretty_print = isatty::isatty(STDERR);
+        let uci_required = !pretty_print || !isatty::isatty(STDOUT);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
@@ -1059,35 +1061,33 @@ impl Board {
                 _ => HFlag::Exact,
             };
         }
-        if bound == HFlag::UpperBound {
+        let bound_string = match bound {
+            HFlag::UpperBound => " upperbound",
+            HFlag::LowerBound => " lowerbound",
+            _ => "",
+        };
+        if uci_required {
             print!(
-                "info score {sstring} upperbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
+                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
                 total_nodes,
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
-        } else if bound == HFlag::LowerBound {
-            print!(
-                "info score {sstring} lowerbound depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
-                info.seldepth.ply_to_horizon(),
-                total_nodes,
-                info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
-            );
-        } else {
-            print!(
-                "info score {sstring} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
-                info.seldepth.ply_to_horizon(),
-                total_nodes,
-                info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
-            );
+            self.print_pv();
         }
-        self.print_pv();
-        // #[allow(clippy::cast_precision_loss)]
-        // let move_ordering_percentage = info.failhigh_first as f64 * 100.0 / info.failhigh as f64;
-        // eprintln!("move ordering quality: {:.2}%", move_ordering_percentage);
+        
+        if pretty_print && bound == HFlag::Exact {
+            let value = uci::pretty_format_score(v, self.turn());
+            eprint!(
+                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} {knps}kn/s ",
+                info.seldepth.ply_to_horizon(),
+                t = uci::format_time(info.start_time.elapsed().as_millis()),
+                knps = nps / 1000,
+                knodes = total_nodes / 1_000,
+            );
+            self.print_pv();
+        }
     }
 }
 
