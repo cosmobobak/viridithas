@@ -1051,8 +1051,7 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let sstr = uci::format_score(v);
-        let pretty_print = isatty::isatty(STDERR) && isatty::isatty(STDOUT);
-        let uci_required = !pretty_print;
+        let pretty_print = uci::PRETTY_PRINT.load(Ordering::SeqCst);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
@@ -1066,7 +1065,7 @@ impl Board {
             HFlag::LowerBound => " lowerbound",
             _ => "",
         };
-        if uci_required {
+        if !pretty_print {
             print!(
                 "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
@@ -1075,9 +1074,7 @@ impl Board {
                 tt.hashfull(),
             );
             self.print_pv();
-        }
-        
-        if pretty_print && bound == HFlag::Exact {
+        } else if bound == HFlag::Exact {
             let value = uci::pretty_format_score(v, self.turn());
             eprint!(
                 " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} {knps}kn/s ",

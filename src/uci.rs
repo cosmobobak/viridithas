@@ -6,7 +6,7 @@ use std::{
         atomic::{self, AtomicBool, AtomicUsize, Ordering},
         mpsc,
     },
-    time::Instant,
+    time::Instant, str::ParseBoolError,
 };
 
 use crate::{
@@ -55,6 +55,12 @@ impl From<ParseFloatError> for UciError {
 impl From<ParseIntError> for UciError {
     fn from(pie: ParseIntError) -> Self {
         Self::ParseOption(pie.to_string())
+    }
+}
+
+impl From<ParseBoolError> for UciError {
+    fn from(pbe: ParseBoolError) -> Self {
+        Self::ParseOption(pbe.to_string())
     }
 }
 
@@ -269,6 +275,10 @@ fn parse_setoption(
             assert!(value > 0 && value <= 500, "MultiPV value must be between 1 and 500");
             MULTI_PV.store(value, Ordering::SeqCst);
         }
+        "PrettyPrint" => {
+            let value: bool = opt_value.parse()?;
+            PRETTY_PRINT.store(value, Ordering::SeqCst);
+        }
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -392,6 +402,7 @@ fn print_uci_response(full: bool) {
     println!("id author Cosmo");
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max 8192");
     println!("option name Threads type spin default 1 min 1 max 512");
+    println!("option name PrettyPrint type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -401,6 +412,7 @@ fn print_uci_response(full: bool) {
     println!("uciok");
 }
 
+pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(false);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
