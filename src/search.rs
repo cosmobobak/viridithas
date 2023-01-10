@@ -1,9 +1,11 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod parameters;
 
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     thread,
-    time::Duration,
+    time::Duration, fmt::Display,
 };
 
 use crate::{
@@ -21,7 +23,7 @@ use crate::{
     cfor,
     chessmove::Move,
     definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StaticVec, INFINITY, MAX_DEPTH,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StaticVec, INFINITY, MAX_DEPTH, MAX_PLY,
     },
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
@@ -164,6 +166,7 @@ impl Board {
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
+        let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let starting_depth = if MAIN_THREAD {
             1i32
@@ -181,14 +184,14 @@ impl Board {
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
-                let v = self.root_search::<USE_NNUE>(tt, info, t, depth, aw.alpha, aw.beta);
+                pv.score = self.root_search::<USE_NNUE>(tt, &mut pv, info, t, depth, aw.alpha, aw.beta);
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
                 info.check_up();
                 if d > 1 && info.stopped() {
                     break 'deepening;
                 }
-                if MAIN_THREAD && is_mate_score(v) && d > 10 {
+                if MAIN_THREAD && is_mate_score(pv.score) && d > 10 {
                     mate_counter += 1;
                     if d > 1 && info.in_game() && mate_counter >= 3 {
                         break 'deepening;
@@ -197,9 +200,8 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                score = v;
-                self.regenerate_pv_line(d, tt);
-                bestmove = *self.principal_variation().first().unwrap_or(&bestmove);
+                score = pv.score;
+                bestmove = pv.line[0];
 
                 if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
@@ -215,13 +217,13 @@ impl Board {
                     }
                 }
 
-                if aw.alpha != -INFINITY && v <= aw.alpha {
+                if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     // fail low
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is an upper bound, because we're going to widen the window downward,
                         // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::UpperBound, v, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::UpperBound, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -230,23 +232,23 @@ impl Board {
                     }
                     continue;
                 }
-                if aw.beta != INFINITY && v >= aw.beta {
+                if aw.beta != INFINITY && pv.score >= aw.beta {
                     // fail high
                     if MAIN_THREAD && info.print_to_stdout {
                         // this is a lower bound, because we're going to widen the window upward,
                         // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::LowerBound, v, d, info, tt, total_nodes);
+                        self.readout_info(HFlag::LowerBound, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
                     continue;
                 }
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(HFlag::Exact, v, d, info, tt, total_nodes);
+                    self.readout_info(HFlag::Exact, &pv, d, info, tt, total_nodes);
                 }
                 if MAIN_THREAD && d > 2 {
-                    info.check_if_search_condition_met(bestmove, v, d);
+                    info.check_if_search_condition_met(bestmove, pv.score, d);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -265,6 +267,7 @@ impl Board {
     pub fn quiescence<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
+        pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut alpha: i32,
@@ -279,6 +282,10 @@ impl Board {
                 return 0;
             }
         }
+
+        let mut lpv = PVariation::default();
+
+        pv.length = 0;
 
         let height = self.height();
         let key = self.hashkey();
@@ -347,10 +354,12 @@ impl Board {
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_mate_score(at_least * 2) {
                 self.unmake_move::<NNUE>(t);
+                pv.length = 1;
+                pv.line[0] = m;
                 return at_least;
             }
 
-            let score = -self.quiescence::<PV, NNUE>(tt, info, t, -beta, -alpha);
+            let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
             self.unmake_move::<NNUE>(t);
 
             if score > best_score {
@@ -358,6 +367,7 @@ impl Board {
                 best_move = m;
                 if score > alpha {
                     alpha = score;
+                    pv.load_from(best_move, &lpv);
                 }
                 if alpha >= beta {
                     break; // fail-high
@@ -395,6 +405,7 @@ impl Board {
     pub fn alpha_beta<const PV: bool, const ROOT: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
+        pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         mut depth: Depth,
@@ -405,10 +416,15 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(self.check_nnue_coherency(&t.nnue));
 
+        let mut lpv = PVariation::default();
+
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<PV, NNUE>(tt, info, t, alpha, beta);
+            return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
+
+        pv.length = 0;
+
         depth = depth.max(ZERO_PLY);
 
         if info.nodes.trailing_zeros() >= 12 {
@@ -515,7 +531,7 @@ impl Board {
                 let nm_depth = depth - get_search_params().nmp_base_reduction - depth / 3;
                 self.make_nullmove();
                 let null_score =
-                    -self.zw_search::<NNUE>(tt, info, t, nm_depth, -beta, -beta + 1);
+                    -self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -531,7 +547,7 @@ impl Board {
                     // and if we hit the other side deeper in the tree
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
-                    let veri_score = self.zw_search::<NNUE>(tt, info, t, nm_depth, beta - 1, beta);
+                    let veri_score = self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, beta - 1, beta);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -554,7 +570,7 @@ impl Board {
         // and help along the history tables.
         if PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
-            self.alpha_beta::<PV, ROOT, NNUE>(tt, info, t, iid_depth, alpha, beta);
+            self.alpha_beta::<PV, ROOT, NNUE>(tt, &mut lpv, info, t, iid_depth, alpha, beta);
             tt_move = t.best_moves[height];
         }
 
@@ -690,6 +706,7 @@ impl Board {
                 // first move (presumably the PV-move)
                 score = -self.fullwindow_search::<PV, NNUE>(
                     tt,
+                    &mut lpv,
                     info,
                     t,
                     depth + extension - 1,
@@ -710,12 +727,13 @@ impl Board {
                 };
                 // perform a zero-window search
                 score =
-                    -self.zw_search::<NNUE>(tt, info, t, depth + extension - r, -alpha - 1, -alpha);
+                    -self.zw_search::<NNUE>(tt, &mut lpv, info, t, depth + extension - r, -alpha - 1, -alpha);
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
                     score = -self.fullwindow_search::<PV, NNUE>(
                         tt,
+                        &mut lpv,
                         info,
                         t,
                         depth + extension - 1,
@@ -735,6 +753,9 @@ impl Board {
                 best_move = m;
                 if score > alpha {
                     alpha = score;
+
+                    pv.load_from(best_move, &lpv);
+
                     if score >= beta {
                         // we failed high, so this is a cut-node
 
@@ -842,7 +863,6 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    #[allow(clippy::too_many_arguments)]
     pub fn singularity<const ROOT: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
@@ -854,12 +874,13 @@ impl Board {
         depth: Depth,
         mp: &mut MainMovePicker<ROOT>,
     ) -> Depth {
+        let mut lpv = PVariation::default();
         let r_beta = Self::singularity_margin(tt_value, depth);
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move::<NNUE>(t);
         t.excluded[self.height()] = m;
-        let value = self.zw_search::<NNUE>(tt, info, t, r_depth, r_beta - 1, r_beta);
+        let value = self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
@@ -893,7 +914,7 @@ impl Board {
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value = self.alpha_beta::<false, true, true>(tt, info, t, r_depth, r_beta - 1, r_beta);
+        let value = self.alpha_beta::<false, true, true>(tt, &mut PVariation::default(), info, t, r_depth, r_beta - 1, r_beta);
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
         value < r_beta
@@ -992,39 +1013,42 @@ impl Board {
     pub fn root_search<const NNUE: bool>(
         &mut self,
         tt: TTView,
+        pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<true, true, NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<true, true, NNUE>(tt, pv, info, t, depth, alpha, beta)
     }
 
     /// zero-window alpha-beta search.
     pub fn zw_search<const NNUE: bool>(
         &mut self,
         tt: TTView,
+        pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<false, false, NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<false, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
     }
 
     /// full-window alpha-beta search.
     pub fn fullwindow_search<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
+        pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
         depth: Depth,
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<PV, false, NNUE>(tt, info, t, depth, alpha, beta)
+        self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
     }
 
     /// Get an initial move and score for the current position from the TT
@@ -1053,7 +1077,7 @@ impl Board {
     fn readout_info(
         &mut self,
         mut bound: HFlag,
-        v: i32,
+        pv: &PVariation,
         depth: i32,
         info: &SearchInfo,
         tt: TTView,
@@ -1064,7 +1088,7 @@ impl Board {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        let sstr = uci::format_score(v);
+        let sstr = uci::format_score(pv.score);
         let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
@@ -1081,17 +1105,16 @@ impl Board {
         };
         if normal_uci_output {
             print!(
-                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
+                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv {pv}",
                 info.seldepth.ply_to_horizon(),
                 total_nodes,
                 info.start_time.elapsed().as_millis(),
                 tt.hashfull(),
             );
-            self.print_pv();
             println!();
         } else {
-            let value = uci::pretty_format_score(v, self.turn());
-            let pv = self.pv_san();
+            let value = uci::pretty_format_score(pv.score, self.turn());
+            let pv = self.pv_san(pv);
             let endchr = if bound == HFlag::Exact {
                 "\n"
             } else {
@@ -1208,5 +1231,38 @@ impl AspirationWindow {
         }
         self.beta = self.midpoint + margin;
         self.beta_fails += 1;
+    }
+}
+
+pub struct PVariation {
+    length: usize,
+    score: i32,
+    line: [Move; MAX_PLY]
+}
+
+impl Default for PVariation {
+    fn default() -> Self {
+        Self { length: 0, score: 0, line: [Move::NULL; MAX_PLY] }
+    }
+}
+
+impl PVariation {
+    pub fn moves(&self) -> &[Move] {
+        &self.line[..self.length]
+    }
+
+    fn load_from(&mut self, m: Move, rest: &Self) {
+        self.line[0] = m;
+        self.line[1..=rest.length].copy_from_slice(&rest.line[..rest.length]);
+        self.length = rest.length + 1;
+    }
+}
+
+impl Display for PVariation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for &m in self.moves() {
+            write!(f, "{m} ")?;
+        }
+        Ok(())
     }
 }

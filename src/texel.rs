@@ -14,7 +14,7 @@ use crate::{
     definitions::{INFINITY, MEGABYTE},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::TT, piece::Colour,
+    transpositiontable::TT, piece::Colour, search::PVariation,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -33,6 +33,7 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 }
 
 fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) -> f64 {
+    let mut pv = PVariation::default();
     let mut pos = Board::default();
     let mut info = SearchInfo::default();
     let mut tt = TT::new();
@@ -51,6 +52,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
             let pov_score = Board::quiescence::<true, false>(
                 &mut pos,
                 tt.view(),
+                &mut pv,
                 &mut info,
                 &mut t,
                 -INFINITY,

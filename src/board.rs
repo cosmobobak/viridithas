@@ -25,8 +25,7 @@ use crate::{
     definitions::{
         File,
         Rank::{self, RANK_3, RANK_6},
-        Square, Undo, BKCA, BQCA, INFINITY,
-        MAX_DEPTH, WKCA, WQCA, CheckState,
+        Square, Undo, BKCA, BQCA, WKCA, WQCA, CheckState,
     },
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
@@ -35,8 +34,7 @@ use crate::{
     nnue::{ACTIVATE, DEACTIVATE},
     piecesquaretable::pst_value,
     threadlocal::ThreadData,
-    transpositiontable::{ProbeResult, TTHit, TTView},
-    piece::{Piece, Colour, PieceType},
+    piece::{Piece, Colour, PieceType}, search::PVariation,
 };
 
 use self::{evaluation::score::S, movegen::bitboards::BitBoard};
@@ -87,8 +85,6 @@ pub struct Board {
     height: usize,
     history: Vec<Undo>,
     repetition_cache: Vec<u64>,
-
-    principal_variation: Vec<Move>,
 }
 
 impl Debug for Board {
@@ -132,7 +128,6 @@ impl Board {
             castle_perm: 0,
             history: Vec::new(),
             repetition_cache: Vec::new(),
-            principal_variation: Vec::new(),
             pst_vals: S(0, 0),
         };
         out.reset();
@@ -145,10 +140,6 @@ impl Board {
 
     pub const fn hashkey(&self) -> u64 {
         self.key
-    }
-
-    pub fn principal_variation(&self) -> &[Move] {
-        &self.principal_variation
     }
 
     // pub const fn n_men(&self) -> u8 {
@@ -703,29 +694,6 @@ impl Board {
         }
 
         true
-    }
-
-    /// Checks if a move is legal in the current position.
-    /// Because moves must be played and unplayed, this method
-    /// requires a mutable reference to the position.
-    /// Despite this, you should expect the state of a Board
-    /// object to be the same before and after calling [`Board::is_legal`].
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_legal(&mut self, move_to_check: Move) -> bool {
-        let mut list = MoveList::new();
-        self.generate_moves(&mut list);
-
-        for &m in list.iter() {
-            if !self.make_move_hce(m) {
-                continue;
-            }
-            self.unmake_move_hce();
-            if m == move_to_check {
-                return true;
-            }
-        }
-
-        false
     }
 
     fn clear_piece(&mut self, sq: Square) {
@@ -1466,43 +1434,10 @@ impl Board {
         self.num(Piece::new(Colour::WHITE, pt)) + self.num(Piece::new(Colour::BLACK, pt))
     }
 
-    pub fn regenerate_pv_line(&mut self, depth: i32, tt: TTView) {
-        self.principal_variation.clear();
-
-        while let ProbeResult::Hit(TTHit { tt_move, .. }) =
-            tt.probe(self.key, 0, -INFINITY, INFINITY, MAX_DEPTH, true)
-        {
-            if self.principal_variation.len() < depth.try_into().unwrap()
-                && self.is_legal(tt_move)
-                && !self.is_draw()
-            {
-                self.make_move_hce(tt_move);
-                self.principal_variation.push(tt_move);
-            } else {
-                break;
-            }
-        }
-
-        for _ in 0..self.principal_variation.len() {
-            self.unmake_move_hce();
-        }
-    }
-
-    fn get_pv_line(&self) -> &[Move] {
-        &self.principal_variation
-    }
-
-    pub fn print_pv(&self) {
-        for &m in self.get_pv_line() {
-            print!("{m} ");
-        }
-    }
-
-    pub fn pv_san(&mut self) -> String {
-        #![allow(clippy::unnecessary_to_owned)] // needed for ownership stuff
+    pub fn pv_san(&mut self, pv: &PVariation) -> String {
         let mut out = String::new();
         let mut moves_made = 0;
-        for m in self.get_pv_line().to_vec() {
+        for &m in pv.moves() {
             write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string())).unwrap();
             self.make_move_hce(m);
             moves_made += 1;
