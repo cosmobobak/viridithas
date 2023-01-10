@@ -1163,7 +1163,7 @@ impl AspirationWindow {
         Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
-    pub fn from_last_score(last_score: i32) -> Self {
+    pub const fn from_last_score(last_score: i32) -> Self {
         if is_mate_score(last_score) {
             // for mates we expect a lot of fluctuation, so aspiration
             // windows are not useful.
@@ -1175,20 +1175,13 @@ impl AspirationWindow {
                 beta_fails: 0,
             }
         } else {
-            let mut out = Self {
+            Self {
                 midpoint: last_score,
                 alpha: last_score - ASPIRATION_WINDOW,
                 beta: last_score + ASPIRATION_WINDOW,
                 alpha_fails: 0,
                 beta_fails: 0,
-            };
-            if last_score.abs() > 400 {
-                out.widen_down();
-                out.widen_up();
-                out.widen_down();
-                out.widen_up();
             }
-            out
         }
     }
 
