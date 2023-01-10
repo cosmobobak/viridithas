@@ -12,6 +12,7 @@ use crate::{
     transpositiontable::TT,
 };
 
+const CONTROL_GREY: &str = "\u{001b}[38;5;243m";
 const CONTROL_GREEN: &str = "\u{001b}[32m";
 const CONTROL_RED: &str = "\u{001b}[31m";
 const CONTROL_RESET: &str = "\u{001b}[0m";
@@ -97,24 +98,24 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         let passed = best_moves.contains(&bm);
         let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed {
-            format!(" {:.1}s", info.start_time.elapsed().as_secs_f64())
+            format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", info.start_time.elapsed().as_secs_f64())
         } else {
-            format!(", {CONTROL_RED}program chose {bm}{CONTROL_RESET}")
+            format!(", program chose {CONTROL_RED}{bm}{CONTROL_RESET}")
         };
         let move_strings =
             best_moves
                 .iter()
                 .map(|&m| {
                     if m == bm {
-                        format!("{CONTROL_GREEN}{m}{CONTROL_RESET}")
+                        format!("{m}")
                     } else {
-                        m.to_string()
+                        format!("{CONTROL_GREY}{m}{CONTROL_RESET}")
                     }
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
         println!(
-            "{id:midl$} {color}{}{CONTROL_RESET} {fen:mfl$} [{move_strings}]{failinfo}",
+            "{CONTROL_GREY}{id:midl$}{CONTROL_RESET} {fen:mfl$} {color}{}{CONTROL_RESET} [{move_strings}]{failinfo}",
             if passed { "PASS" } else { "FAIL" },
             midl = maxidlen,
             mfl = maxfenlen,

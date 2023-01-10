@@ -29,7 +29,7 @@ pub struct Cli {
     #[clap(long, value_name = "N_EXAMPLES", default_value = "16000000")]
     pub examples: usize,
     /// Display misc. information about the engine
-    #[clap(long)]
+    #[clap(short, long)]
     pub info: bool,
     /// Visualise the evaluation parameters
     #[clap(long)]
@@ -76,8 +76,4 @@ pub struct Cli {
     /// Visualise the NNUE.
     #[clap(long)]
     pub visnnue: bool,
-    /// Launch UCI in interactive mode.
-    /// Sets defaults to optimise for pleasant human use.
-    #[clap(short, long)]
-    pub interactive: bool,
 }

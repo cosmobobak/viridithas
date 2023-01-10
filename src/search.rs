@@ -337,8 +337,8 @@ impl Board {
             if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
-            moves_made += 1;
             info.nodes += 1;
+            moves_made += 1;
 
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
             // the worst case for a capture is that we lose the capturing piece immediately.
@@ -1092,7 +1092,7 @@ impl Board {
         } else if bound == HFlag::Exact {
             let value = uci::pretty_format_score(v, self.turn());
             eprint!(
-                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} {knps:5}kn/s ",
+                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m ",
                 info.seldepth.ply_to_horizon(),
                 t = uci::format_time(info.start_time.elapsed().as_millis()),
                 knps = nps / 1000,
@@ -1165,10 +1165,23 @@ impl AspirationWindow {
 
     pub const fn from_last_score(last_score: i32) -> Self {
         if is_mate_score(last_score) || last_score.abs() > 1000 {
+            // for mates & completely-winning scores, 
+            // we expect a lot of fluctuation, so aspiration
+            // windows are not useful.
+            let alpha = if last_score > MINIMUM_MATE_SCORE {
+                last_score // mate scores can only go down
+            } else {
+                -INFINITY
+            };
+            let beta = if last_score < -MINIMUM_MATE_SCORE {
+                last_score // mate scores can only go down
+            } else {
+                INFINITY
+            };
             Self {
                 midpoint: last_score,
-                alpha: -INFINITY,
-                beta: INFINITY,
+                alpha,
+                beta,
                 alpha_fails: 0,
                 beta_fails: 0,
             }

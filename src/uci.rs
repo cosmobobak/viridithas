@@ -24,7 +24,6 @@ use crate::{
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
-const UCI_INTERACTIVE_HASH_MEGABYTES: usize = 256;
 
 enum UciError {
     ParseOption(String),
@@ -435,14 +434,14 @@ fn print_uci_response(full: bool) {
     println!("uciok");
 }
 
-pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(false);
+pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn main_loop(params: EvalParams, interactive: bool) {
+pub fn main_loop(params: EvalParams) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -465,11 +464,6 @@ pub fn main_loop(params: EvalParams, interactive: bool) {
         t.alloc_tables();
     }
 
-    if interactive {
-        tt.resize(UCI_INTERACTIVE_HASH_MEGABYTES * MEGABYTE);
-        PRETTY_PRINT.store(true, Ordering::SeqCst);
-    }
-
     loop {
         std::io::stdout().flush().unwrap();
         let line = stdin.lock().unwrap().recv().expect("Couldn't read from stdin");
@@ -479,6 +473,7 @@ pub fn main_loop(params: EvalParams, interactive: bool) {
             "\n" => continue,
             "uci" => {
                 print_uci_response(false);
+                PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
             "ucifull" => {
