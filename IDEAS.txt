@@ -3,11 +3,11 @@ MAJOR:
 - tablebases
 -- root-optimal play (exclude all moves that change the game-theoretic value of the position)
 -- in-tree tablebase probing (use the tablebase to prune moves when the search hits TB positions)
+-- pyrrhic bindings?
 - docs
 
 MINOR:
 - tune search parameters
-- tune move generation (check evasions?)
 - check out other engine's impls of countermoves and killer moves
 - replace all the false/true constgen stuff with a proper type.
 - alpha pruning
@@ -33,3 +33,5 @@ MINOR:
 - make the big-piece and other stuff better named
 - IID
 - put movelists in ThreadData to reuse them.
+- make is_legal faster
+- check evasions
