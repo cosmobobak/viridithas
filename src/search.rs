@@ -553,7 +553,7 @@ impl Board {
         // move ordering will be terrible. To rectify this,
         // we do a shallower search first, to get a bestmove
         // and help along the history tables.
-        if PV && depth > Depth::new(3) && tt_hit.map_or(true, |hit| hit.tt_bound != HFlag::Exact) {
+        if PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
             self.alpha_beta::<PV, ROOT, NNUE>(tt, info, t, iid_depth, alpha, beta);
             tt_move = t.best_moves[height];
