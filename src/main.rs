@@ -149,5 +149,5 @@ fn main() {
         };
     }
 
-    uci::main_loop(eparams);
+    uci::main_loop(eparams, cli.interactive);
 }

@@ -24,6 +24,7 @@ use crate::{
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
+const UCI_INTERACTIVE_HASH_MEGABYTES: usize = 256;
 
 enum UciError {
     ParseOption(String),
@@ -441,7 +442,7 @@ pub fn is_multipv() -> bool {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn main_loop(params: EvalParams) {
+pub fn main_loop(params: EvalParams, interactive: bool) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -462,6 +463,11 @@ pub fn main_loop(params: EvalParams) {
     for t in &mut thread_data {
         t.nnue.refresh_acc(&pos);
         t.alloc_tables();
+    }
+
+    if interactive {
+        tt.resize(UCI_INTERACTIVE_HASH_MEGABYTES * MEGABYTE);
+        PRETTY_PRINT.store(true, Ordering::SeqCst);
     }
 
     loop {

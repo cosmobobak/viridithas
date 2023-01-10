@@ -546,6 +546,18 @@ impl Board {
         let mut best_score = -INFINITY;
         let mut moves_made = 0;
 
+        // internal iterative deepening - 
+        // if we didn't get a TT hit, and we're in the PV,
+        // then this is going to be a costly search because
+        // move ordering will be terrible. To rectify this,
+        // we do a shallower search first, to get a bestmove
+        // and help along the history tables.
+        if PV && tt_hit.is_none() && depth > Depth::new(3) {
+            let iid_depth = depth - 2;
+            self.alpha_beta::<PV, ROOT, NNUE>(tt, info, t, iid_depth, alpha, beta);
+            best_move = t.best_moves[height];
+        }
+
         // number of quiet moves to try before we start pruning
         let lmp_threshold = get_lm_table().getp(depth, improving);
 
@@ -555,7 +567,7 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-        let tt_move = tt_hit.as_ref().map_or(Move::NULL, |hit| hit.tt_move);
+        let tt_move = tt_hit.as_ref().map_or(best_move, |hit| hit.tt_move);
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
@@ -757,6 +769,7 @@ impl Board {
                             );
                         }
 
+                        t.best_moves[height] = best_move;
                         return score;
                     }
                 }
@@ -802,6 +815,7 @@ impl Board {
             }
         }
 
+        t.best_moves[height] = best_move;
         best_score
     }
 

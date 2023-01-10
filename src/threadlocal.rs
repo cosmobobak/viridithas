@@ -9,6 +9,7 @@ use crate::{
 pub struct ThreadData {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
+    pub best_moves: [Move; MAX_PLY],
     pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::NNUEState>,
@@ -29,6 +30,7 @@ impl ThreadData {
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
+            best_moves: [Move::NULL; MAX_PLY],
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
             nnue: Box::new(nnue::NNUEState::new()),

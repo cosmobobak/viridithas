@@ -69,5 +69,5 @@ NET ID | general concept                          | notes
     27 | net-26 data but 40% WDL focus.           | 8.0 +/- 6.6, LOS: 99.1 %
        |                                          | vs net-26.
 --------------------------------------------------------------------------------------------------
-    28 | same as net-27 but with LR=5e-3.         | ???? +/- ????, LOS: ????
+    28 | same as net-27 but with LR=5e-3.         | 2.3 +/- 6.6, LOS: 75.3 %
        |                                          | vs net-27.
