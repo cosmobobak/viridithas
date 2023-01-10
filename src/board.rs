@@ -1496,21 +1496,21 @@ impl Board {
         for &m in self.get_pv_line() {
             print!("{m} ");
         }
-        println!();
     }
 
-    pub fn print_pv_san(&mut self) {
+    pub fn pv_san(&mut self) -> String {
         #![allow(clippy::unnecessary_to_owned)] // needed for ownership stuff
+        let mut out = String::new();
         let mut moves_made = 0;
         for m in self.get_pv_line().to_vec() {
-            print!("{} ", self.san(m).unwrap_or_else(|| "???".to_string()));
+            write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string())).unwrap();
             self.make_move_hce(m);
             moves_made += 1;
         }
-        println!();
         for _ in 0..moves_made {
             self.unmake_move_hce();
         }
+        out
     }
 
     pub fn predicted_moves_left(&self) -> u64 {

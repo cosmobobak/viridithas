@@ -1066,7 +1066,7 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let sstr = uci::format_score(v);
-        let pretty_print = uci::PRETTY_PRINT.load(Ordering::SeqCst);
+        let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
@@ -1080,7 +1080,7 @@ impl Board {
             HFlag::LowerBound => " lowerbound",
             _ => "",
         };
-        if !pretty_print {
+        if normal_uci_output {
             print!(
                 "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv ",
                 info.seldepth.ply_to_horizon(),
@@ -1089,16 +1089,22 @@ impl Board {
                 tt.hashfull(),
             );
             self.print_pv();
-        } else if bound == HFlag::Exact {
+            println!();
+        } else {
             let value = uci::pretty_format_score(v, self.turn());
+            let pv = self.pv_san();
+            let endchr = if bound == HFlag::Exact {
+                "\n"
+            } else {
+                "                        \r"
+            };
             eprint!(
-                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m ",
+                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv}{endchr}",
                 info.seldepth.ply_to_horizon(),
                 t = uci::format_time(info.start_time.elapsed().as_millis()),
                 knps = nps / 1000,
                 knodes = total_nodes / 1_000,
             );
-            self.print_pv_san();
         }
     }
 }
