@@ -201,7 +201,7 @@ impl Board {
                 }
 
                 score = pv.score;
-                bestmove = pv.line[0];
+                bestmove = *pv.moves().first().unwrap_or(&bestmove);
 
                 if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
