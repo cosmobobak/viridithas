@@ -1164,24 +1164,13 @@ impl AspirationWindow {
     }
 
     pub const fn from_last_score(last_score: i32) -> Self {
-        if is_mate_score(last_score) || last_score.abs() > 1000 {
-            // for mates & completely-winning scores, 
-            // we expect a lot of fluctuation, so aspiration
+        if is_mate_score(last_score) {
+            // for mates we expect a lot of fluctuation, so aspiration
             // windows are not useful.
-            let alpha = if last_score > MINIMUM_MATE_SCORE {
-                last_score // mate scores can only go down
-            } else {
-                -INFINITY
-            };
-            let beta = if last_score < -MINIMUM_MATE_SCORE {
-                last_score // mate scores can only go down
-            } else {
-                INFINITY
-            };
             Self {
                 midpoint: last_score,
-                alpha,
-                beta,
+                alpha: -INFINITY,
+                beta: INFINITY,
                 alpha_fails: 0,
                 beta_fails: 0,
             }
