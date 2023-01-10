@@ -542,6 +542,7 @@ impl Board {
         }
 
         let original_alpha = alpha;
+        let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.tt_move);
         let mut best_move = Move::NULL;
         let mut best_score = -INFINITY;
         let mut moves_made = 0;
@@ -552,10 +553,10 @@ impl Board {
         // move ordering will be terrible. To rectify this,
         // we do a shallower search first, to get a bestmove
         // and help along the history tables.
-        if PV && depth > Depth::new(3) && tt_hit.is_none() {
+        if PV && depth > Depth::new(3) && tt_hit.map_or(true, |hit| hit.tt_bound != HFlag::Exact) {
             let iid_depth = depth - 2;
             self.alpha_beta::<PV, ROOT, NNUE>(tt, info, t, iid_depth, alpha, beta);
-            best_move = t.best_moves[height];
+            tt_move = t.best_moves[height];
         }
 
         // number of quiet moves to try before we start pruning
@@ -567,7 +568,6 @@ impl Board {
         ];
 
         let killers = self.get_killer_set(t);
-        let tt_move = tt_hit.as_ref().map_or(best_move, |hit| hit.tt_move);
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
 
@@ -650,7 +650,7 @@ impl Board {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
 
-            let maybe_singular = tt_hit.as_ref().map_or(false, |tt_hit| {
+            let maybe_singular = tt_hit.map_or(false, |tt_hit| {
                 !ROOT
                     && depth >= get_search_params().singularity_depth
                     && tt_hit.tt_move == m

@@ -107,6 +107,7 @@ pub struct TTView<'a> {
     age: u8,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct TTHit {
     pub tt_move: Move,
     pub tt_depth: Depth,
