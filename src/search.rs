@@ -1164,7 +1164,7 @@ impl AspirationWindow {
     }
 
     pub const fn from_last_score(last_score: i32) -> Self {
-        if is_mate_score(last_score) {
+        if is_mate_score(last_score) || last_score.abs() > 1000 {
             Self {
                 midpoint: last_score,
                 alpha: -INFINITY,
