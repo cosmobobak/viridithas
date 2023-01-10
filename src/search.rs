@@ -366,8 +366,7 @@ impl Board {
         }
 
         if moves_made == 0 && in_check {
-            // lol
-            return mated_in(MAX_DEPTH.ply_to_horizon());
+            return -5000; // weird but works
         }
 
         let flag = if best_score >= beta {
@@ -1096,7 +1095,7 @@ impl Board {
             let endchr = if bound == HFlag::Exact {
                 "\n"
             } else {
-                "                        \r"
+                "                                                                   \r"
             };
             eprint!(
                 " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv}{endchr}",
