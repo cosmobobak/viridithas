@@ -522,8 +522,9 @@ pub fn main_loop(params: EvalParams) {
                         }
                         if let Some(threads) = conf.threads {
                             thread_data = (0..threads).map(ThreadData::new).collect();
-                            for td in &mut thread_data {
-                                td.alloc_tables();
+                            for t in &mut thread_data {
+                                t.nnue.refresh_acc(&pos);
+                                t.alloc_tables();
                             }
                         }
                         Ok(())

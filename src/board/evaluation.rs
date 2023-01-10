@@ -46,12 +46,12 @@ pub fn get_see_value(piece: PieceType) -> i32 {
 pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
 pub const fn mate_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply < MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
     MATE_SCORE - ply as i32
 }
 pub const fn mated_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply < MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
     -MATE_SCORE + ply as i32
 }
 
