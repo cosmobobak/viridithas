@@ -301,6 +301,10 @@ fn parse_setoption(
             let value: bool = opt_value.parse()?;
             PRETTY_PRINT.store(value, Ordering::SeqCst);
         }
+        "UseNNUE" => {
+            let value: bool = opt_value.parse()?;
+            USE_NNUE.store(value, Ordering::SeqCst);
+        }
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -425,6 +429,7 @@ fn print_uci_response(full: bool) {
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max 8192");
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
+    println!("option name UseNNUE type check default true");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -435,6 +440,7 @@ fn print_uci_response(full: bool) {
 }
 
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
+pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
@@ -545,7 +551,11 @@ pub fn main_loop(params: EvalParams) {
                 let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
                     tt.increase_age();
-                    pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
+                    if USE_NNUE.load(Ordering::SeqCst) {
+                        pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
+                    } else {
+                        pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
+                    }
                 }
                 res
             }
