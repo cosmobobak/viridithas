@@ -1114,7 +1114,7 @@ impl Board {
             println!();
         } else {
             let value = uci::pretty_format_score(pv.score, self.turn());
-            let pv = self.pv_san(pv);
+            let pv = self.pv_san(pv).unwrap();
             let endchr = if bound == HFlag::Exact {
                 "\n"
             } else {

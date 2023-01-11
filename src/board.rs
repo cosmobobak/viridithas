@@ -4,7 +4,7 @@ pub mod movegen;
 pub mod validation;
 
 use std::{
-    fmt::{Debug, Display, Formatter, Write},
+    fmt::{Debug, Display, Formatter, Write, self},
     sync::Once,
 };
 
@@ -1434,18 +1434,18 @@ impl Board {
         self.num(Piece::new(Colour::WHITE, pt)) + self.num(Piece::new(Colour::BLACK, pt))
     }
 
-    pub fn pv_san(&mut self, pv: &PVariation) -> String {
+    pub fn pv_san(&mut self, pv: &PVariation) -> Result<String, fmt::Error> {
         let mut out = String::new();
         let mut moves_made = 0;
         for &m in pv.moves() {
-            write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string())).unwrap();
+            write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string()))?;
             self.make_move_hce(m);
             moves_made += 1;
         }
         for _ in 0..moves_made {
             self.unmake_move_hce();
         }
-        out
+        Ok(out)
     }
 
     pub fn predicted_moves_left(&self) -> u64 {
