@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::{mated_in, mate_in}};
+use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::mate_in};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -46,6 +46,11 @@ impl SearchLimit {
         let time_window = computed_time_window.min(our_clock);
         let max_time_window = (time_window * 5 / 2).min(our_clock);
         (time_window, max_time_window)
+    }
+
+    #[allow(dead_code)]
+    pub const fn mate_in(moves: usize) -> Self {
+        Self::Mate(moves * 2)
     }
 }
 
@@ -168,15 +173,10 @@ impl<'a> SearchInfo<'a> {
                 self.stopped.store(true, Ordering::SeqCst);
             }
         } else if let &SearchLimit::Mate(mate_ply) = &self.limit {
-            let expected_score = if mate_ply & 1 == 0 {
-                // mate in an even number of moves => we are getting mated
-                mated_in(mate_ply)
-            } else {
-                // mate in an odd number of moves => we are mating
-                mate_in(mate_ply)
-            };
+            let expected_score = mate_in(mate_ply);
+            let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if value == expected_score && depth >= mate_ply as i32 {
+            if is_good_enough && depth >= mate_ply as i32 {
                 self.stopped.store(true, Ordering::SeqCst);
             }
         }
@@ -203,5 +203,95 @@ impl<'a> SearchInfo<'a> {
 
     pub fn time_since_start(&self) -> Duration {
         Instant::now().checked_duration_since(self.start_time).unwrap_or_default()
+    }
+}
+
+mod tests {
+    #![allow(unused_imports)]
+    use crate::{board::{Board, evaluation::{mate_in, mated_in}}, threadlocal::ThreadData, transpositiontable::TT, definitions::MEGABYTE, magic};
+    use super::{SearchInfo, SearchLimit};
+
+    #[test]
+    fn go_mate_in_2_white() {
+        magic::initialise();
+        let mut position = Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
+        let mut info = SearchInfo {
+            limit: SearchLimit::mate_in(2),
+            ..SearchInfo::default()
+        };
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE);
+        let mut thread_headers = vec![
+            ThreadData::new(0),
+        ];
+        thread_headers[0].alloc_tables();
+        thread_headers[0].nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+
+        assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
+        assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
+    }
+
+    #[test]
+    fn go_mated_in_2_white() {
+        magic::initialise();
+        let mut position = Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
+        let mut info = SearchInfo {
+            limit: SearchLimit::mate_in(2),
+            ..SearchInfo::default()
+        };
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE);
+        let mut thread_headers = vec![
+            ThreadData::new(0),
+        ];
+        thread_headers[0].alloc_tables();
+        thread_headers[0].nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        
+        assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
+        assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
+    }
+
+    #[test]
+    fn go_mated_in_2_black() {
+        magic::initialise();
+        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
+        let mut info = SearchInfo {
+            limit: SearchLimit::mate_in(2),
+            ..SearchInfo::default()
+        };
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE);
+        let mut thread_headers = vec![
+            ThreadData::new(0),
+        ];
+        thread_headers[0].alloc_tables();
+        thread_headers[0].nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        
+        assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
+        assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
+    }
+
+    #[test]
+    fn go_mate_in_2_black() {
+        magic::initialise();
+        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
+        let mut info = SearchInfo {
+            limit: SearchLimit::mate_in(2),
+            ..SearchInfo::default()
+        };
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE);
+        let mut thread_headers = vec![
+            ThreadData::new(0),
+        ];
+        thread_headers[0].alloc_tables();
+        thread_headers[0].nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+
+        assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
+        assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.
     }
 }

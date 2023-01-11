@@ -155,22 +155,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
             "infinite" => info.limit = SearchLimit::Infinite,
             "mate" => {
-                let mate_distance: i32 = part_parse("mate", parts.next())?;
-                let mate_distance = if pos.turn() == Colour::WHITE {
-                    mate_distance
-                } else {
-                    -mate_distance
-                };
-                let mate_distance: usize = if mate_distance > 0 {
-                    // mate is positive, so we will mate on our turn, so height will be odd:
-                    (mate_distance.abs() * 2 - 1).try_into().unwrap()
-                } else {
-                    // mate is negative, so they will mate on their turn, so height will be even:
-                    (mate_distance.abs() * 2).try_into().unwrap()
-                };
-                // add one because height is checked before mate
-                GO_MATE_MAX_DEPTH.store(mate_distance + 1, Ordering::SeqCst);
-                info.limit = SearchLimit::Mate(mate_distance);
+                let mate_distance: usize = part_parse("mate", parts.next())?;
+                let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
+                GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
+                info.limit = SearchLimit::Mate(ply);
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
