@@ -35,3 +35,4 @@ MINOR:
 - put movelists in ThreadData to reuse them.
 - make is_legal faster
 - check evasions
+- MVV capture history

@@ -42,24 +42,24 @@ impl ThreadData {
         }
     }
 
-    pub fn ban_nmp_for(&mut self, color: Colour) {
-        self.banned_nmp |= if color == Colour::WHITE {
+    pub fn ban_nmp_for(&mut self, colour: Colour) {
+        self.banned_nmp |= if colour == Colour::WHITE {
             Self::WHITE_BANNED_NMP
         } else {
             Self::BLACK_BANNED_NMP
         };
     }
 
-    pub fn unban_nmp_for(&mut self, color: Colour) {
-        self.banned_nmp &= if color == Colour::WHITE {
+    pub fn unban_nmp_for(&mut self, colour: Colour) {
+        self.banned_nmp &= if colour == Colour::WHITE {
             !Self::WHITE_BANNED_NMP
         } else {
             !Self::BLACK_BANNED_NMP
         };
     }
 
-    pub fn nmp_banned_for(&self, color: Colour) -> bool {
-        self.banned_nmp & if color == Colour::WHITE {
+    pub fn nmp_banned_for(&self, colour: Colour) -> bool {
+        self.banned_nmp & if colour == Colour::WHITE {
             Self::WHITE_BANNED_NMP
         } else {
             Self::BLACK_BANNED_NMP

@@ -96,7 +96,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         };
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);
-        let color = if passed { CONTROL_GREEN } else { CONTROL_RED };
+        let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed {
             format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", info.start_time.elapsed().as_secs_f64())
         } else {
@@ -115,7 +115,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
                 .collect::<Vec<_>>()
                 .join(", ");
         println!(
-            "{CONTROL_GREY}{id:midl$}{CONTROL_RESET} {fen:mfl$} {color}{}{CONTROL_RESET} [{move_strings}]{failinfo}",
+            "{CONTROL_GREY}{id:midl$}{CONTROL_RESET} {fen:mfl$} {colour}{}{CONTROL_RESET} [{move_strings}]{failinfo}",
             if passed { "PASS" } else { "FAIL" },
             midl = maxidlen,
             mfl = maxfenlen,
