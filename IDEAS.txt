@@ -5,6 +5,10 @@ MAJOR:
 -- in-tree tablebase probing (use the tablebase to prune moves when the search hits TB positions)
 -- pyrrhic bindings?
 - docs
+- support chess variants
+-- FRC
+-- DFRC
+-- Crazyhouse
 
 MINOR:
 - tune search parameters
@@ -22,7 +26,7 @@ MINOR:
 - endgame material combination guarding. (see if SF has any good "winnability" tricks)
 - "go mate X"
 - the slow part of deduplication is the file I/O, consider mmap?.
-- record percentage of position where TT move saves movegen - similar for captures when we get staged movegen.
+- record percentage of positions where TT move saves movegen - similar for captures when we get staged movegen.
 - multipv. put the moves in ThreadData and use ROOT.
 - tune time-management multipliers at long TC.
 - Rust features to watch for: full const generics, const floating-point maths.

@@ -339,11 +339,9 @@ impl Board {
 
     pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 =
-            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 =
-            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
         if IS_WHITE {
             if self.castle_perm & WKCA != 0
