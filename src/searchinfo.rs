@@ -177,6 +177,7 @@ impl<'a> SearchInfo<'a> {
             let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             if is_good_enough && depth >= mate_ply as i32 {
+                println!("mate found! depth: {depth}, value: {value}");
                 self.stopped.store(true, Ordering::SeqCst);
             }
         }

@@ -38,7 +38,7 @@ const fn history_bonus(depth: Depth) -> i32 {
     #![allow(clippy::cast_possible_truncation)]
     // i'm genuinely unsure if this is the same way ethereal does it, operator precedence is a trip.
     let depth = depth.round();
-    (if depth > 13 { 32 } else { 16 }) * depth * depth + 128 * max!(depth - 1, 0)
+    if depth > 13 { 32 } else { 16 * depth * depth + 128 * max!(depth - 1, 0) }
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
