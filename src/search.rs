@@ -632,13 +632,13 @@ impl Board {
 
                 // history leaf pruning
                 // if the history score is too low, we skip the move.
-                if is_quiet
-                    && moves_made > 1
-                    && lmr_depth <= ONE_PLY * 2
-                    && ordering_score < (-500 * (depth.round() - 1))
-                {
-                    continue;
-                }
+                // if is_quiet
+                //     && moves_made > 1
+                //     && lmr_depth <= ONE_PLY * 2
+                //     && ordering_score < (-500 * (depth.round() - 1))
+                // {
+                //     continue;
+                // }
             }
 
             // static exchange evaluation pruning
