@@ -83,7 +83,7 @@ static GLOBAL_STOPPED: AtomicBool = AtomicBool::new(false);
 
 impl Default for SearchInfo<'_> {
     fn default() -> Self {
-        Self {
+        let out = Self {
             start_time: Instant::now(),
             nodes: 0,
             quit: false,
@@ -94,7 +94,9 @@ impl Default for SearchInfo<'_> {
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),
-        }
+        };
+        debug_assert!(!out.stopped.load(Ordering::SeqCst));
+        out
     }
 }
 
@@ -212,8 +214,12 @@ mod tests {
     use crate::{board::{Board, evaluation::{mate_in, mated_in}}, threadlocal::ThreadData, transpositiontable::TT, definitions::MEGABYTE, magic};
     use super::{SearchInfo, SearchLimit};
 
+#[cfg(test)] // while running tests, we don't want multiple concurrent searches
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn go_mate_in_2_white() {
+        let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let mut info = SearchInfo {
@@ -231,10 +237,13 @@ mod tests {
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
+
+        drop(guard);
     }
 
     #[test]
     fn go_mated_in_2_white() {
+        let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let mut info = SearchInfo {
@@ -252,10 +261,13 @@ mod tests {
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
+
+        drop(guard);
     }
 
     #[test]
     fn go_mated_in_2_black() {
+        let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let mut info = SearchInfo {
@@ -273,10 +285,13 @@ mod tests {
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
+
+        drop(guard);
     }
 
     #[test]
     fn go_mate_in_2_black() {
+        let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let mut info = SearchInfo {
@@ -294,5 +309,7 @@ mod tests {
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.
+
+        drop(guard);
     }
 }

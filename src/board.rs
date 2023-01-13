@@ -1523,6 +1523,7 @@ impl Display for Board {
 }
 
 mod tests {
+
     #[test]
     fn read_fen_validity() {
         use super::Board;
@@ -1584,6 +1585,7 @@ mod tests {
             fs::File,
             io::{BufRead, BufReader},
         };
+        crate::magic::initialise();
         
         let f = File::open("epds/perftsuite.epd").unwrap();
         let mut pos = Board::new();

@@ -358,6 +358,9 @@ unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
 // this function is super-duper thread safe.
 pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
 pub fn initialise() {
+    if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     unsafe {
         init_sliders_attacks::<true>();
         init_sliders_attacks::<false>();
