@@ -635,7 +635,7 @@ impl Board {
                 if is_quiet
                     && moves_made > 1
                     && lmr_depth <= ONE_PLY * 2
-                    && ordering_score < (6000 / (depth.round().max(1)) / (i32::from(improving) + 1))
+                    && ordering_score < 0
                 {
                     continue;
                 }
