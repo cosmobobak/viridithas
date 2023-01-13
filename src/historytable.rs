@@ -1,3 +1,5 @@
+use std::array;
+
 use crate::{
     chessmove::Move,
     definitions::{depth::Depth, Square, BOARD_N_SQUARES}, piece::Piece,
@@ -31,10 +33,10 @@ const fn hist_table_piece_offset(piece: Piece) -> usize {
     }
 }
 
-const fn history_bonus(depth: Depth) -> i16 {
+const fn history_bonus(depth: Depth) -> i32 {
     #![allow(clippy::cast_possible_truncation)]
     // (depth.squared() + depth.round()) as i16
-    let depth = depth.round() as i16;
+    let depth = depth.round();
     // depth > 13 ? 32 : 16 * depth * depth + 128 * MAX(depth - 1, 0);
     (if depth > 13 {
         32
@@ -44,9 +46,10 @@ const fn history_bonus(depth: Depth) -> i16 {
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
+    #![allow(clippy::cast_possible_truncation)]
     const HISTORY_DIVISOR: i16 = i16::MAX / 2;
     let delta = if IS_GOOD { history_bonus(depth) } else { -history_bonus(depth) };
-    *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
+    *val += delta as i16 - (i32::from(*val) * delta.abs() / i32::from(HISTORY_DIVISOR)) as i16;
 }
 
 #[derive(Clone)]
@@ -117,49 +120,37 @@ impl HistoryTable {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct DoubleHistoryTable {
-    table: Vec<i16>,
+    table: [[Box<HistoryTable>; BOARD_N_SQUARES]; pslots()],
 }
 
 impl DoubleHistoryTable {
-    const I1: usize = BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES;
-    const I2: usize = BOARD_N_SQUARES * pslots();
-    const I3: usize = BOARD_N_SQUARES;
-
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            table: array::from_fn(|_| {
+                array::from_fn(|_| Box::new(HistoryTable::new()))
+            }),
+        }
     }
 
     pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table.resize(BOARD_N_SQUARES * pslots() * BOARD_N_SQUARES * pslots(), 0);
-        } else {
-            self.table.fill(0);
-        }
+        self.table.iter_mut().flatten().for_each(|x| x.clear());
     }
 
     pub fn age_entries(&mut self) {
         assert!(!self.table.is_empty());
-        self.table.iter_mut().for_each(|x| *x /= AGEING_DIVISOR);
+        self.table.iter_mut().flatten().for_each(|x| x.age_entries());
     }
 
-    pub fn get(&self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> i16 {
-        let pt_1 = hist_table_piece_offset(piece_1);
-        let pt_2 = hist_table_piece_offset(piece_2);
-        let sq1 = sq1.index();
-        let sq2 = sq2.index();
-        let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
-        self.table[idx]
+    pub const fn get(&self, piece: Piece, sq: Square) -> &HistoryTable {
+        let pt = hist_table_piece_offset(piece);
+        &self.table[pt][sq.index()]
     }
 
-    pub fn get_mut(&mut self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> &mut i16 {
-        let pt_1 = hist_table_piece_offset(piece_1);
-        let pt_2 = hist_table_piece_offset(piece_2);
-        let sq1 = sq1.index();
-        let sq2 = sq2.index();
-        let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
-        &mut self.table[idx]
+    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut HistoryTable {
+        let pt = hist_table_piece_offset(piece);
+        &mut self.table[pt][sq.index()]
     }
 }
 

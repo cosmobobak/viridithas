@@ -98,7 +98,7 @@ impl ThreadData {
         let to = m.to();
         let piece = pos.moved_piece(m);
 
-        let val = self.followup_history.get_mut(tpa_piece, tpa_to, piece, to);
+        let val = self.followup_history.get_mut(tpa_piece, tpa_to).get_mut(piece, to);
         update_history::<IS_GOOD>(val, depth);
     }
 
@@ -134,7 +134,7 @@ impl ThreadData {
         let to = m.to();
         let piece = pos.moved_piece(m);
 
-        self.followup_history.get(tpa_piece, tpa_to, piece, to)
+        self.followup_history.get(tpa_piece, tpa_to).get(piece, to)
     }
 
     /// Add a killer move.
