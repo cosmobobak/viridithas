@@ -2,7 +2,8 @@ use crate::{
     chessmove::Move,
     definitions::{depth::Depth, MAX_DEPTH},
     historytable::update_history,
-    threadlocal::ThreadData, piece::Piece,
+    piece::Piece,
+    threadlocal::ThreadData,
 };
 
 use super::Board;

@@ -2,7 +2,8 @@ use std::array;
 
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Square, BOARD_N_SQUARES}, piece::Piece,
+    definitions::{depth::Depth, Square, BOARD_N_SQUARES},
+    piece::Piece,
 };
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
@@ -35,14 +36,9 @@ const fn hist_table_piece_offset(piece: Piece) -> usize {
 
 const fn history_bonus(depth: Depth) -> i32 {
     #![allow(clippy::cast_possible_truncation)]
-    // (depth.squared() + depth.round()) as i16
+    // i'm genuinely unsure if this is the same way ethereal does it, operator precedence is a trip.
     let depth = depth.round();
-    // depth > 13 ? 32 : 16 * depth * depth + 128 * MAX(depth - 1, 0);
-    (if depth > 13 {
-        32
-    } else {
-        16
-    }) * depth * depth + 128 * max!(depth - 1, 0)
+    (if depth > 13 { 32 } else { 16 }) * depth * depth + 128 * max!(depth - 1, 0)
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
@@ -59,9 +55,7 @@ pub struct HistoryTable {
 
 impl HistoryTable {
     pub const fn new() -> Self {
-        Self {
-            table: [[0; BOARD_N_SQUARES]; pslots()],
-        }
+        Self { table: [[0; BOARD_N_SQUARES]; pslots()] }
     }
 
     pub fn clear(&mut self) {
@@ -127,11 +121,7 @@ pub struct DoubleHistoryTable {
 
 impl DoubleHistoryTable {
     pub fn new() -> Self {
-        Self {
-            table: array::from_fn(|_| {
-                array::from_fn(|_| Box::new(HistoryTable::new()))
-            }),
-        }
+        Self { table: array::from_fn(|_| array::from_fn(|_| Box::new(HistoryTable::new()))) }
     }
 
     pub fn clear(&mut self) {
