@@ -33,7 +33,14 @@ const fn hist_table_piece_offset(piece: Piece) -> usize {
 
 const fn history_bonus(depth: Depth) -> i16 {
     #![allow(clippy::cast_possible_truncation)]
-    (depth.squared() + depth.round()) as i16
+    // (depth.squared() + depth.round()) as i16
+    let depth = depth.round() as i16;
+    // depth > 13 ? 32 : 16 * depth * depth + 128 * MAX(depth - 1, 0);
+    if depth > 13 {
+        32
+    } else {
+        16 * depth * depth + 128 * max!(depth - 1, 0)
+    }
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
