@@ -116,8 +116,6 @@ const QUEEN_PHASE: i32 = 40;
 const TOTAL_PHASE: i32 =
     16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
 
-#[allow(dead_code)]
-pub static RANK_BB: [u64; 8] = init_eval_masks().0;
 pub static FILE_BB: [u64; 8] = init_eval_masks().1;
 
 pub static WHITE_PASSED_BB: [u64; 64] = init_passed_isolated_bb().0;

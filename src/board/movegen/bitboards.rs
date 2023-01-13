@@ -509,22 +509,6 @@ pub fn pawn_attacks<const IS_WHITE: bool>(bb: u64) -> u64 {
     }
 }
 
-#[allow(dead_code)]
-pub fn print_bb(bb: u64) {
-    for rank in (0..=7).rev() {
-        for file in 0..=7 {
-            let sq = crate::lookups::filerank_to_square(file, rank);
-            assert!(sq < 64, "sq64: {sq}, sq: {sq}, file: {file}, rank: {rank}");
-            if bb & (1 << sq) == 0 {
-                print!(" .");
-            } else {
-                print!(" X");
-            }
-        }
-        println!();
-    }
-}
-
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for rank in (0..=7).rev() {

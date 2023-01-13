@@ -92,16 +92,6 @@ impl Image {
         self.data.chunks(self.width)
     }
 
-    #[allow(dead_code)]
-    pub fn rows_mut(&mut self) -> impl Iterator<Item = &mut [u32]> {
-        self.data.chunks_mut(self.width)
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, x: usize, y: usize) -> u32 {
-        self.data[y * self.width + x]
-    }
-
     pub fn set(&mut self, x: usize, y: usize, value: u32) {
         self.data[y * self.width + x] = value;
     }

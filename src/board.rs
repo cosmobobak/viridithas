@@ -174,52 +174,6 @@ impl Board {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn maybe_gives_check(&self, mov: Move) -> bool {
-        let piece = self.piece_at(mov.from());
-        let piece_type = piece.piece_type();
-        let stm = self.side;
-
-        let opponent_king = self.king_sq(stm.flip());
-        let blockers = self.pieces.occupied() ^ mov.bitboard();
-
-        // direct check:
-        let attacks_from_dest = if piece_type == PieceType::PAWN {
-            if stm == Colour::WHITE {
-                pawn_attacks::<true>(mov.to().bitboard())
-            } else {
-                pawn_attacks::<false>(mov.to().bitboard())
-            }
-        } else {
-            bitboards::attacks_by_type(piece_type, mov.to(), blockers)
-        };
-        if attacks_from_dest & opponent_king.bitboard() != 0 {
-            return true;
-        }
-
-        // discovered check:
-        let ortho = bitboards::attacks::<{ PieceType::ROOK.inner() }>(opponent_king, blockers);
-        let diag = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(opponent_king, blockers);
-        let our_orthos = if stm == Colour::WHITE {
-            self.pieces.rookqueen::<true>()
-        } else {
-            self.pieces.rookqueen::<false>()
-        };
-        let our_diags = if stm == Colour::WHITE {
-            self.pieces.bishopqueen::<true>()
-        } else {
-            self.pieces.bishopqueen::<false>()
-        };
-        if ortho & our_orthos != 0 {
-            return true;
-        }
-        if diag & our_diags != 0 {
-            return true;
-        }
-
-        false
-    }
-
     pub fn zero_height(&mut self) {
         self.height = 0;
     }

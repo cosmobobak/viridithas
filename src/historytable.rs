@@ -80,38 +80,6 @@ impl HistoryTable {
         let pt = hist_table_piece_offset(piece);
         &mut self.table[pt][sq.index()]
     }
-
-    #[allow(dead_code)]
-    pub fn print_stats(&self) {
-        #![allow(clippy::cast_precision_loss)]
-        let sum = self.table.iter().flatten().map(|x| i64::from(*x)).sum::<i64>();
-        let mean = sum as f64 / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        let stdev = self
-            .table
-            .iter()
-            .flatten()
-            .map(|x| i64::from(*x))
-            .map(|x| (x as f64 - mean).powi(2))
-            .sum::<f64>()
-            .sqrt()
-            / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        println!("mean: {mean}");
-        println!("stdev: {stdev}");
-        println!("max: {}", self.table.iter().flatten().copied().max().unwrap());
-        let nonzero = self.table.iter().flatten().copied().filter(|x| *x != 0).collect::<Vec<_>>();
-        println!("nonzero: {}", nonzero.len());
-        let nz_mean =
-            nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);
-        let nz_stdev = nonzero
-            .iter()
-            .map(|x| i64::from(*x))
-            .map(|x| (x as f64 - nz_mean).powi(2))
-            .sum::<f64>()
-            .sqrt()
-            / (nonzero.len() as f64);
-        println!("nz mean: {nz_mean}");
-        println!("nz stdev: {nz_stdev}");
-    }
 }
 
 #[derive(Clone)]

@@ -48,7 +48,7 @@ impl SearchLimit {
         (time_window, max_time_window)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub const fn mate_in(moves: usize) -> Self {
         Self::Mate(moves * 2)
     }

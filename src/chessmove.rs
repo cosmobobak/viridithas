@@ -77,11 +77,6 @@ impl Move {
         self.is_castle() && matches!(self.to(), Square::C1 | Square::C8)
     }
 
-    #[allow(dead_code)]
-    pub const fn bitboard(self) -> u64 {
-        self.from().bitboard() | self.to().bitboard()
-    }
-
     pub fn is_valid(self) -> bool {
         let promotion = self.safe_promotion_type();
         if promotion != PieceType::NO_PIECE_TYPE && !self.is_promo() {
