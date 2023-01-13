@@ -22,7 +22,7 @@ const fn coloured_piece_index(piece: Piece) -> usize {
     piece.index() - 1
 }
 
-const fn piece_index(piece: Piece) -> usize {
+const fn hist_table_piece_offset(piece: Piece) -> usize {
     debug_assert!(!piece.is_empty());
     if DO_COLOUR_DIFFERENTIATION {
         coloured_piece_index(piece)
@@ -41,19 +41,21 @@ pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
     *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct HistoryTable {
-    table: Box<[[i32; BOARD_N_SQUARES]]>,
+    table: [[i32; BOARD_N_SQUARES]; pslots()],
 }
 
 impl HistoryTable {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            table: [[0; BOARD_N_SQUARES]; pslots()],
+        }
     }
 
     pub fn clear(&mut self) {
         if self.table.is_empty() {
-            self.table = vec![[0; BOARD_N_SQUARES]; pslots()].into_boxed_slice();
+            self.table = [[0; BOARD_N_SQUARES]; pslots()];
         } else {
             self.table.iter_mut().flatten().for_each(|x| *x = 0);
         }
@@ -65,12 +67,12 @@ impl HistoryTable {
     }
 
     pub const fn get(&self, piece: Piece, sq: Square) -> i32 {
-        let pt = piece_index(piece);
+        let pt = hist_table_piece_offset(piece);
         self.table[pt][sq.index()]
     }
 
     pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i32 {
-        let pt = piece_index(piece);
+        let pt = hist_table_piece_offset(piece);
         &mut self.table[pt][sq.index()]
     }
 
@@ -135,8 +137,8 @@ impl DoubleHistoryTable {
     }
 
     pub fn get(&self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> i32 {
-        let pt_1 = piece_index(piece_1);
-        let pt_2 = piece_index(piece_2);
+        let pt_1 = hist_table_piece_offset(piece_1);
+        let pt_2 = hist_table_piece_offset(piece_2);
         let sq1 = sq1.index();
         let sq2 = sq2.index();
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
@@ -144,8 +146,8 @@ impl DoubleHistoryTable {
     }
 
     pub fn get_mut(&mut self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> &mut i32 {
-        let pt_1 = piece_index(piece_1);
-        let pt_2 = piece_index(piece_2);
+        let pt_1 = hist_table_piece_offset(piece_1);
+        let pt_2 = hist_table_piece_offset(piece_2);
         let sq1 = sq1.index();
         let sq2 = sq2.index();
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
@@ -203,13 +205,13 @@ impl MoveTable {
     }
 
     pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
-        let pt = piece_index(piece);
+        let pt = hist_table_piece_offset(piece);
         let sq = sq.index();
         self.table[pt * BOARD_N_SQUARES + sq] = m;
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> Move {
-        let pt = piece_index(piece);
+        let pt = hist_table_piece_offset(piece);
         let sq = sq.index();
         self.table[pt * BOARD_N_SQUARES + sq]
     }

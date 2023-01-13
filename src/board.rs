@@ -1319,6 +1319,18 @@ impl Board {
     }
 
     pub fn san(&mut self, m: Move) -> Option<String> {
+        let check_char = match self.gives(m) {
+            CheckState::None => "",
+            CheckState::Check => "+",
+            CheckState::Checkmate => "#",
+        };
+        if m.is_castle() {
+            match m.to() {
+                Square::G1 | Square::G8 => return Some(format!("O-O{check_char}")),
+                Square::C1 | Square::C8 => return Some(format!("O-O-O{check_char}")),
+                _ => unreachable!(),
+            }
+        }
         let to_sq = m.to();
         let is_capture = !self.piece_at(to_sq).is_empty();
         let moved_piece = self.piece_at(m.from());
@@ -1368,11 +1380,6 @@ impl Board {
             PieceType::QUEEN => "=Q",
             PieceType::NO_PIECE_TYPE => "",
             _ => unreachable!(),
-        };
-        let check_char = match self.gives(m) {
-            CheckState::None => "",
-            CheckState::Check => "+",
-            CheckState::Checkmate => "#",
         };
         let san = format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
         Some(san)
