@@ -611,7 +611,7 @@ impl Board {
                 tacticals_tried.push(m);
             }
 
-            // lmp, fp, and hlp.
+            // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
