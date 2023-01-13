@@ -21,7 +21,7 @@ impl ThreadData {
     }
 
     /// Get the history score for a quiet move.
-    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i32 {
+    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i16 {
         let piece_moved = pos.moved_piece(m);
         let to = m.to();
         self.history_table.get(piece_moved, to)
@@ -103,7 +103,7 @@ impl ThreadData {
     }
 
     /// Get the follow-up history score for a move.
-    pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i32 {
+    pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i16 {
         let two_ply_ago = match pos.history.len().checked_sub(2) {
             Some(idx) => idx,
             None => return 0,

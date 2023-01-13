@@ -4,7 +4,7 @@ use crate::{
 };
 
 const DO_COLOUR_DIFFERENTIATION: bool = true;
-const AGEING_DIVISOR: i32 = 4;
+const AGEING_DIVISOR: i16 = 4;
 
 const fn pslots() -> usize {
     if DO_COLOUR_DIFFERENTIATION {
@@ -31,19 +31,20 @@ const fn hist_table_piece_offset(piece: Piece) -> usize {
     }
 }
 
-const fn history_bonus(depth: Depth) -> i32 {
-    depth.squared() + depth.round()
+const fn history_bonus(depth: Depth) -> i16 {
+    #![allow(clippy::cast_possible_truncation)]
+    (depth.squared() + depth.round()) as i16
 }
 
-pub fn update_history<const IS_GOOD: bool>(val: &mut i32, depth: Depth) {
-    const HISTORY_DIVISOR: i32 = i16::MAX as i32;
+pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
+    const HISTORY_DIVISOR: i16 = i16::MAX / 2;
     let delta = if IS_GOOD { history_bonus(depth) } else { -history_bonus(depth) };
     *val += delta - (*val * delta.abs() / HISTORY_DIVISOR);
 }
 
 #[derive(Clone)]
 pub struct HistoryTable {
-    table: [[i32; BOARD_N_SQUARES]; pslots()],
+    table: [[i16; BOARD_N_SQUARES]; pslots()],
 }
 
 impl HistoryTable {
@@ -66,12 +67,12 @@ impl HistoryTable {
         self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub const fn get(&self, piece: Piece, sq: Square) -> i32 {
+    pub const fn get(&self, piece: Piece, sq: Square) -> i16 {
         let pt = hist_table_piece_offset(piece);
         self.table[pt][sq.index()]
     }
 
-    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i32 {
+    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
         let pt = hist_table_piece_offset(piece);
         &mut self.table[pt][sq.index()]
     }
@@ -111,7 +112,7 @@ impl HistoryTable {
 
 #[derive(Default, Clone)]
 pub struct DoubleHistoryTable {
-    table: Vec<i32>,
+    table: Vec<i16>,
 }
 
 impl DoubleHistoryTable {
@@ -136,7 +137,7 @@ impl DoubleHistoryTable {
         self.table.iter_mut().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub fn get(&self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> i32 {
+    pub fn get(&self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> i16 {
         let pt_1 = hist_table_piece_offset(piece_1);
         let pt_2 = hist_table_piece_offset(piece_2);
         let sq1 = sq1.index();
@@ -145,44 +146,13 @@ impl DoubleHistoryTable {
         self.table[idx]
     }
 
-    pub fn get_mut(&mut self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> &mut i32 {
+    pub fn get_mut(&mut self, piece_1: Piece, sq1: Square, piece_2: Piece, sq2: Square) -> &mut i16 {
         let pt_1 = hist_table_piece_offset(piece_1);
         let pt_2 = hist_table_piece_offset(piece_2);
         let sq1 = sq1.index();
         let sq2 = sq2.index();
         let idx = pt_1 * Self::I1 + pt_2 * Self::I2 + sq1 * Self::I3 + sq2;
         &mut self.table[idx]
-    }
-
-    #[allow(dead_code)]
-    pub fn print_stats(&self) {
-        #![allow(clippy::cast_precision_loss)]
-        let sum = self.table.iter().map(|x| i64::from(*x)).sum::<i64>();
-        let mean = sum as f64 / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        let stdev = self
-            .table
-            .iter()
-            .map(|x| i64::from(*x))
-            .map(|x| (x as f64 - mean).powi(2))
-            .sum::<f64>()
-            .sqrt()
-            / (BOARD_N_SQUARES as f64 * pslots() as f64);
-        println!("mean: {mean}");
-        println!("stdev: {stdev}");
-        println!("max: {}", self.table.iter().copied().max().unwrap());
-        let nonzero = self.table.iter().copied().filter(|x| *x != 0).collect::<Vec<_>>();
-        println!("nonzero: {}", nonzero.len());
-        let nz_mean =
-            nonzero.iter().map(|x| i64::from(*x)).sum::<i64>() as f64 / (nonzero.len() as f64);
-        let nz_stdev = nonzero
-            .iter()
-            .map(|x| i64::from(*x))
-            .map(|x| (x as f64 - nz_mean).powi(2))
-            .sum::<f64>()
-            .sqrt()
-            / (nonzero.len() as f64);
-        println!("nz mean: {nz_mean}");
-        println!("nz stdev: {nz_stdev}");
     }
 }
 

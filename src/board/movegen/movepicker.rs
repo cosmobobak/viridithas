@@ -136,7 +136,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         } else {
             let history = t.history_score(pos, m);
             let followup_history = t.followup_history_score(pos, m);
-            history + followup_history
+            i32::from(history + followup_history)
         }
     }
 
