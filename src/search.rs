@@ -635,7 +635,7 @@ impl Board {
                 if is_quiet
                     && moves_made > 1
                     && lmr_depth <= ONE_PLY * 2
-                    && ordering_score < 0
+                    && ordering_score < -500
                 {
                     continue;
                 }
