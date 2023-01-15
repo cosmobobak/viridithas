@@ -142,6 +142,7 @@ pub static PIECE_BIG: [bool; 13] =
 pub static PIECE_MAJ: [bool; 13] =
     [false, false, false, false, true, true, false, false, false, false, true, true, false];
 /// knights and bishops.
+#[cfg(debug_assertions)]
 pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
@@ -176,21 +177,17 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     attacks
 }
 
-static JUMPING_ATTACKS: [[u64; 64]; 7] = [
-    [0; 64],                         // no_piece
-    [0; 64],                         // pawn
-    init_jumping_attacks::<true>(),  // knight
-    [0; 64],                         // bishop
-    [0; 64],                         // rook
-    [0; 64],                         // queen
-    init_jumping_attacks::<false>(), // king
-];
-
 pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> u64 {
+    static KNIGHT_ATTACKS: [u64; 64] = init_jumping_attacks::<true>();
+    static KING_ATTACKS: [u64; 64] = init_jumping_attacks::<false>();
     debug_assert!(PIECE_TYPE < 7);
     debug_assert!(sq.on_board());
     debug_assert!(PIECE_TYPE == PieceType::KNIGHT.inner() || PIECE_TYPE == PieceType::KING.inner());
-    unsafe { *JUMPING_ATTACKS.get_unchecked(PIECE_TYPE as usize).get_unchecked(sq.index()) }
+    if PIECE_TYPE == PieceType::KNIGHT.inner() {
+        unsafe { *KNIGHT_ATTACKS.get_unchecked(sq.index()) }
+    } else {
+        unsafe { *KING_ATTACKS.get_unchecked(sq.index()) }
+    }
 }
 
 mod tests {

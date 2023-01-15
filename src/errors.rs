@@ -28,5 +28,7 @@ impl Display for MoveParseError {
     }
 }
 
+#[cfg(debug_assertions)]
 pub type PositionValidityError = String;
+
 pub type FenParseError = String;

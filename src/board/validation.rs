@@ -12,6 +12,7 @@ use crate::{
 use super::{evaluation::get_eval_params, movegen::bitboards::BitLoop, Board};
 
 impl Board {
+    #[cfg(debug_assertions)]
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
