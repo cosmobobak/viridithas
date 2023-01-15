@@ -1,13 +1,17 @@
+#![allow(unused_imports)]
+
 use crate::{
     board::evaluation::score::S,
     definitions::{
         Rank::{RANK_3, RANK_6},
         Square,
     },
-    errors::PositionValidityError,
-    lookups::{PIECE_BIG, PIECE_MAJ, PIECE_MIN},
+    lookups::{PIECE_BIG, PIECE_MAJ},
     nnue::NNUEState, piece::{Colour, Piece},
 };
+
+#[cfg(debug_assertions)]
+use crate::{errors::PositionValidityError, lookups::PIECE_MIN};
 
 use super::{evaluation::get_eval_params, movegen::bitboards::BitLoop, Board};
 
