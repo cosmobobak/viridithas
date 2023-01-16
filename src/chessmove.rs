@@ -10,9 +10,10 @@ pub struct Move {
 }
 
 impl Move {
-    const FROM_MASK: u16 = 0b0000_0000_0011_1111;
-    const TO_MASK: u16 = 0b0000_1111_1100_0000;
-    const PROMO_MASK: u16 = 0b0011_0000_0000_0000;
+    const SQ_MASK: u16 = 0b11_1111;
+    const TO_SHIFT: usize = 6;
+    const PROMO_MASK: u16 = 0b11;
+    const PROMO_SHIFT: usize = 12;
     pub const EP_FLAG: u16 = 0b0100_0000_0000_0000;
     pub const CASTLE_FLAG: u16 = 0b1000_0000_0000_0000;
     pub const PROMO_FLAG: u16 = 0b1100_0000_0000_0000;
@@ -26,21 +27,21 @@ impl Move {
             promotion == PieceType::NO_PIECE_TYPE && flags != Self::PROMO_FLAG
                 || promotion.legal_promo() && flags == Self::PROMO_FLAG
         );
-        let promotion = promotion.inner().wrapping_sub(2) & 0b11; // can't promote to NO_PIECE or PAWN
-        Self { data: u16::from(from) | (u16::from(to) << 6) | (u16::from(promotion) << 12) | flags }
+        let promotion = u16::from(promotion.inner()).wrapping_sub(2) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
+        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | (promotion << Self::PROMO_SHIFT) | flags }
     }
 
     pub const fn from(self) -> Square {
-        Square::new((self.data & Self::FROM_MASK) as u8)
+        Square::new((self.data & Self::SQ_MASK) as u8)
     }
 
     pub const fn to(self) -> Square {
-        Square::new((((self.data & Self::TO_MASK) >> 6) & 0b11_1111) as u8)
+        Square::new(((self.data >> Self::TO_SHIFT) & Self::SQ_MASK) as u8)
     }
 
     pub fn promotion_type(self) -> PieceType {
         debug_assert!(self.is_promo());
-        let output = PieceType::new((((self.data & Self::PROMO_MASK) >> 12) & 0b11) as u8 + 2);
+        let output = PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 2);
         debug_assert!(output.legal_promo());
         output
     }
