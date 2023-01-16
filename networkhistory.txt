@@ -71,3 +71,11 @@ NET ID | general concept                          | notes
 --------------------------------------------------------------------------------------------------
     28 | same as net-27 but with LR=5e-3.         | 2.3 +/- 6.6, LOS: 75.3 %
        |                                          | vs net-27.
+--------------------------------------------------------------------------------------------------
+    29 | combination of pure viri data            | ~ -60 elo vs net-28
+       | from v5.1.0, v6.0.0, and v6.0.0-dev      | seems that either the Lichess Elite data has
+       |                                          | really important stuff to learn, or 960k games
+       |                                          | is not enough to train a good net.
+--------------------------------------------------------------------------------------------------
+    30 | 320K net-28 self-play games from uhobook | 
+       | injected into net-28 data.               | vs net-28.
