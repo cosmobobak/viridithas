@@ -28,7 +28,7 @@ use crate::{
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TTView},
+    transpositiontable::{HFlag, ProbeResult, TTView, TTHit},
     uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour},
 };
 
@@ -492,6 +492,8 @@ impl Board {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
+        } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
+            *tt_value // if we have a TT hit, we already have the static eval.
         } else {
             self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };
