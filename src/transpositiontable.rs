@@ -266,7 +266,7 @@ impl<'a> TTView<'a> {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
                 if score <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(alpha) // never cutoff at root.
+                    ProbeResult::Cutoff(score) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
@@ -278,7 +278,7 @@ impl<'a> TTView<'a> {
             }
             HFlag::LowerBound => {
                 if score >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(beta) // never cutoff at root.
+                    ProbeResult::Cutoff(score) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
