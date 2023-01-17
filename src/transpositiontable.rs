@@ -259,32 +259,33 @@ impl<'a> TTView<'a> {
 
         // we can't store the score in a tagged union,
         // because we need to do mate score preprocessing.
-        let score = reconstruct_mate_score(entry.score.into(), ply);
+        // let score = reconstruct_mate_score(entry.score.into(), ply);
+        let tt_value = entry.score.into();
 
-        debug_assert!(score >= -INFINITY);
+        debug_assert!(tt_value >= -INFINITY);
         match entry.age_and_flag.flag() {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
-                if score <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(score) // never cutoff at root.
+                if tt_value <= alpha && !do_not_cut {
+                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::UpperBound,
-                        tt_value: entry.score.into(),
+                        tt_value,
                     })
                 }
             }
             HFlag::LowerBound => {
-                if score >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(score) // never cutoff at root.
+                if tt_value >= beta && !do_not_cut {
+                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::LowerBound,
-                        tt_value: entry.score.into(),
+                        tt_value,
                     })
                 }
             }
@@ -294,10 +295,10 @@ impl<'a> TTView<'a> {
                         tt_move: m,
                         tt_depth: e_depth,
                         tt_bound: HFlag::Exact,
-                        tt_value: entry.score.into(),
+                        tt_value,
                     })
                 } else {
-                    ProbeResult::Cutoff(score) // never cutoff at root.
+                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
                 }
             }
         }
@@ -330,15 +331,15 @@ const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
     score
 }
 
-const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
-    #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-    if score > MINIMUM_MATE_SCORE {
-        score -= ply as i32;
-    } else if score < -MINIMUM_MATE_SCORE {
-        score += ply as i32;
-    }
-    score
-}
+// const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
+//     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+//     if score > MINIMUM_MATE_SCORE {
+//         score -= ply as i32;
+//     } else if score < -MINIMUM_MATE_SCORE {
+//         score += ply as i32;
+//     }
+//     score
+// }
 
 mod tests {
     #![allow(unused_imports)]
