@@ -200,23 +200,6 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                score = pv.score;
-                bestmove = *pv.moves().first().unwrap_or(&bestmove);
-
-                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
-                    let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
-                    info.seldepth = saved_seldepth;
-                    if forced {
-                        forcing_time_reduction = true;
-                        info.multiply_time_window(0.25);
-                    }
-                    info.check_up();
-                    if d > 1 && info.stopped() {
-                        break 'deepening;
-                    }
-                }
-
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     // fail low
                     if MAIN_THREAD && info.print_to_stdout {
@@ -243,6 +226,25 @@ impl Board {
                     aw.widen_up();
                     continue;
                 }
+                
+                // if we've made it here, it means we got an exact score.
+                score = pv.score;
+                bestmove = *pv.moves().first().unwrap_or(&bestmove);
+
+                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
+                    let saved_seldepth = info.seldepth;
+                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+                    info.seldepth = saved_seldepth;
+                    if forced {
+                        forcing_time_reduction = true;
+                        info.multiply_time_window(0.25);
+                    }
+                    info.check_up();
+                    if d > 1 && info.stopped() {
+                        break 'deepening;
+                    }
+                }
+                
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(HFlag::Exact, &pv, d, info, tt, total_nodes);
