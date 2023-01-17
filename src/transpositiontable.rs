@@ -69,6 +69,9 @@ pub struct TTEntry {
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
 }
 
+#[allow(dead_code)]
+const TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
+
 impl TTEntry {
     pub const NULL: Self = Self {
         key: 0,
@@ -346,11 +349,6 @@ mod tests {
     use crate::{definitions::Square, piece::PieceType};
 
     use super::*;
-
-    #[test]
-    fn tt_entries_are_one_word() {
-        assert_eq!(std::mem::size_of::<TTEntry>(), 8);
-    }
 
     #[test]
     fn tt_entry_roundtrip() {

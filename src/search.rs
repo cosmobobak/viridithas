@@ -505,9 +505,6 @@ impl Board {
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
-        // clear subtree killers:
-        t.killer_move_table[height + 1] = [Move::NULL, Move::NULL];
-
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
             // beta-pruning. (reverse futility pruning)
