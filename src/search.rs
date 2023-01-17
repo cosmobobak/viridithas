@@ -28,7 +28,7 @@ use crate::{
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TTView, TTHit},
+    transpositiontable::{HFlag, ProbeResult, TTView},
     uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour},
 };
 
