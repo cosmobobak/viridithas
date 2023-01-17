@@ -213,13 +213,13 @@ impl Board {
                         forcing_time_reduction = true;
                         info.multiply_time_window(0.25);
                     }
-                    if bestmove_changed {
-                        info.multiply_time_window(1.1);
-                    }
                     info.check_up();
                     if d > 1 && info.stopped() {
                         break 'deepening;
                     }
+                }
+                if MAIN_THREAD && d > 6 && info.in_game() && bestmove_changed {
+                    info.multiply_time_window(1.1);
                 }
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
