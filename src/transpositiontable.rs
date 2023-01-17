@@ -243,35 +243,35 @@ impl<'a> TTView<'a> {
             return ProbeResult::Nothing;
         }
 
-        let m = entry.m;
-        let e_depth = entry.depth.into();
+        let tt_move = entry.m;
+        let tt_depth = entry.depth.into();
+        let tt_bound = entry.age_and_flag.flag();
 
-        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&e_depth), "depth: {e_depth}");
-
-        if e_depth < depth {
-            return ProbeResult::Hit(TTHit {
-                tt_move: m,
-                tt_depth: e_depth,
-                tt_bound: entry.age_and_flag.flag(),
-                tt_value: entry.score.into(),
-            });
-        }
+        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&tt_depth), "depth: {tt_depth}");
 
         // we can't store the score in a tagged union,
         // because we need to do mate score preprocessing.
-        // let score = reconstruct_mate_score(entry.score.into(), ply);
-        let tt_value = entry.score.into();
+        let tt_value = reconstruct_mate_score(entry.score.into(), ply);
+
+        if tt_depth < depth {
+            return ProbeResult::Hit(TTHit {
+                tt_move,
+                tt_depth,
+                tt_bound,
+                tt_value,
+            });
+        }
 
         debug_assert!(tt_value >= -INFINITY);
-        match entry.age_and_flag.flag() {
+        match tt_bound {
             HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             HFlag::UpperBound => {
                 if tt_value <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
+                    ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
-                        tt_move: m,
-                        tt_depth: e_depth,
+                        tt_move,
+                        tt_depth,
                         tt_bound: HFlag::UpperBound,
                         tt_value,
                     })
@@ -279,11 +279,11 @@ impl<'a> TTView<'a> {
             }
             HFlag::LowerBound => {
                 if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
+                    ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
-                        tt_move: m,
-                        tt_depth: e_depth,
+                        tt_move,
+                        tt_depth,
                         tt_bound: HFlag::LowerBound,
                         tt_value,
                     })
@@ -292,8 +292,8 @@ impl<'a> TTView<'a> {
             HFlag::Exact => {
                 if do_not_cut {
                     ProbeResult::Hit(TTHit {
-                        tt_move: m,
-                        tt_depth: e_depth,
+                        tt_move,
+                        tt_depth,
                         tt_bound: HFlag::Exact,
                         tt_value,
                     })
@@ -323,23 +323,23 @@ impl<'a> TTView<'a> {
 
 const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-    if score > MINIMUM_MATE_SCORE {
+    if score >= MINIMUM_MATE_SCORE {
         score += ply as i32;
-    } else if score < -MINIMUM_MATE_SCORE {
+    } else if score <= -MINIMUM_MATE_SCORE {
         score -= ply as i32;
     }
     score
 }
 
-// const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
-//     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-//     if score > MINIMUM_MATE_SCORE {
-//         score -= ply as i32;
-//     } else if score < -MINIMUM_MATE_SCORE {
-//         score += ply as i32;
-//     }
-//     score
-// }
+const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    if score >= MINIMUM_MATE_SCORE {
+        score -= ply as i32;
+    } else if score <= -MINIMUM_MATE_SCORE {
+        score += ply as i32;
+    }
+    score
+}
 
 mod tests {
     #![allow(unused_imports)]
