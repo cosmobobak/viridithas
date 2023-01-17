@@ -41,4 +41,3 @@ MINOR:
 - check evasions
 - MVV capture history
 - filter training positions that are forced.
-- remove the first mask in Move::to

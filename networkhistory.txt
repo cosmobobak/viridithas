@@ -77,5 +77,5 @@ NET ID | general concept                          | notes
        |                                          | really important stuff to learn, or 960k games
        |                                          | is not enough to train a good net.
 --------------------------------------------------------------------------------------------------
-    30 | 320K net-28 self-play games from uhobook | 
+    30 | 320K net-28 self-play games from uhobook | 7.2 +/- 6.7, LOS: 98.2 %
        | injected into net-28 data.               | vs net-28.
