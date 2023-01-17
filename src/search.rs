@@ -492,8 +492,6 @@ impl Board {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
-        } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
-            *tt_value // if we have a TT hit, we already have the static eval.
         } else {
             self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
         };
@@ -506,6 +504,9 @@ impl Board {
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
+
+        // clear subtree killers:
+        t.killer_move_table[height + 1] = [Move::NULL, Move::NULL];
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
