@@ -486,7 +486,7 @@ impl Board {
                 ProbeResult::Nothing => {
                     // TT-reduction.
                     if PV && depth >= get_search_params().tt_reduction_depth {
-                        depth -= 1;
+                        depth -= 2;
                     }
                     None
                 }
