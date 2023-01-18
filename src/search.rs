@@ -718,9 +718,7 @@ impl Board {
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
-                    if is_quiet {
-                        r -= (ordering_score / 5000).clamp(-2, 2);
-                    }
+                    r -= i32::from(killers[0] == m || killers[1] == m);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
