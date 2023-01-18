@@ -7,6 +7,7 @@ use super::{
     LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
     NMP_VERIFICATION_DEPTH, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH,
     SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH, RAZORING_MARGIN,
+    SEARCH_TIME_FRACTION,
 };
 
 pub static mut SEARCH_PARAMS: SearchParams = SearchParams::default();
@@ -44,6 +45,7 @@ pub struct SearchParams {
     pub see_depth: Depth,
     pub lmr_base: f64,
     pub lmr_division: f64,
+    pub search_time_fraction: u64,
 }
 
 impl SearchParams {
@@ -69,6 +71,7 @@ impl SearchParams {
             see_depth: SEE_DEPTH,
             lmr_base: LMR_BASE,
             lmr_division: LMR_DIVISION,
+            search_time_fraction: SEARCH_TIME_FRACTION,
         }
     }
 }
@@ -132,7 +135,8 @@ impl SearchParams {
             SINGULARITY_DEPTH = [self.singularity_depth],
             SEE_DEPTH = [self.see_depth],
             LMR_BASE = [self.lmr_base],
-            LMR_DIVISION = [self.lmr_division]
+            LMR_DIVISION = [self.lmr_division],
+            SEARCH_TIME_FRACTION = [self.search_time_fraction]
         ]
     }
 
@@ -177,7 +181,9 @@ impl SearchParams {
             LMR_BASE,
             [self.lmr_base],
             LMR_DIVISION,
-            [self.lmr_division]
+            [self.lmr_division],
+            SEARCH_TIME_FRACTION,
+            [self.search_time_fraction as f64]
         ]
     }
 }

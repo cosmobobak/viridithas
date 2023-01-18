@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::mate_in};
+use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::mate_in, search::parameters::SearchParams};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -41,8 +41,8 @@ impl SearchLimit {
         }
     }
 
-    pub fn compute_time_windows(our_clock: u64, _moves_to_go: u64, our_inc: u64) -> (u64, u64) {
-        let computed_time_window = our_clock / 29 + our_inc / 2 - 10;
+    pub fn compute_time_windows(our_clock: u64, _moves_to_go: u64, our_inc: u64, config: &SearchParams) -> (u64, u64) {
+        let computed_time_window = our_clock / config.search_time_fraction + our_inc / 2 - 10;
         let time_window = computed_time_window.min(our_clock);
         let max_time_window = (time_window * 5 / 2).min(our_clock);
         (time_window, max_time_window)

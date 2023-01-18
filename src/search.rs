@@ -66,6 +66,7 @@ const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
+const SEARCH_TIME_FRACTION: u64 = 29;
 
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
@@ -718,7 +719,6 @@ impl Board {
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
-                    r -= i32::from(killers[0] == m || killers[1] == m);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY

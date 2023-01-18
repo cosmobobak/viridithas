@@ -127,7 +127,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
 }
 
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
+fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchParams) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -184,7 +184,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
         let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
         let (time_window, max_time_window) =
-            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, config);
         info.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
@@ -536,7 +536,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             input if input.starts_with("go") => {
-                let res = parse_go(input, &mut info, &mut pos);
+                let res = parse_go(input, &mut info, &mut pos, get_search_params());
                 if res.is_ok() {
                     tt.increase_age();
                     if USE_NNUE.load(Ordering::SeqCst) {
