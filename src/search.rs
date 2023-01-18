@@ -202,7 +202,10 @@ impl Board {
 
                 score = pv.score;
                 let prev_bestmove = bestmove;
-                bestmove = *pv.moves().first().unwrap_or(&bestmove);
+                bestmove = match t.best_moves[0] {
+                    Move::NULL => bestmove,
+                    m => m,
+                };
                 let bestmove_changed = bestmove != prev_bestmove;
 
                 if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
@@ -855,7 +858,7 @@ impl Board {
 
     /// The reduced beta margin for Singular Extension.
     fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
-        (tt_value - 2 * depth.round()).max(-MATE_SCORE)
+        (tt_value - 3 * depth.round()).max(-MATE_SCORE)
     }
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
