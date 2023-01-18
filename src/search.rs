@@ -718,6 +718,7 @@ impl Board {
                 {
                     let mut r = get_lm_table().getr(depth, moves_made);
                     r += i32::from(!PV);
+                    r -= (ordering_score / 5000).clamp(-2, 2);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
