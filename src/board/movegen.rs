@@ -111,17 +111,14 @@ impl Board {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to, PieceType::NO_PIECE_TYPE, 0));
         }
+        // for pure-capture generation, we only try queen promotions.
         for from in BitLoop::new(attacks_west & promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
-                move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
-            }
+            move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
         }
         for from in BitLoop::new(attacks_east & promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
-                move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
-            }
+            move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
         }
     }
 
