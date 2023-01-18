@@ -200,13 +200,9 @@ impl Board {
                     mate_counter = 0;
                 }
 
-                assert_eq!(self.height(), 0);
                 score = pv.score;
                 let prev_bestmove = bestmove;
-                bestmove = match t.best_moves[0] {
-                    Move::NULL => bestmove,
-                    m => m,
-                };
+                bestmove = pv.moves().first().copied().unwrap_or(bestmove);
                 let bestmove_changed = bestmove != prev_bestmove;
 
                 if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
