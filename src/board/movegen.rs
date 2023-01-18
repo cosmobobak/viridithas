@@ -88,37 +88,52 @@ impl Display for MoveList {
 
 impl Board {
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_pawn_caps<const IS_WHITE: bool, const CAPTURES_ONLY: bool>(&self, move_list: &mut MoveList) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
-        let attacks_west = if IS_WHITE {
+        let attacking_west = if IS_WHITE {
             their_pieces.south_east_one() & our_pawns
         } else {
             their_pieces.north_east_one() & our_pawns
         };
-        let attacks_east = if IS_WHITE {
+        let attacking_east = if IS_WHITE {
             their_pieces.south_west_one() & our_pawns
         } else {
             their_pieces.north_west_one() & our_pawns
         };
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        for from in BitLoop::new(attacks_west & !promo_rank) {
+        for from in BitLoop::new(attacking_west & !promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             move_list.push::<true>(Move::new(from, to, PieceType::NO_PIECE_TYPE, 0));
         }
-        for from in BitLoop::new(attacks_east & !promo_rank) {
+        for from in BitLoop::new(attacking_east & !promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to, PieceType::NO_PIECE_TYPE, 0));
         }
-        // for pure-capture generation, we only try queen promotions.
-        for from in BitLoop::new(attacks_west & promo_rank) {
+        for from in BitLoop::new(attacking_west & promo_rank) {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
+            if CAPTURES_ONLY {
+                // for pure-capture generation, we only try queen promotions.
+                move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
+            } else {
+                // otherwise, generate all promotions:
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                    move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
+                }
+            }
         }
-        for from in BitLoop::new(attacks_east & promo_rank) {
+        for from in BitLoop::new(attacking_east & promo_rank) {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
+            if CAPTURES_ONLY {
+                // for pure-capture generation, we only try queen promotions.
+                move_list.push::<true>(Move::new(from, to, PieceType::QUEEN, Move::PROMO_FLAG));
+            } else {
+                // otherwise, generate all promotions:
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                    move_list.push::<true>(Move::new(from, to, promo, Move::PROMO_FLAG));
+                }
+            }
         }
     }
 
@@ -209,7 +224,7 @@ impl Board {
         self.check_validity().unwrap();
 
         self.generate_pawn_forward::<IS_WHITE>(move_list);
-        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE, false>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
@@ -283,7 +298,7 @@ impl Board {
         self.generate_forward_promos::<IS_WHITE>(move_list);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE, true>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
