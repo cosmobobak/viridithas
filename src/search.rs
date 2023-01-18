@@ -200,6 +200,7 @@ impl Board {
                     mate_counter = 0;
                 }
 
+                assert_eq!(self.height(), 0);
                 score = pv.score;
                 let prev_bestmove = bestmove;
                 bestmove = match t.best_moves[0] {
