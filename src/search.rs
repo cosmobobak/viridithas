@@ -486,7 +486,7 @@ impl Board {
                 ProbeResult::Nothing => {
                     // TT-reduction.
                     if PV && depth >= get_search_params().tt_reduction_depth {
-                        depth -= 2;
+                        depth -= 1;
                     }
                     None
                 }
@@ -855,7 +855,7 @@ impl Board {
 
     /// The reduced beta margin for Singular Extension.
     fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
-        (tt_value - 3 * depth.round()).max(-MATE_SCORE)
+        (tt_value - 2 * depth.round()).max(-MATE_SCORE)
     }
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
