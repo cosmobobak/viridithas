@@ -186,9 +186,9 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
-                move_list.push::<true>(Move::new(sq, to, promo, Move::PROMO_FLAG));
-            }
+            // this function is only for capture generation, so we don't need to generate
+            // non-queen promotions.
+            move_list.push::<true>(Move::new(sq, to, PieceType::QUEEN, Move::PROMO_FLAG));
         }
     }
 
