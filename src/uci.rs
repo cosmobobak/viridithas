@@ -182,7 +182,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchP
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
+        // let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
         let (time_window, max_time_window) =
             SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, config);
         info.limit = SearchLimit::Dynamic {
@@ -190,7 +190,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchP
             their_clock,
             our_inc,
             their_inc,
-            moves_to_go,
+            moves_to_go: moves_to_go.unwrap_or_else(|| pos.predicted_moves_left()),
             max_time_window,
             time_window,
         };
