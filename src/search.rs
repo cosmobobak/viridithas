@@ -167,6 +167,7 @@ impl Board {
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
+        let mut bm_changes = 0;
         let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let starting_depth = if MAIN_THREAD {
@@ -219,8 +220,9 @@ impl Board {
                         break 'deepening;
                     }
                 }
-                if MAIN_THREAD && d > 6 && info.in_game() && bestmove_changed {
+                if MAIN_THREAD && d > 6 && info.in_game() && bestmove_changed && bm_changes < 3 {
                     info.multiply_time_window(1.1);
+                    bm_changes += 1;
                 }
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {

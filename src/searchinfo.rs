@@ -42,15 +42,17 @@ impl SearchLimit {
     }
 
     pub fn compute_time_windows(our_clock: u64, moves_to_go: Option<u64>, our_inc: u64, config: &SearchParams) -> (u64, u64) {
+        let max_time = our_clock.saturating_sub(30);
         if let Some(moves_to_go) = moves_to_go {
-            let computed_time_window = our_clock / moves_to_go - 10;
-            let time_window = computed_time_window.min(our_clock);
-            let max_time_window = (time_window * 5 / 2).min(our_clock);
+            let divisor = moves_to_go.clamp(1, 20);
+            let computed_time_window = our_clock / divisor;
+            let time_window = computed_time_window.min(max_time);
+            let max_time_window = (time_window * 5 / 2).min(max_time);
             return (time_window, max_time_window);
         }
         let computed_time_window = our_clock / config.search_time_fraction + our_inc / 2 - 10;
-        let time_window = computed_time_window.min(our_clock);
-        let max_time_window = (time_window * 5 / 2).min(our_clock);
+        let time_window = computed_time_window.min(max_time);
+        let max_time_window = (time_window * 5 / 2).min(max_time);
         (time_window, max_time_window)
     }
 
