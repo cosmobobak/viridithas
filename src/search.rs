@@ -66,7 +66,7 @@ const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
-const SEARCH_TIME_FRACTION: u64 = 29;
+const SEARCH_TIME_FRACTION: u64 = 26;
 
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.

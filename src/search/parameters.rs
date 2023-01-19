@@ -141,6 +141,7 @@ impl SearchParams {
     }
 
     pub fn ids_with_values(&self) -> Vec<(&str, f64)> {
+        #![allow(clippy::cast_precision_loss)]
         id_value_gen![
             ASPIRATION_WINDOW,
             [self.aspiration_window.into()],
