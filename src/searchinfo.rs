@@ -44,7 +44,7 @@ impl SearchLimit {
     pub fn compute_time_windows(our_clock: u64, moves_to_go: Option<u64>, our_inc: u64, config: &SearchParams) -> (u64, u64) {
         let max_time = our_clock.saturating_sub(30);
         if let Some(moves_to_go) = moves_to_go {
-            let divisor = moves_to_go.clamp(1, 20);
+            let divisor = moves_to_go.clamp(2, config.search_time_fraction);
             let computed_time_window = our_clock / divisor;
             let time_window = computed_time_window.min(max_time);
             let max_time_window = (time_window * 5 / 2).min(max_time);
