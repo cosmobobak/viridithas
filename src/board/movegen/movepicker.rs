@@ -1,5 +1,5 @@
 use crate::{
-    board::Board,
+    board::{Board, evaluation::get_see_value},
     chessmove::Move,
     lookups,
     threadlocal::ThreadData, piece::PieceType,
@@ -13,7 +13,7 @@ const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-pub const MOVEGEN_SEE_THRESHOLD: i32 = 0;
+pub const MOVEGEN_SEE_THRESHOLD: i32 = get_see_value(PieceType::PAWN);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {

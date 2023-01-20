@@ -26,8 +26,8 @@ pub const BISHOP_VALUE: S = S(437, 491);
 pub const ROOK_VALUE: S = S(604, 805);
 pub const QUEEN_VALUE: S = S(1369, 1274);
 
-pub fn get_see_value(piece: PieceType) -> i32 {
-    static SEE_PIECE_VALUES: [i32; 7] = [
+pub const fn get_see_value(piece: PieceType) -> i32 {
+    const SEE_PIECE_VALUES: [i32; 7] = [
         0,
         PAWN_VALUE.value(128),
         KNIGHT_VALUE.value(128),
