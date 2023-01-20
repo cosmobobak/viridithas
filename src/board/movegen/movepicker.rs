@@ -87,22 +87,30 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             return None;
         }
 
-        // SAFETY: self.index is always in bounds.
-        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
-        let mut best_num = self.index;
-
-        // find the best move in the unsorted portion of the movelist.
-        for index in self.index + 1..self.movelist.count {
-            // SAFETY: self.count is always less than 256, and self.index is always in bounds.
-            let score = unsafe { self.movelist.moves.get_unchecked(index).score };
-            if score > best_score {
-                best_score = score;
-                best_num = index;
+        let (best_num, m) = loop {
+            // find the best move in the unsorted portion of the movelist.
+            // SAFETY: self.index is always in bounds.
+            let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
+            let mut best_num = self.index;
+            for index in self.index + 1..self.movelist.count {
+                // SAFETY: self.count is always less than 256, and self.index is always in bounds.
+                let score = unsafe { self.movelist.moves.get_unchecked(index).score };
+                if score > best_score {
+                    best_score = score;
+                    best_num = index;
+                }
             }
-        }
-
-        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
-        let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
+            // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
+            let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
+            if !DO_SEE || m.score == -1 || position.static_exchange_eval(m.mov, MOVEGEN_SEE_THRESHOLD) {
+                break (best_num, m);
+            } else {
+                // best_move was found to be a losing capture, so we rescore it and continue:
+                unsafe {
+                    self.movelist.moves.get_unchecked_mut(best_num).score = -1;
+                }
+            }
+        };
 
         // swap the best move with the first unsorted move.
         // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
