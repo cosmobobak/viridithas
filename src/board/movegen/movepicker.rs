@@ -102,12 +102,12 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             }
             // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
             let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
-            if !DO_SEE || m.score == -1 || position.static_exchange_eval(m.mov, MOVEGEN_SEE_THRESHOLD) {
+            if !DO_SEE || m.score < WINNING_CAPTURE_SCORE || position.static_exchange_eval(m.mov, MOVEGEN_SEE_THRESHOLD) {
                 break (best_num, m);
             } else {
                 // best_move was found to be a losing capture, so we rescore it and continue:
                 unsafe {
-                    self.movelist.moves.get_unchecked_mut(best_num).score = -1;
+                    self.movelist.moves.get_unchecked_mut(best_num).score -= WINNING_CAPTURE_SCORE;
                 }
             }
         };
