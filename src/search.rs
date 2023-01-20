@@ -64,8 +64,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
-const LMR_BASE: f64 = 75.0;
-const LMR_DIVISION: f64 = 225.0;
+const LMR_BASE: f64 = 30.0;
+const LMR_DIVISION: f64 = 200.0;
 const SEARCH_TIME_FRACTION: u64 = 26;
 
 impl Board {
