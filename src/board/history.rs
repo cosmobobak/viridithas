@@ -17,15 +17,20 @@ impl ThreadData {
             "Invalid piece moved by move {m} in position \n{pos}"
         );
         let to = m.to();
-        let val = self.history_table.get_mut(piece_moved, to);
+        let val = self.quiet_history.get_mut(piece_moved, to);
         update_history::<IS_GOOD>(val, depth);
     }
 
-    /// Get the history score for a quiet move.
-    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i16 {
+    /// Add a capture to the history table.
+    pub fn add_capture_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
         let piece_moved = pos.moved_piece(m);
+        debug_assert!(
+            piece_moved != Piece::EMPTY,
+            "Invalid piece moved by move {m} in position \n{pos}"
+        );
         let to = m.to();
-        self.history_table.get(piece_moved, to)
+        let val = self.capture_history.get_mut(piece_moved, to);
+        update_history::<IS_GOOD>(val, depth);
     }
 
     /// Add a move to the countermove history table.

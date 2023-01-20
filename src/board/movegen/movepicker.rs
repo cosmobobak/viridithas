@@ -134,24 +134,29 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {
-            let history = t.history_score(pos, m);
+            let to_sq = m.to();
+            let moved_piece = pos.piece_at(m.from());
+            let history = t.quiet_history.get(moved_piece, to_sq);
             let followup_history = t.followup_history_score(pos, m);
             i32::from(history + followup_history)
         }
     }
 
-    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move) -> i32 {
-        let mut score;
+    pub fn score_capture(t: &ThreadData, pos: &Board, m: Move) -> i32 {
+        let to_sq = m.to();
+        let moved_piece = pos.piece_at(m.from());
+        let history = t.capture_history.get(moved_piece, to_sq);
+        let mut score = i32::from(history);
         if m.is_promo() {
             if m.promotion_type() == PieceType::QUEEN {
-                score = lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
+                score += lookups::mvv_bonus(PieceType::QUEEN);
             } else {
-                score = -WINNING_CAPTURE_SCORE; // basically no point looking at these.
+                score += -WINNING_CAPTURE_SCORE; // basically no point looking at these.
             }
         } else if m.is_ep() {
-            score = 1050; // the score for PxP in MVVLVA
+            score += lookups::mvv_bonus(PieceType::PAWN);
         } else {
-            score = lookups::get_mvv_lva_score(pos.captured_piece(m).piece_type(), pos.piece_at(m.from()).piece_type());
+            score += lookups::mvv_bonus(pos.captured_piece(m).piece_type());
         }
         if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
             score += WINNING_CAPTURE_SCORE;
@@ -159,6 +164,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         if m.is_promo() && m.promotion_type() == PieceType::QUEEN {
             score += WINNING_CAPTURE_SCORE / 2;
         }
-        score
+        score + i32::from(history)
     }
 }
