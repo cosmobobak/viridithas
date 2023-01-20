@@ -146,20 +146,10 @@ pub static PIECE_MAJ: [bool; 13] =
 pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
-fn victim_score(piece: PieceType) -> i32 {
-    i32::from(piece.inner()) * 1000 // pawn = 1000, knight = 2000, bishop = 3000, etc.
-}
-
-/// The score of this pair of pieces, for MVV/LVA move ordering.
-pub fn get_mvv_lva_score(victim: PieceType, attacker: PieceType) -> i32 {
-    victim_score(victim) + 60 - victim_score(attacker) / 100
-}
-
 /// The score of attacking this piece, for combining with capture history.
 pub fn mvv_bonus(piece: PieceType) -> i32 {
-    const MULTIPLIER: i32 = i16::MAX as i32; // 32767, the most that history scores can be.
-    let inner = i32::from(piece.inner());
-    MULTIPLIER * inner // pawn = 1, knight = 2, bishop = 3, etc.
+    const MVV_BONUSES: [i32; 6] = [0, 0, 2400, 2400, 4800, 9600];
+    MVV_BONUSES[piece.index()]
 }
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
