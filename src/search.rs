@@ -768,25 +768,9 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<true, false>(t, best_move, depth);
-
-                            // decrease the history of the quiet moves that came before the cutoff move.
-                            let qs = quiets_tried.as_slice();
-                            let qs = &qs[..qs.len() - 1];
-                            for &m in qs {
-                                self.update_history_metrics::<false, false>(t, m, depth);
-                            }
-                        } else {
-                            // bestmove was a capture, so we update capture history
-                            self.update_history_metrics::<true, true>(t, best_move, depth);
-
-                            // decrease the history of the captures that came before the best move.
-                            let ts = tacticals_tried.as_slice();
-                            let ts = &ts[..ts.len() - 1];
-                            for &m in ts {
-                                self.update_history_metrics::<false, true>(t, m, depth);
-                            }
+                            self.update_history_metrics::<false>(t, quiets_tried.as_slice(), best_move, depth);
                         }
+                        self.update_history_metrics::<true>(t, tacticals_tried.as_slice(), best_move, depth);
 
                         if excluded.is_null() {
                             tt.store::<ROOT>(
@@ -830,25 +814,9 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<true, false>(t, best_move, depth);
-
-                // decrease the history of the quiet moves that came before the best move.
-                let qs = quiets_tried.as_slice();
-                let qs = &qs[..qs.len() - 1];
-                for &m in qs {
-                    self.update_history_metrics::<false, false>(t, m, depth);
-                }
-            } else {
-                // bestmove was a capture, so we update capture history
-                self.update_history_metrics::<true, true>(t, best_move, depth);
-
-                // decrease the history of the captures that came before the best move.
-                let ts = tacticals_tried.as_slice();
-                let ts = &ts[..ts.len() - 1];
-                for &m in ts {
-                    self.update_history_metrics::<false, true>(t, m, depth);
-                }
+                self.update_history_metrics::<false>(t, quiets_tried.as_slice(), best_move, depth);
             }
+            self.update_history_metrics::<true>(t, tacticals_tried.as_slice(), best_move, depth);
 
             if excluded.is_null() {
                 tt.store::<ROOT>(key, height, best_move, best_score, HFlag::Exact, depth);
@@ -866,17 +834,20 @@ impl Board {
     }
 
     /// Update the history and followup history tables.
-    fn update_history_metrics<const IS_GOOD: bool, const IS_CAPTURE: bool>(
+    fn update_history_metrics<const IS_CAPTURE: bool>(
         &mut self,
         t: &mut ThreadData,
-        m: Move,
+        moves: &[Move],
+        best: Move,
         depth: Depth,
     ) {
-        if IS_CAPTURE {
-            t.add_capture_history::<IS_GOOD>(self, m, depth);
-        } else {
-            t.add_history::<IS_GOOD>(self, m, depth);
-            t.add_followup_history::<IS_GOOD>(self, m, depth);
+        for &m in moves {
+            if IS_CAPTURE {
+                t.add_capture_history(self, m, depth, m == best);
+            } else {
+                t.add_history(self, m, depth, m == best);
+                t.add_followup_history(self, m, depth, m == best);
+            }
         }
     }
 
