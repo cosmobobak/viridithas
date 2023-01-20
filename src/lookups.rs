@@ -149,7 +149,7 @@ pub static PIECE_MIN: [bool; 13] =
 /// The score of attacking this piece, for combining with capture history.
 pub fn mvv_bonus(piece: PieceType) -> i32 {
     const MVV_BONUSES: [i32; 6] = [0, 0, 2400, 2400, 4800, 9600];
-    const BASE_CAPTURE_BONUS: i32 = 64000;
+    const BASE_CAPTURE_BONUS: i32 = 1000;
     MVV_BONUSES[piece.index()] + BASE_CAPTURE_BONUS
 }
 
