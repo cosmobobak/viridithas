@@ -45,7 +45,7 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 20;
+const ASPIRATION_WINDOW: i32 = 25;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
 const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 70;
@@ -64,8 +64,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
-const LMR_BASE: f64 = 77.0;
-const LMR_DIVISION: f64 = 236.0;
+const LMR_BASE: f64 = 30.0;
+const LMR_DIVISION: f64 = 201.0;
 const SEARCH_TIME_FRACTION: u64 = 26;
 
 impl Board {
