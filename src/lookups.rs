@@ -6,7 +6,7 @@ use crate::{
         Rank::{RANK_1, RANK_8},
         Square,
     },
-    rng::XorShiftState, piece::PieceType,
+    rng::XorShiftState, piece::PieceType, board::movegen::movepicker::WINNING_CAPTURE_SCORE,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -149,8 +149,7 @@ pub static PIECE_MIN: [bool; 13] =
 /// The score of attacking this piece, for combining with capture history.
 pub fn mvv_bonus(piece: PieceType) -> i32 {
     const MVV_BONUSES: [i32; 6] = [0, 0, 2400, 2400, 4800, 9600];
-    const BASE_CAPTURE_BONUS: i32 = 1000;
-    MVV_BONUSES[piece.index()] + BASE_CAPTURE_BONUS
+    MVV_BONUSES[piece.index()] + WINNING_CAPTURE_SCORE
 }
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {

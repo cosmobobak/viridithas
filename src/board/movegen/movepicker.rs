@@ -158,9 +158,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         } else {
             score += lookups::mvv_bonus(pos.captured_piece(m).piece_type());
         }
-        if !DO_SEE || pos.static_exchange_eval(m, MOVEGEN_SEE_THRESHOLD) {
-            score += WINNING_CAPTURE_SCORE;
-        }
         if m.is_promo() && m.promotion_type() == PieceType::QUEEN {
             score += WINNING_CAPTURE_SCORE / 2;
         }
