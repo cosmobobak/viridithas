@@ -15,7 +15,6 @@ pub struct ThreadData {
     pub nnue: Box<nnue::NNUEState>,
 
     pub quiet_history: HistoryTable,
-    pub capture_history: HistoryTable,
     pub followup_history: DoubleHistoryTable,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
     pub counter_move_table: MoveTable,
@@ -36,7 +35,6 @@ impl ThreadData {
             multi_pv_excluded: Vec::new(),
             nnue: Box::new(nnue::NNUEState::new()),
             quiet_history: HistoryTable::new(),
-            capture_history: HistoryTable::new(),
             followup_history: DoubleHistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
@@ -70,7 +68,6 @@ impl ThreadData {
 
     pub fn alloc_tables(&mut self) {
         self.quiet_history.clear();
-        self.capture_history.clear();
         self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
@@ -78,7 +75,6 @@ impl ThreadData {
 
     pub fn setup_tables_for_search(&mut self) {
         self.quiet_history.age_entries();
-        self.capture_history.age_entries();
         self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();

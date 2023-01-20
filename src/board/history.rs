@@ -21,16 +21,15 @@ impl ThreadData {
         update_history(val, depth, good);
     }
 
-    /// Add a capture to the history table.
-    pub fn add_capture_history(&mut self, pos: &Board, m: Move, depth: Depth, good: bool) {
+    /// Get the history score for a move.
+    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i16 {
         let piece_moved = pos.moved_piece(m);
         debug_assert!(
             piece_moved != Piece::EMPTY,
             "Invalid piece moved by move {m} in position \n{pos}"
         );
         let to = m.to();
-        let val = self.capture_history.get_mut(piece_moved, to);
-        update_history(val, depth, good);
+        self.quiet_history.get(piece_moved, to)
     }
 
     /// Add a move to the countermove history table.
@@ -72,7 +71,7 @@ impl ThreadData {
         pos: &Board,
         m: Move,
         depth: Depth,
-        good: bool,
+        good: bool
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
         let two_ply_ago = match pos.history.len().checked_sub(2) {

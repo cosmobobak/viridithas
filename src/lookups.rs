@@ -6,7 +6,7 @@ use crate::{
         Rank::{RANK_1, RANK_8},
         Square,
     },
-    rng::XorShiftState, piece::PieceType, board::movegen::movepicker::WINNING_CAPTURE_SCORE,
+    rng::XorShiftState, piece::PieceType,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -146,10 +146,13 @@ pub static PIECE_MAJ: [bool; 13] =
 pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
-/// The score of attacking this piece, for combining with capture history.
-pub fn mvv_bonus(piece: PieceType) -> i32 {
-    const MVV_BONUSES: [i32; 6] = [0, 0, 2400, 2400, 4800, 9600];
-    MVV_BONUSES[piece.index()] + WINNING_CAPTURE_SCORE
+fn victim_score(piece: PieceType) -> i32 {
+    i32::from(piece.inner()) * 1000 // pawn = 1000, knight = 2000, bishop = 3000, etc.
+}
+
+/// The score of this pair of pieces, for MVV/LVA move ordering.
+pub fn get_mvv_lva_score(victim: PieceType, attacker: PieceType) -> i32 {
+    victim_score(victim) + 60 - victim_score(attacker) / 100
 }
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {

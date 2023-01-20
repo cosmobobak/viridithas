@@ -768,9 +768,8 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<false>(t, quiets_tried.as_slice(), best_move, depth);
+                            self.update_history_metrics(t, quiets_tried.as_slice(), best_move, depth);
                         }
-                        self.update_history_metrics::<true>(t, tacticals_tried.as_slice(), best_move, depth);
 
                         if excluded.is_null() {
                             tt.store::<ROOT>(
@@ -814,9 +813,8 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<false>(t, quiets_tried.as_slice(), best_move, depth);
+                self.update_history_metrics(t, quiets_tried.as_slice(), best_move, depth);
             }
-            self.update_history_metrics::<true>(t, tacticals_tried.as_slice(), best_move, depth);
 
             if excluded.is_null() {
                 tt.store::<ROOT>(key, height, best_move, best_score, HFlag::Exact, depth);
@@ -834,7 +832,7 @@ impl Board {
     }
 
     /// Update the history and followup history tables.
-    fn update_history_metrics<const IS_CAPTURE: bool>(
+    fn update_history_metrics(
         &mut self,
         t: &mut ThreadData,
         moves: &[Move],
@@ -842,12 +840,8 @@ impl Board {
         depth: Depth,
     ) {
         for &m in moves {
-            if IS_CAPTURE {
-                t.add_capture_history(self, m, depth, m == best);
-            } else {
-                t.add_history(self, m, depth, m == best);
-                t.add_followup_history(self, m, depth, m == best);
-            }
+            t.add_history(self, m, depth, m == best);
+            t.add_followup_history(self, m, depth, m == best);
         }
     }
 
