@@ -87,17 +87,30 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             return None;
         }
 
-        let best_idx = self.movelist.moves[self.index..self.movelist.count]
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, e)| e.score)
-            .map(|(i, _)| i + self.index)
-            .unwrap();
+        // SAFETY: self.index is always in bounds.
+        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
+        let mut best_num = self.index;
 
-        let &m = &self.movelist.moves[best_idx];
+        // find the best move in the unsorted portion of the movelist.
+        for index in self.index + 1..self.movelist.count {
+            // SAFETY: self.count is always less than 256, and self.index is always in bounds.
+            let score = unsafe { self.movelist.moves.get_unchecked(index).score };
+            if score > best_score {
+                best_score = score;
+                best_num = index;
+            }
+        }
+
+        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
+        let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
 
         // swap the best move with the first unsorted move.
-        self.movelist.moves[best_idx] = self.movelist.moves[self.index];
+        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
+        // and self.index is always in bounds.
+        unsafe {
+            *self.movelist.moves.get_unchecked_mut(best_num) =
+                *self.movelist.moves.get_unchecked(self.index);
+        }
 
         self.index += 1;
 
@@ -127,7 +140,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         }
     }
 
-    pub fn score_capture(_zt: &ThreadData, pos: &Board, m: Move) -> i32 {
+    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move) -> i32 {
         let mut score;
         if m.is_promo() {
             if m.promotion_type() == PieceType::QUEEN {

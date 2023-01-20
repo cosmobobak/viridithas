@@ -10,26 +10,22 @@ use super::Board;
 
 impl ThreadData {
     /// Add a quiet move to the history table.
-    pub fn add_history(&mut self, pos: &Board, m: Move, depth: Depth, good: bool) {
+    pub fn add_history<const IS_GOOD: bool>(&mut self, pos: &Board, m: Move, depth: Depth) {
         let piece_moved = pos.moved_piece(m);
         debug_assert!(
             piece_moved != Piece::EMPTY,
             "Invalid piece moved by move {m} in position \n{pos}"
         );
         let to = m.to();
-        let val = self.quiet_history.get_mut(piece_moved, to);
-        update_history(val, depth, good);
+        let val = self.history_table.get_mut(piece_moved, to);
+        update_history::<IS_GOOD>(val, depth);
     }
 
-    /// Get the history score for a move.
+    /// Get the history score for a quiet move.
     pub(super) fn history_score(&self, pos: &Board, m: Move) -> i16 {
         let piece_moved = pos.moved_piece(m);
-        debug_assert!(
-            piece_moved != Piece::EMPTY,
-            "Invalid piece moved by move {m} in position \n{pos}"
-        );
         let to = m.to();
-        self.quiet_history.get(piece_moved, to)
+        self.history_table.get(piece_moved, to)
     }
 
     /// Add a move to the countermove history table.
@@ -66,12 +62,11 @@ impl ThreadData {
     }
 
     /// Add a move to the follow-up history table.
-    pub fn add_followup_history(
+    pub fn add_followup_history<const IS_GOOD: bool>(
         &mut self,
         pos: &Board,
         m: Move,
         depth: Depth,
-        good: bool
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
         let two_ply_ago = match pos.history.len().checked_sub(2) {
@@ -105,7 +100,7 @@ impl ThreadData {
         let piece = pos.moved_piece(m);
 
         let val = self.followup_history.get_mut(tpa_piece, tpa_to).get_mut(piece, to);
-        update_history(val, depth, good);
+        update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the follow-up history score for a move.

@@ -45,7 +45,7 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 25;
+const ASPIRATION_WINDOW: i32 = 20;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
 const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 70;
@@ -768,7 +768,14 @@ impl Board {
                         if is_quiet {
                             t.insert_killer(self, best_move);
                             t.insert_countermove(self, best_move);
-                            self.update_history_metrics(t, quiets_tried.as_slice(), best_move, depth);
+                            self.update_history_metrics::<true>(t, best_move, depth);
+
+                            // decrease the history of the quiet moves that came before the cutoff move.
+                            let qs = quiets_tried.as_slice();
+                            let qs = &qs[..qs.len() - 1];
+                            for &m in qs {
+                                self.update_history_metrics::<false>(t, m, depth);
+                            }
                         }
 
                         if excluded.is_null() {
@@ -813,7 +820,14 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics(t, quiets_tried.as_slice(), best_move, depth);
+                self.update_history_metrics::<true>(t, best_move, depth);
+
+                // decrease the history of the quiet moves that came before the best move.
+                let qs = quiets_tried.as_slice();
+                let qs = &qs[..qs.len() - 1];
+                for &m in qs {
+                    self.update_history_metrics::<false>(t, m, depth);
+                }
             }
 
             if excluded.is_null() {
@@ -832,17 +846,14 @@ impl Board {
     }
 
     /// Update the history and followup history tables.
-    fn update_history_metrics(
+    fn update_history_metrics<const IS_GOOD: bool>(
         &mut self,
         t: &mut ThreadData,
-        moves: &[Move],
-        best: Move,
+        m: Move,
         depth: Depth,
     ) {
-        for &m in moves {
-            t.add_history(self, m, depth, m == best);
-            t.add_followup_history(self, m, depth, m == best);
-        }
+        t.add_history::<IS_GOOD>(self, m, depth);
+        t.add_followup_history::<IS_GOOD>(self, m, depth);
     }
 
     /// The reduced beta margin for Singular Extension.

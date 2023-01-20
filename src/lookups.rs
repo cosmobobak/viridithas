@@ -147,7 +147,7 @@ pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
 fn victim_score(piece: PieceType) -> i32 {
-    i32::from(piece.inner()) * 1000 // pawn = 1000, knight = 2000, bishop = 3000, etc.
+    i32::from(piece.inner()) * 1000
 }
 
 /// The score of this pair of pieces, for MVV/LVA move ordering.
