@@ -1,4 +1,4 @@
-use std::{array::from_mut, fs, mem};
+use std::{array::from_mut, fs, mem, ops::{Deref, DerefMut}};
 
 use serde_json::Value;
 
@@ -28,6 +28,22 @@ const ACC_STACK_SIZE: usize = 256;
 pub const ACTIVATE: bool = true;
 pub const DEACTIVATE: bool = false;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(C, align(64))]
+pub struct Align<T>(pub T);
+
+impl<T, const SIZE: usize> Deref for Align<[T; SIZE]> {
+    type Target = [T; SIZE];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
@@ -39,10 +55,10 @@ pub static NNUE: NNUEParams = NNUEParams {
 };
 
 pub struct NNUEParams {
-    pub feature_weights: [i16; INPUT * HIDDEN],
-    pub flipped_weights: [i16; INPUT * HIDDEN],
-    pub feature_bias: [i16; HIDDEN],
-    pub output_weights: [i16; HIDDEN * 2],
+    pub feature_weights: Align<[i16; INPUT * HIDDEN]>,
+    pub flipped_weights: Align<[i16; INPUT * HIDDEN]>,
+    pub feature_bias: Align<[i16; HIDDEN]>,
+    pub output_weights: Align<[i16; HIDDEN * 2]>,
     pub output_bias: i16,
 }
 
@@ -118,10 +134,10 @@ impl NNUEParams {
         }
 
         let mut out = Box::new(Self {
-            feature_weights: [0; INPUT * HIDDEN],
-            flipped_weights: [0; INPUT * HIDDEN],
-            feature_bias: [0; HIDDEN],
-            output_weights: [0; HIDDEN * 2],
+            feature_weights: Align([0; INPUT * HIDDEN]),
+            flipped_weights: Align([0; INPUT * HIDDEN]),
+            feature_bias: Align([0; HIDDEN]),
+            output_weights: Align([0; HIDDEN * 2]),
             output_bias: 0,
         });
 
@@ -178,8 +194,8 @@ impl NNUEParams {
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
-    pub white_pov: [i16; INPUT],
-    pub black_pov: [i16; INPUT],
+    pub white_pov: Align<[i16; INPUT]>,
+    pub black_pov: Align<[i16; INPUT]>,
 
     pub accumulators: [Accumulator<HIDDEN>; ACC_STACK_SIZE],
     pub current_acc: usize,
@@ -188,8 +204,8 @@ pub struct NNUEState {
 impl NNUEState {
     pub const fn new() -> Self {
         Self {
-            white_pov: [0; INPUT],
-            black_pov: [0; INPUT],
+            white_pov: Align([0; INPUT]),
+            black_pov: Align([0; INPUT]),
             accumulators: [Accumulator::new(); ACC_STACK_SIZE],
             current_acc: 0,
         }
