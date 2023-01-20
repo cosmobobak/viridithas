@@ -164,6 +164,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         if m.is_promo() && m.promotion_type() == PieceType::QUEEN {
             score += WINNING_CAPTURE_SCORE / 2;
         }
-        score + i32::from(history)
+        score
     }
 }
