@@ -87,30 +87,17 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             return None;
         }
 
-        // SAFETY: self.index is always in bounds.
-        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
-        let mut best_num = self.index;
+        let best_idx = self.movelist.moves[self.index..self.movelist.count]
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, e)| e.score)
+            .map(|(i, _)| i + self.index)
+            .unwrap();
 
-        // find the best move in the unsorted portion of the movelist.
-        for index in self.index + 1..self.movelist.count {
-            // SAFETY: self.count is always less than 256, and self.index is always in bounds.
-            let score = unsafe { self.movelist.moves.get_unchecked(index).score };
-            if score > best_score {
-                best_score = score;
-                best_num = index;
-            }
-        }
-
-        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
-        let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
+        let &m = &self.movelist.moves[best_idx];
 
         // swap the best move with the first unsorted move.
-        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
-        // and self.index is always in bounds.
-        unsafe {
-            *self.movelist.moves.get_unchecked_mut(best_num) =
-                *self.movelist.moves.get_unchecked(self.index);
-        }
+        self.movelist.moves[best_idx] = self.movelist.moves[self.index];
 
         self.index += 1;
 
