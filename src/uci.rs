@@ -158,13 +158,13 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchP
                 let mate_distance: usize = part_parse("mate", parts.next())?;
                 let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
                 GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
-                info.limit = SearchLimit::Mate(ply);
+                info.limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
-    if !matches!(info.limit, SearchLimit::Mate(_)) {
+    if !matches!(info.limit, SearchLimit::Mate { .. }) {
         GO_MATE_MAX_DEPTH.store(MAX_DEPTH.ply_to_horizon(), Ordering::SeqCst);
     }
 

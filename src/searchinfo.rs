@@ -15,7 +15,7 @@ pub enum SearchLimit {
     Time(u64),
     TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
-    Mate(usize),
+    Mate { ply: usize },
     Dynamic {
         our_clock: u64,
         their_clock: u64,
@@ -58,7 +58,7 @@ impl SearchLimit {
 
     #[cfg(test)]
     pub const fn mate_in(moves: usize) -> Self {
-        Self::Mate(moves * 2)
+        Self::Mate { ply: moves * 2 }
     }
 }
 
@@ -146,7 +146,7 @@ impl<'a> SearchInfo<'a> {
 
     pub fn check_up(&mut self) {
         match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate(_) | SearchLimit::Infinite => {}
+            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {}
             SearchLimit::Nodes(nodes) => {
                 if self.nodes >= nodes {
                     self.stopped.store(true, Ordering::SeqCst);
@@ -182,11 +182,11 @@ impl<'a> SearchInfo<'a> {
             if correct_moves.contains(&best_move) {
                 self.stopped.store(true, Ordering::SeqCst);
             }
-        } else if let &SearchLimit::Mate(mate_ply) = &self.limit {
-            let expected_score = mate_in(mate_ply);
+        } else if let &SearchLimit::Mate { ply } = &self.limit {
+            let expected_score = mate_in(ply);
             let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= mate_ply as i32 {
+            if is_good_enough && depth >= ply as i32 {
                 self.stopped.store(true, Ordering::SeqCst);
             }
         }
