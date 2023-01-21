@@ -3,8 +3,8 @@ use std::{
     io::Write,
     num::{ParseFloatError, ParseIntError},
     sync::{
-        atomic::{self, AtomicBool, AtomicUsize, Ordering},
-        mpsc,
+        atomic::{self, AtomicBool, AtomicUsize, Ordering, AtomicU8},
+        mpsc, Mutex,
     },
     time::Instant, str::ParseBoolError,
 };
@@ -20,7 +20,7 @@ use crate::{
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION, piece::Colour,
+    NAME, VERSION, piece::Colour, tablebases,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
@@ -293,6 +293,18 @@ fn parse_setoption(
             let value: bool = opt_value.parse()?;
             USE_NNUE.store(value, Ordering::SeqCst);
         }
+        "SyzygyPath" => {
+            let path = opt_value.to_string();
+            tablebases::probe::init(&path);
+            let mut lock = SYZYGY_PATH.lock().unwrap();
+            *lock = path;
+            SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+        }
+        "SyzygyProbeLimit" => {
+            let value: u8 = opt_value.parse()?;
+            assert!(value <= 6, "SyzygyProbeLimit value must be between 0 and 6");
+            SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
+        }
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -418,6 +430,8 @@ fn print_uci_response(full: bool) {
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name UseNNUE type check default true");
+    println!("option name SyzygyPath type string default <empty>");
+    println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -429,6 +443,9 @@ fn print_uci_response(full: bool) {
 
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
+pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
+pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
+pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1

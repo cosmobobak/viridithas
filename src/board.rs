@@ -142,10 +142,10 @@ impl Board {
         self.key
     }
 
-    // pub const fn n_men(&self) -> u8 {
-    //     #![allow(clippy::cast_possible_truncation)]
-    //     self.pieces.occupied().count_ones() as u8
-    // }
+    pub const fn n_men(&self) -> u8 {
+        #![allow(clippy::cast_possible_truncation)]
+        self.pieces.occupied().count_ones() as u8
+    }
 
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::WHITE || side == Colour::BLACK);

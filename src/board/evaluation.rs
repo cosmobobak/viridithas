@@ -54,10 +54,24 @@ pub const fn mated_in(ply: usize) -> i32 {
     debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
     -MATE_SCORE + ply as i32
 }
+pub const TB_WIN_SCORE: i32 = MATE_SCORE - 1000;
+pub const fn tb_win_in(ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    TB_WIN_SCORE - ply as i32
+}
+pub const fn tb_loss_in(ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    -TB_WIN_SCORE + ply as i32
+}
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
+/// A threshold over which scores must be a TB win (or mate).
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
 
 #[rustfmt::skip]
 pub const PIECE_VALUES: [S; 13] = [
@@ -156,6 +170,9 @@ pub const fn lerp(mg: i32, eg: i32, t: i32) -> i32 {
 
 pub const fn is_mate_score(score: i32) -> bool {
     score.abs() >= MINIMUM_MATE_SCORE
+}
+pub const fn is_game_theoretic_score(score: i32) -> bool {
+    score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
 impl Board {

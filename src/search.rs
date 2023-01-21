@@ -11,7 +11,7 @@ use std::{
 use crate::{
     board::{
         evaluation::{
-            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_MATE_SCORE,
+            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE, tb_win_in, tb_loss_in, is_game_theoretic_score,
         },
         movegen::{
             bitboards::{self, first_square},
@@ -29,7 +29,7 @@ use crate::{
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::{HFlag, ProbeResult, TTView},
-    uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour},
+    uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour}, tablebases::{self, probe::WDL},
 };
 
 use self::parameters::SearchParams;
@@ -362,7 +362,7 @@ impl Board {
             // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
             // we have to do this after make_move, because the move has to be legal.
             let at_least = stand_pat + worst_case;
-            if at_least > beta && !is_mate_score(at_least * 2) {
+            if at_least > beta && !is_game_theoretic_score(at_least * 2) {
                 self.unmake_move::<NNUE>(t);
                 pv.length = 1;
                 pv.line[0] = m;
@@ -498,6 +498,17 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search.
         };
 
+        // Probe the tablebases.
+        if !ROOT && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) && depth > ONE_PLY && self.n_men() <= tablebases::probe::get_max_pieces_count() {
+            if let Some(wdl) = tablebases::probe::get_wdl(&self) {
+                return match wdl {
+                    WDL::Win => tb_win_in(height),
+                    WDL::Loss => tb_loss_in(height),
+                    WDL::Draw => draw_score(info.nodes),
+                };
+            }
+        }
+
         let static_eval = if in_check {
             INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
@@ -548,7 +559,7 @@ impl Board {
                 }
                 if null_score >= beta {
                     // unconditionally cutoff if we're just too shallow.
-                    if depth < get_search_params().nmp_verification_depth && !is_mate_score(beta) {
+                    if depth < get_search_params().nmp_verification_depth && !is_game_theoretic_score(beta) {
                         return null_score;
                     }
                     // verify that it's *actually* fine to prune,
@@ -622,7 +633,7 @@ impl Board {
             }
 
             // lmp & fp.
-            if !ROOT && !PV && !in_check && best_score > -MINIMUM_MATE_SCORE {
+            if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= get_search_params().lmp_depth && moves_made >= lmp_threshold {
@@ -644,7 +655,7 @@ impl Board {
             // static exchange evaluation pruning
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
             if !ROOT
-                && best_score > -MINIMUM_MATE_SCORE
+                && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= get_search_params().see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
@@ -1192,8 +1203,8 @@ impl AspirationWindow {
     }
 
     pub const fn from_last_score(last_score: i32) -> Self {
-        if is_mate_score(last_score) {
-            // for mates we expect a lot of fluctuation, so aspiration
+        if is_game_theoretic_score(last_score) {
+            // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
             Self {
                 midpoint: last_score,

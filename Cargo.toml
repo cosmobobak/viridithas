@@ -5,6 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+syzygy = ["dep:cc"]
+bindgen = ["dep:bindgen"]
+
+[build-dependencies]
+cc = { version = "1.0.73", optional = true }
+bindgen = { version = "0.60.1", optional = true }
+
 [dependencies]
 rand = "0.8.5"
 num_cpus = "1.13.1"

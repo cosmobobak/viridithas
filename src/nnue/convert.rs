@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    board::{evaluation::is_mate_score, Board},
+    board::{evaluation::is_game_theoretic_score, Board},
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
     threadlocal::ThreadData,
@@ -64,7 +64,7 @@ fn batch_convert<const USE_NNUE: bool>(
             ..Default::default()
         };
         let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t, tt.view());
-        if filter_quiescent && (pos.is_tactical(bm) || is_mate_score(score)) {
+        if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {
             evals.push(None);
             continue;
         }

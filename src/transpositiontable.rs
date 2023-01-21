@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
-    board::evaluation::MINIMUM_MATE_SCORE,
+    board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
     definitions::{
         depth::Depth,
@@ -188,7 +188,7 @@ impl<'a> TTView<'a> {
             best_move = entry.m;
         }
 
-        let score = normalise_mate_score(score, ply);
+        let score = normalise_gt_truth_score(score, ply);
 
         let record_depth: Depth = entry.depth.into();
 
@@ -254,7 +254,7 @@ impl<'a> TTView<'a> {
 
         // we can't store the score in a tagged union,
         // because we need to do mate score preprocessing.
-        let tt_value = reconstruct_mate_score(entry.score.into(), ply);
+        let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
         if tt_depth < depth {
             return ProbeResult::Hit(TTHit {
@@ -324,21 +324,21 @@ impl<'a> TTView<'a> {
     }
 }
 
-const fn normalise_mate_score(mut score: i32, ply: usize) -> i32 {
+const fn normalise_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-    if score >= MINIMUM_MATE_SCORE {
+    if score >= MINIMUM_TB_WIN_SCORE {
         score += ply as i32;
-    } else if score <= -MINIMUM_MATE_SCORE {
+    } else if score <= -MINIMUM_TB_WIN_SCORE {
         score -= ply as i32;
     }
     score
 }
 
-const fn reconstruct_mate_score(mut score: i32, ply: usize) -> i32 {
+const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-    if score >= MINIMUM_MATE_SCORE {
+    if score >= MINIMUM_TB_WIN_SCORE {
         score -= ply as i32;
-    } else if score <= -MINIMUM_MATE_SCORE {
+    } else if score <= -MINIMUM_TB_WIN_SCORE {
         score += ply as i32;
     }
     score
