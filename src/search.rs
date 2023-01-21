@@ -500,12 +500,13 @@ impl Board {
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
+        let cardinality = tablebases::probe::get_max_pieces_count();
         if !ROOT 
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) 
-            && depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
-            && self.n_men() <= tablebases::probe::get_max_pieces_count() {
+            && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)) || self.n_men() < cardinality)
+            && self.n_men() <= cardinality {
             if let Some(wdl) = tablebases::probe::get_wdl(&self) {
-                let value = match wdl {
+                let tb_value = match wdl {
                     WDL::Win => tb_win_in(height),
                     WDL::Loss => tb_loss_in(height),
                     WDL::Draw => 0,
@@ -518,20 +519,20 @@ impl Board {
                 };
 
                 if tb_bound == HFlag::Exact 
-                    || (tb_bound == HFlag::LowerBound && value >= beta) 
-                    || (tb_bound == HFlag::UpperBound && value <= alpha) 
+                    || (tb_bound == HFlag::LowerBound && tb_value >= beta) 
+                    || (tb_bound == HFlag::UpperBound && tb_value <= alpha) 
                 {
-                    tt.store::<false>(key, height, Move::NULL, value, tb_bound, depth);
-                    return value;
+                    tt.store::<false>(key, height, Move::NULL, tb_value, tb_bound, depth);
+                    return tb_value;
                 }
 
                 if PV && tb_bound == HFlag::LowerBound {
-                    alpha = alpha.max(value);
-                    syzygy_min = value;
+                    alpha = alpha.max(tb_value);
+                    syzygy_min = tb_value;
                 }
                 
                 if PV && tb_bound == HFlag::UpperBound {
-                    syzygy_max = value;
+                    syzygy_max = tb_value;
                 }
             }
         }

@@ -35,6 +35,12 @@ pub fn get_max_pieces_count() -> u8 {
 pub fn get_wdl(board: &Board) -> Option<WDL> {
     const WHITE: bool = true;
     const BLACK: bool = false;
+
+    // guards for invalid positions
+    if board.castling_rights() != 0 || board.fifty_move_counter() != 0 {
+        return None;
+    }
+
     #[cfg(feature = "syzygy")]
     unsafe {
         let wdl = tb_probe_wdl(

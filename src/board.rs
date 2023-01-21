@@ -186,6 +186,10 @@ impl Board {
         self.side
     }
 
+    pub const fn castling_rights(&self) -> u8 {
+        self.castle_perm
+    }
+
     pub fn generate_pos_key(&self) -> u64 {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
