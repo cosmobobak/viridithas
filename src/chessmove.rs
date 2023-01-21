@@ -14,14 +14,17 @@ impl Move {
     const TO_SHIFT: usize = 6;
     const PROMO_MASK: u16 = 0b11;
     const PROMO_SHIFT: usize = 12;
+    const PROMO_FLAG: u16 = 0b1100_0000_0000_0000;
     pub const EP_FLAG: u16 = 0b0100_0000_0000_0000;
     pub const CASTLE_FLAG: u16 = 0b1000_0000_0000_0000;
-    pub const PROMO_FLAG: u16 = 0b1100_0000_0000_0000;
     pub const NULL: Self = Self { data: 0 };
 
     pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        debug_assert_ne!(promotion, PieceType::NO_PIECE_TYPE, "attempted to construct promotion to NO_PIECE_TYPE");
+        debug_assert_ne!(promotion, PieceType::PAWN, "attempted to construct promotion to pawn");
+        debug_assert_ne!(promotion, PieceType::KING, "attempted to construct promotion to king");
         let promotion = u16::from(promotion.inner()).wrapping_sub(2) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
         Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | (promotion << Self::PROMO_SHIFT) | Self::PROMO_FLAG }
     }
