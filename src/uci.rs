@@ -3,7 +3,7 @@ use std::{
     io::Write,
     num::{ParseFloatError, ParseIntError},
     sync::{
-        atomic::{self, AtomicBool, AtomicUsize, Ordering, AtomicU8},
+        atomic::{self, AtomicBool, AtomicUsize, Ordering, AtomicU8, AtomicI32},
         mpsc, Mutex,
     },
     time::Instant, str::ParseBoolError,
@@ -305,6 +305,11 @@ fn parse_setoption(
             assert!(value <= 6, "SyzygyProbeLimit value must be between 0 and 6");
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
         }
+        "SyzygyProbeDepth" => {
+            let value: i32 = opt_value.parse()?;
+            assert!(value >= 1 && value <= 100, "SyzygyProbeDepth value must be between 0 and 100");
+            SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
+        }
         _ => eprintln!("ignoring option {opt_name}"),
     }
     Ok(out)
@@ -432,6 +437,7 @@ fn print_uci_response(full: bool) {
     println!("option name UseNNUE type check default true");
     println!("option name SyzygyPath type string default <empty>");
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
+    println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -444,6 +450,7 @@ fn print_uci_response(full: bool) {
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
+pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);

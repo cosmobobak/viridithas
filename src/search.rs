@@ -500,7 +500,10 @@ impl Board {
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-        if !ROOT && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) && depth > ONE_PLY && self.n_men() <= tablebases::probe::get_max_pieces_count() {
+        if !ROOT 
+            && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) 
+            && depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
+            && self.n_men() <= tablebases::probe::get_max_pieces_count() {
             if let Some(wdl) = tablebases::probe::get_wdl(&self) {
                 let value = match wdl {
                     WDL::Win => tb_win_in(height),
