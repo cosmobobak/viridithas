@@ -499,13 +499,37 @@ impl Board {
         };
 
         // Probe the tablebases.
+        let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         if !ROOT && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) && depth > ONE_PLY && self.n_men() <= tablebases::probe::get_max_pieces_count() {
             if let Some(wdl) = tablebases::probe::get_wdl(&self) {
-                return match wdl {
+                let value = match wdl {
                     WDL::Win => tb_win_in(height),
                     WDL::Loss => tb_loss_in(height),
-                    WDL::Draw => draw_score(info.nodes),
+                    WDL::Draw => 0,
                 };
+
+                let tb_bound = match wdl {
+                    WDL::Win => HFlag::LowerBound,
+                    WDL::Loss => HFlag::UpperBound,
+                    WDL::Draw => HFlag::Exact,
+                };
+
+                if tb_bound == HFlag::Exact 
+                    || (tb_bound == HFlag::LowerBound && value >= beta) 
+                    || (tb_bound == HFlag::UpperBound && value <= alpha) 
+                {
+                    tt.store::<false>(key, height, Move::NULL, value, tb_bound, depth);
+                    return value;
+                }
+
+                if PV && tb_bound == HFlag::LowerBound {
+                    alpha = alpha.max(value);
+                    syzygy_min = value;
+                }
+                
+                if PV && tb_bound == HFlag::UpperBound {
+                    syzygy_max = value;
+                }
             }
         }
 
@@ -789,12 +813,13 @@ impl Board {
                             }
                         }
 
+                        best_score = best_score.clamp(syzygy_min, syzygy_max);
                         if excluded.is_null() {
                             tt.store::<ROOT>(
                                 key,
                                 height,
                                 best_move,
-                                beta,
+                                best_score,
                                 HFlag::LowerBound,
                                 depth,
                             );
@@ -817,6 +842,8 @@ impl Board {
             }
             return draw_score(info.nodes);
         }
+
+        best_score = best_score.clamp(syzygy_min, syzygy_max);
 
         if alpha == original_alpha {
             // we didn't raise alpha, so this is an all-node

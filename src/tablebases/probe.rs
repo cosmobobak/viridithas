@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{tablebases::bindings::*, uci, board::{Board, movegen::MoveList}, piece::{Colour, PieceType}, chessmove::Move, definitions::Square};
 use std::ffi::CString;
 use std::ptr;
@@ -121,6 +123,6 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
 
         return None;
     }
-
+    #[cfg(not(feature = "syzygy"))]
     None
 }
