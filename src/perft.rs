@@ -137,7 +137,7 @@ mod tests {
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.set_startpos();
-        let e4 = Move::new(Square::E2, Square::E4, PieceType::NO_PIECE_TYPE, 0);
+        let e4 = Move::new(Square::E2, Square::E4);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
@@ -157,7 +157,7 @@ mod tests {
         crate::magic::initialise();
         let mut pos = Board::new();
         pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2").unwrap();
-        let exd5 = Move::new(Square::E4, Square::D5, PieceType::NO_PIECE_TYPE, 0);
+        let exd5 = Move::new(Square::E4, Square::D5);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();

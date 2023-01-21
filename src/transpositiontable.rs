@@ -354,7 +354,7 @@ mod tests {
     fn tt_entry_roundtrip() {
         let entry = TTEntry {
             key: 0x1234,
-            m: Move::new(Square::A1, Square::A2, PieceType::NO_PIECE_TYPE, 0),
+            m: Move::new(Square::A1, Square::A2),
             score: 0,
             depth: ZERO_PLY.try_into().unwrap(),
             age_and_flag: AgeAndFlag::new(63, HFlag::Exact),

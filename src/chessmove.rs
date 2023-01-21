@@ -19,16 +19,24 @@ impl Move {
     pub const PROMO_FLAG: u16 = 0b1100_0000_0000_0000;
     pub const NULL: Self = Self { data: 0 };
 
-    pub fn new(from: Square, to: Square, promotion: PieceType, flags: u16) -> Self {
-        debug_assert!((flags & (Self::EP_FLAG | Self::CASTLE_FLAG | Self::PROMO_FLAG)) == flags);
-        debug_assert!(u16::from(from) & 0b11_1111 == u16::from(from));
-        debug_assert!(u16::from(to) & 0b11_1111 == u16::from(to));
-        debug_assert!(
-            promotion == PieceType::NO_PIECE_TYPE && flags != Self::PROMO_FLAG
-                || promotion.legal_promo() && flags == Self::PROMO_FLAG
-        );
+    pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
+        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
+        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
         let promotion = u16::from(promotion.inner()).wrapping_sub(2) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
-        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | (promotion << Self::PROMO_SHIFT) | flags }
+        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | (promotion << Self::PROMO_SHIFT) | Self::PROMO_FLAG }
+    }
+
+    pub fn new_with_flags(from: Square, to: Square, flags: u16) -> Self {
+        debug_assert_ne!(flags & Self::PROMO_FLAG, Self::PROMO_FLAG, "promotion flag set without piece type");
+        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
+        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | flags }
+    }
+
+    pub fn new(from: Square, to: Square) -> Self {
+        debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
+        debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
+        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) }
     }
 
     pub const fn from(self) -> Square {
@@ -127,7 +135,7 @@ mod tests {
     #[test]
     fn test_simple_move() {
         use super::*;
-        let m = Move::new(Square::A1, Square::B2, PieceType::NO_PIECE_TYPE, 0);
+        let m = Move::new(Square::A1, Square::B2);
         println!("{m:?}");
         println!("bitpattern: {:016b}", m.data);
         assert_eq!(m.from(), Square::A1);
@@ -142,7 +150,7 @@ mod tests {
     #[test]
     fn test_promotion() {
         use super::*;
-        let m = Move::new(Square::A7, Square::A8, PieceType::QUEEN, Move::PROMO_FLAG);
+        let m = Move::new_with_promo(Square::A7, Square::A8, PieceType::QUEEN);
         println!("{m:?}");
         println!("bitpattern: {:016b}", m.data);
         assert_eq!(m.from(), Square::A7);
@@ -162,7 +170,7 @@ mod tests {
         use super::*;
         for from in BitLoop::new(BB_ALL) {
             for to in BitLoop::new(BB_ALL) {
-                let m = Move::new(from, to, PieceType::NO_PIECE_TYPE, 0);
+                let m = Move::new(from, to);
                 assert_eq!(m.from(), from);
                 assert_eq!(m.to(), to);
                 assert!(!m.is_promo());
