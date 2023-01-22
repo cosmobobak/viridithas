@@ -222,10 +222,6 @@ impl Board {
         self.material[Colour::WHITE.index()] - self.material[Colour::BLACK.index()]
     }
 
-    fn simple_evaluation(&self) -> i32 {
-        (self.pst_vals + self.material()).value(self.phase())
-    }
-
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         debug_assert!(!self.in_check::<{ Self::US }>(), "evaluate_nnue called while in check");
 
@@ -234,11 +230,6 @@ impl Board {
         }
 
         let v = t.nnue.evaluate(self.side);
-        let simple = self.simple_evaluation();
-        let simple = if self.side == Colour::WHITE { simple } else { -simple };
-        let complexity = (v - simple).abs();
-
-        let v = v + complexity / 20;
 
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
