@@ -231,16 +231,7 @@ impl Board {
 
         let v = t.nnue.evaluate(self.side);
 
-        let v = v * (100 - i32::from(self.fifty_move_counter)) / 100;
-
-        let abs_v = if self.turn() == Colour::BLACK { -v } else { v };
-        let abs_v = self.preprocess_drawish_scores(abs_v, nodes);
-
-        if self.turn() == Colour::WHITE {
-            abs_v
-        } else {
-            -abs_v
-        }
+        v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
     pub fn evaluate<const USE_NNUE: bool>(&self, t: &ThreadData, nodes: u64) -> i32 {
