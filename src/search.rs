@@ -514,17 +514,6 @@ impl Board {
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
-        #[cfg(debug_assertions)]
-        if !ROOT && self.n_men() <= 5 {
-            println!("cardinality: {}", cardinality);
-            println!("uci::SYZYGY_ENABLED.load(Ordering::SeqCst): {}", uci::SYZYGY_ENABLED.load(Ordering::SeqCst));
-            println!("    depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst): {}", depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)));
-            println!("    self.n_men() < cardinality: {}", self.n_men() < cardinality);
-            println!("self.n_men() <= cardinality: {}", self.n_men() <= cardinality);
-            println!("board.castling_rights() != 0: {}", self.castling_rights() != 0);
-            println!("board.fifty_move_counter() != 0: {}", self.fifty_move_counter() != 0);
-            println!();
-        }
         if !ROOT 
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) 
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)) || self.n_men() < cardinality)

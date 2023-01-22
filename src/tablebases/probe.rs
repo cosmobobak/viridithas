@@ -25,8 +25,6 @@ pub fn get_max_pieces_count() -> u8 {
     {
         let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::SeqCst);
         let hard_limit = unsafe { TB_LARGEST as u8 };
-        #[cfg(debug_assertions)]
-        println!("Syzygy probe limit: {} (user limit: {})", hard_limit, user_limit);
         return std::cmp::min(user_limit, hard_limit);
     }
     #[cfg(not(feature = "syzygy"))]
