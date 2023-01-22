@@ -68,6 +68,8 @@ const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
 const SEARCH_TIME_FRACTION: u64 = 26;
 
+static TB_HITS: AtomicU64 = AtomicU64::new(0);
+
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
@@ -77,6 +79,7 @@ impl Board {
         thread_headers: &mut [ThreadData],
         tt: TTView,
     ) -> (i32, Move) {
+        TB_HITS.store(0, Ordering::Relaxed);
         info.setup_for_search();
         for td in thread_headers.iter_mut() {
             td.setup_tables_for_search();
@@ -501,11 +504,24 @@ impl Board {
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
+        #[cfg(debug_assertions)]
+        if !ROOT && self.n_men() <= 5 {
+            println!("cardinality: {}", cardinality);
+            println!("uci::SYZYGY_ENABLED.load(Ordering::SeqCst): {}", uci::SYZYGY_ENABLED.load(Ordering::SeqCst));
+            println!("    depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst): {}", depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)));
+            println!("    self.n_men() < cardinality: {}", self.n_men() < cardinality);
+            println!("self.n_men() <= cardinality: {}", self.n_men() <= cardinality);
+            println!("board.castling_rights() != 0: {}", self.castling_rights() != 0);
+            println!("board.fifty_move_counter() != 0: {}", self.fifty_move_counter() != 0);
+            println!();
+        }
         if !ROOT 
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) 
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)) || self.n_men() < cardinality)
             && self.n_men() <= cardinality {
             if let Some(wdl) = tablebases::probe::get_wdl(&self) {
+                TB_HITS.fetch_add(1, Ordering::Relaxed);
+
                 let tb_value = match wdl {
                     WDL::Win => tb_win_in(height),
                     WDL::Loss => tb_loss_in(height),
@@ -1147,11 +1163,11 @@ impl Board {
         };
         if normal_uci_output {
             print!(
-                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {} time {} nps {nps} hashfull {} pv {pv}",
+                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
                 info.seldepth.ply_to_horizon(),
-                total_nodes,
                 info.start_time.elapsed().as_millis(),
-                tt.hashfull(),
+                hashfull = tt.hashfull(),
+                tbhits = TB_HITS.load(Ordering::SeqCst),
             );
             println!();
         } else {
