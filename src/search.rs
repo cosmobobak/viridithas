@@ -97,6 +97,7 @@ impl Board {
         if let Some((best_move, score)) = tablebases::probe::get_tablebase_move(self) {
             let mut pv = PVariation::default();
             pv.load_from(best_move, &PVariation::default());
+            pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
             self.readout_info(HFlag::Exact, &pv, 0, info, tt, 1);
             return (score, best_move);
