@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{tablebases::bindings::*, uci, board::{Board, movegen::MoveList}, piece::{Colour, PieceType}, chessmove::Move, definitions::Square};
+use crate::{tablebases::bindings::*, uci, board::{Board, movegen::MoveList, evaluation::TB_WIN_SCORE}, piece::{Colour, PieceType}, chessmove::Move, definitions::Square};
 use std::ffi::CString;
 use std::ptr;
 
@@ -133,4 +133,21 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     }
     #[cfg(not(feature = "syzygy"))]
     None
+}
+
+/// Checks if there's a tablebase move and returns it as [Some], otherwise [None].
+pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
+    if board.n_men() > get_max_pieces_count() {
+        return None;
+    }
+
+    let result = get_root_wdl_dtz(board)?;
+
+    let score = match result.wdl {
+        WDL::Win => TB_WIN_SCORE,
+        WDL::Draw => 0,
+        WDL::Loss => -TB_WIN_SCORE,
+    };
+
+    Some((result.best_move, score))
 }

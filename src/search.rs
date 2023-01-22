@@ -79,7 +79,7 @@ impl Board {
         thread_headers: &mut [ThreadData],
         tt: TTView,
     ) -> (i32, Move) {
-        TB_HITS.store(0, Ordering::Relaxed);
+        TB_HITS.store(0, Ordering::SeqCst);
         info.setup_for_search();
         for td in thread_headers.iter_mut() {
             td.setup_tables_for_search();
@@ -91,6 +91,15 @@ impl Board {
         }
         if info.in_game() && legal_moves.len() == 1 {
             info.set_time_window(0);
+        }
+
+        // Probe the tablebases if we're in a TB position.
+        if let Some((best_move, score)) = tablebases::probe::get_tablebase_move(self) {
+            let mut pv = PVariation::default();
+            pv.load_from(best_move, &PVariation::default());
+            TB_HITS.store(1, Ordering::SeqCst);
+            self.readout_info(HFlag::Exact, &pv, 0, info, tt, 1);
+            return (score, best_move);
         }
 
         // don't produce weird scores if there's one legal option
