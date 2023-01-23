@@ -574,7 +574,9 @@ impl Board {
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
-            // razoring
+            // razoring.
+            // if the static eval is too low, check if qsearch can beat alpha.
+            // if it can't, we can prune the node.
             if static_eval < alpha - 394 - 290 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
