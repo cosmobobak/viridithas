@@ -71,16 +71,7 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
-            let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
-            let mut legal = vec![];
-            for &m in ml.iter() {
-                if pos.make_move_hce(m) {
-                    legal.push(m);
-                    pos.unmake_move_hce();
-                }
-            }
-            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
@@ -95,16 +86,7 @@ mod tests {
         std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
-            let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
-            let mut legal = vec![];
-            for &m in ml.iter() {
-                if pos.make_move_hce(m) {
-                    legal.push(m);
-                    pos.unmake_move_hce();
-                }
-            }
-            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
@@ -118,16 +100,7 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
-            let mut ml = MoveList::new();
-            pos.generate_moves(&mut ml);
-            let mut legal = vec![];
-            for &m in ml.iter() {
-                if pos.make_move_hce(m) {
-                    legal.push(m);
-                    pos.unmake_move_hce();
-                }
-            }
-            legal.into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
     }
 
