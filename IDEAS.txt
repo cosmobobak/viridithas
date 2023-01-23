@@ -33,7 +33,6 @@ MINOR:
 - root node eval oracle.
 - fix MDP.
 - in_check cacheing.
-- stdout-dependent tui.
 - make the big-piece and other stuff better named
 - IID
 - put movelists in ThreadData to reuse them.

@@ -498,6 +498,23 @@ pub fn main_loop(params: EvalParams) {
                 print_uci_response(true);
                 Ok(())
             }
+            arg @ ("ucidump" | "ucidumpfull") => {
+                // dump the values of the current UCI options
+                println!("Hash: {}", tt.size() / MEGABYTE);
+                println!("Threads: {}", thread_data.len());
+                println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
+                println!("UseNNUE: {}", USE_NNUE.load(Ordering::SeqCst));
+                println!("SyzygyPath: {}", SYZYGY_PATH.lock().unwrap());
+                println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
+                println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
+                // println!("MultiPV: {}", MULTI_PV.load(Ordering::SeqCst));
+                if arg == "ucidumpfull" {
+                    for (id, default) in SearchParams::default().ids_with_values() {
+                        println!("{id}: {default}");
+                    }
+                }
+                Ok(())
+            }
             "isready" => {
                 println!("readyok");
                 Ok(())

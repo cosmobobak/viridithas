@@ -5,7 +5,7 @@ use std::{
     io::{self, BufRead, BufReader, BufWriter, Write},
     ops::Range,
     path::Path,
-    sync::atomic::{self, AtomicU64},
+    sync::atomic::{self, AtomicU64}, array,
 };
 
 use crate::{
@@ -28,11 +28,9 @@ fn batch_convert<const USE_NNUE: bool>(
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut t = vec![ThreadData::new(0)];
+    let mut t = ThreadData::new(0);
     let mut local_ticker = 0;
-    for thread in &mut t {
-        thread.alloc_tables();
-    }
+    t.alloc_tables();
     if printing_thread {
         let c = counter.load(atomic::Ordering::SeqCst);
         #[allow(clippy::cast_precision_loss)]
@@ -56,14 +54,14 @@ fn batch_convert<const USE_NNUE: bool>(
             continue;
         }
         // no NNUE for generating training data.
-        t.iter_mut().for_each(|thread_data| thread_data.nnue.refresh_acc(&pos));
+        t.nnue.refresh_acc(&pos);
         tt.clear();
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..Default::default()
         };
-        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, &mut t, tt.view());
+        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {
             evals.push(None);
             continue;

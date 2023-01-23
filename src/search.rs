@@ -540,7 +540,7 @@ impl Board {
                     || (tb_bound == HFlag::LowerBound && tb_value >= beta) 
                     || (tb_bound == HFlag::UpperBound && tb_value <= alpha) 
                 {
-                    // tt.store::<false>(key, height, Move::NULL, tb_value, tb_bound, depth);
+                    tt.store::<false>(key, height, Move::NULL, tb_value, tb_bound, depth);
                     return tb_value;
                 }
 

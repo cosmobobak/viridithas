@@ -218,6 +218,8 @@ impl<'a> SearchInfo<'a> {
 
 mod tests {
     #![allow(unused_imports)]
+    use std::array;
+
     use crate::{board::{Board, evaluation::{mate_in, mated_in}}, threadlocal::ThreadData, transpositiontable::TT, definitions::MEGABYTE, magic};
     use super::{SearchInfo, SearchLimit};
 
@@ -235,12 +237,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut thread_headers = vec![
-            ThreadData::new(0),
-        ];
-        thread_headers[0].alloc_tables();
-        thread_headers[0].nnue.refresh_acc(&position);
-        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        let mut t = ThreadData::new(0);
+        t.alloc_tables();
+        t.nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -259,12 +259,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut thread_headers = vec![
-            ThreadData::new(0),
-        ];
-        thread_headers[0].alloc_tables();
-        thread_headers[0].nnue.refresh_acc(&position);
-        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        let mut t = ThreadData::new(0);
+        t.alloc_tables();
+        t.nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
@@ -283,12 +281,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut thread_headers = vec![
-            ThreadData::new(0),
-        ];
-        thread_headers[0].alloc_tables();
-        thread_headers[0].nnue.refresh_acc(&position);
-        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        let mut t = ThreadData::new(0);
+        t.alloc_tables();
+        t.nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
@@ -307,12 +303,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut thread_headers = vec![
-            ThreadData::new(0),
-        ];
-        thread_headers[0].alloc_tables();
-        thread_headers[0].nnue.refresh_acc(&position);
-        let (value, mov) = position.search_position::<true>(&mut info, &mut thread_headers, tt.view());
+        let mut t = ThreadData::new(0);
+        t.alloc_tables();
+        t.nnue.refresh_acc(&position);
+        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.

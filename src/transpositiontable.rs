@@ -154,6 +154,10 @@ impl TT {
     pub fn increase_age(&mut self) {
         self.age = (self.age + 1) & 0b11_1111; // keep age in range [0, 63]
     }
+
+    pub fn size(&self) -> usize {
+        self.table.len() * TT_ENTRY_SIZE
+    }
 }
 
 impl<'a> TTView<'a> {
