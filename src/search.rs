@@ -100,6 +100,9 @@ impl Board {
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
             self.readout_info(HFlag::Exact, &pv, 0, info, tt, 1);
+            if info.print_to_stdout {
+                println!("bestmove {best_move}");
+            }
             return (score, best_move);
         }
 
@@ -571,6 +574,14 @@ impl Board {
 
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
+            // razoring
+            if static_eval < alpha - 394 - 255 * depth * depth {
+                let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
+                if v < alpha {
+                    return v;
+                }
+            }
+
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
