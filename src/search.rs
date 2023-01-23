@@ -521,7 +521,7 @@ impl Board {
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst) 
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)) || self.n_men() < cardinality)
             && self.n_men() <= cardinality {
-            if let Some(wdl) = tablebases::probe::get_wdl(&self) {
+            if let Some(wdl) = tablebases::probe::get_wdl(self) {
                 TB_HITS.fetch_add(1, Ordering::Relaxed);
 
                 let tb_value = match wdl {

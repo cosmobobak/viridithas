@@ -307,7 +307,7 @@ fn parse_setoption(
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
-            assert!(value >= 1 && value <= 100, "SyzygyProbeDepth value must be between 0 and 100");
+            assert!((1..=100).contains(&value), "SyzygyProbeDepth value must be between 0 and 100");
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
         _ => eprintln!("ignoring option {opt_name}"),
