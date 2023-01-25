@@ -113,11 +113,10 @@ impl NNUEParams {
             weight_array: &mut [i16; LEN],
             stride: usize,
             k: i32,
-            flip: bool,
         ) {
             for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
                 for (j, weight) in output.as_array().unwrap().iter().enumerate() {
-                    let index = if flip { j * stride + i } else { i * stride + j };
+                    let index = j * stride + i;
                     let value = weight.as_f64().unwrap();
                     weight_array[index] = (value * f64::from(k)) as i16;
                 }
@@ -144,13 +143,13 @@ impl NNUEParams {
         for (key, value) in json.as_object().unwrap() {
             match key.as_str() {
                 "ft.weight" => {
-                    weight(value, &mut out.feature_weights, HIDDEN, QA, false);
+                    weight(value, &mut out.feature_weights, HIDDEN, QA);
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
                 }
                 "out.weight" => {
-                    weight(value, &mut out.output_weights, HIDDEN * 2, QB, false);
+                    weight(value, &mut out.output_weights, HIDDEN * 2, QB);
                 }
                 "out.bias" => {
                     bias(value, from_mut(&mut out.output_bias), QAB);
