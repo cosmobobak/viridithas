@@ -28,3 +28,4 @@ MINOR:
 - make is_legal faster
 - check evasions
 - filter training positions that are forced.
+- fix the horrendous 3-location TT store design in main-search
