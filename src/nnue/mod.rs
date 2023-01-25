@@ -48,7 +48,6 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
     feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
-    flipped_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
     feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
     output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
     output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
@@ -56,7 +55,6 @@ pub static NNUE: NNUEParams = NNUEParams {
 
 pub struct NNUEParams {
     pub feature_weights: Align<[i16; INPUT * HIDDEN]>,
-    pub flipped_weights: Align<[i16; INPUT * HIDDEN]>,
     pub feature_bias: Align<[i16; HIDDEN]>,
     pub output_weights: Align<[i16; HIDDEN * 2]>,
     pub output_bias: i16,
@@ -135,7 +133,6 @@ impl NNUEParams {
 
         let mut out = Box::new(Self {
             feature_weights: Align([0; INPUT * HIDDEN]),
-            flipped_weights: Align([0; INPUT * HIDDEN]),
             feature_bias: Align([0; HIDDEN]),
             output_weights: Align([0; HIDDEN * 2]),
             output_bias: 0,
@@ -148,7 +145,6 @@ impl NNUEParams {
             match key.as_str() {
                 "ft.weight" => {
                     weight(value, &mut out.feature_weights, INPUT, QA, false);
-                    weight(value, &mut out.flipped_weights, HIDDEN, QA, true);
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
@@ -171,8 +167,6 @@ impl NNUEParams {
 
         let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
-        let (head, flipped_weights, tail) = unsafe { self.flipped_weights.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
         let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
         let (head, output_weights, tail) = unsafe { self.output_weights.align_to::<u8>() };
@@ -182,7 +176,6 @@ impl NNUEParams {
         assert!(head.is_empty() && tail.is_empty());
 
         out.push(feature_weights.to_vec());
-        out.push(flipped_weights.to_vec());
         out.push(feature_bias.to_vec());
         out.push(output_weights.to_vec());
         out.push(output_bias.to_vec());
@@ -302,13 +295,13 @@ impl NNUEState {
 
         subtract_and_add_to_all(
             &mut acc.white,
-            &NNUE.flipped_weights,
+            &NNUE.feature_weights,
             white_idx_from * HIDDEN,
             white_idx_to * HIDDEN,
         );
         subtract_and_add_to_all(
             &mut acc.black,
-            &NNUE.flipped_weights,
+            &NNUE.feature_weights,
             black_idx_from * HIDDEN,
             black_idx_to * HIDDEN,
         );
@@ -349,8 +342,8 @@ impl NNUEState {
             );
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
-            add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
-            add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * HIDDEN);
+            add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * HIDDEN);
+            add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * HIDDEN);
         } else {
             debug_assert!(
                 self.white_pov[white_idx] == 1,
@@ -366,8 +359,8 @@ impl NNUEState {
             );
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
-            sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * HIDDEN);
-            sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * HIDDEN);
+            sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * HIDDEN);
+            sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * HIDDEN);
         }
     }
 
