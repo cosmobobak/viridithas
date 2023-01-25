@@ -144,7 +144,7 @@ impl NNUEParams {
         for (key, value) in json.as_object().unwrap() {
             match key.as_str() {
                 "ft.weight" => {
-                    weight(value, &mut out.feature_weights, INPUT, QA, false);
+                    weight(value, &mut out.feature_weights, HIDDEN, QA, false);
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
