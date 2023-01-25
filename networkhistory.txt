@@ -82,3 +82,12 @@ NET ID | general concept                          | notes
 --------------------------------------------------------------------------------------------------
     31 | net 30 data re-evaluated with net-30.    | -3.0 +/- 6.6, LOS: 18.7 %
        | feeling somewhat discouraged.            | vs net-30.
+--------------------------------------------------------------------------------------------------
+    32 | net 30 data, using MinusKelvin's         | ???? +/- ????, LOS: ????
+       | marlinflow fork, and his default hyper-  | vs net-30.
+       | parameters:                              |
+       |  - LR = 0.001                            |
+       |  - LR drop at 30 epochs                  |
+       |  - 45 epochs                             |
+       |  - whatever his fork sets for batch size |
+       |  - WDL focus 10%                         |

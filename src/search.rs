@@ -183,7 +183,6 @@ impl Board {
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
-        let mut bm_changes = 0;
         let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
         let starting_depth = if MAIN_THREAD {
@@ -219,9 +218,7 @@ impl Board {
                 }
 
                 score = pv.score;
-                let prev_bestmove = bestmove;
                 bestmove = pv.moves().first().copied().unwrap_or(bestmove);
-                let bestmove_changed = bestmove != prev_bestmove;
 
                 if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
                     let saved_seldepth = info.seldepth;
@@ -235,10 +232,6 @@ impl Board {
                     if d > 1 && info.stopped() {
                         break 'deepening;
                     }
-                }
-                if MAIN_THREAD && d > 6 && info.in_game() && bestmove_changed && bm_changes < 3 {
-                    info.multiply_time_window(1.1);
-                    bm_changes += 1;
                 }
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {

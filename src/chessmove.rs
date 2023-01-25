@@ -1,8 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::{
-    definitions::Square, piece::PieceType,
-};
+use crate::{definitions::Square, piece::PieceType};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {
@@ -22,15 +20,29 @@ impl Move {
     pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
-        debug_assert_ne!(promotion, PieceType::NO_PIECE_TYPE, "attempted to construct promotion to NO_PIECE_TYPE");
+        debug_assert_ne!(
+            promotion,
+            PieceType::NO_PIECE_TYPE,
+            "attempted to construct promotion to NO_PIECE_TYPE"
+        );
         debug_assert_ne!(promotion, PieceType::PAWN, "attempted to construct promotion to pawn");
         debug_assert_ne!(promotion, PieceType::KING, "attempted to construct promotion to king");
         let promotion = u16::from(promotion.inner()).wrapping_sub(2) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
-        Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | (promotion << Self::PROMO_SHIFT) | Self::PROMO_FLAG }
+        Self {
+            data: u16::from(from)
+                | (u16::from(to) << Self::TO_SHIFT)
+                | (promotion << Self::PROMO_SHIFT)
+                | Self::PROMO_FLAG,
+        }
     }
 
     pub fn new_with_flags(from: Square, to: Square, flags: u16) -> Self {
-        debug_assert_ne!(flags & Self::PROMO_FLAG, Self::PROMO_FLAG, "promotion flag set without piece type");
+        debug_assert_ne!(
+            flags & Self::PROMO_FLAG,
+            Self::PROMO_FLAG,
+            "promotion flag set without piece type"
+        );
+        debug_assert_ne!(flags, 0, "attempted to construct move with no flags");
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
         Self { data: u16::from(from) | (u16::from(to) << Self::TO_SHIFT) | flags }
@@ -52,7 +64,8 @@ impl Move {
 
     pub fn promotion_type(self) -> PieceType {
         debug_assert!(self.is_promo());
-        let output = PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 2);
+        let output =
+            PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 2);
         debug_assert!(output.legal_promo());
         output
     }
@@ -95,8 +108,7 @@ impl Move {
             // promotion type is set but not a promotion move
             return false;
         }
-        promotion == PieceType::NO_PIECE_TYPE
-            || promotion.legal_promo()
+        promotion == PieceType::NO_PIECE_TYPE || promotion.legal_promo()
     }
 }
 
@@ -168,9 +180,9 @@ mod tests {
 
     #[test]
     fn test_all_square_combinations() {
-        use crate::board::movegen::BitLoop;
-        use crate::board::movegen::bitboards::BB_ALL;
         use super::*;
+        use crate::board::movegen::bitboards::BB_ALL;
+        use crate::board::movegen::BitLoop;
         for from in BitLoop::new(BB_ALL) {
             for to in BitLoop::new(BB_ALL) {
                 let m = Move::new(from, to);

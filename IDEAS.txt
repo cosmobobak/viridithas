@@ -1,9 +1,5 @@
 ideas for viri
 MAJOR:
-- tablebases
--- root-optimal play (exclude all moves that change the game-theoretic value of the position)
--- in-tree tablebase probing (use the tablebase to prune moves when the search hits TB positions)
--- pyrrhic bindings?
 - docs
 - support chess variants
 -- FRC
@@ -11,10 +7,9 @@ MAJOR:
 -- Crazyhouse
 
 MINOR:
-- tune search parameters
-- check out other engine's impls of countermoves and killer moves
+- replace countermoves with countermove history
+- tune history more
 - replace all the false/true constgen stuff with a proper type.
-- alpha pruning
 - increase maxdepth just in case.
 - fullwindow on big scores (+30?)
 - uci bench extension
@@ -22,21 +17,14 @@ MINOR:
 - perft divide
 - try to reduce attr use, it's ugly.
 - make FEN conversion not halt singlethreaded when writing to file. or generally.
-- replace uses of iter().position() with a linear map type.
-- endgame material combination guarding. (see if SF has any good "winnability" tricks)
-- "go mate X"
 - the slow part of deduplication is the file I/O, consider mmap?.
 - record percentage of positions where TT move saves movegen - similar for captures when we get staged movegen.
 - multipv. put the moves in ThreadData and use ROOT.
-- tune time-management multipliers at long TC.
 - Rust features to watch for: full const generics, const floating-point maths.
 - root node eval oracle.
-- fix MDP.
-- in_check cacheing.
 - make the big-piece and other stuff better named
 - IID
 - put movelists in ThreadData to reuse them.
 - make is_legal faster
 - check evasions
-- MVV capture history
 - filter training positions that are forced.
