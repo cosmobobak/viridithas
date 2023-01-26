@@ -91,3 +91,7 @@ NET ID | general concept                          | notes
        |  - 45 epochs                             |
        |  - whatever his fork sets for batch size |
        |  - WDL focus 10%                         |
+       | this arch uses buckets and a 384x2 net,  |
+       | so it required rewriting the inference   |
+       | code.                                    |
+--------------------------------------------------------------------------------------------------

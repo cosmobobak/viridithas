@@ -239,8 +239,7 @@ fn parse_setoption(
         .map(|s| {
             assert!(
                 s == "name",
-                "unexpected character after \"setoption\", expected \"name\", got {}",
-                s
+                "unexpected character after \"setoption\", expected \"name\", got {s}"
             );
         })
         .ok_or_else(|| UnexpectedCommandTermination("no name after setoption".into()))?;

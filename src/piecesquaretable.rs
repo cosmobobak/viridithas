@@ -52,8 +52,7 @@ mod tests {
                 assert_eq!(
                     white_pst[sq.index()],
                     -black_pst[sq.flip_rank().index()],
-                    "pst mirroring failed on square {sq} for piece {}",
-                    white_piece
+                    "pst mirroring failed on square {sq} for piece {white_piece}"
                 );
             }
         }

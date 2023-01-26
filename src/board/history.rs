@@ -69,10 +69,7 @@ impl ThreadData {
         depth: Depth,
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let two_ply_ago = match pos.history.len().checked_sub(2) {
-            Some(idx) => idx,
-            None => return,
-        };
+        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
         if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
@@ -105,10 +102,7 @@ impl ThreadData {
 
     /// Get the follow-up history score for a move.
     pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i16 {
-        let two_ply_ago = match pos.history.len().checked_sub(2) {
-            Some(idx) => idx,
-            None => return 0,
-        };
+        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return 0 };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
         if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {

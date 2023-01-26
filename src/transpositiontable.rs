@@ -84,7 +84,8 @@ impl TTEntry {
 
 impl From<u64> for TTEntry {
     fn from(data: u64) -> Self {
-        // SAFETY: This is safe because all fields of `TTEntry` are (at base) integral types.
+        // SAFETY: This is safe because all fields of TTEntry are (at base) integral types,
+        // and TTEntry is repr(C).
         unsafe { std::mem::transmute(data) }
     }
 }

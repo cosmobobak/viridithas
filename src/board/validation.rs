@@ -182,8 +182,7 @@ impl Board {
             let actual_colour = piece_on_board.colour();
             if colour != actual_colour {
                 eprintln!(
-                    "coherency check failed: feature on sq {} has colour {:?}, but piece on board is {:?}",
-                    square, colour, piece_on_board
+                    "coherency check failed: feature on sq {square} has colour {colour:?}, but piece on board is {piece_on_board:?}"
                 );
                 eprintln!("fen: {}", self.fen());
                 return false;
@@ -191,8 +190,7 @@ impl Board {
             let actual_piece_type = piece_on_board.piece_type();
             if piece_type != actual_piece_type {
                 eprintln!(
-                    "coherency check failed: feature on sq {} has piece type {:?}, but piece on board is {:?}",
-                    square, piece_type, piece_on_board
+                    "coherency check failed: feature on sq {square} has piece type {piece_type:?}, but piece on board is {piece_on_board:?}"
                 );
                 eprintln!("fen: {}", self.fen());
                 return false;
