@@ -233,8 +233,8 @@ impl Board {
                     aw.widen_up();
                     continue;
                 }
+
                 // if we've made it here, it means we got an exact score.
-                
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(HFlag::Exact, &pv, d, info, tt, total_nodes);
@@ -797,46 +797,10 @@ impl Board {
                 best_move = m;
                 if score > alpha {
                     alpha = score;
-
                     pv.load_from(best_move, &lpv);
-
-                    if score >= beta {
-                        // we failed high, so this is a cut-node
-
-                        // record move ordering stats:
-                        if moves_made == 1 {
-                            info.failhigh_first += 1;
-                        }
-                        info.failhigh += 1;
-
-                        if is_quiet {
-                            t.insert_killer(self, best_move);
-                            t.insert_countermove(self, best_move);
-                            self.update_history_metrics::<true>(t, best_move, depth);
-
-                            // decrease the history of the quiet moves that came before the cutoff move.
-                            let qs = quiets_tried.as_slice();
-                            let qs = &qs[..qs.len() - 1];
-                            for &m in qs {
-                                self.update_history_metrics::<false>(t, m, depth);
-                            }
-                        }
-
-                        best_score = best_score.clamp(syzygy_min, syzygy_max);
-                        if excluded.is_null() {
-                            tt.store::<ROOT>(
-                                key,
-                                height,
-                                best_move,
-                                best_score,
-                                HFlag::LowerBound,
-                                depth,
-                            );
-                        }
-
-                        t.best_moves[height] = best_move;
-                        return score;
-                    }
+                }
+                if alpha >= beta {
+                    break;
                 }
             }
         }
@@ -846,7 +810,6 @@ impl Board {
                 return alpha;
             }
             if in_check {
-                // lol
                 return mated_in(height);
             }
             return draw_score(info.nodes);
@@ -854,15 +817,17 @@ impl Board {
 
         best_score = best_score.clamp(syzygy_min, syzygy_max);
 
-        if alpha == original_alpha {
-            // we didn't raise alpha, so this is an all-node
-            if excluded.is_null() {
-                tt.store::<ROOT>(key, height, best_move, best_score, HFlag::UpperBound, depth);
-            }
+        let flag = if best_score >= beta {
+            HFlag::LowerBound
+        } else if best_score > original_alpha {
+            HFlag::Exact
         } else {
-            // we raised alpha, and didn't raise beta
-            // as if we had, we would have returned early,
-            // so this is a PV-node
+            HFlag::UpperBound
+        };
+
+        if alpha != original_alpha {
+            // we raised alpha, so this is either a PV-node or a cut-node,
+            // so we update history metrics.
             let bm_quiet = !self.is_tactical(best_move);
             if bm_quiet {
                 t.insert_killer(self, best_move);
@@ -876,10 +841,10 @@ impl Board {
                     self.update_history_metrics::<false>(t, m, depth);
                 }
             }
+        }
 
-            if excluded.is_null() {
-                tt.store::<ROOT>(key, height, best_move, best_score, HFlag::Exact, depth);
-            }
+        if excluded.is_null() {
+            tt.store::<ROOT>(key, height, best_move, best_score, flag, depth);
         }
 
         t.best_moves[height] = best_move;
