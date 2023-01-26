@@ -144,13 +144,15 @@ impl<'a> SearchInfo<'a> {
         }
     }
 
-    pub fn check_up(&mut self) {
-        match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {}
+    pub fn check_up(&mut self) -> bool {
+        let res = match self.limit {
+            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => { self.stopped.load(Ordering::SeqCst) }
             SearchLimit::Nodes(nodes) => {
-                if self.nodes >= nodes {
+                let past_limit = self.nodes >= nodes;
+                if past_limit {
                     self.stopped.store(true, Ordering::SeqCst);
                 }
+                past_limit
             }
             SearchLimit::Time(time_window)
             | SearchLimit::Dynamic { time_window, .. }
@@ -159,18 +161,23 @@ impl<'a> SearchInfo<'a> {
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
                 let elapsed_millis = elapsed.as_millis() as u64;
-                if elapsed_millis >= time_window {
+                let past_limit = elapsed_millis >= time_window;
+                if past_limit {
                     self.stopped.store(true, Ordering::SeqCst);
                 }
+                past_limit
             }
-        }
+        };
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
             if cmd == "quit" {
                 self.quit = true;
             }
-        };
+            true
+        } else {
+            res
+        }
     }
 
     pub fn stopped(&self) -> bool {

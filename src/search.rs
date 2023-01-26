@@ -5,7 +5,7 @@ pub mod parameters;
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     thread,
-    time::Duration, fmt::Display,
+    time::Duration, fmt::Display, ops::ControlFlow,
 };
 
 use crate::{
@@ -185,13 +185,7 @@ impl Board {
         let mut fail_increment = false;
         let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
-        let starting_depth = if MAIN_THREAD {
-            1i32
-        } else {
-            // induce symmetry breaking in the helper threads
-            let id: i32 = t.thread_id.try_into().unwrap();
-            1 + id % 10
-        };
+        let starting_depth = 1 + <_ as TryInto<i32>>::try_into(t.thread_id).unwrap() % 10;
         'deepening: for d in starting_depth..=max_depth {
             // consider stopping early if we've neatly completed a depth:
             if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
@@ -204,41 +198,23 @@ impl Board {
                 pv.score = self.root_search::<USE_NNUE>(tt, &mut pv, info, t, depth, aw.alpha, aw.beta);
                 let nodes = info.nodes - nodes_before;
                 total_nodes.fetch_add(nodes, Ordering::SeqCst);
-                info.check_up();
-                if d > 1 && info.stopped() {
+                
+                if info.check_up() && d > 1 {
                     break 'deepening;
                 }
-                if MAIN_THREAD && is_mate_score(pv.score) && d > 10 {
-                    mate_counter += 1;
-                    if d > 1 && info.in_game() && mate_counter >= 3 {
-                        break 'deepening;
-                    }
-                } else if MAIN_THREAD {
-                    mate_counter = 0;
+                if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
+                    break 'deepening;
                 }
 
                 score = pv.score;
                 bestmove = pv.moves().first().copied().unwrap_or(bestmove);
 
-                if MAIN_THREAD && d > 8 && !forcing_time_reduction && info.in_game() {
-                    let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
-                    info.seldepth = saved_seldepth;
-                    if forced {
-                        forcing_time_reduction = true;
-                        info.multiply_time_window(0.25);
-                    }
-                    info.check_up();
-                    if d > 1 && info.stopped() {
-                        break 'deepening;
-                    }
+                if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
+                    break 'deepening;
                 }
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-                    // fail low
                     if MAIN_THREAD && info.print_to_stdout {
-                        // this is an upper bound, because we're going to widen the window downward,
-                        // and find a lower score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(HFlag::UpperBound, &pv, d, info, tt, total_nodes);
                     }
@@ -250,10 +226,7 @@ impl Board {
                     continue;
                 }
                 if aw.beta != INFINITY && pv.score >= aw.beta {
-                    // fail high
                     if MAIN_THREAD && info.print_to_stdout {
-                        // this is a lower bound, because we're going to widen the window upward,
-                        // and find a higher score (in theory).
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(HFlag::LowerBound, &pv, d, info, tt, total_nodes);
                     }
@@ -282,6 +255,23 @@ impl Board {
         (bestmove, score)
     }
 
+    fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: i32, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
+        if MAIN_THREAD && d > 8 && !*forcing_time_reduction && info.in_game() {
+            let saved_seldepth = info.seldepth;
+            let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+            info.seldepth = saved_seldepth;
+            if forced {
+                *forcing_time_reduction = true;
+                info.multiply_time_window(0.25);
+            }
+            
+            if info.check_up() && d > 1 {
+                return ControlFlow::Break(());
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
     /// Perform a tactical resolution search, searching only captures and promotions.
     pub fn quiescence<const PV: bool, const NNUE: bool>(
         &mut self,
@@ -295,11 +285,8 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if info.nodes.trailing_zeros() >= 12 {
-            info.check_up();
-            if info.stopped() {
-                return 0;
-            }
+        if info.nodes.trailing_zeros() >= 12 && info.check_up() {
+            return 0;
         }
 
         let mut lpv = PVariation::default();
@@ -446,11 +433,8 @@ impl Board {
 
         depth = depth.max(ZERO_PLY);
 
-        if info.nodes.trailing_zeros() >= 12 {
-            info.check_up();
-            if info.stopped() {
-                return 0;
-            }
+        if info.nodes.trailing_zeros() >= 12 && info.check_up() {
+            return 0;
         }
 
         let key = self.hashkey();
@@ -1192,6 +1176,18 @@ impl Board {
             );
         }
     }
+}
+
+fn mate_found_breaker<const MAIN_THREAD: bool>(pv: &PVariation, d: i32, mate_counter: &mut i32, info: &mut SearchInfo) -> ControlFlow<()> {
+    if MAIN_THREAD && is_mate_score(pv.score) && d > 10 {
+        *mate_counter += 1;
+        if d > 1 && info.in_game() && *mate_counter >= 3 {
+            return ControlFlow::Break(());
+        }
+    } else if MAIN_THREAD {
+        *mate_counter = 0;
+    }
+    ControlFlow::Continue(())
 }
 
 pub const fn draw_score(nodes: u64) -> i32 {
