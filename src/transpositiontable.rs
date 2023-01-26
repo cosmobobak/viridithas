@@ -12,25 +12,25 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum HFlag {
+pub enum Bound {
     None = 0,
-    UpperBound = 1,
-    LowerBound = 2,
+    Upper = 1,
+    Lower = 2,
     Exact = 3,
 }
 
-macro_rules! impl_from_hflag {
+macro_rules! impl_from_bound {
     ($t:ty) => {
-        impl From<HFlag> for $t {
-            fn from(hflag: HFlag) -> Self {
+        impl From<Bound> for $t {
+            fn from(hflag: Bound) -> Self {
                 hflag as Self
             }
         }
     };
 }
 
-impl_from_hflag!(u8);
-impl_from_hflag!(i32);
+impl_from_bound!(u8);
+impl_from_bound!(i32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgeAndFlag {
@@ -40,7 +40,7 @@ pub struct AgeAndFlag {
 impl AgeAndFlag {
     const NULL: Self = Self { data: 0 };
 
-    const fn new(age: u8, flag: HFlag) -> Self {
+    const fn new(age: u8, flag: Bound) -> Self {
         Self { data: (age << 2) | flag as u8 }
     }
 
@@ -48,12 +48,12 @@ impl AgeAndFlag {
         self.data >> 2
     }
 
-    fn flag(self) -> HFlag {
+    fn flag(self) -> Bound {
         match self.data & 0b11 {
-            0 => HFlag::None,
-            1 => HFlag::UpperBound,
-            2 => HFlag::LowerBound,
-            3 => HFlag::Exact,
+            0 => Bound::None,
+            1 => Bound::Upper,
+            2 => Bound::Lower,
+            3 => Bound::Exact,
             _ => unreachable!(),
         }
     }
@@ -115,7 +115,7 @@ pub struct TTView<'a> {
 pub struct TTHit {
     pub tt_move: Move,
     pub tt_depth: Depth,
-    pub tt_bound: HFlag,
+    pub tt_bound: Bound,
     pub tt_value: i32,
 }
 
@@ -176,11 +176,9 @@ impl<'a> TTView<'a> {
         ply: usize,
         mut best_move: Move,
         score: i32,
-        flag: HFlag,
+        flag: Bound,
         depth: Depth,
     ) {
-        use HFlag::Exact;
-
         debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
@@ -213,7 +211,7 @@ impl<'a> TTView<'a> {
 
         if ROOT
             || entry.key != key
-            || flag == Exact && entry.age_and_flag.flag() != Exact
+            || flag == Bound::Exact && entry.age_and_flag.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
             let write = TTEntry {
@@ -272,37 +270,37 @@ impl<'a> TTView<'a> {
 
         debug_assert!(tt_value >= -INFINITY);
         match tt_bound {
-            HFlag::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
-            HFlag::UpperBound => {
+            Bound::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
+            Bound::Upper => {
                 if tt_value <= alpha && !do_not_cut {
                     ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move,
                         tt_depth,
-                        tt_bound: HFlag::UpperBound,
+                        tt_bound: Bound::Upper,
                         tt_value,
                     })
                 }
             }
-            HFlag::LowerBound => {
+            Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
                     ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit {
                         tt_move,
                         tt_depth,
-                        tt_bound: HFlag::LowerBound,
+                        tt_bound: Bound::Lower,
                         tt_value,
                     })
                 }
             }
-            HFlag::Exact => {
+            Bound::Exact => {
                 if do_not_cut {
                     ProbeResult::Hit(TTHit {
                         tt_move,
                         tt_depth,
-                        tt_bound: HFlag::Exact,
+                        tt_bound: Bound::Exact,
                         tt_value,
                     })
                 } else {
@@ -362,7 +360,7 @@ mod tests {
             m: Move::new(Square::A1, Square::A2),
             score: 0,
             depth: ZERO_PLY.try_into().unwrap(),
-            age_and_flag: AgeAndFlag::new(63, HFlag::Exact),
+            age_and_flag: AgeAndFlag::new(63, Bound::Exact),
         };
         let packed: u64 = entry.into();
         let unpacked: TTEntry = packed.into();

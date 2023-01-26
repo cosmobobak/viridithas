@@ -28,7 +28,7 @@ use crate::{
     search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::{HFlag, ProbeResult, TTView},
+    transpositiontable::{Bound, ProbeResult, TTView},
     uci::{self, PRETTY_PRINT}, piece::{PieceType, Colour}, tablebases::{self, probe::WDL},
 };
 
@@ -99,7 +99,7 @@ impl Board {
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
-            self.readout_info(HFlag::Exact, &pv, 0, info, tt, 1);
+            self.readout_info(Bound::Exact, &pv, 0, info, tt, 1);
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
             }
@@ -216,7 +216,7 @@ impl Board {
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::UpperBound, &pv, d, info, tt, total_nodes);
+                        self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down();
                     if MAIN_THREAD && !fail_increment && info.in_game() {
@@ -228,7 +228,7 @@ impl Board {
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(HFlag::LowerBound, &pv, d, info, tt, total_nodes);
+                        self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
                     continue;
@@ -237,7 +237,7 @@ impl Board {
                 // if we've made it here, it means we got an exact score.
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(HFlag::Exact, &pv, d, info, tt, total_nodes);
+                    self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
                 }
                 if MAIN_THREAD && d > 2 {
                     info.check_if_search_condition_met(bestmove, pv.score, d);
@@ -386,11 +386,11 @@ impl Board {
         }
 
         let flag = if best_score >= beta {
-            HFlag::LowerBound
+            Bound::Lower
         } else if best_score > original_alpha {
-            HFlag::Exact
+            Bound::Exact
         } else {
-            HFlag::UpperBound
+            Bound::Upper
         };
 
         tt.store::<false>(key, height, best_move, best_score, flag, ZERO_PLY);
@@ -508,25 +508,25 @@ impl Board {
                 };
 
                 let tb_bound = match wdl {
-                    WDL::Win => HFlag::LowerBound,
-                    WDL::Loss => HFlag::UpperBound,
-                    WDL::Draw => HFlag::Exact,
+                    WDL::Win => Bound::Lower,
+                    WDL::Loss => Bound::Upper,
+                    WDL::Draw => Bound::Exact,
                 };
 
-                if tb_bound == HFlag::Exact 
-                    || (tb_bound == HFlag::LowerBound && tb_value >= beta) 
-                    || (tb_bound == HFlag::UpperBound && tb_value <= alpha) 
+                if tb_bound == Bound::Exact 
+                    || (tb_bound == Bound::Lower && tb_value >= beta) 
+                    || (tb_bound == Bound::Upper && tb_value <= alpha) 
                 {
                     tt.store::<false>(key, height, Move::NULL, tb_value, tb_bound, depth);
                     return tb_value;
                 }
 
-                if PV && tb_bound == HFlag::LowerBound {
+                if PV && tb_bound == Bound::Lower {
                     alpha = alpha.max(tb_value);
                     syzygy_min = tb_value;
                 }
                 
-                if PV && tb_bound == HFlag::UpperBound {
+                if PV && tb_bound == Bound::Upper {
                     syzygy_max = tb_value;
                 }
             }
@@ -715,13 +715,13 @@ impl Board {
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
-                    && matches!(tt_hit.tt_bound, HFlag::LowerBound | HFlag::Exact)
+                    && matches!(tt_hit.tt_bound, Bound::Lower | Bound::Exact)
             });
 
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                extension = self.singularity::<ROOT, NNUE>(
+                extension = self.singularity::<ROOT, PV, NNUE>(
                     tt,
                     info,
                     t,
@@ -818,11 +818,11 @@ impl Board {
         best_score = best_score.clamp(syzygy_min, syzygy_max);
 
         let flag = if best_score >= beta {
-            HFlag::LowerBound
+            Bound::Lower
         } else if best_score > original_alpha {
-            HFlag::Exact
+            Bound::Exact
         } else {
-            HFlag::UpperBound
+            Bound::Upper
         };
 
         if alpha != original_alpha {
@@ -875,7 +875,7 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn singularity<const ROOT: bool, const NNUE: bool>(
+    pub fn singularity<const ROOT: bool, const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
         info: &mut SearchInfo,
@@ -900,7 +900,10 @@ impl Board {
             // re-make the singular move.
             self.make_move::<NNUE>(m, t);
         }
-        if value < r_beta {
+        let double_extend = !PV && value < r_beta - 15;
+        if double_extend {
+            ONE_PLY * 2 // double-extend if we failed low by a lot (the move is very singular)
+        } else if value < r_beta {
             ONE_PLY // singular extension
         } else if tt_value >= beta {
             -ONE_PLY // somewhat multi-cut-y
@@ -1088,7 +1091,7 @@ impl Board {
     /// Print the info about an iteration of the search.
     fn readout_info(
         &mut self,
-        mut bound: HFlag,
+        mut bound: Bound,
         pv: &PVariation,
         depth: i32,
         info: &SearchInfo,
@@ -1105,29 +1108,28 @@ impl Board {
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
-                HFlag::UpperBound => HFlag::LowerBound,
-                HFlag::LowerBound => HFlag::UpperBound,
-                _ => HFlag::Exact,
+                Bound::Upper => Bound::Lower,
+                Bound::Lower => Bound::Upper,
+                _ => Bound::Exact,
             };
         }
         let bound_string = match bound {
-            HFlag::UpperBound => " upperbound",
-            HFlag::LowerBound => " lowerbound",
+            Bound::Upper => " upperbound",
+            Bound::Lower => " lowerbound",
             _ => "",
         };
         if normal_uci_output {
-            print!(
+            println!(
                 "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
                 info.seldepth.ply_to_horizon(),
                 info.start_time.elapsed().as_millis(),
                 hashfull = tt.hashfull(),
                 tbhits = TB_HITS.load(Ordering::SeqCst),
             );
-            println!();
         } else {
             let value = uci::pretty_format_score(pv.score, self.turn());
             let pv = self.pv_san(pv).unwrap();
-            let endchr = if bound == HFlag::Exact {
+            let endchr = if bound == Bound::Exact {
                 "\n"
             } else {
                 "                                                                   \r"
