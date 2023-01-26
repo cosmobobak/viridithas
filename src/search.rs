@@ -15,7 +15,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, first_square},
-            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE, QS_SEE_THRESHOLD},
+            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -339,7 +339,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3], 1.max(alpha - stand_pat - QS_SEE_THRESHOLD));
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3], 1);
         if !in_check {
             move_picker.skip_quiets = true;
         }
