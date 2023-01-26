@@ -15,7 +15,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, first_square},
-            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE, QS_SEE_THRESHOLD},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -339,7 +339,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3]);
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3], 1.max(alpha - stand_pat - QS_SEE_THRESHOLD));
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -644,7 +644,7 @@ impl Board {
 
         let killers = self.get_killer_set(t);
 
-        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers);
+        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
 
         let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
         let mut tacticals_tried =
@@ -1087,7 +1087,7 @@ impl Board {
         legal_moves: &[Move],
     ) -> (Move, i32) {
         let (m, score) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
-        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data));
+        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data), 0);
         let mut maybe_legal = m;
         while !legal_moves.contains(&maybe_legal) {
             if let Some(next_picked) = mp.next(self, thread_data) {
