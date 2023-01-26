@@ -549,6 +549,12 @@ impl Board {
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
+        t.double_extensions[height] = if ROOT {
+            0
+        } else {
+            t.double_extensions[height - 1]
+        };
+
         // whole-node pruning techniques:
         if !PV && !in_check && excluded.is_null() {
             // razoring.
@@ -744,6 +750,9 @@ impl Board {
                     if is_quiet { self.static_exchange_eval(m, -1) } else { is_winning_capture };
                 extension = Depth::from(is_good_see);
             };
+            if extension > ONE_PLY * 2 {
+                t.double_extensions[height] += 1;
+            }
 
             let mut score;
             if moves_made == 1 {
@@ -787,6 +796,9 @@ impl Board {
                 }
             }
             self.unmake_move::<NNUE>(t);
+            if extension > ONE_PLY * 2 {
+                t.double_extensions[height] -= 1;
+            }
 
             if info.stopped() {
                 return 0;
@@ -900,7 +912,7 @@ impl Board {
             // re-make the singular move.
             self.make_move::<NNUE>(m, t);
         }
-        let double_extend = !PV && value < r_beta - 15;
+        let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 4;
         if double_extend {
             ONE_PLY * 2 // double-extend if we failed low by a lot (the move is very singular)
         } else if value < r_beta {
