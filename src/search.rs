@@ -202,12 +202,13 @@ impl Board {
                 if info.check_up() && d > 1 {
                     break 'deepening;
                 }
-                if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
-                    break 'deepening;
-                }
 
                 score = pv.score;
                 bestmove = pv.moves().first().copied().unwrap_or(bestmove);
+                
+                if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
+                    break 'deepening;
+                }
 
                 if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
                     break 'deepening;
