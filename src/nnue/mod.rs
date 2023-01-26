@@ -18,7 +18,7 @@ pub const LAYER_1_SIZE: usize = 256;
 const CR_MIN: i16 = 0;
 const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
-const BUCKETS: usize = 16;
+// const BUCKETS: usize = 16;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -48,7 +48,6 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
-    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
     flipped_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
     feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
     output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
@@ -56,26 +55,25 @@ pub static NNUE: NNUEParams = NNUEParams {
 };
 
 pub struct NNUEParams {
-    pub feature_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
     pub flipped_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
     pub feature_bias: Align<[i16; LAYER_1_SIZE]>,
     pub output_weights: Align<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
 
-pub static NNUE2: NNUEParams2 = NNUEParams2 {
-    input_weights: [Align([0; LAYER_1_SIZE]); INPUT],
-    input_bias: Align([0; LAYER_1_SIZE]),
-    hidden_weights: [Align([0; LAYER_1_SIZE * 2]); BUCKETS],
-    hidden_bias: Align([0; BUCKETS]),
-};
+// pub static NNUE2: NNUEParams2 = NNUEParams2 {
+//     input_weights: [Align([0; LAYER_1_SIZE]); INPUT],
+//     input_bias: Align([0; LAYER_1_SIZE]),
+//     hidden_weights: [Align([0; LAYER_1_SIZE * 2]); BUCKETS],
+//     hidden_bias: Align([0; BUCKETS]),
+// };
 
-pub struct NNUEParams2 {
-    pub input_weights: [Align<[i16; LAYER_1_SIZE]>; INPUT],
-    pub input_bias: Align<[i16; LAYER_1_SIZE]>,
-    pub hidden_weights: [Align<[i16; LAYER_1_SIZE * 2]>; BUCKETS],
-    pub hidden_bias: Align<[i16; BUCKETS]>,
-}
+// pub struct NNUEParams2 {
+//     pub input_weights: [Align<[i16; LAYER_1_SIZE]>; INPUT],
+//     pub input_bias: Align<[i16; LAYER_1_SIZE]>,
+//     pub hidden_weights: [Align<[i16; LAYER_1_SIZE * 2]>; BUCKETS],
+//     pub hidden_bias: Align<[i16; BUCKETS]>,
+// }
 
 impl NNUEParams {
     pub const fn num_params() -> usize {
@@ -88,7 +86,7 @@ impl NNUEParams {
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
         assert!(neuron < LAYER_1_SIZE);
         let starting_idx = neuron * INPUT;
-        let slice = &self.feature_weights[starting_idx..starting_idx + INPUT];
+        let slice = &self.flipped_weights[starting_idx..starting_idx + INPUT];
 
         let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
 
@@ -149,7 +147,6 @@ impl NNUEParams {
         }
 
         let mut out = Box::new(Self {
-            feature_weights: Align([0; INPUT * LAYER_1_SIZE]),
             flipped_weights: Align([0; INPUT * LAYER_1_SIZE]),
             feature_bias: Align([0; LAYER_1_SIZE]),
             output_weights: Align([0; LAYER_1_SIZE * 2]),
@@ -162,7 +159,7 @@ impl NNUEParams {
         for (key, value) in json.as_object().unwrap() {
             match key.as_str() {
                 "ft.weight" => {
-                    weight(value, &mut out.feature_weights, INPUT, QA, false);
+                    // weight(value, &mut out.feature_weights, INPUT, QA, false);
                     weight(value, &mut out.flipped_weights, LAYER_1_SIZE, QA, true);
                 }
                 "ft.bias" => {
@@ -184,8 +181,8 @@ impl NNUEParams {
     pub fn to_bytes(&self) -> Vec<Vec<u8>> {
         let mut out = Vec::new();
 
-        let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
+        // let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
+        // assert!(head.is_empty() && tail.is_empty());
         let (head, flipped_weights, tail) = unsafe { self.flipped_weights.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
         let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
@@ -196,7 +193,7 @@ impl NNUEParams {
         let (head, output_bias, tail) = unsafe { ob.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
 
-        out.push(feature_weights.to_vec());
+        // out.push(feature_weights.to_vec());
         out.push(flipped_weights.to_vec());
         out.push(feature_bias.to_vec());
         out.push(output_weights.to_vec());
