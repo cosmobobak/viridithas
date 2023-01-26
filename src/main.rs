@@ -144,7 +144,7 @@ fn main() {
         // create folder for the images
         let path = std::path::PathBuf::from("nnue-visualisations");
         std::fs::create_dir_all(&path).unwrap();
-        return for neuron in 0..crate::nnue::HIDDEN {
+        return for neuron in 0..crate::nnue::LAYER_1_SIZE {
             crate::nnue::NNUE.visualise_neuron(neuron, &path);
         };
     }

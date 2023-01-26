@@ -14,10 +14,11 @@ mod accumulator;
 pub mod convert;
 
 const INPUT: usize = 768;
-pub const HIDDEN: usize = 256;
+pub const LAYER_1_SIZE: usize = 256;
 const CR_MIN: i16 = 0;
 const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
+const BUCKETS: usize = 16;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -48,28 +49,44 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
     feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
+    flipped_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
     feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
     output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
     output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
 };
 
 pub struct NNUEParams {
-    pub feature_weights: Align<[i16; INPUT * HIDDEN]>,
-    pub feature_bias: Align<[i16; HIDDEN]>,
-    pub output_weights: Align<[i16; HIDDEN * 2]>,
+    pub feature_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
+    pub flipped_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
+    pub feature_bias: Align<[i16; LAYER_1_SIZE]>,
+    pub output_weights: Align<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
+}
+
+pub static NNUE2: NNUEParams2 = NNUEParams2 {
+    input_weights: [Align([0; LAYER_1_SIZE]); INPUT],
+    input_bias: Align([0; LAYER_1_SIZE]),
+    hidden_weights: [Align([0; LAYER_1_SIZE * 2]); BUCKETS],
+    hidden_bias: Align([0; BUCKETS]),
+};
+
+pub struct NNUEParams2 {
+    pub input_weights: [Align<[i16; LAYER_1_SIZE]>; INPUT],
+    pub input_bias: Align<[i16; LAYER_1_SIZE]>,
+    pub hidden_weights: [Align<[i16; LAYER_1_SIZE * 2]>; BUCKETS],
+    pub hidden_bias: Align<[i16; BUCKETS]>,
 }
 
 impl NNUEParams {
     pub const fn num_params() -> usize {
-        INPUT * HIDDEN + HIDDEN + HIDDEN * 2 + 1 // don't duplicate the feature weights
+        INPUT * LAYER_1_SIZE + LAYER_1_SIZE + LAYER_1_SIZE * 2 + 1 // don't duplicate the feature weights
     }
 
     pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
-        assert!(neuron < HIDDEN);
+        assert!(neuron < LAYER_1_SIZE);
         let starting_idx = neuron * INPUT;
         let slice = &self.feature_weights[starting_idx..starting_idx + INPUT];
 
@@ -113,10 +130,11 @@ impl NNUEParams {
             weight_array: &mut [i16; LEN],
             stride: usize,
             k: i32,
+            flip: bool,
         ) {
             for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
                 for (j, weight) in output.as_array().unwrap().iter().enumerate() {
-                    let index = j * stride + i;
+                    let index = if flip { j * stride + i } else { i * stride + j };
                     let value = weight.as_f64().unwrap();
                     weight_array[index] = (value * f64::from(k)) as i16;
                 }
@@ -131,9 +149,10 @@ impl NNUEParams {
         }
 
         let mut out = Box::new(Self {
-            feature_weights: Align([0; INPUT * HIDDEN]),
-            feature_bias: Align([0; HIDDEN]),
-            output_weights: Align([0; HIDDEN * 2]),
+            feature_weights: Align([0; INPUT * LAYER_1_SIZE]),
+            flipped_weights: Align([0; INPUT * LAYER_1_SIZE]),
+            feature_bias: Align([0; LAYER_1_SIZE]),
+            output_weights: Align([0; LAYER_1_SIZE * 2]),
             output_bias: 0,
         });
 
@@ -143,13 +162,14 @@ impl NNUEParams {
         for (key, value) in json.as_object().unwrap() {
             match key.as_str() {
                 "ft.weight" => {
-                    weight(value, &mut out.feature_weights, HIDDEN, QA);
+                    weight(value, &mut out.feature_weights, INPUT, QA, false);
+                    weight(value, &mut out.flipped_weights, LAYER_1_SIZE, QA, true);
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
                 }
                 "out.weight" => {
-                    weight(value, &mut out.output_weights, HIDDEN * 2, QB);
+                    weight(value, &mut out.output_weights, LAYER_1_SIZE * 2, QB, false);
                 }
                 "out.bias" => {
                     bias(value, from_mut(&mut out.output_bias), QAB);
@@ -166,6 +186,8 @@ impl NNUEParams {
 
         let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
+        let (head, flipped_weights, tail) = unsafe { self.flipped_weights.align_to::<u8>() };
+        assert!(head.is_empty() && tail.is_empty());
         let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
         let (head, output_weights, tail) = unsafe { self.output_weights.align_to::<u8>() };
@@ -175,6 +197,7 @@ impl NNUEParams {
         assert!(head.is_empty() && tail.is_empty());
 
         out.push(feature_weights.to_vec());
+        out.push(flipped_weights.to_vec());
         out.push(feature_bias.to_vec());
         out.push(output_weights.to_vec());
         out.push(output_bias.to_vec());
@@ -189,7 +212,7 @@ pub struct NNUEState {
     pub white_pov: Align<[i16; INPUT]>,
     pub black_pov: Align<[i16; INPUT]>,
 
-    pub accumulators: [Accumulator<HIDDEN>; ACC_STACK_SIZE],
+    pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
     pub current_acc: usize,
 }
 
@@ -294,15 +317,15 @@ impl NNUEState {
 
         subtract_and_add_to_all(
             &mut acc.white,
-            &NNUE.feature_weights,
-            white_idx_from * HIDDEN,
-            white_idx_to * HIDDEN,
+            &NNUE.flipped_weights,
+            white_idx_from * LAYER_1_SIZE,
+            white_idx_to * LAYER_1_SIZE,
         );
         subtract_and_add_to_all(
             &mut acc.black,
-            &NNUE.feature_weights,
-            black_idx_from * HIDDEN,
-            black_idx_to * HIDDEN,
+            &NNUE.flipped_weights,
+            black_idx_from * LAYER_1_SIZE,
+            black_idx_to * LAYER_1_SIZE,
         );
     }
 
@@ -341,8 +364,8 @@ impl NNUEState {
             );
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
-            add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * HIDDEN);
-            add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * HIDDEN);
+            add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
+            add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         } else {
             debug_assert!(
                 self.white_pov[white_idx] == 1,
@@ -358,8 +381,8 @@ impl NNUEState {
             );
             self.white_pov[white_idx] = 0;
             self.black_pov[black_idx] = 0;
-            sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * HIDDEN);
-            sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * HIDDEN);
+            sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
+            sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         }
     }
 
@@ -412,19 +435,17 @@ impl NNUEState {
     pub fn evaluate(&self, stm: Colour) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
-        let output = if stm == Colour::WHITE {
-            clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
-                &acc.white,
-                &acc.black,
-                &NNUE.output_weights,
-            )
+        let (us, them) = if stm == Colour::WHITE {
+            (&acc.white, &acc.black)
         } else {
-            clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, HIDDEN, { HIDDEN * 2 }>(
-                &acc.black,
-                &acc.white,
-                &NNUE.output_weights,
-            )
+            (&acc.black, &acc.white)
         };
+
+        let output = clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, LAYER_1_SIZE, { LAYER_1_SIZE * 2 }>(
+            us,
+            them,
+            &NNUE.output_weights,
+        );
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
