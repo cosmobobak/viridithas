@@ -220,6 +220,9 @@ impl Board {
                 }
 
                 let score = pv.score;
+                println!("depth: {d}");
+                println!("t.completed: {}", t.completed);
+                println!("t.pvs[t.completed]: {}", t.pvs[t.completed]);
                 let bestmove = t.pvs[t.completed].moves()[0];
 
                 if MAIN_THREAD && info.print_to_stdout {
