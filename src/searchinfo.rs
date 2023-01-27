@@ -3,7 +3,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc, Mutex,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant}, ops::ControlFlow,
 };
 
 use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::mate_in, search::parameters::SearchParams};
@@ -145,6 +145,10 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn check_up(&mut self) -> bool {
+        let already_stopped = self.stopped.load(Ordering::SeqCst);
+        if already_stopped {
+            return true;
+        }
         let res = match self.limit {
             SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => { self.stopped.load(Ordering::SeqCst) }
             SearchLimit::Nodes(nodes) => {
@@ -184,10 +188,13 @@ impl<'a> SearchInfo<'a> {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: usize) {
+    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: usize) -> ControlFlow<()> {
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
                 self.stopped.store(true, Ordering::SeqCst);
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
             }
         } else if let &SearchLimit::Mate { ply } = &self.limit {
             let expected_score = mate_in(ply);
@@ -195,7 +202,12 @@ impl<'a> SearchInfo<'a> {
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
             if is_good_enough && depth >= ply {
                 self.stopped.store(true, Ordering::SeqCst);
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
             }
+        } else {
+            ControlFlow::Continue(())
         }
     }
 

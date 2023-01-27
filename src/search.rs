@@ -228,7 +228,9 @@ impl Board {
                     self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
                 }
                 if MAIN_THREAD && d > 2 {
-                    info.check_if_search_condition_met(bestmove, pv.score, d);
+                    if let ControlFlow::Break(_) = info.check_if_search_condition_met(bestmove, pv.score, d) {
+                        break 'deepening;
+                    }
                 }
                 
                 // if we've made it here, it means we got an exact score.
@@ -299,7 +301,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if info.nodes.trailing_zeros() >= 12 && info.check_up() {
+        if (info.nodes & 1023) == 1023 && info.check_up() {
             return 0;
         }
 
@@ -447,7 +449,7 @@ impl Board {
 
         depth = depth.max(ZERO_PLY);
 
-        if info.nodes.trailing_zeros() >= 12 && info.check_up() {
+        if (info.nodes & 1023) == 1023 && info.check_up() {
             return 0;
         }
 
@@ -1120,7 +1122,7 @@ impl Board {
 
         // if we aren't using the main thread (thread 0) then we need to do
         // an extra uci info line to show the best move/score/pv
-        if best_thread.thread_id != 0 {
+        if best_thread.thread_id != 0 && info.print_to_stdout {
             let pv = &best_thread.pvs[best_thread.completed];
             let depth = best_thread.completed;
             self.readout_info(Bound::Exact, pv, depth, info, tt, total_nodes);
