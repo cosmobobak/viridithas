@@ -558,7 +558,7 @@ impl Board {
         };
 
         // whole-node pruning techniques:
-        if !PV && !in_check && excluded.is_null() {
+        if !ROOT && !PV && !in_check && excluded.is_null() {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -855,6 +855,8 @@ impl Board {
                     self.update_history_metrics::<false>(t, m, depth);
                 }
             }
+        } else {
+            assert!(!PV, "PV nodes should always raise alpha");
         }
 
         if excluded.is_null() {
