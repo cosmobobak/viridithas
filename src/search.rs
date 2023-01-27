@@ -149,6 +149,7 @@ impl Board {
         global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
+        assert!(legal_moves.contains(&d_move), "default returned an illegal move.");
         let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
@@ -1126,7 +1127,6 @@ impl Board {
             self.readout_info(Bound::Exact, pv, depth, info, tt, total_nodes);
         }
 
-        assert!(self.legal_moves().contains(&best_move), "best move {best_move} is illegal in position {f}", f = self.fen());
         (best_move, best_score)
     }
 
