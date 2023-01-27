@@ -92,13 +92,11 @@ impl ThreadData {
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
-        eprintln!("Updating best line to {pv} at depth {depth}", depth = self.depth);
         self.completed = self.depth;
         self.pvs[self.depth] = pv.clone();
     }
 
     pub fn revert_best_line(&mut self) {
-        eprintln!("Reverting best line to {pv} at depth {depth}", pv = self.pvs[self.depth - 1], depth = self.depth);
         self.completed = self.depth - 1;
     }
 }

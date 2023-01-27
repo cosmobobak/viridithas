@@ -148,7 +148,8 @@ impl Board {
         });
         global_stopped.store(false, Ordering::SeqCst);
 
-        let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
+        let d_move = self.default_move(tt);
+        let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
             println!("bestmove {bestmove}");
@@ -168,10 +169,7 @@ impl Board {
         t: &mut ThreadData,
         total_nodes: &AtomicU64,
     ) {
-        let d_move = tt.probe_for_provisional_info(self.hashkey()).map_or_else(|| {
-            let lmoves = self.legal_moves();
-            lmoves.first().copied().unwrap_or_default()
-        }, |defaults| defaults.0);
+        let d_move = self.default_move(tt);
         let mut aw = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -253,6 +251,13 @@ impl Board {
                 aw = AspirationWindow::infinite();
             }
         }
+    }
+
+    fn default_move(&mut self, tt: TTView) -> Move {
+        tt.probe_for_provisional_info(self.hashkey()).map_or_else(|| {
+            let lmoves = self.legal_moves();
+            lmoves.first().copied().unwrap_or_default()
+        }, |defaults| defaults.0)
     }
 
     fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: usize, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
@@ -1085,6 +1090,7 @@ impl Board {
         info: &SearchInfo,
         tt: TTView,
         total_nodes: u64,
+        default_move: Move,
     ) -> (Move, i32) {
         let (mut best_thread, rest) = thread_headers.split_first().unwrap();
         for thread in rest {
@@ -1100,7 +1106,7 @@ impl Board {
             }
         }
 
-        let best_move = best_thread.pvs[best_thread.completed].moves()[0];
+        let best_move = best_thread.pvs[best_thread.completed].moves().first().copied().unwrap_or(default_move);
         let best_score = best_thread.pvs[best_thread.completed].score();
 
         // if we aren't using the main thread (thread 0) then we need to do
