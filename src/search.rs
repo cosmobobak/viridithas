@@ -205,14 +205,6 @@ impl Board {
 
                 score = pv.score;
                 bestmove = pv.moves().first().copied().unwrap_or(bestmove);
-                
-                if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
-                    break 'deepening;
-                }
-
-                if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
-                    break 'deepening;
-                }
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
@@ -233,6 +225,14 @@ impl Board {
                     }
                     aw.widen_up();
                     continue;
+                }
+                
+                if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
+                    break 'deepening;
+                }
+
+                if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
+                    break 'deepening;
                 }
 
                 // if we've made it here, it means we got an exact score.
