@@ -1,8 +1,10 @@
+use std::array;
+
 use crate::{
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
-    nnue, piece::Colour,
+    nnue, piece::Colour, search::PVariation,
 };
 
 #[derive(Clone)]
@@ -21,6 +23,10 @@ pub struct ThreadData {
     pub counter_move_table: MoveTable,
 
     pub thread_id: usize,
+
+    pvs: [PVariation; MAX_DEPTH.ply_to_horizon()],
+    completed: usize,
+    pub depth: usize,
 }
 
 impl ThreadData {
@@ -41,6 +47,9 @@ impl ThreadData {
             killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
             counter_move_table: MoveTable::new(),
             thread_id,
+            pvs: array::from_fn(|_| PVariation::default()),
+            completed: 0,
+            depth: 0,
         }
     }
 
@@ -80,5 +89,16 @@ impl ThreadData {
         self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
+    }
+
+    pub fn update_best_line(&mut self, pv: &PVariation) {
+        if pv.score() > self.pvs[self.completed].score() {
+            self.completed = self.depth;
+            self.pvs[self.depth] = pv.clone();
+        }
+    }
+
+    pub fn revert_best_line(&mut self) {
+        self.completed = self.depth - 1;
     }
 }

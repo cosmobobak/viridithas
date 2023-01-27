@@ -184,7 +184,7 @@ impl<'a> SearchInfo<'a> {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: i32) {
+    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: usize) {
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
                 self.stopped.store(true, Ordering::SeqCst);
@@ -193,7 +193,7 @@ impl<'a> SearchInfo<'a> {
             let expected_score = mate_in(ply);
             let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= ply as i32 {
+            if is_good_enough && depth >= ply {
                 self.stopped.store(true, Ordering::SeqCst);
             }
         }

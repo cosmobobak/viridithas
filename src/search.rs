@@ -184,14 +184,15 @@ impl Board {
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
         let mut pv = PVariation::default();
-        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).round();
-        let starting_depth = 1 + <_ as TryInto<i32>>::try_into(t.thread_id).unwrap() % 10;
+        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
+        let starting_depth = 1 + t.thread_id % 10;
         'deepening: for d in starting_depth..=max_depth {
+            t.depth = d;
             // consider stopping early if we've neatly completed a depth:
             if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
                 break 'deepening;
             }
-            let depth = Depth::new(d);
+            let depth = Depth::new(d.try_into().unwrap());
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
@@ -213,8 +214,13 @@ impl Board {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
                     }
+                    // search failed low, so we might have to
+                    // revert a fail-high pv update
+                    t.revert_best_line();
                     continue;
                 }
+                // search is either exact or fail-high, so we can update the best line.
+                t.update_best_line(&pv);
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
@@ -226,6 +232,14 @@ impl Board {
 
                 score = pv.score;
                 bestmove = pv.moves().first().copied().unwrap_or(bestmove);
+
+                if MAIN_THREAD && info.print_to_stdout {
+                    let total_nodes = total_nodes.load(Ordering::SeqCst);
+                    self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
+                }
+                if MAIN_THREAD && d > 2 {
+                    info.check_if_search_condition_met(bestmove, pv.score, d);
+                }
                 
                 // if we've made it here, it means we got an exact score.
                 if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
@@ -234,14 +248,6 @@ impl Board {
 
                 if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
                     break 'deepening;
-                }
-
-                if MAIN_THREAD && info.print_to_stdout {
-                    let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
-                }
-                if MAIN_THREAD && d > 2 {
-                    info.check_if_search_condition_met(bestmove, pv.score, d);
                 }
 
                 break; // we got an exact score, so we can stop the aspiration loop.
@@ -256,7 +262,7 @@ impl Board {
         (bestmove, score)
     }
 
-    fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: i32, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
+    fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: usize, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
         if MAIN_THREAD && d > 8 && !*forcing_time_reduction && info.in_game() {
             let saved_seldepth = info.seldepth;
             let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
@@ -1106,7 +1112,7 @@ impl Board {
         &mut self,
         mut bound: Bound,
         pv: &PVariation,
-        depth: i32,
+        depth: usize,
         info: &SearchInfo,
         tt: TTView,
         total_nodes: u64,
@@ -1158,7 +1164,7 @@ impl Board {
     }
 }
 
-fn mate_found_breaker<const MAIN_THREAD: bool>(pv: &PVariation, d: i32, mate_counter: &mut i32, info: &mut SearchInfo) -> ControlFlow<()> {
+fn mate_found_breaker<const MAIN_THREAD: bool>(pv: &PVariation, d: usize, mate_counter: &mut i32, info: &mut SearchInfo) -> ControlFlow<()> {
     if MAIN_THREAD && is_mate_score(pv.score) && d > 10 {
         *mate_counter += 1;
         if d > 1 && info.in_game() && *mate_counter >= 3 {
@@ -1273,6 +1279,7 @@ impl AspirationWindow {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct PVariation {
     length: usize,
     score: i32,
@@ -1288,6 +1295,10 @@ impl Default for PVariation {
 impl PVariation {
     pub fn moves(&self) -> &[Move] {
         &self.line[..self.length]
+    }
+
+    pub const fn score(&self) -> i32 {
+        self.score
     }
 
     fn load_from(&mut self, m: Move, rest: &Self) {
