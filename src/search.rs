@@ -223,6 +223,9 @@ impl Board {
                 eprintln!("depth: {d}");
                 eprintln!("t.completed: {}", t.completed);
                 eprintln!("t.pvs[t.completed]: {}", t.pvs[t.completed]);
+                if t.pvs[t.completed].moves().is_empty() {
+                    eprintln!("bug hit in position {pos}", pos = self.fen());
+                }
                 let bestmove = t.pvs[t.completed].moves()[0];
 
                 if MAIN_THREAD && info.print_to_stdout {
