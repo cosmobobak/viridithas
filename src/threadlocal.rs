@@ -98,6 +98,7 @@ impl ThreadData {
     }
 
     pub fn revert_best_line(&mut self) {
+        eprintln!("Reverting best line to {pv} at depth {depth}", pv = self.pvs[self.depth - 1], depth = self.depth);
         self.completed = self.depth - 1;
     }
 }
