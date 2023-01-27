@@ -261,10 +261,12 @@ impl Board {
             if !self.make_move_hce(mov) {
                 continue;
             }
+            // if we get here, it means the move is legal.
             m = mov;
             self.unmake_move_hce();
             break;
         }
+        assert!(self.legal_moves().contains(&m), "default move is not legal! ({m})");
         m
     }
 
