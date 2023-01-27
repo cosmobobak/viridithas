@@ -266,7 +266,6 @@ impl Board {
             self.unmake_move_hce();
             break;
         }
-        assert!(self.legal_moves().contains(&m), "default move is not legal! ({m})");
         m
     }
 
@@ -1127,6 +1126,7 @@ impl Board {
             self.readout_info(Bound::Exact, pv, depth, info, tt, total_nodes);
         }
 
+        assert!(self.legal_moves().contains(&best_move), "best move {best_move} is illegal in position {f}", f = self.fen());
         (best_move, best_score)
     }
 
