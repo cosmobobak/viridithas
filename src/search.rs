@@ -15,7 +15,7 @@ use crate::{
         },
         movegen::{
             bitboards::{self, first_square},
-            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, Stage, WINNING_CAPTURE_SCORE, MovePicker},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -148,7 +148,7 @@ impl Board {
         });
         global_stopped.store(false, Ordering::SeqCst);
 
-        let d_move = self.default_move(tt);
+        let d_move = self.default_move(tt, t1);
         let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
@@ -169,7 +169,7 @@ impl Board {
         t: &mut ThreadData,
         total_nodes: &AtomicU64,
     ) {
-        let d_move = self.default_move(tt);
+        let d_move = self.default_move(tt, t);
         let mut aw = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -188,12 +188,11 @@ impl Board {
             loop {
                 let nodes_before = info.nodes;
                 pv.score = self.root_search::<USE_NNUE>(tt, &mut pv, info, t, depth, aw.alpha, aw.beta);
-                let nodes = info.nodes - nodes_before;
-                total_nodes.fetch_add(nodes, Ordering::SeqCst);
-                
-                if info.check_up() && d > 1 {
+                if info.check_up() {
                     break 'deepening;
                 }
+                let nodes = info.nodes - nodes_before;
+                total_nodes.fetch_add(nodes, Ordering::SeqCst);
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
@@ -253,10 +252,19 @@ impl Board {
         }
     }
 
-    fn default_move(&mut self, tt: TTView) -> Move {
+    fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
         tt.probe_for_provisional_info(self.hashkey()).map_or_else(|| {
-            let lmoves = self.legal_moves();
-            lmoves.first().copied().unwrap_or_default()
+            let mut mp = 
+                MovePicker::<false, true, true>::new(Move::NULL, self.get_killer_set(t), 0);
+            let mut m = Move::NULL;
+            while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
+                if !self.make_move_hce(mov) {
+                    continue;
+                }
+                m = mov;
+                self.unmake_move_hce();
+            }
+            m
         }, |defaults| defaults.0)
     }
 
