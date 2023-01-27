@@ -24,8 +24,8 @@ pub struct ThreadData {
 
     pub thread_id: usize,
 
-    pvs: [PVariation; MAX_DEPTH.ply_to_horizon()],
-    completed: usize,
+    pub pvs: [PVariation; MAX_DEPTH.ply_to_horizon()],
+    pub completed: usize,
     pub depth: usize,
 }
 

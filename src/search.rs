@@ -11,7 +11,7 @@ use std::{
 use crate::{
     board::{
         evaluation::{
-            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE, tb_win_in, tb_loss_in, is_game_theoretic_score,
+            self, get_see_value, is_mate_score, mate_in, mated_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE, tb_win_in, tb_loss_in, is_game_theoretic_score, MINIMUM_MATE_SCORE,
         },
         movegen::{
             bitboards::{self, first_square},
@@ -106,13 +106,7 @@ impl Board {
             return (score, best_move);
         }
 
-        // don't produce weird scores if there's one legal option
-        // and we're going to instamove.
-        let (mut bestmove, mut score) =
-            self.initial_move_and_score(tt, &thread_headers[0], &legal_moves);
-
         let global_stopped = info.stopped;
-        let mut search_results = Vec::with_capacity(thread_headers.len());
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
         let board_copy = self.clone();
@@ -123,16 +117,13 @@ impl Board {
 
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
-                let res = self.iterative_deepening::<USE_NNUE, true>(
+                self.iterative_deepening::<USE_NNUE, true>(
                     info,
                     tt,
                     t1,
-                    bestmove,
-                    score,
                     &total_nodes,
                 );
                 global_stopped.store(true, Ordering::SeqCst);
-                res
             });
             // we need to eagerly start the threads or nothing will happen
             #[allow(clippy::needless_collect)]
@@ -145,19 +136,19 @@ impl Board {
                             info,
                             tt,
                             t,
-                            bestmove,
-                            score,
                             &total_nodes,
-                        )
+                        );
                     })
                 })
                 .collect::<Vec<_>>();
-            search_results.push(main_thread_handle.join().unwrap());
-            search_results.extend(helper_handles.into_iter().map(|h| h.join().unwrap()));
+            main_thread_handle.join().unwrap();
+            for hh in helper_handles {
+                hh.join().unwrap();
+            }
         });
         global_stopped.store(false, Ordering::SeqCst);
 
-        (bestmove, score) = search_results[0];
+        let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
 
         if info.print_to_stdout {
             println!("bestmove {bestmove}");
@@ -175,10 +166,8 @@ impl Board {
         info: &mut SearchInfo,
         tt: TTView,
         t: &mut ThreadData,
-        mut bestmove: Move,
-        mut score: i32,
         total_nodes: &AtomicU64,
-    ) -> (Move, i32) {
+    ) {
         let mut aw = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -230,8 +219,8 @@ impl Board {
                     continue;
                 }
 
-                score = pv.score;
-                bestmove = pv.moves().first().copied().unwrap_or(bestmove);
+                let score = pv.score;
+                let bestmove = t.pvs[t.completed].moves()[0];
 
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
@@ -254,12 +243,12 @@ impl Board {
             }
 
             if depth > ASPIRATION_WINDOW_MIN_DEPTH {
+                let score = t.pvs[t.completed].score;
                 aw = AspirationWindow::from_last_score(score);
             } else {
                 aw = AspirationWindow::infinite();
             }
         }
-        (bestmove, score)
     }
 
     fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: usize, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
@@ -1085,26 +1074,39 @@ impl Board {
         self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
     }
 
-    /// Get an initial move and score for the current position from the TT
-    /// and the movepicker.
-    fn initial_move_and_score(
-        &self,
+    pub fn select_best(
+        &mut self,
+        thread_headers: &[ThreadData],
+        info: &SearchInfo,
         tt: TTView,
-        thread_data: &ThreadData,
-        legal_moves: &[Move],
+        total_nodes: u64,
     ) -> (Move, i32) {
-        let (m, score) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
-        let mut mp = MainMovePicker::<false>::new(m, self.get_killer_set(thread_data), 0);
-        let mut maybe_legal = m;
-        while !legal_moves.contains(&maybe_legal) {
-            if let Some(next_picked) = mp.next(self, thread_data) {
-                maybe_legal = next_picked.mov;
-            } else {
-                break;
+        let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+        for thread in rest {
+            let best_depth = best_thread.completed;
+            let best_score = best_thread.pvs[best_depth].score();
+            let this_depth = thread.completed;
+            let this_score = thread.pvs[this_depth].score();
+            if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE) && this_score > best_score {
+                best_thread = thread;
+            }
+            if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_MATE_SCORE) {
+                best_thread = thread;
             }
         }
-        assert!(legal_moves.contains(&maybe_legal), "no legal moves found");
-        (maybe_legal, score)
+
+        let best_move = best_thread.pvs[best_thread.completed].moves()[0];
+        let best_score = best_thread.pvs[best_thread.completed].score();
+
+        // if we aren't using the main thread (thread 0) then we need to do
+        // an extra uci info line to show the best move/score/pv
+        if best_thread.thread_id != 0 {
+            let pv = &best_thread.pvs[best_thread.completed];
+            let depth = best_thread.completed;
+            self.readout_info(Bound::Exact, pv, depth, info, tt, total_nodes);
+        }
+
+        (best_move, best_score)
     }
 
     /// Print the info about an iteration of the search.

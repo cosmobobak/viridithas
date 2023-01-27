@@ -310,14 +310,6 @@ impl<'a> TTView<'a> {
         }
     }
 
-    pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe(key, 0, -INFINITY, INFINITY, ZERO_PLY, true);
-        match result {
-            ProbeResult::Hit(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
-            _ => None,
-        }
-    }
-
     pub fn hashfull(&self) -> usize {
         self.table
             .iter()
