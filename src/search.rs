@@ -168,6 +168,10 @@ impl Board {
         t: &mut ThreadData,
         total_nodes: &AtomicU64,
     ) {
+        let d_move = tt.probe_for_provisional_info(self.hashkey()).map_or_else(|| {
+            let lmoves = self.legal_moves();
+            lmoves.first().copied().unwrap_or_default()
+        }, |defaults| defaults.0);
         let mut aw = AspirationWindow::infinite();
         let mut mate_counter = 0;
         let mut forcing_time_reduction = false;
@@ -211,7 +215,6 @@ impl Board {
                 // search is either exact or fail-high, so we can update the best line.
                 t.update_best_line(&pv);
                 if aw.beta != INFINITY && pv.score >= aw.beta {
-                    eprintln!("fail high");
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
@@ -219,16 +222,9 @@ impl Board {
                     aw.widen_up();
                     continue;
                 }
-                eprintln!("exact");
 
                 let score = pv.score;
-                eprintln!("depth: {d}");
-                eprintln!("t.completed: {}", t.completed);
-                eprintln!("t.pvs[t.completed]: {}", t.pvs[t.completed]);
-                if t.pvs[t.completed].moves().is_empty() {
-                    eprintln!("bug hit in position {pos}", pos = self.fen());
-                }
-                let bestmove = t.pvs[t.completed].moves()[0];
+                let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
 
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
@@ -430,7 +426,6 @@ impl Board {
 
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
-            eprintln!("exiting into quiescence");
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
 
@@ -439,7 +434,6 @@ impl Board {
         depth = depth.max(ZERO_PLY);
 
         if info.nodes.trailing_zeros() >= 12 && info.check_up() {
-            eprintln!("exiting due to time");
             return 0;
         }
 
@@ -807,7 +801,6 @@ impl Board {
             }
 
             if info.stopped() {
-                eprintln!("exiting due to time limit");
                 return 0;
             }
 
@@ -826,14 +819,11 @@ impl Board {
 
         if moves_made == 0 {
             if !excluded.is_null() {
-                eprintln!("excluded move was legally forced");
                 return alpha;
             }
             if in_check {
-                eprintln!("exiting due to checkmate");
                 return mated_in(height);
             }
-            eprintln!("exiting due to stalemate");
             return draw_score(info.nodes);
         }
 
@@ -871,7 +861,6 @@ impl Board {
 
         t.best_moves[height] = best_move;
 
-        eprintln!("exiting normally");
         best_score
     }
 

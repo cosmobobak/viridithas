@@ -146,6 +146,12 @@ impl Debug for Move {
     }
 }
 
+impl Default for Move {
+    fn default() -> Self {
+        Self::NULL
+    }
+}
+
 mod tests {
     #[test]
     fn test_simple_move() {
