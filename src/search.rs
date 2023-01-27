@@ -855,8 +855,6 @@ impl Board {
                     self.update_history_metrics::<false>(t, m, depth);
                 }
             }
-        } else {
-            assert!(!PV, "PV nodes should always raise alpha");
         }
 
         if excluded.is_null() {
