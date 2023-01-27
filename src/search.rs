@@ -149,7 +149,6 @@ impl Board {
         global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
-        assert!(legal_moves.contains(&d_move), "default returned an illegal move.");
         let (bestmove, score) = self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
@@ -254,7 +253,6 @@ impl Board {
     }
 
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
-        let fen_before = self.fen();
         let (tt_move, _) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
         let mut mp = 
             MovePicker::<false, true, true>::new(tt_move, self.get_killer_set(t), 0);
@@ -268,7 +266,6 @@ impl Board {
             self.unmake_move_hce();
             break;
         }
-        assert_eq!(fen_before, self.fen(), "default move changed the position from {fen_before} to {}", self.fen());
         m
     }
 

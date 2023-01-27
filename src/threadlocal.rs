@@ -82,6 +82,9 @@ impl ThreadData {
         self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
+        self.depth = 0;
+        self.completed = 0;
+        self.pvs.fill(PVariation::default());
     }
 
     pub fn setup_tables_for_search(&mut self) {
@@ -89,6 +92,9 @@ impl ThreadData {
         self.followup_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
+        self.depth = 0;
+        self.completed = 0;
+        self.pvs.fill(PVariation::default());
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
