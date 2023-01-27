@@ -92,10 +92,8 @@ impl ThreadData {
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
-        if pv.score() > self.pvs[self.completed].score() {
-            self.completed = self.depth;
-            self.pvs[self.depth] = pv.clone();
-        }
+        self.completed = self.depth;
+        self.pvs[self.depth] = pv.clone();
     }
 
     pub fn revert_best_line(&mut self) {
