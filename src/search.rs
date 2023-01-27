@@ -253,19 +253,19 @@ impl Board {
     }
 
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
-        tt.probe_for_provisional_info(self.hashkey()).map_or_else(|| {
-            let mut mp = 
-                MovePicker::<false, true, true>::new(Move::NULL, self.get_killer_set(t), 0);
-            let mut m = Move::NULL;
-            while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
-                if !self.make_move_hce(mov) {
-                    continue;
-                }
-                m = mov;
-                self.unmake_move_hce();
+        let (tt_move, _) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
+        let mut mp = 
+            MovePicker::<false, true, true>::new(tt_move, self.get_killer_set(t), 0);
+        let mut m = Move::NULL;
+        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
+            if !self.make_move_hce(mov) {
+                continue;
             }
-            m
-        }, |defaults| defaults.0)
+            m = mov;
+            self.unmake_move_hce();
+            break;
+        }
+        m
     }
 
     fn forced_move_breaker<const MAIN_THREAD: bool>(&mut self, d: usize, forcing_time_reduction: &mut bool, info: &mut SearchInfo, tt: TTView, t: &mut ThreadData, bestmove: Move, score: i32, depth: Depth) -> ControlFlow<()> {
