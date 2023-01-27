@@ -203,9 +203,6 @@ impl Board {
                     break 'deepening;
                 }
 
-                score = pv.score;
-                bestmove = pv.moves().first().copied().unwrap_or(bestmove);
-
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
@@ -226,7 +223,11 @@ impl Board {
                     aw.widen_up();
                     continue;
                 }
+
+                score = pv.score;
+                bestmove = pv.moves().first().copied().unwrap_or(bestmove);
                 
+                // if we've made it here, it means we got an exact score.
                 if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
                     break 'deepening;
                 }
@@ -235,7 +236,6 @@ impl Board {
                     break 'deepening;
                 }
 
-                // if we've made it here, it means we got an exact score.
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
