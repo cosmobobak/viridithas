@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use crate::{
     board::{
@@ -92,6 +92,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
+            start_time: Instant::now(),
             ..Default::default()
         };
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());

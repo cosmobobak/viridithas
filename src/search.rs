@@ -220,6 +220,7 @@ impl Board {
                     continue;
                 }
 
+                // if we've made it here, it means we got an exact score.
                 let score = pv.score;
                 let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
 
@@ -227,18 +228,20 @@ impl Board {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
                 }
-                if MAIN_THREAD && d > 2 {
-                    if let ControlFlow::Break(_) = info.check_if_search_condition_met(bestmove, pv.score, d) {
-                        break 'deepening;
-                    }
+
+                if let ControlFlow::Break(_) = info.solved_breaker::<MAIN_THREAD>(bestmove, pv.score, d) {
+                    break 'deepening;
                 }
-                
-                // if we've made it here, it means we got an exact score.
+
                 if let ControlFlow::Break(_) = mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info) {
                     break 'deepening;
                 }
 
                 if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(d, &mut forcing_time_reduction, info, tt, t, bestmove, score, depth) {
+                    break 'deepening;
+                }
+
+                if info.stopped() {
                     break 'deepening;
                 }
 

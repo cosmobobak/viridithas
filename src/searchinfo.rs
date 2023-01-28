@@ -188,7 +188,10 @@ impl<'a> SearchInfo<'a> {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    pub fn check_if_search_condition_met(&mut self, best_move: Move, value: i32, depth: usize) -> ControlFlow<()> {
+    pub fn solved_breaker<const MAIN_THREAD: bool>(&mut self, best_move: Move, value: i32, depth: usize) -> ControlFlow<()> {
+        if !MAIN_THREAD || depth < 8 {
+            return ControlFlow::Continue(());
+        }
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
                 self.stopped.store(true, Ordering::SeqCst);
