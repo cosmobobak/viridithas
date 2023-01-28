@@ -146,6 +146,7 @@ impl NNUEParams {
             }
         }
 
+        #[allow(clippy::large_stack_arrays)] // we only run this function in release, so it shouldn't blow the stack.
         let mut out = Box::new(Self {
             flipped_weights: Align([0; INPUT * LAYER_1_SIZE]),
             feature_bias: Align([0; LAYER_1_SIZE]),

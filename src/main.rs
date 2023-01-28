@@ -1,4 +1,4 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![deny(missing_docs)]
 
 //! Viridithas, a UCI chess engine written in Rust.
@@ -49,7 +49,7 @@ fn main() {
 
     let eparams =
         cli.eparams.map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
-            board::evaluation::parameters::EvalParams::from_file(p).unwrap()
+            board::evaluation::parameters::EvalParams::from_file(p).expect("failed to load evaluation parameters")
         });
 
     assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
