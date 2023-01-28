@@ -14,7 +14,7 @@ mod accumulator;
 pub mod convert;
 
 const INPUT: usize = 768;
-pub const LAYER_1_SIZE: usize = 256;
+pub const LAYER_1_SIZE: usize = 384;
 const CR_MIN: i16 = 0;
 const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
@@ -527,7 +527,7 @@ pub fn convert_json_to_binary(
     let bytes = nnue.to_bytes();
     fs::create_dir(&output_path).unwrap();
     for (fname, byte_vector) in
-        ["feature_weights", "flipped_weights", "feature_bias", "output_weights", "output_bias"]
+        ["flipped_weights", "feature_bias", "output_weights", "output_bias"]
             .into_iter()
             .zip(&bytes)
     {
