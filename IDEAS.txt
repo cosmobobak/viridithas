@@ -7,10 +7,7 @@ MAJOR:
 -- Crazyhouse
 
 MINOR:
-- replace countermoves with countermove history
-- tune history more
 - replace all the false/true constgen stuff with a proper type.
-- increase maxdepth just in case.
 - fullwindow on big scores (+30?)
 - uci bench extension
 - remove `as` casts and unsafe code
@@ -23,9 +20,9 @@ MINOR:
 - Rust features to watch for: full const generics, const floating-point maths.
 - root node eval oracle.
 - make the big-piece and other stuff better named
-- IID
-- put movelists in ThreadData to reuse them.
 - make is_legal faster
 - check evasions
 - filter training positions that are forced.
-- fix the horrendous 3-location TT store design in main-search
+- replace countermoves with countermove history
+- deeper conthists
+- adapt frozenight's data generation for viri.

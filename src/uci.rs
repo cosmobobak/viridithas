@@ -24,6 +24,7 @@ use crate::{
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
+const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 
 enum UciError {
     ParseOption(String),
@@ -430,7 +431,7 @@ pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
 fn print_uci_response(full: bool) {
     println!("id name {NAME} {VERSION}");
     println!("id author Cosmo");
-    println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max 8192");
+    println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
     println!("option name UseNNUE type check default true");
