@@ -14,7 +14,7 @@ mod accumulator;
 pub mod convert;
 
 const INPUT: usize = 768;
-pub const LAYER_1_SIZE: usize = 384;
+pub const LAYER_1_SIZE: usize = 512;
 const CR_MIN: i16 = 0;
 const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
