@@ -171,10 +171,9 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchP
 
     if let Some(movetime) = movetime {
         info.limit = SearchLimit::Time(movetime);
-    } else if let Some(depth) = depth {
+    }
+    if let Some(depth) = depth {
         info.limit = SearchLimit::Depth(depth.into());
-    } else if let Some(nodes) = nodes {
-        info.limit = SearchLimit::Nodes(nodes);
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
@@ -199,6 +198,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchP
         return Err(UciError::InvalidFormat(
             "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
         ));
+    }
+    
+    if let Some(nodes) = nodes {
+        info.limit = SearchLimit::Nodes(nodes);
     }
 
     info.start_time = Instant::now();
