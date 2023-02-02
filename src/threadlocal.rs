@@ -1,5 +1,3 @@
-use std::array;
-
 use crate::{
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
@@ -24,7 +22,7 @@ pub struct ThreadData {
 
     pub thread_id: usize,
 
-    pub pvs: [PVariation; MAX_DEPTH.ply_to_horizon()],
+    pub pvs: Vec<PVariation>,
     pub completed: usize,
     pub depth: usize,
 }
@@ -34,6 +32,7 @@ impl ThreadData {
     const BLACK_BANNED_NMP: u8 = 0b10;
 
     pub fn new(thread_id: usize) -> Self {
+        eprintln!("ThreadData::new({thread_id})");
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
@@ -41,13 +40,13 @@ impl ThreadData {
             double_extensions: [0; MAX_PLY],
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
-            nnue: Box::new(nnue::NNUEState::new()),
+            nnue: nnue::NNUEState::boxed(),
             history_table: HistoryTable::new(),
             followup_history: DoubleHistoryTable::new(),
-            killer_move_table: [[Move::NULL; 2]; MAX_DEPTH.ply_to_horizon()],
+            killer_move_table: [[Move::NULL; 2]; MAX_PLY],
             counter_move_table: MoveTable::new(),
             thread_id,
-            pvs: array::from_fn(|_| PVariation::default()),
+            pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,
             depth: 0,
         }
