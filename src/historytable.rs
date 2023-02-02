@@ -63,7 +63,6 @@ pub struct DoubleHistoryTable {
 
 impl DoubleHistoryTable {
     pub fn new() -> Self {
-        eprintln!("DoubleHistoryTable::new()");
         Self { table: array::from_fn(|_| array::from_fn(|_| Box::new(HistoryTable::new()))) }
     }
 

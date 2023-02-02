@@ -484,7 +484,6 @@ pub fn main_loop(params: EvalParams) {
     info.set_stdin(&stdin);
 
     let mut thread_data = Vec::new();
-    eprintln!("ThreadData is {} bytes", std::mem::size_of::<ThreadData>());
     thread_data.push(ThreadData::new(0));
     for t in &mut thread_data {
         t.nnue.refresh_acc(&pos);

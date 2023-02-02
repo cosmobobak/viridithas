@@ -32,7 +32,6 @@ impl ThreadData {
     const BLACK_BANNED_NMP: u8 = 0b10;
 
     pub fn new(thread_id: usize) -> Self {
-        eprintln!("ThreadData::new({thread_id})");
         Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
