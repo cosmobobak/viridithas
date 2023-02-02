@@ -257,8 +257,9 @@ impl Board {
         }
     }
 
+    /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
-        let (tt_move, _) = tt.probe_for_provisional_info(self.hashkey()).unwrap_or((Move::NULL, 0));
+        let tt_move = tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
         let mut mp = 
             MovePicker::<false, true, true>::new(tt_move, self.get_killer_set(t), 0);
         let mut m = Move::NULL;
@@ -1184,7 +1185,7 @@ impl Board {
                 " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv}{endchr}",
                 info.seldepth.ply_to_horizon(),
                 t = uci::format_time(info.start_time.elapsed().as_millis()),
-                knps = nps / 1000,
+                knps = nps / 1_000,
                 knodes = total_nodes / 1_000,
             );
         }
