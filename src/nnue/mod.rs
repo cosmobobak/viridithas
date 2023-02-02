@@ -1,4 +1,4 @@
-use std::{array::from_mut, fs, mem, ops::{Deref, DerefMut}};
+use std::{array::from_mut, fs, mem::{self, MaybeUninit}, ops::{Deref, DerefMut}};
 
 use serde_json::Value;
 
@@ -215,12 +215,34 @@ pub struct NNUEState {
 }
 
 impl NNUEState {
-    pub const fn new() -> Self {
-        Self {
-            white_pov: Align([0; INPUT]),
-            black_pov: Align([0; INPUT]),
-            accumulators: [Accumulator::new(); ACC_STACK_SIZE],
-            current_acc: 0,
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
+        // at time of writing, this adds up to 396,296 bytes. 
+        // Putting this on the stack will almost certainly blow it, so we box it.
+        // Unfortunately, in debug mode `Box::new(Self::new())` will allocate on the stack
+        // and then memcpy it to the heap, so we have to do this manually.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+
+            let uninit = ptr.cast::<MaybeUninit<Self>>();
+
+            let white_pov = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).white_pov);
+            let black_pov = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).black_pov);
+            let accumulators = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).accumulators);
+            let current_acc = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).current_acc);
+
+            // write the bytes of the fields to zeroes:
+            std::ptr::write_bytes(white_pov, 0, 1);
+            std::ptr::write_bytes(black_pov, 0, 1);
+            std::ptr::write_bytes(accumulators, 0, 1);
+            std::ptr::write_bytes(current_acc, 0, 1);
+
+            Box::from_raw(ptr.cast())
         }
     }
 

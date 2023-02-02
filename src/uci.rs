@@ -2,25 +2,28 @@ use std::{
     fmt::Display,
     io::Write,
     num::{ParseFloatError, ParseIntError},
+    str::ParseBoolError,
     sync::{
-        atomic::{self, AtomicBool, AtomicUsize, Ordering, AtomicU8, AtomicI32},
+        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering},
         mpsc, Mutex,
     },
-    time::Instant, str::ParseBoolError,
+    time::Instant,
 };
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE},
+        evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE, is_game_theoretic_score, TB_WIN_SCORE},
         Board,
     },
-    definitions::{MEGABYTE, MAX_DEPTH},
+    definitions::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
+    piece::Colour,
     search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
+    tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION, piece::Colour, tablebases,
+    NAME, VERSION,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
@@ -128,7 +131,12 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
 }
 
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board, config: &SearchParams) -> Result<(), UciError> {
+fn parse_go(
+    text: &str,
+    info: &mut SearchInfo,
+    pos: &mut Board,
+    config: &SearchParams,
+) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -241,10 +249,7 @@ fn parse_setoption(
     parts
         .next()
         .map(|s| {
-            assert!(
-                s == "name",
-                "unexpected character after \"setoption\", expected \"name\", got {s}"
-            );
+            assert_eq!(s, "name", "expected \"name\" after \"setoption\", got {s}");
         })
         .ok_or_else(|| UnexpectedCommandTermination("no name after setoption".into()))?;
     let opt_name = parts.next().ok_or_else(|| {
@@ -379,11 +384,7 @@ impl Display for PrettyScoreFormatWrapper {
             501..=10000 => write!(f, "\u{001b}[38;5;4m")?, // much better for us, blue.
             _ => write!(f, "\u{001b}[38;5;219m")?, // probably a mate score, pink.
         }
-        let white_pov = if self.1 == Colour::WHITE {
-            self.0
-        } else {
-            -self.0
-        };
+        let white_pov = if self.1 == Colour::WHITE { self.0 } else { -self.0 };
         if is_mate_score(white_pov) {
             let plies_to_mate = MATE_SCORE - white_pov.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;
@@ -391,6 +392,13 @@ impl Display for PrettyScoreFormatWrapper {
                 write!(f, "   #{moves_to_mate:<2}")?;
             } else {
                 write!(f, "  #-{moves_to_mate:<2}")?;
+            }
+        } else if is_game_theoretic_score(white_pov) {
+            let plies_to_tb = TB_WIN_SCORE - white_pov.abs();
+            if white_pov > 0 {
+                write!(f, " +TB{plies_to_tb:<2}")?;
+            } else {
+                write!(f, " -TB{plies_to_tb:<2}")?;
             }
         } else {
             // six chars wide: one for the sign, two for the pawn values,

@@ -9,10 +9,6 @@ pub struct Accumulator<const HIDDEN: usize> {
 }
 
 impl<const HIDDEN: usize> Accumulator<HIDDEN> {
-    pub const fn new() -> Self {
-        Self { white: Align([0; HIDDEN]), black: Align([0; HIDDEN]) }
-    }
-
     pub fn init(&mut self, bias: &[i16; HIDDEN]) {
         self.white.copy_from_slice(bias);
         self.black.copy_from_slice(bias);

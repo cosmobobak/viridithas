@@ -83,7 +83,7 @@ NET ID | general concept                          | notes
     31 | net 30 data re-evaluated with net-30.    | -3.0 +/- 6.6, LOS: 18.7 %
        | feeling somewhat discouraged.            | vs net-30.
 --------------------------------------------------------------------------------------------------
-    32 | net 30 data, using MinusKelvin's         | ???? +/- ????, LOS: ????
+    32 | net XX data, using MinusKelvin's         | ???? +/- ????, LOS: ????
        | marlinflow fork, and his default hyper-  | vs net-XX.
        | parameters:                              |
        |  - LR = 0.001                            |
@@ -102,4 +102,11 @@ NET ID | general concept                          | notes
 --------------------------------------------------------------------------------------------------
     34 | same as net 33, but with 512 neurons.    | -31.8 +/- 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
        |                                          | vs net-33.
+--------------------------------------------------------------------------------------------------
+    35 | injected 320K net-34 self-play games     | ??? +/- ???, LOS: ???, DrawRatio: ???
+       | from uhobook into the net-31 data.       | vs net-33.
+       | same training setup as net 33.           |
+--------------------------------------------------------------------------------------------------
+    36 | net XX data with 40% WDL focus.          | ??? +/- ???, LOS: ???, DrawRatio: ???
+       |                                          | vs net-XX.
 --------------------------------------------------------------------------------------------------

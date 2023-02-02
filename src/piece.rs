@@ -213,6 +213,11 @@ impl Piece {
         self.v as usize
     }
 
+    pub const fn hist_table_offset(self) -> usize {
+        debug_assert!(!self.is_empty());
+        self.v as usize - 1
+    }
+
     pub const fn char(self) -> Option<char> {
         match self {
             Self::WP => Some('P'),
