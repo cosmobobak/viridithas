@@ -99,49 +99,6 @@ impl ThreadData {
         self.followup_history.get(tpa_piece, tpa_to).get(piece, to)
     }
 
-    /// Add a move to the counter-move history table.
-    pub fn add_countermove_history<const IS_GOOD: bool>(
-        &mut self,
-        pos: &Board,
-        m: Move,
-        depth: Depth,
-    ) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return;
-        };
-        if prev_move.is_null() || prev_move.is_ep() {
-            return;
-        }
-        let prev_to = prev_move.to();
-        // prev_move has already been played, so the piece on the target square
-        // is the piece that moved.
-        let prev_piece = pos.piece_at(prev_to);
-        let to = m.to();
-        let piece = pos.moved_piece(m);
-
-        let val = self.counter_move_history.get_mut(prev_piece, prev_to).get_mut(piece, to);
-        update_history::<IS_GOOD>(val, depth);
-    }
-
-    /// Get the counter-move history score for a move.
-    pub(super) fn countermove_history_score(&self, pos: &Board, m: Move) -> i16 {
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return 0;
-        };
-        if prev_move.is_null() || prev_move.is_ep() {
-            return 0;
-        }
-        let prev_to = prev_move.to();
-        // prev_move has already been played, so the piece on the target square
-        // is the piece that moved.
-        let prev_piece = pos.piece_at(prev_to);
-        let to = m.to();
-        let piece = pos.moved_piece(m);
-
-        self.counter_move_history.get(prev_piece, prev_to).get(piece, to)
-    }
-
     /// Add a move to the countermove history table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());

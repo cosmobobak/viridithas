@@ -360,7 +360,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 3], 1);
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], 1);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -419,12 +419,10 @@ impl Board {
         best_score
     }
 
-    /// Get the two killer moves for this position, and the best killer for the position two ply ago.
-    pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 3] {
+    /// Get the two killer moves for this position.
+    pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 2] {
         let ply = self.height();
-        let curr = t.killer_move_table[ply];
-        let prev = if ply > 2 { t.killer_move_table[ply - 2][0] } else { Move::NULL };
-        [curr[0], curr[1], prev]
+        t.killer_move_table[ply]
     }
 
     /// Perform alpha-beta minimax search.

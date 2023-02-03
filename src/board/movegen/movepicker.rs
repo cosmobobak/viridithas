@@ -26,7 +26,7 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT:
     index: usize,
     pub stage: Stage,
     tt_move: Move,
-    killers: [Move; 3],
+    killers: [Move; 2],
     pub skip_quiets: bool,
     see_threshold: i32
 }
@@ -37,7 +37,7 @@ pub type CapturePicker = MovePicker<true, true, false>;
 impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
     MovePicker<CAPTURES_ONLY, DO_SEE, ROOT>
 {
-    pub const fn new(tt_move: Move, killers: [Move; 3], see_threshold: i32) -> Self {
+    pub const fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
             index: 0,
@@ -122,7 +122,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         }
     }
 
-    pub fn score_quiet(killers: [Move; 3], t: &ThreadData, pos: &Board, m: Move) -> i32 {
+    pub fn score_quiet(killers: [Move; 2], t: &ThreadData, pos: &Board, m: Move) -> i32 {
         if killers[0] == m {
             FIRST_ORDER_KILLER_SCORE
         } else if killers[1] == m {
