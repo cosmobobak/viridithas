@@ -596,7 +596,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval < alpha - 400 - 320 * depth * depth {
+            if static_eval < alpha - 100 - 320 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
