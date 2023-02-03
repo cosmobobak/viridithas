@@ -16,9 +16,9 @@ pub struct ThreadData {
     pub nnue: Box<nnue::NNUEState>,
 
     pub history_table: HistoryTable,
-    pub followup_history: DoubleHistoryTable,
+    pub followup_history: Box<DoubleHistoryTable>,
+    pub counter_move_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
-    pub counter_move_history: DoubleHistoryTable,
 
     pub thread_id: usize,
 
@@ -41,9 +41,9 @@ impl ThreadData {
             multi_pv_excluded: Vec::new(),
             nnue: nnue::NNUEState::boxed(),
             history_table: HistoryTable::new(),
-            followup_history: DoubleHistoryTable::new(),
+            followup_history: DoubleHistoryTable::boxed(),
+            counter_move_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY],
-            counter_move_history: DoubleHistoryTable::new(),
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,

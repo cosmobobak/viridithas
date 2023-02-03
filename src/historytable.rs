@@ -1,5 +1,3 @@
-use std::array;
-
 use crate::{
     definitions::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::Piece,
@@ -61,21 +59,32 @@ impl HistoryTable {
 
 #[derive(Clone)]
 pub struct DoubleHistoryTable {
-    table: [[Box<HistoryTable>; BOARD_N_SQUARES]; 12],
+    table: [[HistoryTable; BOARD_N_SQUARES]; 12],
 }
 
 impl DoubleHistoryTable {
-    pub fn new() -> Self {
-        Self { table: array::from_fn(|_| array::from_fn(|_| Box::new(HistoryTable::new()))) }
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+
+            std::ptr::write_bytes(ptr, 0, 1);
+
+            Box::from_raw(ptr.cast::<Self>())
+        }
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().flatten().for_each(|x| x.clear());
+        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(|x| x.age_entries());
+        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
     }
 
     pub const fn get(&self, piece: Piece, sq: Square) -> &HistoryTable {
