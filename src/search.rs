@@ -94,6 +94,7 @@ impl Board {
         }
 
         // Probe the tablebases if we're in a TB position.
+        // TODO: make this behave nicely if we're in analysis mode.
         if let Some((best_move, score)) = tablebases::probe::get_tablebase_move(self) {
             let mut pv = PVariation::default();
             pv.load_from(best_move, &PVariation::default());
