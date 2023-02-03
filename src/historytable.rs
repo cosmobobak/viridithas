@@ -1,7 +1,6 @@
 use std::array;
 
 use crate::{
-    chessmove::Move,
     definitions::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::Piece,
 };
@@ -12,7 +11,11 @@ const fn history_bonus(depth: Depth) -> i32 {
     #![allow(clippy::cast_possible_truncation)]
     // i'm genuinely unsure if this is the same way ethereal does it, operator precedence is a trip.
     let depth = depth.round();
-    if depth > 13 { 32 } else { 16 * depth * depth + 128 * max!(depth - 1, 0) }
+    if depth > 13 {
+        32
+    } else {
+        16 * depth * depth + 128 * max!(depth - 1, 0)
+    }
 }
 
 pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
@@ -83,36 +86,5 @@ impl DoubleHistoryTable {
     pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut HistoryTable {
         let pt = piece.hist_table_offset();
         &mut self.table[pt][sq.index()]
-    }
-}
-
-#[derive(Clone)]
-pub struct MoveTable {
-    table: Vec<Move>,
-}
-
-impl MoveTable {
-    pub const fn new() -> Self {
-        Self { table: Vec::new() }
-    }
-
-    pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table.resize(BOARD_N_SQUARES * 12, Move::NULL);
-        } else {
-            self.table.fill(Move::NULL);
-        }
-    }
-
-    pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
-        let pt = piece.hist_table_offset();
-        let sq = sq.index();
-        self.table[pt * BOARD_N_SQUARES + sq] = m;
-    }
-
-    pub fn get(&self, piece: Piece, sq: Square) -> Move {
-        let pt = piece.hist_table_offset();
-        let sq = sq.index();
-        self.table[pt * BOARD_N_SQUARES + sq]
     }
 }
