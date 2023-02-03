@@ -766,8 +766,7 @@ impl Board {
                 // only captures are automatically SEE'd in the movepicker,
                 // so we need to SEE quiets here.
                 // TODO: check if using SEE is broken due to the fact we've already made the move.
-                let is_good_see =
-                    if is_quiet { self.static_exchange_eval(m, -1) } else { is_winning_capture };
+                let is_good_see = is_quiet || is_winning_capture;
                 extension = Depth::from(is_good_see);
             };
             if extension > ONE_PLY * 2 {
