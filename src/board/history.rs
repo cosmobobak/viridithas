@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, MAX_DEPTH},
+    definitions::{depth::Depth, Undo, MAX_DEPTH},
     historytable::update_history,
     piece::Piece,
     threadlocal::ThreadData,
@@ -107,8 +107,9 @@ impl ThreadData {
         depth: Depth,
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(one_ply_ago) = pos.history.len().checked_sub(1) else { return };
-        let prev_move = pos.history[one_ply_ago].m;
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return;
+        };
         if prev_move.is_null() || prev_move.is_ep() {
             return;
         }
@@ -119,17 +120,15 @@ impl ThreadData {
         let to = m.to();
         let piece = pos.moved_piece(m);
 
-        let val = self
-            .counter_move_history
-            .get_mut(prev_piece, prev_to)
-            .get_mut(piece, to);
+        let val = self.counter_move_history.get_mut(prev_piece, prev_to).get_mut(piece, to);
         update_history::<IS_GOOD>(val, depth);
     }
 
     /// Get the counter-move history score for a move.
     pub(super) fn countermove_history_score(&self, pos: &Board, m: Move) -> i16 {
-        let Some(one_ply_ago) = pos.history.len().checked_sub(1) else { return 0 };
-        let prev_move = pos.history[one_ply_ago].m;
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return 0;
+        };
         if prev_move.is_null() || prev_move.is_ep() {
             return 0;
         }
@@ -141,6 +140,35 @@ impl ThreadData {
         let piece = pos.moved_piece(m);
 
         self.counter_move_history.get(prev_piece, prev_to).get(piece, to)
+    }
+
+    /// Add a move to the countermove history table.
+    pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return;
+        };
+        if prev_move.is_null() {
+            return;
+        }
+        let prev_to = prev_move.to();
+        let prev_piece = pos.piece_at(prev_to);
+
+        self.counter_move_table.add(prev_piece, prev_to, m);
+    }
+
+    /// Get the countermove history score for a move.
+    pub(super) fn is_countermove(&self, pos: &Board, m: Move) -> bool {
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return false;
+        };
+        if prev_move == Move::NULL {
+            return false;
+        }
+        let prev_to = prev_move.to();
+        let prev_piece = pos.piece_at(prev_to);
+
+        self.counter_move_table.get(prev_piece, prev_to) == m
     }
 
     /// Add a killer move.

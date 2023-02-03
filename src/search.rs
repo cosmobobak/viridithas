@@ -865,6 +865,7 @@ impl Board {
             let bm_quiet = !self.is_tactical(best_move);
             if bm_quiet {
                 t.insert_killer(self, best_move);
+                t.insert_countermove(self, best_move);
                 self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the quiet moves that came before the best move.
