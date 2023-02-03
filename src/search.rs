@@ -501,8 +501,6 @@ impl Board {
             }
 
             // mate-distance pruning.
-            // doesn't actually add strength, but it makes viri better at solving puzzles.
-            // approach taken from Ethereal.
             let r_alpha = alpha.max(mated_in(height));
             let r_beta = beta.min(mate_in(height + 1));
             if r_alpha >= r_beta {
@@ -598,7 +596,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval < alpha - 394 - 290 * depth * depth {
+            if static_eval < alpha - 400 - 320 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
