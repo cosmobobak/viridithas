@@ -593,6 +593,16 @@ impl Board {
 
         // whole-node pruning techniques:
         if !ROOT && !PV && !in_check && excluded.is_null() {
+            // razoring.
+            // if the static eval is too low, check if qsearch can beat alpha.
+            // if it can't, we can prune the node.
+            if static_eval < alpha - 394 - 290 * depth * depth {
+                let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
+                if v < alpha {
+                    return v;
+                }
+            }
+
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
