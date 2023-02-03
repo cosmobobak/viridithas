@@ -10,7 +10,6 @@ use super::{MoveList, MoveListEntry};
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
 const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
-const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 const THIRD_ORDER_KILLER_SCORE: i32 = 1_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
@@ -128,16 +127,14 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             FIRST_ORDER_KILLER_SCORE
         } else if killers[1] == m {
             SECOND_ORDER_KILLER_SCORE
-        } else if t.is_countermove(pos, m) {
-            // move that refuted the previous move
-            COUNTER_MOVE_SCORE
         } else if killers[2] == m {
             // killer from two moves ago
             THIRD_ORDER_KILLER_SCORE
         } else {
             let history = t.history_score(pos, m);
             let followup_history = t.followup_history_score(pos, m);
-            i32::from(history + followup_history)
+            let countermove_history = t.countermove_history_score(pos, m);
+            i32::from(history + followup_history + countermove_history)
         }
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
-    historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
+    historytable::{DoubleHistoryTable, HistoryTable},
     nnue, piece::Colour, search::PVariation,
 };
 
@@ -18,7 +18,7 @@ pub struct ThreadData {
     pub history_table: HistoryTable,
     pub followup_history: DoubleHistoryTable,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
-    pub counter_move_table: MoveTable,
+    pub counter_move_history: DoubleHistoryTable,
 
     pub thread_id: usize,
 
@@ -43,7 +43,7 @@ impl ThreadData {
             history_table: HistoryTable::new(),
             followup_history: DoubleHistoryTable::new(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY],
-            counter_move_table: MoveTable::new(),
+            counter_move_history: DoubleHistoryTable::new(),
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,
@@ -78,8 +78,8 @@ impl ThreadData {
     pub fn alloc_tables(&mut self) {
         self.history_table.clear();
         self.followup_history.clear();
+        self.counter_move_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());
@@ -88,8 +88,8 @@ impl ThreadData {
     pub fn setup_tables_for_search(&mut self) {
         self.history_table.age_entries();
         self.followup_history.age_entries();
+        self.counter_move_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);
-        self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());

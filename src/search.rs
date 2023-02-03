@@ -767,6 +767,7 @@ impl Board {
                 // extend checks with SEE > 0
                 // only captures are automatically SEE'd in the movepicker,
                 // so we need to SEE quiets here.
+                // TODO: check if using SEE is broken due to the fact we've already made the move.
                 let is_good_see =
                     if is_quiet { self.static_exchange_eval(m, -1) } else { is_winning_capture };
                 extension = Depth::from(is_good_see);
@@ -864,7 +865,6 @@ impl Board {
             let bm_quiet = !self.is_tactical(best_move);
             if bm_quiet {
                 t.insert_killer(self, best_move);
-                t.insert_countermove(self, best_move);
                 self.update_history_metrics::<true>(t, best_move, depth);
 
                 // decrease the history of the quiet moves that came before the best move.
@@ -900,6 +900,7 @@ impl Board {
     ) {
         t.add_history::<IS_GOOD>(self, m, depth);
         t.add_followup_history::<IS_GOOD>(self, m, depth);
+        t.add_countermove_history::<IS_GOOD>(self, m, depth);
     }
 
     /// The reduced beta margin for Singular Extension.

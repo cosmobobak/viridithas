@@ -28,39 +28,6 @@ impl ThreadData {
         self.history_table.get(piece_moved, to)
     }
 
-    /// Add a move to the countermove history table.
-    pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let prev_move = if let Some(undo) = pos.history.last() {
-            undo.m
-        } else {
-            return;
-        };
-        if prev_move.is_null() {
-            return;
-        }
-        let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
-
-        self.counter_move_table.add(prev_piece, prev_to, m);
-    }
-
-    /// Get the countermove history score for a move.
-    pub(super) fn is_countermove(&self, pos: &Board, m: Move) -> bool {
-        let prev_move = if let Some(undo) = pos.history.last() {
-            undo.m
-        } else {
-            return false;
-        };
-        if prev_move == Move::NULL {
-            return false;
-        }
-        let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
-
-        self.counter_move_table.get(prev_piece, prev_to) == m
-    }
-
     /// Add a move to the follow-up history table.
     pub fn add_followup_history<const IS_GOOD: bool>(
         &mut self,
@@ -130,6 +97,50 @@ impl ThreadData {
         let piece = pos.moved_piece(m);
 
         self.followup_history.get(tpa_piece, tpa_to).get(piece, to)
+    }
+
+    /// Add a move to the counter-move history table.
+    pub fn add_countermove_history<const IS_GOOD: bool>(
+        &mut self,
+        pos: &Board,
+        m: Move,
+        depth: Depth,
+    ) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let Some(one_ply_ago) = pos.history.len().checked_sub(1) else { return };
+        let prev_move = pos.history[one_ply_ago].m;
+        if prev_move.is_null() || prev_move.is_ep() {
+            return;
+        }
+        let prev_to = prev_move.to();
+        // prev_move has already been played, so the piece on the target square
+        // is the piece that moved.
+        let prev_piece = pos.piece_at(prev_to);
+        let to = m.to();
+        let piece = pos.moved_piece(m);
+
+        let val = self
+            .counter_move_history
+            .get_mut(prev_piece, prev_to)
+            .get_mut(piece, to);
+        update_history::<IS_GOOD>(val, depth);
+    }
+
+    /// Get the counter-move history score for a move.
+    pub(super) fn countermove_history_score(&self, pos: &Board, m: Move) -> i16 {
+        let Some(one_ply_ago) = pos.history.len().checked_sub(1) else { return 0 };
+        let prev_move = pos.history[one_ply_ago].m;
+        if prev_move.is_null() || prev_move.is_ep() {
+            return 0;
+        }
+        let prev_to = prev_move.to();
+        // prev_move has already been played, so the piece on the target square
+        // is the piece that moved.
+        let prev_piece = pos.piece_at(prev_to);
+        let to = m.to();
+        let piece = pos.moved_piece(m);
+
+        self.counter_move_history.get(prev_piece, prev_to).get(piece, to)
     }
 
     /// Add a killer move.
