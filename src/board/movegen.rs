@@ -219,7 +219,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -282,15 +282,18 @@ impl Board {
     }
 
     pub fn generate_captures(&self, move_list: &mut MoveList) {
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_captures_for::<true>(move_list);
         } else {
             self.generate_captures_for::<false>(move_list);
         }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -342,14 +345,17 @@ impl Board {
     }
 
     pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_castling_moves_for::<true>(move_list);
         } else {
             self.generate_castling_moves_for::<false>(move_list);
         }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
-    pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
         const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
@@ -406,7 +412,7 @@ impl Board {
         }
     }
 
-    pub fn _attackers_mask(&self, sq: Square, side: Colour, blockers: u64) -> u64 {
+    fn _attackers_mask(&self, sq: Square, side: Colour, blockers: u64) -> u64 {
         let mut attackers = 0;
         if side == Colour::WHITE {
             let our_pawns = self.pieces.pawns::<true>();
