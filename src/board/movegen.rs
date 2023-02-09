@@ -219,7 +219,7 @@ impl Board {
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -282,15 +282,18 @@ impl Board {
     }
 
     pub fn generate_captures(&self, move_list: &mut MoveList) {
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_captures_for::<true>(move_list);
         } else {
             self.generate_captures_for::<false>(move_list);
         }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -342,14 +345,17 @@ impl Board {
     }
 
     pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_castling_moves_for::<true>(move_list);
         } else {
             self.generate_castling_moves_for::<false>(move_list);
         }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
-    pub fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
         const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
@@ -404,57 +410,5 @@ impl Board {
                 ));
             }
         }
-    }
-
-    pub fn _attackers_mask(&self, sq: Square, side: Colour, blockers: u64) -> u64 {
-        let mut attackers = 0;
-        if side == Colour::WHITE {
-            let our_pawns = self.pieces.pawns::<true>();
-            let west_attacks = our_pawns.north_west_one();
-            let east_attacks = our_pawns.north_east_one();
-            let pawn_attacks = west_attacks | east_attacks;
-            attackers |= pawn_attacks;
-        } else {
-            let our_pawns = self.pieces.pawns::<false>();
-            let west_attacks = our_pawns.south_west_one();
-            let east_attacks = our_pawns.south_east_one();
-            let pawn_attacks = west_attacks | east_attacks;
-            attackers |= pawn_attacks;
-        }
-
-        let our_knights = if side == Colour::WHITE {
-            self.pieces.knights::<true>()
-        } else {
-            self.pieces.knights::<false>()
-        };
-
-        let knight_attacks = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE) & our_knights;
-        attackers |= knight_attacks;
-
-        let our_diag_pieces = if side == Colour::WHITE {
-            self.pieces.bishopqueen::<true>()
-        } else {
-            self.pieces.bishopqueen::<false>()
-        };
-
-        let diag_attacks = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers) & our_diag_pieces;
-        attackers |= diag_attacks;
-
-        let our_orth_pieces = if side == Colour::WHITE {
-            self.pieces.rookqueen::<true>()
-        } else {
-            self.pieces.rookqueen::<false>()
-        };
-
-        let orth_attacks = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers) & our_orth_pieces;
-        attackers |= orth_attacks;
-
-        let our_king =
-            if side == Colour::WHITE { self.pieces.king::<true>() } else { self.pieces.king::<false>() };
-
-        let king_attacks = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE) & our_king;
-        attackers |= king_attacks;
-
-        attackers
     }
 }

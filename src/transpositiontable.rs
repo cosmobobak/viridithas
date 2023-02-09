@@ -69,8 +69,7 @@ pub struct TTEntry {
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
 }
 
-#[allow(dead_code)]
-const TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
+const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
 
 impl TTEntry {
     pub const NULL: Self = Self {
