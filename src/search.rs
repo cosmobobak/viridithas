@@ -52,15 +52,16 @@ use self::parameters::SearchParams;
 
 const ASPIRATION_WINDOW: i32 = 20;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
-const RAZORING_MARGIN: i32 = 300;
 const RFP_MARGIN: i32 = 70;
 const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -19;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_1: i32 = 90;
 const FUTILITY_COEFF_0: i32 = 76;
+const FUTILITY_COEFF_1: i32 = 90;
+const RAZORING_COEFF_0: i32 = 394;
+const RAZORING_COEFF_1: i32 = 290;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
@@ -596,7 +597,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval < alpha - 394 - 290 * depth * depth {
+            if static_eval < alpha - sp.razoring_coeff_0 - sp.razoring_coeff_1 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
