@@ -347,6 +347,9 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         for _ in 0..12 {
             let res = board.make_random_move::<true>(&mut rng, &mut thread_data);
             if res.is_none() {
+                if options.log_level > 2 {
+                    println!("Reached a position with no legal moves, skipping...");
+                }
                 continue 'generation_main_loop;
             }
         }
