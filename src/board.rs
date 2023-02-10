@@ -8,6 +8,8 @@ use std::{
     sync::Once,
 };
 
+use rand::rngs::ThreadRng;
+use rand::prelude::SliceRandom;
 use regex::Regex;
 
 use crate::{
@@ -37,7 +39,7 @@ use crate::{
     piece::{Piece, Colour, PieceType}, search::PVariation,
 };
 
-use self::{evaluation::score::S, movegen::bitboards::BitBoard};
+use self::{evaluation::score::S, movegen::{bitboards::{BitBoard, BB_LIGHT_SQUARES, BB_DARK_SQUARES}, MoveListEntry}};
 
 static SAN_REGEX_INIT: Once = Once::new();
 static mut SAN_REGEX: Option<Regex> = None;
@@ -212,7 +214,7 @@ impl Board {
         debug_assert!(self.castle_perm <= 15);
         hash_castling(&mut key, self.castle_perm);
 
-        debug_assert!(self.fifty_move_counter < 100);
+        debug_assert!(self.fifty_move_counter <= 100);
 
         key
     }
@@ -1120,6 +1122,16 @@ impl Board {
         }
     }
 
+    pub fn make_random_move<const NNUE: bool>(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
+        let mut ml = MoveList::new();
+        self.generate_moves(&mut ml);
+        let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
+            return None;
+        };
+        self.make_move::<NNUE>(*mov, t);
+        Some(*mov)
+    }
+
     pub fn last_move_was_nullmove(&self) -> bool {
         if let Some(Undo { m, .. }) = self.history.last() {
             m.is_null()
@@ -1451,6 +1463,110 @@ impl Board {
     pub const fn fifty_move_counter(&self) -> u8 {
         self.fifty_move_counter
     }
+
+    pub const fn has_insufficient_material<const IS_WHITE: bool>(&self) -> bool {
+        if (self.pieces.pawns::<IS_WHITE>() | self.pieces.rooks::<IS_WHITE>() | self.pieces.queens::<IS_WHITE>()) != 0 {
+            return false;
+        }
+
+        if self.pieces.knights::<IS_WHITE>() != 0 {
+            // this approach renders KNNvK as *not* being insufficient material.
+            // this is because the losing side can in theory help the winning side
+            // into a checkmate, despite it being impossible to /force/ mate.
+            let kings = self.pieces.king::<true>() | self.pieces.king::<false>();
+            let queens = self.pieces.queens::<true>() | self.pieces.queens::<false>();
+            return self.pieces.our_pieces::<IS_WHITE>().count_ones() <= 2
+                && (self.pieces.their_pieces::<IS_WHITE>() & !kings & !queens) == 0;
+        }
+
+        if self.pieces.bishops::<IS_WHITE>() != 0 {
+            let bishops = self.pieces.bishops::<true>() | self.pieces.bishops::<false>();
+            let same_color = (bishops & BB_DARK_SQUARES) == 0 || (bishops & BB_LIGHT_SQUARES) == 0;
+            let pawns = self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
+            let knights = self.pieces.knights::<true>() | self.pieces.knights::<false>();
+            return same_color && pawns == 0 && knights == 0;
+        }
+
+        true
+    }
+
+    pub const fn is_insufficient_material(&self) -> bool {
+        self.has_insufficient_material::<true>() && self.has_insufficient_material::<false>()
+    }
+
+    pub fn outcome(&mut self) -> GameOutcome {
+        if self.fifty_move_counter >= 100 {
+            return GameOutcome::DrawFiftyMoves;
+        }
+        let mut reps = 1;
+        for (key, undo) in
+            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
+        {
+            if *key == self.key {
+                reps += 1;
+                if reps == 3 {
+                    return GameOutcome::DrawRepetition;
+                }
+            }
+            // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
+            if undo.fifty_move_counter == 0 {
+                break;
+            }
+        }
+        if self.is_insufficient_material() {
+            return GameOutcome::DrawInsufficientMaterial
+        }
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        let mut legal_moves = false;
+        for &m in move_list.iter() {
+            if self.make_move_hce(m) {
+                self.unmake_move_hce();
+                legal_moves = true;
+                break;
+            }
+        }
+        if legal_moves {
+            GameOutcome::Ongoing
+        } else if self.in_check::<{ Self::US }>() {
+            match self.side {
+                Colour::WHITE => GameOutcome::BlackWinMate,
+                Colour::BLACK => GameOutcome::WhiteWinMate,
+                _ => unreachable!(),
+            }
+        } else {
+            GameOutcome::DrawStalemate
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameOutcome {
+    WhiteWinMate,
+    BlackWinMate,
+    WhiteWinTB,
+    BlackWinTB,
+    DrawFiftyMoves,
+    DrawRepetition,
+    DrawStalemate,
+    DrawInsufficientMaterial,
+    DrawTB,
+    Ongoing,
+}
+
+impl GameOutcome {
+    pub const fn as_float_str(self) -> &'static str {
+        match self {
+            Self::WhiteWinMate | Self::WhiteWinTB => "1.0",
+            Self::BlackWinMate | Self::BlackWinTB  => "0.0",
+            Self::DrawFiftyMoves
+            | Self::DrawRepetition
+            | Self::DrawStalemate
+            | Self::DrawInsufficientMaterial
+            | Self::DrawTB => "0.5",
+            Self::Ongoing => panic!("Game is not over!"),
+        }
+    }
 }
 
 impl Default for Board {
@@ -1481,7 +1597,6 @@ impl Display for Board {
 }
 
 mod tests {
-
     #[test]
     fn read_fen_validity() {
         use super::Board;
@@ -1496,6 +1611,38 @@ mod tests {
         board_2.check_validity().unwrap();
 
         assert_eq!(board_1, board_2);
+    }
+
+    #[test]
+    fn game_end_states() {
+        use super::Board;
+        use super::GameOutcome;
+        use crate::{chessmove::Move, definitions::Square};
+
+        crate::magic::initialise();
+
+        let mut fiftymove_draw = Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2").unwrap();
+        assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
+        let mut draw_repetition = Board::default();
+        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        draw_repetition.make_move_hce(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_hce(Move::new(Square::B8, Square::C6));
+        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        draw_repetition.make_move_hce(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_hce(Move::new(Square::C6, Square::B8));
+        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        draw_repetition.make_move_hce(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_hce(Move::new(Square::B8, Square::C6));
+        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        draw_repetition.make_move_hce(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_hce(Move::new(Square::C6, Square::B8));
+        assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
+        let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
+        assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);
+        let mut insufficient_material_bare_kings = Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
+        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::DrawInsufficientMaterial);
+        let mut insufficient_material_knights = Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
+        assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing); // using FIDE rules.
     }
 
     #[test]

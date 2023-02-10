@@ -165,6 +165,11 @@ impl BitBoard {
     }
 
     #[rustfmt::skip]
+    pub const fn our_pieces<const IS_WHITE: bool>(&self) -> u64 {
+        if IS_WHITE { self.white } else { self.black }
+    }
+
+    #[rustfmt::skip]
     pub const fn rookqueen<const IS_WHITE: bool>(&self) -> u64 {
         if IS_WHITE { self.w_rooks | self.w_queens } else { self.b_rooks | self.b_queens }
     }

@@ -62,6 +62,10 @@ impl MoveList {
     pub fn iter(&self) -> impl Iterator<Item = &Move> {
         self.moves[..self.count].iter().map(|e| &e.mov)
     }
+
+    pub fn as_slice(&self) -> &[MoveListEntry] {
+        &self.moves[..self.count]
+    }
 }
 
 impl Index<usize> for MoveList {

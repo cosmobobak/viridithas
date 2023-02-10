@@ -76,4 +76,7 @@ pub struct Cli {
     /// Visualise the NNUE.
     #[clap(long)]
     pub visnnue: bool,
+    /// Generate training data for the NNUE.
+    #[clap(long)]
+    pub datagen: bool,
 }

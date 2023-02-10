@@ -85,10 +85,12 @@ impl Board {
         thread_headers: &mut [ThreadData],
         tt: TTView,
     ) -> (i32, Move) {
+        self.zero_height();
         TB_HITS.store(0, Ordering::SeqCst);
         info.setup_for_search();
         for td in thread_headers.iter_mut() {
             td.setup_tables_for_search();
+            td.nnue.refresh_acc(self);
         }
 
         let legal_moves = self.legal_moves();

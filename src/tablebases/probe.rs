@@ -147,3 +147,17 @@ pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
 
     Some((result.best_move, score))
 }
+
+/// Gets the WDL of the position from the perspective of White.
+/// Returns [None] if data couldn't be obtained or the feature is disabled.
+pub fn get_wdl_white(board: &Board) -> Option<WDL> {
+    let probe_result = get_root_wdl_dtz(board)?;
+
+    let stm = board.turn() == Colour::WHITE;
+
+    match probe_result.wdl {
+        WDL::Win => Some(if stm { WDL::Win } else { WDL::Loss }),
+        WDL::Draw => Some(WDL::Draw),
+        WDL::Loss => Some(if stm { WDL::Loss } else { WDL::Win }),
+    }
+}

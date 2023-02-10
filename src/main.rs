@@ -29,6 +29,7 @@ mod texel;
 mod threadlocal;
 mod transpositiontable;
 mod uci;
+mod datagen;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -46,6 +47,10 @@ fn main() {
     }
 
     let cli = <cli::Cli as clap::Parser>::parse();
+
+    if cli.datagen {
+        return datagen::gen_data_main();
+    }
 
     let eparams =
         cli.eparams.map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
