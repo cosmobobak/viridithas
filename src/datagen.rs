@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::{PathBuf, Path}, str::FromStr, hash::Hash, fs::File, io::{BufWriter, Write}, sync::atomic::Ordering};
+use std::{fmt::Display, path::{PathBuf, Path}, str::FromStr, hash::Hash, fs::File, io::{BufWriter, Write}, sync::atomic::Ordering, time::Instant};
 
 use crate::{transpositiontable::TT, definitions::{MEGABYTE, depth::Depth}, board::{Board, GameOutcome, evaluation::is_game_theoretic_score}, threadlocal::ThreadData, searchinfo::{SearchInfo, SearchLimit}, tablebases::{self, probe::WDL}, uci::{SYZYGY_PATH, SYZYGY_ENABLED}};
 
@@ -186,6 +186,8 @@ pub fn gen_data_main() {
             handle.join().unwrap();
         }
     });
+
+    println!("Done!");
 }
 
 fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
@@ -296,6 +298,7 @@ fn show_boot_info(options: &DataGenOptions) {
 }
 
 fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
+    #![allow(clippy::cast_precision_loss)]
     // this rng is different between each thread 
     // (https://rust-random.github.io/book/guide-parallel.html)
     // so no worries :3
@@ -321,13 +324,14 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
 
     let mut single_game_buffer = Vec::new();
 
+    let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
         // report progress
         if id == 0 && game % 256 == 0 && options.log_level > 0 {
             let percentage = game * 100_000 / n_games_to_run;
-            #[allow(clippy::cast_precision_loss)]
             let percentage = percentage as f64 / 1000.0;
-            println!("Main thread: Generated {game} games ({percentage:.1}%)");
+            let time_per_game = start.elapsed().as_secs_f64() / game as f64;
+            eprintln!("Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
         }
         // reset everything: board, thread data, tt, search info
         board.set_startpos();
@@ -338,17 +342,17 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         output_buffer.flush().unwrap();
         // generate game
         if options.log_level > 1 {
-            println!("Generating game {game}...");
+            eprintln!("Generating game {game}...");
         }
         // STEP 1: make random moves for variety
         if options.log_level > 2 {
-            println!("Making random moves...");
+            eprintln!("Making random moves...");
         }
         for _ in 0..12 {
             let res = board.make_random_move::<true>(&mut rng, &mut thread_data);
             if res.is_none() {
                 if options.log_level > 2 {
-                    println!("Reached a position with no legal moves, skipping...");
+                    eprintln!("Reached a position with no legal moves, skipping...");
                 }
                 continue 'generation_main_loop;
             }
@@ -356,13 +360,13 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
         if options.log_level > 2 {
-            println!("Evaluating position...");
+            eprintln!("Evaluating position...");
         }
         let temp_limit = std::mem::replace(&mut info.limit, SearchLimit::Depth(Depth::new(12)));
         let (eval, _) = board.search_position::<true>(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         if eval.abs() > 1000 {
             if options.log_level > 2 {
-                println!("Position is too good or too bad, skipping...");
+                eprintln!("Position is too good or too bad, skipping...");
             }
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
@@ -370,7 +374,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         info.limit = temp_limit;
         // STEP 3: play out to the end of the game
         if options.log_level > 2 {
-            println!("Playing out game...");
+            eprintln!("Playing out game...");
         }
         let outcome = loop {
             let outcome = board.outcome();
@@ -392,18 +396,18 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
             board.make_move::<true>(best_move, &mut thread_data);
         };
         if options.log_level > 2 {
-            println!("Game is over, outcome: {outcome:?}");
+            eprintln!("Game is over, outcome: {outcome:?}");
         }
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
         let outcome = outcome.as_float_str();
         // STEP 4: write the game to the output file
         if options.log_level > 2 {
-            println!("Writing {} moves to output file...", single_game_buffer.len());
+            eprintln!("Writing {} moves to output file...", single_game_buffer.len());
         }
         for (i, (score, fen)) in single_game_buffer.iter().enumerate() {
             if is_game_theoretic_score(*score) {
                 if options.log_level > 2 {
-                    println!("Move {i} is game theoretic, skipping rest.");
+                    eprintln!("Move {i} is game theoretic, skipping rest.");
                 }
                 break;
             }
