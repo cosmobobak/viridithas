@@ -2,7 +2,7 @@ use clap::Parser;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(clippy::struct_excessive_bools, clippy::option_option)]
 pub struct Cli {
     /// A path to the evaluation parameters for the engine - if omitted, the default parameters will be used
     #[clap(long, value_parser, value_name = "PATH")]
@@ -78,5 +78,5 @@ pub struct Cli {
     pub visnnue: bool,
     /// Generate training data for the NNUE.
     #[clap(long)]
-    pub datagen: bool,
+    pub datagen: Option<Option<String>>,
 }

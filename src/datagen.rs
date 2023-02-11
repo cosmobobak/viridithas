@@ -1,6 +1,23 @@
-use std::{fmt::Display, path::{PathBuf, Path}, str::FromStr, hash::Hash, fs::File, io::{BufWriter, Write}, sync::atomic::Ordering, time::Instant};
+use std::{
+    fmt::Display,
+    fs::File,
+    hash::Hash,
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::atomic::Ordering,
+    time::Instant,
+};
 
-use crate::{transpositiontable::TT, definitions::{MEGABYTE, depth::Depth}, board::{Board, GameOutcome, evaluation::is_game_theoretic_score}, threadlocal::ThreadData, searchinfo::{SearchInfo, SearchLimit}, tablebases::{self, probe::WDL}, uci::{SYZYGY_PATH, SYZYGY_ENABLED}};
+use crate::{
+    board::{evaluation::is_game_theoretic_score, Board, GameOutcome},
+    definitions::{depth::Depth, MEGABYTE},
+    searchinfo::{SearchInfo, SearchLimit},
+    tablebases::{self, probe::WDL},
+    threadlocal::ThreadData,
+    transpositiontable::TT,
+    uci::{SYZYGY_ENABLED, SYZYGY_PATH},
+};
 
 /// Whether to limit searches by depth or by nodes.
 #[derive(Clone, Debug, Hash)]
@@ -14,8 +31,10 @@ impl FromStr for DataGenLimit {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         #![allow(clippy::cast_possible_truncation)]
-        let (limit_type, limit_value) = s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
-        let limit_value: u64 = limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
+        let (limit_type, limit_value) =
+            s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
+        let limit_value: u64 =
+            limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
         match limit_type {
             "depth" => {
                 if limit_value > i32::MAX as u64 {
@@ -49,11 +68,11 @@ struct DataGenOptions {
 impl DataGenOptions {
     /// Creates a new `DataGenOptions` instance.
     const fn new() -> Self {
-        Self { 
-            num_games: 100, 
-            num_threads: 1, 
-            tablebases_path: None, 
-            use_nnue: false, 
+        Self {
+            num_games: 100,
+            num_threads: 1,
+            tablebases_path: None,
+            use_nnue: false,
             limit: DataGenLimit::Depth(8),
             log_level: 1,
         }
@@ -99,15 +118,65 @@ impl DataGenOptions {
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}-{}-{}",
+            "{}g-{}t-{}-{}-{}",
             self.num_games,
-            if self.tablebases_path.is_some() { "tb" } else { "no-tb" },
+            self.num_threads,
+            self.tablebases_path.as_ref().map_or_else(
+                || "no-tb".into(),
+                |tablebases_path| tablebases_path.to_string_lossy()
+            ),
             if self.use_nnue { "nnue" } else { "hce" },
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
             }
         )
+    }
+}
+
+impl FromStr for DataGenOptions {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut options = Self::new();
+        let parts = s.split('-').collect::<Vec<_>>();
+        if parts.len() != 5 {
+            return Err(format!("Invalid options string: {s}"));
+        }
+        options.num_games = parts[0]
+            .strip_suffix('g')
+            .ok_or_else(|| format!("Invalid number of games: {}", parts[0]))?
+            .parse()
+            .map_err(|_| format!("Invalid number of games: {}", parts[0]))?;
+        options.num_threads = parts[1]
+            .strip_suffix('t')
+            .ok_or_else(|| format!("Invalid number of threads: {}", parts[1]))?
+            .parse()
+            .map_err(|_| format!("Invalid number of threads: {}", parts[1]))?;
+        if parts[2] != "no_tb" {
+            options.tablebases_path = Some(PathBuf::from(parts[2]));
+        }
+        options.use_nnue = parts[3] == "nnue";
+        let limit = match parts[4].chars().next() {
+            Some('d') => DataGenLimit::Depth(
+                parts[4]
+                    .strip_prefix('d')
+                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[4]))?
+                    .parse()
+                    .map_err(|_| format!("Invalid depth limit: {}", parts[4]))?,
+            ),
+            Some('n') => DataGenLimit::Nodes(
+                parts[4]
+                    .strip_prefix('n')
+                    .ok_or_else(|| format!("Invalid node limit: {}", parts[4]))?
+                    .parse()
+                    .map_err(|_| format!("Invalid node limit: {}", parts[4]))?,
+            ),
+            _ => return Err(format!("Invalid limit: {}", parts[4])),
+        };
+        options.limit = limit;
+        options.log_level = 0;
+        Ok(options)
     }
 }
 
@@ -124,10 +193,14 @@ impl Display for DataGenOptions {
                 .map_or_else(|| "None".into(), |path| path.to_string_lossy())
         )?;
         writeln!(f, " |> use_nnue: {}", self.use_nnue)?;
-        writeln!(f, " |> limit: {}", match self.limit {
-            DataGenLimit::Depth(depth) => format!("depth {depth}"),
-            DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
-        })?;
+        writeln!(
+            f,
+            " |> limit: {}",
+            match self.limit {
+                DataGenLimit::Depth(depth) => format!("depth {depth}"),
+                DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
+            }
+        )?;
         writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
             writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
@@ -136,39 +209,44 @@ impl Display for DataGenOptions {
     }
 }
 
-pub fn gen_data_main() {
-    let mut options = DataGenOptions::new()
-        .num_games(100)
-        .num_threads(1)
-        .use_nnue(true);
-    show_boot_info(&options);
-    options = config_loop(options);
-    println!("Starting data generation with the following configuration:");
-    println!("{options}");
-    if options.num_games % options.num_threads != 0 {
-        println!("Warning: The number of games is not evenly divisible by the number of threads,");
-        println!("this will result in {} games being omitted.", options.num_games % options.num_threads);
+pub fn gen_data_main(cli_config: Option<&str>) {
+    let options: DataGenOptions = cli_config.map_or_else(|| {
+            let options = DataGenOptions::new();
+            show_boot_info(&options);
+            config_loop(options)
+        }, |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"));
+    if options.log_level > 0 {
+        println!("Starting data generation with the following configuration:");
+        println!("{options}");
+        if options.num_games % options.num_threads != 0 {
+            println!("Warning: The number of games is not evenly divisible by the number of threads,");
+            println!(
+                "this will result in {} games being omitted.",
+                options.num_games % options.num_threads
+            );
+        }
     }
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
         tablebases::probe::init(&tb_path);
         *SYZYGY_PATH.lock().unwrap() = tb_path.to_string();
         SYZYGY_ENABLED.store(true, Ordering::SeqCst);
-        println!("Syzygy tablebases enabled.");
+        if options.log_level > 0 {
+            println!("Syzygy tablebases enabled.");
+        }
     }
-    
+
     // create a new unique identifier for this generation run
     // this is used to create a unique directory for the data
-    // and to name the data files. 
+    // and to name the data files.
     // the ID is formed by taking the current date and time,
     // plus a compressed representation of the options struct.
-    let run_id = format!(
-        "run_{}_{}",
-        chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"),
-        options.summary()
-    );
-    println!("This run will be saved to the directory \"data/{run_id}\"");
-    println!("Each thread will save its data to a separate file in this directory.");
+    let run_id =
+        format!("run_{}_{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"), options.summary());
+    if options.log_level > 0 {
+        println!("This run will be saved to the directory \"data/{run_id}\"");
+        println!("Each thread will save its data to a separate file in this directory.");
+    }
 
     // create the directory for the data
     let data_dir = PathBuf::from("data").join(run_id);
@@ -187,7 +265,9 @@ pub fn gen_data_main() {
         }
     });
 
-    println!("Done!");
+    if options.log_level > 0 {
+        println!("Done!");
+    }
 }
 
 fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
@@ -205,7 +285,9 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
             break;
         }
         if command != "set" {
-            println!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            println!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            );
             continue;
         }
         let Some(param) = user_input.next() else {
@@ -287,19 +369,21 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
 }
 
 fn show_boot_info(options: &DataGenOptions) {
-    println!("Welcome to Viri's data generation tool!");
-    println!("This tool will generate self-play data for Viridithas.");
-    println!("You can configure the data generation process by setting the following parameters:");
-    println!("{options}");
-    println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
-    println!("(You have {} logical cores on your CPU)", num_cpus::get());
-    println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
-    println!("To start data generation, type \"start\"");
+    if options.log_level > 0 {
+        println!("Welcome to Viri's data generation tool!");
+        println!("This tool will generate self-play data for Viridithas.");
+        println!("You can configure the data generation process by setting the following parameters:");
+        println!("{options}");
+        println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
+        println!("(You have {} logical cores on your CPU)", num_cpus::get());
+        println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
+        println!("To start data generation, type \"start\"");
+    }
 }
 
 fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
-    #![allow(clippy::cast_precision_loss)]
-    // this rng is different between each thread 
+    #![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
+    // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
     // so no worries :3
     let mut rng = rand::thread_rng();
@@ -363,7 +447,11 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
             eprintln!("Evaluating position...");
         }
         let temp_limit = std::mem::replace(&mut info.limit, SearchLimit::Depth(Depth::new(12)));
-        let (eval, _) = board.search_position::<true>(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+        let (eval, _) = board.search_position::<true>(
+            &mut info,
+            std::array::from_mut(&mut thread_data),
+            tt.view(),
+        );
         if eval.abs() > 1000 {
             if options.log_level > 2 {
                 eprintln!("Position is too good or too bad, skipping...");
@@ -387,11 +475,15 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
                         WDL::Win => GameOutcome::WhiteWinTB,
                         WDL::Loss => GameOutcome::BlackWinTB,
                         WDL::Draw => GameOutcome::DrawTB,
-                    }
+                    };
                 }
             }
             tt.increase_age();
-            let (score, best_move) = board.search_position::<true>(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+            let (score, best_move) = board.search_position::<true>(
+                &mut info,
+                std::array::from_mut(&mut thread_data),
+                tt.view(),
+            );
             single_game_buffer.push((score, board.fen()));
             board.make_move::<true>(best_move, &mut thread_data);
         };

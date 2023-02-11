@@ -48,8 +48,8 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
-    if cli.datagen {
-        return datagen::gen_data_main();
+    if let Some(config) = cli.datagen {
+        return datagen::gen_data_main(config.as_deref());
     }
 
     let eparams =
