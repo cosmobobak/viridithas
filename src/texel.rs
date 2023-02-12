@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    time::Instant,
+    time::Instant, sync::atomic::AtomicBool,
 };
 
 use rand::prelude::SliceRandom;
@@ -33,9 +33,10 @@ fn sigmoid(s: f64, k: f64) -> f64 {
 }
 
 fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) -> f64 {
+    let stopped = AtomicBool::new(false);
     let mut pv = PVariation::default();
     let mut pos = Board::default();
-    let mut info = SearchInfo::default();
+    let mut info = SearchInfo::new(&stopped);
     let mut tt = TT::new();
     tt.resize(MEGABYTE);
     let mut t = ThreadData::new(0);

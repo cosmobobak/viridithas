@@ -154,7 +154,6 @@ impl Board {
     }
 
     fn reset_everything_for_root_search(&mut self, info: &mut SearchInfo, thread_headers: &mut [ThreadData]) {
-        TB_HITS.store(0, Ordering::SeqCst);
         self.zero_height();
         info.setup_for_search();
         for td in thread_headers.iter_mut() {

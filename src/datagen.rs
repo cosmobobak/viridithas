@@ -5,7 +5,7 @@ use std::{
     io::{BufWriter, Write},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::atomic::Ordering,
+    sync::atomic::{Ordering, AtomicBool},
     time::Instant,
 };
 
@@ -392,13 +392,14 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
     thread_data.alloc_tables();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
+    let stopped = AtomicBool::new(false);
     let mut info = SearchInfo {
         print_to_stdout: false,
         limit: match options.limit {
             DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
             DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
         },
-        ..Default::default()
+        ..SearchInfo::new(&stopped)
     };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);

@@ -1,4 +1,4 @@
-use std::{path::Path, time::Instant};
+use std::{path::Path, time::Instant, sync::atomic::AtomicBool};
 
 use crate::{
     board::{
@@ -88,12 +88,12 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
             t.nnue.refresh_acc(&board);
             t.alloc_tables();
         }
-
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
             start_time: Instant::now(),
-            ..Default::default()
+            ..SearchInfo::new(&stopped)
         };
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);

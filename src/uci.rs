@@ -471,19 +471,18 @@ pub fn is_multipv() -> bool {
 
 #[allow(clippy::too_many_lines)]
 pub fn main_loop(params: EvalParams) {
+    unsafe {
+        set_eval_params(params);
+    }
+
     let mut pos = Board::default();
 
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
-    let mut info = SearchInfo::default();
-
-    unsafe {
-        set_eval_params(params);
-    }
-
+    let stopped = AtomicBool::new(false);
     let stdin = std::sync::Mutex::new(stdin_reader());
-
+    let mut info = SearchInfo::new(&stopped);
     info.set_stdin(&stdin);
 
     let mut thread_data = Vec::new();

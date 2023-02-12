@@ -72,7 +72,7 @@ pub struct SearchInfo<'a> {
     /// Signal to quit the search.
     pub quit: bool,
     /// Signal to stop the search.
-    pub stopped: &'static AtomicBool,
+    pub stopped: &'a AtomicBool,
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
     /// The number of fail-highs that occured on the first move searched.
@@ -87,15 +87,13 @@ pub struct SearchInfo<'a> {
     pub limit: SearchLimit,
 }
 
-static GLOBAL_STOPPED: AtomicBool = AtomicBool::new(false);
-
-impl Default for SearchInfo<'_> {
-    fn default() -> Self {
+impl<'a> SearchInfo<'a> {
+    pub fn new(stopped: &'a AtomicBool) -> Self {
         let out = Self {
             start_time: Instant::now(),
             nodes: 0,
             quit: false,
-            stopped: &GLOBAL_STOPPED,
+            stopped,
             failhigh: 0,
             failhigh_first: 0,
             seldepth: ZERO_PLY,
@@ -103,12 +101,10 @@ impl Default for SearchInfo<'_> {
             print_to_stdout: true,
             limit: SearchLimit::default(),
         };
-        debug_assert!(!out.stopped.load(Ordering::SeqCst));
+        assert!(!out.stopped.load(Ordering::SeqCst));
         out
     }
-}
 
-impl<'a> SearchInfo<'a> {
     pub fn setup_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
@@ -240,7 +236,7 @@ impl<'a> SearchInfo<'a> {
 
 mod tests {
     #![allow(unused_imports)]
-    use std::array;
+    use std::{array, sync::atomic::AtomicBool};
 
     use crate::{board::{Board, evaluation::{mate_in, mated_in}}, threadlocal::ThreadData, transpositiontable::TT, definitions::MEGABYTE, magic};
     use super::{SearchInfo, SearchLimit};
@@ -253,9 +249,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             limit: SearchLimit::mate_in(2),
-            ..SearchInfo::default()
+            ..SearchInfo::new(&stopped)
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -275,9 +272,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             limit: SearchLimit::mate_in(2),
-            ..SearchInfo::default()
+            ..SearchInfo::new(&stopped)
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -297,9 +295,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             limit: SearchLimit::mate_in(2),
-            ..SearchInfo::default()
+            ..SearchInfo::new(&stopped)
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -319,9 +318,10 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
         let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             limit: SearchLimit::mate_in(2),
-            ..SearchInfo::default()
+            ..SearchInfo::new(&stopped)
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);

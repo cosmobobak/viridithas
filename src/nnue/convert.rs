@@ -5,7 +5,7 @@ use std::{
     io::{self, BufRead, BufReader, BufWriter, Write},
     ops::Range,
     path::Path,
-    sync::atomic::{self, AtomicU64}, array,
+    sync::atomic::{self, AtomicU64, AtomicBool}, array,
 };
 
 use crate::{
@@ -56,10 +56,11 @@ fn batch_convert<const USE_NNUE: bool>(
         // no NNUE for generating training data.
         t.nnue.refresh_acc(&pos);
         tt.clear();
+        let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::Depth(Depth::new(depth)),
-            ..Default::default()
+            ..SearchInfo::new(&stopped)
         };
         let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {

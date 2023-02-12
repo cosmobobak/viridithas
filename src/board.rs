@@ -386,7 +386,7 @@ impl Board {
         if self.ep_sq == Square::NO_SQUARE {
             fen.push('-');
         } else {
-            fen.push_str(&self.ep_sq.to_string());
+            write!(fen, "{}", self.ep_sq).unwrap();
         }
         write!(fen, " {}", self.fifty_move_counter).unwrap();
         write!(fen, " {}", self.ply / 2 + 1).unwrap();
