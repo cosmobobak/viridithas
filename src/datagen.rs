@@ -72,7 +72,7 @@ impl DataGenOptions {
             num_games: 100,
             num_threads: 1,
             tablebases_path: None,
-            use_nnue: false,
+            use_nnue: true,
             limit: DataGenLimit::Depth(8),
             log_level: 1,
         }
@@ -175,7 +175,7 @@ impl FromStr for DataGenOptions {
             _ => return Err(format!("Invalid limit: {}", parts[4])),
         };
         options.limit = limit;
-        options.log_level = 0;
+        options.log_level = 1;
         Ok(options)
     }
 }
