@@ -281,7 +281,7 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
         std::io::stdin().read_line(&mut user_input).unwrap();
         let mut user_input = user_input.split_whitespace();
         let Some(command) = user_input.next() else { continue; };
-        if command == "start" {
+        if matches!(command, "start" | "go") {
             break;
         }
         if command != "set" {
@@ -377,7 +377,7 @@ fn show_boot_info(options: &DataGenOptions) {
         println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
         println!("(You have {} logical cores on your CPU)", num_cpus::get());
         println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
-        println!("To start data generation, type \"start\"");
+        println!("To start data generation, type \"start\" or \"go\".");
     }
 }
 
@@ -446,7 +446,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         if options.log_level > 2 {
             eprintln!("Evaluating position...");
         }
-        let temp_limit = std::mem::replace(&mut info.limit, SearchLimit::Depth(Depth::new(12)));
+        let temp_limit = std::mem::replace(&mut info.limit, SearchLimit::Depth(Depth::new(10)));
         let (eval, _) = board.search_position::<true>(
             &mut info,
             std::array::from_mut(&mut thread_data),
@@ -484,7 +484,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
                 std::array::from_mut(&mut thread_data),
                 tt.view(),
             );
-            single_game_buffer.push((score, board.fen()));
+            if !board.is_tactical(best_move) && !is_game_theoretic_score(score) && !board.in_check::<{ Board::US }>() {
+                // we only save FENs where the best move is not tactical (promotions or captures)
+                // and the score is not game theoretic (mate or TB-win),
+                // and the side to move is not in check.
+                single_game_buffer.push((score, board.fen()));
+            }
             board.make_move::<true>(best_move, &mut thread_data);
         };
         if options.log_level > 2 {
@@ -496,13 +501,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         if options.log_level > 2 {
             eprintln!("Writing {} moves to output file...", single_game_buffer.len());
         }
-        for (i, (score, fen)) in single_game_buffer.iter().enumerate() {
-            if is_game_theoretic_score(*score) {
-                if options.log_level > 2 {
-                    eprintln!("Move {i} is game theoretic, skipping rest.");
-                }
-                break;
-            }
+        for (score, fen) in &single_game_buffer {
             writeln!(output_buffer, "{fen} | {score} | {outcome}").unwrap();
         }
         single_game_buffer.clear();
