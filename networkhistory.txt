@@ -110,6 +110,10 @@ NET ID | general concept                          | notes
     36 | net 35 data with 40% WDL focus.          | 16.2 +/- 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
        |                                          | vs net-35.
 --------------------------------------------------------------------------------------------------
-    37 | net 36 data + 60M of the new datagen     | ???? +/- ????, LOS: ????, DrawRatio: ????
-       | FENs                                     | vs net-36.
+    37 | net 36 data + 60M of the new datagen     | -58.1 +/- 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
+       | FENs.                                    | vs net-36.
+       | datagen does not handle noisy-move       |
+       | exclusion, and might have other issues,  |
+       | so this isn't a damning refutation of    |
+       | the new datagen.                         |
 --------------------------------------------------------------------------------------------------
