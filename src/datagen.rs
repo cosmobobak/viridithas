@@ -285,17 +285,17 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
             break;
         }
         if command != "set" {
-            println!(
-                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\""
             );
             continue;
         }
         let Some(param) = user_input.next() else {
-            println!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
             continue;
         };
         let Some(value) = user_input.next() else {
-            println!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
             continue;
         };
         match param {
@@ -303,48 +303,52 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 if let Ok(num_games) = value.parse::<usize>() {
                     options = options.num_games(num_games);
                 } else {
-                    println!("Invalid value for num_games, must be a positive integer");
+                    eprintln!("Invalid value for num_games, must be a positive integer");
                 }
             }
             "num_threads" => {
                 if let Ok(num_threads) = value.parse::<usize>() {
+                    let num_cpus = num_cpus::get();
+                    if num_threads > num_cpus {
+                        eprintln!("Warning: The specified number of threads ({num_threads}) is greater than the number of available CPUs ({num_cpus}).");
+                    }
                     options = options.num_threads(num_threads);
                 } else {
-                    println!("Invalid value for num_threads, must be a positive integer");
+                    eprintln!("Invalid value for num_threads, must be a positive integer");
                 }
             }
             "tablebases_path" => {
                 if let Ok(tablebases_path) = value.parse::<PathBuf>() {
                     if !tablebases_path.exists() {
-                        println!("Warning: The specified tablebases path does not exist.");
+                        eprintln!("Warning: The specified tablebases path does not exist.");
                     } else if !tablebases_path.is_dir() {
-                        println!("Warning: The specified tablebases path is not a directory.");
+                        eprintln!("Warning: The specified tablebases path is not a directory.");
                     } else {
                         options = options.tablebases_path(tablebases_path);
                     }
                 } else {
-                    println!("Invalid value for tablebases_path, must be a valid path");
+                    eprintln!("Invalid value for tablebases_path, must be a valid path");
                 }
             }
             "use_nnue" => {
                 if let Ok(use_nnue) = value.parse::<bool>() {
                     options = options.use_nnue(use_nnue);
                 } else {
-                    println!("Invalid value for use_nnue, must be a boolean");
+                    eprintln!("Invalid value for use_nnue, must be a boolean");
                 }
             }
             "limit" => {
                 let Some(limit_size) = user_input.next() else {
-                    println!("Trying to set limit, but only one token was provided");
-                    println!("Usage: \"set limit <TYPE> <NUMBER>\"");
-                    println!("Example: \"set limit depth 8\" (sets the limit to 8 plies)");
+                    eprintln!("Trying to set limit, but only one token was provided");
+                    eprintln!("Usage: \"set limit <TYPE> <NUMBER>\"");
+                    eprintln!("Example: \"set limit depth 8\" (sets the limit to 8 plies)");
                     continue;
                 };
                 let full_limit = value.to_string() + " " + limit_size;
                 let limit = match full_limit.parse::<DataGenLimit>() {
                     Ok(limit) => limit,
                     Err(e) => {
-                        println!("{e}");
+                        eprintln!("{e}");
                         continue;
                     }
                 };
@@ -354,14 +358,14 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 let log_level = match value.parse::<u8>() {
                     Ok(log_level) => log_level,
                     Err(e) => {
-                        println!("{e}");
+                        eprintln!("{e}");
                         continue;
                     }
                 };
                 options = options.log_level(log_level);
             }
             other => {
-                println!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
+                eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
             }
         }
     }
