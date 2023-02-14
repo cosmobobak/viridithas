@@ -421,6 +421,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
             let percentage = percentage as f64 / 1000.0;
             let time_per_game = start.elapsed().as_secs_f64() / game as f64;
             eprintln!("Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
+            std::io::stderr().flush().unwrap();
         }
         // reset everything: board, thread data, tt, search info
         board.set_startpos();
