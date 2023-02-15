@@ -473,8 +473,6 @@ impl Board {
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
 
-        pv.length = 0;
-
         depth = depth.max(ZERO_PLY);
 
         if (info.nodes & 1023) == 1023 && info.check_up() {
@@ -773,6 +771,8 @@ impl Board {
                 );
 
                 if move_picker.stage == Stage::Done {
+                    // got a multi-cut bubbled up from the singularity search
+                    // so we just bail out.
                     return Self::singularity_margin(tt_value, depth);
                 }
             } else if !ROOT && self.in_check::<{ Self::US }>() {
