@@ -348,7 +348,7 @@ impl Board {
             return draw_score(info.nodes);
         }
 
-        let in_check = t.checks[height];
+        let in_check = self.in_check::<{ Self::US }>();
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
@@ -411,8 +411,6 @@ impl Board {
                 return at_least;
             }
 
-            let gives_check = self.in_check::<{ Self::US }>();
-            t.checks[height + 1] = gives_check;
             let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
             self.unmake_move::<NNUE>(t);
 
@@ -470,13 +468,10 @@ impl Board {
 
         let mut lpv = PVariation::default();
 
-        let height = self.height();
-        let in_check = t.checks[height];
+        let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
-
-        pv.length = 0;
 
         depth = depth.max(ZERO_PLY);
 
@@ -485,6 +480,7 @@ impl Board {
         }
 
         let key = self.hashkey();
+        let height = self.height();
         let sp = get_search_params();
 
         debug_assert_eq!(height == 0, ROOT);
@@ -760,8 +756,6 @@ impl Board {
                     && matches!(tt_hit.tt_bound, Bound::Lower | Bound::Exact)
             });
 
-            let gives_check = self.in_check::<{ Self::US }>();
-            t.checks[height + 1] = gives_check;
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
@@ -781,7 +775,7 @@ impl Board {
                     // so we just bail out.
                     return Self::singularity_margin(tt_value, depth);
                 }
-            } else if !ROOT && gives_check {
+            } else if !ROOT && self.in_check::<{ Self::US }>() {
                 // self.in_check::<{ Self::US }>() determines if the opponent is in check,
                 // because we have already made the move.
                 let do_extension = is_quiet || is_winning_capture;
