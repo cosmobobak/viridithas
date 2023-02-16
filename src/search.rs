@@ -773,6 +773,8 @@ impl Board {
                 );
 
                 if move_picker.stage == Stage::Done {
+                    // got a multi-cut bubbled up from the singularity search
+                    // so we just bail out.
                     return Self::singularity_margin(tt_value, depth);
                 }
             } else if !ROOT && self.in_check::<{ Self::US }>() {

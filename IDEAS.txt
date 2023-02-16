@@ -26,3 +26,5 @@ MINOR:
 - replace countermoves with countermove history
 - deeper conthists
 - adapt frozenight's data generation for viri.
+- add good logging for everything using `log` + `env_logger`
+-- datagen, data reanalysis, maybe other things
