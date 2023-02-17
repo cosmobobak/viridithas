@@ -1,5 +1,3 @@
-use std::mem::MaybeUninit;
-
 use crate::{
     definitions::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::Piece, chessmove::Move,
@@ -67,15 +65,15 @@ pub struct DoubleHistoryTable {
 impl DoubleHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
-            let ptr = std::alloc::alloc(layout).cast::<MaybeUninit<Self>>();
+            let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-
-            std::ptr::write_bytes(ptr, 0, 1);
-
             Box::from_raw(ptr.cast())
         }
     }
