@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use crate::{
     definitions::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::Piece, chessmove::Move,
@@ -67,14 +69,14 @@ impl DoubleHistoryTable {
         #![allow(clippy::cast_ptr_alignment)]
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
-            let ptr = std::alloc::alloc(layout);
+            let ptr = std::alloc::alloc(layout).cast::<MaybeUninit<Self>>();
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
 
             std::ptr::write_bytes(ptr, 0, 1);
 
-            Box::from_raw(ptr.cast::<Self>())
+            Box::from_raw(ptr.cast())
         }
     }
 
