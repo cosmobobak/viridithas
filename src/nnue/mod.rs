@@ -1,4 +1,4 @@
-use std::{array::from_mut, fs, mem::{self, MaybeUninit}, ops::{Deref, DerefMut}};
+use std::{array::from_mut, fs, mem, ops::{Deref, DerefMut}};
 
 use serde_json::Value;
 
@@ -222,26 +222,19 @@ impl NNUEState {
         // Putting this on the stack will almost certainly blow it, so we box it.
         // Unfortunately, in debug mode `Box::new(Self::new())` will allocate on the stack
         // and then memcpy it to the heap, so we have to do this manually.
+
+        // SAFETY: NNUEState has four fields:
+        // {white,black}_pov, which are just arrays of ints, for whom the all-zeroes bitpattern is valid.
+        // current_acc, which is just an int, so the all-zeroes bitpattern is valid.
+        // accumulators, which is an array of Accumulator<SIZE>.
+        //     Accumulator is a struct containing a pair of arrays of ints, so this field is safe for zeroing too.
+        // As all fields can be safely initialised to all zeroes, the following code is sound.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
-            let ptr = std::alloc::alloc(layout);
+            let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-
-            let uninit = ptr.cast::<MaybeUninit<Self>>();
-
-            let white_pov = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).white_pov);
-            let black_pov = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).black_pov);
-            let accumulators = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).accumulators);
-            let current_acc = std::ptr::addr_of_mut!((*(*uninit).as_mut_ptr()).current_acc);
-
-            // write the bytes of the fields to zeroes:
-            std::ptr::write_bytes(white_pov, 0, 1);
-            std::ptr::write_bytes(black_pov, 0, 1);
-            std::ptr::write_bytes(accumulators, 0, 1);
-            std::ptr::write_bytes(current_acc, 0, 1);
-
             Box::from_raw(ptr.cast())
         }
     }
