@@ -1302,8 +1302,8 @@ impl Board {
             }
         }
         let to_sq = m.to();
-        let is_capture = !self.piece_at(to_sq).is_empty();
         let moved_piece = self.piece_at(m.from());
+        let is_capture = !self.piece_at(to_sq).is_empty() || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::PAWN if !is_capture => "",
             PieceType::PAWN => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
