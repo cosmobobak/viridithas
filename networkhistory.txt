@@ -117,3 +117,10 @@ NET ID | general concept                          | notes
        | so this isn't a damning refutation of    |
        | the new datagen.                         |
 --------------------------------------------------------------------------------------------------
+    38 | 80M net-36 FENs (run_2023-02-14_23-54-59 | -87.6 +/- 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
+       | _1000000g-64t-tb5-nnue-d8)               | vs net-36.
+       | This was with "fixed" datagen, which is  |
+       | disheartening.                           |
+--------------------------------------------------------------------------------------------------
+    39 | Those 80M FENs + the net-36 training     | 24.8 +/- 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
+       | data.                                    |
