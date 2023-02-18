@@ -124,4 +124,6 @@ NET ID | general concept                          | notes
 --------------------------------------------------------------------------------------------------
     39 | Those 80M FENs + the net-36 training     | 24.8 +/- 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
        | data.                                    | vs net-36.
+       | Seems like the main problem was the      |
+       | simple reduction in dataset size.        |
 --------------------------------------------------------------------------------------------------
