@@ -331,7 +331,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if (info.nodes & 1023) == 1023 && info.check_up() {
+        if info.nodes % 1024 == 0 && info.check_up() {
             return 0;
         }
 
@@ -477,7 +477,7 @@ impl Board {
 
         depth = depth.max(ZERO_PLY);
 
-        if (info.nodes & 1023) == 1023 && info.check_up() {
+        if info.nodes % 1024 == 0 && info.check_up() {
             return 0;
         }
 
