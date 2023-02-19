@@ -5,7 +5,7 @@ use std::{
     io::{BufWriter, Write},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::atomic::{Ordering, AtomicBool},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Instant,
 };
 
@@ -18,6 +18,8 @@ use crate::{
     transpositiontable::TT,
     uci::{SYZYGY_ENABLED, SYZYGY_PATH},
 };
+
+static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
 
 /// Whether to limit searches by depth or by nodes.
 #[derive(Clone, Debug, Hash)]
@@ -210,6 +212,8 @@ impl Display for DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
+    FENS_GENERATED.store(0, Ordering::SeqCst);
+
     let options: DataGenOptions = cli_config.map_or_else(|| {
             let options = DataGenOptions::new();
             show_boot_info(&options);
@@ -219,7 +223,9 @@ pub fn gen_data_main(cli_config: Option<&str>) {
         println!("Starting data generation with the following configuration:");
         println!("{options}");
         if options.num_games % options.num_threads != 0 {
-            println!("Warning: The number of games is not evenly divisible by the number of threads,");
+            println!(
+                "Warning: The number of games is not evenly divisible by the number of threads,"
+            );
             println!(
                 "this will result in {} games being omitted.",
                 options.num_games % options.num_threads
@@ -376,7 +382,9 @@ fn show_boot_info(options: &DataGenOptions) {
     if options.log_level > 0 {
         println!("Welcome to Viri's data generation tool!");
         println!("This tool will generate self-play data for Viridithas.");
-        println!("You can configure the data generation process by setting the following parameters:");
+        println!(
+            "You can configure the data generation process by setting the following parameters:"
+        );
         println!("{options}");
         println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
         println!("(You have {} logical cores on your CPU)", num_cpus::get());
@@ -416,11 +424,27 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
         // report progress
-        if id == 0 && game % 256 == 0 && options.log_level > 0 {
+        if id == 0 && game % 64 == 0 && options.log_level > 0 && game > 0 {
             let percentage = game * 100_000 / n_games_to_run;
             let percentage = percentage as f64 / 1000.0;
             let time_per_game = start.elapsed().as_secs_f64() / game as f64;
-            eprintln!("Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
+            eprintln!("[+] Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
+            eprintln!(
+                " |> FENs generated: {fens} (FENs/sec = {fps:.2})",
+                fens = FENS_GENERATED.load(Ordering::Relaxed),
+                fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
+            );
+            eprintln!(
+                " |> Estimated time remaining: {time_remaining:.2} seconds.",
+                time_remaining = (n_games_to_run - game) as f64 * time_per_game
+            );
+            let est_completion_date = chrono::Local::now()
+                .checked_add_signed(chrono::Duration::seconds(
+                    (n_games_to_run - game) as i64 * time_per_game as i64,
+                ))
+                .unwrap();
+            let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
+            eprintln!(" |> Estimated completion time: {time_completion}");
             std::io::stderr().flush().unwrap();
         }
         // reset everything: board, thread data, tt, search info
@@ -490,7 +514,10 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
                 std::array::from_mut(&mut thread_data),
                 tt.view(),
             );
-            if !board.is_tactical(best_move) && !is_game_theoretic_score(score) && !board.in_check::<{ Board::US }>() {
+            if !board.is_tactical(best_move)
+                && !is_game_theoretic_score(score)
+                && !board.in_check::<{ Board::US }>()
+            {
                 // we only save FENs where the best move is not tactical (promotions or captures)
                 // and the score is not game theoretic (mate or TB-win),
                 // and the side to move is not in check.
@@ -510,6 +537,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         for (score, fen) in &single_game_buffer {
             writeln!(output_buffer, "{fen} | {score} | {outcome}").unwrap();
         }
+        FENS_GENERATED.fetch_add(single_game_buffer.len() as u64, Ordering::SeqCst);
         single_game_buffer.clear();
     }
 }
