@@ -28,28 +28,6 @@ enum DataGenLimit {
     Nodes(u64),
 }
 
-impl FromStr for DataGenLimit {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        #![allow(clippy::cast_possible_truncation)]
-        let (limit_type, limit_value) =
-            s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
-        let limit_value: u64 =
-            limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
-        match limit_type {
-            "depth" => {
-                if limit_value > i32::MAX as u64 {
-                    return Err(format!("Depth limit too large: {limit_value}"));
-                }
-                Ok(Self::Depth(limit_value as i32))
-            }
-            "nodes" => Ok(Self::Nodes(limit_value)),
-            _ => Err(format!("Invalid limit type: {limit_type}")),
-        }
-    }
-}
-
 /// Configuration options for Viri's self-play data generation.
 #[derive(Clone, Debug, Hash)]
 struct DataGenOptions {
@@ -80,43 +58,6 @@ impl DataGenOptions {
         }
     }
 
-    /// Sets the number of games to generate.
-    const fn num_games(mut self, num_games: usize) -> Self {
-        self.num_games = num_games;
-        self
-    }
-
-    /// Sets the number of threads to use.
-    const fn num_threads(mut self, num_threads: usize) -> Self {
-        self.num_threads = num_threads;
-        self
-    }
-
-    /// Sets the path to the directory containing syzygy endgame tablebases.
-    #[allow(clippy::missing_const_for_fn)]
-    fn tablebases_path(mut self, tablebases_path: PathBuf) -> Self {
-        self.tablebases_path = Some(tablebases_path);
-        self
-    }
-
-    /// Sets whether to use NNUE evaluation during self-play.
-    const fn use_nnue(mut self, use_nnue: bool) -> Self {
-        self.use_nnue = use_nnue;
-        self
-    }
-
-    /// Sets the depth or node limit for searches.
-    const fn limit(mut self, limit: DataGenLimit) -> Self {
-        self.limit = limit;
-        self
-    }
-
-    /// Sets the log level
-    const fn log_level(mut self, log_level: u8) -> Self {
-        self.log_level = log_level;
-        self
-    }
-
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
@@ -133,81 +74,6 @@ impl DataGenOptions {
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
             }
         )
-    }
-}
-
-impl FromStr for DataGenOptions {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut options = Self::new();
-        let parts = s.split('-').collect::<Vec<_>>();
-        if parts.len() != 5 {
-            return Err(format!("Invalid options string: {s}"));
-        }
-        options.num_games = parts[0]
-            .strip_suffix('g')
-            .ok_or_else(|| format!("Invalid number of games: {}", parts[0]))?
-            .parse()
-            .map_err(|_| format!("Invalid number of games: {}", parts[0]))?;
-        options.num_threads = parts[1]
-            .strip_suffix('t')
-            .ok_or_else(|| format!("Invalid number of threads: {}", parts[1]))?
-            .parse()
-            .map_err(|_| format!("Invalid number of threads: {}", parts[1]))?;
-        if parts[2] != "no_tb" {
-            options.tablebases_path = Some(PathBuf::from(parts[2]));
-        }
-        options.use_nnue = parts[3] == "nnue";
-        let limit = match parts[4].chars().next() {
-            Some('d') => DataGenLimit::Depth(
-                parts[4]
-                    .strip_prefix('d')
-                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[4]))?
-                    .parse()
-                    .map_err(|_| format!("Invalid depth limit: {}", parts[4]))?,
-            ),
-            Some('n') => DataGenLimit::Nodes(
-                parts[4]
-                    .strip_prefix('n')
-                    .ok_or_else(|| format!("Invalid node limit: {}", parts[4]))?
-                    .parse()
-                    .map_err(|_| format!("Invalid node limit: {}", parts[4]))?,
-            ),
-            _ => return Err(format!("Invalid limit: {}", parts[4])),
-        };
-        options.limit = limit;
-        options.log_level = 1;
-        Ok(options)
-    }
-}
-
-impl Display for DataGenOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[+] Current data generation configuration:")?;
-        writeln!(f, " |> num_games: {}", self.num_games)?;
-        writeln!(f, " |> num_threads: {}", self.num_threads)?;
-        writeln!(
-            f,
-            " |> tablebases_path: {}",
-            self.tablebases_path
-                .as_ref()
-                .map_or_else(|| "None".into(), |path| path.to_string_lossy())
-        )?;
-        writeln!(f, " |> use_nnue: {}", self.use_nnue)?;
-        writeln!(
-            f,
-            " |> limit: {}",
-            match self.limit {
-                DataGenLimit::Depth(depth) => format!("depth {depth}"),
-                DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
-            }
-        )?;
-        writeln!(f, " |> log_level: {}", self.log_level)?;
-        if self.tablebases_path.is_none() {
-            writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
-        }
-        Ok(())
     }
 }
 
@@ -273,123 +139,6 @@ pub fn gen_data_main(cli_config: Option<&str>) {
 
     if options.log_level > 0 {
         println!("Done!");
-    }
-}
-
-fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
-    #![allow(clippy::option_if_let_else)]
-    println!();
-    let mut user_input = String::new();
-    loop {
-        print!(">>> ");
-        std::io::stdout().flush().unwrap();
-        user_input.clear();
-        std::io::stdin().read_line(&mut user_input).unwrap();
-        let mut user_input = user_input.split_whitespace();
-        let Some(command) = user_input.next() else { continue; };
-        if matches!(command, "start" | "go") {
-            break;
-        }
-        if command != "set" {
-            eprintln!(
-                "Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\""
-            );
-            continue;
-        }
-        let Some(param) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
-            continue;
-        };
-        let Some(value) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
-            continue;
-        };
-        match param {
-            "num_games" => {
-                if let Ok(num_games) = value.parse::<usize>() {
-                    options = options.num_games(num_games);
-                } else {
-                    eprintln!("Invalid value for num_games, must be a positive integer");
-                }
-            }
-            "num_threads" => {
-                if let Ok(num_threads) = value.parse::<usize>() {
-                    let num_cpus = num_cpus::get();
-                    if num_threads > num_cpus {
-                        eprintln!("Warning: The specified number of threads ({num_threads}) is greater than the number of available CPUs ({num_cpus}).");
-                    }
-                    options = options.num_threads(num_threads);
-                } else {
-                    eprintln!("Invalid value for num_threads, must be a positive integer");
-                }
-            }
-            "tablebases_path" => {
-                if let Ok(tablebases_path) = value.parse::<PathBuf>() {
-                    if !tablebases_path.exists() {
-                        eprintln!("Warning: The specified tablebases path does not exist.");
-                    } else if !tablebases_path.is_dir() {
-                        eprintln!("Warning: The specified tablebases path is not a directory.");
-                    } else {
-                        options = options.tablebases_path(tablebases_path);
-                    }
-                } else {
-                    eprintln!("Invalid value for tablebases_path, must be a valid path");
-                }
-            }
-            "use_nnue" => {
-                if let Ok(use_nnue) = value.parse::<bool>() {
-                    options = options.use_nnue(use_nnue);
-                } else {
-                    eprintln!("Invalid value for use_nnue, must be a boolean");
-                }
-            }
-            "limit" => {
-                let Some(limit_size) = user_input.next() else {
-                    eprintln!("Trying to set limit, but only one token was provided");
-                    eprintln!("Usage: \"set limit <TYPE> <NUMBER>\"");
-                    eprintln!("Example: \"set limit depth 8\" (sets the limit to 8 plies)");
-                    continue;
-                };
-                let full_limit = value.to_string() + " " + limit_size;
-                let limit = match full_limit.parse::<DataGenLimit>() {
-                    Ok(limit) => limit,
-                    Err(e) => {
-                        eprintln!("{e}");
-                        continue;
-                    }
-                };
-                options = options.limit(limit);
-            }
-            "log_level" => {
-                let log_level = match value.parse::<u8>() {
-                    Ok(log_level) => log_level,
-                    Err(e) => {
-                        eprintln!("{e}");
-                        continue;
-                    }
-                };
-                options = options.log_level(log_level);
-            }
-            other => {
-                eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
-            }
-        }
-    }
-    options
-}
-
-fn show_boot_info(options: &DataGenOptions) {
-    if options.log_level > 0 {
-        println!("Welcome to Viri's data generation tool!");
-        println!("This tool will generate self-play data for Viridithas.");
-        println!(
-            "You can configure the data generation process by setting the following parameters:"
-        );
-        println!("{options}");
-        println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
-        println!("(You have {} logical cores on your CPU)", num_cpus::get());
-        println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
-        println!("To start data generation, type \"start\" or \"go\".");
     }
 }
 
@@ -539,5 +288,219 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
         }
         FENS_GENERATED.fetch_add(single_game_buffer.len() as u64, Ordering::SeqCst);
         single_game_buffer.clear();
+    }
+}
+
+fn show_boot_info(options: &DataGenOptions) {
+    if options.log_level > 0 {
+        println!("Welcome to Viri's data generation tool!");
+        println!("This tool will generate self-play data for Viridithas.");
+        println!(
+            "You can configure the data generation process by setting the following parameters:"
+        );
+        println!("{options}");
+        println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
+        println!("(You have {} logical cores on your CPU)", num_cpus::get());
+        println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
+        println!("To start data generation, type \"start\" or \"go\".");
+    }
+}
+
+fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
+    #![allow(clippy::option_if_let_else)]
+    println!();
+    let mut user_input = String::new();
+    loop {
+        print!(">>> ");
+        std::io::stdout().flush().unwrap();
+        user_input.clear();
+        std::io::stdin().read_line(&mut user_input).unwrap();
+        let mut user_input = user_input.split_whitespace();
+        let Some(command) = user_input.next() else { continue; };
+        if matches!(command, "start" | "go") {
+            break;
+        }
+        if command != "set" {
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\""
+            );
+            continue;
+        }
+        let Some(param) = user_input.next() else {
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            continue;
+        };
+        let Some(value) = user_input.next() else {
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            continue;
+        };
+        match param {
+            "num_games" => {
+                if let Ok(num_games) = value.parse::<usize>() {
+                    options.num_games = num_games;
+                } else {
+                    eprintln!("Invalid value for num_games, must be a positive integer");
+                }
+            }
+            "num_threads" => {
+                if let Ok(num_threads) = value.parse::<usize>() {
+                    let num_cpus = num_cpus::get();
+                    if num_threads > num_cpus {
+                        eprintln!("Warning: The specified number of threads ({num_threads}) is greater than the number of available CPUs ({num_cpus}).");
+                    }
+                    options.num_threads = num_threads;
+                } else {
+                    eprintln!("Invalid value for num_threads, must be a positive integer");
+                }
+            }
+            "tablebases_path" => {
+                if let Ok(tablebases_path) = value.parse::<PathBuf>() {
+                    if !tablebases_path.exists() {
+                        eprintln!("Warning: The specified tablebases path does not exist.");
+                    } else if !tablebases_path.is_dir() {
+                        eprintln!("Warning: The specified tablebases path is not a directory.");
+                    } else {
+                        options.tablebases_path = Some(tablebases_path);
+                    }
+                } else {
+                    eprintln!("Invalid value for tablebases_path, must be a valid path");
+                }
+            }
+            "use_nnue" => {
+                if let Ok(use_nnue) = value.parse::<bool>() {
+                    options.use_nnue = use_nnue;
+                } else {
+                    eprintln!("Invalid value for use_nnue, must be a boolean");
+                }
+            }
+            "limit" => {
+                let Some(limit_size) = user_input.next() else {
+                    eprintln!("Trying to set limit, but only one token was provided");
+                    eprintln!("Usage: \"set limit <TYPE> <NUMBER>\"");
+                    eprintln!("Example: \"set limit depth 8\" (sets the limit to 8 plies)");
+                    continue;
+                };
+                let full_limit = value.to_string() + " " + limit_size;
+                let limit = match full_limit.parse::<DataGenLimit>() {
+                    Ok(limit) => limit,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        continue;
+                    }
+                };
+                options.limit = limit;
+            }
+            "log_level" => {
+                let log_level = match value.parse::<u8>() {
+                    Ok(log_level) => log_level,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        continue;
+                    }
+                };
+                options.log_level = log_level;
+            }
+            other => {
+                eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
+            }
+        }
+    }
+    options
+}
+
+impl FromStr for DataGenOptions {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut options = Self::new();
+        let parts = s.split('-').collect::<Vec<_>>();
+        if parts.len() != 5 {
+            return Err(format!("Invalid options string: {s}"));
+        }
+        options.num_games = parts[0]
+            .strip_suffix('g')
+            .ok_or_else(|| format!("Invalid number of games: {}", parts[0]))?
+            .parse()
+            .map_err(|_| format!("Invalid number of games: {}", parts[0]))?;
+        options.num_threads = parts[1]
+            .strip_suffix('t')
+            .ok_or_else(|| format!("Invalid number of threads: {}", parts[1]))?
+            .parse()
+            .map_err(|_| format!("Invalid number of threads: {}", parts[1]))?;
+        if parts[2] != "no_tb" {
+            options.tablebases_path = Some(PathBuf::from(parts[2]));
+        }
+        options.use_nnue = parts[3] == "nnue";
+        let limit = match parts[4].chars().next() {
+            Some('d') => DataGenLimit::Depth(
+                parts[4]
+                    .strip_prefix('d')
+                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[4]))?
+                    .parse()
+                    .map_err(|_| format!("Invalid depth limit: {}", parts[4]))?,
+            ),
+            Some('n') => DataGenLimit::Nodes(
+                parts[4]
+                    .strip_prefix('n')
+                    .ok_or_else(|| format!("Invalid node limit: {}", parts[4]))?
+                    .parse()
+                    .map_err(|_| format!("Invalid node limit: {}", parts[4]))?,
+            ),
+            _ => return Err(format!("Invalid limit: {}", parts[4])),
+        };
+        options.limit = limit;
+        options.log_level = 1;
+        Ok(options)
+    }
+}
+
+impl Display for DataGenOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "[+] Current data generation configuration:")?;
+        writeln!(f, " |> num_games: {}", self.num_games)?;
+        writeln!(f, " |> num_threads: {}", self.num_threads)?;
+        writeln!(
+            f,
+            " |> tablebases_path: {}",
+            self.tablebases_path
+                .as_ref()
+                .map_or_else(|| "None".into(), |path| path.to_string_lossy())
+        )?;
+        writeln!(f, " |> use_nnue: {}", self.use_nnue)?;
+        writeln!(
+            f,
+            " |> limit: {}",
+            match self.limit {
+                DataGenLimit::Depth(depth) => format!("depth {depth}"),
+                DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
+            }
+        )?;
+        writeln!(f, " |> log_level: {}", self.log_level)?;
+        if self.tablebases_path.is_none() {
+            writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
+        }
+        Ok(())
+    }
+}
+
+impl FromStr for DataGenLimit {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        #![allow(clippy::cast_possible_truncation)]
+        let (limit_type, limit_value) =
+            s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
+        let limit_value: u64 =
+            limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
+        match limit_type {
+            "depth" => {
+                if limit_value > i32::MAX as u64 {
+                    return Err(format!("Depth limit too large: {limit_value}"));
+                }
+                Ok(Self::Depth(limit_value as i32))
+            }
+            "nodes" => Ok(Self::Nodes(limit_value)),
+            _ => Err(format!("Invalid limit type: {limit_type}")),
+        }
     }
 }
