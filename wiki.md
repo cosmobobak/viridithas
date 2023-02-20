@@ -187,6 +187,7 @@ if depth <= RFP_DEPTH && static_eval - RFP_MARGIN * depth > beta {
     return static_eval;
 }
 ```
+### Other Pruning Techniques
 #### Late Move Reductions
 It is generally assumed during search that the first moves tried are the best ones. As such, the more moves that are tried in a position, the less fruitful a deep search is likely to be. To make use of this insight, moves tried later in a position will be searched to a reduced depth. As with PVS, a re-search must be done if a reduced depth search finds a better score, but this improves search efficiency on average.
 
