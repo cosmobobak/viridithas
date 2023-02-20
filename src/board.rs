@@ -4,12 +4,12 @@ pub mod movegen;
 pub mod validation;
 
 use std::{
-    fmt::{Debug, Display, Formatter, Write, self},
+    fmt::{self, Debug, Display, Formatter, Write},
     sync::Once,
 };
 
-use rand::rngs::ThreadRng;
 use rand::prelude::SliceRandom;
+use rand::rngs::ThreadRng;
 use regex::Regex;
 
 use crate::{
@@ -25,21 +25,28 @@ use crate::{
     },
     chessmove::Move,
     definitions::{
-        File,
+        CheckState, File,
         Rank::{self, RANK_3, RANK_6},
-        Square, Undo, BKCA, BQCA, WKCA, WQCA, CheckState,
+        Square, Undo, BKCA, BQCA, WKCA, WQCA,
     },
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::{ACTIVATE, DEACTIVATE},
+    piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
+    search::PVariation,
     threadlocal::ThreadData,
-    piece::{Piece, Colour, PieceType}, search::PVariation,
 };
 
-use self::{evaluation::score::S, movegen::{bitboards::{BitBoard, BB_LIGHT_SQUARES, BB_DARK_SQUARES}, MoveListEntry}};
+use self::{
+    evaluation::score::S,
+    movegen::{
+        bitboards::{BitBoard, BB_DARK_SQUARES, BB_LIGHT_SQUARES},
+        MoveListEntry,
+    },
+};
 
 static SAN_REGEX_INIT: Once = Once::new();
 static mut SAN_REGEX: Option<Regex> = None;
@@ -315,14 +322,18 @@ impl Board {
         self.set_from_fen(Self::STARTING_FEN)
             .expect("for some reason, STARTING_FEN is now broken.");
         debug_assert_eq!(
-            self.material[Colour::WHITE.index()].0, self.material[Colour::BLACK.index()].0,
+            self.material[Colour::WHITE.index()].0,
+            self.material[Colour::BLACK.index()].0,
             "mg_material is not equal, white: {}, black: {}",
-            self.material[Colour::WHITE.index()].0, self.material[Colour::BLACK.index()].0
+            self.material[Colour::WHITE.index()].0,
+            self.material[Colour::BLACK.index()].0
         );
         debug_assert_eq!(
-            self.material[Colour::WHITE.index()].1, self.material[Colour::BLACK.index()].1,
+            self.material[Colour::WHITE.index()].1,
+            self.material[Colour::BLACK.index()].1,
             "eg_material is not equal, white: {}, black: {}",
-            self.material[Colour::WHITE.index()].1, self.material[Colour::BLACK.index()].1
+            self.material[Colour::WHITE.index()].1,
+            self.material[Colour::BLACK.index()].1
         );
         debug_assert_eq!(
             self.pst_vals.0, 0,
@@ -520,25 +531,29 @@ impl Board {
         }
 
         // knights
-        let knight_attacks_from_this_square = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
+        let knight_attacks_from_this_square =
+            bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
         if our_knights & knight_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // bishops, queens
-        let diag_attacks_from_this_square = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+        let diag_attacks_from_this_square =
+            bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
         if our_diags & diag_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+        let ortho_attacks_from_this_square =
+            bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
         if our_orthos & ortho_attacks_from_this_square != BB_NONE {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
+        let king_attacks_from_this_square =
+            bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
         if our_king & king_attacks_from_this_square != BB_NONE {
             return true;
         }
@@ -573,7 +588,9 @@ impl Board {
             return false;
         }
 
-        if moved_piece.piece_type() != PieceType::PAWN && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
+        if moved_piece.piece_type() != PieceType::PAWN
+            && (is_pawn_double_push || m.is_ep() || m.is_promo())
+        {
             return false;
         }
 
@@ -634,10 +651,18 @@ impl Board {
         // - the king ends up in check (not checked here)
 
         let (target_castling_perm, occ_mask, from_sq, next_sq) = match (self.side, to) {
-            (Colour::WHITE, Square::C1) => (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1),
-            (Colour::WHITE, Square::G1) => (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1),
-            (Colour::BLACK, Square::C8) => (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8),
-            (Colour::BLACK, Square::G8) => (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8),
+            (Colour::WHITE, Square::C1) => {
+                (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1)
+            }
+            (Colour::WHITE, Square::G1) => {
+                (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1)
+            }
+            (Colour::BLACK, Square::C8) => {
+                (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8)
+            }
+            (Colour::BLACK, Square::G8) => {
+                (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8)
+            }
             (_, _) => return false,
         };
         if target_castling_perm == 0 {
@@ -1037,16 +1062,36 @@ impl Board {
         } else if m.is_castle() {
             match to {
                 Square::C1 => {
-                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::A1, Square::D1);
+                    t.nnue.efficiently_update_from_move(
+                        PieceType::ROOK,
+                        colour,
+                        Square::A1,
+                        Square::D1,
+                    );
                 }
                 Square::C8 => {
-                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::A8, Square::D8);
+                    t.nnue.efficiently_update_from_move(
+                        PieceType::ROOK,
+                        colour,
+                        Square::A8,
+                        Square::D8,
+                    );
                 }
                 Square::G1 => {
-                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::H1, Square::F1);
+                    t.nnue.efficiently_update_from_move(
+                        PieceType::ROOK,
+                        colour,
+                        Square::H1,
+                        Square::F1,
+                    );
                 }
                 Square::G8 => {
-                    t.nnue.efficiently_update_from_move(PieceType::ROOK, colour, Square::H8, Square::F8);
+                    t.nnue.efficiently_update_from_move(
+                        PieceType::ROOK,
+                        colour,
+                        Square::H8,
+                        Square::F8,
+                    );
                 }
                 _ => {
                     panic!("Invalid castle move");
@@ -1071,38 +1116,50 @@ impl Board {
     }
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
+        #[cfg(debug_assertions)]
         let m = self.history.last().unwrap().m;
         self.unmake_move_hce();
-        let piece = self.moved_piece(m).piece_type();
-        let from = m.from();
-        let to = m.to();
-        let colour = self.turn();
         t.nnue.pop_acc();
-        if m.is_ep() {
-            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour.flip(), ep_sq);
-        } else if m.is_castle() {
-            match to {
-                Square::C1 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D1, Square::A1),
-                Square::G8 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F8, Square::H8),
-                Square::C8 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D8, Square::A8),
-                Square::G1 => t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F1, Square::H1),
-                _ => {
-                    panic!("Invalid castle move");
+        #[cfg(debug_assertions)]
+        {
+            let piece = self.moved_piece(m).piece_type();
+            let from = m.from();
+            let to = m.to();
+            let colour = self.turn();
+            if m.is_ep() {
+                let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+                t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour.flip(), ep_sq);
+            } else if m.is_castle() {
+                match to {
+                    Square::C1 => {
+                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D1, Square::A1)
+                    }
+                    Square::G8 => {
+                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F8, Square::H8)
+                    }
+                    Square::C8 => {
+                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D8, Square::A8)
+                    }
+                    Square::G1 => {
+                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F1, Square::H1)
+                    }
+                    _ => {
+                        panic!("Invalid castle move");
+                    }
                 }
             }
-        }
-        if m.is_promo() {
-            let promo = m.promotion_type();
-            debug_assert!(promo.legal_promo());
-            t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
-            t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour, from);
-        } else {
-            t.nnue.update_pov_move(piece, colour, to, from);
-        }
-        let capture = self.captured_piece(m);
-        if capture != Piece::EMPTY {
-            t.nnue.update_pov_manual::<ACTIVATE>(capture.piece_type(), colour.flip(), to);
+            if m.is_promo() {
+                let promo = m.promotion_type();
+                debug_assert!(promo.legal_promo());
+                t.nnue.update_pov_manual::<DEACTIVATE>(promo, colour, to);
+                t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour, from);
+            } else {
+                t.nnue.update_pov_move(piece, colour, to, from);
+            }
+            let capture = self.captured_piece(m);
+            if capture != Piece::EMPTY {
+                t.nnue.update_pov_manual::<ACTIVATE>(capture.piece_type(), colour.flip(), to);
+            }
         }
     }
 
@@ -1122,7 +1179,11 @@ impl Board {
         }
     }
 
-    pub fn make_random_move<const NNUE: bool>(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
+    pub fn make_random_move<const NNUE: bool>(
+        &mut self,
+        rng: &mut ThreadRng,
+        t: &mut ThreadData,
+    ) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
         let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
@@ -1227,7 +1288,10 @@ impl Board {
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
-            b"..NBRQ.".iter().position(|&c| c == *promo.as_str().as_bytes().last().unwrap()).unwrap()
+            b"..NBRQ."
+                .iter()
+                .position(|&c| c == *promo.as_str().as_bytes().last().unwrap())
+                .unwrap()
         });
         if promo.is_some() {
             let legal_mask = if self.side == Colour::WHITE { BB_RANK_7 } else { BB_RANK_2 };
@@ -1303,7 +1367,8 @@ impl Board {
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from());
-        let is_capture = !self.piece_at(to_sq).is_empty() || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
+        let is_capture = !self.piece_at(to_sq).is_empty()
+            || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::PAWN if !is_capture => "",
             PieceType::PAWN => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
@@ -1318,20 +1383,21 @@ impl Board {
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::PAWN {
             0
         } else {
-            bitboards::attacks_by_type(
-                moved_piece.piece_type(), 
-                to_sq,
-                self.pieces.occupied(),
-            ) & self.pieces.piece_bb(moved_piece)
+            bitboards::attacks_by_type(moved_piece.piece_type(), to_sq, self.pieces.occupied())
+                & self.pieces.piece_bb(moved_piece)
         };
-        let needs_disambiguation = possible_ambiguous_attackers.count_ones() > 1 && moved_piece.piece_type() != PieceType::PAWN;
+        let needs_disambiguation = possible_ambiguous_attackers.count_ones() > 1
+            && moved_piece.piece_type() != PieceType::PAWN;
         let from_file = BB_FILES[m.from().file() as usize];
         let from_rank = BB_RANKS[m.from().rank() as usize];
-        let can_be_disambiguated_by_file = (possible_ambiguous_attackers & from_file).count_ones() == 1;
-        let can_be_disambiguated_by_rank = (possible_ambiguous_attackers & from_rank).count_ones() == 1;
+        let can_be_disambiguated_by_file =
+            (possible_ambiguous_attackers & from_file).count_ones() == 1;
+        let can_be_disambiguated_by_rank =
+            (possible_ambiguous_attackers & from_rank).count_ones() == 1;
         let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;
         let must_be_disambiguated_by_file = needs_both || can_be_disambiguated_by_file;
-        let must_be_disambiguated_by_rank = needs_both || (can_be_disambiguated_by_rank && !can_be_disambiguated_by_file);
+        let must_be_disambiguated_by_rank =
+            needs_both || (can_be_disambiguated_by_rank && !can_be_disambiguated_by_file);
         let disambiguator1 = if needs_disambiguation && must_be_disambiguated_by_file {
             &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize]
         } else {
@@ -1465,7 +1531,11 @@ impl Board {
     }
 
     pub const fn has_insufficient_material<const IS_WHITE: bool>(&self) -> bool {
-        if (self.pieces.pawns::<IS_WHITE>() | self.pieces.rooks::<IS_WHITE>() | self.pieces.queens::<IS_WHITE>()) != 0 {
+        if (self.pieces.pawns::<IS_WHITE>()
+            | self.pieces.rooks::<IS_WHITE>()
+            | self.pieces.queens::<IS_WHITE>())
+            != 0
+        {
             return false;
         }
 
@@ -1514,7 +1584,7 @@ impl Board {
             }
         }
         if self.is_insufficient_material() {
-            return GameOutcome::DrawInsufficientMaterial
+            return GameOutcome::DrawInsufficientMaterial;
         }
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
@@ -1558,7 +1628,7 @@ impl GameOutcome {
     pub const fn as_float_str(self) -> &'static str {
         match self {
             Self::WhiteWinMate | Self::WhiteWinTB => "1.0",
-            Self::BlackWinMate | Self::BlackWinTB  => "0.0",
+            Self::BlackWinMate | Self::BlackWinTB => "0.0",
             Self::DrawFiftyMoves
             | Self::DrawRepetition
             | Self::DrawStalemate
@@ -1621,7 +1691,9 @@ mod tests {
 
         crate::magic::initialise();
 
-        let mut fiftymove_draw = Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2").unwrap();
+        let mut fiftymove_draw =
+            Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
+                .unwrap();
         assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
@@ -1639,10 +1711,16 @@ mod tests {
         assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);
-        let mut insufficient_material_bare_kings = Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
-        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::DrawInsufficientMaterial);
-        let mut insufficient_material_knights = Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
-        assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing); // using FIDE rules.
+        let mut insufficient_material_bare_kings =
+            Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
+        assert_eq!(
+            insufficient_material_bare_kings.outcome(),
+            GameOutcome::DrawInsufficientMaterial
+        );
+        let mut insufficient_material_knights =
+            Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
+        assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing);
+        // using FIDE rules.
     }
 
     #[test]
@@ -1674,10 +1752,8 @@ mod tests {
             Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1")
                 .unwrap();
 
-        for ((p1, p2), pt) in Piece::all().take(6)
-            .into_iter()
-            .zip(Piece::all().skip(6).take(6))
-            .zip(PieceType::all())
+        for ((p1, p2), pt) in
+            Piece::all().take(6).into_iter().zip(Piece::all().skip(6).take(6)).zip(PieceType::all())
         {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }
@@ -1691,7 +1767,7 @@ mod tests {
             io::{BufRead, BufReader},
         };
         crate::magic::initialise();
-        
+
         let f = File::open("epds/perftsuite.epd").unwrap();
         let mut pos = Board::new();
         let mut ml = crate::board::movegen::MoveList::new();
@@ -1708,12 +1784,7 @@ mod tests {
                 let san_repr = pos.san(m);
                 let san_repr = san_repr.unwrap();
                 let parsed_move = pos.parse_san(&san_repr);
-                assert_eq!(
-                    parsed_move, 
-                    Ok(m), 
-                    "{san_repr} != {m} in fen {}",
-                    pos.fen(),
-                );
+                assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen(),);
             }
         }
     }

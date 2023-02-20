@@ -1,11 +1,16 @@
-use std::{array::from_mut, fs, mem, ops::{Deref, DerefMut}};
+use std::{
+    array::from_mut,
+    fs, mem,
+    ops::{Deref, DerefMut},
+};
 
 use serde_json::Value;
 
 use crate::{
     board::{movegen::BitLoop, Board},
     definitions::Square,
-    image::{Image, self}, piece::{Colour, PieceType, Piece},
+    image::{self, Image},
+    piece::{Colour, Piece, PieceType},
 };
 
 use self::accumulator::Accumulator;
@@ -146,7 +151,8 @@ impl NNUEParams {
             }
         }
 
-        #[allow(clippy::large_stack_arrays)] // we only run this function in release, so it shouldn't blow the stack.
+        #[allow(clippy::large_stack_arrays)]
+        // we only run this function in release, so it shouldn't blow the stack.
         let mut out = Box::new(Self {
             flipped_weights: Align([0; INPUT * LAYER_1_SIZE]),
             feature_bias: Align([0; LAYER_1_SIZE]),
@@ -220,7 +226,7 @@ impl NNUEState {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
-        // at time of writing, this adds up to 396,296 bytes. 
+        // at time of writing, this adds up to 396,296 bytes.
         // Putting this on the stack will almost certainly blow it, so we box it.
         // Unfortunately, in debug mode `Box::new(Self::new())` will allocate on the stack
         // and then memcpy it to the heap, so we have to do this manually.
@@ -370,45 +376,56 @@ impl NNUEState {
         let acc = &mut self.accumulators[self.current_acc];
 
         if IS_ACTIVATE {
-    #[cfg(debug_assertions)]
-            {debug_assert!(
-                self.white_pov[white_idx] == 0,
-                "piece: {}, sq: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                sq
-            );
-            debug_assert!(
-                self.black_pov[black_idx] == 0,
-                "piece: {}, sq: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                sq
-            );
-            self.white_pov[white_idx] = 1;
-            self.black_pov[black_idx] = 1;}
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    self.white_pov[white_idx] == 0,
+                    "piece: {}, sq: {}",
+                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                    sq
+                );
+                debug_assert!(
+                    self.black_pov[black_idx] == 0,
+                    "piece: {}, sq: {}",
+                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                    sq
+                );
+                self.white_pov[white_idx] = 1;
+                self.black_pov[black_idx] = 1;
+            }
             add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
             add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         } else {
-    #[cfg(debug_assertions)]
-            {debug_assert!(
-                self.white_pov[white_idx] == 1,
-                "piece: {}, sq: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                sq
-            );
-            debug_assert!(
-                self.black_pov[black_idx] == 1,
-                "piece: {}, sq: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                sq
-            );
-            self.white_pov[white_idx] = 0;
-            self.black_pov[black_idx] = 0;}
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    self.white_pov[white_idx] == 1,
+                    "piece: {}, sq: {}",
+                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                    sq
+                );
+                debug_assert!(
+                    self.black_pov[black_idx] == 1,
+                    "piece: {}, sq: {}",
+                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                    sq
+                );
+                self.white_pov[white_idx] = 0;
+                self.black_pov[black_idx] = 0;
+            }
             sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
             sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         }
     }
 
-    pub fn update_pov_move(&mut self, piece_type: PieceType, colour: Colour, from: Square, to: Square) {
+    #[cfg(debug_assertions)]
+    pub fn update_pov_move(
+        &mut self,
+        piece_type: PieceType,
+        colour: Colour,
+        from: Square,
+        to: Square,
+    ) {
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
 
@@ -422,13 +439,13 @@ impl NNUEState {
         let black_idx_to =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.flip_rank().index();
 
-    #[cfg(debug_assertions)]
-        {self.white_pov[white_idx_from] = 0;
+        self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
         self.white_pov[white_idx_to] = 1;
-        self.black_pov[black_idx_to] = 1;}
+        self.black_pov[black_idx_to] = 1;
     }
 
+    #[cfg(debug_assertions)]
     pub fn update_pov_manual<const IS_ACTIVATE: bool>(
         &mut self,
         piece_type: PieceType,
@@ -446,7 +463,6 @@ impl NNUEState {
         let black_idx =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
 
-        #[cfg(debug_assertions)]
         if IS_ACTIVATE {
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
@@ -459,26 +475,25 @@ impl NNUEState {
     pub fn evaluate(&self, stm: Colour) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
-        let (us, them) = if stm == Colour::WHITE {
-            (&acc.white, &acc.black)
-        } else {
-            (&acc.black, &acc.white)
-        };
+        let (us, them) =
+            if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = clipped_relu_flatten_and_forward::<CR_MIN, CR_MAX, LAYER_1_SIZE, { LAYER_1_SIZE * 2 }>(
-            us,
-            them,
-            &NNUE.output_weights,
-        );
+        let output = clipped_relu_flatten_and_forward::<
+            CR_MIN,
+            CR_MAX,
+            LAYER_1_SIZE,
+            { LAYER_1_SIZE * 2 },
+        >(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
-    
+
     #[cfg(debug_assertions)]
     pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
         self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
     }
 
+    #[cfg(debug_assertions)]
     pub const fn feature_loc_to_parts(loc: usize) -> (Colour, PieceType, Square) {
         #![allow(clippy::cast_possible_truncation)]
         const COLOUR_STRIDE: usize = 64 * 6;
@@ -555,9 +570,7 @@ pub fn convert_json_to_binary(
     let bytes = nnue.to_bytes();
     fs::create_dir(&output_path).unwrap();
     for (fname, byte_vector) in
-        ["flipped_weights", "feature_bias", "output_weights", "output_bias"]
-            .into_iter()
-            .zip(&bytes)
+        ["flipped_weights", "feature_bias", "output_weights", "output_bias"].into_iter().zip(&bytes)
     {
         let mut f =
             fs::File::create(output_path.as_ref().join(fname).with_extension("bin")).unwrap();
