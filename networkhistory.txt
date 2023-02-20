@@ -127,3 +127,6 @@ NET ID | general concept                          | notes
        | Seems like the main problem was the      |
        | simple reduction in dataset size.        |
 --------------------------------------------------------------------------------------------------
+    40 | 88M more FENs added to the net-39 data.  | 
+       |                                          | vs net-39.
+--------------------------------------------------------------------------------------------------
