@@ -331,7 +331,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if (info.nodes & 1023) == 1023 && info.check_up() {
+        if info.nodes % 1024 == 0 && info.check_up() {
             return 0;
         }
 
@@ -385,7 +385,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], 1);
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], -108);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -477,7 +477,7 @@ impl Board {
 
         depth = depth.max(ZERO_PLY);
 
-        if (info.nodes & 1023) == 1023 && info.check_up() {
+        if info.nodes % 1024 == 0 && info.check_up() {
             return 0;
         }
 
