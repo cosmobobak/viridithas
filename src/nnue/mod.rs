@@ -207,7 +207,9 @@ impl NNUEParams {
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
+    #[cfg(debug_assertions)]
     pub white_pov: Align<[i16; INPUT]>,
+    #[cfg(debug_assertions)]
     pub black_pov: Align<[i16; INPUT]>,
 
     pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
@@ -251,7 +253,9 @@ impl NNUEState {
     pub fn refresh_acc(&mut self, board: &Board) {
         self.current_acc = 0;
 
+        #[cfg(debug_assertions)]
         self.white_pov.fill(0);
+        #[cfg(debug_assertions)]
         self.black_pov.fill(0);
 
         self.accumulators[self.current_acc].init(&NNUE.feature_bias);
@@ -289,42 +293,45 @@ impl NNUEState {
         let black_idx_to =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.flip_rank().index();
 
-        debug_assert_eq!(
-            self.white_pov[white_idx_from],
-            1,
-            "piece: {}, from: {}, to: {}",
-            Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-            from,
-            to
-        );
-        debug_assert_eq!(
-            self.black_pov[black_idx_from],
-            1,
-            "piece: {}, from: {}, to: {}",
-            Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-            from,
-            to
-        );
-        debug_assert_eq!(
-            self.white_pov[white_idx_to],
-            0,
-            "piece: {}, from: {}, to: {}",
-            Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-            from,
-            to
-        );
-        debug_assert_eq!(
-            self.black_pov[black_idx_to],
-            0,
-            "piece: {}, from: {}, to: {}",
-            Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-            from,
-            to
-        );
-        self.white_pov[white_idx_from] = 0;
-        self.black_pov[black_idx_from] = 0;
-        self.white_pov[white_idx_to] = 1;
-        self.black_pov[black_idx_to] = 1;
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(
+                self.white_pov[white_idx_from],
+                1,
+                "piece: {}, from: {}, to: {}",
+                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                from,
+                to
+            );
+            assert_eq!(
+                self.black_pov[black_idx_from],
+                1,
+                "piece: {}, from: {}, to: {}",
+                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                from,
+                to
+            );
+            assert_eq!(
+                self.white_pov[white_idx_to],
+                0,
+                "piece: {}, from: {}, to: {}",
+                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                from,
+                to
+            );
+            assert_eq!(
+                self.black_pov[black_idx_to],
+                0,
+                "piece: {}, from: {}, to: {}",
+                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
+                from,
+                to
+            );
+            self.white_pov[white_idx_from] = 0;
+            self.black_pov[black_idx_from] = 0;
+            self.white_pov[white_idx_to] = 1;
+            self.black_pov[black_idx_to] = 1;
+        }
 
         let acc = &mut self.accumulators[self.current_acc];
 
@@ -363,7 +370,8 @@ impl NNUEState {
         let acc = &mut self.accumulators[self.current_acc];
 
         if IS_ACTIVATE {
-            debug_assert!(
+    #[cfg(debug_assertions)]
+            {debug_assert!(
                 self.white_pov[white_idx] == 0,
                 "piece: {}, sq: {}",
                 Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
@@ -376,11 +384,12 @@ impl NNUEState {
                 sq
             );
             self.white_pov[white_idx] = 1;
-            self.black_pov[black_idx] = 1;
+            self.black_pov[black_idx] = 1;}
             add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
             add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         } else {
-            debug_assert!(
+    #[cfg(debug_assertions)]
+            {debug_assert!(
                 self.white_pov[white_idx] == 1,
                 "piece: {}, sq: {}",
                 Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
@@ -393,7 +402,7 @@ impl NNUEState {
                 sq
             );
             self.white_pov[white_idx] = 0;
-            self.black_pov[black_idx] = 0;
+            self.black_pov[black_idx] = 0;}
             sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
             sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
         }
@@ -413,10 +422,11 @@ impl NNUEState {
         let black_idx_to =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.flip_rank().index();
 
-        self.white_pov[white_idx_from] = 0;
+    #[cfg(debug_assertions)]
+        {self.white_pov[white_idx_from] = 0;
         self.black_pov[black_idx_from] = 0;
         self.white_pov[white_idx_to] = 1;
-        self.black_pov[black_idx_to] = 1;
+        self.black_pov[black_idx_to] = 1;}
     }
 
     pub fn update_pov_manual<const IS_ACTIVATE: bool>(
@@ -436,6 +446,7 @@ impl NNUEState {
         let black_idx =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
 
+        #[cfg(debug_assertions)]
         if IS_ACTIVATE {
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
@@ -462,7 +473,8 @@ impl NNUEState {
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
-
+    
+    #[cfg(debug_assertions)]
     pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
         self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
     }

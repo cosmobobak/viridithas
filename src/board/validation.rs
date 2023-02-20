@@ -173,8 +173,9 @@ impl Board {
 
         Ok(())
     }
-
+    
     pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
+        #[cfg(debug_assertions)]
         for (colour, piece_type, square) in
             nn.active_features().map(NNUEState::feature_loc_to_parts)
         {
@@ -196,6 +197,8 @@ impl Board {
                 return false;
             }
         }
+        #[cfg(not(debug_assertions))]
+        let _ = (self, nn);
         true
     }
 }
