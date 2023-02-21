@@ -130,6 +130,6 @@ NET ID | general concept                          | notes
     40 | 88M more FENs added to the net-39 data.  | -5.9 +/- 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
        |                                          | vs net-39.
 --------------------------------------------------------------------------------------------------
-    41 | interleave all the net-40 data for more  | ???? +/- ????, LOS: ????, DrawRatio: ????
+    41 | interleave all the net-40 data for more  | 6.0 +/- 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
        | homogeneous training.                    | vs net-39.
 --------------------------------------------------------------------------------------------------
