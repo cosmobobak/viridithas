@@ -29,3 +29,6 @@ MINOR:
 - add good logging for everything using `log` + `env_logger`
 -- datagen, data reanalysis, maybe other things
 - mess about with the in-check QS score, and aspiration windows relating to it.
+- fix score_capture()
+- add Shuffle Chess starting positions for datagen. (double shuffle chess?)
+- fix dextensions
