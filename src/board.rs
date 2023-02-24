@@ -1130,23 +1130,14 @@ impl Board {
                 let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
                 t.nnue.update_pov_manual::<ACTIVATE>(PieceType::PAWN, colour.flip(), ep_sq);
             } else if m.is_castle() {
-                match to {
-                    Square::C1 => {
-                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D1, Square::A1)
-                    }
-                    Square::G8 => {
-                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F8, Square::H8)
-                    }
-                    Square::C8 => {
-                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::D8, Square::A8)
-                    }
-                    Square::G1 => {
-                        t.nnue.update_pov_move(PieceType::ROOK, colour, Square::F1, Square::H1)
-                    }
-                    _ => {
-                        panic!("Invalid castle move");
-                    }
-                }
+                let (rook_from, rook_to) = match to {
+                    Square::C1 => (Square::D1, Square::A1),
+                    Square::G8 => (Square::F8, Square::H8),
+                    Square::C8 => (Square::D8, Square::A8),
+                    Square::G1 => (Square::F1, Square::H1),
+                    _ => panic!("Invalid castle move"),
+                };
+                t.nnue.update_pov_move(PieceType::ROOK, colour, rook_from, rook_to);
             }
             if m.is_promo() {
                 let promo = m.promotion_type();

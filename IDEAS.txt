@@ -32,3 +32,4 @@ MINOR:
 - fix score_capture()
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
 - fix dextensions
+- use relaxed atomics for more things
