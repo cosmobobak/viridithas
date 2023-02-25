@@ -272,13 +272,13 @@ pub enum CheckState {
     Checkmate,
 }
 
-pub struct StaticVec<T: Copy, const N: usize> {
+pub struct StackVec<T: Copy, const N: usize> {
     data: [T; N],
     len: usize,
 }
 
-impl<T: Copy, const N: usize> StaticVec<T, N> {
-    pub const fn new_from_default(default: T) -> Self {
+impl<T: Copy, const N: usize> StackVec<T, N> {
+    pub const fn from_default(default: T) -> Self {
         Self { data: [default; N], len: 0 }
     }
 

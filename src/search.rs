@@ -26,7 +26,7 @@ use crate::{
     cfor,
     chessmove::Move,
     definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StaticVec, INFINITY, MAX_DEPTH, MAX_PLY,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, MAX_PLY,
     },
     piece::{Colour, PieceType},
     search::parameters::{get_lm_table, get_search_params},
@@ -684,9 +684,8 @@ impl Board {
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
 
-        let mut quiets_tried = StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
-        let mut tacticals_tried =
-            StaticVec::<Move, MAX_POSITION_MOVES>::new_from_default(Move::NULL);
+        let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
+        let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
             if ROOT && uci::is_multipv() {
