@@ -811,6 +811,9 @@ impl Board {
                     -alpha - 1,
                     -alpha,
                 );
+                if info.stopped() {
+                    return 0;
+                }
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
@@ -823,6 +826,9 @@ impl Board {
                         -beta,
                         -alpha,
                     );
+                    if info.stopped() {
+                        return 0;
+                    }
                 }
             }
             self.unmake_move::<NNUE>(t);
