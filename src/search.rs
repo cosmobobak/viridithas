@@ -798,10 +798,6 @@ impl Board {
                     -beta,
                     -alpha,
                 );
-                if info.stopped() {
-                    self.unmake_move::<NNUE>(t);
-                    return 0;
-                }
             } else {
                 // calculation of LMR stuff
                 let r = if (is_quiet || !is_winning_capture)
@@ -824,10 +820,6 @@ impl Board {
                     -alpha - 1,
                     -alpha,
                 );
-                if info.stopped() {
-                    self.unmake_move::<NNUE>(t);
-                    return 0;
-                }
                 // if we failed, then full window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
@@ -840,15 +832,15 @@ impl Board {
                         -beta,
                         -alpha,
                     );
-                    if info.stopped() {
-                        self.unmake_move::<NNUE>(t);
-                        return 0;
-                    }
                 }
             }
             self.unmake_move::<NNUE>(t);
-            if extension > ONE_PLY * 2 {
+            if extension >= ONE_PLY * 2 {
                 t.double_extensions[height] -= 1;
+            }
+
+            if info.stopped() {
+                return 0;
             }
 
             if score > best_score {
