@@ -675,7 +675,7 @@ impl Board {
         }
 
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = get_lm_table().getp(depth, improving);
+        let lmp_threshold = get_lm_table().lmp_movecount(depth, improving);
 
         let see_table =
             [sp.see_tactical_margin * depth.squared(), sp.see_quiet_margin * depth.round()];
@@ -698,7 +698,7 @@ impl Board {
                 continue;
             }
 
-            let lmr_reduction = get_lm_table().getr(depth, moves_made);
+            let lmr_reduction = get_lm_table().lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
@@ -804,7 +804,7 @@ impl Board {
                     && depth >= Depth::new(3)
                     && moves_made >= (2 + usize::from(PV))
                 {
-                    let mut r = get_lm_table().getr(depth, moves_made);
+                    let mut r = get_lm_table().lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
@@ -1255,12 +1255,14 @@ pub const fn draw_score(nodes: u64) -> i32 {
 }
 
 pub struct LMTable {
-    rtable: [[i32; 64]; 64],
-    ptable: [[usize; 12]; 2],
+    /// The reduction table. rtable[depth][played] is the base LMR reduction for a move
+    lm_reduction_table: [[i32; 64]; 64],
+    /// The movecount table. ptable[played][improving] is the movecount at which LMP is triggered.
+    lmp_movecount_table: [[usize; 12]; 2],
 }
 
 impl LMTable {
-    pub const NULL: Self = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
+    pub const NULL: Self = Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
 
     pub fn new(config: &SearchParams) -> Self {
         #![allow(
@@ -1268,31 +1270,31 @@ impl LMTable {
             clippy::cast_precision_loss,
             clippy::cast_sign_loss
         )]
-        let mut out = Self { rtable: [[0; 64]; 64], ptable: [[0; 12]; 2] };
+        let mut out = Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
-                out.rtable[depth][played] = (base + ld * lp / division) as i32;
+                out.lm_reduction_table[depth][played] = (base + ld * lp / division) as i32;
             });
         });
         cfor!(let mut depth = 1; depth < 12; depth += 1; {
-            out.ptable[0][depth] = (2.5 + 2.0 * depth as f64 * depth as f64 / 4.5) as usize;
-            out.ptable[1][depth] = (4.0 + 4.0 * depth as f64 * depth as f64 / 4.5) as usize;
+            out.lmp_movecount_table[0][depth] = (2.5 + 2.0 * depth as f64 * depth as f64 / 4.5) as usize;
+            out.lmp_movecount_table[1][depth] = (4.0 + 4.0 * depth as f64 * depth as f64 / 4.5) as usize;
         });
         out
     }
 
-    pub fn getr(&self, depth: Depth, moves_made: usize) -> i32 {
+    pub fn lm_reduction(&self, depth: Depth, moves_made: usize) -> i32 {
         let depth = depth.ply_to_horizon().min(63);
         let played = moves_made.min(63);
-        self.rtable[depth][played]
+        self.lm_reduction_table[depth][played]
     }
 
-    pub fn getp(&self, depth: Depth, improving: bool) -> usize {
+    pub fn lmp_movecount(&self, depth: Depth, improving: bool) -> usize {
         let depth = depth.ply_to_horizon().min(11);
-        self.ptable[usize::from(improving)][depth]
+        self.lmp_movecount_table[usize::from(improving)][depth]
     }
 }
 
