@@ -46,6 +46,8 @@ static SQUARE_NAMES: [&str; 64] = [
     "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
     "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
+
+#[allow(clippy::unusual_byte_groupings)]
 impl Square {
     pub const A1: Self = Self(0);
     pub const B1: Self = Self(1);
@@ -125,11 +127,11 @@ impl Square {
     }
 
     pub const fn flip_rank(self) -> Self {
-        Self(self.0 ^ 56)
+        Self(self.0 ^ 0b111_000)
     }
 
     pub const fn flip_file(self) -> Self {
-        Self(self.0 ^ 7)
+        Self(self.0 ^ 0b000_111)
     }
 
     /// The file that this square is on.

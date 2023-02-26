@@ -33,3 +33,4 @@ MINOR:
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
 - fix dextensions
 - use relaxed atomics for more things
+- optimise the piece_type & piece_color stuff
