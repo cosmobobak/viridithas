@@ -798,6 +798,10 @@ impl Board {
                     -beta,
                     -alpha,
                 );
+                if info.stopped() {
+                    self.unmake_move::<NNUE>(t);
+                    return 0;
+                }
             } else {
                 // calculation of LMR stuff
                 let r = ONE_PLY;
