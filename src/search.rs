@@ -800,16 +800,7 @@ impl Board {
                 );
             } else {
                 // calculation of LMR stuff
-                let r = if (is_quiet || !is_winning_capture)
-                    && depth >= Depth::new(3)
-                    && moves_made >= (2 + usize::from(PV))
-                {
-                    let mut r = get_lm_table().lm_reduction(depth, moves_made);
-                    r += i32::from(!PV);
-                    Depth::new(r).clamp(ONE_PLY, depth - 1)
-                } else {
-                    ONE_PLY
-                };
+                let r = ONE_PLY;
                 // perform a zero-window search
                 score = -self.zw_search::<NNUE>(
                     tt,
