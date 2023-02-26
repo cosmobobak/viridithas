@@ -274,14 +274,14 @@ pub enum CheckState {
     Checkmate,
 }
 
-pub struct StackVec<T: Copy, const N: usize> {
-    data: [T; N],
+pub struct StackVec<T: Copy, const CAPACITY: usize> {
+    data: [T; CAPACITY],
     len: usize,
 }
 
-impl<T: Copy, const N: usize> StackVec<T, N> {
+impl<T: Copy, const CAPACITY: usize> StackVec<T, CAPACITY> {
     pub const fn from_default(default: T) -> Self {
-        Self { data: [default; N], len: 0 }
+        Self { data: [default; CAPACITY], len: 0 }
     }
 
     pub fn push(&mut self, item: T) {
