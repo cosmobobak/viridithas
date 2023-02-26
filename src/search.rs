@@ -782,7 +782,7 @@ impl Board {
                 let do_extension = is_quiet || is_winning_capture;
                 extension = Depth::from(do_extension);
             };
-            if extension > ONE_PLY * 2 {
+            if extension >= ONE_PLY * 2 {
                 t.double_extensions[height] += 1;
             }
 
