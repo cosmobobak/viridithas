@@ -812,6 +812,7 @@ impl Board {
                     -alpha,
                 );
                 if info.stopped() {
+                    self.unmake_move::<NNUE>(t);
                     return 0;
                 }
                 // if we failed, then full window search
@@ -827,6 +828,7 @@ impl Board {
                         -alpha,
                     );
                     if info.stopped() {
+                        self.unmake_move::<NNUE>(t);
                         return 0;
                     }
                 }
@@ -834,10 +836,6 @@ impl Board {
             self.unmake_move::<NNUE>(t);
             if extension > ONE_PLY * 2 {
                 t.double_extensions[height] -= 1;
-            }
-
-            if info.stopped() {
-                return 0;
             }
 
             if score > best_score {
