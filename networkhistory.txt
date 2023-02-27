@@ -133,3 +133,7 @@ NET ID | general concept                          | notes
     41 | interleave all the net-40 data for more  | 6.0 +/- 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
        | homogeneous training.                    | vs net-39.
 --------------------------------------------------------------------------------------------------
+    42 | add 2.5M net-41 games to the net-41 data | ???? +/- ????, LOS: ????, DrawRatio: ????
+       | it would be 5M, but I accidentally       | vs net-41.
+       | deleted half of it, like an idiot.       |
+--------------------------------------------------------------------------------------------------
