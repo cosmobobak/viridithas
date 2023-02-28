@@ -101,7 +101,7 @@ impl Board {
             let mut pv = PVariation::default();
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
-            TB_HITS.store(1, Ordering::Relaxed);
+            TB_HITS.store(1, Ordering::SeqCst);
             self.readout_info(Bound::Exact, &pv, 0, info, tt, 1);
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
@@ -139,11 +139,11 @@ impl Board {
                 hh.join().unwrap();
             }
         });
-        global_stopped.store(false, Ordering::Relaxed);
+        global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
         let (bestmove, score) =
-            self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::Relaxed), d_move);
+            self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
             println!("bestmove {bestmove}");
@@ -196,11 +196,11 @@ impl Board {
                     break 'deepening;
                 }
                 let nodes = info.nodes - nodes_before;
-                total_nodes.fetch_add(nodes, Ordering::Relaxed);
+                total_nodes.fetch_add(nodes, Ordering::SeqCst);
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
-                        let total_nodes = total_nodes.load(Ordering::Relaxed);
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down();
@@ -217,7 +217,7 @@ impl Board {
                 t.update_best_line(&pv);
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
-                        let total_nodes = total_nodes.load(Ordering::Relaxed);
+                        let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
@@ -229,7 +229,7 @@ impl Board {
                 let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
 
                 if MAIN_THREAD && info.print_to_stdout {
-                    let total_nodes = total_nodes.load(Ordering::Relaxed);
+                    let total_nodes = total_nodes.load(Ordering::SeqCst);
                     self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
                 }
 
@@ -501,7 +501,7 @@ impl Board {
 
             // are we too deep?
             let max_height =
-                MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::Relaxed));
+                MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
                 return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
             }
@@ -539,8 +539,8 @@ impl Board {
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
         if !ROOT
-            && uci::SYZYGY_ENABLED.load(Ordering::Relaxed)
-            && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::Relaxed))
+            && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
+            && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
                 || self.n_men() < cardinality)
             && self.n_men() <= cardinality
         {
@@ -744,7 +744,7 @@ impl Board {
                 && t.thread_id == 0
                 && info.print_to_stdout
                 && info.time_since_start() > Duration::from_secs(5)
-                && !PRETTY_PRINT.load(Ordering::Relaxed)
+                && !PRETTY_PRINT.load(Ordering::SeqCst)
             {
                 println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
             }
@@ -1192,7 +1192,7 @@ impl Board {
             clippy::cast_possible_truncation
         )]
         let sstr = uci::format_score(pv.score);
-        let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::Relaxed);
+        let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
@@ -1212,7 +1212,7 @@ impl Board {
                 info.seldepth.ply_to_horizon(),
                 info.start_time.elapsed().as_millis(),
                 hashfull = tt.hashfull(),
-                tbhits = TB_HITS.load(Ordering::Relaxed),
+                tbhits = TB_HITS.load(Ordering::SeqCst),
             );
         } else {
             let value = uci::pretty_format_score(pv.score, self.turn());

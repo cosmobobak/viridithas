@@ -135,11 +135,11 @@ impl TT {
         let new_len = bytes / TT_ENTRY_SIZE;
         self.table.resize_with(new_len, || AtomicU64::new(Self::NULL_VALUE));
         self.table.shrink_to_fit();
-        self.table.iter_mut().for_each(|x| x.store(Self::NULL_VALUE, Ordering::Relaxed));
+        self.table.iter_mut().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     pub fn clear(&self) {
-        self.table.iter().for_each(|x| x.store(Self::NULL_VALUE, Ordering::Relaxed));
+        self.table.iter().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     const fn pack_key(key: u64) -> u16 {
@@ -184,7 +184,7 @@ impl<'a> TTView<'a> {
 
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
-        let entry: TTEntry = self.table[index].load(Ordering::Relaxed).into();
+        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if best_move.is_null() {
             best_move = entry.m;
@@ -220,7 +220,7 @@ impl<'a> TTView<'a> {
                 depth: depth.try_into().unwrap(),
                 age_and_flag: AgeAndFlag::new(self.age, flag),
             };
-            self.table[index].store(write.into(), Ordering::Relaxed);
+            self.table[index].store(write.into(), Ordering::SeqCst);
         }
     }
 
@@ -242,7 +242,7 @@ impl<'a> TTView<'a> {
         debug_assert!(beta >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let entry: TTEntry = self.table[index].load(Ordering::Relaxed).into();
+        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
         if entry.key != key {
             return ProbeResult::Nothing;
