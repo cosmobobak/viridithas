@@ -721,6 +721,9 @@ impl Board {
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= sp.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
+                    if is_quiet {
+                        continue;
+                    }
                 }
 
                 // futility pruning
@@ -728,6 +731,9 @@ impl Board {
                 let fp_margin = lmr_depth.round() * sp.futility_coeff_1 + sp.futility_coeff_0;
                 if is_quiet && lmr_depth < sp.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
+                    if is_quiet {
+                        continue;
+                    }
                 }
             }
 
