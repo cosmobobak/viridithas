@@ -335,12 +335,15 @@ impl Board {
             return 0;
         }
 
+        let key = self.hashkey();
+
+        tt.prefetch(key);
+
         let mut lpv = PVariation::default();
 
         pv.length = 0;
 
         let height = self.height();
-        let key = self.hashkey();
         info.seldepth = info.seldepth.max(Depth::from(i32::try_from(height).unwrap()));
 
         // check draw
@@ -468,6 +471,10 @@ impl Board {
 
         let mut lpv = PVariation::default();
 
+        let key = self.hashkey();
+
+        tt.prefetch(key);
+
         let in_check = self.in_check::<{ Self::US }>();
         if depth <= ZERO_PLY && !in_check {
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
@@ -481,7 +488,6 @@ impl Board {
             return 0;
         }
 
-        let key = self.hashkey();
         let height = self.height();
         let sp = get_search_params();
 
@@ -856,6 +862,8 @@ impl Board {
                 }
             }
         }
+
+        tt.prefetch(key);
 
         if moves_made == 0 {
             if !excluded.is_null() {

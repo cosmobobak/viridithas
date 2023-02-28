@@ -309,6 +309,19 @@ impl<'a> TTView<'a> {
         }
     }
 
+    pub fn prefetch(&self, key: u64) {
+        let index = self.wrap_key(key);
+        let entry = &self.table[index];
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
+            _mm_prefetch(
+                (entry as *const AtomicU64).cast::<i8>(),
+                _MM_HINT_T0,
+            );
+        }
+    }
+
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
         let result = self.probe(key, 0, -INFINITY, INFINITY, ZERO_PLY, true);
         match result {
