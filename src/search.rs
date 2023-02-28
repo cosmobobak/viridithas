@@ -709,11 +709,6 @@ impl Board {
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
-            if is_quiet {
-                quiets_tried.push(m);
-            } else {
-                tacticals_tried.push(m);
-            }
 
             // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -721,9 +716,6 @@ impl Board {
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= sp.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
-                    if is_quiet {
-                        continue;
-                    }
                 }
 
                 // futility pruning
@@ -731,9 +723,6 @@ impl Board {
                 let fp_margin = lmr_depth.round() * sp.futility_coeff_1 + sp.futility_coeff_0;
                 if is_quiet && lmr_depth < sp.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
-                    if is_quiet {
-                        continue;
-                    }
                 }
             }
 
@@ -750,6 +739,13 @@ impl Board {
             if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
+
+            if is_quiet {
+                quiets_tried.push(m);
+            } else {
+                tacticals_tried.push(m);
+            }
+            
             info.nodes += 1;
             moves_made += 1;
             if ROOT
