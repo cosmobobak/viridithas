@@ -627,7 +627,8 @@ impl Board {
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
-                let nm_depth = depth - sp.nmp_base_reduction - depth / 3;
+                let r = sp.nmp_base_reduction + depth / 3 + std::cmp::min((static_eval - beta) / 200, 3);
+                let nm_depth = depth - r;
                 self.make_nullmove();
                 let null_score =
                     -self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, -beta, -beta + 1);
