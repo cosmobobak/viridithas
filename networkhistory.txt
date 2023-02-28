@@ -137,3 +137,4 @@ NET ID | general concept                          | notes
        | it would be 5M, but I accidentally       | vs net-41.
        | deleted half of it, like an idiot.       |
 --------------------------------------------------------------------------------------------------
+python main.py --data-root data --train-id viri0043 --lr 0.001 --lr-drop 30 --epochs 65 --batch-size 16384 --wdl 0.3 --scale 400 --save-epochs 5
