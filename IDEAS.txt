@@ -31,4 +31,3 @@ MINOR:
 - mess about with the in-check QS score, and aspiration windows relating to it.
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
 - use relaxed atomics for more things
-- optimise the piece_type & piece_color stuff
