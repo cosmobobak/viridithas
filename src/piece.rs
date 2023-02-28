@@ -191,21 +191,22 @@ impl Piece {
     }
 
     pub const fn colour(self) -> Colour {
-        if self.v < Self::BP.v {
-            Colour::WHITE
-        } else {
-            Colour::BLACK
+        match self {
+            Self::WP | Self::WN | Self::WB | Self::WR | Self::WQ | Self::WK => Colour::WHITE,
+            _ => Colour::BLACK,
         }
     }
 
     pub const fn piece_type(self) -> PieceType {
-        if self.is_empty() {
-            return PieceType::NO_PIECE_TYPE;
+        match self {
+            Self::WP | Self::BP => PieceType::PAWN,
+            Self::WN | Self::BN => PieceType::KNIGHT,
+            Self::WB | Self::BB => PieceType::BISHOP,
+            Self::WR | Self::BR => PieceType::ROOK,
+            Self::WQ | Self::BQ => PieceType::QUEEN,
+            Self::WK | Self::BK => PieceType::KING,
+            _ => PieceType::NO_PIECE_TYPE,
         }
-        let inner = self.v;
-        let shifted = inner - 1;
-        let piece_type_index = shifted % 6;
-        PieceType::new(piece_type_index + 1)
     }
 
     pub const fn index(self) -> usize {
