@@ -137,23 +137,21 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
     }
 
     pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move, see_threshold: i32) -> i32 {
-        let mut score;
+        const QUEEN_PROMO_BONUS: i32 = lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
+        let mut score = if m.is_ep() {
+            lookups::get_mvv_lva_score(PieceType::PAWN, PieceType::PAWN)
+        } else {
+            lookups::get_mvv_lva_score(pos.captured_piece(m).piece_type(), pos.moved_piece(m).piece_type())
+        };
         if m.is_promo() {
             if m.promotion_type() == PieceType::QUEEN {
-                score = lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
+                score += QUEEN_PROMO_BONUS;
             } else {
-                score = -WINNING_CAPTURE_SCORE; // basically no point looking at these.
+                return -WINNING_CAPTURE_SCORE; // basically no point looking at these.
             }
-        } else if m.is_ep() {
-            score = 1050; // the score for PxP in MVVLVA
-        } else {
-            score = lookups::get_mvv_lva_score(pos.captured_piece(m).piece_type(), pos.piece_at(m.from()).piece_type());
         }
         if !DO_SEE || pos.static_exchange_eval(m, see_threshold) {
             score += WINNING_CAPTURE_SCORE;
-        }
-        if m.is_promo() && m.promotion_type() == PieceType::QUEEN {
-            score += WINNING_CAPTURE_SCORE / 2;
         }
         score
     }
