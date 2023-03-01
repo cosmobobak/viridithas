@@ -153,7 +153,11 @@ impl Board {
         (if self.turn() == Colour::WHITE { score } else { -score }, bestmove)
     }
 
-    fn reset_everything_for_root_search(&mut self, info: &mut SearchInfo, thread_headers: &mut [ThreadData]) {
+    fn reset_everything_for_root_search(
+        &mut self,
+        info: &mut SearchInfo,
+        thread_headers: &mut [ThreadData],
+    ) {
         self.zero_height();
         info.setup_for_search();
         for td in thread_headers.iter_mut() {
@@ -633,7 +637,9 @@ impl Board {
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
-                let r = sp.nmp_base_reduction + depth / 3 + std::cmp::min((static_eval - beta) / 200, 3);
+                let r = sp.nmp_base_reduction
+                    + depth / 3
+                    + std::cmp::min((static_eval - beta) / 200, 3);
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let null_score =
@@ -745,7 +751,7 @@ impl Board {
             } else {
                 tacticals_tried.push(m);
             }
-            
+
             info.nodes += 1;
             moves_made += 1;
             if ROOT
@@ -1273,7 +1279,8 @@ pub struct LMTable {
 }
 
 impl LMTable {
-    pub const NULL: Self = Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
+    pub const NULL: Self =
+        Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
 
     pub fn new(config: &SearchParams) -> Self {
         #![allow(
