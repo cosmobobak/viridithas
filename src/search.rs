@@ -392,8 +392,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let see_threshold = 1.max(alpha - stand_pat - 110);
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], see_threshold);
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], -108);
         if !in_check {
             move_picker.skip_quiets = true;
         }
