@@ -1,3 +1,5 @@
+#![deny(clippy::panic, clippy::unwrap_used, clippy::todo, clippy::unimplemented)]
+
 use std::{
     fmt::Display,
     io::Write,
@@ -36,6 +38,7 @@ enum UciError {
     UnexpectedCommandTermination(String),
     InvalidFormat(String),
     UnknownCommand(String),
+    InternalError(String),
 }
 
 impl From<MoveParseError> for UciError {
@@ -79,6 +82,7 @@ impl Display for UciError {
             }
             Self::InvalidFormat(s) => write!(f, "InvalidFormat: {s}"),
             Self::UnknownCommand(s) => write!(f, "UnknownCommand: {s}"),
+            Self::InternalError(s) => write!(f, "InternalError: {s}"),
         }
     }
 }
@@ -245,7 +249,9 @@ fn parse_setoption(
 ) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
-    parts.next().unwrap();
+    let Some(_) = parts.next() else {
+        return Err(UnexpectedCommandTermination("no \"setoption\" found".into()));
+    };
     parts
         .next()
         .map(|s| {
@@ -255,7 +261,14 @@ fn parse_setoption(
     let opt_name = parts.next().ok_or_else(|| {
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
-    parts.next().map_or_else(|| panic!("no value after \"setoption name {opt_name}\""), |s| assert!(s == "value", "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {s}"));
+    let Some(value_part) = parts.next() else {
+        return Err(UciError::InvalidFormat("no value after \"setoption name {opt_name}\"".into()));
+    };
+    if value_part != "value" {
+        return Err(UciError::InvalidFormat(format!(
+            "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {value_part}. Did you mean \"setoption name {opt_name} value {value_part}\"?"
+        )));
+    }
     let opt_value = parts.next().ok_or_else(|| {
         UnexpectedCommandTermination(format!(
             "no option value given after \"setoption name {opt_name} value\""
@@ -304,9 +317,12 @@ fn parse_setoption(
         "SyzygyPath" => {
             let path = opt_value.to_string();
             tablebases::probe::init(&path);
-            let mut lock = SYZYGY_PATH.lock().unwrap();
-            *lock = path;
-            SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+            if let Ok(mut lock) = SYZYGY_PATH.lock() {
+                *lock = path;
+                SYZYGY_ENABLED.store(true, Ordering::SeqCst);
+            } else {
+                return Err(UciError::InternalError("failed to take lock on SyzygyPath".into()));
+            }
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
@@ -493,8 +509,12 @@ pub fn main_loop(params: EvalParams) {
     }
 
     loop {
-        std::io::stdout().flush().unwrap();
-        let line = stdin.lock().unwrap().recv().expect("Couldn't read from stdin");
+        std::io::stdout().flush().expect("couldn't flush stdout");
+        let line = stdin
+            .lock()
+            .expect("failed to take lock on stdin")
+            .recv()
+            .expect("couldn't receive from stdin");
         let input = line.trim();
 
         let res = match input {
@@ -514,7 +534,7 @@ pub fn main_loop(params: EvalParams) {
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
                 println!("UseNNUE: {}", USE_NNUE.load(Ordering::SeqCst));
-                println!("SyzygyPath: {}", SYZYGY_PATH.lock().unwrap());
+                println!("SyzygyPath: {}", SYZYGY_PATH.lock().expect("failed to lock syzygy path"));
                 println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
                 println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
                 // println!("MultiPV: {}", MULTI_PV.load(Ordering::SeqCst));
@@ -542,7 +562,7 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
+                println!("{}", pos.evaluate::<true>(thread_data.first_mut().expect("the thread headers are empty."), 0));
                 Ok(())
             }
             "show" => {
