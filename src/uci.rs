@@ -26,7 +26,7 @@ use crate::{
     NAME, VERSION,
 };
 
-const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
+const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
 const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 
 enum UciError {
@@ -280,7 +280,7 @@ fn parse_setoption(
     match opt_name {
         "Hash" => {
             let value = opt_value.parse()?;
-            assert!(value > 0 && value <= 8192, "Hash value must be between 1 and 8192");
+            assert!(value > 0 && value <= UCI_MAX_HASH_MEGABYTES, "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}");
             out.hash_mb = Some(value);
         }
         "Threads" => {
