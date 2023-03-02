@@ -14,7 +14,10 @@ use std::{
 
 use crate::{
     board::{
-        evaluation::{is_mate_score, parameters::EvalParams, set_eval_params, MATE_SCORE, is_game_theoretic_score, TB_WIN_SCORE},
+        evaluation::{
+            is_game_theoretic_score, is_mate_score, parameters::EvalParams, set_eval_params,
+            MATE_SCORE, TB_WIN_SCORE,
+        },
         Board,
     },
     definitions::{MAX_DEPTH, MEGABYTE},
@@ -30,6 +33,8 @@ use crate::{
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
 const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
+const UCI_MAX_THREADS: usize = 512;
+const UCI_MAX_MULTIPV: usize = 500;
 
 enum UciError {
     ParseOption(String),
@@ -39,6 +44,7 @@ enum UciError {
     InvalidFormat(String),
     UnknownCommand(String),
     InternalError(String),
+    IllegalValue(String),
 }
 
 impl From<MoveParseError> for UciError {
@@ -83,6 +89,7 @@ impl Display for UciError {
             Self::InvalidFormat(s) => write!(f, "InvalidFormat: {s}"),
             Self::UnknownCommand(s) => write!(f, "UnknownCommand: {s}"),
             Self::InternalError(s) => write!(f, "InternalError: {s}"),
+            Self::IllegalValue(s) => write!(f, "IllegalValue: {s}"),
         }
     }
 }
@@ -211,7 +218,7 @@ fn parse_go(
             "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
         ));
     }
-    
+
     if let Some(nodes) = nodes {
         info.limit = SearchLimit::Nodes(nodes);
     }
@@ -242,6 +249,7 @@ struct SetOptions {
     pub threads: Option<usize>,
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_setoption(
     text: &str,
     _info: &mut SearchInfo,
@@ -252,21 +260,23 @@ fn parse_setoption(
     let Some(_) = parts.next() else {
         return Err(UnexpectedCommandTermination("no \"setoption\" found".into()));
     };
-    parts
-        .next()
-        .map(|s| {
-            assert_eq!(s, "name", "expected \"name\" after \"setoption\", got {s}");
-        })
-        .ok_or_else(|| UnexpectedCommandTermination("no name after setoption".into()))?;
+    let Some(name_part) = parts.next() else {
+        return Err(UciError::InvalidFormat("no \"name\" after \"setoption\"".into()));
+    };
+    if name_part != "name" {
+        return Err(UciError::InvalidFormat(format!(
+            "unexpected character after \"setoption\", expected \"name\", got \"{name_part}\". Did you mean \"setoption name {name_part}\"?"
+        )));
+    }
     let opt_name = parts.next().ok_or_else(|| {
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
     let Some(value_part) = parts.next() else {
-        return Err(UciError::InvalidFormat("no value after \"setoption name {opt_name}\"".into()));
+        return Err(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
     };
     if value_part != "value" {
         return Err(UciError::InvalidFormat(format!(
-            "unexpected character after \"setoption name {opt_name}\", expected \"value\", got {value_part}. Did you mean \"setoption name {opt_name} value {value_part}\"?"
+            "unexpected character after \"setoption name {opt_name}\", expected \"value\", got \"{value_part}\". Did you mean \"setoption name {opt_name} value {value_part}\"?"
         )));
     }
     let opt_value = parts.next().ok_or_else(|| {
@@ -292,18 +302,33 @@ fn parse_setoption(
     }
     match opt_name {
         "Hash" => {
-            let value = opt_value.parse()?;
-            assert!(value > 0 && value <= UCI_MAX_HASH_MEGABYTES, "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}");
+            let value: usize = opt_value.parse()?;
+            if !(value > 0 && value <= UCI_MAX_HASH_MEGABYTES) {
+                // "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
+                return Err(UciError::IllegalValue(format!(
+                    "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
+                )));
+            }
             out.hash_mb = Some(value);
         }
         "Threads" => {
-            let value = opt_value.parse()?;
-            assert!(value > 0 && value <= 512, "Threads value must be between 1 and 512");
+            let value: usize = opt_value.parse()?;
+            if !(value > 0 && value <= UCI_MAX_THREADS) {
+                // "Threads value must be between 1 and {UCI_MAX_THREADS}"
+                return Err(UciError::IllegalValue(format!(
+                    "Threads value must be between 1 and {UCI_MAX_THREADS}"
+                )));
+            }
             out.threads = Some(value);
         }
         "MultiPV" => {
             let value: usize = opt_value.parse()?;
-            assert!(value > 0 && value <= 500, "MultiPV value must be between 1 and 500");
+            if !(value > 0 && value <= UCI_MAX_MULTIPV) {
+                // "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
+                return Err(UciError::IllegalValue(format!(
+                    "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
+                )));
+            }
             MULTI_PV.store(value, Ordering::SeqCst);
         }
         "PrettyPrint" => {
@@ -326,15 +351,25 @@ fn parse_setoption(
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
-            assert!(value <= 6, "SyzygyProbeLimit value must be between 0 and 6");
+            if value > 6 {
+                return Err(UciError::IllegalValue(
+                    "SyzygyProbeLimit value must be between 0 and 6".to_string(),
+                ));
+            }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
-            assert!((1..=100).contains(&value), "SyzygyProbeDepth value must be between 0 and 100");
+            if !(1..=100).contains(&value) {
+                return Err(UciError::IllegalValue(
+                    "SyzygyProbeDepth value must be between 0 and 100".to_string(),
+                ));
+            }
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
-        _ => eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options"),
+        _ => {
+            eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options");
+        }
     }
     Ok(out)
 }
@@ -562,7 +597,13 @@ pub fn main_loop(params: EvalParams) {
                 res
             }
             "eval" => {
-                println!("{}", pos.evaluate::<true>(thread_data.first_mut().expect("the thread headers are empty."), 0));
+                println!(
+                    "{}",
+                    pos.evaluate::<true>(
+                        thread_data.first_mut().expect("the thread headers are empty."),
+                        0
+                    )
+                );
                 Ok(())
             }
             "show" => {
@@ -594,7 +635,7 @@ pub fn main_loop(params: EvalParams) {
                         }
                         Ok(())
                     }
-                    err => err.map(|_| ()),
+                    Err(err) => Err(err),
                 }
             }
             input if input.starts_with("position") => {
@@ -622,7 +663,7 @@ pub fn main_loop(params: EvalParams) {
         };
 
         if let Err(e) = res {
-            eprintln!("Error: {e}");
+            println!("info string {e}");
         }
 
         if info.quit {
