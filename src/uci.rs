@@ -318,7 +318,7 @@ fn parse_setoption(
             assert!((1..=100).contains(&value), "SyzygyProbeDepth value must be between 0 and 100");
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
-        _ => eprintln!("ignoring option {opt_name}"),
+        _ => eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options"),
     }
     Ok(out)
 }
