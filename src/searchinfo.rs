@@ -181,7 +181,7 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn stopped(&self) -> bool {
-        self.stopped.load(Ordering::Relaxed)
+        self.stopped.load(Ordering::SeqCst)
     }
 
     pub fn solved_breaker<const MAIN_THREAD: bool>(&mut self, best_move: Move, value: i32, depth: usize) -> ControlFlow<()> {
