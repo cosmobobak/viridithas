@@ -23,7 +23,7 @@ use crate::{
     tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION,
+    NAME, VERSION, bench::BENCH_POSITIONS,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 4;
@@ -534,12 +534,7 @@ pub fn main_loop(params: EvalParams) {
                 break;
             }
             "ucinewgame" => {
-                let res = parse_position("position startpos\n", &mut pos);
-                tt.clear();
-                for td in &mut thread_data {
-                    td.alloc_tables();
-                }
-                res
+                do_newgame(&mut pos, &tt, &mut thread_data)
             }
             "eval" => {
                 println!("{}", pos.evaluate::<true>(thread_data.first_mut().unwrap(), 0));
@@ -598,6 +593,43 @@ pub fn main_loop(params: EvalParams) {
                 }
                 res
             }
+            benchcmd @ ("bench" | "benchfull") => 'bench: {
+                info.print_to_stdout = false;
+                let mut node_sum = 0u64;
+                for fen in BENCH_POSITIONS {
+                    let res = do_newgame(&mut pos, &tt, &mut thread_data);
+                    if let Err(e) = res {
+                        info.print_to_stdout = true;
+                        break 'bench Err(e);
+                    }
+                    let res = parse_position(&format!("position fen {fen}\n"), &mut pos);
+                    if let Err(e) = res {
+                        info.print_to_stdout = true;
+                        break 'bench Err(e);
+                    }
+                    for t in &mut thread_data {
+                        t.nnue.refresh_acc(&pos);
+                    }
+                    let res = parse_go("go depth 12\n", &mut info, &mut pos, get_search_params());
+                    if let Err(e) = res {
+                        info.print_to_stdout = true;
+                        break 'bench Err(e);
+                    }
+                    tt.increase_age();
+                    if USE_NNUE.load(Ordering::SeqCst) {
+                        pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
+                    } else {
+                        pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
+                    }
+                    node_sum += info.nodes;
+                    if benchcmd == "benchfull" {
+                        println!("{fen} has {} nodes", info.nodes);
+                    }
+                }
+                println!("{node_sum} nodes");
+                info.print_to_stdout = true;
+                Ok(())
+            }
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -611,4 +643,13 @@ pub fn main_loop(params: EvalParams) {
         }
     }
     KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+}
+
+fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
+    let res = parse_position("position startpos\n", pos);
+    tt.clear();
+    for td in thread_data {
+        td.alloc_tables();
+    }
+    res
 }

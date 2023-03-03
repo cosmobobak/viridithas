@@ -31,6 +31,7 @@ mod threadlocal;
 mod transpositiontable;
 mod uci;
 mod datagen;
+mod bench;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
