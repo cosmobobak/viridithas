@@ -589,7 +589,7 @@ impl Board {
         }
 
         let static_eval = if in_check {
-            INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+            -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
         } else {
