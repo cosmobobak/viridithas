@@ -592,13 +592,15 @@ pub fn main_loop(params: EvalParams) {
                 do_newgame(&mut pos, &tt, &mut thread_data)
             }
             "eval" => {
-                println!(
-                    "{}",
+                let eval = if pos.in_check::<{ Board::US }>() {
+                    0
+                } else {
                     pos.evaluate::<true>(
                         thread_data.first_mut().expect("the thread headers are empty."),
                         0
                     )
-                );
+                };
+                println!("{eval}");
                 Ok(())
             }
             "show" => {
