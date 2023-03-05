@@ -1,10 +1,10 @@
 #![deny(clippy::panic, clippy::unwrap_used, clippy::todo, clippy::unimplemented)]
 
 use std::{
-    fmt::Display,
+    fmt::{Display, self},
     io::Write,
     num::{ParseFloatError, ParseIntError},
-    str::ParseBoolError,
+    str::{ParseBoolError, FromStr},
     sync::{
         atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering},
         mpsc, Mutex,
@@ -78,7 +78,7 @@ impl From<ParseBoolError> for UciError {
 }
 
 impl Display for UciError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ParseOption(s) => write!(f, "ParseOption: {s}"),
             Self::ParseFen(s) => write!(f, "ParseFen: {s}"),
@@ -230,8 +230,8 @@ fn parse_go(
 
 fn part_parse<T>(target: &str, next_part: Option<&str>) -> Result<T, UciError>
 where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Display,
+    T: FromStr,
+    <T as FromStr>::Err: Display,
 {
     let next_part =
         next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
@@ -406,7 +406,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
 
 pub struct ScoreFormatWrapper(i32);
 impl Display for ScoreFormatWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if is_mate_score(self.0) {
             let plies_to_mate = MATE_SCORE - self.0.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;
@@ -425,7 +425,7 @@ pub const fn format_score(score: i32) -> ScoreFormatWrapper {
 }
 pub struct PrettyScoreFormatWrapper(i32, Colour);
 impl Display for PrettyScoreFormatWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             -20..=20 => write!(f, "\u{001b}[0m")?, // drawish, no colour.
             21..=100 => write!(f, "\u{001b}[38;5;10m")?, // slightly better for us, light green.
@@ -467,7 +467,7 @@ pub struct HumanTimeFormatWrapper {
     millis: u128,
 }
 impl Display for HumanTimeFormatWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let millis = self.millis;
         let seconds = millis / 1000;
         let minutes = seconds / 60;
@@ -520,7 +520,7 @@ pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop(params: EvalParams) {
     unsafe {
         set_eval_params(params);
@@ -532,7 +532,7 @@ pub fn main_loop(params: EvalParams) {
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let stopped = AtomicBool::new(false);
-    let stdin = std::sync::Mutex::new(stdin_reader());
+    let stdin = Mutex::new(stdin_reader());
     let mut info = SearchInfo::new(&stopped);
     info.set_stdin(&stdin);
 
