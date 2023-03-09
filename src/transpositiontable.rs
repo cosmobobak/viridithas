@@ -69,7 +69,8 @@ pub struct TTEntry {
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
 }
 
-const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
+const _TT_ENTRIES_ARE_ONE_WORD: () =
+    assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
 
 impl TTEntry {
     pub const NULL: Self = Self {
@@ -259,12 +260,7 @@ impl<'a> TTView<'a> {
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
         if tt_depth < depth {
-            return ProbeResult::Hit(TTHit {
-                tt_move,
-                tt_depth,
-                tt_bound,
-                tt_value,
-            });
+            return ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound, tt_value });
         }
 
         debug_assert!(tt_value >= -INFINITY);
@@ -274,34 +270,19 @@ impl<'a> TTView<'a> {
                 if tt_value <= alpha && !do_not_cut {
                     ProbeResult::Cutoff(alpha) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Upper,
-                        tt_value,
-                    })
+                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value })
                 }
             }
             Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
                     ProbeResult::Cutoff(beta) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Lower,
-                        tt_value,
-                    })
+                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value })
                 }
             }
             Bound::Exact => {
                 if do_not_cut {
-                    ProbeResult::Hit(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Exact,
-                        tt_value,
-                    })
+                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value })
                 } else {
                     ProbeResult::Cutoff(tt_value) // never cutoff at root.
                 }
@@ -315,10 +296,7 @@ impl<'a> TTView<'a> {
         #[cfg(target_arch = "x86_64")]
         unsafe {
             use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
-            _mm_prefetch(
-                (entry as *const AtomicU64).cast::<i8>(),
-                _MM_HINT_T0,
-            );
+            _mm_prefetch((entry as *const AtomicU64).cast::<i8>(), _MM_HINT_T0);
         }
     }
 
@@ -334,7 +312,10 @@ impl<'a> TTView<'a> {
         self.table
             .iter()
             .take(1000)
-            .filter(|e| <u64 as Into<TTEntry>>::into(e.load(Ordering::Relaxed)).key != 0)
+            .filter(|e| {
+                <u64 as Into<TTEntry>>::into(e.load(Ordering::Relaxed)).age_and_flag.flag()
+                    != Bound::None
+            })
             .count()
     }
 }
