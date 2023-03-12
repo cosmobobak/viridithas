@@ -648,8 +648,8 @@ pub fn main_loop(params: EvalParams) {
             input if input.starts_with("go perft") || input.starts_with("perft") => {
                 let tail = input.trim_start_matches("go perft ").trim_start_matches("perft ");
                 match tail.split_whitespace().next() {
-                    Some("divide") => {
-                        let depth = tail.trim_start_matches("divide ");
+                    Some("divide" | "split") => {
+                        let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
                         divide_perft(depth, &mut pos)
                     }
                     Some(depth) => block_perft(depth, &mut pos),
@@ -723,17 +723,19 @@ pub fn main_loop(params: EvalParams) {
 }
 
 fn block_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+    #![allow(clippy::cast_possible_truncation)]
     let depth = depth
         .parse::<usize>()
         .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
     let start_time = Instant::now();
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
-    println!("{} nodes in {}.{:03}s", nodes, elapsed.as_secs(), elapsed.subsec_millis());
+    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
     Ok(())
 }
 
 fn divide_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+    #![allow(clippy::cast_possible_truncation)]
     let depth = depth
         .parse::<usize>()
         .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
@@ -751,7 +753,7 @@ fn divide_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
         pos.unmake_move_hce();
     }
     let elapsed = start_time.elapsed();
-    println!("{} nodes in {}.{:03}s", nodes, elapsed.as_secs(), elapsed.subsec_millis());
+    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
     Ok(())
 }
 
