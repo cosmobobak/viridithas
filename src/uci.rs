@@ -13,22 +13,25 @@ use std::{
 };
 
 use crate::{
+    bench::BENCH_POSITIONS,
     board::{
         evaluation::{
             is_game_theoretic_score, is_mate_score, parameters::EvalParams, set_eval_params,
             MATE_SCORE, TB_WIN_SCORE,
         },
+        movegen::MoveList,
         Board,
     },
     definitions::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
+    perft,
     piece::Colour,
     search::parameters::{get_search_params, set_search_params, SearchParams},
     searchinfo::{SearchInfo, SearchLimit},
     tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION, bench::BENCH_POSITIONS,
+    NAME, VERSION,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
@@ -588,16 +591,14 @@ pub fn main_loop(params: EvalParams) {
                 info.quit = true;
                 break;
             }
-            "ucinewgame" => {
-                do_newgame(&mut pos, &tt, &mut thread_data)
-            }
+            "ucinewgame" => do_newgame(&mut pos, &tt, &mut thread_data),
             "eval" => {
                 let eval = if pos.in_check::<{ Board::US }>() {
                     0
                 } else {
                     pos.evaluate::<true>(
                         thread_data.first_mut().expect("the thread headers are empty."),
-                        0
+                        0,
                     )
                 };
                 println!("{eval}");
@@ -643,6 +644,19 @@ pub fn main_loop(params: EvalParams) {
                     }
                 }
                 res
+            }
+            input if input.starts_with("go perft") || input.starts_with("perft") => {
+                let tail = input.trim_start_matches("go perft ").trim_start_matches("perft ");
+                match tail.split_whitespace().next() {
+                    Some("divide") => {
+                        let depth = tail.trim_start_matches("divide ");
+                        divide_perft(depth, &mut pos)
+                    }
+                    Some(depth) => block_perft(depth, &mut pos),
+                    None => Err(UciError::InvalidFormat(
+                        "expected a depth after 'go perft'".to_string(),
+                    )),
+                }
             }
             input if input.starts_with("go") => {
                 let res = parse_go(input, &mut info, &mut pos, get_search_params());
@@ -706,6 +720,39 @@ pub fn main_loop(params: EvalParams) {
         }
     }
     KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+}
+
+fn block_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+    let depth = depth
+        .parse::<usize>()
+        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
+    let start_time = Instant::now();
+    let nodes = perft::perft(pos, depth);
+    let elapsed = start_time.elapsed();
+    println!("{} nodes in {}.{:03}s", nodes, elapsed.as_secs(), elapsed.subsec_millis());
+    Ok(())
+}
+
+fn divide_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+    let depth = depth
+        .parse::<usize>()
+        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
+    let start_time = Instant::now();
+    let mut nodes = 0;
+    let mut ml = MoveList::new();
+    pos.generate_moves(&mut ml);
+    for &m in ml.iter() {
+        if !pos.make_move_hce(m) {
+            continue;
+        }
+        let arm_nodes = perft::perft(pos, depth - 1);
+        nodes += arm_nodes;
+        println!("{m}: {arm_nodes}");
+        pos.unmake_move_hce();
+    }
+    let elapsed = start_time.elapsed();
+    println!("{} nodes in {}.{:03}s", nodes, elapsed.as_secs(), elapsed.subsec_millis());
+    Ok(())
 }
 
 fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
