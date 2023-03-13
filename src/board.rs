@@ -1744,7 +1744,7 @@ mod tests {
                 .unwrap();
 
         for ((p1, p2), pt) in
-            Piece::all().take(6).into_iter().zip(Piece::all().skip(6).take(6)).zip(PieceType::all())
+            Piece::all().take(6).zip(Piece::all().skip(6).take(6)).zip(PieceType::all())
         {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }
