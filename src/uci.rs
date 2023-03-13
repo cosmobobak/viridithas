@@ -567,6 +567,7 @@ pub fn main_loop(params: EvalParams) {
             }
             "ucifull" => {
                 print_uci_response(true);
+                PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
             arg @ ("ucidump" | "ucidumpfull") => {
