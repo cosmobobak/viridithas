@@ -439,7 +439,7 @@ impl BitBoard {
     }
 }
 
-pub trait BitShiftExt {
+pub trait BitHackExt {
     fn north_east_one(self) -> Self;
     fn north_west_one(self) -> Self;
     fn south_east_one(self) -> Self;
@@ -451,7 +451,7 @@ pub trait BitShiftExt {
     fn first_square(self) -> Square;
 }
 
-impl BitShiftExt for u64 {
+impl BitHackExt for u64 {
     fn north_east_one(self) -> Self {
         (self << 9) & !BB_FILE_A
     }
@@ -484,7 +484,7 @@ impl BitShiftExt for u64 {
 }
 
 pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: u64) -> u64 {
-    debug_assert!(PieceType::new(PIECE_TYPE) != PieceType::PAWN);
+    debug_assert_ne!(PieceType::new(PIECE_TYPE), PieceType::PAWN);
     match PieceType::new(PIECE_TYPE) {
         PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
         PieceType::ROOK => magic::get_rook_attacks(sq, blockers),

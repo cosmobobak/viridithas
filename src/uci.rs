@@ -650,9 +650,17 @@ pub fn main_loop(params: EvalParams) {
                 match tail.split_whitespace().next() {
                     Some("divide" | "split") => {
                         let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
-                        divide_perft(depth, &mut pos)
+                        depth
+                            .parse::<usize>()
+                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                            .map(|depth| divide_perft(depth, &mut pos))
                     }
-                    Some(depth) => block_perft(depth, &mut pos),
+                    Some(depth) => {
+                        depth
+                            .parse::<usize>()
+                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                            .map(|depth| block_perft(depth, &mut pos))
+                    }
                     None => Err(UciError::InvalidFormat(
                         "expected a depth after 'go perft'".to_string(),
                     )),
@@ -722,23 +730,16 @@ pub fn main_loop(params: EvalParams) {
     KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }
 
-fn block_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+fn block_perft(depth: usize, pos: &mut Board) {
     #![allow(clippy::cast_possible_truncation)]
-    let depth = depth
-        .parse::<usize>()
-        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
     let start_time = Instant::now();
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
     println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
-    Ok(())
 }
 
-fn divide_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
+fn divide_perft(depth: usize, pos: &mut Board) {
     #![allow(clippy::cast_possible_truncation)]
-    let depth = depth
-        .parse::<usize>()
-        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))?;
     let start_time = Instant::now();
     let mut nodes = 0;
     let mut ml = MoveList::new();
@@ -754,7 +755,6 @@ fn divide_perft(depth: &str, pos: &mut Board) -> Result<(), UciError> {
     }
     let elapsed = start_time.elapsed();
     println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
-    Ok(())
 }
 
 fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {

@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::movegen::{
-    bitboards::{attacks, BitShiftExt, DARK_SQUARE, LIGHT_SQUARE},
+    bitboards::{attacks, BitHackExt, DARK_SQUARE, LIGHT_SQUARE},
     BitLoop, BB_NONE,
 };
 

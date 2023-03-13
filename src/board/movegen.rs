@@ -1,7 +1,7 @@
 pub mod bitboards;
 pub mod movepicker;
 
-use self::bitboards::{first_square, BitShiftExt, BB_RANK_2, BB_RANK_7};
+use self::bitboards::{first_square, BitHackExt, BB_RANK_2, BB_RANK_7};
 pub use self::bitboards::{BitLoop, BB_NONE};
 
 use super::Board;

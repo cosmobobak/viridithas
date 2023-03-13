@@ -17,7 +17,7 @@ use crate::{
         evaluation::get_eval_params,
         movegen::{
             bitboards::{
-                self, pawn_attacks, BitShiftExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
+                self, pawn_attacks, BitHackExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
                 BB_RANK_4, BB_RANK_5, BB_RANK_7,
             },
             MoveList,
