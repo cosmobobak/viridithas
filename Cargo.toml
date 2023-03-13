@@ -14,6 +14,7 @@ repository = "https://github.com/cosmobobak/viridithas"
 [features]
 syzygy = ["dep:cc"]
 bindgen = ["dep:bindgen"]
+tuning = []
 
 [build-dependencies]
 cc = { version = "1.0.73", optional = true }

@@ -558,6 +558,9 @@ pub fn main_loop(params: EvalParams) {
         let res = match input {
             "\n" => continue,
             "uci" => {
+                #[cfg(feature = "tuning")]
+                print_uci_response(true);
+                #[cfg(not(feature = "tuning"))]
                 print_uci_response(false);
                 PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
