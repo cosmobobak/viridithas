@@ -1,6 +1,10 @@
 ideas for viri
 MAJOR:
 - docs
+- staged movegen.
+- check evasions
+- replace countermoves with countermove history
+- deeper conthists
 - support chess variants
 -- FRC
 -- DFRC
@@ -15,20 +19,13 @@ MINOR:
 - try to reduce attr use, it's ugly.
 - make FEN conversion not halt singlethreaded when writing to file. or generally.
 - the slow part of deduplication is the file I/O, consider mmap?.
-- record percentage of positions where TT move saves movegen - similar for captures when we get staged movegen.
 - multipv. put the moves in ThreadData and use ROOT.
 - Rust features to watch for: full const generics, const floating-point maths.
-- root node eval oracle.
 - make the big-piece and other stuff better named
 - make is_legal faster
-- check evasions
 - filter training positions that are forced.
-- replace countermoves with countermove history
-- deeper conthists
 - adapt frozenight's data generation for viri.
 - add good logging for everything using `log` + `env_logger`
 -- datagen, data reanalysis, maybe other things
 - mess about with the in-check QS score, and aspiration windows relating to it.
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
-- use relaxed atomics for more things
-- make setoption not suck
