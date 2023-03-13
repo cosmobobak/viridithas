@@ -5,6 +5,7 @@ MAJOR:
 - check evasions
 - replace countermoves with countermove history
 - deeper conthists
+- big tuning run (check that the UCI tune parameters actually make it in to the engine!!)
 - support chess variants
 -- FRC
 -- DFRC
