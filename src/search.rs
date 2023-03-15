@@ -32,7 +32,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTView, TTHit},
+    transpositiontable::{Bound, ProbeResult, TTView},
     uci::{self, PRETTY_PRINT},
 };
 
@@ -382,7 +382,6 @@ impl Board {
             return stand_pat;
         }
 
-        let original_alpha = alpha;
         if stand_pat > alpha {
             alpha = stand_pat;
         }
@@ -439,8 +438,6 @@ impl Board {
 
         let flag = if best_score >= beta {
             Bound::Lower
-        } else if best_score > original_alpha {
-            Bound::Exact
         } else {
             Bound::Upper
         };
@@ -594,8 +591,8 @@ impl Board {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
-        } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
-            *tt_value // use the TT value as an enhanced static eval.
+        // } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
+        //     *tt_value // use the TT value as an enhanced static eval.
         } else {
             self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
         };
