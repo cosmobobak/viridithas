@@ -15,7 +15,7 @@ MINOR:
 - replace all the false/true constgen stuff with a proper type.
 - fullwindow on big scores (+30?)
 - uci bench extension
-- remove `as` casts and unsafe code
+- remove `as` casts and unsafe code FOR REAL
 - perft divide
 - try to reduce attr use, it's ugly.
 - make FEN conversion not halt singlethreaded when writing to file. or generally.

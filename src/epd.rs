@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant, sync::atomic::AtomicBool};
 
 use crate::{
     board::{
-        evaluation::{parameters::EvalParams, set_eval_params},
+        evaluation::parameters::EvalParams,
         Board,
     },
     chessmove::Move,
@@ -23,11 +23,8 @@ struct EpdPosition {
     id: String,
 }
 
-pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64, hash: usize, threads: usize) {
+pub fn gamut(epd_path: impl AsRef<Path>, params: &EvalParams, time: u64, hash: usize, threads: usize) {
     let mut board = Board::new();
-    unsafe {
-        set_eval_params(params);
-    }
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
 
@@ -40,7 +37,7 @@ pub fn gamut(epd_path: impl AsRef<Path>, params: EvalParams, time: u64, hash: us
     let n_positions = positions.len();
     println!("successfully parsed {n_positions} positions!");
 
-    let successes = run_on_positions(positions, board, time, hash, threads);
+    let successes = run_on_positions(positions, board, time, hash, threads, params);
 
     println!("{successes}/{n_positions} passed");
 }
@@ -72,7 +69,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
     EpdPosition { fen, best_moves, id }
 }
 
-fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize, threads: usize) -> i32 {
+fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize, threads: usize, params: &EvalParams) -> i32 {
     let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
     let mut thread_data = (0..threads).map(ThreadData::new).collect::<Vec<_>>();
@@ -93,6 +90,7 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
             print_to_stdout: false,
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
             start_time: Instant::now(),
+            eval_params: params.clone(),
             ..SearchInfo::new(&stopped)
         };
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
