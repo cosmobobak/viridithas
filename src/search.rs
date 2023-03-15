@@ -183,7 +183,8 @@ impl Board {
         let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
-        'deepening: for d in starting_depth..=max_depth {
+        let mut d = starting_depth;
+        'deepening: while d <= max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
             if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
@@ -214,6 +215,7 @@ impl Board {
                     // search failed low, so we might have to
                     // revert a fail-high pv update
                     t.revert_best_line();
+                    d = t.depth;
                     continue;
                 }
                 // search is either exact or fail-high, so we can update the best line.
@@ -224,6 +226,7 @@ impl Board {
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
+                    d -= 1;
                     continue;
                 }
 
@@ -274,6 +277,8 @@ impl Board {
             } else {
                 aw = AspirationWindow::infinite();
             }
+
+            d += 1;
         }
     }
 
@@ -371,11 +376,7 @@ impl Board {
             }
         }
 
-        let stand_pat = if in_check {
-            -INFINITY // could be being mated!
-        } else {
-            self.evaluate::<NNUE>(info, t, info.nodes)
-        };
+        let stand_pat = self.evaluate::<NNUE>(info, t, info.nodes);
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
@@ -430,10 +431,6 @@ impl Board {
                     break; // fail-high
                 }
             }
-        }
-
-        if moves_made == 0 && in_check {
-            return -5000; // weird but works
         }
 
         let flag = if best_score >= beta {

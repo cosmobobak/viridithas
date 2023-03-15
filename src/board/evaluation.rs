@@ -212,8 +212,6 @@ impl Board {
     }
 
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
-        debug_assert!(!self.in_check::<{ Self::US }>(), "evaluate_nnue called while in check");
-
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == Colour::WHITE { draw_score(nodes) } else { -draw_score(nodes) };
         }
