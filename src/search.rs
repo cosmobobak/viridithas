@@ -390,7 +390,6 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
 
-        let mut moves_made = 0;
         let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], -108);
         if !in_check {
             move_picker.skip_quiets = true;
@@ -403,7 +402,6 @@ impl Board {
                 continue;
             }
             info.nodes += 1;
-            moves_made += 1;
 
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
             // the worst case for a capture is that we lose the capturing piece immediately.
