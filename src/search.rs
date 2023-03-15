@@ -32,7 +32,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTView, TTHit},
+    transpositiontable::{Bound, ProbeResult, TTView},
     uci::{self, PRETTY_PRINT},
 };
 
@@ -590,24 +590,22 @@ impl Board {
             }
         }
 
-        let eval = if in_check {
+        let static_eval = if in_check {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
-        } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
-            *tt_value // use the TT value as an enhanced static eval.
         } else {
             self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
         };
 
-        t.evals[height] = eval;
+        t.evals[height] = static_eval;
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less agressive with alpha-reductions (eval is too low).
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
-        let improving = !in_check && height >= 2 && eval >= t.evals[height - 2];
+        let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
         t.double_extensions[height] = if ROOT { 0 } else { t.double_extensions[height - 1] };
 
@@ -616,7 +614,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if eval < alpha - info.search_params.razoring_coeff_0 - info.search_params.razoring_coeff_1 * depth * depth {
+            if static_eval < alpha - info.search_params.razoring_coeff_0 - info.search_params.razoring_coeff_1 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
@@ -626,8 +624,8 @@ impl Board {
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
-            if depth <= info.search_params.rfp_depth && eval - Self::rfp_margin(info, depth, improving) > beta {
-                return eval;
+            if depth <= info.search_params.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
+                return static_eval;
             }
 
             let last_move_was_null = self.last_move_was_nullmove();
@@ -637,13 +635,13 @@ impl Board {
             // a score above beta, we can prune the node.
             if !last_move_was_null
                 && depth >= Depth::new(3)
-                && eval + i32::from(improving) * info.search_params.nmp_improving_margin >= beta
+                && static_eval + i32::from(improving) * info.search_params.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / 3
-                    + std::cmp::min((eval - beta) / 200, 3);
+                    + std::cmp::min((static_eval - beta) / 200, 3);
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let null_score =
@@ -731,7 +729,7 @@ impl Board {
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth.round() * info.search_params.futility_coeff_1 + info.search_params.futility_coeff_0;
-                if is_quiet && lmr_depth < info.search_params.futility_depth && eval + fp_margin <= alpha {
+                if is_quiet && lmr_depth < info.search_params.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
             }
