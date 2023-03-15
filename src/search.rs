@@ -32,7 +32,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTView},
+    transpositiontable::{Bound, ProbeResult, TTView, TTHit},
     uci::{self, PRETTY_PRINT},
 };
 
@@ -49,9 +49,9 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 20;
+const ASPIRATION_WINDOW: i32 = 17;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
-const RFP_MARGIN: i32 = 70;
+const RFP_MARGIN: i32 = 60;
 const RFP_IMPROVING_MARGIN: i32 = 57;
 const NMP_IMPROVING_MARGIN: i32 = 76;
 const SEE_QUIET_MARGIN: i32 = -59;
@@ -183,8 +183,7 @@ impl Board {
         let mut pv = PVariation::default();
         let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
-        let mut d = starting_depth;
-        'deepening: while d <= max_depth {
+        'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
             if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
@@ -215,7 +214,6 @@ impl Board {
                     // search failed low, so we might have to
                     // revert a fail-high pv update
                     t.revert_best_line();
-                    d = t.depth;
                     continue;
                 }
                 // search is either exact or fail-high, so we can update the best line.
@@ -226,7 +224,6 @@ impl Board {
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up();
-                    d -= 1;
                     continue;
                 }
 
@@ -277,8 +274,6 @@ impl Board {
             } else {
                 aw = AspirationWindow::infinite();
             }
-
-            d += 1;
         }
     }
 
@@ -376,13 +371,18 @@ impl Board {
             }
         }
 
-        let stand_pat = self.evaluate::<NNUE>(info, t, info.nodes);
+        let stand_pat = if in_check {
+            -INFINITY // could be being mated!
+        } else {
+            self.evaluate::<NNUE>(info, t, info.nodes)
+        };
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
             return stand_pat;
         }
 
+        let original_alpha = alpha;
         if stand_pat > alpha {
             alpha = stand_pat;
         }
@@ -390,6 +390,7 @@ impl Board {
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
 
+        let mut moves_made = 0;
         let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], -108);
         if !in_check {
             move_picker.skip_quiets = true;
@@ -402,6 +403,7 @@ impl Board {
                 continue;
             }
             info.nodes += 1;
+            moves_made += 1;
 
             // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
             // the worst case for a capture is that we lose the capturing piece immediately.
@@ -431,8 +433,14 @@ impl Board {
             }
         }
 
+        if moves_made == 0 && in_check {
+            return -5000; // weird but works
+        }
+
         let flag = if best_score >= beta {
             Bound::Lower
+        } else if best_score > original_alpha {
+            Bound::Exact
         } else {
             Bound::Upper
         };
@@ -586,8 +594,8 @@ impl Board {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
-        // } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
-        //     *tt_value // use the TT value as an enhanced static eval.
+        } else if let Some(TTHit { tt_value, .. }) = &tt_hit {
+            *tt_value // use the TT value as an enhanced static eval.
         } else {
             self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
         };
