@@ -212,7 +212,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
             eprintln!("Making random moves...");
         }
         for _ in 0..12 {
-            let res = board.make_random_move::<true>(&mut rng, &mut thread_data);
+            let res = board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
             if res.is_none() {
                 if options.log_level > 2 {
                     eprintln!("Reached a position with no legal moves, skipping...");
@@ -272,7 +272,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
                 // and the side to move is not in check.
                 single_game_buffer.push((score, board.fen()));
             }
-            board.make_move::<true>(best_move, &mut thread_data);
+            board.make_move::<true>(best_move, &mut thread_data, &info);
         };
         if options.log_level > 2 {
             eprintln!("Game is over, outcome: {outcome:?}");

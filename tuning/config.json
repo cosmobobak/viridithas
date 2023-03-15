@@ -1,24 +1,24 @@
 {
     "engines": [
         {
-            "command": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/dev"
+            "command": "./viridithas"
         },
         {
-            "command": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/dev-fixed"
+            "command": "./viridithas"
         }
     ],
     "parameter_ranges": {
-        "LMRBASE": "Real(0.0, 3.0)",
-        "LMRDIVISION": "Real(0.0, 6.0)",
-        "FUTILITY_GRADIENT": "Integer(0, 60)",
-        "FUTILITY_INTERCEPT": "Integer(0, 150)"
+        "LMR_BASE": "Integer(0, 400)",
+        "LMR_DIVISION": "Real(0, 500)",
+        "FUTILITY_COEFF_0": "Integer(0, 300)",
+        "FUTILITY_COEFF_1": "Integer(0, 300)"
     },
-    "engine1_tc": "3+0.1",
-    "engine2_tc": "3+0.1",
-    "rounds": 100,
+    "engine1_tc": "10+0.1",
+    "engine2_tc": "10+0.1",
+    "rounds": 64,
     "plot_every": 5,
     "plot_path": "plots",
     "result_every": 5,
-    "opening_file": "/afs/inf.ed.ac.uk/user/s20/s2079150/virtue/tuning/Balsa_v500.pgn",
-    "concurrency": 60
+    "opening_file": "../../uhobook.pgn",
+    "concurrency": 64
 }

@@ -16,7 +16,7 @@ use crate::{
     bench::BENCH_POSITIONS,
     board::{
         evaluation::{
-            is_game_theoretic_score, is_mate_score, parameters::EvalParams, set_eval_params,
+            is_game_theoretic_score, is_mate_score, parameters::EvalParams,
             MATE_SCORE, TB_WIN_SCORE,
         },
         movegen::MoveList,
@@ -26,7 +26,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     perft,
     piece::Colour,
-    search::parameters::{get_search_params, set_search_params, SearchParams},
+    search::{parameters::SearchParams, LMTable},
     searchinfo::{SearchInfo, SearchLimit},
     tablebases,
     threadlocal::ThreadData,
@@ -138,7 +138,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     for san in parts {
         pos.zero_height(); // stuff breaks really hard without this lmao
         let m = pos.parse_uci(san)?;
-        pos.make_move_hce(m);
+        pos.make_move_base(m);
     }
     pos.zero_height();
     Ok(())
@@ -149,7 +149,6 @@ fn parse_go(
     text: &str,
     info: &mut SearchInfo,
     pos: &mut Board,
-    config: &SearchParams,
 ) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
@@ -206,7 +205,7 @@ fn parse_go(
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
         // let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
         let (time_window, max_time_window) =
-            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, config);
+            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, &info.search_params);
         info.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
@@ -525,10 +524,6 @@ pub fn is_multipv() -> bool {
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop(params: EvalParams) {
-    unsafe {
-        set_eval_params(params);
-    }
-
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -538,6 +533,7 @@ pub fn main_loop(params: EvalParams) {
     let stdin = Mutex::new(stdin_reader());
     let mut info = SearchInfo::new(&stopped);
     info.set_stdin(&stdin);
+    info.eval_params = params;
 
     let mut thread_data = Vec::new();
     thread_data.push(ThreadData::new(0));
@@ -545,6 +541,7 @@ pub fn main_loop(params: EvalParams) {
         t.nnue.refresh_acc(&pos);
         t.alloc_tables();
     }
+    pos.refresh_psqt(&info);
 
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
@@ -601,6 +598,7 @@ pub fn main_loop(params: EvalParams) {
                     0
                 } else {
                     pos.evaluate::<true>(
+                        &info,
                         thread_data.first_mut().expect("the thread headers are empty."),
                         0,
                     )
@@ -614,16 +612,15 @@ pub fn main_loop(params: EvalParams) {
             }
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
-                    search_config: get_search_params().clone(),
+                    search_config: info.search_params.clone(),
                     hash_mb: None,
                     threads: None,
                 };
                 let res = parse_setoption(input, &mut info, pre_config);
                 match res {
                     Ok(conf) => {
-                        unsafe {
-                            set_search_params(conf.search_config);
-                        }
+                        info.search_params = conf.search_config;
+                        info.lm_table = LMTable::new(&info.search_params);
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
                             tt.resize(new_size);
@@ -646,6 +643,7 @@ pub fn main_loop(params: EvalParams) {
                     for t in &mut thread_data {
                         t.nnue.refresh_acc(&pos);
                     }
+                    pos.refresh_psqt(&info);
                 }
                 res
             }
@@ -671,7 +669,7 @@ pub fn main_loop(params: EvalParams) {
                 }
             }
             input if input.starts_with("go") => {
-                let res = parse_go(input, &mut info, &mut pos, get_search_params());
+                let res = parse_go(input, &mut info, &mut pos);
                 if res.is_ok() {
                     tt.increase_age();
                     if USE_NNUE.load(Ordering::SeqCst) {
@@ -699,7 +697,8 @@ pub fn main_loop(params: EvalParams) {
                     for t in &mut thread_data {
                         t.nnue.refresh_acc(&pos);
                     }
-                    let res = parse_go("go depth 12\n", &mut info, &mut pos, get_search_params());
+                    pos.refresh_psqt(&info);
+                    let res = parse_go("go depth 12\n", &mut info, &mut pos);
                     if let Err(e) = res {
                         info.print_to_stdout = true;
                         break 'bench Err(e);
@@ -749,13 +748,13 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
     for &m in ml.iter() {
-        if !pos.make_move_hce(m) {
+        if !pos.make_move_base(m) {
             continue;
         }
         let arm_nodes = perft::perft(pos, depth - 1);
         nodes += arm_nodes;
         println!("{m}: {arm_nodes}");
-        pos.unmake_move_hce();
+        pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();
     println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);

@@ -44,9 +44,6 @@ fn main() {
 
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
-    unsafe {
-        search::parameters::set_search_params(search::parameters::SearchParams::default());
-    }
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
@@ -140,7 +137,7 @@ fn main() {
     }
 
     if let Some(epd_path) = cli.epdpath {
-        return epd::gamut(epd_path, eparams, cli.epdtime, cli.epdhash, cli.epdthreads);
+        return epd::gamut(epd_path, &eparams, cli.epdtime, cli.epdhash, cli.epdthreads);
     }
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {

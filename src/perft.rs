@@ -1,9 +1,13 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::{
     fs::File,
     io::{BufRead, BufReader},
 };
 
 use crate::board::{movegen::MoveList, Board};
+#[cfg(test)]
+use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -18,11 +22,61 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter() {
-        if !pos.make_move_hce(m) {
+        if !pos.make_move_base(m) {
             continue;
         }
         count += perft(pos, depth - 1);
-        pos.unmake_move_hce();
+        pos.unmake_move_base();
+    }
+
+    count
+}
+
+#[cfg(test)]
+pub fn hce_perft(pos: &mut Board, info: &SearchInfo, depth: usize) -> u64 {
+    #[cfg(debug_assertions)]
+    pos.check_validity().unwrap();
+    debug_assert!(pos.check_hce_coherency(info), "{pos}");
+
+    if depth == 0 {
+        return 1;
+    }
+
+    let mut ml = MoveList::new();
+    pos.generate_moves(&mut ml);
+
+    let mut count = 0;
+    for &m in ml.iter() {
+        if !pos.make_move_hce(m, info) {
+            continue;
+        }
+        count += hce_perft(pos, info, depth - 1);
+        pos.unmake_move_hce(info);
+    }
+
+    count
+}
+
+#[cfg(test)]
+pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+    #[cfg(debug_assertions)]
+    pos.check_validity().unwrap();
+    debug_assert!(pos.check_nnue_coherency(&t.nnue));
+
+    if depth == 0 {
+        return 1;
+    }
+
+    let mut ml = MoveList::new();
+    pos.generate_moves(&mut ml);
+
+    let mut count = 0;
+    for &m in ml.iter() {
+        if !pos.make_move_nnue(m, t) {
+            continue;
+        }
+        count += nnue_perft(pos, t, depth - 1);
+        pos.unmake_move_nnue(t);
     }
 
     count
@@ -59,6 +113,8 @@ pub fn gamut() {
 
 mod tests {
     #![allow(unused_imports)]
+    use std::sync::atomic::AtomicBool;
+
     use crate::{chessmove::Move, definitions::Square, piece::PieceType};
 
     #[test]
@@ -94,6 +150,39 @@ mod tests {
     }
 
     #[test]
+    fn perft_hce_start_position() {
+        use super::*;
+        crate::magic::initialise();
+        let mut pos = Board::new();
+        let stopped = AtomicBool::new(false);
+        let info = SearchInfo::new(&stopped);
+        pos.set_startpos();
+        pos.refresh_psqt(&info);
+        assert_eq!(hce_perft(&mut pos, &info, 1), 20, "got {}", {
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+        });
+        assert_eq!(hce_perft(&mut pos, &info, 2), 400);
+        assert_eq!(hce_perft(&mut pos, &info, 3), 8_902);
+        assert_eq!(hce_perft(&mut pos, &info, 4), 197_281);
+    }
+
+    #[test]
+    fn perft_nnue_start_position() {
+        use super::*;
+        crate::magic::initialise();
+        let mut pos = Board::new();
+        let mut t = ThreadData::new(0);
+        pos.set_startpos();
+        t.nnue.refresh_acc(&pos);
+        assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+        });
+        assert_eq!(nnue_perft(&mut pos, &mut t, 2), 400);
+        assert_eq!(nnue_perft(&mut pos, &mut t, 3), 8_902);
+        // assert_eq!(nnue_perft(&mut pos, &mut t, 4), 197_281);
+    }
+
+    #[test]
     fn perft_krk() {
         use super::*;
         crate::magic::initialise();
@@ -114,11 +203,11 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move_hce(e4);
+        pos.make_move_base(e4);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
-        pos.unmake_move_hce();
+        pos.unmake_move_base();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
         assert_eq!(pos.hashkey(), hashkey_before);
@@ -134,11 +223,11 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move_hce(exd5);
+        pos.make_move_base(exd5);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
-        pos.unmake_move_hce();
+        pos.unmake_move_base();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
         assert_eq!(pos.hashkey(), hashkey_before);

@@ -3,25 +3,12 @@ use std::fmt::Display;
 use crate::definitions::depth::Depth;
 
 use super::{
-    LMTable, ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
+    ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
     LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, RAZORING_COEFF_0,
     NMP_VERIFICATION_DEPTH, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, RAZORING_COEFF_1,
     SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
     SEARCH_TIME_FRACTION,
 };
-
-pub static mut SEARCH_PARAMS: SearchParams = SearchParams::default();
-pub static mut LM_TABLE: LMTable = LMTable::NULL;
-pub unsafe fn set_search_params(params: SearchParams) {
-    LM_TABLE = LMTable::new(&params);
-    SEARCH_PARAMS = params;
-}
-pub fn get_search_params() -> &'static SearchParams {
-    unsafe { &SEARCH_PARAMS }
-}
-pub fn get_lm_table() -> &'static LMTable {
-    unsafe { &LM_TABLE }
-}
 
 #[derive(Clone, Debug)]
 pub struct SearchParams {

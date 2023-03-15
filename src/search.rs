@@ -29,7 +29,6 @@ use crate::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, MAX_PLY,
     },
     piece::{Colour, PieceType},
-    search::parameters::{get_lm_table, get_search_params},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
@@ -284,12 +283,12 @@ impl Board {
         let mut mp = MovePicker::<false, true, true>::new(tt_move, self.get_killer_set(t), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
-            if !self.make_move_hce(mov) {
+            if !self.make_move_base(mov) {
                 continue;
             }
             // if we get here, it means the move is legal.
             m = mov;
-            self.unmake_move_hce();
+            self.unmake_move_base();
             break;
         }
         m
@@ -359,7 +358,7 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
-            return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
+            return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes) };
         }
 
         // probe the TT and see if we get a cutoff.
@@ -375,7 +374,7 @@ impl Board {
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
         } else {
-            self.evaluate::<NNUE>(t, info.nodes)
+            self.evaluate::<NNUE>(info, t, info.nodes)
         };
 
         if stand_pat >= beta {
@@ -400,7 +399,7 @@ impl Board {
             let worst_case =
                 self.estimated_see(m) - get_see_value(self.piece_at(m.from()).piece_type());
 
-            if !self.make_move::<NNUE>(m, t) {
+            if !self.make_move::<NNUE>(m, t, info) {
                 continue;
             }
             info.nodes += 1;
@@ -412,14 +411,14 @@ impl Board {
             // we have to do this after make_move, because the move has to be legal.
             let at_least = stand_pat + worst_case;
             if at_least > beta && !is_game_theoretic_score(at_least * 2) {
-                self.unmake_move::<NNUE>(t);
+                self.unmake_move::<NNUE>(t, info);
                 pv.length = 1;
                 pv.line[0] = m;
                 return at_least;
             }
 
             let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
-            self.unmake_move::<NNUE>(t);
+            self.unmake_move::<NNUE>(t, info);
 
             if score > best_score {
                 best_score = score;
@@ -471,7 +470,11 @@ impl Board {
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-        debug_assert!(self.check_nnue_coherency(&t.nnue));
+        if NNUE {
+            debug_assert!(self.check_nnue_coherency(&t.nnue));
+        } else {
+            debug_assert!(self.check_hce_coherency(info));
+        }
 
         let mut lpv = PVariation::default();
 
@@ -493,7 +496,6 @@ impl Board {
         }
 
         let height = self.height();
-        let sp = get_search_params();
 
         debug_assert_eq!(height == 0, ROOT);
 
@@ -513,7 +515,7 @@ impl Board {
             let max_height =
                 MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
-                return if in_check { 0 } else { self.evaluate::<NNUE>(t, info.nodes) };
+                return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes) };
             }
 
             // mate-distance pruning.
@@ -535,7 +537,7 @@ impl Board {
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction.
-                    if PV && depth >= sp.tt_reduction_depth {
+                    if PV && depth >= info.search_params.tt_reduction_depth {
                         depth -= 1;
                     }
                     None
@@ -593,7 +595,7 @@ impl Board {
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
         } else {
-            self.evaluate::<NNUE>(t, info.nodes) // otherwise, use the static evaluation.
+            self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
         };
 
         t.evals[height] = static_eval;
@@ -612,7 +614,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval < alpha - sp.razoring_coeff_0 - sp.razoring_coeff_1 * depth * depth {
+            if static_eval < alpha - info.search_params.razoring_coeff_0 - info.search_params.razoring_coeff_1 * depth * depth {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
@@ -622,7 +624,7 @@ impl Board {
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
-            if depth <= sp.rfp_depth && static_eval - Self::rfp_margin(depth, improving) > beta {
+            if depth <= info.search_params.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
                 return static_eval;
             }
 
@@ -633,11 +635,11 @@ impl Board {
             // a score above beta, we can prune the node.
             if !last_move_was_null
                 && depth >= Depth::new(3)
-                && static_eval + i32::from(improving) * sp.nmp_improving_margin >= beta
+                && static_eval + i32::from(improving) * info.search_params.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
-                let r = sp.nmp_base_reduction
+                let r = info.search_params.nmp_base_reduction
                     + depth / 3
                     + std::cmp::min((static_eval - beta) / 200, 3);
                 let nm_depth = depth - r;
@@ -650,7 +652,7 @@ impl Board {
                 }
                 if null_score >= beta {
                     // unconditionally cutoff if we're just too shallow.
-                    if depth < sp.nmp_verification_depth && !is_game_theoretic_score(beta) {
+                    if depth < info.search_params.nmp_verification_depth && !is_game_theoretic_score(beta) {
                         return null_score;
                     }
                     // verify that it's *actually* fine to prune,
@@ -688,10 +690,10 @@ impl Board {
         }
 
         // number of quiet moves to try before we start pruning
-        let lmp_threshold = get_lm_table().lmp_movecount(depth, improving);
+        let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
         let see_table =
-            [sp.see_tactical_margin * depth.squared(), sp.see_quiet_margin * depth.round()];
+            [info.search_params.see_tactical_margin * depth.squared(), info.search_params.see_quiet_margin * depth.round()];
 
         let killers = self.get_killer_set(t);
 
@@ -711,7 +713,7 @@ impl Board {
                 continue;
             }
 
-            let lmr_reduction = get_lm_table().lm_reduction(depth, moves_made);
+            let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
@@ -720,14 +722,14 @@ impl Board {
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= sp.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= info.search_params.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth.round() * sp.futility_coeff_1 + sp.futility_coeff_0;
-                if is_quiet && lmr_depth < sp.futility_depth && static_eval + fp_margin <= alpha {
+                let fp_margin = lmr_depth.round() * info.search_params.futility_coeff_1 + info.search_params.futility_coeff_0;
+                if is_quiet && lmr_depth < info.search_params.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
             }
@@ -736,13 +738,13 @@ impl Board {
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
             if !ROOT
                 && best_score > -MINIMUM_TB_WIN_SCORE
-                && depth <= sp.see_depth
+                && depth <= info.search_params.see_depth
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
             }
 
-            if !self.make_move::<NNUE>(m, t) {
+            if !self.make_move::<NNUE>(m, t, info) {
                 continue;
             }
 
@@ -765,7 +767,7 @@ impl Board {
 
             let maybe_singular = tt_hit.map_or(false, |tt_hit| {
                 !ROOT
-                    && depth >= sp.singularity_depth
+                    && depth >= info.search_params.singularity_depth
                     && tt_hit.tt_move == m
                     && excluded.is_null()
                     && tt_hit.tt_depth >= depth - 3
@@ -819,7 +821,7 @@ impl Board {
                     && depth >= Depth::new(3)
                     && moves_made >= (2 + usize::from(PV))
                 {
-                    let mut r = get_lm_table().lm_reduction(depth, moves_made);
+                    let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
@@ -849,7 +851,7 @@ impl Board {
                     );
                 }
             }
-            self.unmake_move::<NNUE>(t);
+            self.unmake_move::<NNUE>(t, info);
             if extension >= ONE_PLY * 2 {
                 t.double_extensions[height] -= 1;
             }
@@ -921,9 +923,8 @@ impl Board {
     }
 
     /// The margin for Reverse Futility Pruning.
-    fn rfp_margin(depth: Depth, improving: bool) -> i32 {
-        let sp = get_search_params();
-        sp.rfp_margin * depth - i32::from(improving) * sp.rfp_improving_margin
+    fn rfp_margin(info: &SearchInfo, depth: Depth, improving: bool) -> i32 {
+        info.search_params.rfp_margin * depth - i32::from(improving) * info.search_params.rfp_improving_margin
     }
 
     /// Update the history and followup history tables.
@@ -960,7 +961,7 @@ impl Board {
         let r_beta = Self::singularity_margin(tt_value, depth);
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
-        self.unmake_move::<NNUE>(t);
+        self.unmake_move::<NNUE>(t, info);
         t.excluded[self.height()] = m;
         let value = self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta);
         t.excluded[self.height()] = Move::NULL;
@@ -968,7 +969,7 @@ impl Board {
             mp.stage = Stage::Done; // multicut!!
         } else {
             // re-make the singular move.
-            self.make_move::<NNUE>(m, t);
+            self.make_move::<NNUE>(m, t, info);
         }
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
         if double_extend {
@@ -1271,6 +1272,7 @@ pub const fn draw_score(nodes: u64) -> i32 {
     (nodes & 0b11) as i32 - 2
 }
 
+#[derive(Clone, Debug)]
 pub struct LMTable {
     /// The reduction table. rtable[depth][played] is the base LMR reduction for a move
     lm_reduction_table: [[i32; 64]; 64],
@@ -1288,7 +1290,7 @@ impl LMTable {
             clippy::cast_precision_loss,
             clippy::cast_sign_loss
         )]
-        let mut out = Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
+        let mut out = Self::NULL;
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
             cfor!(let mut played = 1; played < 64; played += 1; {
@@ -1313,6 +1315,12 @@ impl LMTable {
     pub fn lmp_movecount(&self, depth: Depth, improving: bool) -> usize {
         let depth = depth.ply_to_horizon().min(11);
         self.lmp_movecount_table[usize::from(improving)][depth]
+    }
+}
+
+impl Default for LMTable {
+    fn default() -> Self {
+        Self::new(&SearchParams::default())
     }
 }
 

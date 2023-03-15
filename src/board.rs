@@ -13,16 +13,13 @@ use rand::rngs::ThreadRng;
 use regex::Regex;
 
 use crate::{
-    board::{
-        evaluation::get_eval_params,
-        movegen::{
+    board::movegen::{
             bitboards::{
                 self, pawn_attacks, BitHackExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
                 BB_RANK_4, BB_RANK_5, BB_RANK_7,
             },
             MoveList,
         },
-    },
     chessmove::Move,
     definitions::{
         CheckState, File,
@@ -37,7 +34,7 @@ use crate::{
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::PVariation,
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, searchinfo::SearchInfo,
 };
 
 use self::{
@@ -700,8 +697,6 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = Piece::EMPTY;
-        self.material[colour.index()] -= get_eval_params().piece_values[piece.index()];
-        self.pst_vals -= pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
         if PIECE_BIG[piece.index()] {
             self.big_piece_counts[colour.index()] -= 1;
@@ -710,6 +705,36 @@ impl Board {
             } else {
                 self.minor_piece_counts[colour.index()] -= 1;
             }
+        }
+    }
+
+    pub fn activate_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, sq: Square) {
+        let piece = Piece::new(colour, pt);
+        self.material[colour.index()] += info.eval_params.piece_values[piece.index()];
+        self.pst_vals += pst_value(piece, sq, &info.eval_params.piece_square_tables);
+    }
+
+    pub fn deactivate_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, sq: Square) {
+        let piece = Piece::new(colour, pt);
+        self.material[colour.index()] -= info.eval_params.piece_values[piece.index()];
+        self.pst_vals -= pst_value(piece, sq, &info.eval_params.piece_square_tables);
+    }
+
+    pub fn move_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, from: Square, to: Square) {
+        let piece = Piece::new(colour, pt);
+        self.pst_vals -= pst_value(piece, from, &info.eval_params.piece_square_tables);
+        self.pst_vals += pst_value(piece, to, &info.eval_params.piece_square_tables);
+    }
+
+    pub fn refresh_psqt(&mut self, info: &SearchInfo) {
+        for sq in Square::all() {
+            let piece = self.piece_at(sq);
+            if piece == Piece::EMPTY {
+                continue;
+            }
+            let colour = piece.colour();
+            self.material[colour.index()] += info.eval_params.piece_values[piece.index()];
+            self.pst_vals += pst_value(piece, sq, &info.eval_params.piece_square_tables);
         }
     }
 
@@ -723,8 +748,6 @@ impl Board {
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-        self.material[colour.index()] += get_eval_params().piece_values[piece.index()];
-        self.pst_vals += pst_value(piece, sq, &get_eval_params().piece_square_tables);
 
         if PIECE_BIG[piece.index()] {
             self.big_piece_counts[colour.index()] += 1;
@@ -750,8 +773,6 @@ impl Board {
 
         *self.piece_at_mut(from) = Piece::EMPTY;
         *self.piece_at_mut(to) = piece_moved;
-        self.pst_vals -= pst_value(piece_moved, from, &get_eval_params().piece_square_tables);
-        self.pst_vals += pst_value(piece_moved, to, &get_eval_params().piece_square_tables);
     }
 
     /// Gets the piece that will be moved by the given move.
@@ -807,7 +828,7 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    pub fn make_move_hce(&mut self, m: Move) -> bool {
+    pub fn make_move_base(&mut self, m: Move) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -904,14 +925,14 @@ impl Board {
 
         // reversed in_check fn, as we have now swapped sides
         if self.in_check::<{ Self::THEM }>() {
-            self.unmake_move_hce();
+            self.unmake_move_base();
             return false;
         }
 
         true
     }
 
-    pub fn unmake_move_hce(&mut self) {
+    pub fn unmake_move_base(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1049,7 +1070,7 @@ impl Board {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let capture = self.captured_piece(m);
-        let res = self.make_move_hce(m);
+        let res = self.make_move_base(m);
         if !res {
             return false;
         }
@@ -1115,10 +1136,63 @@ impl Board {
         true
     }
 
+    pub fn make_move_hce(&mut self, m: Move, info: &SearchInfo) -> bool {
+        debug_assert!(self.check_hce_coherency(info));
+        let piece_type = self.moved_piece(m).piece_type();
+        let colour = self.turn();
+        let capture = self.captured_piece(m);
+        let res = self.make_move_base(m);
+        if !res {
+            return false;
+        }
+        let from = m.from();
+        let to = m.to();
+        if m.is_ep() {
+            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            // deactivate pawn on ep_sq
+            self.deactivate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
+        } else if m.is_castle() {
+            match to {
+                Square::C1 => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::A1, Square::D1);
+                }
+                Square::C8 => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::A8, Square::D8);
+                }
+                Square::G1 => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::H1, Square::F1);
+                }
+                Square::G8 => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::H8, Square::F8);
+                }
+                _ => {
+                    panic!("Invalid castle move");
+                }
+            }
+        }
+
+        if capture != Piece::EMPTY {
+            self.deactivate_psqt(info, capture.piece_type(), colour.flip(), to);
+        }
+
+        if m.is_promo() {
+            let promo = m.promotion_type();
+            debug_assert!(promo.legal_promo());
+            self.deactivate_psqt(info, PieceType::PAWN, colour, from);
+            self.activate_psqt(info, promo, colour, to);
+        } else {
+            self.move_psqt(info, piece_type, colour, from, to);
+        }
+
+        debug_assert!(self.check_hce_coherency(info));
+
+        true
+    }
+
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
         #[cfg(debug_assertions)]
         let m = self.history.last().unwrap().m;
-        self.unmake_move_hce();
+        self.unmake_move_base();
         t.nnue.pop_acc();
         #[cfg(debug_assertions)]
         {
@@ -1154,19 +1228,55 @@ impl Board {
         }
     }
 
-    pub fn make_move<const USE_NNUE: bool>(&mut self, m: Move, t: &mut ThreadData) -> bool {
+    pub fn unmake_move_hce(&mut self, info: &SearchInfo) {
+        debug_assert!(self.check_hce_coherency(info));
+        let m = self.history.last().unwrap().m;
+        self.unmake_move_base();
+        let piece = self.moved_piece(m).piece_type();
+        let from = m.from();
+        let to = m.to();
+        let colour = self.turn();
+        if m.is_ep() {
+            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            self.activate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
+        } else if m.is_castle() {
+            let (rook_from, rook_to) = match to {
+                Square::C1 => (Square::D1, Square::A1),
+                Square::G8 => (Square::F8, Square::H8),
+                Square::C8 => (Square::D8, Square::A8),
+                Square::G1 => (Square::F1, Square::H1),
+                _ => panic!("Invalid castle move"),
+            };
+            self.move_psqt(info, PieceType::ROOK, colour, rook_from, rook_to);
+        }
+        if m.is_promo() {
+            let promo = m.promotion_type();
+            debug_assert!(promo.legal_promo());
+            self.deactivate_psqt(info, promo, colour, to);
+            self.activate_psqt(info, PieceType::PAWN, colour, from);
+        } else {
+            self.move_psqt(info, piece, colour, to, from);
+        }
+        let capture = self.captured_piece(m);
+        if capture != Piece::EMPTY {
+            self.activate_psqt(info, capture.piece_type(), colour.flip(), to);
+        }
+        debug_assert!(self.check_hce_coherency(info));
+    }
+
+    pub fn make_move<const USE_NNUE: bool>(&mut self, m: Move, t: &mut ThreadData, info: &SearchInfo) -> bool {
         if USE_NNUE {
             self.make_move_nnue(m, t)
         } else {
-            self.make_move_hce(m)
+            self.make_move_hce(m, info)
         }
     }
 
-    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData) {
+    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData, info: &SearchInfo) {
         if USE_NNUE {
             self.unmake_move_nnue(t);
         } else {
-            self.unmake_move_hce();
+            self.unmake_move_hce(info);
         }
     }
 
@@ -1174,13 +1284,14 @@ impl Board {
         &mut self,
         rng: &mut ThreadRng,
         t: &mut ThreadData,
+        info: &SearchInfo,
     ) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
         let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
             return None;
         };
-        self.make_move::<NNUE>(*mov, t);
+        self.make_move::<NNUE>(*mov, t, info);
         Some(*mov)
     }
 
@@ -1323,10 +1434,10 @@ impl Board {
 
         let mut legal_move = None;
         for &m in ml.iter() {
-            if !self.make_move_hce(m) {
+            if !self.make_move_base(m) {
                 continue;
             }
-            self.unmake_move_hce();
+            self.unmake_move_base();
             let legal_promo_t = m.safe_promotion_type();
             if legal_promo_t.index() != promo.unwrap_or(0) {
                 continue;
@@ -1413,7 +1524,7 @@ impl Board {
     }
 
     pub fn gives(&mut self, m: Move) -> CheckState {
-        if !self.make_move_hce(m) {
+        if !self.make_move_base(m) {
             return CheckState::None;
         }
         let gives_check = self.in_check::<{ Self::US }>();
@@ -1421,20 +1532,20 @@ impl Board {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
             for &m in ml.iter() {
-                if !self.make_move_hce(m) {
+                if !self.make_move_base(m) {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
-                self.unmake_move_hce();
-                self.unmake_move_hce();
+                self.unmake_move_base();
+                self.unmake_move_base();
                 return CheckState::Check;
             }
             // we didn't return, so there were no legal moves,
             // so m gives checkmate.
-            self.unmake_move_hce();
+            self.unmake_move_base();
             return CheckState::Checkmate;
         }
-        self.unmake_move_hce();
+        self.unmake_move_base();
         CheckState::None
     }
 
@@ -1473,11 +1584,11 @@ impl Board {
         let mut moves_made = 0;
         for &m in pv.moves() {
             write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string()))?;
-            self.make_move_hce(m);
+            self.make_move_base(m);
             moves_made += 1;
         }
         for _ in 0..moves_made {
-            self.unmake_move_hce();
+            self.unmake_move_base();
         }
         Ok(out)
     }
@@ -1509,8 +1620,8 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
         for &m in move_list.iter() {
-            if self.make_move_hce(m) {
-                self.unmake_move_hce();
+            if self.make_move_base(m) {
+                self.unmake_move_base();
                 legal_moves.push(m);
             }
         }
@@ -1581,8 +1692,8 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
         for &m in move_list.iter() {
-            if self.make_move_hce(m) {
-                self.unmake_move_hce();
+            if self.make_move_base(m) {
+                self.unmake_move_base();
                 legal_moves = true;
                 break;
             }
@@ -1688,17 +1799,17 @@ mod tests {
         assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_hce(Move::new(Square::G1, Square::F3));
-        draw_repetition.make_move_hce(Move::new(Square::B8, Square::C6));
+        draw_repetition.make_move_base(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_base(Move::new(Square::B8, Square::C6));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_hce(Move::new(Square::F3, Square::G1));
-        draw_repetition.make_move_hce(Move::new(Square::C6, Square::B8));
+        draw_repetition.make_move_base(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_base(Move::new(Square::C6, Square::B8));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_hce(Move::new(Square::G1, Square::F3));
-        draw_repetition.make_move_hce(Move::new(Square::B8, Square::C6));
+        draw_repetition.make_move_base(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_base(Move::new(Square::B8, Square::C6));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_hce(Move::new(Square::F3, Square::G1));
-        draw_repetition.make_move_hce(Move::new(Square::C6, Square::B8));
+        draw_repetition.make_move_base(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_base(Move::new(Square::C6, Square::B8));
         assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);
@@ -1768,10 +1879,10 @@ mod tests {
             pos.set_from_fen(fen).unwrap();
             pos.generate_moves(&mut ml);
             for &m in ml.iter() {
-                if !pos.make_move_hce(m) {
+                if !pos.make_move_base(m) {
                     continue;
                 }
-                pos.unmake_move_hce();
+                pos.unmake_move_base();
                 let san_repr = pos.san(m);
                 let san_repr = san_repr.unwrap();
                 let parsed_move = pos.parse_san(&san_repr);

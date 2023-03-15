@@ -265,7 +265,7 @@ impl EvalParams {
 mod tests {
     #[test]
     fn params_round_trip() {
-        use crate::board::evaluation::EvalParams;
+        use crate::board::evaluation::parameters::EvalParams;
 
         let params = EvalParams::default();
         let vec = params.vectorise();
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn params_round_trip_fuzz() {
-        use crate::board::evaluation::EvalParams;
+        use crate::board::evaluation::parameters::EvalParams;
 
         let n_params = EvalParams::default().vectorise().len();
 

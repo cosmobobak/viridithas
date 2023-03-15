@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant}, ops::ControlFlow,
 };
 
-use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::mate_in, search::parameters::SearchParams};
+use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::{mate_in, parameters::EvalParams}, search::{parameters::SearchParams, LMTable}};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -63,7 +63,7 @@ impl SearchLimit {
 }
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SearchInfo<'a> {
     /// The starting time of the search.
     pub start_time: Instant,
@@ -85,6 +85,12 @@ pub struct SearchInfo<'a> {
     pub print_to_stdout: bool,
     /// Form of the search limit.
     pub limit: SearchLimit,
+    /// Evaluation parameters for HCE.
+    pub eval_params: EvalParams,
+    /// Search parameters.
+    pub search_params: SearchParams,
+    /// LMR + LMP lookup table.
+    pub lm_table: LMTable,
 }
 
 impl<'a> SearchInfo<'a> {
@@ -100,6 +106,9 @@ impl<'a> SearchInfo<'a> {
             stdin_rx: None,
             print_to_stdout: true,
             limit: SearchLimit::default(),
+            eval_params: EvalParams::default(),
+            search_params: SearchParams::default(),
+            lm_table: LMTable::default(),
         };
         assert!(!out.stopped.load(Ordering::SeqCst));
         out

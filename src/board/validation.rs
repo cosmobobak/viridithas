@@ -7,23 +7,24 @@ use crate::{
         Square,
     },
     lookups::{PIECE_BIG, PIECE_MAJ},
-    nnue::NNUEState, piece::{Colour, Piece},
+    nnue::NNUEState, piece::{Colour, Piece}, searchinfo::SearchInfo, piecesquaretable::pst_value,
 };
 
 #[cfg(debug_assertions)]
 use crate::{errors::PositionValidityError, lookups::PIECE_MIN};
 
-use super::{evaluation::get_eval_params, movegen::bitboards::BitLoop, Board};
+use super::{movegen::bitboards::BitLoop, Board, evaluation::parameters::EvalParams};
 
 impl Board {
     #[cfg(debug_assertions)]
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub fn check_validity(&self) -> Result<(), PositionValidityError> {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
+
+        use super::evaluation::parameters::EvalParams;
         let mut big_pce = [0, 0];
         let mut maj_pce = [0, 0];
         let mut min_pce = [0, 0];
-        let mut material = [S(0, 0), S(0, 0)];
 
         // check turn
         if self.side != Colour::WHITE && self.side != Colour::BLACK {
@@ -46,7 +47,6 @@ impl Board {
             if PIECE_MIN[piece.index()] {
                 min_pce[colour.index()] += 1;
             }
-            material[colour.index()] += get_eval_params().piece_values[piece.index()];
         }
 
         // check bitboard / piece array coherency
@@ -64,30 +64,6 @@ impl Board {
             }
         }
 
-        if material[Colour::WHITE.index()].0 != self.material[Colour::WHITE.index()].0 {
-            return Err(format!(
-                "white midgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::WHITE.index()].0, self.material[Colour::WHITE.index()].0
-            ));
-        }
-        if material[Colour::WHITE.index()].1 != self.material[Colour::WHITE.index()].1 {
-            return Err(format!(
-                "white endgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::WHITE.index()].1, self.material[Colour::WHITE.index()].1
-            ));
-        }
-        if material[Colour::BLACK.index()].0 != self.material[Colour::BLACK.index()].0 {
-            return Err(format!(
-                "black midgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::BLACK.index()].0, self.material[Colour::BLACK.index()].0
-            ));
-        }
-        if material[Colour::BLACK.index()].1 != self.material[Colour::BLACK.index()].1 {
-            return Err(format!(
-                "black endgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::BLACK.index()].1, self.material[Colour::BLACK.index()].1
-            ));
-        }
         if min_pce[Colour::WHITE.index()] != self.minor_piece_counts[Colour::WHITE.index()] {
             return Err(format!(
                 "white minor piece count is corrupt: expected {:?}, got {:?}",
@@ -172,6 +148,71 @@ impl Board {
         }
 
         Ok(())
+    }
+
+    pub fn check_hce_coherency(&self, info: &SearchInfo) -> bool {
+        // check material count
+        let mut material = [S(0, 0), S(0, 0)];
+        for sq in Square::all() {
+            let piece = self.piece_at(sq);
+            if piece == Piece::EMPTY {
+                continue;
+            }
+            let colour = piece.colour();
+            material[colour.index()] += info.eval_params.piece_values[piece.index()];
+        }
+        if material[Colour::WHITE.index()].0 != self.material[Colour::WHITE.index()].0 {
+            eprintln!(
+                "white midgame material is corrupt: expected {:?}, got {:?}",
+                material[Colour::WHITE.index()].0, self.material[Colour::WHITE.index()].0
+            );
+            return false;
+        }
+        if material[Colour::WHITE.index()].1 != self.material[Colour::WHITE.index()].1 {
+            eprintln!(
+                "white endgame material is corrupt: expected {:?}, got {:?}",
+                material[Colour::WHITE.index()].1, self.material[Colour::WHITE.index()].1
+            );
+            return false;
+        }
+        if material[Colour::BLACK.index()].0 != self.material[Colour::BLACK.index()].0 {
+            eprintln!(
+                "black midgame material is corrupt: expected {:?}, got {:?}",
+                material[Colour::BLACK.index()].0, self.material[Colour::BLACK.index()].0
+            );
+            return false;
+        }
+        if material[Colour::BLACK.index()].1 != self.material[Colour::BLACK.index()].1 {
+            eprintln!(
+                "black endgame material is corrupt: expected {:?}, got {:?}",
+                material[Colour::BLACK.index()].1, self.material[Colour::BLACK.index()].1
+            );
+            return false;
+        }
+        let mut psqt = S(0, 0);
+        for sq in Square::all() {
+            let piece = self.piece_at(sq);
+            if piece == Piece::EMPTY {
+                continue;
+            }
+            psqt += pst_value(piece, sq, &info.eval_params.piece_square_tables);
+        }
+        if psqt.0 != self.pst_vals.0 {
+            eprintln!(
+                "midgame psqt is corrupt: expected {:?}, got {:?}",
+                psqt.0, self.pst_vals.0
+            );
+            return false;
+        }
+        if psqt.1 != self.pst_vals.1 {
+            eprintln!(
+                "endgame psqt is corrupt: expected {:?}, got {:?}",
+                psqt.1, self.pst_vals.1
+            );
+            return false;
+        }
+
+        true
     }
     
     pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
