@@ -824,6 +824,9 @@ impl Board {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
                     if is_quiet {
+                        // ordering_score is only robustly a history score
+                        // if this is a quiet move. Otherwise, it would be
+                        // the MVV/LVA for a capture, plus SEE.
                         let history = ordering_score;
                         if history > i32::from(MAX_HISTORY) / 2 {
                             r -= 1;
