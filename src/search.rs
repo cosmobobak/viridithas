@@ -1009,8 +1009,11 @@ impl Board {
             ONE_PLY * 2 // double-extend if we failed low by a lot (the move is very singular)
         } else if value < r_beta {
             ONE_PLY // singular extension
-        } else if tt_value >= beta {
-            -ONE_PLY // mini-multi-cut
+        } else if tt_value >= beta // somewhat multi-cut-y
+         || tt_value <= alpha
+        // tt_value <= alpha is from Weiss https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/
+        {
+            -ONE_PLY
         } else {
             ZERO_PLY // no extension
         }
