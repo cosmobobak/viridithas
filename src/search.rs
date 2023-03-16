@@ -28,6 +28,7 @@ use crate::{
     definitions::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, MAX_PLY,
     },
+    historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -614,7 +615,11 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval < alpha - info.search_params.razoring_coeff_0 - info.search_params.razoring_coeff_1 * depth * depth {
+            if static_eval
+                < alpha
+                    - info.search_params.razoring_coeff_0
+                    - info.search_params.razoring_coeff_1 * depth * depth
+            {
                 let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
@@ -624,7 +629,9 @@ impl Board {
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
-            if depth <= info.search_params.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
+            if depth <= info.search_params.rfp_depth
+                && static_eval - Self::rfp_margin(info, depth, improving) > beta
+            {
                 return static_eval;
             }
 
@@ -635,7 +642,8 @@ impl Board {
             // a score above beta, we can prune the node.
             if !last_move_was_null
                 && depth >= Depth::new(3)
-                && static_eval + i32::from(improving) * info.search_params.nmp_improving_margin >= beta
+                && static_eval + i32::from(improving) * info.search_params.nmp_improving_margin
+                    >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
             {
@@ -652,7 +660,9 @@ impl Board {
                 }
                 if null_score >= beta {
                     // unconditionally cutoff if we're just too shallow.
-                    if depth < info.search_params.nmp_verification_depth && !is_game_theoretic_score(beta) {
+                    if depth < info.search_params.nmp_verification_depth
+                        && !is_game_theoretic_score(beta)
+                    {
                         return null_score;
                     }
                     // verify that it's *actually* fine to prune,
@@ -692,8 +702,10 @@ impl Board {
         // number of quiet moves to try before we start pruning
         let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
-        let see_table =
-            [info.search_params.see_tactical_margin * depth.squared(), info.search_params.see_quiet_margin * depth.round()];
+        let see_table = [
+            info.search_params.see_tactical_margin * depth.squared(),
+            info.search_params.see_quiet_margin * depth.round(),
+        ];
 
         let killers = self.get_killer_set(t);
 
@@ -728,8 +740,12 @@ impl Board {
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth.round() * info.search_params.futility_coeff_1 + info.search_params.futility_coeff_0;
-                if is_quiet && lmr_depth < info.search_params.futility_depth && static_eval + fp_margin <= alpha {
+                let fp_margin = lmr_depth.round() * info.search_params.futility_coeff_1
+                    + info.search_params.futility_coeff_0;
+                if is_quiet
+                    && lmr_depth < info.search_params.futility_depth
+                    && static_eval + fp_margin <= alpha
+                {
                     move_picker.skip_quiets = true;
                 }
             }
@@ -783,6 +799,7 @@ impl Board {
                     t,
                     m,
                     tt_value,
+                    alpha,
                     beta,
                     depth,
                     &mut move_picker,
@@ -823,6 +840,20 @@ impl Board {
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
+                    if is_quiet {
+                        // ordering_score is only robustly a history score
+                        // if this is a quiet move. Otherwise, it would be
+                        // the MVV/LVA for a capture, plus SEE.
+                        // even still, this allows killers and countermoves
+                        // which will always have their reduction reduced by one,
+                        // as the killer and cm scores are >> MAX_HISTORY.
+                        let history = ordering_score;
+                        if history > i32::from(MAX_HISTORY) / 2 {
+                            r -= 1;
+                        } else if history < i32::from(-MAX_HISTORY) / 2 {
+                            r += 1;
+                        }
+                    }
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
@@ -924,7 +955,8 @@ impl Board {
 
     /// The margin for Reverse Futility Pruning.
     fn rfp_margin(info: &SearchInfo, depth: Depth, improving: bool) -> i32 {
-        info.search_params.rfp_margin * depth - i32::from(improving) * info.search_params.rfp_improving_margin
+        info.search_params.rfp_margin * depth
+            - i32::from(improving) * info.search_params.rfp_improving_margin
     }
 
     /// Update the history and followup history tables.
@@ -953,6 +985,7 @@ impl Board {
         t: &mut ThreadData,
         m: Move,
         tt_value: i32,
+        alpha: i32,
         beta: i32,
         depth: Depth,
         mp: &mut MainMovePicker<ROOT>,
@@ -976,8 +1009,11 @@ impl Board {
             ONE_PLY * 2 // double-extend if we failed low by a lot (the move is very singular)
         } else if value < r_beta {
             ONE_PLY // singular extension
-        } else if tt_value >= beta {
-            -ONE_PLY // somewhat multi-cut-y
+        } else if tt_value >= beta // somewhat multi-cut-y
+         || tt_value <= alpha
+        // tt_value <= alpha is from Weiss https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/
+        {
+            -ONE_PLY
         } else {
             ZERO_PLY // no extension
         }
