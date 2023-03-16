@@ -827,6 +827,9 @@ impl Board {
                         // ordering_score is only robustly a history score
                         // if this is a quiet move. Otherwise, it would be
                         // the MVV/LVA for a capture, plus SEE.
+                        // even still, this allows killers and countermoves
+                        // which will always have their reduction reduced by one,
+                        // as the killer and cm scores are >> MAX_HISTORY.
                         let history = ordering_score;
                         if history > i32::from(MAX_HISTORY) / 2 {
                             r -= 1;
