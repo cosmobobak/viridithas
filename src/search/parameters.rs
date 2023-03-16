@@ -7,7 +7,7 @@ use super::{
     LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, RAZORING_COEFF_0,
     NMP_VERIFICATION_DEPTH, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, RAZORING_COEFF_1,
     SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
-    SEARCH_TIME_FRACTION,
+    SEARCH_TIME_FRACTION, RAZORING_DEPTH
 };
 
 #[derive(Clone, Debug)]
@@ -23,6 +23,7 @@ pub struct SearchParams {
     pub futility_coeff_1: i32,
     pub razoring_coeff_0: i32,
     pub razoring_coeff_1: i32,
+    pub razoring_depth: Depth,
     pub rfp_depth: Depth,
     pub nmp_base_reduction: Depth,
     pub nmp_verification_depth: Depth,
@@ -50,6 +51,7 @@ impl SearchParams {
             futility_coeff_1: FUTILITY_COEFF_1,
             razoring_coeff_0: RAZORING_COEFF_0,
             razoring_coeff_1: RAZORING_COEFF_1,
+            razoring_depth: RAZORING_DEPTH,
             rfp_depth: RFP_DEPTH,
             nmp_base_reduction: NMP_BASE_REDUCTION,
             nmp_verification_depth: NMP_VERIFICATION_DEPTH,

@@ -61,12 +61,13 @@ const FUTILITY_COEFF_0: i32 = 76;
 const FUTILITY_COEFF_1: i32 = 90;
 const RAZORING_COEFF_0: i32 = 394;
 const RAZORING_COEFF_1: i32 = 290;
+const RAZORING_DEPTH: Depth = Depth::new(3);
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
-const FUTILITY_DEPTH: Depth = Depth::new(8);
+const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const LMR_BASE: f64 = 77.0;
@@ -611,16 +612,6 @@ impl Board {
 
         // whole-node pruning techniques:
         if !ROOT && !PV && !in_check && excluded.is_null() {
-            // razoring.
-            // if the static eval is too low, check if qsearch can beat alpha.
-            // if it can't, we can prune the node.
-            if static_eval < alpha - info.search_params.razoring_coeff_0 - info.search_params.razoring_coeff_1 * depth * depth {
-                let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
-                if v < alpha {
-                    return v;
-                }
-            }
-
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
@@ -668,6 +659,13 @@ impl Board {
                         return null_score;
                     }
                 }
+            }
+
+            // razoring.
+            // if the static eval is too low, return the qs score.
+            if depth <= info.search_params.razoring_depth 
+                && static_eval - info.search_params.razoring_coeff_0 + info.search_params.razoring_coeff_1 * depth <= alpha {
+                return self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, alpha, beta);
             }
         }
 
