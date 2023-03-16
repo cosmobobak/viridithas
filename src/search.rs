@@ -33,7 +33,7 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     transpositiontable::{Bound, ProbeResult, TTView},
-    uci::{self, PRETTY_PRINT},
+    uci::{self, PRETTY_PRINT}, historytable::MAX_HISTORY,
 };
 
 use self::parameters::SearchParams;
@@ -823,6 +823,14 @@ impl Board {
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
+                    if is_quiet {
+                        let history = ordering_score;
+                        if history > i32::from(MAX_HISTORY) / 2 {
+                            r -= 1;
+                        } else if history < i32::from(-MAX_HISTORY) / 2 {
+                            r += 1;
+                        }
+                    }
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
                     ONE_PLY
