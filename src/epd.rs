@@ -89,10 +89,10 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         let mut info = SearchInfo {
             print_to_stdout: false,
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
-            start_time: Instant::now(),
             eval_params: params.clone(),
             ..SearchInfo::new(&stopped)
         };
+        info.start_time = Instant::now();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let passed = best_moves.contains(&bm);
         let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
