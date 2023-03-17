@@ -219,6 +219,10 @@ impl<'a> SearchInfo<'a> {
         }
     }
 
+    pub const fn is_test_suite(&self) -> bool {
+        matches!(self.limit, SearchLimit::TimeOrCorrectMoves(_, _))
+    }
+
     /// If we have used enough time that stopping after finishing a depth would be good here.
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {

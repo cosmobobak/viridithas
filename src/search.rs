@@ -1197,6 +1197,12 @@ impl Board {
         default_move: Move,
     ) -> (Move, i32) {
         let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+
+        if info.is_test_suite() {
+            // we break early focusing only on the main thread.
+            return (best_thread.pv_move().unwrap_or(default_move), best_thread.pv_score());
+        }
+
         for thread in rest {
             let best_depth = best_thread.completed;
             let best_score = best_thread.pvs[best_depth].score();
@@ -1214,9 +1220,8 @@ impl Board {
             }
         }
 
-        let best_move =
-            best_thread.pvs[best_thread.completed].moves().first().copied().unwrap_or(default_move);
-        let best_score = best_thread.pvs[best_thread.completed].score();
+        let best_move = best_thread.pv_move().unwrap_or(default_move);
+        let best_score = best_thread.pv_score();
 
         // if we aren't using the main thread (thread 0) then we need to do
         // an extra uci info line to show the best move/score/pv

@@ -105,4 +105,12 @@ impl ThreadData {
     pub fn revert_best_line(&mut self) {
         self.completed = self.depth - 1;
     }
+
+    pub fn pv_move(&self) -> Option<Move> {
+        self.pvs[self.completed].moves().first().copied()
+    }
+
+    pub fn pv_score(&self) -> i32 {
+        self.pvs[self.completed].score()
+    }
 }
