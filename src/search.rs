@@ -732,7 +732,7 @@ impl Board {
                     continue;
                 }
 
-                let qs_score = -self.quiescence::<false, NNUE>(tt, pv, info, t, -probcut_beta, -probcut_beta + 1);
+                let qs_score = -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -probcut_beta, -probcut_beta + 1);
 
                 if qs_score >= probcut_beta {
                     // seems promising, do the proper reduced search:
