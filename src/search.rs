@@ -70,6 +70,8 @@ const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
+const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
+const PROBCUT_REDUCTION: Depth = Depth::new(4);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
 const SEARCH_TIME_FRACTION: u64 = 26;
@@ -710,6 +712,41 @@ impl Board {
         let killers = self.get_killer_set(t);
 
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
+
+        // probcut:
+        if !PV && depth >= PROBCUT_MIN_DEPTH && alpha < MINIMUM_TB_WIN_SCORE {
+            let probcut_beta = beta + 200;
+            while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
+                if ordering_score < WINNING_CAPTURE_SCORE {
+                    move_picker.return_to_start();
+                    break;
+                }
+
+                // skip non-tacticals from the TT:
+                if m == tt_move && !self.is_tactical(m) {
+                    continue;
+                }
+
+                if !self.make_move::<NNUE>(m, t, info) {
+                    // illegal move
+                    continue;
+                }
+
+                let qs_score = -self.quiescence::<false, NNUE>(tt, pv, info, t, -probcut_beta, -probcut_beta + 1);
+
+                if qs_score >= probcut_beta {
+                    // seems promising, do the proper reduced search:
+                    let probcut_depth = depth - PROBCUT_REDUCTION;
+                    let probcut_score = -self.zw_search::<NNUE>(tt, &mut lpv, info, t, probcut_depth, -probcut_beta, -probcut_beta + 1);
+                    if probcut_score >= probcut_beta {
+                        self.unmake_move::<NNUE>(t, info);
+                        return probcut_score;
+                    }
+                }
+
+                self.unmake_move::<NNUE>(t, info);
+            }
+        }
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
