@@ -313,8 +313,7 @@ impl<'a> TTView<'a> {
             .iter()
             .take(1000)
             .filter(|e| {
-                <u64 as Into<TTEntry>>::into(e.load(Ordering::Relaxed)).age_and_flag.flag()
-                    != Bound::None
+                e.load(Ordering::Relaxed) != 0
             })
             .count()
     }

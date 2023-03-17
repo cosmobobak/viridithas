@@ -1244,6 +1244,9 @@ impl Board {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
+        if info.in_game() && info.time_since_start().as_millis() < 50 {
+            return;
+        }
         let sstr = uci::format_score(pv.score);
         let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
         let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
