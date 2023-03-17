@@ -94,10 +94,11 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         };
         info.start_time = Instant::now();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
+        let elapsed = info.start_time.elapsed();
         let passed = best_moves.contains(&bm);
         let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed {
-            format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", info.start_time.elapsed().as_secs_f64())
+            format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", elapsed.as_secs_f64())
         } else {
             format!(", program chose {CONTROL_RED}{bm}{CONTROL_RESET}")
         };
