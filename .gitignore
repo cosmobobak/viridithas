@@ -13,3 +13,6 @@ scripts/progression-renderer.ipynb
 /nnue-visualisations
 /data/
 dev
+tuning/venv/
+tuning/viridithas
+tuning/log.txt
