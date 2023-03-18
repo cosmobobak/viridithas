@@ -62,7 +62,7 @@ const FUTILITY_COEFF_0: i32 = 76;
 const FUTILITY_COEFF_1: i32 = 90;
 const RAZORING_COEFF_0: i32 = 394;
 const RAZORING_COEFF_1: i32 = 290;
-const PROBCUT_MARGIN: i32 = 100;
+const PROBCUT_MARGIN: i32 = 150;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
@@ -716,6 +716,9 @@ impl Board {
 
         // probcut:
         let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
+        // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
+        // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
+        // that it's not going to be helpful.
         if !PV 
             && !in_check
             && excluded.is_null()
@@ -738,12 +741,12 @@ impl Board {
                     continue;
                 }
 
+                // trick from ethereal: check ahead if this is worth trying when depth is high.
                 let mut value = if depth >= PROBCUT_MIN_DEPTH * 2 {
                     -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -probcut_beta, -probcut_beta + 1)
                 } else {
                     -INFINITY
                 };
-                
                 if depth < PROBCUT_MIN_DEPTH * 2 || value >= probcut_beta {
                     let probcut_depth = depth - PROBCUT_REDUCTION;
                     value = -self.zw_search::<NNUE>(tt, &mut lpv, info, t, probcut_depth, -probcut_beta, -probcut_beta + 1);
