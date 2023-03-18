@@ -714,8 +714,13 @@ impl Board {
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
 
         // probcut:
-        if !PV && depth >= PROBCUT_MIN_DEPTH && alpha < MINIMUM_TB_WIN_SCORE {
-            let probcut_beta = beta + 200;
+        let probcut_beta = std::cmp::min(beta + 200, MINIMUM_TB_WIN_SCORE - 1);
+        if !PV 
+            && !in_check
+            && excluded.is_null()
+            && depth >= PROBCUT_MIN_DEPTH 
+            && beta.abs() < MINIMUM_TB_WIN_SCORE 
+            && tt_hit.as_ref().map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3) {
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     move_picker.return_to_start();
@@ -732,19 +737,22 @@ impl Board {
                     continue;
                 }
 
-                let qs_score = -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -probcut_beta, -probcut_beta + 1);
-
-                if qs_score >= probcut_beta {
-                    // seems promising, do the proper reduced search:
+                let mut value = if depth >= PROBCUT_MIN_DEPTH * 2 {
+                    -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -probcut_beta, -probcut_beta + 1)
+                } else {
+                    -INFINITY
+                };
+                
+                if depth < PROBCUT_MIN_DEPTH * 2 || value >= probcut_beta {
                     let probcut_depth = depth - PROBCUT_REDUCTION;
-                    let probcut_score = -self.zw_search::<NNUE>(tt, &mut lpv, info, t, probcut_depth, -probcut_beta, -probcut_beta + 1);
-                    if probcut_score >= probcut_beta {
-                        self.unmake_move::<NNUE>(t, info);
-                        return probcut_score;
-                    }
+                    value = -self.zw_search::<NNUE>(tt, &mut lpv, info, t, probcut_depth, -probcut_beta, -probcut_beta + 1);
                 }
 
                 self.unmake_move::<NNUE>(t, info);
+
+                if value >= probcut_beta {
+                    return value;
+                }
             }
         }
 
