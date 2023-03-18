@@ -62,6 +62,7 @@ const FUTILITY_COEFF_0: i32 = 76;
 const FUTILITY_COEFF_1: i32 = 90;
 const RAZORING_COEFF_0: i32 = 394;
 const RAZORING_COEFF_1: i32 = 290;
+const PROBCUT_MARGIN: i32 = 100;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
@@ -714,7 +715,7 @@ impl Board {
         let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
 
         // probcut:
-        let probcut_beta = std::cmp::min(beta + 200, MINIMUM_TB_WIN_SCORE - 1);
+        let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
         if !PV 
             && !in_check
             && excluded.is_null()
