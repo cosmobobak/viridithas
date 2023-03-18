@@ -4,7 +4,7 @@ use crate::{definitions::Square, piece::PieceType};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {
-    pub data: u16,
+    data: u16,
 }
 
 impl Move {

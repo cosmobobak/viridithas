@@ -40,7 +40,7 @@ pub struct MoveList {
 
 impl MoveList {
     pub const fn new() -> Self {
-        const DEFAULT: MoveListEntry = MoveListEntry { mov: Move { data: 0 }, score: 0 };
+        const DEFAULT: MoveListEntry = MoveListEntry { mov: Move::NULL, score: 0 };
         Self { moves: [DEFAULT; MAX_POSITION_MOVES], count: 0 }
     }
 
