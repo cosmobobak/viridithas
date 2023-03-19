@@ -55,11 +55,6 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         m == self.tt_move && !self.reset
     }
 
-    pub fn return_to_start(&mut self) {
-        self.index = 0;
-        self.reset = true;
-    }
-
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
     pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::Done {

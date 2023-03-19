@@ -725,9 +725,9 @@ impl Board {
             && depth >= PROBCUT_MIN_DEPTH 
             && beta.abs() < MINIMUM_TB_WIN_SCORE 
             && tt_hit.as_ref().map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3) {
+            let mut move_picker = CapturePicker::new(tt_move, killers, probcut_beta - static_eval);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
-                    move_picker.return_to_start();
                     break;
                 }
 
