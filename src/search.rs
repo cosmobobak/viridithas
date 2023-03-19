@@ -207,7 +207,7 @@ impl Board {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
-                    aw.widen_down();
+                    aw.widen_down(pv.score);
                     if MAIN_THREAD && !fail_increment && info.in_game() {
                         fail_increment = true;
                         info.multiply_time_window(1.5);
@@ -224,7 +224,7 @@ impl Board {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
-                    aw.widen_up();
+                    aw.widen_up(pv.score);
                     continue;
                 }
 
@@ -1403,17 +1403,20 @@ impl AspirationWindow {
         }
     }
 
-    pub fn widen_down(&mut self) {
+    pub fn widen_down(&mut self, value: i32) {
+        self.midpoint = value;
         let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.alpha = -INFINITY;
             return;
         }
+        self.beta = (self.alpha + self.beta) / 2;
         self.alpha = self.midpoint - margin;
         self.alpha_fails += 1;
     }
 
-    pub fn widen_up(&mut self) {
+    pub fn widen_up(&mut self, value: i32) {
+        self.midpoint = value;
         let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.beta = INFINITY;
