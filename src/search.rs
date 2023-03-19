@@ -712,8 +712,6 @@ impl Board {
 
         let killers = self.get_killer_set(t);
 
-        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
-
         // probcut:
         let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
@@ -725,7 +723,7 @@ impl Board {
             && depth >= PROBCUT_MIN_DEPTH 
             && beta.abs() < MINIMUM_TB_WIN_SCORE 
             && tt_hit.as_ref().map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3) {
-            let mut move_picker = CapturePicker::new(tt_move, killers, probcut_beta - static_eval);
+            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], probcut_beta - static_eval);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -756,6 +754,8 @@ impl Board {
                 }
             }
         }
+
+        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
