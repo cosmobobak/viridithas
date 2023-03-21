@@ -146,3 +146,6 @@ NET ID | general concept                          | notes
     45 | couple days worth of datagen with net 44 | -27.0 +/- 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
        | added to the pile of net-44 data.        |
 --------------------------------------------------------------------------------------------------
+    46 | net 44 data reshuffled on the off-chance | -11.2 +/- 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
+       | that it would help. 45 epochs.           |
+--------------------------------------------------------------------------------------------------
