@@ -144,11 +144,11 @@ NET ID | general concept                          | notes
        |                                          | vs net-43.
 --------------------------------------------------------------------------------------------------
     45 | couple days worth of datagen with net 44 | -27.0 +/- 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
-       | added to the pile of net-44 data.        |
+       | added to the pile of net-44 data.        | vs net-44.
 --------------------------------------------------------------------------------------------------
     46 | net 44 data reshuffled on the off-chance | -11.2 +/- 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
-       | that it would help. 45 epochs.           |
+       | that it would help. 45 epochs.           | vs net-44.
 --------------------------------------------------------------------------------------------------
     47 | net 44 data with 20% WDL focus.          | -28.8 +/- 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
-       | 65 epochs.                               |
+       | 65 epochs.                               | vs net-44.
 --------------------------------------------------------------------------------------------------
