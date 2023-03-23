@@ -274,6 +274,8 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         if options.log_level > 2 {
             eprintln!("Playing out game...");
         }
+        let mut win_adj_counter = 0;
+        let mut draw_adj_counter = 0;
         let outcome = loop {
             let outcome = board.outcome();
             if outcome != GameOutcome::Ongoing {
@@ -302,6 +304,30 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
                 // and the score is not game theoretic (mate or TB-win),
                 // and the side to move is not in check.
                 single_game_buffer.push((score, board.fen()));
+            }
+
+            let abs_score = score.abs();
+            if abs_score >= 2000 {
+                win_adj_counter += 1;
+                draw_adj_counter = 0;
+            } else if abs_score <= 4 {
+                draw_adj_counter += 1;
+                win_adj_counter = 0;
+            } else {
+                win_adj_counter = 0;
+                draw_adj_counter = 0;
+            }
+
+            if win_adj_counter >= 4 {
+                let outcome = if score > 0 {
+                    GameOutcome::WhiteWinAdjucation
+                } else {
+                    GameOutcome::BlackWinAdjucation
+                };
+                break outcome;
+            }
+            if draw_adj_counter >= 12 {
+                break GameOutcome::DrawAdjucation;
             }
             if is_game_theoretic_score(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
