@@ -778,7 +778,7 @@ impl Board {
                 && info.time_since_start() > Duration::from_secs(5)
                 && !PRETTY_PRINT.load(Ordering::SeqCst)
             {
-                println!("info currmove {m} currmovenumber {moves_made:2} nodes {}", info.nodes);
+                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
             }
 
             let maybe_singular = tt_hit.map_or(false, |tt_hit| {
