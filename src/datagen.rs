@@ -6,11 +6,11 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    time::Instant,
+    time::Instant, collections::HashMap, cmp::Reverse,
 };
 
 use crate::{
-    board::{evaluation::is_game_theoretic_score, Board, GameOutcome},
+    board::{evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE}, Board, GameOutcome},
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
     tablebases::{self, probe::WDL},
@@ -78,6 +78,7 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
+    #![allow(clippy::cast_precision_loss)]
     FENS_GENERATED.store(0, Ordering::SeqCst);
 
     let options: DataGenOptions = cli_config.map_or_else(|| {
@@ -124,6 +125,7 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     let data_dir = PathBuf::from("data").join(run_id);
     std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
 
+    let mut counters = Vec::new();
     std::thread::scope(|s| {
         let thread_handles = (0..options.num_threads)
             .map(|id| {
@@ -133,16 +135,33 @@ pub fn gen_data_main(cli_config: Option<&str>) {
             })
             .collect::<Vec<_>>();
         for handle in thread_handles {
-            handle.join().unwrap();
+            counters.push(handle.join().unwrap());
         }
     });
 
     if options.log_level > 0 {
         println!("Done!");
     }
+
+    let counters = counters.into_iter().reduce(|mut a, b| {
+        for (key, value) in b {
+            *a.entry(key).or_insert(0) += value;
+        }
+        a
+    });
+
+    if let Some(counters) = counters {
+        let total = counters.values().sum::<u64>();
+        println!("Total games: {total}");
+        let mut counters = counters.into_iter().collect::<Vec<_>>();
+        counters.sort_unstable_by_key(|(_, value)| Reverse(*value));
+        for (key, value) in counters {
+            println!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
+        }
+    }
 }
 
-fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
+fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
     #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cast_possible_truncation)]
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -169,6 +188,18 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
     let mut output_buffer = BufWriter::new(&mut output_file);
 
     let mut single_game_buffer = Vec::new();
+
+    let mut counters = vec![
+        (GameOutcome::WhiteWinMate, 0),
+        (GameOutcome::BlackWinMate, 0),
+        (GameOutcome::WhiteWinTB, 0),
+        (GameOutcome::BlackWinTB, 0),
+        (GameOutcome::DrawFiftyMoves, 0),
+        (GameOutcome::DrawRepetition, 0),
+        (GameOutcome::DrawStalemate, 0),
+        (GameOutcome::DrawInsufficientMaterial, 0),
+        (GameOutcome::DrawTB, 0),
+    ].into_iter().collect::<HashMap<_, _>>();
 
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
@@ -272,23 +303,39 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) {
                 // and the side to move is not in check.
                 single_game_buffer.push((score, board.fen()));
             }
+            if is_game_theoretic_score(score) {
+                // if the score is game theoretic, we don't want to play out the rest of the game
+                let is_mate = score.abs() > MINIMUM_MATE_SCORE;
+                break match (score.signum(), is_mate) {
+                    (1, false) => GameOutcome::WhiteWinTB,
+                    (-1, false) => GameOutcome::BlackWinTB,
+                    (1, true) => GameOutcome::WhiteWinMate,
+                    (-1, true) => GameOutcome::BlackWinMate,
+                    _ => unreachable!(),
+                };
+            }
             board.make_move::<true>(best_move, &mut thread_data, &info);
         };
         if options.log_level > 2 {
             eprintln!("Game is over, outcome: {outcome:?}");
         }
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
-        let outcome = outcome.as_float_str();
+        let outcome_str = outcome.as_float_str();
         // STEP 4: write the game to the output file
         if options.log_level > 2 {
             eprintln!("Writing {} moves to output file...", single_game_buffer.len());
         }
         for (score, fen) in &single_game_buffer {
-            writeln!(output_buffer, "{fen} | {score} | {outcome}").unwrap();
+            writeln!(output_buffer, "{fen} | {score} | {outcome_str}").unwrap();
         }
         FENS_GENERATED.fetch_add(single_game_buffer.len() as u64, Ordering::SeqCst);
         single_game_buffer.clear();
+
+        // STEP 5: update the game outcome statistics
+        *counters.get_mut(&outcome).unwrap() += 1;
     }
+
+    counters
 }
 
 fn show_boot_info(options: &DataGenOptions) {
