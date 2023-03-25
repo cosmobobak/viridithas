@@ -199,6 +199,9 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         (GameOutcome::DrawStalemate, 0),
         (GameOutcome::DrawInsufficientMaterial, 0),
         (GameOutcome::DrawTB, 0),
+        (GameOutcome::WhiteWinAdjucation, 0),
+        (GameOutcome::BlackWinAdjucation, 0),
+        (GameOutcome::DrawAdjucation, 0),
     ].into_iter().collect::<HashMap<_, _>>();
 
     let start = Instant::now();
