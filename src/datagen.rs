@@ -161,6 +161,7 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
     #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cast_possible_truncation)]
     // this rng is different between each thread
