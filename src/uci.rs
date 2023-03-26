@@ -683,6 +683,7 @@ pub fn main_loop(params: EvalParams) {
             benchcmd @ ("bench" | "benchfull") => 'bench: {
                 info.print_to_stdout = false;
                 let mut node_sum = 0u64;
+                let start = Instant::now();
                 for fen in BENCH_POSITIONS {
                     let res = do_newgame(&mut pos, &tt, &mut thread_data);
                     if let Err(e) = res {
@@ -714,7 +715,10 @@ pub fn main_loop(params: EvalParams) {
                         println!("{fen} has {} nodes", info.nodes);
                     }
                 }
-                println!("{node_sum} nodes");
+                let time = start.elapsed();
+                #[allow(clippy::cast_precision_loss)]
+                let nps = node_sum as f64 / time.as_secs_f64();
+                println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
                 info.print_to_stdout = true;
                 Ok(())
             }
