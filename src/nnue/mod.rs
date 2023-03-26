@@ -573,15 +573,16 @@ pub fn clipped_relu_flatten_and_forward<
     input_them: &[i16; SIZE],
     weights: &[i16; WEIGHTS],
 ) -> i32 {
-    use std::arch::x86_64::{__m256i, _mm256_extract_epi32, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_set1_epi16};
-    const VEC_SIZE: usize = std::mem::size_of::<__m256i>() / std::mem::size_of::<u8>();
+    use std::arch::x86_64::*;
+    const VEC_SIZE: usize = std::mem::size_of::<__m256i>() / std::mem::size_of::<u16>();
     debug_assert_eq!(SIZE * 2, WEIGHTS);
-    let mut sum: i32 = 0;
     unsafe {
         assert_eq!(SIZE % VEC_SIZE, 0, "SIZE must be a multiple of VEC_SIZE");
         // set up vectors filled with MIN and MAX
         let min = _mm256_set1_epi16(MIN);
         let max = _mm256_set1_epi16(MAX);
+        // set up accumulator
+        let mut sum = _mm256_setzero_si256();
         // first half: us
         for (i, w) in input_us.chunks_exact(VEC_SIZE).zip(weights.chunks_exact(VEC_SIZE)) {
             // load
@@ -590,12 +591,9 @@ pub fn clipped_relu_flatten_and_forward<
             // clamp i
             let i = _mm256_min_epi16(i, max);
             let i = _mm256_max_epi16(i, min);
-            // multiply and add
+            // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
             let i = _mm256_madd_epi16(i, w);
-            sum += _mm256_extract_epi32(i, 0);
-            sum += _mm256_extract_epi32(i, 1);
-            sum += _mm256_extract_epi32(i, 2);
-            sum += _mm256_extract_epi32(i, 3);
+            sum = _mm256_add_epi32(sum, i);
         }
         // second half: them
         for (i, w) in input_them
@@ -608,15 +606,17 @@ pub fn clipped_relu_flatten_and_forward<
             // clamp i
             let i = _mm256_min_epi16(i, max);
             let i = _mm256_max_epi16(i, min);
-            // multiply and add
+            // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
             let i = _mm256_madd_epi16(i, w);
-            sum += _mm256_extract_epi32(i, 0);
-            sum += _mm256_extract_epi32(i, 1);
-            sum += _mm256_extract_epi32(i, 2);
-            sum += _mm256_extract_epi32(i, 3);
+            sum = _mm256_add_epi32(sum, i);
         }
+        
+        // sum up the accumulator
+        let sum = _mm256_hadd_epi32(sum, sum);
+        let sum = _mm256_hadd_epi32(sum, sum);
+        
+        _mm256_extract_epi32::<0>(sum) + _mm256_extract_epi32::<4>(sum)
     }
-    sum
 }
 
 pub fn convert_json_to_binary(
