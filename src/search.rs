@@ -63,6 +63,7 @@ const FUTILITY_COEFF_1: i32 = 90;
 const RAZORING_COEFF_0: i32 = 394;
 const RAZORING_COEFF_1: i32 = 290;
 const PROBCUT_MARGIN: i32 = 200;
+const PROBCUT_IMPROVING_MARGIN: i32 = 50;
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
@@ -713,7 +714,7 @@ impl Board {
         let killers = self.get_killer_set(t);
 
         // probcut:
-        let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
+        let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
         // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
         // that it's not going to be helpful.
@@ -723,7 +724,7 @@ impl Board {
             && depth >= PROBCUT_MIN_DEPTH 
             && beta.abs() < MINIMUM_TB_WIN_SCORE 
             && tt_hit.as_ref().map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3) {
-            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], probcut_beta - static_eval);
+            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -749,7 +750,7 @@ impl Board {
                 self.unmake_move::<NNUE>(t, info);
 
                 if value >= probcut_beta {
-                    tt.store::<ROOT>(key, height, m, value, Bound::Lower, depth - 3);
+                    tt.store::<false>(key, height, m, value, Bound::Lower, depth - 3);
                     return value;
                 }
             }
