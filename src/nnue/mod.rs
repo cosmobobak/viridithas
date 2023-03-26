@@ -593,6 +593,7 @@ pub fn clipped_relu_flatten_and_forward<
             let i = _mm256_max_epi16(i, min);
             // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
             let i = _mm256_madd_epi16(i, w);
+            // add to accumulator
             sum = _mm256_add_epi32(sum, i);
         }
         // second half: them
@@ -608,6 +609,7 @@ pub fn clipped_relu_flatten_and_forward<
             let i = _mm256_max_epi16(i, min);
             // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
             let i = _mm256_madd_epi16(i, w);
+            // add to accumulator
             sum = _mm256_add_epi32(sum, i);
         }
         
