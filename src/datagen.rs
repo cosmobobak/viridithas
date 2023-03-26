@@ -190,7 +190,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
 
     let mut single_game_buffer = Vec::new();
 
-    let mut counters = vec![
+    let mut counters = [
         (GameOutcome::WhiteWinMate, 0),
         (GameOutcome::BlackWinMate, 0),
         (GameOutcome::WhiteWinTB, 0),
