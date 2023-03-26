@@ -478,12 +478,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = clipped_relu_flatten_and_forward::<
-            CR_MIN,
-            CR_MAX,
-            LAYER_1_SIZE,
-            { LAYER_1_SIZE * 2 },
-        >(us, them, &NNUE.output_weights);
+        let output = crelu_flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
@@ -512,10 +507,11 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     offset_sub: usize,
     offset_add: usize,
 ) {
-    for ((ds, da), i) in delta[offset_sub..offset_sub + SIZE]
-        .iter()
-        .zip(delta[offset_add..offset_add + SIZE].iter())
-        .zip(input.iter_mut())
+    let s_block = &delta[offset_sub..offset_sub + SIZE];
+    let a_block = &delta[offset_add..offset_add + SIZE];
+    for ((i, ds), da) in input.iter_mut()
+        .zip(s_block)
+        .zip(a_block)
     {
         *i = *i - *ds + *da;
     }
@@ -526,7 +522,8 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_add: usize,
 ) {
-    for (i, d) in input.iter_mut().zip(&delta[offset_add..]) {
+    let a_block = &delta[offset_add..offset_add + SIZE];
+    for (i, d) in input.iter_mut().zip(a_block) {
         *i += *d;
     }
 }
@@ -536,28 +533,23 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_sub: usize,
 ) {
-    for (i, d) in input.iter_mut().zip(&delta[offset_sub..]) {
+    let s_block = &delta[offset_sub..offset_sub + SIZE];
+    for (i, d) in input.iter_mut().zip(s_block) {
         *i -= *d;
     }
 }
 
-pub fn clipped_relu_flatten_and_forward<
-    const MIN: i16,
-    const MAX: i16,
-    const SIZE: usize,
-    const WEIGHTS: usize,
->(
-    input_us: &[i16; SIZE],
-    input_them: &[i16; SIZE],
-    weights: &[i16; WEIGHTS],
+pub fn crelu_flatten(
+    us: &[i16; LAYER_1_SIZE],
+    them: &[i16; LAYER_1_SIZE],
+    weights: &[i16; LAYER_1_SIZE * 2],
 ) -> i32 {
-    debug_assert_eq!(SIZE * 2, WEIGHTS);
     let mut sum: i32 = 0;
-    for (&i, &w) in input_us.iter().zip(weights) {
-        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in us.iter().zip(weights) {
+        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
     }
-    for (&i, &w) in input_them.iter().zip(&weights[SIZE..]) {
-        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
+        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
     }
     sum
 }
