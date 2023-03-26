@@ -507,10 +507,11 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     offset_sub: usize,
     offset_add: usize,
 ) {
-    for ((ds, da), i) in delta[offset_sub..offset_sub + SIZE]
-        .iter()
-        .zip(delta[offset_add..offset_add + SIZE].iter())
-        .zip(input.iter_mut())
+    let s_block = &delta[offset_sub..offset_sub + SIZE];
+    let a_block = &delta[offset_add..offset_add + SIZE];
+    for ((i, ds), da) in input.iter_mut()
+        .zip(s_block)
+        .zip(a_block)
     {
         *i = *i - *ds + *da;
     }
@@ -521,7 +522,8 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_add: usize,
 ) {
-    for (i, d) in input.iter_mut().zip(&delta[offset_add..]) {
+    let a_block = &delta[offset_add..offset_add + SIZE];
+    for (i, d) in input.iter_mut().zip(a_block) {
         *i += *d;
     }
 }
@@ -531,7 +533,8 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     delta: &[i16; WEIGHTS],
     offset_sub: usize,
 ) {
-    for (i, d) in input.iter_mut().zip(&delta[offset_sub..]) {
+    let s_block = &delta[offset_sub..offset_sub + SIZE];
+    for (i, d) in input.iter_mut().zip(s_block) {
         *i -= *d;
     }
 }
