@@ -541,6 +541,7 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+#[cfg(not(target_feature = "avx2"))]
 pub fn clipped_relu_flatten_and_forward<
     const MIN: i16,
     const MAX: i16,
@@ -558,6 +559,62 @@ pub fn clipped_relu_flatten_and_forward<
     }
     for (&i, &w) in input_them.iter().zip(&weights[SIZE..]) {
         sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
+    }
+    sum
+}
+#[cfg(target_feature = "avx2")]
+pub fn clipped_relu_flatten_and_forward<
+    const MIN: i16,
+    const MAX: i16,
+    const SIZE: usize,
+    const WEIGHTS: usize,
+>(
+    input_us: &[i16; SIZE],
+    input_them: &[i16; SIZE],
+    weights: &[i16; WEIGHTS],
+) -> i32 {
+    use std::arch::x86_64::{__m256i, _mm256_extract_epi32, _mm256_loadu_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_set1_epi16};
+    const VEC_SIZE: usize = std::mem::size_of::<__m256i>() / std::mem::size_of::<u8>();
+    debug_assert_eq!(SIZE * 2, WEIGHTS);
+    let mut sum: i32 = 0;
+    unsafe {
+        assert_eq!(SIZE % VEC_SIZE, 0, "SIZE must be a multiple of VEC_SIZE");
+        // set up vectors filled with MIN and MAX
+        let min = _mm256_set1_epi16(MIN);
+        let max = _mm256_set1_epi16(MAX);
+        // first half: us
+        for (i, w) in input_us.chunks_exact(VEC_SIZE).zip(weights.chunks_exact(VEC_SIZE)) {
+            // load
+            let i = _mm256_loadu_si256(i.as_ptr().cast());
+            let w = _mm256_loadu_si256(w.as_ptr().cast());
+            // clamp i
+            let i = _mm256_min_epi16(i, max);
+            let i = _mm256_max_epi16(i, min);
+            // multiply and add
+            let i = _mm256_madd_epi16(i, w);
+            sum += _mm256_extract_epi32(i, 0);
+            sum += _mm256_extract_epi32(i, 1);
+            sum += _mm256_extract_epi32(i, 2);
+            sum += _mm256_extract_epi32(i, 3);
+        }
+        // second half: them
+        for (i, w) in input_them
+            .chunks_exact(VEC_SIZE)
+            .zip(weights[SIZE..].chunks_exact(VEC_SIZE))
+        {
+            // load
+            let i = _mm256_loadu_si256(i.as_ptr().cast());
+            let w = _mm256_loadu_si256(w.as_ptr().cast());
+            // clamp i
+            let i = _mm256_min_epi16(i, max);
+            let i = _mm256_max_epi16(i, min);
+            // multiply and add
+            let i = _mm256_madd_epi16(i, w);
+            sum += _mm256_extract_epi32(i, 0);
+            sum += _mm256_extract_epi32(i, 1);
+            sum += _mm256_extract_epi32(i, 2);
+            sum += _mm256_extract_epi32(i, 3);
+        }
     }
     sum
 }
