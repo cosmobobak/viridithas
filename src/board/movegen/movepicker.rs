@@ -28,7 +28,8 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT:
     tt_move: Move,
     killers: [Move; 2],
     pub skip_quiets: bool,
-    see_threshold: i32
+    see_threshold: i32,
+    reset: bool,
 }
 
 pub type MainMovePicker<const ROOT: bool> = MovePicker<false, true, ROOT>;
@@ -45,12 +46,13 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             killers,
             tt_move,
             skip_quiets: false,
-            see_threshold
+            see_threshold,
+            reset: false,
         }
     }
 
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        m == self.tt_move
+        m == self.tt_move && !self.reset
     }
 
     /// Select the next move to try. Usually executes one iteration of partial insertion sort.
@@ -110,6 +112,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         unsafe {
             *self.movelist.moves.get_unchecked_mut(best_num) =
                 *self.movelist.moves.get_unchecked(self.index);
+            *self.movelist.moves.get_unchecked_mut(self.index) = m;
         }
 
         self.index += 1;
