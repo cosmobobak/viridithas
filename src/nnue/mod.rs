@@ -478,12 +478,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = clipped_relu_flatten_and_forward::<
-            CR_MIN,
-            CR_MAX,
-            LAYER_1_SIZE,
-            { LAYER_1_SIZE * 2 },
-        >(us, them, &NNUE.output_weights);
+        let output = crelu_flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
@@ -541,84 +536,19 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
-#[cfg(not(target_feature = "avx2"))]
-pub fn clipped_relu_flatten_and_forward<
-    const MIN: i16,
-    const MAX: i16,
-    const SIZE: usize,
-    const WEIGHTS: usize,
->(
-    input_us: &[i16; SIZE],
-    input_them: &[i16; SIZE],
-    weights: &[i16; WEIGHTS],
+pub fn crelu_flatten(
+    us: &[i16; LAYER_1_SIZE],
+    them: &[i16; LAYER_1_SIZE],
+    weights: &[i16; LAYER_1_SIZE * 2],
 ) -> i32 {
-    debug_assert_eq!(SIZE * 2, WEIGHTS);
     let mut sum: i32 = 0;
-    for (&i, &w) in input_us.iter().zip(weights) {
-        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in us.iter().zip(weights) {
+        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
     }
-    for (&i, &w) in input_them.iter().zip(&weights[SIZE..]) {
-        sum += i32::from(i.clamp(MIN, MAX)) * i32::from(w);
+    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
+        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
     }
     sum
-}
-#[cfg(target_feature = "avx2")]
-pub fn clipped_relu_flatten_and_forward<
-    const MIN: i16,
-    const MAX: i16,
-    const SIZE: usize,
-    const WEIGHTS: usize,
->(
-    input_us: &[i16; SIZE],
-    input_them: &[i16; SIZE],
-    weights: &[i16; WEIGHTS],
-) -> i32 {
-    use std::arch::x86_64::*;
-    const VEC_SIZE: usize = std::mem::size_of::<__m256i>() / std::mem::size_of::<u16>();
-    debug_assert_eq!(SIZE * 2, WEIGHTS);
-    unsafe {
-        assert_eq!(SIZE % VEC_SIZE, 0, "SIZE must be a multiple of VEC_SIZE");
-        // set up vectors filled with MIN and MAX
-        let min = _mm256_set1_epi16(MIN);
-        let max = _mm256_set1_epi16(MAX);
-        // set up accumulator
-        let mut sum = _mm256_setzero_si256();
-        // first half: us
-        for (i, w) in input_us.chunks_exact(VEC_SIZE).zip(weights.chunks_exact(VEC_SIZE)) {
-            // load
-            let i = _mm256_loadu_si256(i.as_ptr().cast());
-            let w = _mm256_loadu_si256(w.as_ptr().cast());
-            // clamp i
-            let i = _mm256_min_epi16(i, max);
-            let i = _mm256_max_epi16(i, min);
-            // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
-            let i = _mm256_madd_epi16(i, w);
-            // add to accumulator
-            sum = _mm256_add_epi32(sum, i);
-        }
-        // second half: them
-        for (i, w) in input_them
-            .chunks_exact(VEC_SIZE)
-            .zip(weights[SIZE..].chunks_exact(VEC_SIZE))
-        {
-            // load
-            let i = _mm256_loadu_si256(i.as_ptr().cast());
-            let w = _mm256_loadu_si256(w.as_ptr().cast());
-            // clamp i
-            let i = _mm256_min_epi16(i, max);
-            let i = _mm256_max_epi16(i, min);
-            // multiply and add (i16x16 + i16x16 -> i32x16 -> i32x8)
-            let i = _mm256_madd_epi16(i, w);
-            // add to accumulator
-            sum = _mm256_add_epi32(sum, i);
-        }
-        
-        // sum up the accumulator
-        let sum = _mm256_hadd_epi32(sum, sum);
-        let sum = _mm256_hadd_epi32(sum, sum);
-        
-        _mm256_extract_epi32::<0>(sum) + _mm256_extract_epi32::<4>(sum)
-    }
 }
 
 pub fn convert_json_to_binary(
