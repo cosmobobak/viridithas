@@ -31,3 +31,4 @@ MINOR:
 - mess about with the in-check QS score, and aspiration windows relating to it.
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
 - optimise conthist loading
+- validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
