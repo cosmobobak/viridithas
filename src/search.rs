@@ -1316,26 +1316,28 @@ impl Board {
         };
         if normal_uci_output {
             println!(
-                "info score {sstr}{bound_string} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
+                "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
                 info.seldepth.ply_to_horizon(),
                 info.start_time.elapsed().as_millis(),
                 hashfull = tt.hashfull(),
                 tbhits = TB_HITS.load(Ordering::SeqCst),
+                wdl = uci::format_wdl(pv.score, self.ply()),
             );
         } else {
             let value = uci::pretty_format_score(pv.score, self.turn());
-            let pv = self.pv_san(pv).unwrap();
+            let pv_string = self.pv_san(pv).unwrap();
             let endchr = if bound == Bound::Exact {
                 "\n"
             } else {
                 "                                                                   \r"
             };
             eprint!(
-                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv}{endchr}",
+                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
                 info.seldepth.ply_to_horizon(),
                 t = uci::format_time(info.start_time.elapsed().as_millis()),
                 knps = nps / 1_000,
                 knodes = total_nodes / 1_000,
+                wdl = uci::pretty_format_wdl(pv.score, self.ply()),
             );
         }
     }

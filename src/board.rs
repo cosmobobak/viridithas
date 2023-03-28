@@ -153,6 +153,10 @@ impl Board {
         self.pieces.occupied().count_ones() as u8
     }
 
+    pub const fn ply(&self) -> usize {
+        self.ply
+    }
+
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::WHITE || side == Colour::BLACK);
         debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);

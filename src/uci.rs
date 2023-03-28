@@ -417,8 +417,10 @@ impl Display for ScoreFormatWrapper {
             } else {
                 write!(f, "mate -{moves_to_mate}")
             }
-        } else {
+        } else if is_game_theoretic_score(self.0) {
             write!(f, "cp {}", self.0)
+        } else {
+            write!(f, "cp {}", self.0 * 100 / NORMALISE_TO_PAWN_VALUE)
         }
     }
 }
@@ -456,6 +458,7 @@ impl Display for PrettyScoreFormatWrapper {
         } else {
             // six chars wide: one for the sign, two for the pawn values,
             // one for the decimal point, and two for the centipawn values
+            let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
             write!(f, "{:+6.2}", f64::from(white_pov) / 100.0)?;
         }
         write!(f, "\u{001b}[0m") // reset
@@ -771,4 +774,65 @@ fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Resul
         td.alloc_tables();
     }
     res
+}
+
+/// Normalizes the internal value as reported by evaluate or search
+/// to the UCI centipawn result used in output. This value is derived from
+/// the `win_rate_model` such that Viridithas outputs an advantage of
+/// "100 centipawns" for a position if the engine has a 50% probability to win
+/// from this position in selfplay at 8s+0.08s time control.
+const NORMALISE_TO_PAWN_VALUE: i32 = 269;
+fn win_rate_model(eval: i32, ply: usize) -> i32 {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    const AS: [f64; 4] = [ -26.994_571_68,  207.590_501_28, -214.904_939_28,  303.735_316_05 ];
+    const BS: [f64; 4] = [ -19.224_614_27,  141.390_056_35, -283.690_790_60,  378.025_261_86 ];
+    let m = min!(240.0, ply as f64) / 64.0;
+    debug_assert_eq!(NORMALISE_TO_PAWN_VALUE, AS.iter().sum::<f64>() as i32);
+    let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
+    let b = BS[0].mul_add(m, BS[1]).mul_add(m, BS[2]).mul_add(m, BS[3]);
+
+    // Transform the eval to centipawns with limited range
+    let x = f64::from(eval.clamp(-4000, 4000));
+
+    // Return the win rate in per mille units rounded to the nearest value
+    (0.5 + 1000.0 / (1.0 + f64::exp((a - x) / b))) as i32
+}
+
+struct UciWdlFormat {
+    eval: i32,
+    ply: usize,
+}
+impl Display for UciWdlFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let wdl_w = win_rate_model(self.eval, self.ply);
+        let wdl_l = win_rate_model(-self.eval, self.ply);
+        let wdl_d = 1000 - wdl_w - wdl_l;
+        write!(f, "{wdl_w} {wdl_d} {wdl_l}")
+    }
+}
+
+struct PrettyUciWdlFormat {
+    eval: i32,
+    ply: usize,
+}
+impl Display for PrettyUciWdlFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let wdl_w = win_rate_model(self.eval, self.ply);
+        let wdl_l = win_rate_model(-self.eval, self.ply);
+        let wdl_d = 1000 - wdl_w - wdl_l;
+        let wdl_w = f64::from(wdl_w) / 10.0;
+        let wdl_d = f64::from(wdl_d) / 10.0;
+        let wdl_l = f64::from(wdl_l) / 10.0;
+        write!(
+            f,
+            "\u{001b}[38;5;243m{wdl_w:.0}%W {wdl_d:.0}%D {wdl_l:.0}%L\u{001b}[0m",
+        )
+    }
+}
+
+pub fn format_wdl(eval: i32, ply: usize) -> impl Display {
+    UciWdlFormat { eval, ply }
+}
+pub fn pretty_format_wdl(eval: i32, ply: usize) -> impl Display {
+    PrettyUciWdlFormat { eval, ply }
 }
