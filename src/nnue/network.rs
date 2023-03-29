@@ -242,7 +242,7 @@ pub struct NNUEState {
 }
 
 impl NNUEState {
-    /// Create a new NNUEState.
+    /// Create a new `NNUEState`.
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
