@@ -15,21 +15,38 @@ use crate::{
 
 use super::accumulator::Accumulator;
 
+/// The size of the input layer of the network.
 const INPUT: usize = 768;
-pub const LAYER_1_SIZE: usize = 512;
+/// The minimum value for the clipped relu activation.
 const CR_MIN: i16 = 0;
+/// The maximum value for the clipped relu activation.
 const CR_MAX: i16 = 255;
+/// The amount to scale the output of the network by.
+/// This is to allow for the sigmoid activation to differentiate positions with
+/// a small difference in evaluation.
 const SCALE: i32 = 400;
+/// The size of one-half of the hidden layer of the network.
+pub const LAYER_1_SIZE: usize = 512;
 // const BUCKETS: usize = 16;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
+/// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = 256;
 
-pub const ACTIVATE: bool = true;
-pub const DEACTIVATE: bool = false;
+pub trait Activation {
+    const ACTIVATE: bool;
+}
+pub struct Activate;
+impl Activation for Activate {
+    const ACTIVATE: bool = true;
+}
+pub struct Deactivate;
+impl Activation for Deactivate {
+    const ACTIVATE: bool = false;
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C, align(64))]
@@ -50,14 +67,14 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
-    flipped_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
+    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
     feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
     output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
     output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
 };
 
 pub struct NNUEParams {
-    pub flipped_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
+    pub feature_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
     pub feature_bias: Align<[i16; LAYER_1_SIZE]>,
     pub output_weights: Align<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
@@ -88,7 +105,7 @@ impl NNUEParams {
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
         assert!(neuron < LAYER_1_SIZE);
         let starting_idx = neuron * INPUT;
-        let slice = &self.flipped_weights[starting_idx..starting_idx + INPUT];
+        let slice = &self.feature_weights[starting_idx..starting_idx + INPUT];
 
         let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
 
@@ -151,7 +168,7 @@ impl NNUEParams {
         #[allow(clippy::large_stack_arrays)]
         // we only run this function in release, so it shouldn't blow the stack.
         let mut out = Box::new(Self {
-            flipped_weights: Align([0; INPUT * LAYER_1_SIZE]),
+            feature_weights: Align([0; INPUT * LAYER_1_SIZE]),
             feature_bias: Align([0; LAYER_1_SIZE]),
             output_weights: Align([0; LAYER_1_SIZE * 2]),
             output_bias: 0,
@@ -164,7 +181,7 @@ impl NNUEParams {
             match key.as_str() {
                 "ft.weight" => {
                     // weight(value, &mut out.feature_weights, INPUT, QA, false);
-                    weight(value, &mut out.flipped_weights, LAYER_1_SIZE, QA, true);
+                    weight(value, &mut out.feature_weights, LAYER_1_SIZE, QA, true);
                 }
                 "ft.bias" => {
                     bias(value, &mut out.feature_bias, QA);
@@ -187,7 +204,7 @@ impl NNUEParams {
 
         // let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
         // assert!(head.is_empty() && tail.is_empty());
-        let (head, flipped_weights, tail) = unsafe { self.flipped_weights.align_to::<u8>() };
+        let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
         let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
         assert!(head.is_empty() && tail.is_empty());
@@ -198,7 +215,7 @@ impl NNUEParams {
         assert!(head.is_empty() && tail.is_empty());
 
         // out.push(feature_weights.to_vec());
-        out.push(flipped_weights.to_vec());
+        out.push(feature_weights.to_vec());
         out.push(feature_bias.to_vec());
         out.push(output_weights.to_vec());
         out.push(output_bias.to_vec());
@@ -207,19 +224,25 @@ impl NNUEParams {
     }
 }
 
+/// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
+    /// Active features from white's perspective.
     #[cfg(debug_assertions)]
     pub white_pov: Align<[i16; INPUT]>,
+    /// Active features from black's perspective.
     #[cfg(debug_assertions)]
     pub black_pov: Align<[i16; INPUT]>,
 
+    /// Accumulators for the first layer.
     pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
+    /// Index of the current accumulator.
     pub current_acc: usize,
 }
 
 impl NNUEState {
+    /// Create a new NNUEState.
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
@@ -244,15 +267,18 @@ impl NNUEState {
         }
     }
 
+    /// Copy the current accumulator to the next accumulator, and increment the current accumulator.
     pub fn push_acc(&mut self) {
         self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc];
         self.current_acc += 1;
     }
 
+    /// Decrement the current accumulator.
     pub fn pop_acc(&mut self) {
         self.current_acc -= 1;
     }
 
+    /// Reinitialise the state from a board.
     pub fn refresh_acc(&mut self, board: &Board) {
         self.current_acc = 0;
 
@@ -269,12 +295,13 @@ impl NNUEState {
                 let piece_bb = board.pieces.piece_bb(piece);
 
                 for sq in BitLoop::new(piece_bb) {
-                    self.efficiently_update_manual::<ACTIVATE>(piece_type, colour, sq);
+                    self.efficiently_update_manual::<Activate>(piece_type, colour, sq);
                 }
             }
         }
     }
 
+    /// Update the state from a move.
     pub fn efficiently_update_from_move(
         &mut self,
         piece_type: PieceType,
@@ -340,19 +367,20 @@ impl NNUEState {
 
         subtract_and_add_to_all(
             &mut acc.white,
-            &NNUE.flipped_weights,
+            &NNUE.feature_weights,
             white_idx_from * LAYER_1_SIZE,
             white_idx_to * LAYER_1_SIZE,
         );
         subtract_and_add_to_all(
             &mut acc.black,
-            &NNUE.flipped_weights,
+            &NNUE.feature_weights,
             black_idx_from * LAYER_1_SIZE,
             black_idx_to * LAYER_1_SIZE,
         );
     }
 
-    pub fn efficiently_update_manual<const IS_ACTIVATE: bool>(
+    /// Update by activating or deactivating a piece.
+    pub fn efficiently_update_manual<A: Activation>(
         &mut self,
         piece_type: PieceType,
         colour: Colour,
@@ -372,7 +400,7 @@ impl NNUEState {
 
         let acc = &mut self.accumulators[self.current_acc];
 
-        if IS_ACTIVATE {
+        if A::ACTIVATE {
             #[cfg(debug_assertions)]
             {
                 debug_assert!(
@@ -390,8 +418,8 @@ impl NNUEState {
                 self.white_pov[white_idx] = 1;
                 self.black_pov[black_idx] = 1;
             }
-            add_to_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
-            add_to_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
+            add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
+            add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
         } else {
             #[cfg(debug_assertions)]
             {
@@ -410,11 +438,13 @@ impl NNUEState {
                 self.white_pov[white_idx] = 0;
                 self.black_pov[black_idx] = 0;
             }
-            sub_from_all(&mut acc.white, &NNUE.flipped_weights, white_idx * LAYER_1_SIZE);
-            sub_from_all(&mut acc.black, &NNUE.flipped_weights, black_idx * LAYER_1_SIZE);
+            sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
+            sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
         }
     }
 
+    /// Update only the feature planes that are affected by the given move.
+    /// This is just for debugging purposes.
     #[cfg(debug_assertions)]
     pub fn update_pov_move(
         &mut self,
@@ -442,8 +472,10 @@ impl NNUEState {
         self.black_pov[black_idx_to] = 1;
     }
 
+    /// Update only the feature planes that are affected by the addition or removal of a piece.
+    /// This is just for debugging purposes.
     #[cfg(debug_assertions)]
-    pub fn update_pov_manual<const IS_ACTIVATE: bool>(
+    pub fn update_pov_manual<A: Activation>(
         &mut self,
         piece_type: PieceType,
         colour: Colour,
@@ -460,7 +492,7 @@ impl NNUEState {
         let black_idx =
             (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
 
-        if IS_ACTIVATE {
+        if A::ACTIVATE {
             self.white_pov[white_idx] = 1;
             self.black_pov[black_idx] = 1;
         } else {
@@ -469,6 +501,7 @@ impl NNUEState {
         }
     }
 
+    /// Evaluate the final layer on the partial activations.
     pub fn evaluate(&self, stm: Colour) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
@@ -480,11 +513,15 @@ impl NNUEState {
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
 
+    /// Get the active features for the current position, from white's perspective.
     #[cfg(debug_assertions)]
     pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
         self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
     }
 
+    /// Go from a feature index to the corresponding (colour, piece type, square) tuple.
+    /// 
+    /// (from white's perspective)
     #[cfg(debug_assertions)]
     pub const fn feature_loc_to_parts(loc: usize) -> (Colour, PieceType, Square) {
         #![allow(clippy::cast_possible_truncation)]
@@ -498,6 +535,7 @@ impl NNUEState {
     }
 }
 
+/// Move a feature from one square to another.
 fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut [i16; SIZE],
     delta: &[i16; WEIGHTS],
@@ -514,6 +552,7 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+/// Add a feature to a square.
 fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut [i16; SIZE],
     delta: &[i16; WEIGHTS],
@@ -525,6 +564,7 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+/// Subtract a feature from a square.
 fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut [i16; SIZE],
     delta: &[i16; WEIGHTS],
@@ -536,6 +576,8 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+/// Execute clipped relu on the partial activations,
+/// and accumulate the result into a sum.
 pub fn crelu_flatten(
     us: &[i16; LAYER_1_SIZE],
     them: &[i16; LAYER_1_SIZE],
@@ -551,6 +593,7 @@ pub fn crelu_flatten(
     sum
 }
 
+/// Load a network from a JSON file, and emit binary files.
 pub fn convert_json_to_binary(
     json_path: impl AsRef<std::path::Path>,
     output_path: impl AsRef<std::path::Path>,
