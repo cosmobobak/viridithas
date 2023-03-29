@@ -1083,7 +1083,7 @@ impl Board {
         t.nnue.push_acc();
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.efficiently_update_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
+            t.nnue.efficiently_update_manual::<Deactivate>(PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match to {
                 Square::C1 => {
