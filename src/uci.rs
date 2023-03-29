@@ -456,10 +456,15 @@ impl Display for PrettyScoreFormatWrapper {
                 write!(f, " -TB{plies_to_tb:<2}")?;
             }
         } else {
-            // six chars wide: one for the sign, two for the pawn values,
-            // one for the decimal point, and two for the centipawn values
             let white_pov = white_pov * 100 / NORMALISE_TO_PAWN_VALUE;
-            write!(f, "{:+6.2}", f64::from(white_pov) / 100.0)?;
+            if white_pov == 0 {
+                // same as below, but with no sign
+                write!(f, "{:6.2}", f64::from(white_pov) / 100.0)?;
+            } else {
+                // six chars wide: one for the sign, two for the pawn values,
+                // one for the decimal point, and two for the centipawn values
+                write!(f, "{:+6.2}", f64::from(white_pov) / 100.0)?;
+            }
         }
         write!(f, "\u{001b}[0m") // reset
     }
@@ -817,15 +822,16 @@ struct PrettyUciWdlFormat {
 }
 impl Display for PrettyUciWdlFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #![allow(clippy::cast_possible_truncation)]
         let wdl_w = win_rate_model(self.eval, self.ply);
         let wdl_l = win_rate_model(-self.eval, self.ply);
         let wdl_d = 1000 - wdl_w - wdl_l;
-        let wdl_w = f64::from(wdl_w) / 10.0;
-        let wdl_d = f64::from(wdl_d) / 10.0;
-        let wdl_l = f64::from(wdl_l) / 10.0;
+        let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
+        let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
+        let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
         write!(
             f,
-            "\u{001b}[38;5;243m{wdl_w:.0}%W {wdl_d:.0}%D {wdl_l:.0}%L\u{001b}[0m",
+            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
         )
     }
 }
