@@ -1,6 +1,6 @@
 // use crate::{board::Board, piece::PieceType};
 
-use super::Align;
+use super::network::Align;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Accumulator<const HIDDEN: usize> {

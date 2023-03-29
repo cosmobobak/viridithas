@@ -7,7 +7,7 @@ use crate::{
         Square,
     },
     lookups::{PIECE_BIG, PIECE_MAJ},
-    nnue::NNUEState, piece::{Colour, Piece}, searchinfo::SearchInfo, piecesquaretable::pst_value,
+    nnue::network::NNUEState, piece::{Colour, Piece}, searchinfo::SearchInfo, piecesquaretable::pst_value,
 };
 
 #[cfg(debug_assertions)]

@@ -30,7 +30,7 @@ use crate::{
     lookups::{PIECE_BIG, PIECE_MAJ},
     macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
-    nnue::{ACTIVATE, DEACTIVATE},
+    nnue::network::{ACTIVATE, DEACTIVATE},
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::PVariation,

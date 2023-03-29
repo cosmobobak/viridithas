@@ -14,7 +14,7 @@ pub struct ThreadData {
     pub checks: [bool; MAX_PLY],
     pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,
-    pub nnue: Box<nnue::NNUEState>,
+    pub nnue: Box<nnue::network::NNUEState>,
 
     pub history_table: HistoryTable,
     pub followup_history: Box<DoubleHistoryTable>,
@@ -41,7 +41,7 @@ impl ThreadData {
             checks: [false; MAX_PLY],
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
-            nnue: nnue::NNUEState::boxed(),
+            nnue: nnue::network::NNUEState::boxed(),
             history_table: HistoryTable::new(),
             followup_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY],

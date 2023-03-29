@@ -118,7 +118,7 @@ fn main() {
             "Number of HCE parameters: {}",
             board::evaluation::parameters::EvalParams::default().vectorise().len()
         );
-        println!("Number of NNUE parameters: {}", nnue::NNUEParams::num_params());
+        println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
         println!(
             "Size of a transposition table entry: {} bytes",
             std::mem::size_of::<transpositiontable::TTEntry>()
@@ -141,15 +141,15 @@ fn main() {
     }
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {
-        return nnue::convert_json_to_binary(json_path, bin_path);
+        return nnue::network::convert_json_to_binary(json_path, bin_path);
     }
 
     if cli.visnnue {
         // create folder for the images
         let path = std::path::PathBuf::from("nnue-visualisations");
         std::fs::create_dir_all(&path).unwrap();
-        return for neuron in 0..crate::nnue::LAYER_1_SIZE {
-            crate::nnue::NNUE.visualise_neuron(neuron, &path);
+        return for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
+            crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
         };
     }
 
