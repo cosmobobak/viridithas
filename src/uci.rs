@@ -746,11 +746,12 @@ pub fn main_loop(params: EvalParams) {
 }
 
 fn block_perft(depth: usize, pos: &mut Board) {
-    #![allow(clippy::cast_possible_truncation)]
+    #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     let start_time = Instant::now();
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
-    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
+    let nps = nodes as f64 / elapsed.as_secs_f64();
+    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}", elapsed = elapsed.as_millis());
 }
 
 fn divide_perft(depth: usize, pos: &mut Board) {
