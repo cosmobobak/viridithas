@@ -2,7 +2,7 @@ use crate::{
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
-    nnue, piece::Colour, search::PVariation,
+    nnue, piece::Colour, search::PVariation, board::Board,
 };
 
 #[derive(Clone)]
@@ -32,8 +32,8 @@ impl ThreadData {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
-    pub fn new(thread_id: usize) -> Self {
-        Self {
+    pub fn new(thread_id: usize, board: &Board) -> Self {
+        let mut td = Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
             best_moves: [Move::NULL; MAX_PLY],
@@ -41,7 +41,7 @@ impl ThreadData {
             checks: [false; MAX_PLY],
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
-            nnue: nnue::network::NNUEState::boxed(),
+            nnue: nnue::network::NNUEState::new(board),
             history_table: HistoryTable::new(),
             followup_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY],
@@ -50,7 +50,11 @@ impl ThreadData {
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,
             depth: 0,
-        }
+        };
+
+        td.alloc_tables();
+
+        td
     }
 
     pub fn ban_nmp_for(&mut self, colour: Colour) {
@@ -77,7 +81,7 @@ impl ThreadData {
         } != 0
     }
 
-    pub fn alloc_tables(&mut self) {
+    fn alloc_tables(&mut self) {
         self.history_table.clear();
         self.followup_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);

@@ -39,8 +39,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut info = SearchInfo::new(&stopped);
     let mut tt = TT::new();
     tt.resize(MEGABYTE);
-    let mut t = ThreadData::new(0);
-    t.alloc_tables();
+    let mut t = ThreadData::new(0, &pos);
     info.eval_params = params.clone();
     data.iter()
         .map(|TrainingExample { fen, outcome }| {

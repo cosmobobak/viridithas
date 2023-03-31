@@ -269,9 +269,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0);
-        t.alloc_tables();
-        t.nnue.refresh_acc(&position);
+        let mut t = ThreadData::new(0, &position);
         let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
@@ -292,9 +290,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0);
-        t.alloc_tables();
-        t.nnue.refresh_acc(&position);
+        let mut t = ThreadData::new(0, &position);
         let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
@@ -315,9 +311,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0);
-        t.alloc_tables();
-        t.nnue.refresh_acc(&position);
+        let mut t = ThreadData::new(0, &position);
         let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
         
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
@@ -338,9 +332,7 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0);
-        t.alloc_tables();
-        t.nnue.refresh_acc(&position);
+        let mut t = ThreadData::new(0, &position);
         let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));

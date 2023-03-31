@@ -170,10 +170,8 @@ mod tests {
     fn perft_nnue_start_position() {
         use super::*;
         crate::magic::initialise();
-        let mut pos = Board::new();
-        let mut t = ThreadData::new(0);
-        pos.set_startpos();
-        t.nnue.refresh_acc(&pos);
+        let mut pos = Board::default();
+        let mut t = ThreadData::new(0, &pos);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });

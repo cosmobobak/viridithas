@@ -243,7 +243,7 @@ pub struct NNUEState {
 
 impl NNUEState {
     /// Create a new `NNUEState`.
-    pub fn boxed() -> Box<Self> {
+    pub fn new(board: &Board) -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
         // at time of writing, this adds up to 396,296 bytes.
@@ -257,14 +257,18 @@ impl NNUEState {
         // accumulators, which is an array of Accumulator<SIZE>.
         //     Accumulator is a struct containing a pair of arrays of ints, so this field is safe for zeroing too.
         // As all fields can be safely initialised to all zeroes, the following code is sound.
-        unsafe {
+        let mut net: Box<Self> = unsafe {
             let layout = std::alloc::Layout::new::<Self>();
             let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
             Box::from_raw(ptr.cast())
-        }
+        };
+
+        net.refresh_acc(board);
+
+        net
     }
 
     /// Copy the current accumulator to the next accumulator, and increment the current accumulator.
@@ -615,10 +619,9 @@ mod tests {
     fn pov_preserved() {
         crate::magic::initialise();
         let mut board = crate::board::Board::default();
-        let mut t = crate::threadlocal::ThreadData::new(0);
+        let mut t = crate::threadlocal::ThreadData::new(0, &board);
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
-        t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
         for &m in ml.iter() {
@@ -638,10 +641,9 @@ mod tests {
             "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
         )
         .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0);
+        let mut t = crate::threadlocal::ThreadData::new(0, &board);
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
-        t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
         for &m in ml.iter() {
@@ -661,10 +663,9 @@ mod tests {
             "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
         )
         .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0);
+        let mut t = crate::threadlocal::ThreadData::new(0, &board);
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
-        t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
         for &m in ml.iter() {
@@ -684,10 +685,9 @@ mod tests {
             "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
         )
         .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0);
+        let mut t = crate::threadlocal::ThreadData::new(0, &board);
         let mut ml = crate::board::movegen::MoveList::new();
         board.generate_moves(&mut ml);
-        t.nnue.refresh_acc(&board);
         let initial_white = t.nnue.white_pov;
         let initial_black = t.nnue.black_pov;
         for &m in ml.iter() {
