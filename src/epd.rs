@@ -72,7 +72,9 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
 fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize, threads: usize, params: &EvalParams) -> i32 {
     let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
-    let mut thread_data = (0..threads).map(ThreadData::new).collect::<Vec<_>>();
+    let mut thread_data = (0..threads)
+        .map(|i| ThreadData::new(i, &board))
+        .collect::<Vec<_>>();
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
     let maxidlen = positions.iter().map(|pos| pos.id.len()).max().unwrap();
@@ -83,7 +85,6 @@ fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, ha
         tt.clear();
         for t in &mut thread_data {
             t.nnue.refresh_acc(&board);
-            t.alloc_tables();
         }
         let stopped = AtomicBool::new(false);
         let mut info = SearchInfo {

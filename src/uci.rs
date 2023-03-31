@@ -543,12 +543,7 @@ pub fn main_loop(params: EvalParams) {
     info.set_stdin(&stdin);
     info.eval_params = params;
 
-    let mut thread_data = Vec::new();
-    thread_data.push(ThreadData::new(0));
-    for t in &mut thread_data {
-        t.nnue.refresh_acc(&pos);
-        t.alloc_tables();
-    }
+    let mut thread_data = vec![ThreadData::new(0, &pos)];
     pos.refresh_psqt(&info);
 
     loop {
@@ -600,7 +595,7 @@ pub fn main_loop(params: EvalParams) {
                 info.quit = true;
                 break;
             }
-            "ucinewgame" => do_newgame(&mut pos, &tt, &mut thread_data),
+            "ucinewgame" => do_newgame(&mut pos, &tt),
             "eval" => {
                 let eval = if pos.in_check::<{ Board::US }>() {
                     0
@@ -634,11 +629,10 @@ pub fn main_loop(params: EvalParams) {
                             tt.resize(new_size);
                         }
                         if let Some(threads) = conf.threads {
-                            thread_data = (0..threads).map(ThreadData::new).collect();
-                            for t in &mut thread_data {
-                                t.nnue.refresh_acc(&pos);
-                                t.alloc_tables();
-                            }
+                            thread_data = (0..threads)
+                                .zip(std::iter::repeat(&pos))
+                                .map(|(i, p)| ThreadData::new(i, p))
+                                .collect();
                         }
                         Ok(())
                     }
@@ -693,7 +687,7 @@ pub fn main_loop(params: EvalParams) {
                 let mut node_sum = 0u64;
                 let start = Instant::now();
                 for fen in BENCH_POSITIONS {
-                    let res = do_newgame(&mut pos, &tt, &mut thread_data);
+                    let res = do_newgame(&mut pos, &tt);
                     if let Err(e) = res {
                         info.print_to_stdout = true;
                         break 'bench Err(e);
@@ -773,12 +767,9 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
 }
 
-fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
+fn do_newgame(pos: &mut Board, tt: &TT) -> Result<(), UciError> {
     let res = parse_position("position startpos\n", pos);
     tt.clear();
-    for td in thread_data {
-        td.alloc_tables();
-    }
     res
 }
 

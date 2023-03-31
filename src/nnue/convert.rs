@@ -28,9 +28,8 @@ fn batch_convert<const USE_NNUE: bool>(
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut t = ThreadData::new(0);
+    let mut t = ThreadData::new(0, &pos);
     let mut local_ticker = 0;
-    t.alloc_tables();
     if printing_thread {
         let c = counter.load(atomic::Ordering::SeqCst);
         #[allow(clippy::cast_precision_loss)]

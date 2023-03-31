@@ -169,8 +169,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
     // so no worries :3
     let mut rng = rand::thread_rng();
     let mut board = Board::new();
-    let mut thread_data = ThreadData::new(id);
-    thread_data.alloc_tables();
+    let mut thread_data = ThreadData::new(id, &board);
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
