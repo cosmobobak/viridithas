@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::{
     board::{movegen::BitLoop, Board},
-    definitions::Square,
+    definitions::{Square, MAX_DEPTH},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
 };
@@ -34,7 +34,7 @@ const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
 /// The size of the stack used to store the activations of the hidden layer.
-const ACC_STACK_SIZE: usize = 256;
+const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
 
 pub trait Activation {
     const ACTIVATE: bool;

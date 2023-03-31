@@ -186,7 +186,7 @@ impl Board {
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
         let mut pv = PVariation::default();
-        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
+        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
