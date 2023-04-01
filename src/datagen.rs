@@ -78,7 +78,6 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
-    #![allow(clippy::cast_precision_loss)]
     FENS_GENERATED.store(0, Ordering::SeqCst);
 
     let options: DataGenOptions = cli_config.map_or_else(|| {
@@ -151,13 +150,18 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     });
 
     if let Some(counters) = counters {
-        let total = counters.values().sum::<u64>();
-        println!("Total games: {total}");
-        let mut counters = counters.into_iter().collect::<Vec<_>>();
-        counters.sort_unstable_by_key(|(_, value)| Reverse(*value));
-        for (key, value) in counters {
-            println!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
-        }
+        print_game_stats(&counters);
+    }
+}
+
+fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
+    #![allow(clippy::cast_precision_loss)]
+    let total = counters.values().sum::<u64>();
+    eprintln!("Total games: {total}");
+    let mut counters = counters.iter().collect::<Vec<_>>();
+    counters.sort_unstable_by_key(|(_, &value)| Reverse(value));
+    for (&key, &value) in counters {
+        eprintln!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
     }
 }
 
@@ -229,6 +233,10 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
             std::io::stderr().flush().unwrap();
+            if game % 1024 == 0 {
+                eprintln!("Game stats for main thread:");
+                print_game_stats(&counters);
+            }
         }
         // reset everything: board, thread data, tt, search info
         board.set_startpos();
