@@ -546,6 +546,8 @@ pub fn main_loop(params: EvalParams) {
     let mut thread_data = vec![ThreadData::new(0, &pos)];
     pos.refresh_psqt(&info);
 
+    println!("{NAME} {VERSION} by Cosmo");
+
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
         let line = stdin
