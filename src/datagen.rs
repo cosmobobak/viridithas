@@ -66,7 +66,7 @@ impl DataGenOptions {
             self.num_games,
             self.num_threads,
             self.tablebases_path.as_ref().map_or_else(
-                || "no-tb".into(),
+                || "no_tb".into(),
                 |tablebases_path| tablebases_path.to_string_lossy()
             ),
             if self.use_nnue { "nnue" } else { "hce" },
