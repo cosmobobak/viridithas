@@ -20,6 +20,7 @@ use crate::{
 };
 
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
+static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
 /// Whether to limit searches by depth or by nodes.
 #[derive(Clone, Debug, Hash)]
@@ -79,6 +80,10 @@ impl DataGenOptions {
 
 pub fn gen_data_main(cli_config: Option<&str>) {
     FENS_GENERATED.store(0, Ordering::SeqCst);
+    ctrlc::set_handler(move || {
+        STOP_GENERATION.store(true, Ordering::SeqCst);
+        println!("Stopping generation, please don't force quit.");
+    }).expect("Failed to set Ctrl-C handler");
 
     let options: DataGenOptions = cli_config.map_or_else(|| {
             let options = DataGenOptions::new();
@@ -370,6 +375,11 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
 
         // STEP 5: update the game outcome statistics
         *counters.get_mut(&outcome).unwrap() += 1;
+
+        // STEP 6: check if we should stop
+        if STOP_GENERATION.load(Ordering::SeqCst) {
+            break 'generation_main_loop;
+        }
     }
 
     counters
