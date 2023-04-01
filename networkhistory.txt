@@ -152,3 +152,7 @@ NET ID | general concept                          | notes
     47 | net 44 data with 20% WDL focus.          | -28.8 +/- 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
        | 65 epochs.                               | vs net-44.
 --------------------------------------------------------------------------------------------------
+    48 | inject extra data into net 45 data.      | essentially indistinguishable from net-44.
+--------------------------------------------------------------------------------------------------
+    49 | Switch to squared ReLU instead of linear | 
+       | ReLU. (Net 48 data)                      | vs net-44.
