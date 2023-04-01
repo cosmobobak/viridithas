@@ -89,10 +89,10 @@ NET ID | general concept                          | notes
        |  - LR = 0.001                            |
        |  - LR drop at 30 epochs                  |
        |  - 45 epochs                             |
-       |  - whatever his fork sets for batch size |
-       |  - WDL focus 10%                         |
+       |  - whatever his fork sets for batch size | (this still has not been done,
+       |  - WDL focus 10%                         |  in case you're reading this in the future)
        | this arch uses buckets and a 384x2 net,  |
-       | so it required rewriting the inference   |
+       | so it requires rewriting the inference   |
        | code.                                    |
 --------------------------------------------------------------------------------------------------
     33 | experiment with some Frozenight training | 12.3 +/- 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
