@@ -1,4 +1,6 @@
 use std::{
+    cmp::Reverse,
+    collections::HashMap,
     fmt::Display,
     fs::File,
     hash::Hash,
@@ -6,11 +8,14 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    time::Instant, collections::HashMap, cmp::Reverse,
+    time::Instant,
 };
 
 use crate::{
-    board::{evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE}, Board, GameOutcome},
+    board::{
+        evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
+        Board, GameOutcome,
+    },
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::{SearchInfo, SearchLimit},
     tablebases::{self, probe::WDL},
@@ -83,7 +88,8 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
         println!("Stopping generation, please don't force quit.");
-    }).expect("Failed to set Ctrl-C handler");
+    })
+    .expect("Failed to set Ctrl-C handler");
 
     let options: DataGenOptions = cli_config.map_or_else(|| {
             let options = DataGenOptions::new();
@@ -166,12 +172,23 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     let mut counters = counters.iter().collect::<Vec<_>>();
     counters.sort_unstable_by_key(|(_, &value)| Reverse(value));
     for (&key, &value) in counters {
-        eprintln!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
+        eprintln!(
+            "{key:?}: {value} ({percentage}%)",
+            percentage = (value as f64 / total as f64 * 100.0).round()
+        );
     }
 }
 
+const EST_FEN_LENGTH: usize = 56;
+const EST_GAME_LENGTH: usize = 500;
+const FEN_BUFFER_SIZE: usize = EST_FEN_LENGTH * EST_GAME_LENGTH * 150 / 100; // 150% of estimated game length, to give some leeway
+
 #[allow(clippy::cognitive_complexity)]
-fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
+fn generate_on_thread(
+    id: usize,
+    options: &DataGenOptions,
+    data_dir: &Path,
+) -> HashMap<GameOutcome, u64> {
     #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cast_possible_truncation)]
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -211,7 +228,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         (GameOutcome::WhiteWinAdjucation, 0),
         (GameOutcome::BlackWinAdjucation, 0),
         (GameOutcome::DrawAdjucation, 0),
-    ].into_iter().collect::<HashMap<_, _>>();
+    ]
+    .into_iter()
+    .collect::<HashMap<_, _>>();
+
+    // to store the FENs of the game
+    let mut fen_buffer = Vec::with_capacity(FEN_BUFFER_SIZE);
 
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
@@ -319,7 +341,10 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
                 // we only save FENs where the best move is not tactical (promotions or captures)
                 // and the score is not game theoretic (mate or TB-win),
                 // and the side to move is not in check.
-                single_game_buffer.push((score, board.fen()));
+                let fen_start = fen_buffer.len();
+                let bytes_written = board.write_fen_into(&mut fen_buffer).unwrap();
+                let fen_end = fen_start + bytes_written;
+                single_game_buffer.push((score, fen_start..fen_end));
             }
 
             let abs_score = score.abs();
@@ -369,6 +394,10 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         }
         #[allow(clippy::iter_with_drain)] // we want to reuse the buffer
         for (score, fen) in single_game_buffer.drain(..) {
+            let fen = unsafe {
+                // SAFETY: we know that the FEN is valid UTF-8, it came from the board.
+                std::str::from_utf8_unchecked(&fen_buffer[fen])
+            };
             writeln!(output_buffer, "{fen} | {score} | {outcome_str}").unwrap();
         }
         FENS_GENERATED.fetch_add(single_game_buffer.len() as u64, Ordering::SeqCst);

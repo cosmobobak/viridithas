@@ -176,7 +176,7 @@ impl Piece {
     pub const WR: Self = Self::new(Colour::WHITE, PieceType::ROOK);
     pub const WQ: Self = Self::new(Colour::WHITE, PieceType::QUEEN);
     pub const WK: Self = Self::new(Colour::WHITE, PieceType::KING);
-    
+
     pub const BP: Self = Self::new(Colour::BLACK, PieceType::PAWN);
     pub const BN: Self = Self::new(Colour::BLACK, PieceType::KNIGHT);
     pub const BB: Self = Self::new(Colour::BLACK, PieceType::BISHOP);
@@ -233,6 +233,24 @@ impl Piece {
             Self::BQ => Some('q'),
             Self::BK => Some('k'),
             _ => None,
+        }
+    }
+
+    pub const fn byte_char(self) -> u8 {
+        match self {
+            Self::WP => b'P',
+            Self::WN => b'N',
+            Self::WB => b'B',
+            Self::WR => b'R',
+            Self::WQ => b'Q',
+            Self::WK => b'K',
+            Self::BP => b'p',
+            Self::BN => b'n',
+            Self::BB => b'b',
+            Self::BR => b'r',
+            Self::BQ => b'q',
+            Self::BK => b'k',
+            _ => b'.',
         }
     }
 

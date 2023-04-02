@@ -222,6 +222,10 @@ impl Square {
     pub fn all() -> impl Iterator<Item = Self> {
         (0..64).map(Self::new)
     }
+
+    pub fn name(self) -> Option<&'static str> {
+        SQUARE_NAMES.get(self.index()).copied()
+    }
 }
 
 impl Display for Square {

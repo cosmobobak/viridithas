@@ -356,7 +356,10 @@ impl Board {
     }
 
     pub fn fen(&self) -> String {
-        format!("{self}")
+        let mut out = Vec::with_capacity(60);
+        self.write_fen_into(&mut out).expect("something terrible happened while writing FEN");
+        // SAFETY: we know that the string is valid UTF-8, because we only write ASCII characters.
+        unsafe { String::from_utf8_unchecked(out) }
     }
 
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
@@ -1667,6 +1670,84 @@ impl Board {
             GameOutcome::DrawStalemate
         }
     }
+
+    pub fn write_fen_into(&self, mut f: impl std::io::Write) -> std::io::Result<usize> {
+        #![allow(clippy::cast_possible_truncation)]
+        let mut bytes_written = 0;
+        let mut counter = 0;
+        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
+            for file in File::FILE_A..=File::FILE_H {
+                let sq = Square::from_rank_file(rank, file);
+                let piece = self.piece_at(sq);
+                if piece == Piece::EMPTY {
+                    counter += 1;
+                } else {
+                    if counter != 0 {
+                        bytes_written += f.write(&[counter + b'0'])?;
+                    }
+                    counter = 0;
+                    let char = piece.byte_char();
+                    bytes_written += f.write(&[char])?;
+                }
+            }
+            if counter != 0 {
+                bytes_written += f.write(&[counter + b'0'])?;
+            }
+            counter = 0;
+            if rank != 0 {
+                bytes_written += f.write(b"/")?;
+            }
+        }
+
+        bytes_written += f.write(b" ")?;
+        if self.side == Colour::WHITE { 
+            bytes_written += f.write(b"w")?;
+        } else {
+            bytes_written += f.write(b"b")?;
+        }
+        bytes_written += f.write(b" ")?;
+        if self.castle_perm == 0 {
+            bytes_written += f.write(b"-")?;
+        } else {
+            bytes_written += [WKCA, WQCA, BKCA, BQCA]
+                .into_iter()
+                .zip(b"KQkq")
+                .filter(|(m, _)| self.castle_perm & m != 0)
+                .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
+        }
+        bytes_written += f.write(b" ")?;
+        if self.ep_sq == Square::NO_SQUARE {
+            bytes_written += f.write(b"-")?;
+        } else {
+            bytes_written += f.write(self.ep_sq.name().unwrap().as_bytes())?;
+        }
+        let hc = self.fifty_move_counter;
+        let hundreds = hc / 100;
+        let tens = (hc % 100) / 10;
+        let ones = hc % 10;
+        bytes_written += f.write(b" ")?;
+        if hundreds != 0 {
+            bytes_written += f.write(&[hundreds + b'0'])?;
+        }
+        if tens != 0 || hundreds != 0 {
+            bytes_written += f.write(&[tens + b'0'])?;
+        }
+        bytes_written += f.write(&[ones + b'0'])?;
+        let ply = self.ply / 2 + 1;
+        let hundreds = (ply / 100) as u8;
+        let tens = ((ply % 100) / 10) as u8;
+        let ones = (ply % 10) as u8;
+        bytes_written += f.write(b" ")?;
+        if hundreds != 0 {
+            bytes_written += f.write(&[hundreds + b'0'])?;
+        }
+        if tens != 0 || hundreds != 0 {
+            bytes_written += f.write(&[tens + b'0'])?;
+        }
+        bytes_written += f.write(&[ones + b'0'])?;
+
+        Ok(bytes_written)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1712,70 +1793,18 @@ impl Default for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        // check if we're being pretty-printed or not.
-        if f.alternate() {
-            for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
-                write!(f, "{} ", rank + 1)?;
-                for file in File::FILE_A..=File::FILE_H {
-                    let sq = Square::from_rank_file(rank, file);
-                    let piece = self.piece_at(sq);
-                    write!(f, "{piece} ")?;
-                }
-                writeln!(f)?;
-            }
-
-            writeln!(f, "  a b c d e f g h")?;
-            writeln!(f, "FEN: {}", self.fen())?;
-        }
-
-        let mut counter = 0;
         for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
+            write!(f, "{} ", rank + 1)?;
             for file in File::FILE_A..=File::FILE_H {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                if piece == Piece::EMPTY {
-                    counter += 1;
-                } else {
-                    if counter != 0 {
-                        write!(f, "{counter}")?;
-                    }
-                    counter = 0;
-                    write!(f, "{}", piece.char().unwrap())?;
-                }
+                write!(f, "{piece} ")?;
             }
-            if counter != 0 {
-                write!(f, "{counter}")?;
-            }
-            counter = 0;
-            if rank != 0 {
-                write!(f, "/")?;
-            }
+            writeln!(f)?;
         }
 
-        write!(f, " ")?;
-        if self.side == Colour::WHITE { 
-            write!(f, "w")?;
-        } else {
-            write!(f, "b")?;
-        }
-        write!(f, " ")?;
-        if self.castle_perm == 0 {
-            write!(f, "-")?;
-        } else {
-            [WKCA, WQCA, BKCA, BQCA]
-                .into_iter()
-                .zip(['K', 'Q', 'k', 'q'])
-                .filter(|(m, _)| self.castle_perm & m != 0)
-                .try_for_each(|(_, ch)| write!(f, "{ch}"))?;
-        }
-        write!(f, " ")?;
-        if self.ep_sq == Square::NO_SQUARE {
-            write!(f, "-")?;
-        } else {
-            write!(f, "{}", self.ep_sq)?;
-        }
-        write!(f, " {}", self.fifty_move_counter)?;
-        write!(f, " {}", self.ply / 2 + 1)?;
+        writeln!(f, "  a b c d e f g h")?;
+        writeln!(f, "FEN: {}", self.fen())?;
 
         Ok(())
     }
