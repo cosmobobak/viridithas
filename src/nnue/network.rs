@@ -537,7 +537,7 @@ pub fn crelu_flatten(
     weights: &[i16; LAYER_1_SIZE * 2],
 ) -> i32 {
     let mut sum: i32 = 0;
-    for (&i, &w) in us.iter().zip(weights) {
+    for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
         sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
