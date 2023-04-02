@@ -79,4 +79,14 @@ pub struct Cli {
     /// Generate training data for the NNUE.
     #[clap(long)]
     pub datagen: Option<Option<String>>,
+    /// Output node benchmark for OpenBench.
+    /// Implemented as a subcommand because that's what OpenBench expects.
+    #[clap(subcommand)]
+    pub bench: Option<Bench>,
+}
+
+#[derive(Parser)]
+pub enum Bench {
+    /// Output node benchmark for OpenBench.
+    Bench,
 }

@@ -39,6 +39,7 @@ const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 const UCI_MAX_THREADS: usize = 512;
 const UCI_MAX_MULTIPV: usize = 500;
 
+#[derive(Debug, PartialEq, Eq)]
 enum UciError {
     ParseOption(String),
     ParseFen(FenParseError),
@@ -531,7 +532,7 @@ pub fn is_multipv() -> bool {
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn main_loop(params: EvalParams) {
+pub fn main_loop(params: EvalParams, global_bench: bool) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -547,6 +548,11 @@ pub fn main_loop(params: EvalParams) {
     pos.refresh_psqt(&info);
 
     println!("{NAME} {VERSION} by Cosmo");
+
+    if global_bench {
+        bench(&mut info, &mut pos, &mut tt, &mut thread_data, "openbench").expect("bench failed");
+        return;
+    }
 
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
@@ -684,48 +690,7 @@ pub fn main_loop(params: EvalParams) {
                 }
                 res
             }
-            benchcmd @ ("bench" | "benchfull") => 'bench: {
-                info.print_to_stdout = false;
-                let mut node_sum = 0u64;
-                let start = Instant::now();
-                for fen in BENCH_POSITIONS {
-                    let res = do_newgame(&mut pos, &tt);
-                    if let Err(e) = res {
-                        info.print_to_stdout = true;
-                        break 'bench Err(e);
-                    }
-                    let res = parse_position(&format!("position fen {fen}\n"), &mut pos);
-                    if let Err(e) = res {
-                        info.print_to_stdout = true;
-                        break 'bench Err(e);
-                    }
-                    for t in &mut thread_data {
-                        t.nnue.refresh_acc(&pos);
-                    }
-                    pos.refresh_psqt(&info);
-                    let res = parse_go("go depth 12\n", &mut info, &mut pos);
-                    if let Err(e) = res {
-                        info.print_to_stdout = true;
-                        break 'bench Err(e);
-                    }
-                    tt.increase_age();
-                    if USE_NNUE.load(Ordering::SeqCst) {
-                        pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
-                    } else {
-                        pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
-                    }
-                    node_sum += info.nodes;
-                    if benchcmd == "benchfull" {
-                        println!("{fen} has {} nodes", info.nodes);
-                    }
-                }
-                let time = start.elapsed();
-                #[allow(clippy::cast_precision_loss)]
-                let nps = node_sum as f64 / time.as_secs_f64();
-                println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
-                info.print_to_stdout = true;
-                Ok(())
-            }
+            benchcmd @ ("bench" | "benchfull") => bench(&mut info, &mut pos, &mut tt, &mut thread_data, benchcmd),
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -739,6 +704,53 @@ pub fn main_loop(params: EvalParams) {
         }
     }
     KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+}
+
+fn bench(info: &mut SearchInfo, pos: &mut Board, tt: &mut TT, thread_data: &mut [ThreadData], benchcmd: &str) -> Result<(), UciError> {
+    info.print_to_stdout = false;
+    let mut node_sum = 0u64;
+    let start = Instant::now();
+    for fen in BENCH_POSITIONS {
+        let res = do_newgame(pos, tt);
+        if let Err(e) = res {
+            info.print_to_stdout = true;
+            return Err(e);
+        }
+        let res = parse_position(&format!("position fen {fen}\n"), pos);
+        if let Err(e) = res {
+            info.print_to_stdout = true;
+            return Err(e);
+        }
+        for t in thread_data.iter_mut() {
+            t.nnue.refresh_acc(pos);
+        }
+        pos.refresh_psqt(&*info);
+        let res = parse_go("go depth 12\n", info, pos);
+        if let Err(e) = res {
+            info.print_to_stdout = true;
+            return Err(e);
+        }
+        tt.increase_age();
+        if USE_NNUE.load(Ordering::SeqCst) {
+            pos.search_position::<true>(info, thread_data, tt.view());
+        } else {
+            pos.search_position::<false>(info, thread_data, tt.view());
+        }
+        node_sum += info.nodes;
+        if matches!(benchcmd, "benchfull" | "openbench") {
+            println!("{fen} has {} nodes", info.nodes);
+        }
+    }
+    let time = start.elapsed();
+    #[allow(clippy::cast_precision_loss)]
+    let nps = node_sum as f64 / time.as_secs_f64();
+    if benchcmd == "openbench" {
+        println!("{node_sum} nodes {nps:.0} nps");
+    } else {
+        println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
+    }
+    info.print_to_stdout = true;
+    Ok(())
 }
 
 fn block_perft(depth: usize, pos: &mut Board) {
