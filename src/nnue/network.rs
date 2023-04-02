@@ -464,6 +464,8 @@ impl NNUEState {
         (Colour::new(colour), PieceType::new(piece + 1), Square::new(sq))
     }
 
+    /// Assert that the input feature planes (the two boards from white's and black's perspective)
+    /// are consistent with what we expect.
     #[cfg(debug_assertions)]
     fn assert_state<A: Activation>(&self, white: usize, black: usize, feature: (Colour, PieceType, Square)) {
         #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
