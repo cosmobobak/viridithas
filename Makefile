@@ -6,5 +6,5 @@ else
 endif
 
 rule:
-    RUSTFLAGS="-C target-cpu=native" cargo build --release
-    cp target/release/$(BIN) $(NAME)
+	RUSTFLAGS="-C target-cpu=native" cargo build --release
+	cp target/release/$(BIN) $(NAME)
