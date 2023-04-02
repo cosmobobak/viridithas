@@ -529,6 +529,10 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+fn crelu(x: i16) -> i32 {
+    i32::from(x.clamp(CR_MIN, CR_MAX))
+}
+
 /// Execute clipped relu on the partial activations,
 /// and accumulate the result into a sum.
 pub fn crelu_flatten(
@@ -538,12 +542,18 @@ pub fn crelu_flatten(
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
+        sum += crelu(i) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
+        sum += crelu(i) * i32::from(w);
     }
     sum
+}
+
+fn screlu(x: i16) -> i32 {
+    let x = x.clamp(CR_MIN, CR_MAX);
+    let x = i32::from(x);
+    x * x
 }
 
 /// Execute squared + clipped relu on the partial activations,
@@ -555,12 +565,10 @@ pub fn screlu_flatten(
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        let activation = i32::from(i.clamp(CR_MIN, CR_MAX));
-        sum += activation * activation * i32::from(w);
+        sum += screlu(i) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        let activation = i32::from(i.clamp(CR_MIN, CR_MAX));
-        sum += activation * activation * i32::from(w);
+        sum += screlu(i) * i32::from(w);
     }
     sum
 }
