@@ -80,20 +80,6 @@ pub struct NNUEParams {
     pub output_bias: i16,
 }
 
-// pub static NNUE2: NNUEParams2 = NNUEParams2 {
-//     input_weights: [Align([0; LAYER_1_SIZE]); INPUT],
-//     input_bias: Align([0; LAYER_1_SIZE]),
-//     hidden_weights: [Align([0; LAYER_1_SIZE * 2]); BUCKETS],
-//     hidden_bias: Align([0; BUCKETS]),
-// };
-
-// pub struct NNUEParams2 {
-//     pub input_weights: [Align<[i16; LAYER_1_SIZE]>; INPUT],
-//     pub input_bias: Align<[i16; LAYER_1_SIZE]>,
-//     pub hidden_weights: [Align<[i16; LAYER_1_SIZE * 2]>; BUCKETS],
-//     pub hidden_bias: Align<[i16; BUCKETS]>,
-// }
-
 impl NNUEParams {
     pub const fn num_params() -> usize {
         INPUT * LAYER_1_SIZE + LAYER_1_SIZE + LAYER_1_SIZE * 2 + 1 // don't duplicate the feature weights
