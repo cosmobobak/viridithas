@@ -546,6 +546,25 @@ pub fn crelu_flatten(
     sum
 }
 
+/// Execute squared + clipped relu on the partial activations,
+/// and accumulate the result into a sum.
+pub fn screlu_flatten(
+    us: &[i16; LAYER_1_SIZE],
+    them: &[i16; LAYER_1_SIZE],
+    weights: &[i16; LAYER_1_SIZE * 2],
+) -> i32 {
+    let mut sum: i32 = 0;
+    for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
+        let activation = i32::from(i.clamp(CR_MIN, CR_MAX));
+        sum += activation * activation * i32::from(w);
+    }
+    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
+        let activation = i32::from(i.clamp(CR_MIN, CR_MAX));
+        sum += activation * activation * i32::from(w);
+    }
+    sum
+}
+
 /// Load a network from a JSON file, and emit binary files.
 pub fn convert_json_to_binary(
     json_path: impl AsRef<std::path::Path>,
