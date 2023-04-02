@@ -361,7 +361,6 @@ impl NNUEState {
             add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
             add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
         } else {
-            let acc = &mut self.accumulators[self.current_acc];
             sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
             sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
         }
