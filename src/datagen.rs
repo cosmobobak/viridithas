@@ -367,11 +367,11 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         if options.log_level > 2 {
             eprintln!("Writing {} moves to output file...", single_game_buffer.len());
         }
-        for (score, fen) in &single_game_buffer {
+        #[allow(clippy::iter_with_drain)] // we want to reuse the buffer
+        for (score, fen) in single_game_buffer.drain(..) {
             writeln!(output_buffer, "{fen} | {score} | {outcome_str}").unwrap();
         }
         FENS_GENERATED.fetch_add(single_game_buffer.len() as u64, Ordering::SeqCst);
-        single_game_buffer.clear();
 
         // STEP 5: update the game outcome statistics
         *counters.get_mut(&outcome).unwrap() += 1;

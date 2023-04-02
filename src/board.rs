@@ -356,54 +356,7 @@ impl Board {
     }
 
     pub fn fen(&self) -> String {
-        let mut fen = String::with_capacity(60);
-
-        let mut counter = 0;
-        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
-            for file in File::FILE_A..=File::FILE_H {
-                let sq = Square::from_rank_file(rank, file);
-                let piece = self.piece_at(sq);
-                if piece == Piece::EMPTY {
-                    counter += 1;
-                } else {
-                    if counter != 0 {
-                        write!(fen, "{counter}").unwrap();
-                    }
-                    counter = 0;
-                    fen.push(piece.char().unwrap());
-                }
-            }
-            if counter != 0 {
-                write!(fen, "{counter}").unwrap();
-            }
-            counter = 0;
-            if rank != 0 {
-                fen.push('/');
-            }
-        }
-
-        fen.push(' ');
-        fen.push(if self.side == Colour::WHITE { 'w' } else { 'b' });
-        fen.push(' ');
-        if self.castle_perm == 0 {
-            fen.push('-');
-        } else {
-            [WKCA, WQCA, BKCA, BQCA]
-                .into_iter()
-                .zip(['K', 'Q', 'k', 'q'])
-                .filter(|(m, _)| self.castle_perm & m != 0)
-                .for_each(|(_, ch)| fen.push(ch));
-        }
-        fen.push(' ');
-        if self.ep_sq == Square::NO_SQUARE {
-            fen.push('-');
-        } else {
-            write!(fen, "{}", self.ep_sq).unwrap();
-        }
-        write!(fen, " {}", self.fifty_move_counter).unwrap();
-        write!(fen, " {}", self.ply / 2 + 1).unwrap();
-
-        fen
+        format!("{self}")
     }
 
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
@@ -1759,18 +1712,70 @@ impl Default for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        // check if we're being pretty-printed or not.
+        if f.alternate() {
+            for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
+                write!(f, "{} ", rank + 1)?;
+                for file in File::FILE_A..=File::FILE_H {
+                    let sq = Square::from_rank_file(rank, file);
+                    let piece = self.piece_at(sq);
+                    write!(f, "{piece} ")?;
+                }
+                writeln!(f)?;
+            }
+
+            writeln!(f, "  a b c d e f g h")?;
+            writeln!(f, "FEN: {}", self.fen())?;
+        }
+
+        let mut counter = 0;
         for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
-            write!(f, "{} ", rank + 1)?;
             for file in File::FILE_A..=File::FILE_H {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
-                write!(f, "{piece} ")?;
+                if piece == Piece::EMPTY {
+                    counter += 1;
+                } else {
+                    if counter != 0 {
+                        write!(f, "{counter}")?;
+                    }
+                    counter = 0;
+                    write!(f, "{}", piece.char().unwrap())?;
+                }
             }
-            writeln!(f)?;
+            if counter != 0 {
+                write!(f, "{counter}")?;
+            }
+            counter = 0;
+            if rank != 0 {
+                write!(f, "/")?;
+            }
         }
 
-        writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "FEN: {}", self.fen())?;
+        write!(f, " ")?;
+        if self.side == Colour::WHITE { 
+            write!(f, "w")?;
+        } else {
+            write!(f, "b")?;
+        }
+        write!(f, " ")?;
+        if self.castle_perm == 0 {
+            write!(f, "-")?;
+        } else {
+            [WKCA, WQCA, BKCA, BQCA]
+                .into_iter()
+                .zip(['K', 'Q', 'k', 'q'])
+                .filter(|(m, _)| self.castle_perm & m != 0)
+                .try_for_each(|(_, ch)| write!(f, "{ch}"))?;
+        }
+        write!(f, " ")?;
+        if self.ep_sq == Square::NO_SQUARE {
+            write!(f, "-")?;
+        } else {
+            write!(f, "{}", self.ep_sq)?;
+        }
+        write!(f, " {}", self.fifty_move_counter)?;
+        write!(f, " {}", self.ply / 2 + 1)?;
 
         Ok(())
     }
