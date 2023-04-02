@@ -38,14 +38,17 @@ const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
 
 pub trait Activation {
     const ACTIVATE: bool;
+    type Reverse: Activation;
 }
 pub struct Activate;
 impl Activation for Activate {
     const ACTIVATE: bool = true;
+    type Reverse = Deactivate;
 }
 pub struct Deactivate;
 impl Activation for Deactivate {
     const ACTIVATE: bool = false;
+    type Reverse = Activate;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -227,6 +230,22 @@ pub struct NNUEState {
     pub current_acc: usize,
 }
 
+const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (usize, usize) {
+    const COLOUR_STRIDE: usize = 64 * 6;
+    const PIECE_STRIDE: usize = 64;
+
+    let sq = sq;
+    // shift into correct range.
+    let piece_type = piece_type.index() - 1;
+    let colour = colour.index();
+
+    let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
+    let black_idx =
+        (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
+
+    (white_idx, black_idx)
+}
+
 impl NNUEState {
     /// Create a new `NNUEState`.
     pub fn new(board: &Board) -> Box<Self> {
@@ -299,74 +318,33 @@ impl NNUEState {
         from: Square,
         to: Square,
     ) {
-        #![allow(clippy::cast_possible_truncation)]
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
-
-        let piece_type = piece_type.index() - 1; // shift into correct range.
-        let colour = colour.index();
-
-        let white_idx_from = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + from.index();
-        let black_idx_from =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + from.flip_rank().index();
-        let white_idx_to = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.index();
-        let black_idx_to =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.flip_rank().index();
-
-        #[cfg(debug_assertions)]
-        {
-            assert_eq!(
-                self.white_pov[white_idx_from],
-                1,
-                "piece: {}, from: {}, to: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                from,
-                to
-            );
-            assert_eq!(
-                self.black_pov[black_idx_from],
-                1,
-                "piece: {}, from: {}, to: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                from,
-                to
-            );
-            assert_eq!(
-                self.white_pov[white_idx_to],
-                0,
-                "piece: {}, from: {}, to: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                from,
-                to
-            );
-            assert_eq!(
-                self.black_pov[black_idx_to],
-                0,
-                "piece: {}, from: {}, to: {}",
-                Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                from,
-                to
-            );
-            self.white_pov[white_idx_from] = 0;
-            self.black_pov[black_idx_from] = 0;
-            self.white_pov[white_idx_to] = 1;
-            self.black_pov[black_idx_to] = 1;
-        }
+        let (white_from, black_from) = feature_indices(from, piece_type, colour);
+        let (white_to, black_to) = feature_indices(to, piece_type, colour);
 
         let acc = &mut self.accumulators[self.current_acc];
 
         subtract_and_add_to_all(
             &mut acc.white,
             &NNUE.feature_weights,
-            white_idx_from * LAYER_1_SIZE,
-            white_idx_to * LAYER_1_SIZE,
+            white_from * LAYER_1_SIZE,
+            white_to * LAYER_1_SIZE,
         );
         subtract_and_add_to_all(
             &mut acc.black,
             &NNUE.feature_weights,
-            black_idx_from * LAYER_1_SIZE,
-            black_idx_to * LAYER_1_SIZE,
+            black_from * LAYER_1_SIZE,
+            black_to * LAYER_1_SIZE,
         );
+
+        #[cfg(debug_assertions)]
+        {
+            self.assert_state::<Activate>(white_from, black_from, (colour, piece_type, from));
+            self.assert_state::<Deactivate>(white_to, black_to, (colour, piece_type, to));
+            self.white_pov[white_from] = 0;
+            self.black_pov[black_from] = 0;
+            self.white_pov[white_to] = 1;
+            self.black_pov[black_to] = 1;
+        }
     }
 
     /// Update by activating or deactivating a piece.
@@ -376,60 +354,23 @@ impl NNUEState {
         colour: Colour,
         sq: Square,
     ) {
-        #![allow(clippy::cast_possible_truncation)]
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
-
-        let sq = sq;
-        let piece_type = piece_type.index() - 1; // shift into correct range.
-        let colour = colour.index();
-
-        let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
-        let black_idx =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
-
+        let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
 
         if A::ACTIVATE {
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    self.white_pov[white_idx] == 0,
-                    "piece: {}, sq: {}",
-                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                    sq
-                );
-                debug_assert!(
-                    self.black_pov[black_idx] == 0,
-                    "piece: {}, sq: {}",
-                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                    sq
-                );
-                self.white_pov[white_idx] = 1;
-                self.black_pov[black_idx] = 1;
-            }
             add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
             add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
         } else {
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(
-                    self.white_pov[white_idx] == 1,
-                    "piece: {}, sq: {}",
-                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                    sq
-                );
-                debug_assert!(
-                    self.black_pov[black_idx] == 1,
-                    "piece: {}, sq: {}",
-                    Piece::new(Colour::new(colour as u8), PieceType::new(piece_type as u8 + 1)),
-                    sq
-                );
-                self.white_pov[white_idx] = 0;
-                self.black_pov[black_idx] = 0;
-            }
+            let acc = &mut self.accumulators[self.current_acc];
             sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
             sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            self.assert_state::<A::Reverse>(white_idx, black_idx, (colour, piece_type, sq));
+            self.white_pov[white_idx] = A::ACTIVATE.into();
+            self.black_pov[black_idx] = A::ACTIVATE.into();
         }
     }
 
@@ -522,6 +463,27 @@ impl NNUEState {
         let piece = (rem / PIECE_STRIDE) as u8;
         let sq = (rem % PIECE_STRIDE) as u8;
         (Colour::new(colour), PieceType::new(piece + 1), Square::new(sq))
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_state<A: Activation>(&self, white: usize, black: usize, feature: (Colour, PieceType, Square)) {
+        #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
+        let (colour, piece_type, sq) = feature;
+        let val = if A::ACTIVATE { 1 } else { 0 };
+        assert_eq!(
+            self.white_pov[white],
+            val,
+            "piece: {}, sq: {}",
+            Piece::new(colour, piece_type),
+            sq,
+        );
+        assert_eq!(
+            self.black_pov[black],
+            val,
+            "piece: {}, sq: {}",
+            Piece::new(colour, piece_type),
+            sq,
+        );
     }
 }
 
