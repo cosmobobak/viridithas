@@ -1,11 +1,10 @@
+EXE    	= viridithas
 ifeq ($(OS),Windows_NT)
-    NAME := $(EXE).exe
-    BIN := viridithas.exe
+	NAME := $(EXE).exe
 else
-    NAME := $(EXE)
-    BIN := viridithas
+	NAME := $(EXE)
 endif
 
 rule:
     RUSTFLAGS="-C target-cpu=native" cargo build --release
-    cp ../target/release/$(BIN) $(NAME)
+    cp target/release/$(BIN) $(NAME)
