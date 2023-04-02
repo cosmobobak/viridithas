@@ -7,4 +7,4 @@ endif
 
 rule:
 	RUSTFLAGS="-C target-cpu=native" cargo build --release
-	cp target/release/$(BIN) $(NAME)
+	cp target/release/$(NAME) $(NAME)
