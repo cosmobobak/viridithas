@@ -69,7 +69,7 @@ impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
 // read in bytes from files and transmute them into u16s.
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
 pub static NNUE: NNUEParams = NNUEParams {
-    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/flipped_weights.bin")) },
+    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
     feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
     output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
     output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
@@ -165,24 +165,30 @@ impl NNUEParams {
         let file = fs::read_to_string(path).unwrap();
         let json: Value = serde_json::from_str(&file).unwrap();
 
+        let mut things_found = 0;
         for (key, value) in json.as_object().unwrap() {
             match key.as_str() {
-                "ft.weight" => {
+                "perspective.weight" => {
                     // weight(value, &mut out.feature_weights, INPUT, QA, false);
                     weight(value, &mut out.feature_weights, LAYER_1_SIZE, QA, true);
+                    things_found += 1;
                 }
-                "ft.bias" => {
+                "perspective.bias" => {
                     bias(value, &mut out.feature_bias, QA);
+                    things_found += 1;
                 }
                 "out.weight" => {
                     weight(value, &mut out.output_weights, LAYER_1_SIZE * 2, QB, false);
+                    things_found += 1;
                 }
                 "out.bias" => {
                     bias(value, from_mut(&mut out.output_bias), QAB);
+                    things_found += 1;
                 }
                 _ => {}
             }
         }
+        assert_eq!(things_found, 4, "Not all parameters found!");
 
         out
     }
@@ -436,7 +442,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = crelu_flatten(us, them, &NNUE.output_weights);
+        let output = screlu_flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
@@ -527,8 +533,14 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+#[allow(dead_code)]
+fn crelu(x: i16) -> i32 {
+    i32::from(x.clamp(CR_MIN, CR_MAX))
+}
+
 /// Execute clipped relu on the partial activations,
 /// and accumulate the result into a sum.
+#[allow(dead_code)]
 pub fn crelu_flatten(
     us: &[i16; LAYER_1_SIZE],
     them: &[i16; LAYER_1_SIZE],
@@ -536,12 +548,35 @@ pub fn crelu_flatten(
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
+        sum += crelu(i) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += i32::from(i.clamp(CR_MIN, CR_MAX)) * i32::from(w);
+        sum += crelu(i) * i32::from(w);
     }
     sum
+}
+
+fn screlu(x: i16) -> i32 {
+    let x = x.clamp(CR_MIN, CR_MAX);
+    let x = i32::from(x);
+    x * x
+}
+
+/// Execute squared + clipped relu on the partial activations,
+/// and accumulate the result into a sum.
+pub fn screlu_flatten(
+    us: &[i16; LAYER_1_SIZE],
+    them: &[i16; LAYER_1_SIZE],
+    weights: &[i16; LAYER_1_SIZE * 2],
+) -> i32 {
+    let mut sum: i32 = 0;
+    for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
+        sum += screlu(i) * i32::from(w);
+    }
+    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
+        sum += screlu(i) * i32::from(w);
+    }
+    sum / QA
 }
 
 /// Load a network from a JSON file, and emit binary files.
@@ -553,7 +588,7 @@ pub fn convert_json_to_binary(
     let bytes = nnue.to_bytes();
     fs::create_dir(&output_path).unwrap();
     for (fname, byte_vector) in
-        ["flipped_weights", "feature_bias", "output_weights", "output_bias"].into_iter().zip(&bytes)
+        ["feature_weights", "feature_bias", "output_weights", "output_bias"].into_iter().zip(&bytes)
     {
         let mut f =
             fs::File::create(output_path.as_ref().join(fname).with_extension("bin")).unwrap();
