@@ -561,6 +561,19 @@ pub fn convert_json_to_binary(
     }
 }
 
+/// Benchmark the inference portion of the NNUE evaluation.
+/// (everything after the feature extraction)
+pub fn inference_benchmark(state: &NNUEState) {
+    let start = std::time::Instant::now();
+    for _ in 0..1_000_000 {
+        std::hint::black_box(state.evaluate(Colour::WHITE));
+    }
+    let elapsed = start.elapsed();
+    let nanos = elapsed.as_nanos();
+    let ns_per_eval = nanos / 1_000_000;
+    println!("{ns_per_eval} ns per evaluation");
+}
+
 mod tests {
     #[test]
     fn pov_preserved() {

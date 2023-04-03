@@ -31,7 +31,7 @@ use crate::{
     tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION,
+    NAME, VERSION, nnue,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
@@ -619,6 +619,10 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             }
             "show" => {
                 println!("{pos}");
+                Ok(())
+            }
+            "nnuebench" => {
+                nnue::network::inference_benchmark(&thread_data[0].nnue);
                 Ok(())
             }
             input if input.starts_with("setoption") => {
