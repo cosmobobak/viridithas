@@ -27,7 +27,6 @@ const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 512;
-// const BUCKETS: usize = 16;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -234,7 +233,6 @@ const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
-    let sq = sq;
     // shift into correct range.
     let piece_type = piece_type.index() - 1;
     let colour = colour.index();
