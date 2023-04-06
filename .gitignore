@@ -16,3 +16,4 @@ dev
 tuning/venv/
 tuning/viridithas
 tuning/log.txt
+.vscode
