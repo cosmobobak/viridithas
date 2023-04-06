@@ -1,11 +1,12 @@
 use std::{
+    array,
     collections::hash_map::DefaultHasher,
     error::Error,
     fs::File,
     io::{self, BufRead, BufReader, BufWriter, Write},
     ops::Range,
     path::Path,
-    sync::atomic::{self, AtomicU64, AtomicBool}, array,
+    sync::atomic::{self, AtomicBool, AtomicU64},
 };
 
 use crate::{
@@ -61,7 +62,8 @@ fn batch_convert<const USE_NNUE: bool>(
             limit: SearchLimit::Depth(Depth::new(depth)),
             ..SearchInfo::new(&stopped)
         };
-        let (score, bm) = pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
+        let (score, bm) =
+            pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {
             evals.push(None);
             continue;

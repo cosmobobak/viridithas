@@ -14,12 +14,12 @@ use regex::Regex;
 
 use crate::{
     board::movegen::{
-            bitboards::{
-                self, pawn_attacks, BitHackExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
-                BB_RANK_4, BB_RANK_5, BB_RANK_7,
-            },
-            MoveList,
+        bitboards::{
+            self, pawn_attacks, BitHackExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
+            BB_RANK_4, BB_RANK_5, BB_RANK_7,
         },
+        MoveList,
+    },
     chessmove::Move,
     definitions::{
         CheckState, File,
@@ -34,7 +34,8 @@ use crate::{
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::PVariation,
-    threadlocal::ThreadData, searchinfo::SearchInfo,
+    searchinfo::SearchInfo,
+    threadlocal::ThreadData,
 };
 
 use self::{
@@ -674,13 +675,26 @@ impl Board {
         self.pst_vals += pst_value(piece, sq, &info.eval_params.piece_square_tables);
     }
 
-    pub fn deactivate_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, sq: Square) {
+    pub fn deactivate_psqt(
+        &mut self,
+        info: &SearchInfo,
+        pt: PieceType,
+        colour: Colour,
+        sq: Square,
+    ) {
         let piece = Piece::new(colour, pt);
         self.material[colour.index()] -= info.eval_params.piece_values[piece.index()];
         self.pst_vals -= pst_value(piece, sq, &info.eval_params.piece_square_tables);
     }
 
-    pub fn move_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, from: Square, to: Square) {
+    pub fn move_psqt(
+        &mut self,
+        info: &SearchInfo,
+        pt: PieceType,
+        colour: Colour,
+        from: Square,
+        to: Square,
+    ) {
         let piece = Piece::new(colour, pt);
         self.pst_vals -= pst_value(piece, from, &info.eval_params.piece_square_tables);
         self.pst_vals += pst_value(piece, to, &info.eval_params.piece_square_tables);
@@ -1224,7 +1238,12 @@ impl Board {
         debug_assert!(self.check_hce_coherency(info));
     }
 
-    pub fn make_move<const USE_NNUE: bool>(&mut self, m: Move, t: &mut ThreadData, info: &SearchInfo) -> bool {
+    pub fn make_move<const USE_NNUE: bool>(
+        &mut self,
+        m: Move,
+        t: &mut ThreadData,
+        info: &SearchInfo,
+    ) -> bool {
         if USE_NNUE {
             self.make_move_nnue(m, t)
         } else {
@@ -1700,7 +1719,7 @@ impl Board {
         }
 
         bytes_written += f.write(b" ")?;
-        if self.side == Colour::WHITE { 
+        if self.side == Colour::WHITE {
             bytes_written += f.write(b"w")?;
         } else {
             bytes_written += f.write(b"b")?;
@@ -1928,7 +1947,7 @@ mod tests {
                 let san_repr = pos.san(m);
                 let san_repr = san_repr.unwrap();
                 let parsed_move = pos.parse_san(&san_repr);
-                assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen(),);
+                assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen());
             }
         }
     }

@@ -5,7 +5,8 @@
 
 use crate::{
     definitions::Square,
-    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY}, piece::Piece,
+    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
+    piece::Piece,
 };
 
 pub fn hash_castling(key: &mut u64, castle_perm: u8) {

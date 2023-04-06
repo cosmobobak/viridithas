@@ -454,7 +454,7 @@ impl NNUEState {
     }
 
     /// Go from a feature index to the corresponding (colour, piece type, square) tuple.
-    /// 
+    ///
     /// (from white's perspective)
     #[cfg(debug_assertions)]
     pub const fn feature_loc_to_parts(loc: usize) -> (Colour, PieceType, Square) {
@@ -471,7 +471,12 @@ impl NNUEState {
     /// Assert that the input feature planes (the two boards from white's and black's perspective)
     /// are consistent with what we expect.
     #[cfg(debug_assertions)]
-    fn assert_state<A: Activation>(&self, white: usize, black: usize, feature: (Colour, PieceType, Square)) {
+    fn assert_state<A: Activation>(
+        &self,
+        white: usize,
+        black: usize,
+        feature: (Colour, PieceType, Square),
+    ) {
         #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
         let (colour, piece_type, sq) = feature;
         let val = if A::ACTIVATE { 1 } else { 0 };
@@ -501,10 +506,7 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 ) {
     let s_block = &delta[offset_sub..offset_sub + SIZE];
     let a_block = &delta[offset_add..offset_add + SIZE];
-    for ((i, ds), da) in input.iter_mut()
-        .zip(s_block)
-        .zip(a_block)
-    {
+    for ((i, ds), da) in input.iter_mut().zip(s_block).zip(a_block) {
         *i = *i - *ds + *da;
     }
 }

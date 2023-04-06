@@ -1,4 +1,3 @@
-
 #[cfg(any(feature = "bindgen", feature = "syzygy"))]
 use std::env;
 

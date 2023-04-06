@@ -1,10 +1,7 @@
-use std::{path::Path, time::Instant, sync::atomic::AtomicBool};
+use std::{path::Path, sync::atomic::AtomicBool, time::Instant};
 
 use crate::{
-    board::{
-        evaluation::parameters::EvalParams,
-        Board,
-    },
+    board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     definitions::MEGABYTE,
     searchinfo::{SearchInfo, SearchLimit},
@@ -23,7 +20,13 @@ struct EpdPosition {
     id: String,
 }
 
-pub fn gamut(epd_path: impl AsRef<Path>, params: &EvalParams, time: u64, hash: usize, threads: usize) {
+pub fn gamut(
+    epd_path: impl AsRef<Path>,
+    params: &EvalParams,
+    time: u64,
+    hash: usize,
+    threads: usize,
+) {
     let mut board = Board::new();
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
@@ -69,12 +72,17 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
     EpdPosition { fen, best_moves, id }
 }
 
-fn run_on_positions(positions: Vec<EpdPosition>, mut board: Board, time: u64, hash: usize, threads: usize, params: &EvalParams) -> i32 {
+fn run_on_positions(
+    positions: Vec<EpdPosition>,
+    mut board: Board,
+    time: u64,
+    hash: usize,
+    threads: usize,
+    params: &EvalParams,
+) -> i32 {
     let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
-    let mut thread_data = (0..threads)
-        .map(|i| ThreadData::new(i, &board))
-        .collect::<Vec<_>>();
+    let mut thread_data = (0..threads).map(|i| ThreadData::new(i, &board)).collect::<Vec<_>>();
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
     let maxidlen = positions.iter().map(|pos| pos.id.len()).max().unwrap();

@@ -10,8 +10,10 @@ use crate::{
     chessmove::Move,
     definitions::{Square, MAX_DEPTH},
     lookups::{init_eval_masks, init_passed_isolated_bb},
+    piece::{Colour, Piece, PieceType},
     search::draw_score,
-    threadlocal::ThreadData, piece::{PieceType, Colour, Piece}, searchinfo::SearchInfo,
+    searchinfo::SearchInfo,
+    threadlocal::ThreadData,
 };
 
 use super::movegen::{
@@ -221,7 +223,12 @@ impl Board {
         v * (100 - i32::from(self.fifty_move_counter)) / 100
     }
 
-    pub fn evaluate<const USE_NNUE: bool>(&self, i: &SearchInfo, t: &ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate<const USE_NNUE: bool>(
+        &self,
+        i: &SearchInfo,
+        t: &ThreadData,
+        nodes: u64,
+    ) -> i32 {
         if USE_NNUE {
             self.evaluate_nnue(t, nodes)
         } else {
@@ -371,8 +378,11 @@ impl Board {
 
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns =
-            if Colour::new(SIDE) == Colour::WHITE { self.pieces.pawns::<true>() } else { self.pieces.pawns::<false>() };
+        let pawns = if Colour::new(SIDE) == Colour::WHITE {
+            self.pieces.pawns::<true>()
+        } else {
+            self.pieces.pawns::<false>()
+        };
         (mask & pawns) == 0
     }
 
@@ -689,8 +699,8 @@ mod tests {
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let info = crate::searchinfo::SearchInfo::new(&stopped);
 
-        let material = board.material[Colour::WHITE.index()]
-            - board.material[Colour::BLACK.index()];
+        let material =
+            board.material[Colour::WHITE.index()] - board.material[Colour::BLACK.index()];
         let pst = board.pst_vals;
         let pawn_val = board.pawn_structure_term(&info);
         let bishop_pair_val = board.bishop_pair_term(&info);

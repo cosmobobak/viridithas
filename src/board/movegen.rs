@@ -13,10 +13,9 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    definitions::{
-        Square, BKCA, BQCA, WKCA, WQCA,
-    },
-    magic::MAGICS_READY, piece::{PieceType, Colour},
+    definitions::{Square, BKCA, BQCA, WKCA, WQCA},
+    magic::MAGICS_READY,
+    piece::{Colour, PieceType},
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -51,7 +50,7 @@ impl MoveList {
 
         // SAFETY: this function is only called inside this file, and only in a single
         // move-generation cycle. The maximum number of pseudolegal moves that can exist
-        // in a chess position is 218, and self.count is always zeroed at the start of 
+        // in a chess position is 218, and self.count is always zeroed at the start of
         // movegen, so we can't ever exceed the bounds of self.moves.
         unsafe {
             *self.moves.get_unchecked_mut(self.count) = MoveListEntry { mov: m, score };
@@ -92,7 +91,10 @@ impl Display for MoveList {
 
 impl Board {
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const IS_WHITE: bool, const CAPTURES_ONLY: bool>(&self, move_list: &mut MoveList) {
+    fn generate_pawn_caps<const IS_WHITE: bool, const CAPTURES_ONLY: bool>(
+        &self,
+        move_list: &mut MoveList,
+    ) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -122,7 +124,9 @@ impl Board {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             } else {
                 // otherwise, generate all promotions:
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in
+                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
+                {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -134,7 +138,9 @@ impl Board {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             } else {
                 // otherwise, generate all promotions:
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in
+                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
+                {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -361,9 +367,11 @@ impl Board {
 
     fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 = Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+        const WQ_FREESPACE: u64 =
+            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
         const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 = Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+        const BQ_FREESPACE: u64 =
+            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
         if IS_WHITE {
             if self.castle_perm & WKCA != 0

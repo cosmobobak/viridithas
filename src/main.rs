@@ -7,9 +7,11 @@
 #[macro_use]
 mod macros;
 
+mod bench;
 mod board;
 mod chessmove;
 mod cli;
+mod datagen;
 mod definitions;
 mod epd;
 mod errors;
@@ -30,8 +32,6 @@ mod texel;
 mod threadlocal;
 mod transpositiontable;
 mod uci;
-mod datagen;
-mod bench;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -119,6 +119,10 @@ fn main() {
             board::evaluation::parameters::EvalParams::default().vectorise().len()
         );
         println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
+        println!(
+            "Size of NNUE network: {} bytes",
+            std::mem::size_of::<nnue::network::NNUEParams>()
+        );
         println!(
             "Size of a transposition table entry: {} bytes",
             std::mem::size_of::<transpositiontable::TTEntry>()

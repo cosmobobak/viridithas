@@ -5,7 +5,8 @@ use crate::{
         File::{FILE_A, FILE_D, FILE_H},
         Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
         Square,
-    }, piece::{Piece, Colour},
+    },
+    piece::{Colour, Piece},
 };
 
 use super::PieceSquareTable;
@@ -93,7 +94,8 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
     [[S::NULL; 4]; 8],"
     );
     let names = ["NULL", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"];
-    for piece in Piece::all().skip(1).take(5) { // white knight to white king
+    for piece in Piece::all().skip(1).take(5) {
+        // white knight to white king
         println!("    [");
         println!("        // {}", names[piece.index()]);
         for rank in RANK_1..=RANK_8 {

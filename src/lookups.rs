@@ -6,7 +6,8 @@ use crate::{
         Rank::{RANK_1, RANK_8},
         Square,
     },
-    rng::XorShiftState, piece::PieceType,
+    piece::PieceType,
+    rng::XorShiftState,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -220,10 +221,19 @@ mod tests {
         use crate::piece::PieceType;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(0)), 132_096);
-        assert_eq!(get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(63)), 9_077_567_998_918_656);
+        assert_eq!(
+            get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(0)),
+            132_096
+        );
+        assert_eq!(
+            get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(63)),
+            9_077_567_998_918_656
+        );
 
         assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)), 770);
-        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)), 4_665_729_213_955_833_856);
+        assert_eq!(
+            get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)),
+            4_665_729_213_955_833_856
+        );
     }
 }

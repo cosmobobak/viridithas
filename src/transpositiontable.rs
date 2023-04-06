@@ -309,13 +309,7 @@ impl<'a> TTView<'a> {
     }
 
     pub fn hashfull(&self) -> usize {
-        self.table
-            .iter()
-            .take(1000)
-            .filter(|e| {
-                e.load(Ordering::Relaxed) != 0
-            })
-            .count()
+        self.table.iter().take(1000).filter(|e| e.load(Ordering::Relaxed) != 0).count()
     }
 }
 

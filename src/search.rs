@@ -714,18 +714,26 @@ impl Board {
         let killers = self.get_killer_set(t);
 
         // probcut:
-        let probcut_beta = std::cmp::min(beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN, MINIMUM_TB_WIN_SCORE - 1);
+        let probcut_beta = std::cmp::min(
+            beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN,
+            MINIMUM_TB_WIN_SCORE - 1,
+        );
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
         // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
         // that it's not going to be helpful.
-        if !PV 
+        if !PV
             && !in_check
             && excluded.is_null()
-            && depth >= PROBCUT_MIN_DEPTH 
-            && beta.abs() < MINIMUM_TB_WIN_SCORE 
-            && tt_hit.as_ref().map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3) {
+            && depth >= PROBCUT_MIN_DEPTH
+            && beta.abs() < MINIMUM_TB_WIN_SCORE
+            && tt_hit
+                .as_ref()
+                .map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3)
+        {
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], 0);
-            while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
+            while let Some(MoveListEntry { mov: m, score: ordering_score }) =
+                move_picker.next(self, t)
+            {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
                 }
@@ -740,11 +748,26 @@ impl Board {
                     continue;
                 }
 
-                let mut value = -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -probcut_beta, -probcut_beta + 1);
+                let mut value = -self.quiescence::<false, NNUE>(
+                    tt,
+                    &mut lpv,
+                    info,
+                    t,
+                    -probcut_beta,
+                    -probcut_beta + 1,
+                );
 
                 if value >= probcut_beta {
                     let probcut_depth = depth - PROBCUT_REDUCTION;
-                    value = -self.zw_search::<NNUE>(tt, &mut lpv, info, t, probcut_depth, -probcut_beta, -probcut_beta + 1);
+                    value = -self.zw_search::<NNUE>(
+                        tt,
+                        &mut lpv,
+                        info,
+                        t,
+                        probcut_depth,
+                        -probcut_beta,
+                        -probcut_beta + 1,
+                    );
                 }
 
                 self.unmake_move::<NNUE>(t, info);

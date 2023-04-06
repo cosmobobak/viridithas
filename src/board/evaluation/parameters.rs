@@ -1,6 +1,9 @@
 use std::{error::Error, fmt::Display, path::Path};
 
-use crate::{definitions::Square, piece::{Piece, PieceType}};
+use crate::{
+    definitions::Square,
+    piece::{Piece, PieceType},
+};
 
 use super::{
     score::S, BISHOP_MOBILITY_BONUS, BISHOP_PAIR_BONUS, DOUBLED_PAWN_MALUS, ISOLATED_PAWN_MALUS,

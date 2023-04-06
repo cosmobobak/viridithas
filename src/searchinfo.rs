@@ -1,12 +1,18 @@
 use std::{
+    ops::ControlFlow,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Mutex,
     },
-    time::{Duration, Instant}, ops::ControlFlow,
+    time::{Duration, Instant},
 };
 
-use crate::{chessmove::Move, definitions::depth::{Depth, ZERO_PLY}, board::evaluation::{mate_in, parameters::EvalParams}, search::{parameters::SearchParams, LMTable}};
+use crate::{
+    board::evaluation::{mate_in, parameters::EvalParams},
+    chessmove::Move,
+    definitions::depth::{Depth, ZERO_PLY},
+    search::{parameters::SearchParams, LMTable},
+};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -15,7 +21,9 @@ pub enum SearchLimit {
     Time(u64),
     TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
-    Mate { ply: usize },
+    Mate {
+        ply: usize,
+    },
     Dynamic {
         our_clock: u64,
         their_clock: u64,
@@ -41,7 +49,12 @@ impl SearchLimit {
         }
     }
 
-    pub fn compute_time_windows(our_clock: u64, moves_to_go: Option<u64>, our_inc: u64, config: &SearchParams) -> (u64, u64) {
+    pub fn compute_time_windows(
+        our_clock: u64,
+        moves_to_go: Option<u64>,
+        our_inc: u64,
+        config: &SearchParams,
+    ) -> (u64, u64) {
         let max_time = our_clock.saturating_sub(30);
         if let Some(moves_to_go) = moves_to_go {
             let divisor = moves_to_go.clamp(2, config.search_time_fraction);
@@ -155,7 +168,9 @@ impl<'a> SearchInfo<'a> {
             return true;
         }
         let res = match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => { self.stopped.load(Ordering::SeqCst) }
+            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
+                self.stopped.load(Ordering::SeqCst)
+            }
             SearchLimit::Nodes(nodes) => {
                 let past_limit = self.nodes >= nodes;
                 if past_limit {
@@ -193,7 +208,12 @@ impl<'a> SearchInfo<'a> {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    pub fn solved_breaker<const MAIN_THREAD: bool>(&mut self, best_move: Move, value: i32, depth: usize) -> ControlFlow<()> {
+    pub fn solved_breaker<const MAIN_THREAD: bool>(
+        &mut self,
+        best_move: Move,
+        value: i32,
+        depth: usize,
+    ) -> ControlFlow<()> {
         if !MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
@@ -251,26 +271,34 @@ mod tests {
     #![allow(unused_imports)]
     use std::{array, sync::atomic::AtomicBool};
 
-    use crate::{board::{Board, evaluation::{mate_in, mated_in}}, threadlocal::ThreadData, transpositiontable::TT, definitions::MEGABYTE, magic};
     use super::{SearchInfo, SearchLimit};
+    use crate::{
+        board::{
+            evaluation::{mate_in, mated_in},
+            Board,
+        },
+        definitions::MEGABYTE,
+        magic,
+        threadlocal::ThreadData,
+        transpositiontable::TT,
+    };
 
-#[cfg(test)] // while running tests, we don't want multiple concurrent searches
-static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    #[cfg(test)] // while running tests, we don't want multiple concurrent searches
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
-        let mut position = Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
+        let mut position =
+            Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            limit: SearchLimit::mate_in(2),
-            ..SearchInfo::new(&stopped)
-        };
+        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -282,17 +310,16 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
-        let mut position = Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
+        let mut position =
+            Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            limit: SearchLimit::mate_in(2),
-            ..SearchInfo::new(&stopped)
-        };
+        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
-        
+        let (value, mov) =
+            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
 
@@ -303,17 +330,16 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
-        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
+        let mut position =
+            Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            limit: SearchLimit::mate_in(2),
-            ..SearchInfo::new(&stopped)
-        };
+        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
-        
+        let (value, mov) =
+            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
 
@@ -324,16 +350,15 @@ static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
         magic::initialise();
-        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
+        let mut position =
+            Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            limit: SearchLimit::mate_in(2),
-            ..SearchInfo::new(&stopped)
-        };
+        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) = position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.

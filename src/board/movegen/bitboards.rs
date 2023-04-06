@@ -2,7 +2,8 @@ use std::fmt::Display;
 
 use crate::{
     definitions::Square,
-    lookups, magic, piece::{PieceType, Piece, Colour},
+    lookups, magic,
+    piece::{Colour, Piece, PieceType},
 };
 
 pub const BB_RANK_1: u64 = 0x0000_0000_0000_00FF;
@@ -368,12 +369,14 @@ impl BitBoard {
         let sq_bb = sq.bitboard();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.b_pawns;
         let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.w_pawns;
-        let knight_attackers = attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE) & (self.w_knights | self.b_knights);
+        let knight_attackers = attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE)
+            & (self.w_knights | self.b_knights);
         let diag_attackers = attacks::<{ PieceType::BISHOP.inner() }>(sq, occupied)
             & (self.w_bishops | self.b_bishops | self.w_queens | self.b_queens);
         let orth_attackers = attacks::<{ PieceType::ROOK.inner() }>(sq, occupied)
             & (self.w_rooks | self.b_rooks | self.w_queens | self.b_queens);
-        let king_attackers = attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE) & (self.w_king | self.b_king);
+        let king_attackers =
+            attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE) & (self.w_king | self.b_king);
         black_pawn_attackers
             | white_pawn_attackers
             | knight_attackers
@@ -488,7 +491,9 @@ pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: u64) -> u64 {
     match PieceType::new(PIECE_TYPE) {
         PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
         PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
-        PieceType::QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        PieceType::QUEEN => {
+            magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
+        }
         PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
         PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
         _ => panic!("Invalid piece type"),
@@ -499,7 +504,9 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: u64) -> u64 {
     match pt {
         PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
         PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
-        PieceType::QUEEN => magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers),
+        PieceType::QUEEN => {
+            magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
+        }
         PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
         PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
         _ => panic!("Invalid piece type: {pt:?}"),

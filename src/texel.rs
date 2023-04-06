@@ -1,20 +1,20 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    time::Instant, sync::atomic::AtomicBool,
+    sync::atomic::AtomicBool,
+    time::Instant,
 };
 
 use rand::prelude::SliceRandom;
 
 use crate::{
-    board::{
-        evaluation::parameters::EvalParams,
-        Board,
-    },
+    board::{evaluation::parameters::EvalParams, Board},
     definitions::{INFINITY, MEGABYTE},
+    piece::Colour,
+    search::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    transpositiontable::TT, piece::Colour, search::PVariation,
+    transpositiontable::TT,
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";

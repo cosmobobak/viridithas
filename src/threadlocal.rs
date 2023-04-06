@@ -1,8 +1,11 @@
 use crate::{
+    board::Board,
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
     historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
-    nnue, piece::Colour, search::PVariation, board::Board,
+    nnue,
+    piece::Colour,
+    search::PVariation,
 };
 
 #[derive(Clone)]
@@ -58,27 +61,19 @@ impl ThreadData {
     }
 
     pub fn ban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp |= if colour == Colour::WHITE {
-            Self::WHITE_BANNED_NMP
-        } else {
-            Self::BLACK_BANNED_NMP
-        };
+        self.banned_nmp |=
+            if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP };
     }
 
     pub fn unban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp &= if colour == Colour::WHITE {
-            !Self::WHITE_BANNED_NMP
-        } else {
-            !Self::BLACK_BANNED_NMP
-        };
+        self.banned_nmp &=
+            if colour == Colour::WHITE { !Self::WHITE_BANNED_NMP } else { !Self::BLACK_BANNED_NMP };
     }
 
     pub fn nmp_banned_for(&self, colour: Colour) -> bool {
-        self.banned_nmp & if colour == Colour::WHITE {
-            Self::WHITE_BANNED_NMP
-        } else {
-            Self::BLACK_BANNED_NMP
-        } != 0
+        self.banned_nmp
+            & if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP }
+            != 0
     }
 
     fn alloc_tables(&mut self) {

@@ -1,10 +1,10 @@
 #![deny(clippy::panic, clippy::unwrap_used, clippy::todo, clippy::unimplemented)]
 
 use std::{
-    fmt::{Display, self},
+    fmt::{self, Display},
     io::Write,
     num::{ParseFloatError, ParseIntError},
-    str::{ParseBoolError, FromStr},
+    str::{FromStr, ParseBoolError},
     sync::{
         atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering},
         mpsc, Mutex,
@@ -16,22 +16,22 @@ use crate::{
     bench::BENCH_POSITIONS,
     board::{
         evaluation::{
-            is_game_theoretic_score, is_mate_score, parameters::EvalParams,
-            MATE_SCORE, TB_WIN_SCORE,
+            is_game_theoretic_score, is_mate_score, parameters::EvalParams, MATE_SCORE,
+            TB_WIN_SCORE,
         },
         movegen::MoveList,
         Board,
     },
     definitions::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
-    perft,
+    nnue, perft,
     piece::Colour,
     search::{parameters::SearchParams, LMTable},
     searchinfo::{SearchInfo, SearchLimit},
     tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
-    NAME, VERSION, nnue,
+    NAME, VERSION,
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
@@ -146,11 +146,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
 }
 
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
-fn parse_go(
-    text: &str,
-    info: &mut SearchInfo,
-    pos: &mut Board,
-) -> Result<(), UciError> {
+fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -668,15 +664,19 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                         let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
                         depth
                             .parse::<usize>()
-                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                            .map_err(|_| {
+                                UciError::InvalidFormat(format!(
+                                    "cannot parse \"{depth}\" as usize"
+                                ))
+                            })
                             .map(|depth| divide_perft(depth, &mut pos))
                     }
-                    Some(depth) => {
-                        depth
-                            .parse::<usize>()
-                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
-                            .map(|depth| block_perft(depth, &mut pos))
-                    }
+                    Some(depth) => depth
+                        .parse::<usize>()
+                        .map_err(|_| {
+                            UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize"))
+                        })
+                        .map(|depth| block_perft(depth, &mut pos)),
                     None => Err(UciError::InvalidFormat(
                         "expected a depth after 'go perft'".to_string(),
                     )),
@@ -694,7 +694,9 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 }
                 res
             }
-            benchcmd @ ("bench" | "benchfull") => bench(&mut info, &mut pos, &mut tt, &mut thread_data, benchcmd),
+            benchcmd @ ("bench" | "benchfull") => {
+                bench(&mut info, &mut pos, &mut tt, &mut thread_data, benchcmd)
+            }
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -710,7 +712,13 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }
 
-fn bench(info: &mut SearchInfo, pos: &mut Board, tt: &mut TT, thread_data: &mut [ThreadData], benchcmd: &str) -> Result<(), UciError> {
+fn bench(
+    info: &mut SearchInfo,
+    pos: &mut Board,
+    tt: &mut TT,
+    thread_data: &mut [ThreadData],
+    benchcmd: &str,
+) -> Result<(), UciError> {
     info.print_to_stdout = false;
     let mut node_sum = 0u64;
     let start = Instant::now();
@@ -763,7 +771,10 @@ fn block_perft(depth: usize, pos: &mut Board) {
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
     let nps = nodes as f64 / elapsed.as_secs_f64();
-    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}", elapsed = elapsed.as_millis());
+    println!(
+        "info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}",
+        elapsed = elapsed.as_millis()
+    );
 }
 
 fn divide_perft(depth: usize, pos: &mut Board) {
@@ -782,7 +793,11 @@ fn divide_perft(depth: usize, pos: &mut Board) {
         pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();
-    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps}", elapsed = elapsed.as_millis(), nps = nodes * 1000 / elapsed.as_millis() as u64);
+    println!(
+        "info depth {depth} nodes {nodes} time {elapsed} nps {nps}",
+        elapsed = elapsed.as_millis(),
+        nps = nodes * 1000 / elapsed.as_millis() as u64
+    );
 }
 
 fn do_newgame(pos: &mut Board, tt: &TT) -> Result<(), UciError> {
@@ -799,8 +814,8 @@ fn do_newgame(pos: &mut Board, tt: &TT) -> Result<(), UciError> {
 const NORMALISE_TO_PAWN_VALUE: i32 = 269;
 fn win_rate_model(eval: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const AS: [f64; 4] = [ -26.994_571_68,  207.590_501_28, -214.904_939_28,  303.735_316_05 ];
-    const BS: [f64; 4] = [ -19.224_614_27,  141.390_056_35, -283.690_790_60,  378.025_261_86 ];
+    const AS: [f64; 4] = [-26.994_571_68, 207.590_501_28, -214.904_939_28, 303.735_316_05];
+    const BS: [f64; 4] = [-19.224_614_27, 141.390_056_35, -283.690_790_60, 378.025_261_86];
     let m = min!(240.0, ply as f64) / 64.0;
     debug_assert_eq!(NORMALISE_TO_PAWN_VALUE, AS.iter().sum::<f64>() as i32);
     let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
@@ -839,10 +854,7 @@ impl Display for PrettyUciWdlFormat {
         let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
         let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
-        write!(
-            f,
-            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
-        )
+        write!(f, "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",)
     }
 }
 

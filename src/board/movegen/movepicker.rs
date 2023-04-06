@@ -1,9 +1,4 @@
-use crate::{
-    board::Board,
-    chessmove::Move,
-    lookups,
-    threadlocal::ThreadData, piece::PieceType,
-};
+use crate::{board::Board, chessmove::Move, lookups, piece::PieceType, threadlocal::ThreadData};
 
 use super::{MoveList, MoveListEntry};
 
@@ -138,11 +133,15 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
     }
 
     pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move, see_threshold: i32) -> i32 {
-        const QUEEN_PROMO_BONUS: i32 = lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
+        const QUEEN_PROMO_BONUS: i32 =
+            lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
         let mut score = if m.is_ep() {
             lookups::get_mvv_lva_score(PieceType::PAWN, PieceType::PAWN)
         } else {
-            lookups::get_mvv_lva_score(pos.captured_piece(m).piece_type(), pos.moved_piece(m).piece_type())
+            lookups::get_mvv_lva_score(
+                pos.captured_piece(m).piece_type(),
+                pos.moved_piece(m).piece_type(),
+            )
         };
         if m.is_promo() {
             if m.promotion_type() == PieceType::QUEEN {

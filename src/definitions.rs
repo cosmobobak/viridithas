@@ -5,7 +5,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::{board::evaluation::MATE_SCORE, chessmove::Move, piece::{Colour, Piece}};
+use crate::{
+    board::evaluation::MATE_SCORE,
+    chessmove::Move,
+    piece::{Colour, Piece},
+};
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: depth::Depth = depth::Depth::new(128);

@@ -7,13 +7,16 @@ use crate::{
         Square,
     },
     lookups::{PIECE_BIG, PIECE_MAJ},
-    nnue::network::NNUEState, piece::{Colour, Piece}, searchinfo::SearchInfo, piecesquaretable::pst_value,
+    nnue::network::NNUEState,
+    piece::{Colour, Piece},
+    piecesquaretable::pst_value,
+    searchinfo::SearchInfo,
 };
 
 #[cfg(debug_assertions)]
 use crate::{errors::PositionValidityError, lookups::PIECE_MIN};
 
-use super::{movegen::bitboards::BitLoop, Board, evaluation::parameters::EvalParams};
+use super::{evaluation::parameters::EvalParams, movegen::bitboards::BitLoop, Board};
 
 impl Board {
     #[cfg(debug_assertions)]
@@ -67,37 +70,43 @@ impl Board {
         if min_pce[Colour::WHITE.index()] != self.minor_piece_counts[Colour::WHITE.index()] {
             return Err(format!(
                 "white minor piece count is corrupt: expected {:?}, got {:?}",
-                min_pce[Colour::WHITE.index()], self.minor_piece_counts[Colour::WHITE.index()]
+                min_pce[Colour::WHITE.index()],
+                self.minor_piece_counts[Colour::WHITE.index()]
             ));
         }
         if min_pce[Colour::BLACK.index()] != self.minor_piece_counts[Colour::BLACK.index()] {
             return Err(format!(
                 "black minor piece count is corrupt: expected {:?}, got {:?}",
-                min_pce[Colour::BLACK.index()], self.minor_piece_counts[Colour::BLACK.index()]
+                min_pce[Colour::BLACK.index()],
+                self.minor_piece_counts[Colour::BLACK.index()]
             ));
         }
         if maj_pce[Colour::WHITE.index()] != self.major_piece_counts[Colour::WHITE.index()] {
             return Err(format!(
                 "white major piece count is corrupt: expected {:?}, got {:?}",
-                maj_pce[Colour::WHITE.index()], self.major_piece_counts[Colour::WHITE.index()]
+                maj_pce[Colour::WHITE.index()],
+                self.major_piece_counts[Colour::WHITE.index()]
             ));
         }
         if maj_pce[Colour::BLACK.index()] != self.major_piece_counts[Colour::BLACK.index()] {
             return Err(format!(
                 "black major piece count is corrupt: expected {:?}, got {:?}",
-                maj_pce[Colour::BLACK.index()], self.major_piece_counts[Colour::BLACK.index()]
+                maj_pce[Colour::BLACK.index()],
+                self.major_piece_counts[Colour::BLACK.index()]
             ));
         }
         if big_pce[Colour::WHITE.index()] != self.big_piece_counts[Colour::WHITE.index()] {
             return Err(format!(
                 "white big piece count is corrupt: expected {:?}, got {:?}",
-                big_pce[Colour::WHITE.index()], self.big_piece_counts[Colour::WHITE.index()]
+                big_pce[Colour::WHITE.index()],
+                self.big_piece_counts[Colour::WHITE.index()]
             ));
         }
         if big_pce[Colour::BLACK.index()] != self.big_piece_counts[Colour::BLACK.index()] {
             return Err(format!(
                 "black big piece count is corrupt: expected {:?}, got {:?}",
-                big_pce[Colour::BLACK.index()], self.big_piece_counts[Colour::BLACK.index()]
+                big_pce[Colour::BLACK.index()],
+                self.big_piece_counts[Colour::BLACK.index()]
             ));
         }
 
@@ -128,10 +137,16 @@ impl Board {
 
         // check there are the correct number of kings for each side
         if self.num(Piece::WK) != 1 {
-            return Err(format!("white king count is corrupt: expected 1, got {}", self.num(Piece::WK)));
+            return Err(format!(
+                "white king count is corrupt: expected 1, got {}",
+                self.num(Piece::WK)
+            ));
         }
         if self.num(Piece::BK) != 1 {
-            return Err(format!("black king count is corrupt: expected 1, got {}", self.num(Piece::BK)));
+            return Err(format!(
+                "black king count is corrupt: expected 1, got {}",
+                self.num(Piece::BK)
+            ));
         }
 
         if self.piece_at(self.king_sq(Colour::WHITE)) != Piece::WK {
@@ -164,28 +179,32 @@ impl Board {
         if material[Colour::WHITE.index()].0 != self.material[Colour::WHITE.index()].0 {
             eprintln!(
                 "white midgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::WHITE.index()].0, self.material[Colour::WHITE.index()].0
+                material[Colour::WHITE.index()].0,
+                self.material[Colour::WHITE.index()].0
             );
             return false;
         }
         if material[Colour::WHITE.index()].1 != self.material[Colour::WHITE.index()].1 {
             eprintln!(
                 "white endgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::WHITE.index()].1, self.material[Colour::WHITE.index()].1
+                material[Colour::WHITE.index()].1,
+                self.material[Colour::WHITE.index()].1
             );
             return false;
         }
         if material[Colour::BLACK.index()].0 != self.material[Colour::BLACK.index()].0 {
             eprintln!(
                 "black midgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::BLACK.index()].0, self.material[Colour::BLACK.index()].0
+                material[Colour::BLACK.index()].0,
+                self.material[Colour::BLACK.index()].0
             );
             return false;
         }
         if material[Colour::BLACK.index()].1 != self.material[Colour::BLACK.index()].1 {
             eprintln!(
                 "black endgame material is corrupt: expected {:?}, got {:?}",
-                material[Colour::BLACK.index()].1, self.material[Colour::BLACK.index()].1
+                material[Colour::BLACK.index()].1,
+                self.material[Colour::BLACK.index()].1
             );
             return false;
         }
@@ -198,23 +217,17 @@ impl Board {
             psqt += pst_value(piece, sq, &info.eval_params.piece_square_tables);
         }
         if psqt.0 != self.pst_vals.0 {
-            eprintln!(
-                "midgame psqt is corrupt: expected {:?}, got {:?}",
-                psqt.0, self.pst_vals.0
-            );
+            eprintln!("midgame psqt is corrupt: expected {:?}, got {:?}", psqt.0, self.pst_vals.0);
             return false;
         }
         if psqt.1 != self.pst_vals.1 {
-            eprintln!(
-                "endgame psqt is corrupt: expected {:?}, got {:?}",
-                psqt.1, self.pst_vals.1
-            );
+            eprintln!("endgame psqt is corrupt: expected {:?}, got {:?}", psqt.1, self.pst_vals.1);
             return false;
         }
 
         true
     }
-    
+
     pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
         #[cfg(debug_assertions)]
         for (colour, piece_type, square) in
