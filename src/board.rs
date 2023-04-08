@@ -1780,23 +1780,23 @@ pub enum GameOutcome {
     DrawStalemate,
     DrawInsufficientMaterial,
     DrawTB,
-    WhiteWinAdjucation,
-    BlackWinAdjucation,
-    DrawAdjucation,
+    WhiteWinAdjudication,
+    BlackWinAdjudication,
+    DrawAdjudication,
     Ongoing,
 }
 
 impl GameOutcome {
     pub const fn as_float_str(self) -> &'static str {
         match self {
-            Self::WhiteWinMate | Self::WhiteWinTB | Self::WhiteWinAdjucation => "1.0",
-            Self::BlackWinMate | Self::BlackWinTB | Self::BlackWinAdjucation => "0.0",
+            Self::WhiteWinMate | Self::WhiteWinTB | Self::WhiteWinAdjudication => "1.0",
+            Self::BlackWinMate | Self::BlackWinTB | Self::BlackWinAdjudication => "0.0",
             Self::DrawFiftyMoves
             | Self::DrawRepetition
             | Self::DrawStalemate
             | Self::DrawInsufficientMaterial
             | Self::DrawTB
-            | Self::DrawAdjucation => "0.5",
+            | Self::DrawAdjudication => "0.5",
             Self::Ongoing => panic!("Game is not over!"),
         }
     }

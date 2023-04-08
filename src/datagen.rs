@@ -225,9 +225,9 @@ fn generate_on_thread(
         (GameOutcome::DrawStalemate, 0),
         (GameOutcome::DrawInsufficientMaterial, 0),
         (GameOutcome::DrawTB, 0),
-        (GameOutcome::WhiteWinAdjucation, 0),
-        (GameOutcome::BlackWinAdjucation, 0),
-        (GameOutcome::DrawAdjucation, 0),
+        (GameOutcome::WhiteWinAdjudication, 0),
+        (GameOutcome::BlackWinAdjudication, 0),
+        (GameOutcome::DrawAdjudication, 0),
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();
@@ -361,14 +361,14 @@ fn generate_on_thread(
 
             if win_adj_counter >= 4 {
                 let outcome = if score > 0 {
-                    GameOutcome::WhiteWinAdjucation
+                    GameOutcome::WhiteWinAdjudication
                 } else {
-                    GameOutcome::BlackWinAdjucation
+                    GameOutcome::BlackWinAdjudication
                 };
                 break outcome;
             }
             if draw_adj_counter >= 12 {
-                break GameOutcome::DrawAdjucation;
+                break GameOutcome::DrawAdjudication;
             }
             if is_game_theoretic_score(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
