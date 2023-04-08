@@ -607,7 +607,7 @@ impl Board {
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
-        // but we should be less agressive with alpha-reductions (eval is too low).
+        // but we should be less aggressive with alpha-reductions (eval is too low).
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
@@ -1122,7 +1122,7 @@ impl Board {
 
     /// See if a move looks like it would initiate a winning exchange.
     /// This function simulates flowing all moves on to the target square of
-    /// the given move, from least to most valueable moved piece, and returns
+    /// the given move, from least to most valuable moved piece, and returns
     /// true if the exchange comes out with a material advantage of at
     /// least `threshold`.
     pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {

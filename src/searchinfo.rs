@@ -88,7 +88,7 @@ pub struct SearchInfo<'a> {
     pub stopped: &'a AtomicBool,
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
-    /// The number of fail-highs that occured on the first move searched.
+    /// The number of fail-highs that occurred on the first move searched.
     pub failhigh_first: u64,
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,

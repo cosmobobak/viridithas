@@ -376,12 +376,12 @@ fn parse_setoption(
 static KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 
 fn stdin_reader() -> mpsc::Receiver<String> {
-    let (sender, reciever) = mpsc::channel();
+    let (sender, receiver) = mpsc::channel();
     std::thread::Builder::new()
         .name("stdin-reader".into())
         .spawn(|| stdin_reader_worker(sender))
         .expect("Couldn't start stdin reader worker thread");
-    reciever
+    receiver
 }
 
 fn stdin_reader_worker(sender: mpsc::Sender<String>) {
