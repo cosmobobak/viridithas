@@ -313,9 +313,19 @@ impl Board {
         }
     }
 
-    pub const fn zugzwang_unlikely(&self) -> bool {
-        const ENDGAME_PHASE: i32 = game_phase(3, 0, 0, 2, 0);
-        self.big_piece_counts[self.side.index()] > 0 && self.phase() < ENDGAME_PHASE
+    pub fn zugzwang_unlikely(&self) -> bool {
+        let stm = self.turn();
+        if stm == Colour::WHITE {
+            let white_pawns = self.pieces.pawns::<true>();
+            let white_occupied = self.pieces.our_pieces::<true>();
+            let non_pawns = white_occupied ^ white_pawns;
+            non_pawns > 1 // we have a king and something else
+        } else {
+            let black_pawns = self.pieces.pawns::<false>();
+            let black_occupied = self.pieces.our_pieces::<false>();
+            let non_pawns = black_occupied ^ black_pawns;
+            non_pawns > 1 // we have a king and something else
+        }
     }
 
     fn bishop_pair_term(&self, i: &SearchInfo) -> S {
