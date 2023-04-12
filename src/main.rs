@@ -71,13 +71,13 @@ fn main() {
         return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
     }
 
-    if let Some(path) = cli.nnueconversionpath {
-        let output_path = cli.output.unwrap_or_else(|| {
-            let mut path = path.clone();
+    if let Some(input_file) = cli.nnueconversionpath {
+        let output_file = cli.output.unwrap_or_else(|| {
+            let mut path = input_file.clone();
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(path,output_path,nnue::convert::Format::OurTexel,cli.nnuedepth,true,cli.nnuefornnue).unwrap();
+        return nnue::convert::evaluate_fens(input_file, output_file, nnue::convert::Format::OurTexel, cli.nnuedepth, true, cli.nnuefornnue).unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
             let mut path = path.clone();
