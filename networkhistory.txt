@@ -161,6 +161,13 @@ NET ID │ general concept                          │ notes
        │ Went from 768->512x2->1 to               │ vs net─44.
        │ 768->512x2->8->1.                        │
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    51 │ Same as net 49 but training on 450M RL   │ ???? +/─ ????, LOS: 50.0 %, DrawRatio: ???? %
-       │ FENs.                                    │ vs net─44.
+    51 │ Same as net 49 but training on 450M RL   │ ELO   | -68.36 +- 14.74 (95%)
+       │ FENs.                                    │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
+       │       (whoops! forgot to shuffle)        │ GAMES | N: 1184 W: 207 L: 437 D: 540
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    52 │ Same as net 51, training on 450M RL      │ ELO   | 
+       │ FENs, but shuffled this time.            │ SPRT  | 
+       │                                          │ LLR   | 
+       │                                          │ GAMES | 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
