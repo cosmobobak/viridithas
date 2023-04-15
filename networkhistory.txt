@@ -157,17 +157,18 @@ NET ID │ general concept                          │ notes
     49 │ Switch to squared ReLU instead of linear │ 35.8 +/─ 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
        │ ReLU. (Net 48 data)                      │ vs net─44.
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    50 │ Try a deeper network architecture.       │ ???? +/─ ????, LOS: 50.0 %, DrawRatio: ???? %
-       │ Went from 768->512x2->1 to               │ vs net─44.
-       │ 768->512x2->8->1.                        │
+    50 │ Try a deeper network architecture.       │ ELO   | 
+       │ Went from 768->512x2->1 to               │ SPRT  | 
+       │ 768->512x2->8->1.                        │ LLR   | 
+       │                                          │ GAMES | 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     51 │ Same as net 49 but training on 450M RL   │ ELO   | -68.36 +- 14.74 (95%)
        │ FENs.                                    │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
        │                                          │ LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
        │       (whoops! forgot to shuffle)        │ GAMES | N: 1184 W: 207 L: 437 D: 540
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    52 │ Same as net 51, training on 450M RL      │ ELO   | 
-       │ FENs, but shuffled this time.            │ SPRT  | 
-       │                                          │ LLR   | 
-       │                                          │ GAMES | 
+    52 │ Same as net 51, training on 450M RL      │ ELO   | -16.40 +- 9.40 (95%)
+       │ FENs, but shuffled this time.            │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │ The weakness of smaller datasets is      │ LLR   | -3.02 (-2.94, 2.94) [0.00, 5.00]
+       │ apparent.                                │ GAMES | N: 2672 W: 617 L: 743 D: 1312
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
