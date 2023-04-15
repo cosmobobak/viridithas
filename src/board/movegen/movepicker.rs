@@ -128,7 +128,8 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         } else {
             let history = t.history_score(pos, m);
             let followup_history = t.followup_history_score(pos, m);
-            i32::from(history + followup_history)
+            let counter_move_history = t.counter_move_history_score(pos, m);
+            i32::from(history) + i32::from(followup_history) + i32::from(counter_move_history)
         }
     }
 
