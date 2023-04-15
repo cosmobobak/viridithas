@@ -14,16 +14,13 @@ MAJOR:
 MINOR:
 - replace all the false/true constgen stuff with a proper type.
 - fullwindow on big scores (+30?)
-- uci bench extension
 - remove `as` casts and unsafe code FOR REAL
-- perft divide
 - try to reduce attr use, it's ugly.
 - make FEN conversion not halt singlethreaded when writing to file. or generally.
 - the slow part of deduplication is the file I/O, consider mmap?.
 - multipv. put the moves in ThreadData and use ROOT.
 - Rust features to watch for: full const generics, const floating-point maths.
 - make the big-piece and other stuff better named
-- make is_legal faster
 - filter training positions that are forced.
 - adapt frozenight's data generation for viri.
 - add good logging for everything using `log` + `env_logger`
