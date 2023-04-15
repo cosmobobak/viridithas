@@ -137,7 +137,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             TB_PROMOTES_ROOK => PieceType::ROOK,
             TB_PROMOTES_BISHOP => PieceType::BISHOP,
             TB_PROMOTES_KNIGHT => PieceType::KNIGHT,
-            _ => PieceType::NO_PIECE_TYPE,
+            _ => PieceType::NONE,
         };
 
         for &m in moves.iter() {
