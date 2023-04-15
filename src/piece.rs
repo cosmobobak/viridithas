@@ -95,7 +95,7 @@ impl Colour {
 }
 
 impl PieceType {
-    pub const NO_PIECE_TYPE: Self = Self { v: 0 };
+    pub const NONE: Self = Self { v: 0 };
     pub const PAWN: Self = Self { v: 1 };
     pub const KNIGHT: Self = Self { v: 2 };
     pub const BISHOP: Self = Self { v: 3 };
@@ -205,7 +205,7 @@ impl Piece {
             Self::WR | Self::BR => PieceType::ROOK,
             Self::WQ | Self::BQ => PieceType::QUEEN,
             Self::WK | Self::BK => PieceType::KING,
-            _ => PieceType::NO_PIECE_TYPE,
+            _ => PieceType::NONE,
         }
     }
 

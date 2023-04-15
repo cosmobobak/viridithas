@@ -1458,7 +1458,7 @@ impl Board {
             PieceType::ROOK => "R",
             PieceType::QUEEN => "Q",
             PieceType::KING => "K",
-            PieceType::NO_PIECE_TYPE => return None,
+            PieceType::NONE => return None,
             _ => unreachable!(),
         };
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::PAWN {
@@ -1495,7 +1495,7 @@ impl Board {
             PieceType::BISHOP => "=B",
             PieceType::ROOK => "=R",
             PieceType::QUEEN => "=Q",
-            PieceType::NO_PIECE_TYPE => "",
+            PieceType::NONE => "",
             _ => unreachable!(),
         };
         let san = format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
