@@ -91,7 +91,7 @@ impl Display for MoveList {
 
 impl Board {
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_pawn_caps<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -114,16 +114,28 @@ impl Board {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to));
         }
-        for from in BitLoop::new(attacking_west & promo_rank) {
-            let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
-                move_list.push::<true>(Move::new_with_promo(from, to, promo));
+        if QS {
+            // in quiescence search, we only generate promotions to queen.
+            for from in BitLoop::new(attacking_west & promo_rank) {
+                let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
+                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             }
-        }
-        for from in BitLoop::new(attacking_east & promo_rank) {
-            let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
-                move_list.push::<true>(Move::new_with_promo(from, to, promo));
+            for from in BitLoop::new(attacking_east & promo_rank) {
+                let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
+                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
+            }
+        } else {
+            for from in BitLoop::new(attacking_west & promo_rank) {
+                let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                    move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                }
+            }
+            for from in BitLoop::new(attacking_east & promo_rank) {
+                let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                    move_list.push::<true>(Move::new_with_promo(from, to, promo));
+                }
             }
         }
     }
@@ -193,6 +205,7 @@ impl Board {
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if QS {
+                // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
             } else {
                 for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
@@ -219,7 +232,7 @@ impl Board {
         self.check_validity().unwrap();
 
         self.generate_pawn_forward::<IS_WHITE>(move_list);
-        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE, false>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
@@ -296,7 +309,7 @@ impl Board {
         self.generate_forward_promos::<IS_WHITE, QS>(move_list);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<IS_WHITE>(move_list);
+        self.generate_pawn_caps::<IS_WHITE, QS>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
