@@ -88,9 +88,7 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
             self.stage = Stage::YieldRemaining;
             let start = self.movelist.count;
             position.generate_quiets(&mut self.movelist);
-            for entry in &mut self.movelist.moves[start..self.movelist.count] {
-                entry.score = Self::score_quiet(self.killers, t, position, entry.mov);
-            }
+            Self::score_quiets(self.killers, t, position, &mut self.movelist.moves[start..self.movelist.count]);
         }
         if self.stage == Stage::YieldRemaining {
             if let Some(m) = self.yield_once() {
@@ -143,18 +141,21 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
         }
     }
 
-    pub fn score_quiet(killers: [Move; 2], t: &ThreadData, pos: &Board, m: Move) -> i32 {
-        if killers[0] == m {
-            FIRST_ORDER_KILLER_SCORE
-        } else if killers[1] == m {
-            SECOND_ORDER_KILLER_SCORE
-        } else if t.is_countermove(pos, m) {
-            COUNTER_MOVE_SCORE
-        } else {
-            let history = t.history_score(pos, m);
-            let followup_history = t.followup_history_score(pos, m);
-            let counter_move_history = t.counter_move_history_score(pos, m);
-            i32::from(history) + i32::from(followup_history) + i32::from(counter_move_history)
+    pub fn score_quiets(killers: [Move; 2], t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
+        t.get_history_scores(pos, ms);
+        t.get_counter_move_history_scores(pos, ms);
+        t.get_followup_history_scores(pos, ms);
+
+        let counter_move = t.get_counter_move(pos);
+
+        for m in ms {
+            if killers[0] == m.mov {
+                m.score = FIRST_ORDER_KILLER_SCORE;
+            } else if killers[1] == m.mov {
+                m.score = SECOND_ORDER_KILLER_SCORE;
+            } else if counter_move == m.mov {
+                m.score = COUNTER_MOVE_SCORE;
+            }
         }
     }
 

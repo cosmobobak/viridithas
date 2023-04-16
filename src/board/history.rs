@@ -6,7 +6,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use super::Board;
+use super::{Board, movegen::MoveListEntry};
 
 impl ThreadData {
     /// Add a quiet move to the history table.
@@ -22,10 +22,12 @@ impl ThreadData {
     }
 
     /// Get the history score for a quiet move.
-    pub(super) fn history_score(&self, pos: &Board, m: Move) -> i16 {
-        let piece_moved = pos.moved_piece(m);
-        let to = m.to();
-        self.history_table.get(piece_moved, to)
+    pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        for m in ms {
+            let piece_moved = pos.moved_piece(m.mov);
+            let to = m.mov.to();
+            m.score += i32::from(self.history_table.get(piece_moved, to));
+        }
     }
 
     /// Add a move to the follow-up history table.
@@ -68,12 +70,12 @@ impl ThreadData {
     }
 
     /// Get the follow-up history score for a move.
-    pub(super) fn followup_history_score(&self, pos: &Board, m: Move) -> i16 {
-        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return 0 };
+    pub(super) fn get_followup_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
         if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
-            return 0;
+            return;
         }
         let tpa_to = move_to_follow_up.to();
         // getting the previous piece type is a little awkward,
@@ -93,10 +95,13 @@ impl ThreadData {
                 pos.piece_at(tpa_to)
             }
         };
-        let to = m.to();
-        let piece = pos.moved_piece(m);
 
-        self.followup_history.get(tpa_piece, tpa_to).get(piece, to)
+        let fuh_block = self.followup_history.get(tpa_piece, tpa_to);
+        for m in ms {
+            let to = m.mov.to();
+            let piece = pos.moved_piece(m.mov);
+            m.score += i32::from(fuh_block.get(piece, to));
+        }
     }
 
     /// Add a move to the countermove table.
@@ -114,18 +119,18 @@ impl ThreadData {
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
-    /// Determine if a move is a countermove.
-    pub(super) fn is_countermove(&self, pos: &Board, m: Move) -> bool {
+    /// Returns the counter move for this position.
+    pub(super) fn get_counter_move(&self, pos: &Board) -> Move {
         let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return false;
+            return Move::NULL;
         };
         if prev_move == Move::NULL {
-            return false;
+            return Move::NULL;
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
 
-        self.counter_move_table.get(prev_piece, prev_to) == m
+        self.counter_move_table.get(prev_piece, prev_to)
     }
 
     /// Add a move to the countermove history table.
@@ -152,19 +157,22 @@ impl ThreadData {
     }
 
     /// Get the countermove history score for a move.
-    pub(super) fn counter_move_history_score(&self, pos: &Board, m: Move) -> i16 {
+    pub(super) fn get_counter_move_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return 0;
+            return;
         };
         if prev_move.is_null() {
-            return 0;
+            return;
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
-        let to = m.to();
-        let piece = pos.moved_piece(m);
+        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
 
-        self.counter_move_history.get(prev_piece, prev_to).get(piece, to)
+        for m in ms {
+            let to = m.mov.to();
+            let piece = pos.moved_piece(m.mov);
+            m.score += i32::from(cmh_block.get(piece, to));
+        }
     }
 
     /// Add a killer move.
