@@ -44,11 +44,12 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
         }
     }
 
+    /// Returns true if a move was already yielded by the movepicker.
     pub fn was_tried_lazily(&self, m: Move) -> bool {
         m == self.tt_move
     }
 
-    /// Select the next move to try. Usually executes one iteration of partial insertion sort.
+    /// Select the next move to try. Returns None if there are no more moves to try.
     pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::Done {
             return None;
@@ -100,6 +101,13 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
         None
     }
 
+    /// Perform iterations of partial insertion sort.
+    /// Extracts the best move from the unsorted portion of the movelist,
+    /// or returns None if there are no more moves to try.
+    /// 
+    /// Usually only one iteration is performed, but in the case where
+    /// the best move has already been tried or doesn't meet SEE requirements,
+    /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self) -> Option<MoveListEntry> {
         // If we have already tried all moves, return None.
         if self.index == self.movelist.count {

@@ -31,3 +31,4 @@ MINOR:
 - cool Stash-style time management
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
 - move lookup functions into being associated functions of Piece/PieceType/Colour/Move and so on.
+- self.skip_quiets && not_winning should exit straight to None, rather than wasting time.
