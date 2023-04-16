@@ -492,9 +492,9 @@ impl Board {
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
 
-        pv.length = 0;
-
         depth = depth.max(ZERO_PLY);
+
+        pv.length = 0;
 
         if info.nodes % 1024 == 0 && info.check_up() {
             return 0;
