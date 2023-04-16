@@ -285,7 +285,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
         let tt_move = tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp = MovePicker::<false, true, true>::new(tt_move, self.get_killer_set(t), 0);
+        let mut mp = MovePicker::<false, true>::new(tt_move, self.get_killer_set(t), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_base(mov) {

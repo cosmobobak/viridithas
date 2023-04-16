@@ -183,7 +183,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_forward_promos<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
@@ -192,8 +192,12 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
-                move_list.push::<true>(Move::new_with_promo(sq, to, promo));
+            if QS {
+                move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
+            } else {
+                for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
+                    move_list.push::<true>(Move::new_with_promo(sq, to, promo));
+                }
             }
         }
     }
@@ -272,24 +276,24 @@ impl Board {
         self.generate_castling_moves_for::<IS_WHITE>(move_list);
     }
 
-    pub fn generate_captures(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<const QS: bool>(&self, move_list: &mut MoveList) {
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
-            self.generate_captures_for::<true>(move_list);
+            self.generate_captures_for::<true, QS>(move_list);
         } else {
-            self.generate_captures_for::<false>(move_list);
+            self.generate_captures_for::<false, QS>(move_list);
         }
         debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         // promotions
-        self.generate_forward_promos::<IS_WHITE>(move_list);
+        self.generate_forward_promos::<IS_WHITE, QS>(move_list);
 
         // pawn captures and capture promos
         self.generate_pawn_caps::<IS_WHITE>(move_list);
@@ -501,7 +505,7 @@ mod tests {
             let mut ml = MoveList::new();
             pos.generate_moves(&mut ml);
             let mut ml_staged = MoveList::new();
-            pos.generate_captures(&mut ml_staged);
+            pos.generate_captures::<false>(&mut ml_staged);
             pos.generate_quiets(&mut ml_staged);
 
             let mut full_moves_vec = ml.as_slice().to_vec();

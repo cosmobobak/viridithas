@@ -18,7 +18,7 @@ pub enum Stage {
     Done,
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool> {
+pub struct MovePicker<const CAPTURES_ONLY: bool, const ROOT: bool> {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
@@ -28,12 +28,10 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT:
     see_threshold: i32,
 }
 
-pub type MainMovePicker<const ROOT: bool> = MovePicker<false, true, ROOT>;
-pub type CapturePicker = MovePicker<true, true, false>;
+pub type MainMovePicker<const ROOT: bool> = MovePicker<false, ROOT>;
+pub type CapturePicker = MovePicker<true, false>;
 
-impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
-    MovePicker<CAPTURES_ONLY, DO_SEE, ROOT>
-{
+impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
     pub const fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
@@ -64,7 +62,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(self.movelist.count, 0, "movelist not empty before capture generation");
-            position.generate_captures(&mut self.movelist);
+            position.generate_captures::<QSEARCH>(&mut self.movelist);
             for entry in &mut self.movelist.moves[..self.movelist.count] {
                 entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
             }
@@ -73,7 +71,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             if let Some(m) = self.yield_once() {
                 return Some(m);
             }
-            self.stage = if CAPTURES_ONLY {
+            self.stage = if QSEARCH {
                 Stage::Done
             } else {
                 Stage::GenerateQuiets
@@ -164,7 +162,7 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
                 return -WINNING_CAPTURE_SCORE; // basically no point looking at these.
             }
         }
-        if !DO_SEE || pos.static_exchange_eval(m, see_threshold) {
+        if pos.static_exchange_eval(m, see_threshold) {
             score += WINNING_CAPTURE_SCORE;
         }
         score
