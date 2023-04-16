@@ -69,7 +69,13 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once() {
-                return Some(m);
+                if m.score >= WINNING_CAPTURE_SCORE {
+                    return Some(m);
+                }
+                // the move was not winning, so we're going to
+                // generate quiet moves next. As such, we decrement
+                // the index so we can try this move again.
+                self.index -= 1;
             }
             self.stage = if QSEARCH {
                 Stage::Done
