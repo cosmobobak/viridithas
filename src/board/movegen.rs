@@ -44,7 +44,7 @@ impl MoveList {
     }
 
     fn push<const TACTICAL: bool>(&mut self, m: Move) {
-        debug_assert!(self.count < MAX_POSITION_MOVES);
+        debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
 

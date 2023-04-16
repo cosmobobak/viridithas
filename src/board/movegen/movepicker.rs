@@ -11,8 +11,10 @@ pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
     TTMove,
-    GenerateMoves,
-    YieldMoves,
+    GenerateCaptures,
+    YieldGoodCaptures,
+    GenerateQuiets,
+    YieldRemaining,
     Done,
 }
 
@@ -54,42 +56,59 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
             return None;
         }
         if self.stage == Stage::TTMove {
-            self.stage = Stage::GenerateMoves;
+            self.stage = Stage::GenerateCaptures;
             if position.is_pseudo_legal(self.tt_move) {
                 return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
             }
         }
-        if self.stage == Stage::GenerateMoves {
-            self.stage = Stage::YieldMoves;
-            if CAPTURES_ONLY {
-                position.generate_captures(&mut self.movelist);
-                for entry in &mut self.movelist.moves[..self.movelist.count] {
-                    entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
-                }
-            } else {
-                position.generate_moves(&mut self.movelist);
-                for e in &mut self.movelist.moves[..self.movelist.count] {
-                    e.score = if e.score == MoveListEntry::TACTICAL_SENTINEL {
-                        Self::score_capture(t, position, e.mov, self.see_threshold)
-                    } else {
-                        Self::score_quiet(self.killers, t, position, e.mov)
-                    };
-                }
+        if self.stage == Stage::GenerateCaptures {
+            self.stage = Stage::YieldGoodCaptures;
+            debug_assert_eq!(self.movelist.count, 0, "movelist not empty before capture generation");
+            position.generate_captures(&mut self.movelist);
+            for entry in &mut self.movelist.moves[..self.movelist.count] {
+                entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
             }
         }
+        if self.stage == Stage::YieldGoodCaptures {
+            if let Some(m) = self.yield_once() {
+                return Some(m);
+            }
+            self.stage = if CAPTURES_ONLY {
+                Stage::Done
+            } else {
+                Stage::GenerateQuiets
+            };
+        }
+        if self.stage == Stage::GenerateQuiets {
+            self.stage = Stage::YieldRemaining;
+            let start = self.movelist.count;
+            position.generate_quiets(&mut self.movelist);
+            for entry in &mut self.movelist.moves[start..self.movelist.count] {
+                entry.score = Self::score_quiet(self.killers, t, position, entry.mov);
+            }
+        }
+        if self.stage == Stage::YieldRemaining {
+            if let Some(m) = self.yield_once() {
+                return Some(m);
+            }
+            self.stage = Stage::Done;
+        }
+        None
+    }
+
+    fn yield_once(&mut self) -> Option<MoveListEntry> {
         // If we have already tried all moves, return None.
         if self.index == self.movelist.count {
             return None;
         }
 
-        // SAFETY: self.index is always in bounds.
-        let mut best_score = unsafe { self.movelist.moves.get_unchecked(self.index).score };
+        let mut best_score = self.movelist.moves[self.index].score;
         let mut best_num = self.index;
 
         // find the best move in the unsorted portion of the movelist.
         for index in self.index + 1..self.movelist.count {
             // SAFETY: self.count is always less than 256, and self.index is always in bounds.
-            let score = unsafe { self.movelist.moves.get_unchecked(index).score };
+            let score = self.movelist.moves[index].score;
             if score > best_score {
                 best_score = score;
                 best_num = index;
@@ -97,22 +116,16 @@ impl<const CAPTURES_ONLY: bool, const DO_SEE: bool, const ROOT: bool>
         }
 
         // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
-        let &m = unsafe { self.movelist.moves.get_unchecked(best_num) };
+        let m = self.movelist.moves[best_num];
 
         // swap the best move with the first unsorted move.
-        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
-        // and self.index is always in bounds.
-        unsafe {
-            *self.movelist.moves.get_unchecked_mut(best_num) =
-                *self.movelist.moves.get_unchecked(self.index);
-            *self.movelist.moves.get_unchecked_mut(self.index) = m;
-        }
+        self.movelist.moves.swap(best_num, self.index);
 
         self.index += 1;
 
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
         if self.was_tried_lazily(m.mov) || self.skip_quiets && not_winning {
-            self.next(position, t)
+            self.yield_once()
         } else {
             Some(m)
         }
