@@ -44,7 +44,7 @@ impl MoveList {
     }
 
     fn push<const TACTICAL: bool>(&mut self, m: Move) {
-        debug_assert!(self.count < MAX_POSITION_MOVES);
+        debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
 
@@ -91,10 +91,7 @@ impl Display for MoveList {
 
 impl Board {
     #[allow(clippy::cognitive_complexity)]
-    fn generate_pawn_caps<const IS_WHITE: bool, const CAPTURES_ONLY: bool>(
-        &self,
-        move_list: &mut MoveList,
-    ) {
+    fn generate_pawn_caps<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -117,30 +114,26 @@ impl Board {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to));
         }
-        for from in BitLoop::new(attacking_west & promo_rank) {
-            let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-            if CAPTURES_ONLY {
-                // for pure-capture generation, we only try queen promotions.
+        if QS {
+            // in quiescence search, we only generate promotions to queen.
+            for from in BitLoop::new(attacking_west & promo_rank) {
+                let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
-            } else {
-                // otherwise, generate all promotions:
-                for promo in
-                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
-                {
+            }
+            for from in BitLoop::new(attacking_east & promo_rank) {
+                let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
+                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
+            }
+        } else {
+            for from in BitLoop::new(attacking_west & promo_rank) {
+                let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
-        }
-        for from in BitLoop::new(attacking_east & promo_rank) {
-            let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-            if CAPTURES_ONLY {
-                // for pure-capture generation, we only try queen promotions.
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
-            } else {
-                // otherwise, generate all promotions:
-                for promo in
-                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
-                {
+            for from in BitLoop::new(attacking_east & promo_rank) {
+                let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -202,7 +195,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_forward_promos<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
@@ -211,9 +204,14 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in BitLoop::new(promoting_pawns) {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
-            // this function is only for capture generation, so we don't need to generate
-            // non-queen promotions.
-            move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
+            if QS {
+                // in quiescence search, we only generate promotions to queen.
+                move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
+            } else {
+                for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
+                    move_list.push::<true>(Move::new_with_promo(sq, to, promo));
+                }
+            }
         }
     }
 
@@ -291,27 +289,27 @@ impl Board {
         self.generate_castling_moves_for::<IS_WHITE>(move_list);
     }
 
-    pub fn generate_captures(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<const QS: bool>(&self, move_list: &mut MoveList) {
         debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
-            self.generate_captures_for::<true>(move_list);
+            self.generate_captures_for::<true, QS>(move_list);
         } else {
-            self.generate_captures_for::<false>(move_list);
+            self.generate_captures_for::<false, QS>(move_list);
         }
         debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn generate_captures_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         // promotions
-        self.generate_forward_promos::<IS_WHITE>(move_list);
+        self.generate_forward_promos::<IS_WHITE, QS>(move_list);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<IS_WHITE, true>(move_list);
+        self.generate_pawn_caps::<IS_WHITE, QS>(move_list);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
@@ -421,6 +419,145 @@ impl Board {
                     Move::CASTLE_FLAG,
                 ));
             }
+        }
+    }
+
+    pub fn generate_quiets(&self, move_list: &mut MoveList) {
+        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
+        // we don't need to clear the move list here because we're only adding to it.
+        if self.side == Colour::WHITE {
+            self.generate_quiets_for::<true>(move_list);
+        } else {
+            self.generate_quiets_for::<false>(move_list);
+        }
+        debug_assert!(move_list.iter().all(|m| m.is_valid()));
+    }
+
+    fn generate_pawn_quiet<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
+        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let shifted_empty_squares =
+            if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
+        let double_shifted_empty_squares =
+            if IS_WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
+        let our_pawns = self.pieces.pawns::<IS_WHITE>();
+        let pushable_pawns = our_pawns & shifted_empty_squares;
+        let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
+        let promoting_pawns = pushable_pawns & promo_rank;
+        for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
+            let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
+            move_list.push::<false>(Move::new(sq, to));
+        }
+        for sq in BitLoop::new(double_pushable_pawns) {
+            let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
+            move_list.push::<false>(Move::new(sq, to));
+        }
+    }
+
+    fn generate_quiets_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
+        // pawns
+        self.generate_pawn_quiet::<IS_WHITE>(move_list);
+
+        // knights
+        let our_knights = self.pieces.knights::<IS_WHITE>();
+        let blockers = self.pieces.occupied();
+        for sq in BitLoop::new(our_knights) {
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
+            for to in BitLoop::new(moves & !blockers) {
+                move_list.push::<false>(Move::new(sq, to));
+            }
+        }
+
+        // kings
+        let our_king = self.pieces.king::<IS_WHITE>();
+        let blockers = self.pieces.occupied();
+        for sq in BitLoop::new(our_king) {
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
+            for to in BitLoop::new(moves & !blockers) {
+                move_list.push::<false>(Move::new(sq, to));
+            }
+        }
+
+        // bishops and queens
+        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
+        let blockers = self.pieces.occupied();
+        for sq in BitLoop::new(our_diagonal_sliders) {
+            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+            for to in BitLoop::new(moves & !blockers) {
+                move_list.push::<false>(Move::new(sq, to));
+            }
+        }
+
+        // rooks and queens
+        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
+        let blockers = self.pieces.occupied();
+        for sq in BitLoop::new(our_orthogonal_sliders) {
+            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+            for to in BitLoop::new(moves & !blockers) {
+                move_list.push::<false>(Move::new(sq, to));
+            }
+        }
+
+        // castling
+        self.generate_castling_moves_for::<IS_WHITE>(move_list);
+    }
+}
+
+mod tests {
+    #[test]
+    fn staged_matches_full() {
+        use super::*;
+        use crate::bench;
+        fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
+            pos.check_validity().unwrap();
+
+            if depth == 0 {
+                return 1;
+            }
+
+            let mut ml = MoveList::new();
+            pos.generate_moves(&mut ml);
+            let mut ml_staged = MoveList::new();
+            pos.generate_captures::<false>(&mut ml_staged);
+            pos.generate_quiets(&mut ml_staged);
+
+            let mut full_moves_vec = ml.as_slice().to_vec();
+            let mut staged_moves_vec = ml_staged.as_slice().to_vec();
+            full_moves_vec.sort_unstable_by_key(|m| m.mov);
+            staged_moves_vec.sort_unstable_by_key(|m| m.mov);
+            let eq = full_moves_vec == staged_moves_vec;
+            assert!(eq, "full and staged move lists differ in {}, \nfull list: \n[{}], \nstaged list: \n[{}]", pos.fen(), {
+                let mut mvs = Vec::new();
+                for m in full_moves_vec {
+                    mvs.push(format!("{}{}", pos.san(m.mov).unwrap(), if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }));
+                }
+                mvs.join(", ")
+            }, {
+                let mut mvs = Vec::new();
+                for m in staged_moves_vec {
+                    mvs.push(format!("{}{}", pos.san(m.mov).unwrap(), if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }));
+                }
+                mvs.join(", ")
+            });
+
+            let mut count = 0;
+            for &m in ml.iter() {
+                if !pos.make_move_base(m) {
+                    continue;
+                }
+                count += synced_perft(pos, depth - 1);
+                pos.unmake_move_base();
+            }
+
+            count
+        }
+        crate::magic::initialise();
+
+        let mut pos = Board::default();
+
+        for fen in bench::BENCH_POSITIONS {
+            pos.set_from_fen(fen).unwrap();
+            let _ = synced_perft(&mut pos, 2);
         }
     }
 }
