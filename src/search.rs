@@ -1038,7 +1038,7 @@ impl Board {
     ) {
         t.add_history::<IS_GOOD>(self, m, depth);
         t.add_followup_history::<IS_GOOD>(self, m, depth);
-        // t.add_countermove_history::<IS_GOOD>(self, m, depth);
+        t.add_countermove_history::<IS_GOOD>(self, m, depth);
     }
 
     /// The reduced beta margin for Singular Extension.
