@@ -142,6 +142,11 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
     }
 
     pub fn score_quiets(killers: [Move; 2], t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
+        // zero-out the ordering scores
+        for m in ms.iter_mut() {
+            m.score = 0;
+        }
+
         t.get_history_scores(pos, ms);
         t.get_counter_move_history_scores(pos, ms);
         t.get_followup_history_scores(pos, ms);
