@@ -1003,14 +1003,9 @@ impl Board {
             if bm_quiet {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
-                self.update_history_metrics::<true>(t, best_move, depth);
 
-                // decrease the history of the quiet moves that came before the best move.
-                let qs = quiets_tried.as_slice();
-                let qs = &qs[..qs.len() - 1];
-                for &m in qs {
-                    self.update_history_metrics::<false>(t, m, depth);
-                }
+                let moves_to_adjust = quiets_tried.as_slice();
+                self.update_history_metrics(t, moves_to_adjust, depth);
             }
         }
 
@@ -1030,15 +1025,15 @@ impl Board {
     }
 
     /// Update the history and followup history tables.
-    fn update_history_metrics<const IS_GOOD: bool>(
+    fn update_history_metrics(
         &mut self,
         t: &mut ThreadData,
-        m: Move,
+        moves_to_adjust: &[Move],
         depth: Depth,
     ) {
-        t.add_history::<IS_GOOD>(self, m, depth);
-        t.add_followup_history::<IS_GOOD>(self, m, depth);
-        t.add_countermove_history::<IS_GOOD>(self, m, depth);
+        t.update_history(self, moves_to_adjust, depth);
+        t.update_followup_history(self, moves_to_adjust, depth);
+        t.update_countermove_history(self, moves_to_adjust, depth);
     }
 
     /// The reduced beta margin for Singular Extension.
