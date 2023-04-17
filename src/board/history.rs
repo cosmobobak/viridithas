@@ -10,9 +10,8 @@ use super::{Board, movegen::MoveListEntry};
 
 impl ThreadData {
     /// Update the history counters of a batch of moves.
-    /// The last move in the batch is assumed to be the best move.
-    pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], depth: Depth) {
-        for &m in &moves_to_adjust[..moves_to_adjust.len() - 1] {
+    pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+        for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
             debug_assert!(
                 piece_moved != Piece::EMPTY,
@@ -20,17 +19,8 @@ impl ThreadData {
             );
             let to = m.to();
             let val = self.history_table.get_mut(piece_moved, to);
-            update_history::<false>(val, depth);
+            update_history(val, depth, m == best_move);
         }
-        let last_move = moves_to_adjust[moves_to_adjust.len() - 1];
-        let piece_moved = pos.moved_piece(last_move);
-        debug_assert!(
-            piece_moved != Piece::EMPTY,
-            "Invalid piece moved by move {last_move} in position \n{pos}"
-        );
-        let to = last_move.to();
-        let val = self.history_table.get_mut(piece_moved, to);
-        update_history::<true>(val, depth);
     }
 
     /// Get the history scores for a batch of moves.
@@ -43,11 +33,11 @@ impl ThreadData {
     }
 
     /// Update the follow-up history counters of a batch of moves.
-    /// The last move in the batch is assumed to be the best move.
     pub fn update_followup_history(
         &mut self,
         pos: &Board,
         moves_to_adjust: &[Move],
+        best_move: Move,
         depth: Depth,
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
@@ -77,15 +67,11 @@ impl ThreadData {
         };
 
         let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
-        for &m in &moves_to_adjust[..moves_to_adjust.len() - 1] {
+        for &m in moves_to_adjust {
             let to = m.to();
             let piece = pos.moved_piece(m);
-            update_history::<false>(fuh_block.get_mut(piece, to), depth);
+            update_history(fuh_block.get_mut(piece, to), depth, m == best_move);
         }
-        let last_move = moves_to_adjust[moves_to_adjust.len() - 1];
-        let to = last_move.to();
-        let piece = pos.moved_piece(last_move);
-        update_history::<true>(fuh_block.get_mut(piece, to), depth);
     }
 
     /// Get the follow-up history scores for a batch of moves.
@@ -128,6 +114,7 @@ impl ThreadData {
         &mut self,
         pos: &Board,
         moves_to_adjust: &[Move],
+        best_move: Move,
         depth: Depth,
     ) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
@@ -141,15 +128,11 @@ impl ThreadData {
         let prev_piece = pos.piece_at(prev_to);
 
         let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
-        for &m in &moves_to_adjust[..moves_to_adjust.len() - 1] {
+        for &m in moves_to_adjust {
             let to = m.to();
             let piece = pos.moved_piece(m);
-            update_history::<false>(cmh_block.get_mut(piece, to), depth);
+            update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
         }
-        let last_move = moves_to_adjust[moves_to_adjust.len() - 1];
-        let to = last_move.to();
-        let piece = pos.moved_piece(last_move);
-        update_history::<true>(cmh_block.get_mut(piece, to), depth);
     }
 
     /// Get the countermove history scores for a batch of moves.

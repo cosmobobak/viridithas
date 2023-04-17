@@ -1005,7 +1005,7 @@ impl Board {
                 t.insert_countermove(self, best_move);
 
                 let moves_to_adjust = quiets_tried.as_slice();
-                self.update_history_metrics(t, moves_to_adjust, depth);
+                self.update_history_metrics(t, moves_to_adjust, best_move, depth);
             }
         }
 
@@ -1029,11 +1029,12 @@ impl Board {
         &mut self,
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
+        best_move: Move,
         depth: Depth,
     ) {
-        t.update_history(self, moves_to_adjust, depth);
-        t.update_followup_history(self, moves_to_adjust, depth);
-        t.update_countermove_history(self, moves_to_adjust, depth);
+        t.update_history(self, moves_to_adjust, best_move, depth);
+        t.update_followup_history(self, moves_to_adjust, best_move, depth);
+        t.update_countermove_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.
