@@ -1033,8 +1033,8 @@ impl Board {
         depth: Depth,
     ) {
         t.update_history(self, moves_to_adjust, best_move, depth);
-        t.update_followup_history(self, moves_to_adjust, best_move, depth);
         t.update_countermove_history(self, moves_to_adjust, best_move, depth);
+        t.update_followup_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.

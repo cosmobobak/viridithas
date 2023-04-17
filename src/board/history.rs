@@ -32,6 +32,51 @@ impl ThreadData {
         }
     }
 
+    /// Update the countermove history counters of a batch of moves.
+    pub fn update_countermove_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
+        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return;
+        };
+        if prev_move.is_null() {
+            return;
+        }
+        let prev_to = prev_move.to();
+        let prev_piece = pos.piece_at(prev_to);
+
+        let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
+        for &m in moves_to_adjust {
+            let to = m.to();
+            let piece = pos.moved_piece(m);
+            update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
+        }
+    }
+
+    /// Get the countermove history scores for a batch of moves.
+    pub(super) fn get_counter_move_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+            return;
+        };
+        if prev_move.is_null() {
+            return;
+        }
+        let prev_to = prev_move.to();
+        let prev_piece = pos.piece_at(prev_to);
+        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
+
+        for m in ms {
+            let to = m.mov.to();
+            let piece = pos.moved_piece(m.mov);
+            m.score += i32::from(cmh_block.get(piece, to));
+        }
+    }
+
     /// Update the follow-up history counters of a batch of moves.
     pub fn update_followup_history(
         &mut self,
@@ -106,51 +151,6 @@ impl ThreadData {
             let to = m.mov.to();
             let piece = pos.moved_piece(m.mov);
             m.score += i32::from(fuh_block.get(piece, to));
-        }
-    }
-
-    /// Update the countermove history counters of a batch of moves.
-    pub fn update_countermove_history(
-        &mut self,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return;
-        };
-        if prev_move.is_null() {
-            return;
-        }
-        let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
-
-        let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
-        for &m in moves_to_adjust {
-            let to = m.to();
-            let piece = pos.moved_piece(m);
-            update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
-        }
-    }
-
-    /// Get the countermove history scores for a batch of moves.
-    pub(super) fn get_counter_move_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return;
-        };
-        if prev_move.is_null() {
-            return;
-        }
-        let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
-        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
-
-        for m in ms {
-            let to = m.mov.to();
-            let piece = pos.moved_piece(m.mov);
-            m.score += i32::from(cmh_block.get(piece, to));
         }
     }
 
