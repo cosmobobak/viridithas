@@ -19,9 +19,9 @@ const fn history_bonus(depth: Depth) -> i32 {
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
 
-pub fn update_history<const IS_GOOD: bool>(val: &mut i16, depth: Depth) {
+pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
-    let delta = if IS_GOOD { history_bonus(depth) } else { -history_bonus(depth) };
+    let delta = if is_good { history_bonus(depth) } else { -history_bonus(depth) };
     *val += delta as i16 - (i32::from(*val) * delta.abs() / i32::from(MAX_HISTORY)) as i16;
 }
 

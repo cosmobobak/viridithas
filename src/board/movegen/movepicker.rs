@@ -18,7 +18,7 @@ pub enum Stage {
     Done,
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool, const ROOT: bool> {
+pub struct MovePicker<const CAPTURES_ONLY: bool> {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
@@ -28,10 +28,10 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const ROOT: bool> {
     see_threshold: i32,
 }
 
-pub type MainMovePicker<const ROOT: bool> = MovePicker<false, ROOT>;
-pub type CapturePicker = MovePicker<true, false>;
+pub type MainMovePicker = MovePicker<false>;
+pub type CapturePicker = MovePicker<true>;
 
-impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
+impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     pub const fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
@@ -62,7 +62,10 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
         }
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
-            debug_assert_eq!(self.movelist.count, 0, "movelist not empty before capture generation");
+            debug_assert_eq!(
+                self.movelist.count, 0,
+                "movelist not empty before capture generation"
+            );
             position.generate_captures::<QSEARCH>(&mut self.movelist);
             for entry in &mut self.movelist.moves[..self.movelist.count] {
                 entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
@@ -78,17 +81,14 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
                 // the index so we can try this move again.
                 self.index -= 1;
             }
-            self.stage = if QSEARCH {
-                Stage::Done
-            } else {
-                Stage::GenerateQuiets
-            };
+            self.stage = if QSEARCH { Stage::Done } else { Stage::GenerateQuiets };
         }
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
             let start = self.movelist.count;
             position.generate_quiets(&mut self.movelist);
-            Self::score_quiets(self.killers, t, position, &mut self.movelist.moves[start..self.movelist.count]);
+            let quiets = &mut self.movelist.moves[start..self.movelist.count];
+            Self::score_quiets(self.killers, t, position, quiets);
         }
         if self.stage == Stage::YieldRemaining {
             if let Some(m) = self.yield_once() {
@@ -102,7 +102,7 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
     /// Perform iterations of partial insertion sort.
     /// Extracts the best move from the unsorted portion of the movelist,
     /// or returns None if there are no more moves to try.
-    /// 
+    ///
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
