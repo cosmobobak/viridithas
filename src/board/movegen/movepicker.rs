@@ -3,8 +3,8 @@ use crate::{board::Board, chessmove::Move, lookups, piece::PieceType, threadloca
 use super::{MoveList, MoveListEntry};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
-const FIRST_ORDER_KILLER_SCORE: i32 = 9_000_000;
-const SECOND_ORDER_KILLER_SCORE: i32 = 8_000_000;
+const FIRST_KILLER_SCORE: i32 = 9_000_000;
+const SECOND_KILLER_SCORE: i32 = 8_000_000;
 const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
@@ -13,6 +13,9 @@ pub enum Stage {
     TTMove,
     GenerateCaptures,
     YieldGoodCaptures,
+    YieldKiller1,
+    YieldKiller2,
+    YieldCounterMove,
     GenerateQuiets,
     YieldRemaining,
     Done,
@@ -24,6 +27,7 @@ pub struct MovePicker<const CAPTURES_ONLY: bool> {
     pub stage: Stage,
     tt_move: Move,
     killers: [Move; 2],
+    counter_move: Move,
     pub skip_quiets: bool,
     see_threshold: i32,
 }
@@ -32,13 +36,19 @@ pub type MainMovePicker = MovePicker<false>;
 pub type CapturePicker = MovePicker<true>;
 
 impl<const QSEARCH: bool> MovePicker<QSEARCH> {
-    pub const fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
+    pub fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
+        debug_assert!(
+            killers[0].is_null() || killers[0] != killers[1],
+            "Killers are both {}",
+            killers[0]
+        );
         Self {
             movelist: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
-            killers,
             tt_move,
+            killers,
+            counter_move: Move::NULL,
             skip_quiets: false,
             see_threshold,
         }
@@ -46,7 +56,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
     /// Returns true if a move was already yielded by the movepicker.
     pub fn was_tried_lazily(&self, m: Move) -> bool {
-        m == self.tt_move
+        m == self.tt_move || m == self.killers[0] || m == self.killers[1] || m == self.counter_move
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
@@ -81,14 +91,37 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
                 // the index so we can try this move again.
                 self.index -= 1;
             }
-            self.stage = if QSEARCH { Stage::Done } else { Stage::GenerateQuiets };
+            self.stage = if QSEARCH { Stage::Done } else { Stage::YieldKiller1 };
+        }
+        if self.stage == Stage::YieldKiller1 {
+            self.stage = Stage::YieldKiller2;
+            if self.killers[0] != self.tt_move && position.is_pseudo_legal(self.killers[0]) {
+                return Some(MoveListEntry { mov: self.killers[0], score: FIRST_KILLER_SCORE });
+            }
+        }
+        if self.stage == Stage::YieldKiller2 {
+            self.stage = Stage::YieldCounterMove;
+            if self.killers[1] != self.tt_move && position.is_pseudo_legal(self.killers[1]) {
+                return Some(MoveListEntry { mov: self.killers[1], score: SECOND_KILLER_SCORE });
+            }
+        }
+        if self.stage == Stage::YieldCounterMove {
+            self.stage = Stage::GenerateQuiets;
+            self.counter_move = t.get_counter_move(position);
+            if self.counter_move != self.tt_move
+                && self.counter_move != self.killers[0]
+                && self.counter_move != self.killers[1]
+                && position.is_pseudo_legal(self.counter_move)
+            {
+                return Some(MoveListEntry { mov: self.counter_move, score: COUNTER_MOVE_SCORE });
+            }
         }
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
             let start = self.movelist.count;
             position.generate_quiets(&mut self.movelist);
             let quiets = &mut self.movelist.moves[start..self.movelist.count];
-            Self::score_quiets(self.killers, t, position, quiets);
+            Self::score_quiets(t, position, quiets);
         }
         if self.stage == Stage::YieldRemaining {
             if let Some(m) = self.yield_once() {
@@ -139,7 +172,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
     }
 
-    pub fn score_quiets(killers: [Move; 2], t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
+    pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
         // zero-out the ordering scores
         for m in ms.iter_mut() {
             m.score = 0;
@@ -148,18 +181,6 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         t.get_history_scores(pos, ms);
         t.get_counter_move_history_scores(pos, ms);
         t.get_followup_history_scores(pos, ms);
-
-        let counter_move = t.get_counter_move(pos);
-
-        for m in ms {
-            if killers[0] == m.mov {
-                m.score = FIRST_ORDER_KILLER_SCORE;
-            } else if killers[1] == m.mov {
-                m.score = SECOND_ORDER_KILLER_SCORE;
-            } else if counter_move == m.mov {
-                m.score = COUNTER_MOVE_SCORE;
-            }
-        }
     }
 
     pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move, see_threshold: i32) -> i32 {
