@@ -556,6 +556,7 @@ impl Board {
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
         if !ROOT
+            && excluded.is_null() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
                 || self.n_men() < cardinality)
