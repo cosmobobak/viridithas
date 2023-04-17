@@ -6,11 +6,17 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use super::{Board, movegen::MoveListEntry};
+use super::{movegen::MoveListEntry, Board};
 
 impl ThreadData {
     /// Update the history counters of a batch of moves.
-    pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+    pub fn update_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
             debug_assert!(
