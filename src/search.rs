@@ -285,7 +285,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
         let tt_move = tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp = MovePicker::<false, true>::new(tt_move, self.get_killer_set(t), 0);
+        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_base(mov) {
@@ -779,7 +779,7 @@ impl Board {
             }
         }
 
-        let mut move_picker = MainMovePicker::<ROOT>::new(tt_move, killers, 0);
+        let mut move_picker = MainMovePicker::new(tt_move, killers, 0);
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
@@ -863,7 +863,7 @@ impl Board {
             let mut extension = ZERO_PLY;
             if !ROOT && maybe_singular {
                 let tt_value = tt_hit.as_ref().unwrap().tt_value;
-                extension = self.singularity::<ROOT, PV, NNUE>(
+                extension = self.singularity::<PV, NNUE>(
                     tt,
                     info,
                     t,
@@ -1044,7 +1044,7 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn singularity<const ROOT: bool, const PV: bool, const NNUE: bool>(
+    pub fn singularity<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
         info: &mut SearchInfo,
@@ -1054,7 +1054,7 @@ impl Board {
         alpha: i32,
         beta: i32,
         depth: Depth,
-        mp: &mut MainMovePicker<ROOT>,
+        mp: &mut MainMovePicker,
     ) -> Depth {
         let mut lpv = PVariation::default();
         let r_beta = Self::singularity_margin(tt_value, depth);

@@ -18,7 +18,7 @@ pub enum Stage {
     Done,
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool, const ROOT: bool> {
+pub struct MovePicker<const CAPTURES_ONLY: bool> {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
@@ -28,10 +28,10 @@ pub struct MovePicker<const CAPTURES_ONLY: bool, const ROOT: bool> {
     see_threshold: i32,
 }
 
-pub type MainMovePicker<const ROOT: bool> = MovePicker<false, ROOT>;
-pub type CapturePicker = MovePicker<true, false>;
+pub type MainMovePicker = MovePicker<false>;
+pub type CapturePicker = MovePicker<true>;
 
-impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
+impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     pub const fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
