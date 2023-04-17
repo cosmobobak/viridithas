@@ -117,7 +117,6 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
 
         // find the best move in the unsorted portion of the movelist.
         for index in self.index + 1..self.movelist.count {
-            // SAFETY: self.count is always less than 256, and self.index is always in bounds.
             let score = self.movelist.moves[index].score;
             if score > best_score {
                 best_score = score;
@@ -125,7 +124,6 @@ impl<const QSEARCH: bool, const ROOT: bool> MovePicker<QSEARCH, ROOT> {
             }
         }
 
-        // SAFETY: best_num is drawn from self.index..self.count, which is always in bounds.
         let m = self.movelist.moves[best_num];
 
         // swap the best move with the first unsorted move.
