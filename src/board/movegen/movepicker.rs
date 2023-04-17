@@ -95,20 +95,27 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
-            if self.killers[0] != self.tt_move && position.is_pseudo_legal(self.killers[0]) {
+            if !self.skip_quiets
+                && self.killers[0] != self.tt_move
+                && position.is_pseudo_legal(self.killers[0])
+            {
                 return Some(MoveListEntry { mov: self.killers[0], score: FIRST_KILLER_SCORE });
             }
         }
         if self.stage == Stage::YieldKiller2 {
             self.stage = Stage::YieldCounterMove;
-            if self.killers[1] != self.tt_move && position.is_pseudo_legal(self.killers[1]) {
+            if !self.skip_quiets
+                && self.killers[1] != self.tt_move
+                && position.is_pseudo_legal(self.killers[1])
+            {
                 return Some(MoveListEntry { mov: self.killers[1], score: SECOND_KILLER_SCORE });
             }
         }
         if self.stage == Stage::YieldCounterMove {
             self.stage = Stage::GenerateQuiets;
             self.counter_move = t.get_counter_move(position);
-            if self.counter_move != self.tt_move
+            if !self.skip_quiets
+                && self.counter_move != self.tt_move
                 && self.counter_move != self.killers[0]
                 && self.counter_move != self.killers[1]
                 && position.is_pseudo_legal(self.counter_move)
