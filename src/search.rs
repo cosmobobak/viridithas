@@ -285,7 +285,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
         let tt_move = tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), 0);
+        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_base(mov) {
@@ -396,7 +396,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], -108);
+        let mut move_picker = CapturePicker::new(Move::NULL, [Move::NULL; 2], Move::NULL, -108);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -712,8 +712,6 @@ impl Board {
             info.search_params.see_quiet_margin * depth.round(),
         ];
 
-        let killers = self.get_killer_set(t);
-
         // probcut:
         let probcut_beta = std::cmp::min(
             beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN,
@@ -731,7 +729,7 @@ impl Board {
                 .as_ref()
                 .map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3)
         {
-            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], 0);
+            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
             {
@@ -780,7 +778,9 @@ impl Board {
             }
         }
 
-        let mut move_picker = MainMovePicker::new(tt_move, killers, 0);
+        let killers = self.get_killer_set(t);
+        let counter_move = t.get_counter_move(self);
+        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, 0);
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);

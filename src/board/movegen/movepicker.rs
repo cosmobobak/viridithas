@@ -36,7 +36,7 @@ pub type MainMovePicker = MovePicker<false>;
 pub type CapturePicker = MovePicker<true>;
 
 impl<const QSEARCH: bool> MovePicker<QSEARCH> {
-    pub fn new(tt_move: Move, killers: [Move; 2], see_threshold: i32) -> Self {
+    pub fn new(tt_move: Move, killers: [Move; 2], counter_move: Move, see_threshold: i32) -> Self {
         debug_assert!(
             killers[0].is_null() || killers[0] != killers[1],
             "Killers are both {}",
@@ -48,7 +48,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             stage: Stage::TTMove,
             tt_move,
             killers,
-            counter_move: Move::NULL,
+            counter_move,
             skip_quiets: false,
             see_threshold,
         }
@@ -113,7 +113,6 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::YieldCounterMove {
             self.stage = Stage::GenerateQuiets;
-            self.counter_move = t.get_counter_move(position);
             if !self.skip_quiets
                 && self.counter_move != self.tt_move
                 && self.counter_move != self.killers[0]
