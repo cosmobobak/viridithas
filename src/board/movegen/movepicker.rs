@@ -125,10 +125,12 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
-            let start = self.movelist.count;
-            position.generate_quiets(&mut self.movelist);
-            let quiets = &mut self.movelist.moves[start..self.movelist.count];
-            Self::score_quiets(t, position, quiets);
+            if !self.skip_quiets {
+                let start = self.movelist.count;
+                position.generate_quiets(&mut self.movelist);
+                let quiets = &mut self.movelist.moves[start..self.movelist.count];
+                Self::score_quiets(t, position, quiets);
+            }
         }
         if self.stage == Stage::YieldRemaining {
             if let Some(m) = self.yield_once() {
