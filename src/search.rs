@@ -826,6 +826,7 @@ impl Board {
             if !ROOT
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.search_params.see_depth
+                && move_picker.stage > Stage::YieldGoodCaptures
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
