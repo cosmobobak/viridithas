@@ -172,8 +172,8 @@ NET ID │ general concept                          │ notes
        │ The weakness of smaller datasets is      │ LLR   | -3.02 (-2.94, 2.94) [0.00, 5.00]
        │ apparent.                                │ GAMES | N: 2672 W: 617 L: 743 D: 1312
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    53 │ The net-49 dataset + 450M RL FENs give   │ ELO   | 
-       │ a 1.35B FEN dataset.                     │ SPRT  | 
-       │                                          │ LLR   | 
-       │                                          │ GAMES | 
+    53 │ The net-49 dataset + 450M RL FENs give   │ ELO   | 6.95 +- 4.99 (95%)
+       │ a 1.35B FEN dataset.                     │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   | 2.98 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES | N: 9704 W: 2632 L: 2438 D: 4634
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
