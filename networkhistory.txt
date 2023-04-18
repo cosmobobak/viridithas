@@ -177,3 +177,8 @@ NET ID │ general concept                          │ notes
        │                                          │ LLR   | 2.98 (-2.94, 2.94) [0.00, 5.00]
        │                                          │ GAMES | N: 9704 W: 2632 L: 2438 D: 4634
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    54 │ Testing a PSQT-esque skip connection,    │ ELO   | 
+       │ running on the smaller net-49 data with  │ SPRT  | 
+       │ only 45 epochs for speed.                │ LLR   | 
+       │                                          │ GAMES | 
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
