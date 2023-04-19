@@ -3,9 +3,9 @@ use crate::{board::Board, chessmove::Move, lookups, piece::PieceType, threadloca
 use super::{MoveList, MoveListEntry};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
-const FIRST_KILLER_SCORE: i32 = 9_000_000;
-const SECOND_KILLER_SCORE: i32 = 8_000_000;
-const COUNTER_MOVE_SCORE: i32 = 2_000_000;
+pub const FIRST_KILLER_SCORE: i32 = 9_000_000;
+pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
+pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

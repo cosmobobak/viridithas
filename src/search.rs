@@ -436,7 +436,7 @@ impl Board {
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
-                    info.log_fail_high::<true>(moves_made - 1);
+                    info.log_fail_high::<true>(moves_made - 1, 0);
                     break; // fail-high
                 }
             }
@@ -976,7 +976,7 @@ impl Board {
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
-                    info.log_fail_high::<false>(moves_made - 1);
+                    info.log_fail_high::<false>(moves_made - 1, ordering_score);
                     break;
                 }
             }

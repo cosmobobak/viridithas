@@ -8,11 +8,14 @@ use std::{
 };
 
 use crate::{
-    board::{evaluation::{mate_in, parameters::EvalParams}, movegen::MAX_POSITION_MOVES},
+    board::{evaluation::{mate_in, parameters::EvalParams}},
     chessmove::Move,
     definitions::depth::{Depth, ZERO_PLY},
     search::{parameters::SearchParams, LMTable},
 };
+
+#[cfg(feature = "stats")]
+use crate::board::movegen::MAX_POSITION_MOVES;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -87,12 +90,19 @@ pub struct SearchInfo<'a> {
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
     /// The number of fail-highs found (beta cutoffs).
+    #[cfg(feature = "stats")]
     pub failhigh: u64,
     /// The number of fail-highs that occurred on a given ply.
+    #[cfg(feature = "stats")]
     pub failhigh_index: [u64; MAX_POSITION_MOVES],
+    /// Tracks fail-highs of different types.
+    #[cfg(feature = "stats")]
+    pub failhigh_types: [u64; 8],
     /// The number of fail-highs found in quiescence search.
+    #[cfg(feature = "stats")]
     pub qfailhigh: u64,
     /// The number of fail-highs that occurred on a given ply in quiescence search.
+    #[cfg(feature = "stats")]
     pub qfailhigh_index: [u64; MAX_POSITION_MOVES],
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,
@@ -117,9 +127,15 @@ impl<'a> SearchInfo<'a> {
             nodes: 0,
             quit: false,
             stopped,
+            #[cfg(feature = "stats")]
             failhigh: 0,
+            #[cfg(feature = "stats")]
             failhigh_index: [0; MAX_POSITION_MOVES],
+            #[cfg(feature = "stats")]
+            failhigh_types: [0; 8],
+            #[cfg(feature = "stats")]
             qfailhigh: 0,
+            #[cfg(feature = "stats")]
             qfailhigh_index: [0; MAX_POSITION_MOVES],
             seldepth: ZERO_PLY,
             stdin_rx: None,
@@ -136,10 +152,14 @@ impl<'a> SearchInfo<'a> {
     pub fn setup_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
-        self.failhigh = 0;
-        self.failhigh_index = [0; MAX_POSITION_MOVES];
-        self.qfailhigh = 0;
-        self.qfailhigh_index = [0; MAX_POSITION_MOVES];
+        #[cfg(feature = "stats")]
+        {
+            self.failhigh = 0;
+            self.failhigh_index = [0; MAX_POSITION_MOVES];
+            self.failhigh_types = [0; 8];
+            self.qfailhigh = 0;
+            self.qfailhigh_index = [0; MAX_POSITION_MOVES];
+        }
     }
 
     pub fn set_stdin(&mut self, stdin_rx: &'a Mutex<mpsc::Receiver<String>>) {
@@ -275,13 +295,31 @@ impl<'a> SearchInfo<'a> {
     }
 
     #[cfg(feature = "stats")]
-    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize) {
+    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize, ordering_score: i32) {
+        use crate::board::movegen::movepicker::{TT_MOVE_SCORE, WINNING_CAPTURE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, COUNTER_MOVE_SCORE};
+
         if QSEARCH {
             self.qfailhigh += 1;
             self.qfailhigh_index[move_index] += 1;
         } else {
             self.failhigh += 1;
             self.failhigh_index[move_index] += 1;
+            let fail_type = if ordering_score == TT_MOVE_SCORE {
+                FailHighType::TTMove
+            } else if ordering_score >= WINNING_CAPTURE_SCORE {
+                FailHighType::GoodTactical
+            } else if ordering_score == FIRST_KILLER_SCORE {
+                FailHighType::Killer1
+            } else if ordering_score == SECOND_KILLER_SCORE {
+                FailHighType::Killer2
+            } else if ordering_score == COUNTER_MOVE_SCORE {
+                FailHighType::CounterMove
+            } else if ordering_score > 0 {
+                FailHighType::GoodQuiet
+            } else {
+                FailHighType::BadQuiet
+            };
+            self.failhigh_types[fail_type as usize] += 1;
         }
     }
 
@@ -304,7 +342,30 @@ impl<'a> SearchInfo<'a> {
         for ((i1, &x1), (i2, &x2)) in fail_high_percentages.iter().enumerate().zip(qs_fail_high_percentages.iter().enumerate()) {
             println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
         }
+        let type_percentages = self
+            .failhigh_types
+            .iter()
+            .map(|&x| (x as f64 * 100.0) / self.failhigh as f64)
+            .collect::<Vec<_>>();
+        println!("failhigh ttmove        {:5.2}%", type_percentages[0]);
+        println!("failhigh good tactical {:5.2}%", type_percentages[1]);
+        println!("failhigh killer1       {:5.2}%", type_percentages[2]);
+        println!("failhigh killer2       {:5.2}%", type_percentages[3]);
+        println!("failhigh countermove   {:5.2}%", type_percentages[4]);
+        println!("failhigh good quiet    {:5.2}%", type_percentages[5]);
+        println!("failhigh bad quiet     {:5.2}%", type_percentages[6]);
     }
+}
+
+#[cfg(feature = "stats")]
+enum FailHighType {
+    TTMove,
+    GoodTactical,
+    Killer1,
+    Killer2,
+    CounterMove,
+    GoodQuiet,
+    BadQuiet,
 }
 
 mod tests {
