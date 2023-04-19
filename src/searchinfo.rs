@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    board::evaluation::{mate_in, parameters::EvalParams},
+    board::{evaluation::{mate_in, parameters::EvalParams}, movegen::MAX_POSITION_MOVES},
     chessmove::Move,
     definitions::depth::{Depth, ZERO_PLY},
     search::{parameters::SearchParams, LMTable},
@@ -88,8 +88,12 @@ pub struct SearchInfo<'a> {
     pub stopped: &'a AtomicBool,
     /// The number of fail-highs found (beta cutoffs).
     pub failhigh: u64,
-    /// The number of fail-highs that occurred on the first move searched.
-    pub failhigh_first: u64,
+    /// The number of fail-highs that occurred on a given ply.
+    pub failhigh_index: [u64; MAX_POSITION_MOVES],
+    /// The number of fail-highs found in quiescence search.
+    pub qfailhigh: u64,
+    /// The number of fail-highs that occurred on a given ply in quiescence search.
+    pub qfailhigh_index: [u64; MAX_POSITION_MOVES],
     /// The highest depth reached (selective depth).
     pub seldepth: Depth,
     /// A handle to a receiver for stdin.
@@ -114,7 +118,9 @@ impl<'a> SearchInfo<'a> {
             quit: false,
             stopped,
             failhigh: 0,
-            failhigh_first: 0,
+            failhigh_index: [0; MAX_POSITION_MOVES],
+            qfailhigh: 0,
+            qfailhigh_index: [0; MAX_POSITION_MOVES],
             seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
@@ -131,7 +137,9 @@ impl<'a> SearchInfo<'a> {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
         self.failhigh = 0;
-        self.failhigh_first = 0;
+        self.failhigh_index = [0; MAX_POSITION_MOVES];
+        self.qfailhigh = 0;
+        self.qfailhigh_index = [0; MAX_POSITION_MOVES];
     }
 
     pub fn set_stdin(&mut self, stdin_rx: &'a Mutex<mpsc::Receiver<String>>) {
@@ -264,6 +272,38 @@ impl<'a> SearchInfo<'a> {
 
     pub fn time_since_start(&self) -> Duration {
         Instant::now().checked_duration_since(self.start_time).unwrap_or_default()
+    }
+
+    #[cfg(feature = "stats")]
+    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize) {
+        if QSEARCH {
+            self.qfailhigh += 1;
+            self.qfailhigh_index[move_index] += 1;
+        } else {
+            self.failhigh += 1;
+            self.failhigh_index[move_index] += 1;
+        }
+    }
+
+    #[cfg(feature = "stats")]
+    pub fn print_stats(&self) {
+        #[allow(clippy::cast_precision_loss)]
+        let fail_high_percentages = self
+            .failhigh_index
+            .iter()
+            .map(|&x| (x as f64 * 100.0) / self.failhigh as f64)
+            .take(10)
+            .collect::<Vec<_>>();
+        #[allow(clippy::cast_precision_loss)]
+        let qs_fail_high_percentages = self
+            .qfailhigh_index
+            .iter()
+            .map(|&x| (x as f64 * 100.0) / self.qfailhigh as f64)
+            .take(10)
+            .collect::<Vec<_>>();
+        for ((i1, &x1), (i2, &x2)) in fail_high_percentages.iter().enumerate().zip(qs_fail_high_percentages.iter().enumerate()) {
+            println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
+        }
     }
 }
 
