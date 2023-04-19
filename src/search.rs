@@ -151,6 +151,8 @@ impl Board {
 
         if info.print_to_stdout {
             println!("bestmove {bestmove}");
+            #[cfg(feature = "stats")]
+            info.print_stats();
         }
 
         assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
@@ -433,6 +435,8 @@ impl Board {
                     pv.load_from(best_move, &lpv);
                 }
                 if alpha >= beta {
+                    #[cfg(feature = "stats")]
+                    info.log_fail_high::<true>(moves_made - 1);
                     break; // fail-high
                 }
             }
@@ -971,6 +975,8 @@ impl Board {
                     pv.load_from(best_move, &lpv);
                 }
                 if alpha >= beta {
+                    #[cfg(feature = "stats")]
+                    info.log_fail_high::<false>(moves_made - 1);
                     break;
                 }
             }
