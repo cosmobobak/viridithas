@@ -140,7 +140,7 @@ impl ThreadData {
         let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
+        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() || move_to_follow_up.is_ep() {
             return;
         }
         let tpa_to = move_to_follow_up.to();
