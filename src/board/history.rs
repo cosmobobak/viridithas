@@ -95,7 +95,7 @@ impl ThreadData {
         let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() {
+        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() || move_to_follow_up.is_ep() {
             return;
         }
         let tpa_to = move_to_follow_up.to();
@@ -104,16 +104,18 @@ impl ThreadData {
         // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
-            let capture = pos.captured_piece(prev_move);
-            // determine where to find the piece_t info:
-            // we don't need to worry about ep-captures because
-            // we just blanket filter them out with the null checks.
-            if capture != Piece::EMPTY && prev_move.to() == tpa_to {
-                // the opponent captured a piece on this square, so we can use the capture.
-                capture
+            let at_target_square = pos.piece_at(tpa_to);
+            debug_assert_ne!(at_target_square, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
+            if at_target_square.colour() == pos.turn() {
+                // if the piece on the target square is the same colour as us
+                // then nothing happened to our piece, so we can use it directly.
+                at_target_square
             } else {
-                // the opponent didn't capture a piece on this square, so it's still on the board.
-                pos.piece_at(tpa_to)
+                // otherwise, the most recent move captured our piece, so we
+                // look in the undo history to find out what our piece was.
+                debug_assert_ne!(pos.history[two_ply_ago + 1].capture, Piece::EMPTY, "Opponent's move has to capture a piece!");
+                debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
+                pos.history[two_ply_ago + 1].capture
             }
         };
 
@@ -139,16 +141,18 @@ impl ThreadData {
         // meaning that the piece on the target square of the move
         // two ply ago may have been captured.
         let tpa_piece = {
-            let capture = pos.captured_piece(prev_move);
-            // determine where to find the piece_t info:
-            // we don't need to worry about ep-captures because
-            // we just blanket filter them out with the null checks.
-            if capture != Piece::EMPTY && prev_move.to() == tpa_to {
-                // the opponent captured a piece on this square, so we can use the capture.
-                capture
+            let at_target_square = pos.piece_at(tpa_to);
+            debug_assert_ne!(at_target_square, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
+            if at_target_square.colour() == pos.turn() {
+                // if the piece on the target square is the same colour as us
+                // then nothing happened to our piece, so we can use it directly.
+                at_target_square
             } else {
-                // the opponent didn't capture a piece on this square, so it's still on the board.
-                pos.piece_at(tpa_to)
+                // otherwise, the most recent move captured our piece, so we
+                // look in the undo history to find out what our piece was.
+                debug_assert_ne!(pos.history[two_ply_ago + 1].capture, Piece::EMPTY, "Opponent's move has to capture a piece!");
+                debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
+                pos.history[two_ply_ago + 1].capture
             }
         };
 
