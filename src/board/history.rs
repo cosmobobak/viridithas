@@ -55,6 +55,9 @@ impl ThreadData {
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
+        
+        debug_assert_ne!(prev_piece, Piece::EMPTY, "Piece on target square of move to counter has to exist!");
+        debug_assert_eq!(prev_piece.colour(), pos.turn().flip(), "Piece on target square of move to counter has to be the opposite colour to us!");
 
         let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
         for &m in moves_to_adjust {
@@ -74,8 +77,11 @@ impl ThreadData {
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
-        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
+        
+        debug_assert_ne!(prev_piece, Piece::EMPTY, "Piece on target square of move to counter has to exist!");
+        debug_assert_eq!(prev_piece.colour(), pos.turn().flip(), "Piece on target square of move to counter has to be the opposite colour to us!");
 
+        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
         for m in ms {
             let to = m.mov.to();
             let piece = pos.moved_piece(m.mov);
@@ -118,6 +124,8 @@ impl ThreadData {
                 pos.history[two_ply_ago + 1].capture
             }
         };
+        debug_assert_ne!(tpa_piece, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
+        debug_assert_eq!(tpa_piece.colour(), pos.turn(), "Piece on target square of move to follow up on has to be the same colour as us!");
 
         let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
         for &m in moves_to_adjust {
@@ -155,6 +163,8 @@ impl ThreadData {
                 pos.history[two_ply_ago + 1].capture
             }
         };
+        debug_assert_ne!(tpa_piece, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
+        debug_assert_eq!(tpa_piece.colour(), pos.turn(), "Piece on target square of move to follow up on has to be the same colour as us!");
 
         let fuh_block = self.followup_history.get(tpa_piece, tpa_to);
         for m in ms {
