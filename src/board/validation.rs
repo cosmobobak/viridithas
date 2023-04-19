@@ -3,7 +3,7 @@
 use crate::{
     board::evaluation::score::S,
     definitions::{
-        Rank::{RANK_3, RANK_6},
+        Rank,
         Square,
     },
     lookups::{PIECE_BIG, PIECE_MAJ},
@@ -122,8 +122,8 @@ impl Board {
         }
 
         if !(self.ep_sq == Square::NO_SQUARE
-            || (self.ep_sq.rank() == RANK_6 && self.side == Colour::WHITE)
-            || (self.ep_sq.rank() == RANK_3 && self.side == Colour::BLACK))
+            || (self.ep_sq.rank() == Rank::RANK_6 && self.side == Colour::WHITE)
+            || (self.ep_sq.rank() == Rank::RANK_3 && self.side == Colour::BLACK))
         {
             return Err(format!("en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})", Square::NO_SQUARE, self.ep_sq, self.ep_sq.rank()));
         }

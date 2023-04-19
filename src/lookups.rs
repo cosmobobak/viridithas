@@ -2,8 +2,8 @@
 
 use crate::{
     definitions::{
-        File::{FILE_A, FILE_H},
-        Rank::{RANK_1, RANK_8},
+        File,
+        Rank,
         Square,
     },
     piece::PieceType,
@@ -52,16 +52,16 @@ pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
     let mut rank_masks = [0; 8];
     let mut file_masks = [0; 8];
 
-    let mut r = RANK_8;
+    let mut r = Rank::RANK_8;
     loop {
-        let mut f = FILE_A;
-        while f <= FILE_H {
+        let mut f = File::FILE_A;
+        while f <= File::FILE_H {
             let sq = r * 8 + f;
             file_masks[f as usize] |= 1 << sq;
             rank_masks[r as usize] |= 1 << sq;
             f += 1;
         }
-        if r == RANK_1 {
+        if r == Rank::RANK_1 {
             break;
         }
         r -= 1;
@@ -91,7 +91,7 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
             t_sq -= 8;
         }
 
-        if sq.file() > FILE_A {
+        if sq.file() > File::FILE_A {
             isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize - 1];
 
             t_sq = sq.signed_inner() + 7;
@@ -107,7 +107,7 @@ pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
             }
         }
 
-        if sq.file() < FILE_H {
+        if sq.file() < File::FILE_H {
             isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize + 1];
 
             t_sq = sq.signed_inner() + 9;

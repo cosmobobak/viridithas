@@ -1,8 +1,8 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Undo, MAX_DEPTH},
+    definitions::{depth::Depth, Undo, MAX_DEPTH, Rank},
     historytable::update_history,
-    piece::Piece,
+    piece::{Piece, PieceType},
     threadlocal::ThreadData,
 };
 
@@ -101,7 +101,7 @@ impl ThreadData {
         let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() || move_to_follow_up.is_ep() {
+        if move_to_follow_up.is_null() || prev_move.is_null() {
             return;
         }
         let tpa_to = move_to_follow_up.to();
@@ -111,8 +111,14 @@ impl ThreadData {
         // two ply ago may have been captured.
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
-            debug_assert_ne!(at_target_square, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
-            if at_target_square.colour() == pos.turn() {
+            debug_assert!(at_target_square != Piece::EMPTY || prev_move.is_ep(), "Piece on target square of move to follow up on has to exist!");
+            if prev_move.is_ep() {
+                // if the previous move was an en-passant capture, then the
+                // move we're following up must have been a double pawn push.
+                // as such, we can just construct a pawn of our colour.
+                debug_assert!(move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn()));
+                Piece::new(pos.turn(), PieceType::PAWN)
+            } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
                 at_target_square
@@ -140,7 +146,7 @@ impl ThreadData {
         let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
         let move_to_follow_up = pos.history[two_ply_ago].m;
         let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() || prev_move.is_ep() || move_to_follow_up.is_ep() {
+        if move_to_follow_up.is_null() || prev_move.is_null() {
             return;
         }
         let tpa_to = move_to_follow_up.to();
@@ -150,8 +156,14 @@ impl ThreadData {
         // two ply ago may have been captured.
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
-            debug_assert_ne!(at_target_square, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
-            if at_target_square.colour() == pos.turn() {
+            debug_assert!(at_target_square != Piece::EMPTY || prev_move.is_ep(), "Piece on target square of move to follow up on has to exist!");
+            if prev_move.is_ep() {
+                // if the previous move was an en-passant capture, then the
+                // move we're following up must have been a double pawn push.
+                // as such, we can just construct a pawn of our colour.
+                debug_assert!(move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn()));
+                Piece::new(pos.turn(), PieceType::PAWN)
+            } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
                 at_target_square
