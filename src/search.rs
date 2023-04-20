@@ -153,6 +153,8 @@ impl Board {
             println!("bestmove {bestmove}");
             #[cfg(feature = "stats")]
             info.print_stats();
+            #[cfg(feature = "stats")]
+            println!("branching factor: {}", (info.nodes as f64).powf(1.0 / thread_headers[0].completed as f64));
         }
 
         assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");

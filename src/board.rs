@@ -23,7 +23,7 @@ use crate::{
     chessmove::Move,
     definitions::{
         CheckState, File,
-        Rank::{self, RANK_3, RANK_6},
+        Rank,
         Square, Undo, BKCA, BQCA, WKCA, WQCA,
     },
     errors::{FenParseError, MoveParseError},
@@ -873,10 +873,10 @@ impl Board {
             if self.is_double_pawn_push(m) {
                 if side == Colour::WHITE {
                     self.ep_sq = from.add(8);
-                    debug_assert!(self.ep_sq.rank() == RANK_3);
+                    debug_assert!(self.ep_sq.rank() == Rank::RANK_3);
                 } else {
                     self.ep_sq = from.sub(8);
-                    debug_assert!(self.ep_sq.rank() == RANK_6);
+                    debug_assert!(self.ep_sq.rank() == Rank::RANK_6);
                 }
                 hash_ep(&mut self.key, self.ep_sq);
             }

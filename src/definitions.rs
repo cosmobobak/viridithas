@@ -17,8 +17,10 @@ pub const MAX_PLY: usize = MAX_DEPTH.ply_to_horizon();
 pub const INFINITY: i32 = MATE_SCORE * 2;
 pub const MEGABYTE: usize = 1024 * 1024;
 
-#[allow(non_snake_case, dead_code)]
-pub mod File {
+pub struct File;
+
+#[allow(dead_code)]
+impl File {
     pub const FILE_A: u8 = 0;
     pub const FILE_B: u8 = 1;
     pub const FILE_C: u8 = 2;
@@ -29,8 +31,10 @@ pub mod File {
     pub const FILE_H: u8 = 7;
 }
 
-#[allow(non_snake_case, dead_code)]
-pub mod Rank {
+pub struct Rank;
+
+#[allow(dead_code)]
+impl Rank {
     pub const RANK_1: u8 = 0;
     pub const RANK_2: u8 = 1;
     pub const RANK_3: u8 = 2;
@@ -39,6 +43,14 @@ pub mod Rank {
     pub const RANK_6: u8 = 5;
     pub const RANK_7: u8 = 6;
     pub const RANK_8: u8 = 7;
+
+    pub fn double_pawn_push_rank(colour: Colour) -> u8 {
+        if colour == Colour::WHITE {
+            Self::RANK_4
+        } else {
+            Self::RANK_5
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]

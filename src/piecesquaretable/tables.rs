@@ -2,8 +2,8 @@ use crate::{
     board::evaluation::score::S,
     cfor,
     definitions::{
-        File::{FILE_A, FILE_D, FILE_H},
-        Rank::{RANK_1, RANK_2, RANK_7, RANK_8},
+        File,
+        Rank,
         Square,
     },
     piece::{Colour, Piece},
@@ -98,9 +98,9 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
         // white knight to white king
         println!("    [");
         println!("        // {}", names[piece.index()]);
-        for rank in RANK_1..=RANK_8 {
+        for rank in Rank::RANK_1..=Rank::RANK_8 {
             print!("        [");
-            for file in FILE_A..=FILE_D {
+            for file in File::FILE_A..=File::FILE_D {
                 let sq = Square::from_rank_file(rank, file);
                 let val = pst[piece.index()][sq.index()];
                 print!("{val}, ");
@@ -118,9 +118,9 @@ static P_BONUS: [[S; 8]; 8] = [
     // Pawn (asymmetric distribution)
     [ S::NULL; 8 ],"
     );
-    for rank in RANK_2..=RANK_7 {
+    for rank in Rank::RANK_2..=Rank::RANK_7 {
         print!("    [ ");
-        for file in FILE_A..=FILE_H {
+        for file in File::FILE_A..=File::FILE_H {
             let sq = Square::from_rank_file(rank, file);
             let val = pst[Piece::WP.index()][sq.index()];
             print!("{val}, ");
