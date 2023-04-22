@@ -173,7 +173,13 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         self.index += 1;
 
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
-        if self.was_tried_lazily(m.mov) || self.skip_quiets && not_winning {
+
+        if self.skip_quiets && not_winning {
+            // the best we could find wasn't winning,
+            // and we're skipping quiet moves, so we're done.
+            return None;
+        }
+        if self.was_tried_lazily(m.mov) {
             self.yield_once()
         } else {
             Some(m)

@@ -792,6 +792,7 @@ impl Board {
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
+            debug_assert!(!quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m));
             if ROOT && uci::is_multipv() {
                 // handle multi-pv
                 if t.multi_pv_excluded.contains(&m) {
