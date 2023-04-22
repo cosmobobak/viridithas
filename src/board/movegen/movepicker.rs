@@ -86,6 +86,10 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
                 if m.score >= WINNING_CAPTURE_SCORE {
                     return Some(m);
                 }
+                // the move was not winning, so we're going to
+                // generate quiet moves next. As such, we decrement
+                // the index so we can try this move again.
+                self.index -= 1;
             }
             self.stage = if QSEARCH { Stage::Done } else { Stage::YieldKiller1 };
         }
@@ -163,6 +167,11 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
         let m = self.movelist.moves[best_num];
 
+        // swap the best move with the first unsorted move.
+        self.movelist.moves.swap(best_num, self.index);
+
+        self.index += 1;
+
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
 
         if self.skip_quiets && not_winning {
@@ -170,11 +179,6 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             // and we're skipping quiet moves, so we're done.
             return None;
         }
-
-        // swap the best move with the first unsorted move.
-        self.movelist.moves.swap(best_num, self.index);
-
-        self.index += 1;
         if self.was_tried_lazily(m.mov) {
             self.yield_once()
         } else {
