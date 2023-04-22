@@ -175,7 +175,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
 
         if self.skip_quiets && not_winning {
-            // the best we could find wasn't winning, so we're done,
+            // the best we could find wasn't winning,
             // and we're skipping quiet moves, so we're done.
             return None;
         }
