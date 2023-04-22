@@ -557,7 +557,7 @@ mod tests {
 
         for fen in bench::BENCH_POSITIONS {
             pos.set_from_fen(fen).unwrap();
-            let _ = synced_perft(&mut pos, 2);
+            synced_perft(&mut pos, 2);
         }
     }
 }
