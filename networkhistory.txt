@@ -158,7 +158,7 @@ NET ID │ general concept                          │ notes
        │ ReLU. (Net 48 data)                      │ vs net─44.
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     50 │ Try a deeper network architecture.       │ ELO   | 
-       │ Went from 768->512x2->1 to               │ SPRT  | 
+       │ Went from 768->512x2->1 to               │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
        │ 768->512x2->8->1.                        │ LLR   | 
        │                                          │ GAMES | 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
@@ -177,8 +177,18 @@ NET ID │ general concept                          │ notes
        │                                          │ LLR   | 2.98 (-2.94, 2.94) [0.00, 5.00]
        │                                          │ GAMES | N: 9704 W: 2632 L: 2438 D: 4634
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    54 │ Testing a PSQT-esque skip connection,    │ ELO   | 
-       │ running on the smaller net-49 data with  │ SPRT  | 
-       │ only 45 epochs for speed.                │ LLR   | 
+    54 │ Testing a PSQT-esque skip connection,    │ ELO   | -504.03 +- 252.80 (95%)
+       │ running on the smaller net-49 data with  │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │ only 45 epochs for speed.                │ LLR   | -2.98 (-2.94, 2.94) [-10.00, 0.00]
+       │ (turns out sign on the pqst was wrong)   │ GAMES | N: 96 W: 3 L: 89 D: 4
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    55 │ Same as net 54, but not broken.          │ ELO   | 
+       │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │      (still haven't made inf work)       │ LLR   | 
+       │                                          │ GAMES | 
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    56 │ Net 53 using AdamW instead of Adam.      │ ELO   | 
+       │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   | 
        │                                          │ GAMES | 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
