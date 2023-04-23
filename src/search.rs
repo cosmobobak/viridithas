@@ -660,7 +660,8 @@ impl Board {
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / 3
-                    + std::cmp::min((static_eval - beta) / 200, 3);
+                    + std::cmp::min((static_eval - beta) / 200, 3)
+                    + i32::from(improving);
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let null_score =
