@@ -89,6 +89,22 @@ pub struct SearchInfo<'a> {
     pub quit: bool,
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
+    /// The highest depth reached (selective depth).
+    pub seldepth: Depth,
+    /// A handle to a receiver for stdin.
+    pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
+    /// Whether to print the search info to stdout.
+    pub print_to_stdout: bool,
+    /// Form of the search limit.
+    pub limit: SearchLimit,
+    /// Evaluation parameters for HCE.
+    pub eval_params: EvalParams,
+    /// Search parameters.
+    pub search_params: SearchParams,
+    /// LMR + LMP lookup table.
+    pub lm_table: LMTable,
+
+    /* Conditionally-compiled stat trackers: */
     /// The number of fail-highs found (beta cutoffs).
     #[cfg(feature = "stats")]
     pub failhigh: u64,
@@ -104,20 +120,6 @@ pub struct SearchInfo<'a> {
     /// The number of fail-highs that occurred on a given ply in quiescence search.
     #[cfg(feature = "stats")]
     pub qfailhigh_index: [u64; MAX_POSITION_MOVES],
-    /// The highest depth reached (selective depth).
-    pub seldepth: Depth,
-    /// A handle to a receiver for stdin.
-    pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
-    /// Whether to print the search info to stdout.
-    pub print_to_stdout: bool,
-    /// Form of the search limit.
-    pub limit: SearchLimit,
-    /// Evaluation parameters for HCE.
-    pub eval_params: EvalParams,
-    /// Search parameters.
-    pub search_params: SearchParams,
-    /// LMR + LMP lookup table.
-    pub lm_table: LMTable,
 }
 
 impl<'a> SearchInfo<'a> {
@@ -127,6 +129,13 @@ impl<'a> SearchInfo<'a> {
             nodes: 0,
             quit: false,
             stopped,
+            seldepth: ZERO_PLY,
+            stdin_rx: None,
+            print_to_stdout: true,
+            limit: SearchLimit::default(),
+            eval_params: EvalParams::default(),
+            search_params: SearchParams::default(),
+            lm_table: LMTable::default(),
             #[cfg(feature = "stats")]
             failhigh: 0,
             #[cfg(feature = "stats")]
@@ -137,13 +146,6 @@ impl<'a> SearchInfo<'a> {
             qfailhigh: 0,
             #[cfg(feature = "stats")]
             qfailhigh_index: [0; MAX_POSITION_MOVES],
-            seldepth: ZERO_PLY,
-            stdin_rx: None,
-            print_to_stdout: true,
-            limit: SearchLimit::default(),
-            eval_params: EvalParams::default(),
-            search_params: SearchParams::default(),
-            lm_table: LMTable::default(),
         };
         assert!(!out.stopped.load(Ordering::SeqCst));
         out
