@@ -660,16 +660,20 @@ impl Board {
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / 3
-                    + std::cmp::min((static_eval - beta) / 200, 3);
+                    + std::cmp::min((static_eval - beta) / 200, 4);
                 let nm_depth = depth - r;
                 self.make_nullmove();
-                let null_score =
+                let mut null_score =
                     -self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
                 }
                 if null_score >= beta {
+                    // don't return game-theoretic scores:
+                    if null_score >= MINIMUM_TB_WIN_SCORE {
+                        null_score = beta;
+                    }
                     // unconditionally cutoff if we're just too shallow.
                     if depth < info.search_params.nmp_verification_depth
                         && !is_game_theoretic_score(beta)
