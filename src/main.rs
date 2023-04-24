@@ -32,6 +32,7 @@ mod texel;
 mod threadlocal;
 mod transpositiontable;
 mod uci;
+mod timemgmt;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";

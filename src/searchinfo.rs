@@ -11,78 +11,15 @@ use crate::{
     board::{evaluation::{mate_in, parameters::EvalParams}},
     chessmove::Move,
     definitions::depth::{Depth, ZERO_PLY},
-    search::{parameters::SearchParams, LMTable},
+    search::{parameters::SearchParams, LMTable}, timemgmt::{SearchLimit, TimeManager},
 };
 
 #[cfg(feature = "stats")]
 use crate::board::movegen::MAX_POSITION_MOVES;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum SearchLimit {
-    Infinite,
-    Depth(Depth),
-    Time(u64),
-    TimeOrCorrectMoves(u64, Vec<Move>),
-    Nodes(u64),
-    Mate {
-        ply: usize,
-    },
-    Dynamic {
-        our_clock: u64,
-        their_clock: u64,
-        our_inc: u64,
-        their_inc: u64,
-        moves_to_go: u64,
-        max_time_window: u64,
-        time_window: u64,
-    },
-}
-
-impl Default for SearchLimit {
-    fn default() -> Self {
-        Self::Infinite
-    }
-}
-
-impl SearchLimit {
-    pub const fn depth(&self) -> Option<Depth> {
-        match self {
-            Self::Depth(d) => Some(*d),
-            _ => None,
-        }
-    }
-
-    pub fn compute_time_windows(
-        our_clock: u64,
-        moves_to_go: Option<u64>,
-        our_inc: u64,
-        config: &SearchParams,
-    ) -> (u64, u64) {
-        let max_time = our_clock.saturating_sub(30);
-        if let Some(moves_to_go) = moves_to_go {
-            let divisor = moves_to_go.clamp(2, config.search_time_fraction);
-            let computed_time_window = our_clock / divisor;
-            let time_window = computed_time_window.min(max_time);
-            let max_time_window = (time_window * 5 / 2).min(max_time);
-            return (time_window, max_time_window);
-        }
-        let computed_time_window = our_clock / config.search_time_fraction + our_inc / 2 - 10;
-        let time_window = computed_time_window.min(max_time);
-        let max_time_window = (time_window * 5 / 2).min(max_time);
-        (time_window, max_time_window)
-    }
-
-    #[cfg(test)]
-    pub const fn mate_in(moves: usize) -> Self {
-        Self::Mate { ply: moves * 2 }
-    }
-}
-
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
 pub struct SearchInfo<'a> {
-    /// The starting time of the search.
-    pub start_time: Instant,
     /// The number of nodes searched.
     pub nodes: u64,
     /// Signal to quit the search.
@@ -103,6 +40,8 @@ pub struct SearchInfo<'a> {
     pub search_params: SearchParams,
     /// LMR + LMP lookup table.
     pub lm_table: LMTable,
+    /// The time manager.
+    pub time_manager: TimeManager,
 
     /* Conditionally-compiled stat trackers: */
     /// The number of fail-highs found (beta cutoffs).
@@ -125,7 +64,6 @@ pub struct SearchInfo<'a> {
 impl<'a> SearchInfo<'a> {
     pub fn new(stopped: &'a AtomicBool) -> Self {
         let out = Self {
-            start_time: Instant::now(),
             nodes: 0,
             quit: false,
             stopped,
@@ -136,6 +74,7 @@ impl<'a> SearchInfo<'a> {
             eval_params: EvalParams::default(),
             search_params: SearchParams::default(),
             lm_table: LMTable::default(),
+            time_manager: TimeManager::default(),
             #[cfg(feature = "stats")]
             failhigh: 0,
             #[cfg(feature = "stats")]
@@ -169,8 +108,8 @@ impl<'a> SearchInfo<'a> {
     }
 
     pub fn set_time_window(&mut self, millis: u64) {
-        self.start_time = Instant::now();
-        match &mut self.limit {
+        self.time_manager.start_time = Instant::now();
+        match &mut self.time_manager.limit {
             SearchLimit::Dynamic { time_window, .. } => {
                 *time_window = millis;
             }
@@ -197,31 +136,7 @@ impl<'a> SearchInfo<'a> {
         if already_stopped {
             return true;
         }
-        let res = match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
-                self.stopped.load(Ordering::SeqCst)
-            }
-            SearchLimit::Nodes(nodes) => {
-                let past_limit = self.nodes >= nodes;
-                if past_limit {
-                    self.stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-            SearchLimit::Time(time_window)
-            | SearchLimit::Dynamic { time_window, .. }
-            | SearchLimit::TimeOrCorrectMoves(time_window, _) => {
-                let elapsed = self.start_time.elapsed();
-                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
-                #[allow(clippy::cast_possible_truncation)]
-                let elapsed_millis = elapsed.as_millis() as u64;
-                let past_limit = elapsed_millis >= time_window;
-                if past_limit {
-                    self.stopped.store(true, Ordering::SeqCst);
-                }
-                past_limit
-            }
-        };
+        let res = self.time_manager.check_up(self.stopped, self.nodes);
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
@@ -273,27 +188,8 @@ impl<'a> SearchInfo<'a> {
         matches!(self.limit, SearchLimit::TimeOrCorrectMoves(_, _))
     }
 
-    /// If we have used enough time that stopping after finishing a depth would be good here.
-    pub fn is_past_opt_time(&self) -> bool {
-        match self.limit {
-            SearchLimit::Dynamic { time_window, .. } => {
-                let elapsed = self.start_time.elapsed();
-                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
-                #[allow(clippy::cast_possible_truncation)]
-                let elapsed_millis = elapsed.as_millis() as u64;
-                let optimistic_time_window = time_window * 6 / 10;
-                elapsed_millis >= optimistic_time_window
-            }
-            _ => false,
-        }
-    }
-
     pub const fn in_game(&self) -> bool {
         matches!(self.limit, SearchLimit::Dynamic { .. })
-    }
-
-    pub fn time_since_start(&self) -> Duration {
-        Instant::now().checked_duration_since(self.start_time).unwrap_or_default()
     }
 
     #[cfg(feature = "stats")]

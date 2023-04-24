@@ -195,7 +195,7 @@ impl Board {
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
-            if MAIN_THREAD && d > 8 && info.in_game() && info.is_past_opt_time() {
+            if MAIN_THREAD && d > 8 && info.in_game() && info.time_manager.is_past_opt_time() {
                 break 'deepening;
             }
             let depth = Depth::new(d.try_into().unwrap());
@@ -858,7 +858,7 @@ impl Board {
             if ROOT
                 && t.thread_id == 0
                 && info.print_to_stdout
-                && info.time_since_start() > Duration::from_secs(5)
+                && info.time_manager.time_since_start() > Duration::from_secs(5)
                 && !PRETTY_PRINT.load(Ordering::SeqCst)
             {
                 println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
@@ -1330,12 +1330,12 @@ impl Board {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        if info.in_game() && info.time_since_start().as_millis() < 50 {
+        if info.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
             return;
         }
         let sstr = uci::format_score(pv.score);
         let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-        let nps = (total_nodes as f64 / info.start_time.elapsed().as_secs_f64()) as u64;
+        let nps = (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
                 Bound::Upper => Bound::Lower,
@@ -1352,7 +1352,7 @@ impl Board {
             println!(
                 "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
                 info.seldepth.ply_to_horizon(),
-                info.start_time.elapsed().as_millis(),
+                info.time_manager.start_time.elapsed().as_millis(),
                 hashfull = tt.hashfull(),
                 tbhits = TB_HITS.load(Ordering::SeqCst),
                 wdl = uci::format_wdl(pv.score, self.ply()),
@@ -1368,7 +1368,7 @@ impl Board {
             eprint!(
                 " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
                 info.seldepth.ply_to_horizon(),
-                t = uci::format_time(info.start_time.elapsed().as_millis()),
+                t = uci::format_time(info.time_manager.start_time.elapsed().as_millis()),
                 knps = nps / 1_000,
                 knodes = total_nodes / 1_000,
                 wdl = uci::pretty_format_wdl(pv.score, self.ply()),

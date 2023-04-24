@@ -12,7 +12,8 @@ use std::{
 use crate::{
     board::{evaluation::is_game_theoretic_score, Board},
     definitions::{depth::Depth, MEGABYTE},
-    searchinfo::{SearchInfo, SearchLimit},
+    searchinfo::SearchInfo,
+    timemgmt::SearchLimit,
     threadlocal::ThreadData,
     transpositiontable::TT,
 };
