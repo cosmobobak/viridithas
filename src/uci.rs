@@ -27,7 +27,8 @@ use crate::{
     nnue, perft,
     piece::Colour,
     search::{parameters::SearchParams, LMTable},
-    searchinfo::{SearchInfo, SearchLimit},
+    searchinfo::SearchInfo,
+    timemgmt::SearchLimit,
     tablebases,
     threadlocal::ThreadData,
     transpositiontable::TT,
@@ -235,7 +236,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         info.limit = SearchLimit::Nodes(nodes);
     }
 
-    info.start_time = Instant::now();
+    info.time_manager.start_time = Instant::now();
 
     Ok(())
 }
