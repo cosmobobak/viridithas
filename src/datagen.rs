@@ -18,7 +18,7 @@ use crate::{
     },
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::SearchInfo,
-    timemgmt::SearchLimit,
+    timemgmt::{SearchLimit, TimeManager},
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     transpositiontable::TT,
@@ -200,12 +200,16 @@ fn generate_on_thread(
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
-    let mut info = SearchInfo {
-        print_to_stdout: false,
+    let time_manager = TimeManager {
         limit: match options.limit {
             DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
             DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
         },
+        ..TimeManager::default()
+    };
+    let mut info = SearchInfo {
+        time_manager,
+        print_to_stdout: false,
         ..SearchInfo::new(&stopped)
     };
 
@@ -295,7 +299,7 @@ fn generate_on_thread(
         if options.log_level > 2 {
             eprintln!("Evaluating position...");
         }
-        let temp_limit = std::mem::replace(&mut info.limit, SearchLimit::Depth(Depth::new(10)));
+        let temp_limit = std::mem::replace(&mut info.time_manager.limit, SearchLimit::Depth(Depth::new(10)));
         let (eval, _) = board.search_position::<true>(
             &mut info,
             std::array::from_mut(&mut thread_data),
@@ -308,7 +312,7 @@ fn generate_on_thread(
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        info.limit = temp_limit;
+        info.time_manager.limit = temp_limit;
         // STEP 3: play out to the end of the game
         if options.log_level > 2 {
             eprintln!("Playing out game...");

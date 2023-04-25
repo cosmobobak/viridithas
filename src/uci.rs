@@ -173,26 +173,26 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "btime" => clocks[pos.turn().flip().index()] = Some(part_parse("btime", parts.next())?),
             "winc" => incs[pos.turn().index()] = Some(part_parse("winc", parts.next())?),
             "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
-            "infinite" => info.limit = SearchLimit::Infinite,
+            "infinite" => info.time_manager.limit = SearchLimit::Infinite,
             "mate" => {
                 let mate_distance: usize = part_parse("mate", parts.next())?;
                 let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
                 GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
-                info.limit = SearchLimit::Mate { ply };
+                info.time_manager.limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
-    if !matches!(info.limit, SearchLimit::Mate { .. }) {
+    if !matches!(info.time_manager.limit, SearchLimit::Mate { .. }) {
         GO_MATE_MAX_DEPTH.store(MAX_DEPTH.ply_to_horizon(), Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
-        info.limit = SearchLimit::Time(movetime);
+        info.time_manager.limit = SearchLimit::Time(movetime);
     }
     if let Some(depth) = depth {
-        info.limit = SearchLimit::Depth(depth.into());
+        info.time_manager.limit = SearchLimit::Depth(depth.into());
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
@@ -204,7 +204,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         // let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
         let (time_window, max_time_window) =
             SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, &info.search_params);
-        info.limit = SearchLimit::Dynamic {
+        info.time_manager.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
             our_inc,
@@ -220,7 +220,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     }
 
     if let Some(nodes) = nodes {
-        info.limit = SearchLimit::Nodes(nodes);
+        info.time_manager.limit = SearchLimit::Nodes(nodes);
     }
 
     info.time_manager.start_time = Instant::now();

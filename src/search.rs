@@ -13,8 +13,8 @@ use std::{
 use crate::{
     board::{
         evaluation::{
-            self, get_see_value, is_game_theoretic_score, is_mate_score, mate_in, mated_in,
-            tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
+            self, get_see_value, is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in,
+            MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
             bitboards::{self, first_square},
@@ -95,8 +95,8 @@ impl Board {
         if legal_moves.is_empty() {
             return (0, Move::NULL);
         }
-        if info.in_game() && legal_moves.len() == 1 {
-            info.set_time_window(0);
+        if legal_moves.len() == 1 {
+            info.time_manager.notify_one_legal_move();
         }
 
         // Probe the tablebases if we're in a TB position.
@@ -193,12 +193,16 @@ impl Board {
         let mut forcing_time_reduction = false;
         let mut fail_increment = false;
         let mut pv = PVariation::default();
-        let max_depth = info.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
+        let max_depth = info.time_manager.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
-            if MAIN_THREAD && d > 8 && info.in_game() && info.time_manager.is_past_opt_time() {
+            if MAIN_THREAD
+                && d > 8
+                && info.time_manager.in_game()
+                && info.time_manager.is_past_opt_time()
+            {
                 break 'deepening;
             }
             let depth = Depth::new(d.try_into().unwrap());
@@ -219,9 +223,8 @@ impl Board {
                         self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down(pv.score);
-                    if MAIN_THREAD && !fail_increment && info.in_game() {
-                        fail_increment = true;
-                        info.multiply_time_window(1.5);
+                    if MAIN_THREAD {
+                        info.time_manager.report_aspiration_fail(depth, Bound::Upper);
                     }
                     // search failed low, so we might have to
                     // revert a fail-high pv update
@@ -236,6 +239,9 @@ impl Board {
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up(pv.score);
+                    if MAIN_THREAD {
+                        info.time_manager.report_aspiration_fail(depth, Bound::Lower);
+                    }
                     continue;
                 }
 
@@ -249,28 +255,31 @@ impl Board {
                 }
 
                 if let ControlFlow::Break(_) =
-                    info.solved_breaker::<MAIN_THREAD>(bestmove, pv.score, d)
+                    info.time_manager.solved_breaker::<MAIN_THREAD>(bestmove, pv.score, d)
                 {
+                    info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
 
                 if let ControlFlow::Break(_) =
-                    mate_found_breaker::<MAIN_THREAD>(&pv, d, &mut mate_counter, info)
+                    info.time_manager.mate_found_breaker::<MAIN_THREAD>(&pv, depth)
                 {
+                    info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
 
-                if let ControlFlow::Break(_) = self.forced_move_breaker::<MAIN_THREAD>(
-                    d,
-                    &mut forcing_time_reduction,
-                    info,
-                    tt,
-                    t,
-                    bestmove,
-                    score,
-                    depth,
-                ) {
-                    break 'deepening;
+                let mut forced = false;
+                if MAIN_THREAD && info.time_manager.check_for_forced_move(depth) {
+                    let saved_seldepth = info.seldepth;
+                    forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+                    info.seldepth = saved_seldepth;
+
+                    if let ControlFlow::Break(_) =
+                        info.time_manager.report_forced_move(self, depth, tt, t, bestmove, score)
+                    {
+                        info.stopped.store(true, Ordering::SeqCst);
+                        break 'deepening;
+                    }
                 }
 
                 if info.stopped() {
@@ -305,33 +314,6 @@ impl Board {
             break;
         }
         m
-    }
-
-    fn forced_move_breaker<const MAIN_THREAD: bool>(
-        &mut self,
-        d: usize,
-        forcing_time_reduction: &mut bool,
-        info: &mut SearchInfo,
-        tt: TTView,
-        t: &mut ThreadData,
-        bestmove: Move,
-        score: i32,
-        depth: Depth,
-    ) -> ControlFlow<()> {
-        if MAIN_THREAD && d > 8 && !*forcing_time_reduction && info.in_game() {
-            let saved_seldepth = info.seldepth;
-            let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
-            info.seldepth = saved_seldepth;
-            if forced {
-                *forcing_time_reduction = true;
-                info.multiply_time_window(0.25);
-            }
-
-            if info.check_up() && d > 1 {
-                return ControlFlow::Break(());
-            }
-        }
-        ControlFlow::Continue(())
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
@@ -1286,7 +1268,7 @@ impl Board {
     ) -> (Move, i32) {
         let (mut best_thread, rest) = thread_headers.split_first().unwrap();
 
-        if info.is_test_suite() {
+        if info.time_manager.is_test_suite() {
             // we break early focusing only on the main thread.
             return (best_thread.pv_move().unwrap_or(default_move), best_thread.pv_score());
         }
@@ -1337,12 +1319,15 @@ impl Board {
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation
         )]
-        if info.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
+        // don't print anything if we are in the first 50ms of the search and we are in a game,
+        // this helps in ultra-fast time controls where we only have a few ms to think.
+        if info.time_manager.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
             return;
         }
         let sstr = uci::format_score(pv.score);
         let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-        let nps = (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
+        let nps =
+            (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
         if self.turn() == Colour::BLACK {
             bound = match bound {
                 Bound::Upper => Bound::Lower,
@@ -1382,23 +1367,6 @@ impl Board {
             );
         }
     }
-}
-
-fn mate_found_breaker<const MAIN_THREAD: bool>(
-    pv: &PVariation,
-    d: usize,
-    mate_counter: &mut i32,
-    info: &mut SearchInfo,
-) -> ControlFlow<()> {
-    if MAIN_THREAD && is_mate_score(pv.score) && d > 10 {
-        *mate_counter += 1;
-        if d > 1 && info.in_game() && *mate_counter >= 3 {
-            return ControlFlow::Break(());
-        }
-    } else if MAIN_THREAD {
-        *mate_counter = 0;
-    }
-    ControlFlow::Continue(())
 }
 
 pub const fn draw_score(nodes: u64) -> i32 {

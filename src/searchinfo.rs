@@ -1,15 +1,13 @@
 use std::{
-    ops::ControlFlow,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Mutex,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use crate::{
-    board::evaluation::{mate_in, parameters::EvalParams},
-    chessmove::Move,
+    board::evaluation::parameters::EvalParams,
     definitions::depth::{Depth, ZERO_PLY},
     search::{parameters::SearchParams, LMTable}, timemgmt::{SearchLimit, TimeManager},
 };
@@ -32,8 +30,6 @@ pub struct SearchInfo<'a> {
     pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
-    /// Form of the search limit.
-    pub limit: SearchLimit,
     /// Evaluation parameters for HCE.
     pub eval_params: EvalParams,
     /// Search parameters.
@@ -70,7 +66,6 @@ impl<'a> SearchInfo<'a> {
             seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
-            limit: SearchLimit::default(),
             eval_params: EvalParams::default(),
             search_params: SearchParams::default(),
             lm_table: LMTable::default(),
@@ -117,20 +112,6 @@ impl<'a> SearchInfo<'a> {
         }
     }
 
-    pub fn multiply_time_window(&mut self, factor: f64) {
-        #![allow(
-            clippy::cast_precision_loss,
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss
-        )]
-        match &mut self.limit {
-            SearchLimit::Dynamic { time_window, .. } => {
-                *time_window = (*time_window as f64 * factor) as u64;
-            }
-            other => panic!("Unexpected search limit: {other:?}"),
-        }
-    }
-
     pub fn check_up(&mut self) -> bool {
         let already_stopped = self.stopped.load(Ordering::SeqCst);
         if already_stopped {
@@ -151,45 +132,6 @@ impl<'a> SearchInfo<'a> {
 
     pub fn stopped(&self) -> bool {
         self.stopped.load(Ordering::SeqCst)
-    }
-
-    pub fn solved_breaker<const MAIN_THREAD: bool>(
-        &mut self,
-        best_move: Move,
-        value: i32,
-        depth: usize,
-    ) -> ControlFlow<()> {
-        if !MAIN_THREAD || depth < 8 {
-            return ControlFlow::Continue(());
-        }
-        if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
-            if correct_moves.contains(&best_move) {
-                self.stopped.store(true, Ordering::SeqCst);
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
-        } else if let &SearchLimit::Mate { ply } = &self.limit {
-            let expected_score = mate_in(ply);
-            let is_good_enough = value.abs() >= expected_score;
-            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= ply {
-                self.stopped.store(true, Ordering::SeqCst);
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
-        } else {
-            ControlFlow::Continue(())
-        }
-    }
-
-    pub const fn is_test_suite(&self) -> bool {
-        matches!(self.limit, SearchLimit::TimeOrCorrectMoves(_, _))
-    }
-
-    pub const fn in_game(&self) -> bool {
-        matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
     #[cfg(feature = "stats")]
@@ -286,7 +228,7 @@ mod tests {
         definitions::MEGABYTE,
         magic,
         threadlocal::ThreadData,
-        transpositiontable::TT,
+        transpositiontable::TT, timemgmt::TimeManager,
     };
 
     #[cfg(test)] // while running tests, we don't want multiple concurrent searches
@@ -299,7 +241,11 @@ mod tests {
         let mut position =
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
+        let time_manager = TimeManager {
+            limit: SearchLimit::mate_in(2),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -319,7 +265,11 @@ mod tests {
         let mut position =
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
+        let time_manager = TimeManager {
+            limit: SearchLimit::mate_in(2),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -339,7 +289,11 @@ mod tests {
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
+        let time_manager = TimeManager {
+            limit: SearchLimit::mate_in(2),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -359,7 +313,11 @@ mod tests {
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo { limit: SearchLimit::mate_in(2), ..SearchInfo::new(&stopped) };
+        let time_manager = TimeManager {
+            limit: SearchLimit::mate_in(2),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
