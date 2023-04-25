@@ -13,6 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
+const DEFAULT_MOVES_TO_GO: u64 = 26;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -52,17 +53,23 @@ impl SearchLimit {
         moves_to_go: Option<u64>,
         our_inc: u64,
     ) -> (u64, u64) {
-        let max_time = our_clock.saturating_sub(MOVE_OVERHEAD);
+        // The absolute maximum time we could spend without losing on the clock:
+        let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
+
+        // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
-            let divisor = moves_to_go.clamp(2, 26);
+            // Use more time if we have fewer moves to go, but not more than DEFAULT_MOVES_TO_GO.
+            let divisor = moves_to_go.clamp(2, DEFAULT_MOVES_TO_GO);
             let computed_time_window = our_clock / divisor;
-            let time_window = computed_time_window.min(max_time);
-            let max_time_window = (time_window * 5 / 2).min(max_time);
+            let time_window = computed_time_window.min(absolute_maximum);
+            let max_time_window = (time_window * 5 / 2).min(absolute_maximum);
             return (time_window, max_time_window);
         }
-        let computed_time_window = our_clock / 26 + our_inc / 2 - 10;
-        let time_window = computed_time_window.min(max_time);
-        let max_time_window = (time_window * 5 / 2).min(max_time);
+
+        // Otherwise, we use DEFAULT_MOVES_TO_GO.
+        let computed_time_window = our_clock / DEFAULT_MOVES_TO_GO + our_inc / 2 - MOVE_OVERHEAD;
+        let time_window = computed_time_window.min(absolute_maximum);
+        let max_time_window = (time_window * 5 / 2).min(absolute_maximum);
         (time_window, max_time_window)
     }
 
@@ -269,5 +276,6 @@ impl TimeManager {
 
     pub fn notify_one_legal_move(&mut self) {
         self.opt_time = Duration::from_millis(0);
+        self.found_forced_move = true;
     }
 }
