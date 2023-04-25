@@ -53,7 +53,8 @@ fn main() {
 
     let eparams =
         cli.eparams.map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
-            board::evaluation::parameters::EvalParams::from_file(p).expect("failed to load evaluation parameters")
+            board::evaluation::parameters::EvalParams::from_file(p)
+                .expect("failed to load evaluation parameters")
         });
 
     assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
@@ -77,7 +78,15 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(input_file, output_file, nnue::convert::Format::OurTexel, cli.nnuedepth, true, cli.nnuefornnue).unwrap();
+        return nnue::convert::evaluate_fens(
+            input_file,
+            output_file,
+            nnue::convert::Format::OurTexel,
+            cli.nnuedepth,
+            true,
+            cli.nnuefornnue,
+        )
+        .unwrap();
     } else if let Some(path) = cli.nnuereanalysepath {
         let output_path = cli.output.unwrap_or_else(|| {
             let mut path = path.clone();
@@ -111,23 +120,7 @@ fn main() {
     }
 
     if cli.info {
-        println!("{NAME} {VERSION}");
-        println!("Compiled with architecture: {}", std::env::consts::ARCH);
-        println!("Compiled for OS: {}", std::env::consts::OS);
-        println!(
-            "Number of HCE parameters: {}",
-            board::evaluation::parameters::EvalParams::default().vectorise().len()
-        );
-        println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
-        println!(
-            "Size of NNUE network: {} bytes",
-            std::mem::size_of::<nnue::network::NNUEParams>()
-        );
-        println!(
-            "Size of a transposition table entry: {} bytes",
-            std::mem::size_of::<transpositiontable::TTEntry>()
-        );
-        return;
+        return lookups::info_dump();
     }
 
     if cli.visparams {
@@ -149,12 +142,7 @@ fn main() {
     }
 
     if cli.visnnue {
-        // create folder for the images
-        let path = std::path::PathBuf::from("nnue-visualisations");
-        std::fs::create_dir_all(&path).unwrap();
-        return for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
-            crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
-        };
+        return crate::nnue::network::visualise_nnue();
     }
 
     uci::main_loop(eparams, cli.bench.is_some());

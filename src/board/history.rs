@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Undo, MAX_DEPTH, Rank},
+    definitions::{depth::Depth, Rank, Undo, MAX_DEPTH},
     historytable::update_history,
     piece::{Piece, PieceType},
     threadlocal::ThreadData,
@@ -55,9 +55,17 @@ impl ThreadData {
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
-        
-        debug_assert_ne!(prev_piece, Piece::EMPTY, "Piece on target square of move to counter has to exist!");
-        debug_assert_eq!(prev_piece.colour(), pos.turn().flip(), "Piece on target square of move to counter has to be the opposite colour to us!");
+
+        debug_assert_ne!(
+            prev_piece,
+            Piece::EMPTY,
+            "Piece on target square of move to counter has to exist!"
+        );
+        debug_assert_eq!(
+            prev_piece.colour(),
+            pos.turn().flip(),
+            "Piece on target square of move to counter has to be the opposite colour to us!"
+        );
 
         let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
         for &m in moves_to_adjust {
@@ -77,9 +85,17 @@ impl ThreadData {
         }
         let prev_to = prev_move.to();
         let prev_piece = pos.piece_at(prev_to);
-        
-        debug_assert_ne!(prev_piece, Piece::EMPTY, "Piece on target square of move to counter has to exist!");
-        debug_assert_eq!(prev_piece.colour(), pos.turn().flip(), "Piece on target square of move to counter has to be the opposite colour to us!");
+
+        debug_assert_ne!(
+            prev_piece,
+            Piece::EMPTY,
+            "Piece on target square of move to counter has to exist!"
+        );
+        debug_assert_eq!(
+            prev_piece.colour(),
+            pos.turn().flip(),
+            "Piece on target square of move to counter has to be the opposite colour to us!"
+        );
 
         let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
         for m in ms {
@@ -111,12 +127,17 @@ impl ThreadData {
         // two ply ago may have been captured.
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
-            debug_assert!(at_target_square != Piece::EMPTY || prev_move.is_ep(), "Piece on target square of move to follow up on has to exist!");
+            debug_assert!(
+                at_target_square != Piece::EMPTY || prev_move.is_ep(),
+                "Piece on target square of move to follow up on has to exist!"
+            );
             if prev_move.is_ep() {
                 // if the previous move was an en-passant capture, then the
                 // move we're following up must have been a double pawn push.
                 // as such, we can just construct a pawn of our colour.
-                debug_assert!(move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn()));
+                debug_assert!(
+                    move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
+                );
                 Piece::new(pos.turn(), PieceType::PAWN)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
@@ -125,13 +146,25 @@ impl ThreadData {
             } else {
                 // otherwise, the most recent move captured our piece, so we
                 // look in the undo history to find out what our piece was.
-                debug_assert_ne!(pos.history[two_ply_ago + 1].capture, Piece::EMPTY, "Opponent's move has to capture a piece!");
+                debug_assert_ne!(
+                    pos.history[two_ply_ago + 1].capture,
+                    Piece::EMPTY,
+                    "Opponent's move has to capture a piece!"
+                );
                 debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
                 pos.history[two_ply_ago + 1].capture
             }
         };
-        debug_assert_ne!(tpa_piece, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
-        debug_assert_eq!(tpa_piece.colour(), pos.turn(), "Piece on target square of move to follow up on has to be the same colour as us!");
+        debug_assert_ne!(
+            tpa_piece,
+            Piece::EMPTY,
+            "Piece on target square of move to follow up on has to exist!"
+        );
+        debug_assert_eq!(
+            tpa_piece.colour(),
+            pos.turn(),
+            "Piece on target square of move to follow up on has to be the same colour as us!"
+        );
 
         let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
         for &m in moves_to_adjust {
@@ -156,12 +189,17 @@ impl ThreadData {
         // two ply ago may have been captured.
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
-            debug_assert!(at_target_square != Piece::EMPTY || prev_move.is_ep(), "Piece on target square of move to follow up on has to exist!");
+            debug_assert!(
+                at_target_square != Piece::EMPTY || prev_move.is_ep(),
+                "Piece on target square of move to follow up on has to exist!"
+            );
             if prev_move.is_ep() {
                 // if the previous move was an en-passant capture, then the
                 // move we're following up must have been a double pawn push.
                 // as such, we can just construct a pawn of our colour.
-                debug_assert!(move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn()));
+                debug_assert!(
+                    move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
+                );
                 Piece::new(pos.turn(), PieceType::PAWN)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
@@ -170,13 +208,25 @@ impl ThreadData {
             } else {
                 // otherwise, the most recent move captured our piece, so we
                 // look in the undo history to find out what our piece was.
-                debug_assert_ne!(pos.history[two_ply_ago + 1].capture, Piece::EMPTY, "Opponent's move has to capture a piece!");
+                debug_assert_ne!(
+                    pos.history[two_ply_ago + 1].capture,
+                    Piece::EMPTY,
+                    "Opponent's move has to capture a piece!"
+                );
                 debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
                 pos.history[two_ply_ago + 1].capture
             }
         };
-        debug_assert_ne!(tpa_piece, Piece::EMPTY, "Piece on target square of move to follow up on has to exist!");
-        debug_assert_eq!(tpa_piece.colour(), pos.turn(), "Piece on target square of move to follow up on has to be the same colour as us!");
+        debug_assert_ne!(
+            tpa_piece,
+            Piece::EMPTY,
+            "Piece on target square of move to follow up on has to exist!"
+        );
+        debug_assert_eq!(
+            tpa_piece.colour(),
+            pos.turn(),
+            "Piece on target square of move to follow up on has to be the same colour as us!"
+        );
 
         let fuh_block = self.followup_history.get(tpa_piece, tpa_to);
         for m in ms {

@@ -90,7 +90,6 @@ impl Display for MoveList {
 }
 
 impl Board {
-    #[allow(clippy::cognitive_complexity)]
     fn generate_pawn_caps<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
@@ -127,13 +126,17 @@ impl Board {
         } else {
             for from in BitLoop::new(attacking_west & promo_rank) {
                 let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in
+                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
+                {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
             for from in BitLoop::new(attacking_east & promo_rank) {
                 let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in
+                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
+                {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -141,7 +144,6 @@ impl Board {
     }
 
     fn generate_ep<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
-        #![allow(clippy::cast_possible_truncation)]
         if self.ep_sq == Square::NO_SQUARE {
             return;
         }
@@ -195,7 +197,10 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
+    fn generate_forward_promos<const IS_WHITE: bool, const QS: bool>(
+        &self,
+        move_list: &mut MoveList,
+    ) {
         let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
@@ -208,7 +213,9 @@ impl Board {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
             } else {
-                for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
+                for promo in
+                    [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP]
+                {
                     move_list.push::<true>(Move::new_with_promo(sq, to, promo));
                 }
             }
@@ -226,7 +233,6 @@ impl Board {
         debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -300,8 +306,10 @@ impl Board {
         debug_assert!(move_list.iter().all(|m| m.is_valid()));
     }
 
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn generate_captures_for<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<const IS_WHITE: bool, const QS: bool>(
+        &self,
+        move_list: &mut MoveList,
+    ) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 

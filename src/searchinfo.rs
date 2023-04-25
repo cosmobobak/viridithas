@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    board::{evaluation::{mate_in, parameters::EvalParams}},
+    board::evaluation::{mate_in, parameters::EvalParams},
     chessmove::Move,
     definitions::depth::{Depth, ZERO_PLY},
     search::{parameters::SearchParams, LMTable},
@@ -298,7 +298,10 @@ impl<'a> SearchInfo<'a> {
 
     #[cfg(feature = "stats")]
     pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize, ordering_score: i32) {
-        use crate::board::movegen::movepicker::{TT_MOVE_SCORE, WINNING_CAPTURE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, COUNTER_MOVE_SCORE};
+        use crate::board::movegen::movepicker::{
+            COUNTER_MOVE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, TT_MOVE_SCORE,
+            WINNING_CAPTURE_SCORE,
+        };
 
         if QSEARCH {
             self.qfailhigh += 1;
@@ -341,7 +344,11 @@ impl<'a> SearchInfo<'a> {
             .map(|&x| (x as f64 * 100.0) / self.qfailhigh as f64)
             .take(10)
             .collect::<Vec<_>>();
-        for ((i1, &x1), (i2, &x2)) in fail_high_percentages.iter().enumerate().zip(qs_fail_high_percentages.iter().enumerate()) {
+        for ((i1, &x1), (i2, &x2)) in fail_high_percentages
+            .iter()
+            .enumerate()
+            .zip(qs_fail_high_percentages.iter().enumerate())
+        {
             println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
         }
         let type_percentages = self

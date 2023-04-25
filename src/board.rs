@@ -21,11 +21,7 @@ use crate::{
         MoveList,
     },
     chessmove::Move,
-    definitions::{
-        CheckState, File,
-        Rank,
-        Square, Undo, BKCA, BQCA, WKCA, WQCA,
-    },
+    definitions::{CheckState, File, Rank, Square, Undo, BKCA, BQCA, WKCA, WQCA},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     macros,

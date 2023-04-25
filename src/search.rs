@@ -154,7 +154,10 @@ impl Board {
             #[cfg(feature = "stats")]
             info.print_stats();
             #[cfg(feature = "stats")]
-            println!("branching factor: {}", (info.nodes as f64).powf(1.0 / thread_headers[0].completed as f64));
+            println!(
+                "branching factor: {}",
+                (info.nodes as f64).powf(1.0 / thread_headers[0].completed as f64)
+            );
         }
 
         assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
@@ -289,7 +292,8 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, tt: TTView, t: &ThreadData) -> Move {
         let tt_move = tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
+        let mut mp =
+            MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_base(mov) {
@@ -739,7 +743,8 @@ impl Board {
                 .as_ref()
                 .map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3)
         {
-            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, 0);
+            let mut move_picker =
+                CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
             {
@@ -796,7 +801,9 @@ impl Board {
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
         {
-            debug_assert!(!quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m));
+            debug_assert!(
+                !quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m)
+            );
             if ROOT && uci::is_multipv() {
                 // handle multi-pv
                 if t.multi_pv_excluded.contains(&m) {

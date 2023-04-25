@@ -1,13 +1,9 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    definitions::{
-        File,
-        Rank,
-        Square,
-    },
+    definitions::{File, Rank, Square},
     piece::PieceType,
-    rng::XorShiftState,
+    rng::XorShiftState, board, nnue, transpositiontable,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -189,6 +185,26 @@ pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> u64 {
     } else {
         unsafe { *KING_ATTACKS.get_unchecked(sq.index()) }
     }
+}
+
+pub fn info_dump() {
+    use crate::{NAME, VERSION};
+    println!("{NAME} {VERSION}");
+    println!("Compiled with architecture: {}", std::env::consts::ARCH);
+    println!("Compiled for OS: {}", std::env::consts::OS);
+    println!(
+        "Number of HCE parameters: {}",
+        board::evaluation::parameters::EvalParams::default().vectorise().len()
+    );
+    println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
+    println!(
+        "Size of NNUE network: {} bytes",
+        std::mem::size_of::<nnue::network::NNUEParams>()
+    );
+    println!(
+        "Size of a transposition table entry: {} bytes",
+        std::mem::size_of::<transpositiontable::TTEntry>()
+    );
 }
 
 mod tests {

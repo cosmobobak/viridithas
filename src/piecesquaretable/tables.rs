@@ -1,11 +1,7 @@
 use crate::{
     board::evaluation::score::S,
     cfor,
-    definitions::{
-        File,
-        Rank,
-        Square,
-    },
+    definitions::{File, Rank, Square},
     piece::{Colour, Piece},
 };
 

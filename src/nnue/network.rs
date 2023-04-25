@@ -611,6 +611,15 @@ pub fn inference_benchmark(state: &NNUEState) {
     println!("{ns_per_eval} ns per evaluation");
 }
 
+pub fn visualise_nnue() {
+    // create folder for the images
+    let path = std::path::PathBuf::from("nnue-visualisations");
+    std::fs::create_dir_all(&path).unwrap();
+    for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
+        crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
+    }
+}
+
 mod tests {
     #[test]
     fn pov_preserved() {
