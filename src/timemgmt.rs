@@ -153,7 +153,13 @@ impl TimeManager {
                 }
                 past_limit
             }
-            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.max_time,
+            SearchLimit::Dynamic { .. } => {
+                let past_limit = self.time_since_start() >= self.max_time;
+                if past_limit {
+                    stopped.store(true, Ordering::SeqCst);
+                }
+                past_limit
+            }
         }
     }
 
@@ -257,7 +263,7 @@ impl TimeManager {
     }
 
     pub fn check_for_forced_move(&self, depth: Depth) -> bool {
-        const FORCED_MOVE_BREAK_DEPTH: Depth = Depth::new(10);
+        const FORCED_MOVE_BREAK_DEPTH: Depth = Depth::new(8);
         depth > FORCED_MOVE_BREAK_DEPTH && !self.found_forced_move && self.in_game()
     }
 

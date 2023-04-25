@@ -267,7 +267,7 @@ impl Board {
 
                 if MAIN_THREAD && info.time_manager.check_for_forced_move(depth) {
                     let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth - 2);
                     info.seldepth = saved_seldepth;
 
                     if forced {
