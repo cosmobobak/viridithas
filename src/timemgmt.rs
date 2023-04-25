@@ -8,7 +8,7 @@ use crate::{
     board::evaluation::{is_mate_score, mate_in},
     chessmove::Move,
     definitions::depth::Depth,
-    search::{parameters::SearchParams, PVariation},
+    search::PVariation,
     transpositiontable::Bound,
 };
 
@@ -29,9 +29,7 @@ pub enum SearchLimit {
         their_clock: u64,
         our_inc: u64,
         their_inc: u64,
-        moves_to_go: u64,
-        max_time_window: u64,
-        time_window: u64,
+        moves_to_go: Option<u64>,
     },
 }
 
@@ -53,17 +51,16 @@ impl SearchLimit {
         our_clock: u64,
         moves_to_go: Option<u64>,
         our_inc: u64,
-        config: &SearchParams,
     ) -> (u64, u64) {
         let max_time = our_clock.saturating_sub(MOVE_OVERHEAD);
         if let Some(moves_to_go) = moves_to_go {
-            let divisor = moves_to_go.clamp(2, config.search_time_fraction);
+            let divisor = moves_to_go.clamp(2, 26);
             let computed_time_window = our_clock / divisor;
             let time_window = computed_time_window.min(max_time);
             let max_time_window = (time_window * 5 / 2).min(max_time);
             return (time_window, max_time_window);
         }
-        let computed_time_window = our_clock / config.search_time_fraction + our_inc / 2 - 10;
+        let computed_time_window = our_clock / 26 + our_inc / 2 - 10;
         let time_window = computed_time_window.min(max_time);
         let max_time_window = (time_window * 5 / 2).min(max_time);
         (time_window, max_time_window)
@@ -124,6 +121,13 @@ impl TimeManager {
         self.failed_low = false;
         self.mate_counter = 0;
         self.found_forced_move = false;
+
+        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
+            let (time_window, max_time_window) =
+                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            self.max_time = Duration::from_millis(max_time_window);
+            self.opt_time = Duration::from_millis(time_window);
+        }
     }
 
     pub fn check_up(&mut self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
@@ -138,39 +142,31 @@ impl TimeManager {
                 }
                 past_limit
             }
-            SearchLimit::Time(time_window)
-            | SearchLimit::Dynamic { time_window, .. }
-            | SearchLimit::TimeOrCorrectMoves(time_window, _) => {
+            SearchLimit::Time(millis) | SearchLimit::TimeOrCorrectMoves(millis, _) => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
                 let elapsed_millis = elapsed.as_millis() as u64;
-                let past_limit = elapsed_millis >= time_window;
+                let past_limit = elapsed_millis >= millis;
                 if past_limit {
                     stopped.store(true, Ordering::SeqCst);
                 }
                 past_limit
             }
+            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.max_time,
         }
     }
 
     /// If we have used enough time that stopping after finishing a depth would be good here.
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
-            SearchLimit::Dynamic { time_window, .. } => {
-                let elapsed = self.start_time.elapsed();
-                // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
-                #[allow(clippy::cast_possible_truncation)]
-                let elapsed_millis = elapsed.as_millis() as u64;
-                let optimistic_time_window = time_window * 6 / 10;
-                elapsed_millis >= optimistic_time_window
-            }
+            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
             _ => false,
         }
     }
 
     pub fn time_since_start(&self) -> Duration {
-        Instant::now().checked_duration_since(self.start_time).unwrap_or_default()
+        self.start_time.elapsed()
     }
 
     pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {

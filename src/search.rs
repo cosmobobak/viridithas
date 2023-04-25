@@ -76,7 +76,6 @@ const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
 const PROBCUT_REDUCTION: Depth = Depth::new(4);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
-const SEARCH_TIME_FRACTION: u64 = 26;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 

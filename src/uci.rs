@@ -201,17 +201,12 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        // let moves_to_go = moves_to_go.unwrap_or_else(|| pos.predicted_moves_left());
-        let (time_window, max_time_window) =
-            SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, &info.search_params);
         info.time_manager.limit = SearchLimit::Dynamic {
             our_clock,
             their_clock,
             our_inc,
             their_inc,
-            moves_to_go: moves_to_go.unwrap_or_else(|| pos.predicted_moves_left()),
-            max_time_window,
-            time_window,
+            moves_to_go,
         };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(UciError::InvalidFormat(
