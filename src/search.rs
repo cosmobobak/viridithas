@@ -189,12 +189,10 @@ impl Board {
     ) {
         let d_move = self.default_move(tt, t);
         let mut aw = AspirationWindow::infinite();
-        let mut mate_counter = 0;
-        let mut forcing_time_reduction = false;
-        let mut fail_increment = false;
         let mut pv = PVariation::default();
         let max_depth = info.time_manager.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
+        info.time_manager.reset_for_id();
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
@@ -268,17 +266,16 @@ impl Board {
                     break 'deepening;
                 }
 
-                let mut forced = false;
                 if MAIN_THREAD && info.time_manager.check_for_forced_move(depth) {
                     let saved_seldepth = info.seldepth;
-                    forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
+                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth);
                     info.seldepth = saved_seldepth;
 
-                    if let ControlFlow::Break(_) =
-                        info.time_manager.report_forced_move(self, depth, tt, t, bestmove, score)
-                    {
-                        info.stopped.store(true, Ordering::SeqCst);
-                        break 'deepening;
+                    if forced {
+                        if let ControlFlow::Break(_) = info.time_manager.report_forced_move() {
+                            info.stopped.store(true, Ordering::SeqCst);
+                            break 'deepening;
+                        }
                     }
                 }
 

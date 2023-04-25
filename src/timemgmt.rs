@@ -5,15 +5,11 @@ use std::{
 };
 
 use crate::{
-    board::{
-        evaluation::{is_mate_score, mate_in},
-        Board,
-    },
+    board::evaluation::{is_mate_score, mate_in},
     chessmove::Move,
     definitions::depth::Depth,
     search::{parameters::SearchParams, PVariation},
-    threadlocal::ThreadData,
-    transpositiontable::{Bound, TTView},
+    transpositiontable::Bound,
 };
 
 const MOVE_OVERHEAD: u64 = 10;
@@ -121,6 +117,15 @@ impl Default for TimeManager {
 }
 
 impl TimeManager {
+    pub fn reset_for_id(&mut self) {
+        self.prev_score = 0;
+        self.prev_move = Move::NULL;
+        self.stability = 0;
+        self.failed_low = false;
+        self.mate_counter = 0;
+        self.found_forced_move = false;
+    }
+
     pub fn check_up(&mut self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
         match self.limit {
             SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
@@ -246,20 +251,12 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    pub fn report_forced_move(
-        &mut self,
-        board: &mut Board,
-        depth: Depth,
-        tt: TTView,
-        t: &mut ThreadData,
-        bestmove: Move,
-        score: i32,
-    ) -> ControlFlow<()> {
+    pub fn report_forced_move(&mut self) -> ControlFlow<()> {
         assert!(!self.found_forced_move);
         self.found_forced_move = true;
         // reduce thinking time by 75%
-        self.max_time = self.max_time / 4;
-        self.opt_time = self.opt_time / 4;
+        self.max_time /= 4;
+        self.opt_time /= 4;
         ControlFlow::Continue(())
     }
 
