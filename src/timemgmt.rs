@@ -9,6 +9,7 @@ use crate::{
     chessmove::Move,
     definitions::depth::Depth,
     search::PVariation,
+    transpositiontable::Bound,
 };
 
 const MOVE_OVERHEAD: u64 = 10;
@@ -102,6 +103,8 @@ pub struct TimeManager {
     pub mate_counter: usize,
     /// Whether we have found a forced move.
     pub found_forced_move: bool,
+    /// The last set of multiplicative factors.
+    pub last_factors: [f64; 3],
 }
 
 impl Default for TimeManager {
@@ -118,6 +121,7 @@ impl Default for TimeManager {
             failed_low: 0,
             mate_counter: 0,
             found_forced_move: false,
+            last_factors: [1.0, 1.0, 1.0],
         }
     }
 }
@@ -130,6 +134,7 @@ impl TimeManager {
         self.failed_low = 0;
         self.mate_counter = 0;
         self.found_forced_move = false;
+        self.last_factors = [1.0, 1.0, 1.0];
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
             let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
@@ -187,6 +192,36 @@ impl TimeManager {
 
     pub fn time_since_start(&self) -> Duration {
         self.start_time.elapsed()
+    }
+
+    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
+        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
+        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
+            if depth >= FAIL_LOW_UPDATE_THRESHOLD
+                && bound == Bound::Upper
+                && self.failed_low < 2
+            {
+                self.failed_low += 1;
+
+                let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+                let max_time = Duration::from_millis(max_time);
+                let hard_time = Duration::from_millis(hard_time);
+                let opt_time = Duration::from_millis(opt_time);
+
+                let stability_multiplier = self.last_factors[0];
+                let score_differential_multiplier = self.last_factors[1];
+                // calculate the failed low multiplier
+                let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+
+                let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
+
+                let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
+                let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
+
+                self.hard_time = hard_time.min(max_time);
+                self.opt_time = opt_time.min(max_time);
+            }
+        }
     }
 
     pub const fn is_test_suite(&self) -> bool {
@@ -325,14 +360,22 @@ impl TimeManager {
 
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
             let score_differential_multiplier = Self::score_differential_multiplier(eval - self.prev_score);
+            // retain time added by windows that failed low
+            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
-            let multiplier = stability_multiplier * score_differential_multiplier;
+            let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
 
             self.hard_time = hard_time.min(max_time);
             self.opt_time = opt_time.min(max_time);
+
+            self.last_factors = [
+                stability_multiplier,
+                score_differential_multiplier,
+                failed_low_multiplier,
+            ];
         }
 
         self.prev_move = best_move;
