@@ -265,15 +265,14 @@ impl Board {
                     break 'deepening;
                 }
 
-                if MAIN_THREAD && info.time_manager.check_for_forced_move(depth) {
-                    let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced::<200>(tt, info, t, bestmove, score, depth - 2);
-                    info.seldepth = saved_seldepth;
+                if MAIN_THREAD {
+                    if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
+                        let saved_seldepth = info.seldepth;
+                        let forced = self.is_forced(margin, tt, info, t, bestmove, score, depth - 2);
+                        info.seldepth = saved_seldepth;
 
-                    if forced {
-                        if let ControlFlow::Break(_) = info.time_manager.report_forced_move() {
-                            info.stopped.store(true, Ordering::SeqCst);
-                            break 'deepening;
+                        if forced {
+                            info.time_manager.report_forced_move();
                         }
                     }
                 }
@@ -1088,8 +1087,9 @@ impl Board {
     /// Test if a move is *forced* - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position,
     /// by a margin of at least `MARGIN`. (typically ~200cp).
-    pub fn is_forced<const MARGIN: i32>(
+    pub fn is_forced(
         &mut self,
+        margin: i32,
         tt: TTView,
         info: &mut SearchInfo,
         t: &mut ThreadData,
@@ -1097,7 +1097,7 @@ impl Board {
         value: i32,
         depth: Depth,
     ) -> bool {
-        let r_beta = (value - MARGIN).max(-MATE_SCORE);
+        let r_beta = (value - margin).max(-MATE_SCORE);
         let r_depth = (depth - 1) / 2;
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;

@@ -260,18 +260,28 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    pub fn report_forced_move(&mut self) -> ControlFlow<()> {
+    pub fn report_forced_move(&mut self) {
         assert!(!self.found_forced_move);
         self.found_forced_move = true;
         // reduce thinking time by 75%
         self.hard_time /= 4;
         self.opt_time /= 4;
-        ControlFlow::Continue(())
     }
 
-    pub fn check_for_forced_move(&self, depth: Depth) -> bool {
-        const FORCED_MOVE_BREAK_DEPTH: Depth = Depth::new(10);
-        depth > FORCED_MOVE_BREAK_DEPTH && !self.found_forced_move && self.in_game()
+    pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
+        const SLIGHTLY_FORCED: Depth = Depth::new(12);
+        const VERY_FORCED: Depth = Depth::new(8);
+        if !self.found_forced_move && self.in_game() {
+            if depth >= SLIGHTLY_FORCED {
+                Some(170)
+            } else if depth >= VERY_FORCED {
+                Some(400)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     pub fn notify_one_legal_move(&mut self) {
