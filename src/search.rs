@@ -34,7 +34,7 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     transpositiontable::{Bound, ProbeResult, TTView},
-    uci::{self, PRETTY_PRINT}, timemgmt::SearchLimit,
+    uci::{self, PRETTY_PRINT},
 };
 
 use self::parameters::SearchParams;
@@ -90,23 +90,23 @@ impl Board {
     ) -> (i32, Move) {
         self.reset_everything_for_root_search(info, thread_headers);
 
-        if info.time_manager.in_game() {
-            let SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go } = info.time_manager.limit else {
-                panic!("in_game() is true but limit is not Dynamic");
-            };
-            let moves_to_go = moves_to_go.unwrap_or(40);
-            let max_time_window = info.time_manager.hard_time.as_millis() as u64;
-            let time_window = info.time_manager.opt_time.as_millis() as u64;
-            let abs_time = info.time_manager.max_time.as_millis() as u64;
-            println!("info string our_clock: {our_clock}, their_clock: {their_clock}, our_inc: {our_inc}, their_inc: {their_inc}, moves_to_go: {moves_to_go}, max_time_window: {max_time_window}, time_window: {time_window}, hardlimit: {abs_time}");
-        }
+        // if info.time_manager.in_game() {
+        //     let SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go } = info.time_manager.limit else {
+        //         panic!("in_game() is true but limit is not Dynamic");
+        //     };
+        //     let moves_to_go = moves_to_go.unwrap_or(40);
+        //     let max_time_window = info.time_manager.hard_time.as_millis() as u64;
+        //     let time_window = info.time_manager.opt_time.as_millis() as u64;
+        //     let abs_time = info.time_manager.max_time.as_millis() as u64;
+        //     println!("info string our_clock: {our_clock}, their_clock: {their_clock}, our_inc: {our_inc}, their_inc: {their_inc}, moves_to_go: {moves_to_go}, max_time_window: {max_time_window}, time_window: {time_window}, hardlimit: {abs_time}");
+        // }
 
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
             return (0, Move::NULL);
         }
         if legal_moves.len() == 1 {
-            println!("info string only legal move is {}", legal_moves[0]);
+            // println!("info string only legal move is {}", legal_moves[0]);
             info.time_manager.notify_one_legal_move();
         }
 
@@ -211,7 +211,7 @@ impl Board {
                 && info.time_manager.in_game()
                 && info.time_manager.is_past_opt_time()
             {
-                println!("info string optimal time reached, stopping search early");
+                // println!("info string optimal time reached, stopping search early");
                 break 'deepening;
             }
             let depth = Depth::new(d.try_into().unwrap());
@@ -221,7 +221,7 @@ impl Board {
                 pv.score =
                     self.root_search::<USE_NNUE>(tt, &mut pv, info, t, depth, aw.alpha, aw.beta);
                 if info.check_up() {
-                    println!("info string search interrupted by hard time limit");
+                    // println!("info string search interrupted by hard time limit");
                     break 'deepening;
                 }
                 let nodes = info.nodes - nodes_before;
@@ -267,7 +267,7 @@ impl Board {
                 if let ControlFlow::Break(_) =
                     info.time_manager.solved_breaker::<MAIN_THREAD>(bestmove, pv.score, d)
                 {
-                    println!("info string position solved");
+                    // println!("info string position solved");
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
@@ -275,7 +275,7 @@ impl Board {
                 if let ControlFlow::Break(_) =
                     info.time_manager.mate_found_breaker::<MAIN_THREAD>(&pv, depth)
                 {
-                    println!("info string mate found");
+                    // println!("info string mate found");
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
@@ -287,14 +287,14 @@ impl Board {
                         info.seldepth = saved_seldepth;
 
                         if forced {
-                            println!("info string forcing move found, reducing time window");
+                            // println!("info string forcing move found, reducing time window");
                             info.time_manager.report_forced_move(depth);
                         }
                     }
                 }
 
                 if info.stopped() {
-                    println!("info string search interrupted by unknown reason");
+                    // println!("info string search interrupted by unknown reason");
                     break 'deepening;
                 }
 
