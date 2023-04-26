@@ -176,7 +176,12 @@ impl TimeManager {
     /// If we have used enough time that stopping after finishing a depth would be good here.
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
-            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
+            SearchLimit::Dynamic { .. } => {
+                let elapsed_millis = self.time_since_start().as_millis() as u64;
+                let optimistic_time_window = self.opt_time.as_millis() as u64;
+                println!("info string checking if we are past opt time: {elapsed_millis} >= {optimistic_time_window}");
+                self.time_since_start() >= self.opt_time
+            }
             _ => false,
         }
     }
