@@ -9,7 +9,6 @@ use crate::{
     chessmove::Move,
     definitions::depth::Depth,
     search::PVariation,
-    transpositiontable::Bound,
 };
 
 const MOVE_OVERHEAD: u64 = 10;
@@ -188,24 +187,6 @@ impl TimeManager {
 
     pub fn time_since_start(&self) -> Duration {
         self.start_time.elapsed()
-    }
-
-    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
-        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
-        if self.in_game()
-            && depth >= FAIL_LOW_UPDATE_THRESHOLD
-            && bound == Bound::Upper
-            && self.failed_low < 2
-        {
-            // println!("info string aspiration failed low, adding 25% to time limit");
-            self.failed_low += 1;
-            // add 25% to the time limit
-            self.hard_time += self.hard_time * 25 / 100;
-            self.opt_time += self.opt_time * 25 / 100;
-            // clamp to under the maximum time limit
-            self.hard_time = self.hard_time.min(self.max_time);
-            self.opt_time = self.opt_time.min(self.max_time);
-        }
     }
 
     pub const fn is_test_suite(&self) -> bool {
