@@ -97,8 +97,8 @@ pub struct TimeManager {
     pub prev_move: Move,
     /// The number of ID iterations for which the best move remained.
     pub stability: usize,
-    /// Whether the search has failed low at appreciable depth.
-    pub failed_low: bool,
+    /// Number of times that we have failed low.
+    pub failed_low: i32,
     /// Number of ID iterations that a mate score has remained.
     pub mate_counter: usize,
     /// Whether we have found a forced move.
@@ -116,7 +116,7 @@ impl Default for TimeManager {
             prev_score: 0,
             prev_move: Move::NULL,
             stability: 0,
-            failed_low: false,
+            failed_low: 0,
             mate_counter: 0,
             found_forced_move: false,
         }
@@ -128,7 +128,7 @@ impl TimeManager {
         self.prev_score = 0;
         self.prev_move = Move::NULL;
         self.stability = 0;
-        self.failed_low = false;
+        self.failed_low = 0;
         self.mate_counter = 0;
         self.found_forced_move = false;
 
@@ -177,9 +177,9 @@ impl TimeManager {
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => {
-                let elapsed_millis = self.time_since_start().as_millis() as u64;
-                let optimistic_time_window = self.opt_time.as_millis() as u64;
-                println!("info string checking if we are past opt time: {elapsed_millis} >= {optimistic_time_window}");
+                // let elapsed_millis = self.time_since_start().as_millis() as u64;
+                // let optimistic_time_window = self.opt_time.as_millis() as u64;
+                // println!("info string checking if we are past opt time: {elapsed_millis} >= {optimistic_time_window}");
                 self.time_since_start() >= self.opt_time
             }
             _ => false,
@@ -195,13 +195,13 @@ impl TimeManager {
         if self.in_game()
             && depth >= FAIL_LOW_UPDATE_THRESHOLD
             && bound == Bound::Upper
-            && !self.failed_low
+            && self.failed_low < 2
         {
-            println!("info string aspiration failed low, adding 50% to time limit");
-            self.failed_low = true;
-            // add 50% to the time limit
-            self.hard_time += self.hard_time / 2;
-            self.opt_time += self.opt_time / 2;
+            // println!("info string aspiration failed low, adding 25% to time limit");
+            self.failed_low += 1;
+            // add 25% to the time limit
+            self.hard_time += self.hard_time * 25 / 100;
+            self.opt_time += self.opt_time * 25 / 100;
             // clamp to under the maximum time limit
             self.hard_time = self.hard_time.min(self.max_time);
             self.opt_time = self.opt_time.min(self.max_time);
