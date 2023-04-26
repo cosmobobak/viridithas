@@ -77,6 +77,8 @@ const PROBCUT_REDUCTION: Depth = Depth::new(4);
 const LMR_BASE: f64 = 77.0;
 const LMR_DIVISION: f64 = 236.0;
 
+const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
+
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
 impl Board {
@@ -306,6 +308,10 @@ impl Board {
                 aw = AspirationWindow::from_last_score(score);
             } else {
                 aw = AspirationWindow::infinite();
+            }
+
+            if MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+                info.time_manager.report_completed_depth(depth, pv.score, t.pvs[t.completed].line[0]);
             }
         }
     }
