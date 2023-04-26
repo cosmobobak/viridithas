@@ -52,7 +52,7 @@ impl SearchLimit {
         our_clock: u64,
         moves_to_go: Option<u64>,
         our_inc: u64,
-    ) -> (u64, u64) {
+    ) -> (u64, u64, u64) {
         // The absolute maximum time we could spend without losing on the clock:
         let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
 
@@ -61,16 +61,16 @@ impl SearchLimit {
             // Use more time if we have fewer moves to go, but not more than DEFAULT_MOVES_TO_GO.
             let divisor = moves_to_go.clamp(2, DEFAULT_MOVES_TO_GO);
             let computed_time_window = our_clock / divisor;
-            let time_window = computed_time_window.min(absolute_maximum);
-            let max_time_window = (time_window * 5 / 2).min(absolute_maximum);
-            return (time_window, max_time_window);
+            let hard_time_window = computed_time_window.min(absolute_maximum);
+            let optimal_time_window = hard_time_window * 6 / 10;
+            return (optimal_time_window, hard_time_window, absolute_maximum);
         }
 
         // Otherwise, we use DEFAULT_MOVES_TO_GO.
         let computed_time_window = our_clock / DEFAULT_MOVES_TO_GO + our_inc / 2 - MOVE_OVERHEAD;
-        let time_window = computed_time_window.min(absolute_maximum);
-        let max_time_window = (time_window * 5 / 2).min(absolute_maximum);
-        (time_window, max_time_window)
+        let hard_time_window = computed_time_window.min(absolute_maximum);
+        let optimal_time_window = hard_time_window * 6 / 10;
+        (optimal_time_window, hard_time_window, absolute_maximum)
     }
 
     #[cfg(test)]
@@ -85,8 +85,10 @@ pub struct TimeManager {
     pub start_time: Instant,
     /// The limit on the search.
     pub limit: SearchLimit,
-    /// The maximum time that the search may last for.
+    /// The maximum time that the search may last for without losing on the clock.
     pub max_time: Duration,
+    /// The time after which search will be halted even mid-search.
+    pub hard_time: Duration,
     /// The time after which we will stop upon completing a depth.
     pub opt_time: Duration,
     /// The value from the last iteration of search.
@@ -109,6 +111,7 @@ impl Default for TimeManager {
             start_time: Instant::now(),
             limit: SearchLimit::Infinite,
             max_time: Duration::from_secs(0),
+            hard_time: Duration::from_secs(0),
             opt_time: Duration::from_secs(0),
             prev_score: 0,
             prev_move: Move::NULL,
@@ -130,10 +133,10 @@ impl TimeManager {
         self.found_forced_move = false;
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
-            let (time_window, max_time_window) =
-                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
-            self.max_time = Duration::from_millis(max_time_window);
-            self.opt_time = Duration::from_millis(time_window);
+            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            self.max_time = Duration::from_millis(max_time);
+            self.hard_time = Duration::from_millis(hard_time);
+            self.opt_time = Duration::from_millis(opt_time);
         }
     }
 
@@ -161,7 +164,7 @@ impl TimeManager {
                 past_limit
             }
             SearchLimit::Dynamic { .. } => {
-                let past_limit = self.time_since_start() >= self.max_time;
+                let past_limit = self.time_since_start() >= self.hard_time;
                 if past_limit {
                     stopped.store(true, Ordering::SeqCst);
                 }
@@ -191,14 +194,11 @@ impl TimeManager {
         {
             self.failed_low = true;
             // add 50% to the time limit
-            self.max_time += self.max_time / 2;
+            self.hard_time += self.hard_time / 2;
             self.opt_time += self.opt_time / 2;
-            // clamp to under (clock - move overhead)
-            let SearchLimit::Dynamic { our_clock, .. } = self.limit else { unreachable!() };
-            let hard_time_limit = our_clock.saturating_sub(MOVE_OVERHEAD);
-            let hard_time_limit = Duration::from_millis(hard_time_limit);
-            self.max_time = self.max_time.min(hard_time_limit);
-            self.opt_time = self.opt_time.min(hard_time_limit);
+            // clamp to under the maximum time limit
+            self.hard_time = self.hard_time.min(self.max_time);
+            self.opt_time = self.opt_time.min(self.max_time);
         }
     }
 
@@ -264,13 +264,13 @@ impl TimeManager {
         assert!(!self.found_forced_move);
         self.found_forced_move = true;
         // reduce thinking time by 75%
-        self.max_time /= 4;
+        self.hard_time /= 4;
         self.opt_time /= 4;
         ControlFlow::Continue(())
     }
 
     pub fn check_for_forced_move(&self, depth: Depth) -> bool {
-        const FORCED_MOVE_BREAK_DEPTH: Depth = Depth::new(8);
+        const FORCED_MOVE_BREAK_DEPTH: Depth = Depth::new(10);
         depth > FORCED_MOVE_BREAK_DEPTH && !self.found_forced_move && self.in_game()
     }
 
