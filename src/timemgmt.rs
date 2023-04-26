@@ -192,6 +192,7 @@ impl TimeManager {
             && bound == Bound::Upper
             && !self.failed_low
         {
+            println!("info string aspiration failed low, adding 50% to time limit");
             self.failed_low = true;
             // add 50% to the time limit
             self.hard_time += self.hard_time / 2;
