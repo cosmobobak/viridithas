@@ -211,11 +211,11 @@ impl TimeManager {
             let opt_time = Duration::from_millis(opt_time);
 
             let stability_multiplier = self.last_factors[0];
-            let score_differential_multiplier = self.last_factors[1];
+            let _score_differential_multiplier = self.last_factors[1];
             // calculate the failed low multiplier
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
-            let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
+            let multiplier = stability_multiplier * failed_low_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
@@ -364,7 +364,7 @@ impl TimeManager {
             // retain time added by windows that failed low
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
-            let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
+            let multiplier = stability_multiplier * failed_low_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
