@@ -13,7 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
-const DEFAULT_MOVES_TO_GO: u64 = 40;
+const DEFAULT_MOVES_TO_GO: u64 = 32;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -342,7 +342,7 @@ impl TimeManager {
         // Clamp stability to the range [0, 4], and convert it to a time scale in
         // the range [0.75, 2.50].
         let stability = stability.min(4);
-        
+
         VALUES[stability]
     }
 
