@@ -13,7 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
-const DEFAULT_MOVES_TO_GO: u64 = 32;
+const DEFAULT_MOVES_TO_GO: u64 = 26;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
