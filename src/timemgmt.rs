@@ -320,7 +320,7 @@ impl TimeManager {
 
     fn best_move_stability_multiplier(stability: usize) -> f64 {
         // approach to this is adapted from Stash.
-        const VALUES: [f64; 5] = [0.75, 0.8, 0.9, 1.20, 2.50];
+        const VALUES: [f64; 5] = [2.50, 1.20, 0.90, 0.80, 0.75];
 
         // Clamp stability to the range [0, 4], and convert it to a time scale in
         // the range [0.75, 2.50].
