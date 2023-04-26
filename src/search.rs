@@ -203,7 +203,6 @@ impl Board {
         let mut pv = PVariation::default();
         let max_depth = info.time_manager.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
-        info.time_manager.reset_for_id();
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             // consider stopping early if we've neatly completed a depth:
