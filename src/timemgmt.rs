@@ -300,4 +300,61 @@ impl TimeManager {
         self.opt_time = Duration::from_millis(0);
         self.found_forced_move = true;
     }
+
+    fn score_differential_multiplier(delta_s: i32) -> f64 {
+        // approach to this is adapted from Stash.
+        const BOUND: i32 = 100;
+
+        // Clamp score to the range [-100, 100], and convert it to a time scale in
+        // the range [0.5, 2.0].
+        // Examples:
+        // -100 -> 2.000x time
+        //  -50 -> 1.414x time
+        //    0 -> 1.000x time
+        //  +50 -> 0.707x time
+        // +100 -> 0.500x time
+        let s = f64::from(delta_s.clamp(-BOUND, BOUND));
+        
+        (s / f64::from(BOUND)).exp2()
+    }
+
+    fn best_move_stability_multiplier(stability: usize) -> f64 {
+        // approach to this is adapted from Stash.
+        const VALUES: [f64; 5] = [0.75, 0.8, 0.9, 1.20, 2.50];
+
+        // Clamp stability to the range [0, 4], and convert it to a time scale in
+        // the range [0.75, 2.50].
+        let stability = stability.min(4);
+        
+        VALUES[stability]
+    }
+
+    pub fn report_completed_depth(&mut self, _depth: Depth, eval: i32, best_move: Move) {
+        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
+            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let max_time = Duration::from_millis(max_time);
+            let hard_time = Duration::from_millis(hard_time);
+            let opt_time = Duration::from_millis(opt_time);
+
+            if best_move == self.prev_move {
+                self.stability += 1;
+            } else {
+                self.stability = 0;
+            }
+
+            let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
+            let score_differential_multiplier = Self::score_differential_multiplier(eval - self.prev_score);
+
+            let multiplier = stability_multiplier * score_differential_multiplier;
+
+            let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
+            let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
+
+            self.hard_time = hard_time.min(max_time);
+            self.opt_time = opt_time.min(max_time);
+        }
+
+        self.prev_move = best_move;
+        self.prev_score = eval;
+    }
 }
