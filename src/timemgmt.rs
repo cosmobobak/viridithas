@@ -13,7 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
-const DEFAULT_MOVES_TO_GO: u64 = 26;
+const DEFAULT_MOVES_TO_GO: u64 = 40;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
@@ -196,31 +196,32 @@ impl TimeManager {
 
     pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
         const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
-        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
-            if depth >= FAIL_LOW_UPDATE_THRESHOLD
-                && bound == Bound::Upper
-                && self.failed_low < 2
-            {
-                self.failed_low += 1;
+        let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit else {
+            return;
+        };
+        if depth >= FAIL_LOW_UPDATE_THRESHOLD
+            && bound == Bound::Upper
+            && self.failed_low < 2
+        {
+            self.failed_low += 1;
 
-                let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
-                let max_time = Duration::from_millis(max_time);
-                let hard_time = Duration::from_millis(hard_time);
-                let opt_time = Duration::from_millis(opt_time);
+            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let max_time = Duration::from_millis(max_time);
+            let hard_time = Duration::from_millis(hard_time);
+            let opt_time = Duration::from_millis(opt_time);
 
-                let stability_multiplier = self.last_factors[0];
-                let score_differential_multiplier = self.last_factors[1];
-                // calculate the failed low multiplier
-                let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let stability_multiplier = self.last_factors[0];
+            let score_differential_multiplier = self.last_factors[1];
+            // calculate the failed low multiplier
+            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
-                let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
+            let multiplier = stability_multiplier * score_differential_multiplier * failed_low_multiplier;
 
-                let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
-                let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
+            let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
+            let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
 
-                self.hard_time = hard_time.min(max_time);
-                self.opt_time = opt_time.min(max_time);
-            }
+            self.hard_time = hard_time.min(max_time);
+            self.opt_time = opt_time.min(max_time);
         }
     }
 
