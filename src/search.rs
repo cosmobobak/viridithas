@@ -283,12 +283,12 @@ impl Board {
                 if MAIN_THREAD {
                     if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
                         let saved_seldepth = info.seldepth;
-                        let forced = self.is_forced(margin, tt, info, t, bestmove, score, depth - 2);
+                        let forced = self.is_forced(margin, tt, info, t, bestmove, score, (depth - 1) / 2);
                         info.seldepth = saved_seldepth;
 
                         if forced {
                             println!("info string forcing move found, reducing time window");
-                            info.time_manager.report_forced_move();
+                            info.time_manager.report_forced_move(depth);
                         }
                     }
                 }

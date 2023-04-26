@@ -191,7 +191,7 @@ impl TimeManager {
     }
 
     pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
-        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(10);
+        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
         if self.in_game()
             && depth >= FAIL_LOW_UPDATE_THRESHOLD
             && bound == Bound::Upper
@@ -266,21 +266,27 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    pub fn report_forced_move(&mut self) {
+    const SLIGHTLY_FORCED: Depth = Depth::new(12);
+    const VERY_FORCED: Depth = Depth::new(8);
+    pub fn report_forced_move(&mut self, depth: Depth) {
         assert!(!self.found_forced_move);
         self.found_forced_move = true;
-        // reduce thinking time by 75%
-        self.hard_time /= 4;
-        self.opt_time /= 4;
+        if depth >= Self::SLIGHTLY_FORCED {
+            // reduce thinking time by 50%
+            self.hard_time /= 2;
+            self.opt_time /= 2;
+        } else /* if depth >= Self::VERY_FORCED */ {
+            // reduce thinking time by 75%
+            self.hard_time /= 4;
+            self.opt_time /= 4;
+        }
     }
 
     pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
-        const SLIGHTLY_FORCED: Depth = Depth::new(12);
-        const VERY_FORCED: Depth = Depth::new(8);
         if !self.found_forced_move && self.in_game() {
-            if depth >= SLIGHTLY_FORCED {
+            if depth >= Self::SLIGHTLY_FORCED {
                 Some(170)
-            } else if depth >= VERY_FORCED {
+            } else if depth >= Self::VERY_FORCED {
                 Some(400)
             } else {
                 None
