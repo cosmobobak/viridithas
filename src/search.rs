@@ -235,6 +235,9 @@ impl Board {
                         self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down(pv.score);
+                    if MAIN_THREAD {
+                        info.time_manager.report_aspiration_fail(depth, Bound::Upper);
+                    }
                     // search failed low, so we might have to
                     // revert a fail-high pv update
                     t.revert_best_line();
@@ -248,6 +251,9 @@ impl Board {
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up(pv.score);
+                    if MAIN_THREAD {
+                        info.time_manager.report_aspiration_fail(depth, Bound::Lower);
+                    }
                     continue;
                 }
 
