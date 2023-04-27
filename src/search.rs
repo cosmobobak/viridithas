@@ -296,7 +296,7 @@ impl Board {
                 info.time_manager.report_completed_depth(depth, pv.score, t.pvs[t.completed].line[0]);
             }
 
-            if MAIN_THREAD && info.check_up() {
+            if info.check_up() {
                 break 'deepening;
             }
         }
