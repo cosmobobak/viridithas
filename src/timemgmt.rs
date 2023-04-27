@@ -104,7 +104,7 @@ pub struct TimeManager {
     /// Whether we have found a forced move.
     pub found_forced_move: bool,
     /// The last set of multiplicative factors.
-    pub last_factors: [f64; 3],
+    pub last_factors: [f64; 2],
 }
 
 impl Default for TimeManager {
@@ -121,7 +121,7 @@ impl Default for TimeManager {
             failed_low: 0,
             mate_counter: 0,
             found_forced_move: false,
-            last_factors: [1.0, 1.0, 1.0],
+            last_factors: [1.0, 1.0],
         }
     }
 }
@@ -134,7 +134,7 @@ impl TimeManager {
         self.failed_low = 0;
         self.mate_counter = 0;
         self.found_forced_move = false;
-        self.last_factors = [1.0, 1.0, 1.0];
+        self.last_factors = [1.0, 1.0];
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
             let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
@@ -181,9 +181,6 @@ impl TimeManager {
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => {
-                // let elapsed_millis = self.time_since_start().as_millis() as u64;
-                // let optimistic_time_window = self.opt_time.as_millis() as u64;
-                // println!("info string checking if we are past opt time: {elapsed_millis} >= {optimistic_time_window}");
                 self.time_since_start() >= self.opt_time
             }
             _ => false,
@@ -211,7 +208,6 @@ impl TimeManager {
             let opt_time = Duration::from_millis(opt_time);
 
             let stability_multiplier = self.last_factors[0];
-            let _score_differential_multiplier = self.last_factors[1];
             // calculate the failed low multiplier
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
@@ -222,6 +218,8 @@ impl TimeManager {
 
             self.hard_time = hard_time.min(max_time);
             self.opt_time = opt_time.min(max_time);
+
+            self.last_factors[1] = failed_low_multiplier;
         }
     }
 
@@ -318,23 +316,6 @@ impl TimeManager {
         self.found_forced_move = true;
     }
 
-    fn score_differential_multiplier(delta_s: i32) -> f64 {
-        // approach to this is adapted from Stash.
-        const BOUND: i32 = 100;
-
-        // Clamp score to the range [-100, 100], and convert it to a time scale in
-        // the range [0.5, 2.0].
-        // Examples:
-        // -100 -> 2.000x time
-        //  -50 -> 1.414x time
-        //    0 -> 1.000x time
-        //  +50 -> 0.707x time
-        // +100 -> 0.500x time
-        let s = f64::from(delta_s.clamp(-BOUND, BOUND));
-        
-        (s / f64::from(BOUND)).exp2()
-    }
-
     fn best_move_stability_multiplier(stability: usize) -> f64 {
         // approach to this is adapted from Stash.
         const VALUES: [f64; 5] = [2.50, 1.20, 0.90, 0.80, 0.75];
@@ -360,7 +341,6 @@ impl TimeManager {
             }
 
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
-            let score_differential_multiplier = Self::score_differential_multiplier(eval - self.prev_score);
             // retain time added by windows that failed low
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
 
@@ -374,7 +354,6 @@ impl TimeManager {
 
             self.last_factors = [
                 stability_multiplier,
-                score_differential_multiplier,
                 failed_low_multiplier,
             ];
         }
