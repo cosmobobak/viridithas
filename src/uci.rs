@@ -39,6 +39,20 @@ const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 const UCI_MAX_THREADS: usize = 512;
 const UCI_MAX_MULTIPV: usize = 500;
 
+static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
+pub static QUIT: AtomicBool = AtomicBool::new(false);
+pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
+pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
+pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
+pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
+pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
+pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
+pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
+pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
+pub fn is_multipv() -> bool {
+    MULTI_PV.load(Ordering::SeqCst) > 1
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum UciError {
     ParseOption(String),
@@ -145,7 +159,6 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     Ok(())
 }
 
-pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
 fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
@@ -373,8 +386,6 @@ fn parse_setoption(
     Ok(out)
 }
 
-static KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
-
 fn stdin_reader() -> mpsc::Receiver<String> {
     let (sender, receiver) = mpsc::channel();
     std::thread::Builder::new()
@@ -395,7 +406,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
         if sender.send(cmd.to_owned()).is_err() {
             break;
         }
-        if !KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
+        if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
             break;
         }
         linebuf.clear();
@@ -516,17 +527,6 @@ fn print_uci_response(full: bool) {
     println!("uciok");
 }
 
-pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
-pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
-pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
-pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
-pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
-pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
-pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
-pub fn is_multipv() -> bool {
-    MULTI_PV.load(Ordering::SeqCst) > 1
-}
-
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop(params: EvalParams, global_bench: bool) {
     let mut pos = Board::default();
@@ -596,7 +596,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 Ok(())
             }
             "quit" => {
-                info.quit = true;
+                QUIT.store(true, Ordering::SeqCst);
                 break;
             }
             "ucinewgame" => do_newgame(&mut pos, &tt),
@@ -704,12 +704,12 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             println!("info string {e}");
         }
 
-        if info.quit {
+        if QUIT.load(Ordering::SeqCst) {
             // quit can be set true in parse_go
             break;
         }
     }
-    KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+    STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }
 
 fn bench(

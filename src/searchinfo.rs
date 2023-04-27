@@ -11,7 +11,7 @@ use crate::{
     board::evaluation::{mate_in, parameters::EvalParams},
     chessmove::Move,
     definitions::depth::{Depth, ZERO_PLY},
-    search::{parameters::SearchParams, LMTable},
+    search::{parameters::SearchParams, LMTable}, uci,
 };
 
 #[cfg(feature = "stats")]
@@ -85,8 +85,6 @@ pub struct SearchInfo<'a> {
     pub start_time: Instant,
     /// The number of nodes searched.
     pub nodes: u64,
-    /// Signal to quit the search.
-    pub quit: bool,
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
     /// The highest depth reached (selective depth).
@@ -127,7 +125,6 @@ impl<'a> SearchInfo<'a> {
         let out = Self {
             start_time: Instant::now(),
             nodes: 0,
-            quit: false,
             stopped,
             seldepth: ZERO_PLY,
             stdin_rx: None,
@@ -226,7 +223,7 @@ impl<'a> SearchInfo<'a> {
             self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
             if cmd == "quit" {
-                self.quit = true;
+                uci::QUIT.store(true, Ordering::SeqCst);
             }
             true
         } else {
