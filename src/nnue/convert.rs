@@ -12,7 +12,8 @@ use std::{
 use crate::{
     board::{evaluation::is_game_theoretic_score, Board},
     definitions::{depth::Depth, MEGABYTE},
-    searchinfo::{SearchInfo, SearchLimit},
+    searchinfo::SearchInfo,
+    timemgmt::{SearchLimit, TimeManager},
     threadlocal::ThreadData,
     transpositiontable::TT,
 };
@@ -57,9 +58,13 @@ fn batch_convert<const USE_NNUE: bool>(
         t.nnue.refresh_acc(&pos);
         tt.clear();
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            print_to_stdout: false,
+        let time_manager = TimeManager {
             limit: SearchLimit::Depth(Depth::new(depth)),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo {
+            time_manager,
+            print_to_stdout: false,
             ..SearchInfo::new(&stopped)
         };
         let (score, bm) =

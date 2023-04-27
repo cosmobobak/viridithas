@@ -4,7 +4,8 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     definitions::MEGABYTE,
-    searchinfo::{SearchInfo, SearchLimit},
+    searchinfo::SearchInfo,
+    timemgmt::{SearchLimit, TimeManager},
     threadlocal::ThreadData,
     transpositiontable::TT,
 };
@@ -95,15 +96,19 @@ fn run_on_positions(
             t.nnue.refresh_acc(&board);
         }
         let stopped = AtomicBool::new(false);
-        let mut info = SearchInfo {
-            print_to_stdout: false,
+        let time_manager = TimeManager {
             limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
+            ..TimeManager::default()
+        };
+        let mut info = SearchInfo {
+            time_manager,
+            print_to_stdout: false,
             eval_params: params.clone(),
             ..SearchInfo::new(&stopped)
         };
-        info.start_time = Instant::now();
+        info.time_manager.start_time = Instant::now();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
-        let elapsed = info.start_time.elapsed();
+        let elapsed = info.time_manager.start_time.elapsed();
         let passed = best_moves.contains(&bm);
         let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed {

@@ -1568,28 +1568,6 @@ impl Board {
         Ok(out)
     }
 
-    pub fn predicted_moves_left(&self) -> u64 {
-        #![allow(
-            clippy::cast_precision_loss,
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss
-        )]
-        static WEIGHTS: [f64; 6] = [
-            0.322_629_598_871_821,
-            -0.789_691_260_856_047_8,
-            -0.001_186_089_580_333_777,
-            -0.000_701_857_880_801_681_8,
-            0.002_348_458_515_297_663_4,
-            88.189_977_391_814_35,
-        ];
-        let half_moves_since_game_start = self.ply;
-        let phase = self.phase();
-        let (a, b) = (f64::from(phase), half_moves_since_game_start as f64);
-        let features = [a, b, a * b, a * a, b * b, 1.0];
-        let prediction = WEIGHTS.iter().zip(features.iter()).map(|(w, f)| w * f).sum::<f64>();
-        prediction.round().max(2.0) as u64
-    }
-
     pub fn legal_moves(&mut self) -> Vec<Move> {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
