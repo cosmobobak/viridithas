@@ -201,6 +201,7 @@ impl Board {
                 && info.time_manager.in_game()
                 && info.time_manager.is_past_opt_time()
             {
+                info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
             }
             let depth = Depth::new(d.try_into().unwrap());
