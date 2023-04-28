@@ -270,7 +270,8 @@ impl Board {
                 if MAIN_THREAD {
                     if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
                         let saved_seldepth = info.seldepth;
-                        let forced = self.is_forced(margin, tt, info, t, bestmove, score, (depth - 1) / 2);
+                        let forced =
+                            self.is_forced(margin, tt, info, t, bestmove, score, (depth - 1) / 2);
                         info.seldepth = saved_seldepth;
 
                         if forced {
@@ -294,7 +295,11 @@ impl Board {
             }
 
             if MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
-                info.time_manager.report_completed_depth(depth, pv.score, t.pvs[t.completed].line[0]);
+                info.time_manager.report_completed_depth(
+                    depth,
+                    pv.score,
+                    t.pvs[t.completed].line[0],
+                );
             }
 
             if info.check_up() {
@@ -937,26 +942,29 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                score = -self.zw_search::<NNUE>(
-                    tt,
-                    &mut lpv,
-                    info,
-                    t,
-                    depth + extension - r,
-                    -alpha - 1,
-                    -alpha,
-                );
-                // if we failed, then full window search
-                if score > alpha && score < beta {
-                    // this is a new best move, so it *is* PV.
-                    score = -self.fullwindow_search::<PV, NNUE>(
+                let new_depth = depth + extension - r;
+                score =
+                    -self.zw_search::<NNUE>(tt, &mut lpv, info, t, new_depth, -alpha - 1, -alpha);
+                // if we failed above alpha, and reduced more than one ply,
+                // then we do a zero-window search at full depth.
+                if score > alpha && r > ONE_PLY {
+                    let new_depth = depth + extension - 1;
+                    score = -self.zw_search::<NNUE>(
                         tt,
                         &mut lpv,
                         info,
                         t,
-                        depth + extension - 1,
-                        -beta,
+                        new_depth,
+                        -alpha - 1,
                         -alpha,
+                    );
+                }
+                // if we failed completely, then do full-window search
+                if score > alpha && score < beta {
+                    // this is a new best move, so it *is* PV.
+                    let new_depth = depth + extension - 1;
+                    score = -self.fullwindow_search::<PV, NNUE>(
+                        tt, &mut lpv, info, t, new_depth, -beta, -alpha,
                     );
                 }
             }
