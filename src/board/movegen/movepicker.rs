@@ -66,7 +66,6 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            // If we're in qsearch, we only want to try the TT move if it's a capture:
             if position.is_pseudo_legal(self.tt_move) {
                 return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
             }
