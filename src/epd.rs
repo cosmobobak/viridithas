@@ -114,7 +114,7 @@ fn run_on_positions(
         let failinfo = if passed {
             format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", elapsed.as_secs_f64())
         } else {
-            format!(", program chose {CONTROL_RED}{bm}{CONTROL_RESET}")
+            format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET} program chose {CONTROL_RED}{bm}{CONTROL_RESET}", elapsed.as_secs_f64())
         };
         let move_strings =
             best_moves
