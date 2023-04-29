@@ -187,8 +187,8 @@ NET ID │ general concept                          │ notes
        │      (still haven't made inf work)       │ LLR   | 
        │                                          │ GAMES | 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    56 │ Net 53 using AdamW instead of Adam.      │ ELO   | 
+    56 │ Net 53 using AdamW instead of Adam.      │ ELO   | 10.16 +- 6.37 (95%)
        │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   | 
-       │                                          │ GAMES | 
+       │                                          │ LLR   | 2.97 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES | N: 5816 W: 1568 L: 1398 D: 2850
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
