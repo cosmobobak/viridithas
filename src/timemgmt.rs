@@ -16,6 +16,13 @@ const MOVE_OVERHEAD: u64 = 10;
 const DEFAULT_MOVES_TO_GO: u64 = 26;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
+pub enum ForcedMoveType {
+    Strong,
+    Weak,
+    None,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
     Depth(Depth),
@@ -101,8 +108,8 @@ pub struct TimeManager {
     pub failed_low: i32,
     /// Number of ID iterations that a mate score has remained.
     pub mate_counter: usize,
-    /// Whether we have found a forced move.
-    pub found_forced_move: bool,
+    /// The nature of the forced move (if any)
+    pub found_forced_move: ForcedMoveType,
     /// The last set of multiplicative factors.
     pub last_factors: [f64; 2],
 }
@@ -120,7 +127,7 @@ impl Default for TimeManager {
             stability: 0,
             failed_low: 0,
             mate_counter: 0,
-            found_forced_move: false,
+            found_forced_move: ForcedMoveType::None,
             last_factors: [1.0, 1.0],
         }
     }
@@ -133,7 +140,7 @@ impl TimeManager {
         self.stability = 0;
         self.failed_low = 0;
         self.mate_counter = 0;
-        self.found_forced_move = false;
+        self.found_forced_move = ForcedMoveType::None;
         self.last_factors = [1.0, 1.0];
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
@@ -284,21 +291,22 @@ impl TimeManager {
     const SLIGHTLY_FORCED: Depth = Depth::new(12);
     const VERY_FORCED: Depth = Depth::new(8);
     pub fn report_forced_move(&mut self, depth: Depth) {
-        assert!(!self.found_forced_move);
-        self.found_forced_move = true;
+        assert_eq!(self.found_forced_move, ForcedMoveType::None);
         if depth >= Self::SLIGHTLY_FORCED {
             // reduce thinking time by 50%
             self.hard_time /= 2;
             self.opt_time /= 2;
+            self.found_forced_move = ForcedMoveType::Weak;
         } else /* if depth >= Self::VERY_FORCED */ {
             // reduce thinking time by 75%
             self.hard_time /= 4;
             self.opt_time /= 4;
+            self.found_forced_move = ForcedMoveType::Strong;
         }
     }
 
     pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
-        if !self.found_forced_move && self.in_game() {
+        if self.found_forced_move == ForcedMoveType::None && self.in_game() {
             if depth >= Self::SLIGHTLY_FORCED {
                 Some(170)
             } else if depth >= Self::VERY_FORCED {
@@ -313,7 +321,7 @@ impl TimeManager {
 
     pub fn notify_one_legal_move(&mut self) {
         self.opt_time = Duration::from_millis(0);
-        self.found_forced_move = true;
+        self.found_forced_move = ForcedMoveType::Strong;
     }
 
     fn best_move_stability_multiplier(stability: usize) -> f64 {
@@ -343,8 +351,13 @@ impl TimeManager {
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
             // retain time added by windows that failed low
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let forced_move_multiplier = match self.found_forced_move {
+                ForcedMoveType::None => 1.0,
+                ForcedMoveType::Weak => 0.5,
+                ForcedMoveType::Strong => 0.25,
+            };
 
-            let multiplier = stability_multiplier * failed_low_multiplier;
+            let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
