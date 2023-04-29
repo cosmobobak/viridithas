@@ -217,8 +217,13 @@ impl TimeManager {
             let stability_multiplier = self.last_factors[0];
             // calculate the failed low multiplier
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let forced_move_multiplier = match self.found_forced_move {
+                ForcedMoveType::None => 1.0,
+                ForcedMoveType::Weak => 0.5,
+                ForcedMoveType::Strong => 0.25,
+            };
 
-            let multiplier = stability_multiplier * failed_low_multiplier;
+            let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
