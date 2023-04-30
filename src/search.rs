@@ -736,7 +736,7 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let see_threshold = pc_beta - static_eval;
+            let see_threshold = (pc_beta - static_eval) / 2;
             let mut move_picker =
                 CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, see_threshold);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
