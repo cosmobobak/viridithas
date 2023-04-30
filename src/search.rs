@@ -33,7 +33,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTView, TTHit},
+    transpositiontable::{Bound, ProbeResult, TTHit, TTView},
     uci::{self, PRETTY_PRINT},
 };
 
@@ -735,8 +735,9 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
+            let see_threshold = pc_beta - static_eval;
             let mut move_picker =
-                CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, 0);
+                CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, see_threshold);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
             {
@@ -754,14 +755,8 @@ impl Board {
                     continue;
                 }
 
-                let mut value = -self.quiescence::<false, NNUE>(
-                    tt,
-                    &mut lpv,
-                    info,
-                    t,
-                    -pc_beta,
-                    -pc_beta + 1,
-                );
+                let mut value =
+                    -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
                     let probcut_depth = depth - PROBCUT_REDUCTION;
