@@ -484,7 +484,8 @@ impl Board {
             debug_assert!(self.check_hce_coherency(info));
         }
 
-        let mut lpv = PVariation::default();
+        let mut local_pv = PVariation::default();
+        let l_pv = &mut local_pv;
 
         let key = self.hashkey();
 
@@ -661,7 +662,7 @@ impl Board {
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let mut null_score =
-                    -self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, -beta, -beta + 1);
+                    -self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, -beta, -beta + 1);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -684,7 +685,7 @@ impl Board {
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
                     let veri_score =
-                        self.zw_search::<NNUE>(tt, &mut lpv, info, t, nm_depth, beta - 1, beta);
+                        self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, beta - 1, beta);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -707,7 +708,7 @@ impl Board {
         // and help along the history tables.
         if PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
-            self.alpha_beta::<PV, ROOT, NNUE>(tt, &mut lpv, info, t, iid_depth, alpha, beta);
+            self.alpha_beta::<PV, ROOT, NNUE>(tt, l_pv, info, t, iid_depth, alpha, beta);
             tt_move = t.best_moves[height];
         }
 
@@ -756,16 +757,16 @@ impl Board {
                 }
 
                 let mut value =
-                    -self.quiescence::<false, NNUE>(tt, &mut lpv, info, t, -pc_beta, -pc_beta + 1);
+                    -self.quiescence::<false, NNUE>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
-                    let probcut_depth = depth - PROBCUT_REDUCTION;
+                    let pc_depth = depth - PROBCUT_REDUCTION;
                     value = -self.zw_search::<NNUE>(
                         tt,
-                        &mut lpv,
+                        l_pv,
                         info,
                         t,
-                        probcut_depth,
+                        pc_depth,
                         -pc_beta,
                         -pc_beta + 1,
                     );
@@ -900,15 +901,8 @@ impl Board {
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
-                score = -self.fullwindow_search::<PV, NNUE>(
-                    tt,
-                    &mut lpv,
-                    info,
-                    t,
-                    depth + extension - 1,
-                    -beta,
-                    -alpha,
-                );
+                let new_depth = depth + extension - 1;
+                score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
                 let r = if (is_quiet || !is_winning_capture)
@@ -937,29 +931,20 @@ impl Board {
                 };
                 // perform a zero-window search
                 let new_depth = depth + extension - r;
-                score =
-                    -self.zw_search::<NNUE>(tt, &mut lpv, info, t, new_depth, -alpha - 1, -alpha);
+                score = -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth, -alpha - 1, -alpha);
                 // if we failed above alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
                     let new_depth = depth + extension - 1;
-                    score = -self.zw_search::<NNUE>(
-                        tt,
-                        &mut lpv,
-                        info,
-                        t,
-                        new_depth,
-                        -alpha - 1,
-                        -alpha,
-                    );
+                    score =
+                        -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth, -alpha - 1, -alpha);
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
                     let new_depth = depth + extension - 1;
-                    score = -self.fullwindow_search::<PV, NNUE>(
-                        tt, &mut lpv, info, t, new_depth, -beta, -alpha,
-                    );
+                    score =
+                        -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
                 }
             }
             self.unmake_move::<NNUE>(t, info);
@@ -976,7 +961,7 @@ impl Board {
                 best_move = m;
                 if score > alpha {
                     alpha = score;
-                    pv.load_from(best_move, &lpv);
+                    pv.load_from(best_move, l_pv);
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
@@ -1254,7 +1239,7 @@ impl Board {
     }
 
     /// full-window alpha-beta search.
-    pub fn fullwindow_search<const PV: bool, const NNUE: bool>(
+    pub fn full_search<const PV: bool, const NNUE: bool>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
