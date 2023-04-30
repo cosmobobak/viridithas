@@ -857,18 +857,15 @@ impl Board {
                 println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
             }
 
-            let maybe_singular = tt_hit.map_or(false, |tt_hit| {
-                !ROOT
-                    && depth >= info.search_params.singularity_depth
-                    && tt_hit.tt_move == m
-                    && excluded.is_null()
-                    && tt_hit.tt_depth >= depth - 3
-                    && matches!(tt_hit.tt_bound, Bound::Lower | Bound::Exact)
-            });
+            let maybe_singular = depth >= info.search_params.singularity_depth
+                && excluded.is_null()
+                && matches!(tt_hit, Some(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower | Bound::Exact, .. }) if tt_move == m && tt_depth >= depth - 3);
 
-            let mut extension = ZERO_PLY;
-            if !ROOT && maybe_singular {
-                let tt_value = tt_hit.as_ref().unwrap().tt_value;
+            let extension;
+            if ROOT {
+                extension = ZERO_PLY;
+            } else if maybe_singular {
+                let Some(TTHit { tt_value, .. }) = tt_hit else { unreachable!() };
                 extension = self.singularity::<PV, NNUE>(
                     tt,
                     info,
@@ -886,12 +883,13 @@ impl Board {
                     // so we just bail out.
                     return Self::singularity_margin(tt_value, depth);
                 }
-            } else if !ROOT && self.in_check::<{ Self::US }>() {
+            } else if self.in_check::<{ Self::US }>() {
                 // self.in_check::<{ Self::US }>() determines if the opponent is in check,
                 // because we have already made the move.
-                let do_extension = is_quiet || is_winning_capture;
-                extension = Depth::from(do_extension);
-            };
+                extension = Depth::from(is_quiet || is_winning_capture);
+            } else {
+                extension = ZERO_PLY;
+            }
             if extension >= ONE_PLY * 2 {
                 t.double_extensions[height] += 1;
             }
