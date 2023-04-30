@@ -33,7 +33,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTView},
+    transpositiontable::{Bound, ProbeResult, TTView, TTHit},
     uci::{self, PRETTY_PRINT},
 };
 
@@ -720,7 +720,7 @@ impl Board {
         ];
 
         // probcut:
-        let probcut_beta = std::cmp::min(
+        let pc_beta = std::cmp::min(
             beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN,
             MINIMUM_TB_WIN_SCORE - 1,
         );
@@ -732,9 +732,8 @@ impl Board {
             && excluded.is_null()
             && depth >= PROBCUT_MIN_DEPTH
             && beta.abs() < MINIMUM_TB_WIN_SCORE
-            && tt_hit
-                .as_ref()
-                .map_or(true, |e| e.tt_value >= probcut_beta || e.tt_depth < depth - 3)
+            // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
+            && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
             let mut move_picker =
                 CapturePicker::new(tt_move, [Move::NULL, Move::NULL], Move::NULL, 0);
@@ -760,11 +759,11 @@ impl Board {
                     &mut lpv,
                     info,
                     t,
-                    -probcut_beta,
-                    -probcut_beta + 1,
+                    -pc_beta,
+                    -pc_beta + 1,
                 );
 
-                if value >= probcut_beta {
+                if value >= pc_beta {
                     let probcut_depth = depth - PROBCUT_REDUCTION;
                     value = -self.zw_search::<NNUE>(
                         tt,
@@ -772,14 +771,14 @@ impl Board {
                         info,
                         t,
                         probcut_depth,
-                        -probcut_beta,
-                        -probcut_beta + 1,
+                        -pc_beta,
+                        -pc_beta + 1,
                     );
                 }
 
                 self.unmake_move::<NNUE>(t, info);
 
-                if value >= probcut_beta {
+                if value >= pc_beta {
                     tt.store::<false>(key, height, m, value, Bound::Lower, depth - 3);
                     return value;
                 }
