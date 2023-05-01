@@ -299,9 +299,8 @@ impl TimeManager {
             self.hard_time /= 2;
             self.opt_time /= 2;
             self.found_forced_move = ForcedMoveType::Weak;
-        } else
-        /* if depth >= Self::VERY_FORCED */
-        {
+        } else {
+            /* depth >= Self::VERY_FORCED */
             // reduce thinking time by 75%
             self.hard_time /= 4;
             self.opt_time /= 4;
