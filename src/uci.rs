@@ -395,6 +395,8 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     let mut linebuf = String::with_capacity(128);
     while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
         if bytes == 0 {
+            // EOF
+            QUIT.store(true, Ordering::SeqCst);
             break;
         }
         let cmd = linebuf.trim();
@@ -552,11 +554,12 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
-        let line = stdin
+        let Ok(line) = stdin
             .lock()
             .expect("failed to take lock on stdin")
-            .recv()
-            .expect("couldn't receive from stdin");
+            .recv() else {
+            break;
+        };
         let input = line.trim();
 
         let res = match input {
