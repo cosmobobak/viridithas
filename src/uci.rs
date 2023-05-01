@@ -396,15 +396,13 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     while std::io::stdin().read_line(&mut linebuf).is_ok() {
         let cmd = linebuf.trim();
         eprintln!("info string received command in stdin thread: \"{cmd}\" [{}]", std::process::id());
-        if cmd.len() != linebuf.len() {
-            eprintln!("info string command is only whitespace: \"{:?}\" [{}]", linebuf.as_bytes(), std::process::id());
-            continue;
-        }
         if cmd.is_empty() {
+            eprintln!("info string command is only whitespace: \"{:?}\" [{}]", linebuf.as_bytes(), std::process::id());
             linebuf.clear();
             continue;
         }
-        if sender.send(cmd.to_owned()).is_err() {
+        if let Err(e) = sender.send(cmd.to_owned()) {
+            eprintln!("info string failed to send command to main thread: {} [{}]", e, std::process::id());
             break;
         }
         if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
