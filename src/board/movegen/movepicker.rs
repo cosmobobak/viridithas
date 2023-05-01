@@ -204,7 +204,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
-            *score += MVV_SCORE[history::captured_piece_type(pos, *mov).index() - 1];
+            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov).index() - 1];
             if pos.static_exchange_eval(*mov, see_threshold) {
                 *score += WINNING_CAPTURE_SCORE;
             }
