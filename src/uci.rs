@@ -396,6 +396,10 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     while std::io::stdin().read_line(&mut linebuf).is_ok() {
         let cmd = linebuf.trim();
         eprintln!("info string received command in stdin thread: \"{cmd}\" [{}]", std::process::id());
+        if cmd.len() != linebuf.len() {
+            eprintln!("info string command is only whitespace: \"{:?}\" [{}]", linebuf.as_bytes(), std::process::id());
+            continue;
+        }
         if cmd.is_empty() {
             linebuf.clear();
             continue;
