@@ -17,6 +17,7 @@ const DEFAULT_MOVES_TO_GO: u64 = 26;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
+    Extreme,
     Strong,
     Weak,
     None,
@@ -25,6 +26,7 @@ pub enum ForcedMoveType {
 impl ForcedMoveType {
     pub const fn tm_multiplier(self) -> f64 {
         match self {
+            Self::Extreme => 0.01,
             Self::Strong => 0.25,
             Self::Weak => 0.5,
             Self::None => 1.0,
@@ -330,7 +332,7 @@ impl TimeManager {
 
     pub fn notify_one_legal_move(&mut self) {
         self.opt_time = Duration::from_millis(0);
-        self.found_forced_move = ForcedMoveType::Strong;
+        self.found_forced_move = ForcedMoveType::Extreme;
     }
 
     fn best_move_stability_multiplier(stability: usize) -> f64 {
