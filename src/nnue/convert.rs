@@ -13,8 +13,8 @@ use crate::{
     board::{evaluation::is_game_theoretic_score, Board},
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::SearchInfo,
-    timemgmt::{SearchLimit, TimeManager},
     threadlocal::ThreadData,
+    timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
 };
 
@@ -58,15 +58,10 @@ fn batch_convert<const USE_NNUE: bool>(
         t.nnue.refresh_acc(&pos);
         tt.clear();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager {
-            limit: SearchLimit::Depth(Depth::new(depth)),
-            ..TimeManager::default()
-        };
-        let mut info = SearchInfo {
-            time_manager,
-            print_to_stdout: false,
-            ..SearchInfo::new(&stopped)
-        };
+        let time_manager =
+            TimeManager { limit: SearchLimit::Depth(Depth::new(depth)), ..TimeManager::default() };
+        let mut info =
+            SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
         let (score, bm) =
             pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {

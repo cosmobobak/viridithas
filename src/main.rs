@@ -30,9 +30,9 @@ mod searchinfo;
 mod tablebases;
 mod texel;
 mod threadlocal;
+mod timemgmt;
 mod transpositiontable;
 mod uci;
-mod timemgmt;
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";

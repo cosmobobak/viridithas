@@ -1,9 +1,12 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
+    board,
     definitions::{File, Rank, Square},
+    nnue,
     piece::PieceType,
-    rng::XorShiftState, board, nnue, transpositiontable,
+    rng::XorShiftState,
+    transpositiontable,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -197,10 +200,7 @@ pub fn info_dump() {
         board::evaluation::parameters::EvalParams::default().vectorise().len()
     );
     println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
-    println!(
-        "Size of NNUE network: {} bytes",
-        std::mem::size_of::<nnue::network::NNUEParams>()
-    );
+    println!("Size of NNUE network: {} bytes", std::mem::size_of::<nnue::network::NNUEParams>());
     println!(
         "Size of a transposition table entry: {} bytes",
         std::mem::size_of::<transpositiontable::TTEntry>()

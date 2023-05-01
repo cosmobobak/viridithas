@@ -28,9 +28,9 @@ use crate::{
     piece::Colour,
     search::{parameters::SearchParams, LMTable},
     searchinfo::SearchInfo,
-    timemgmt::SearchLimit,
     tablebases,
     threadlocal::ThreadData,
+    timemgmt::SearchLimit,
     transpositiontable::TT,
     NAME, VERSION,
 };
@@ -214,13 +214,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        info.time_manager.limit = SearchLimit::Dynamic {
-            our_clock,
-            their_clock,
-            our_inc,
-            their_inc,
-            moves_to_go,
-        };
+        info.time_manager.limit =
+            SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(UciError::InvalidFormat(
             "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
@@ -393,13 +388,19 @@ fn stdin_reader() -> mpsc::Receiver<String> {
 
 fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     let mut linebuf = String::with_capacity(128);
-    while std::io::stdin().read_line(&mut linebuf).is_ok() {
+    while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
+        if bytes == 0 {
+            // EOF
+            QUIT.store(true, Ordering::SeqCst);
+            break;
+        }
         let cmd = linebuf.trim();
         if cmd.is_empty() {
             linebuf.clear();
             continue;
         }
-        if sender.send(cmd.to_owned()).is_err() {
+        if let Err(e) = sender.send(cmd.to_owned()) {
+            eprintln!("info string error sending command to main thread: {e}");
             break;
         }
         if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
@@ -548,11 +549,12 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
-        let line = stdin
+        let Ok(line) = stdin
             .lock()
             .expect("failed to take lock on stdin")
-            .recv()
-            .expect("couldn't receive from stdin");
+            .recv() else {
+            break;
+        };
         let input = line.trim();
 
         let res = match input {
@@ -697,7 +699,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
         };
 
         if let Err(e) = res {
-            println!("info string {e}");
+            eprintln!("info string {e}");
         }
 
         if QUIT.load(Ordering::SeqCst) {
