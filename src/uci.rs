@@ -393,20 +393,20 @@ fn stdin_reader() -> mpsc::Receiver<String> {
 
 fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     let mut linebuf = String::with_capacity(128);
-    while std::io::stdin().read_line(&mut linebuf).is_ok() {
+    while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
+        if bytes == 0 {
+            break;
+        }
         let cmd = linebuf.trim();
-        eprintln!("info string received command in stdin thread: \"{cmd}\" [{}]", std::process::id());
         if cmd.is_empty() {
-            eprintln!("info string command is only whitespace: \"{:?}\" [{}]", linebuf.as_bytes(), std::process::id());
             linebuf.clear();
             continue;
         }
         if let Err(e) = sender.send(cmd.to_owned()) {
-            eprintln!("info string failed to send command to main thread: {} [{}]", e, std::process::id());
+            eprintln!("info string error sending command to main thread: {e}");
             break;
         }
         if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
-            eprintln!("info string stdin reader thread exiting [{}]", std::process::id());
             break;
         }
         linebuf.clear();
@@ -551,7 +551,6 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     }
 
     loop {
-        eprintln!("info string top of uci main loop [{}]", std::process::id());
         std::io::stdout().flush().expect("couldn't flush stdout");
         let line = stdin
             .lock()
@@ -559,7 +558,6 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             .recv()
             .expect("couldn't receive from stdin");
         let input = line.trim();
-        eprintln!("info string received input: \"{input}\" [{}]", std::process::id());
 
         let res = match input {
             "\n" => continue,
@@ -712,7 +710,6 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
         }
     }
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
-    eprintln!("info string returning from uci main [{}]", std::process::id());
 }
 
 fn bench(
