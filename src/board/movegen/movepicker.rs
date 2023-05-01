@@ -170,6 +170,9 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
         self.index += 1;
 
+        // as the scores of positive-SEE moves can be pushed below
+        // WINNING_CAPTURE_SCORE if their capture history is particularly 
+        // bad, this implicitly filters out moves with bad history scores.
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
 
         if self.skip_quiets && not_winning {
