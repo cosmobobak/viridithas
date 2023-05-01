@@ -146,15 +146,6 @@ pub static PIECE_MAJ: [bool; 13] =
 pub static PIECE_MIN: [bool; 13] =
     [false, false, true, true, false, false, false, false, true, true, false, false, false];
 
-const fn victim_score(piece: PieceType) -> i32 {
-    piece.inner() as i32 * 1000
-}
-
-/// The score of this pair of pieces, for MVV/LVA move ordering.
-pub const fn get_mvv_lva_score(victim: PieceType, attacker: PieceType) -> i32 {
-    victim_score(victim) + 60 - victim_score(attacker) / 100
-}
-
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     let mut attacks = [0; 64];
     let deltas =

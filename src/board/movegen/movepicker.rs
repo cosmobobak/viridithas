@@ -1,4 +1,4 @@
-use crate::{board::Board, chessmove::Move, lookups, piece::PieceType, threadlocal::ThreadData};
+use crate::{board::Board, chessmove::Move, piece::PieceType, threadlocal::ThreadData};
 
 use super::{MoveList, MoveListEntry};
 
@@ -77,9 +77,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
                 "movelist not empty before capture generation"
             );
             position.generate_captures::<QSEARCH>(&mut self.movelist);
-            for entry in &mut self.movelist.moves[..self.movelist.count] {
-                entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
-            }
+            Self::score_captures(t, position, self.movelist.as_slice_mut(), self.see_threshold);
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once() {
@@ -197,27 +195,29 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         t.get_followup_history_scores(pos, ms);
     }
 
-    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move, see_threshold: i32) -> i32 {
-        const QUEEN_PROMO_BONUS: i32 =
-            lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
-        let mut score = if m.is_ep() {
-            lookups::get_mvv_lva_score(PieceType::PAWN, PieceType::PAWN)
-        } else {
-            lookups::get_mvv_lva_score(
-                pos.captured_piece(m).piece_type(),
-                pos.moved_piece(m).piece_type(),
-            )
-        };
-        if m.is_promo() {
-            if m.promotion_type() == PieceType::QUEEN {
-                score += QUEEN_PROMO_BONUS;
+    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
+        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, -WINNING_CAPTURE_SCORE];
+        // zero-out the ordering scores
+        for m in moves.iter_mut() {
+            m.score = 0;
+        }
+
+        t.get_tactical_history_scores(pos, moves);
+        for MoveListEntry { mov, score } in moves {
+            let type_index = if mov.is_ep() {
+                0
+            } else if mov.is_promo() {
+                // 4 if a queen promotion, 5 otherwise.
+                4 + usize::from(mov.promotion_type() != PieceType::QUEEN)
             } else {
-                return -WINNING_CAPTURE_SCORE; // basically no point looking at these.
+                let captured_piece = pos.captured_piece(*mov);
+                // get index of captured piece type (0 is NO_PIECE so we subtract 1)
+                captured_piece.piece_type().index() - 1
+            };
+            *score += MVV_SCORE[type_index];
+            if type_index != 5 && pos.static_exchange_eval(*mov, see_threshold) {
+                *score += WINNING_CAPTURE_SCORE;
             }
         }
-        if pos.static_exchange_eval(m, see_threshold) {
-            score += WINNING_CAPTURE_SCORE;
-        }
-        score
     }
 }

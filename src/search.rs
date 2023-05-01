@@ -1000,6 +1000,10 @@ impl Board {
                 let moves_to_adjust = quiets_tried.as_slice();
                 self.update_history_metrics(t, moves_to_adjust, best_move, depth);
             }
+
+            // update tactical history
+            let moves_to_adjust = tacticals_tried.as_slice();
+            self.update_tactical_history_metrics(t, moves_to_adjust, best_move, depth);
         }
 
         if excluded.is_null() {
@@ -1028,6 +1032,17 @@ impl Board {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_countermove_history(self, moves_to_adjust, best_move, depth);
         t.update_followup_history(self, moves_to_adjust, best_move, depth);
+    }
+
+    /// Update the tactical history table.
+    fn update_tactical_history_metrics(
+        &mut self,
+        t: &mut ThreadData,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
+        t.update_tactical_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.

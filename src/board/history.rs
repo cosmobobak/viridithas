@@ -38,6 +38,35 @@ impl ThreadData {
         }
     }
 
+    /// Update the tactical history counters of a batch of moves.
+    pub fn update_tactical_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
+        for &m in moves_to_adjust {
+            let piece_moved = pos.moved_piece(m);
+            debug_assert!(
+                piece_moved != Piece::EMPTY,
+                "Invalid piece moved by move {m} in position \n{pos}"
+            );
+            let to = m.to();
+            let val = self.tactical_history.get_mut(piece_moved, to);
+            update_history(val, depth, m == best_move);
+        }
+    }
+
+    /// Get the tactical history scores for a batch of moves.
+    pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        for m in ms {
+            let piece_moved = pos.moved_piece(m.mov);
+            let to = m.mov.to();
+            m.score += i32::from(self.tactical_history.get(piece_moved, to));
+        }
+    }
+
     /// Update the countermove history counters of a batch of moves.
     pub fn update_countermove_history(
         &mut self,
