@@ -1,4 +1,4 @@
-use crate::{board::Board, chessmove::Move, piece::PieceType, threadlocal::ThreadData};
+use crate::{board::{Board, history}, chessmove::Move, threadlocal::ThreadData};
 
 use super::{MoveList, MoveListEntry};
 
@@ -196,7 +196,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
-        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, -WINNING_CAPTURE_SCORE];
+        const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
         // zero-out the ordering scores
         for m in moves.iter_mut() {
             m.score = 0;
@@ -204,18 +204,8 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
-            let type_index = if mov.is_ep() {
-                0
-            } else if mov.is_promo() {
-                // 4 if a queen promotion, 5 otherwise.
-                4 + usize::from(mov.promotion_type() != PieceType::QUEEN)
-            } else {
-                let captured_piece = pos.captured_piece(*mov);
-                // get index of captured piece type (0 is NO_PIECE so we subtract 1)
-                captured_piece.piece_type().index() - 1
-            };
-            *score += MVV_SCORE[type_index];
-            if type_index != 5 && pos.static_exchange_eval(*mov, see_threshold) {
+            *score += MVV_SCORE[history::captured_piece_type(pos, *mov).index() - 1];
+            if pos.static_exchange_eval(*mov, see_threshold) {
                 *score += WINNING_CAPTURE_SCORE;
             }
         }

@@ -48,12 +48,13 @@ impl ThreadData {
     ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
+            let capture = captured_piece_type(pos, m);
             debug_assert!(
                 piece_moved != Piece::EMPTY,
                 "Invalid piece moved by move {m} in position \n{pos}"
             );
             let to = m.to();
-            let val = self.tactical_history.get_mut(piece_moved, to);
+            let val = self.tactical_history.get_mut(piece_moved, to, capture);
             update_history(val, depth, m == best_move);
         }
     }
@@ -62,8 +63,9 @@ impl ThreadData {
     pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
             let piece_moved = pos.moved_piece(m.mov);
+            let capture = captured_piece_type(pos, m.mov);
             let to = m.mov.to();
-            m.score += i32::from(self.tactical_history.get(piece_moved, to));
+            m.score += i32::from(self.tactical_history.get(piece_moved, to, capture));
         }
     }
 
@@ -303,5 +305,19 @@ impl ThreadData {
         let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.get(prev_piece, prev_to)
+    }
+}
+
+pub fn captured_piece_type(pos: &Board, mv: Move) -> PieceType {
+    if mv.is_ep() {
+        PieceType::PAWN
+    } else if mv.is_promo() {
+        if mv.promotion_type() == PieceType::QUEEN {
+            PieceType::QUEEN
+        } else {
+            PieceType::PAWN
+        }
+    } else {
+        pos.captured_piece(mv).piece_type()
     }
 }
