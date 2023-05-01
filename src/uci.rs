@@ -547,6 +547,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     }
 
     loop {
+        eprintln!("info string top of uci main loop");
         std::io::stdout().flush().expect("couldn't flush stdout");
         let line = stdin
             .lock()
@@ -554,6 +555,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             .recv()
             .expect("couldn't receive from stdin");
         let input = line.trim();
+        eprintln!("info string received input: \"{input}\"");
 
         let res = match input {
             "\n" => continue,
@@ -697,7 +699,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
         };
 
         if let Err(e) = res {
-            println!("info string {e}");
+            eprintln!("info string {e}");
         }
 
         if QUIT.load(Ordering::SeqCst) {
@@ -706,6 +708,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
         }
     }
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+    eprintln!("info string returning from uci main");
 }
 
 fn bench(
