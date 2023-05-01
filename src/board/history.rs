@@ -24,7 +24,7 @@ impl ThreadData {
                 "Invalid piece moved by move {m} in position \n{pos}"
             );
             let to = m.to();
-            let val = self.history_table.get_mut(piece_moved, to);
+            let val = self.main_history.get_mut(piece_moved, to);
             update_history(val, depth, m == best_move);
         }
     }
@@ -34,7 +34,7 @@ impl ThreadData {
         for m in ms {
             let piece_moved = pos.moved_piece(m.mov);
             let to = m.mov.to();
-            m.score += i32::from(self.history_table.get(piece_moved, to));
+            m.score += i32::from(self.main_history.get(piece_moved, to));
         }
     }
 
