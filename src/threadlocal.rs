@@ -2,7 +2,7 @@ use crate::{
     board::Board,
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
-    historytable::{DoubleHistoryTable, HistoryTable, MoveTable},
+    historytable::{DoubleHistoryTable, HistoryTable, MoveTable, CaptureHistoryTable},
     nnue,
     piece::Colour,
     search::PVariation,
@@ -19,7 +19,8 @@ pub struct ThreadData {
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::network::NNUEState>,
 
-    pub history_table: HistoryTable,
+    pub main_history: HistoryTable,
+    pub tactical_history: Box<CaptureHistoryTable>,
     pub followup_history: Box<DoubleHistoryTable>,
     pub counter_move_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
@@ -46,7 +47,8 @@ impl ThreadData {
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
             nnue: nnue::network::NNUEState::new(board),
-            history_table: HistoryTable::new(),
+            main_history: HistoryTable::new(),
+            tactical_history: CaptureHistoryTable::boxed(),
             followup_history: DoubleHistoryTable::boxed(),
             counter_move_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY],
@@ -79,7 +81,8 @@ impl ThreadData {
     }
 
     fn alloc_tables(&mut self) {
-        self.history_table.clear();
+        self.main_history.clear();
+        self.tactical_history.clear();
         self.followup_history.clear();
         self.counter_move_history.clear();
         self.killer_move_table.fill([Move::NULL; 2]);
@@ -90,7 +93,8 @@ impl ThreadData {
     }
 
     pub fn setup_tables_for_search(&mut self) {
-        self.history_table.age_entries();
+        self.main_history.age_entries();
+        self.tactical_history.age_entries();
         self.followup_history.age_entries();
         self.counter_move_history.age_entries();
         self.killer_move_table.fill([Move::NULL; 2]);

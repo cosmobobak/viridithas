@@ -65,6 +65,10 @@ impl MoveList {
     pub fn as_slice(&self) -> &[MoveListEntry] {
         &self.moves[..self.count]
     }
+
+    pub fn as_slice_mut(&mut self) -> &mut [MoveListEntry] {
+        &mut self.moves[..self.count]
+    }
 }
 
 impl Index<usize> for MoveList {

@@ -24,7 +24,7 @@ impl ThreadData {
                 "Invalid piece moved by move {m} in position \n{pos}"
             );
             let to = m.to();
-            let val = self.history_table.get_mut(piece_moved, to);
+            let val = self.main_history.get_mut(piece_moved, to);
             update_history(val, depth, m == best_move);
         }
     }
@@ -34,7 +34,38 @@ impl ThreadData {
         for m in ms {
             let piece_moved = pos.moved_piece(m.mov);
             let to = m.mov.to();
-            m.score += i32::from(self.history_table.get(piece_moved, to));
+            m.score += i32::from(self.main_history.get(piece_moved, to));
+        }
+    }
+
+    /// Update the tactical history counters of a batch of moves.
+    pub fn update_tactical_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
+        for &m in moves_to_adjust {
+            let piece_moved = pos.moved_piece(m);
+            let capture = caphist_piece_type(pos, m);
+            debug_assert!(
+                piece_moved != Piece::EMPTY,
+                "Invalid piece moved by move {m} in position \n{pos}"
+            );
+            let to = m.to();
+            let val = self.tactical_history.get_mut(piece_moved, to, capture);
+            update_history(val, depth, m == best_move);
+        }
+    }
+
+    /// Get the tactical history scores for a batch of moves.
+    pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        for m in ms {
+            let piece_moved = pos.moved_piece(m.mov);
+            let capture = caphist_piece_type(pos, m.mov);
+            let to = m.mov.to();
+            m.score += i32::from(self.tactical_history.get(piece_moved, to, capture));
         }
     }
 
@@ -274,5 +305,17 @@ impl ThreadData {
         let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.get(prev_piece, prev_to)
+    }
+}
+
+pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {
+    if mv.is_ep() || mv.is_promo() {
+        // it's fine to make all promos of type PAWN,
+        // because you'd never usually capture pawns on
+        // the back ranks, so these slots are free in
+        // the capture history table.
+        PieceType::PAWN
+    } else {
+        pos.captured_piece(mv).piece_type()
     }
 }

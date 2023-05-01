@@ -1,4 +1,4 @@
-use crate::{board::Board, chessmove::Move, lookups, piece::PieceType, threadlocal::ThreadData};
+use crate::{board::{Board, history}, chessmove::Move, threadlocal::ThreadData};
 
 use super::{MoveList, MoveListEntry};
 
@@ -77,9 +77,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
                 "movelist not empty before capture generation"
             );
             position.generate_captures::<QSEARCH>(&mut self.movelist);
-            for entry in &mut self.movelist.moves[..self.movelist.count] {
-                entry.score = Self::score_capture(t, position, entry.mov, self.see_threshold);
-            }
+            Self::score_captures(t, position, self.movelist.as_slice_mut(), self.see_threshold);
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once() {
@@ -197,27 +195,19 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         t.get_followup_history_scores(pos, ms);
     }
 
-    pub fn score_capture(_t: &ThreadData, pos: &Board, m: Move, see_threshold: i32) -> i32 {
-        const QUEEN_PROMO_BONUS: i32 =
-            lookups::get_mvv_lva_score(PieceType::QUEEN, PieceType::PAWN);
-        let mut score = if m.is_ep() {
-            lookups::get_mvv_lva_score(PieceType::PAWN, PieceType::PAWN)
-        } else {
-            lookups::get_mvv_lva_score(
-                pos.captured_piece(m).piece_type(),
-                pos.moved_piece(m).piece_type(),
-            )
-        };
-        if m.is_promo() {
-            if m.promotion_type() == PieceType::QUEEN {
-                score += QUEEN_PROMO_BONUS;
-            } else {
-                return -WINNING_CAPTURE_SCORE; // basically no point looking at these.
+    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
+        const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
+        // zero-out the ordering scores
+        for m in moves.iter_mut() {
+            m.score = 0;
+        }
+
+        t.get_tactical_history_scores(pos, moves);
+        for MoveListEntry { mov, score } in moves {
+            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov).index() - 1];
+            if pos.static_exchange_eval(*mov, see_threshold) {
+                *score += WINNING_CAPTURE_SCORE;
             }
         }
-        if pos.static_exchange_eval(m, see_threshold) {
-            score += WINNING_CAPTURE_SCORE;
-        }
-        score
     }
 }

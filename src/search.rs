@@ -998,8 +998,15 @@ impl Board {
                 t.insert_countermove(self, best_move);
 
                 let moves_to_adjust = quiets_tried.as_slice();
-                self.update_history_metrics(t, moves_to_adjust, best_move, depth);
+                self.update_quiet_history(t, moves_to_adjust, best_move, depth);
             }
+
+            // we unconditionally update the tactical history table
+            // because tactical moves ought to be good in any position,
+            // so it's good to decrease tactical history scores even
+            // when the best move was non-tactical.
+            let moves_to_adjust = tacticals_tried.as_slice();
+            self.update_tactical_history(t, moves_to_adjust, best_move, depth);
         }
 
         if excluded.is_null() {
@@ -1017,8 +1024,8 @@ impl Board {
             - i32::from(improving) * info.search_params.rfp_improving_margin
     }
 
-    /// Update the history and followup history tables.
-    fn update_history_metrics(
+    /// Update the main, counter-move, and followup history tables.
+    fn update_quiet_history(
         &mut self,
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
@@ -1028,6 +1035,17 @@ impl Board {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_countermove_history(self, moves_to_adjust, best_move, depth);
         t.update_followup_history(self, moves_to_adjust, best_move, depth);
+    }
+
+    /// Update the tactical history table.
+    fn update_tactical_history(
+        &mut self,
+        t: &mut ThreadData,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
+        t.update_tactical_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.
