@@ -291,11 +291,15 @@ impl<'a> TTView<'a> {
     }
 
     pub fn prefetch(&self, key: u64) {
-        let index = self.wrap_key(key);
-        let entry = &self.table[index];
         #[cfg(target_arch = "x86_64")]
         unsafe {
             use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
+
+            // get a reference to the entry in the table:
+            let index = self.wrap_key(key);
+            let entry = &self.table[index];
+
+            // prefetch the entry:
             _mm_prefetch((entry as *const AtomicU64).cast::<i8>(), _MM_HINT_T0);
         }
     }
