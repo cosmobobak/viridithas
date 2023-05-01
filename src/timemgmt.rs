@@ -15,11 +15,21 @@ use crate::{
 const MOVE_OVERHEAD: u64 = 10;
 const DEFAULT_MOVES_TO_GO: u64 = 26;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
     Strong,
     Weak,
     None,
+}
+
+impl ForcedMoveType {
+    pub const fn tm_multiplier(self) -> f64 {
+        match self {
+            Self::Strong => 0.25,
+            Self::Weak => 0.5,
+            Self::None => 1.0,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -214,11 +224,7 @@ impl TimeManager {
             let stability_multiplier = self.last_factors[0];
             // calculate the failed low multiplier
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
-            let forced_move_multiplier = match self.found_forced_move {
-                ForcedMoveType::None => 1.0,
-                ForcedMoveType::Weak => 0.5,
-                ForcedMoveType::Strong => 0.25,
-            };
+            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
 
             let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
 
@@ -355,11 +361,7 @@ impl TimeManager {
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
             // retain time added by windows that failed low
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
-            let forced_move_multiplier = match self.found_forced_move {
-                ForcedMoveType::None => 1.0,
-                ForcedMoveType::Weak => 0.5,
-                ForcedMoveType::Strong => 0.25,
-            };
+            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
 
             let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
 
