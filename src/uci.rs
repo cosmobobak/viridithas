@@ -28,9 +28,9 @@ use crate::{
     piece::Colour,
     search::{parameters::SearchParams, LMTable},
     searchinfo::SearchInfo,
-    timemgmt::SearchLimit,
     tablebases,
     threadlocal::ThreadData,
+    timemgmt::SearchLimit,
     transpositiontable::TT,
     NAME, VERSION,
 };
@@ -214,13 +214,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        info.time_manager.limit = SearchLimit::Dynamic {
-            our_clock,
-            their_clock,
-            our_inc,
-            their_inc,
-            moves_to_go,
-        };
+        info.time_manager.limit =
+            SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(UciError::InvalidFormat(
             "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),

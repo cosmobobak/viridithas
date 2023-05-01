@@ -5,8 +5,8 @@ use crate::{
     chessmove::Move,
     definitions::MEGABYTE,
     searchinfo::SearchInfo,
-    timemgmt::{SearchLimit, TimeManager},
     threadlocal::ThreadData,
+    timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
 };
 

@@ -144,7 +144,8 @@ impl TimeManager {
         self.last_factors = [1.0, 1.0];
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
-            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let (opt_time, hard_time, max_time) =
+                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
             self.max_time = Duration::from_millis(max_time);
             self.hard_time = Duration::from_millis(hard_time);
             self.opt_time = Duration::from_millis(opt_time);
@@ -187,9 +188,7 @@ impl TimeManager {
     /// If we have used enough time that stopping after finishing a depth would be good here.
     pub fn is_past_opt_time(&self) -> bool {
         match self.limit {
-            SearchLimit::Dynamic { .. } => {
-                self.time_since_start() >= self.opt_time
-            }
+            SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
             _ => false,
         }
     }
@@ -203,13 +202,11 @@ impl TimeManager {
         let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit else {
             return;
         };
-        if depth >= FAIL_LOW_UPDATE_THRESHOLD
-            && bound == Bound::Upper
-            && self.failed_low < 2
-        {
+        if depth >= FAIL_LOW_UPDATE_THRESHOLD && bound == Bound::Upper && self.failed_low < 2 {
             self.failed_low += 1;
 
-            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let (opt_time, hard_time, max_time) =
+                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
             let max_time = Duration::from_millis(max_time);
             let hard_time = Duration::from_millis(hard_time);
             let opt_time = Duration::from_millis(opt_time);
@@ -302,7 +299,9 @@ impl TimeManager {
             self.hard_time /= 2;
             self.opt_time /= 2;
             self.found_forced_move = ForcedMoveType::Weak;
-        } else /* if depth >= Self::VERY_FORCED */ {
+        } else
+        /* if depth >= Self::VERY_FORCED */
+        {
             // reduce thinking time by 75%
             self.hard_time /= 4;
             self.opt_time /= 4;
@@ -342,7 +341,8 @@ impl TimeManager {
 
     pub fn report_completed_depth(&mut self, _depth: Depth, eval: i32, best_move: Move) {
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
-            let (opt_time, hard_time, max_time) = SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let (opt_time, hard_time, max_time) =
+                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
             let max_time = Duration::from_millis(max_time);
             let hard_time = Duration::from_millis(hard_time);
             let opt_time = Duration::from_millis(opt_time);
@@ -370,10 +370,7 @@ impl TimeManager {
             self.hard_time = hard_time.min(max_time);
             self.opt_time = opt_time.min(max_time);
 
-            self.last_factors = [
-                stability_multiplier,
-                failed_low_multiplier,
-            ];
+            self.last_factors = [stability_multiplier, failed_low_multiplier];
         }
 
         self.prev_move = best_move;

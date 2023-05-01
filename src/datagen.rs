@@ -18,9 +18,9 @@ use crate::{
     },
     definitions::{depth::Depth, MEGABYTE},
     searchinfo::SearchInfo,
-    timemgmt::{SearchLimit, TimeManager},
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
+    timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{SYZYGY_ENABLED, SYZYGY_PATH},
 };
@@ -207,11 +207,7 @@ fn generate_on_thread(
         },
         ..TimeManager::default()
     };
-    let mut info = SearchInfo {
-        time_manager,
-        print_to_stdout: false,
-        ..SearchInfo::new(&stopped)
-    };
+    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -299,7 +295,8 @@ fn generate_on_thread(
         if options.log_level > 2 {
             eprintln!("Evaluating position...");
         }
-        let temp_limit = std::mem::replace(&mut info.time_manager.limit, SearchLimit::Depth(Depth::new(10)));
+        let temp_limit =
+            std::mem::replace(&mut info.time_manager.limit, SearchLimit::Depth(Depth::new(10)));
         let (eval, _) = board.search_position::<true>(
             &mut info,
             std::array::from_mut(&mut thread_data),
