@@ -391,6 +391,7 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
     while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
         if bytes == 0 {
             // EOF
+            sender.send("quit".into()).expect("couldn't send quit command to main thread");
             QUIT.store(true, Ordering::SeqCst);
             break;
         }
