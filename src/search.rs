@@ -188,6 +188,7 @@ impl Board {
         t: &mut ThreadData,
         total_nodes: &AtomicU64,
     ) {
+        eprintln!("info string entered ID on thread {} [{}]", t.thread_id, std::process::id());
         let d_move = self.default_move(tt, t);
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
@@ -306,6 +307,7 @@ impl Board {
                 break 'deepening;
             }
         }
+        eprintln!("info string exited ID on thread {} [{}]", t.thread_id, std::process::id());
     }
 
     /// Give a legal default move in the case where we don't have enough time to search.
