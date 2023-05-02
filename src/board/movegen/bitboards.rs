@@ -73,7 +73,7 @@ impl Iterator for BitLoop {
             // SOUNDNESS: the trailing_zeros of a u64 cannot exceed 64, which is less than u8::MAX
             #[allow(clippy::cast_possible_truncation)]
             let lsb: u8 = self.value.trailing_zeros() as u8;
-            self.value ^= 1 << lsb;
+            self.value &= self.value - 1;
             Some(Square::new(lsb))
         }
     }
