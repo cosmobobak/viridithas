@@ -1,13 +1,18 @@
-use std::{path::Path, sync::atomic::AtomicBool, time::{Instant, Duration}};
+use std::{
+    path::Path,
+    sync::atomic::{AtomicBool, AtomicUsize},
+    time::{Duration, Instant},
+};
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
+    cli,
     definitions::MEGABYTE,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
-    transpositiontable::TT, cli,
+    transpositiontable::TT,
 };
 
 const CONTROL_GREY: &str = "\u{001b}[38;5;243m";
@@ -22,11 +27,7 @@ struct EpdPosition {
     id: String,
 }
 
-pub fn gamut(
-    epd_path: impl AsRef<Path>,
-    params: &EvalParams,
-    cli: &cli::Cli,
-) {
+pub fn gamut(epd_path: impl AsRef<Path>, params: &EvalParams, cli: &cli::Cli) {
     let time: u64 = cli.epdtime;
     let hash: usize = cli.epdhash;
     let threads: usize = cli.epdthreads;
@@ -51,6 +52,8 @@ pub fn gamut(
 }
 
 fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let counter = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let fen = line.split_whitespace().take(4).chain(Some("1 1")).collect::<Vec<_>>().join(" ");
     board.set_from_fen(&fen).unwrap_or_else(|err| panic!("Invalid FEN: {fen}\n - {err}"));
     let fen_out = board.fen();
@@ -68,12 +71,19 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
                 .unwrap_or_else(|err| panic!("invalid bestmove: {best_move}, {err}"))
         })
         .collect::<Vec<_>>();
-    let id_idx = line.find("id").unwrap_or_else(|| panic!("no id found in {line}"));
-    let id = line[id_idx + 4..]
-        .split(|c| c == '"')
-        .next()
-        .unwrap_or_else(|| panic!("no id found in {line}"))
-        .to_string();
+    let id_idx = line.find("id");
+    let id = id_idx.map_or_else(
+        || {
+            format!("position {counter}")
+        },
+        |id_idx| {
+            line[id_idx + 4..]
+                .split(|c| c == '"')
+                .next()
+                .unwrap_or_else(|| panic!("no id found in {line}"))
+                .to_string()
+        },
+    );
     EpdPosition { fen, best_moves, id }
 }
 
@@ -84,7 +94,7 @@ fn run_on_positions(
     hash: usize,
     threads: usize,
     params: &EvalParams,
-    print: bool
+    print: bool,
 ) -> i32 {
     let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
