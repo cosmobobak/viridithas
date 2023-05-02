@@ -34,7 +34,7 @@ br4k1/1qrnbppp/pp1ppn2/8/NPPBP3/PN3P2/5QPP/2RR1B1K w - - bm Nxb6; id "arasan21.3
 r2q1rk1/ppp2p2/3p1np1/4pNQ1/4P1pP/1PPP4/1P3P2/R3K1R1 w Q - bm Qh6; id "arasan21.34"; c0 "Morella-Fernandez, Cuba 1998";
 1qb2rk1/3p1pp1/1p6/1pbBp3/r5p1/3QB3/PPP2P1P/2KR2R1 w - - bm b3; id "arasan21.35"; c0 "Shirov-Zvjaginsev, Biel 1995";
 r1b2q1k/2Qn1p1p/1p1Rpp2/p6B/4P2P/6N1/P4PP1/6K1 w - - bm e5; id "arasan21.36"; c0 "Amateur-Rybka, ACCA East-West team match, ICC 2008";
-1q3r1k/6b1/B6p/2P5/1P1p2pQ/P3r3/6P1/1R1R2K1 b - - bm g3; od "arasan21.37"; c0 "Arasan-DeathBook2020, ICC 2020";
+1q3r1k/6b1/B6p/2P5/1P1p2pQ/P3r3/6P1/1R1R2K1 b - - bm g3; id "arasan21.37"; c0 "Arasan-DeathBook2020, ICC 2020";
 r4rk1/p4ppp/qp2p3/b5B1/n1R5/5N2/PP2QPPP/1R4K1 w - - bm Bf6; id "arasan21.38"; c0 "Alekhine-Sterk, Budapest 1921";
 r2q1rk1/4bppp/3pb3/2n1pP2/1p2P1PP/1P3Q2/1BP1N1B1/2KR3R b - - bm Ra2; id "arasan21.39"; c0 "Gereben-Geller, Budapest 1952";
 2r2rkb/1Q1b3p/p2p3q/2PPnp2/1P2p1p1/2N5/P3BPPB/4RRK1 b - - bm e3; id "arasan21.40"; c0 "Houdini 4 x64-Stockfish 7 x64, Stockfish Gauntlet (G. Banks) 2016";
@@ -47,7 +47,7 @@ r1b2rk1/pp2bppp/3p4/q7/3BN1n1/1B3Q2/PPP3PP/R4RK1 w - - bm Qxf7+; id "arasan21.46
 r1b1rk2/p1pq2p1/1p1b1p1p/n2P4/2P1NP2/P2B1R2/1BQ3PP/R6K w - - bm Nxf6; id "arasan21.47"; c0 "Gutsche-Jones, W-ch24 sf05 email 2000";
 r2qr3/2p1b1pk/p5pp/1p2p3/nP2P1P1/1BP2RP1/P3QPK1/R1B5 w - - bm Bxh6; id "arasan21.48"; c0 "Gurgenidze-Klovans, Soviet Union 1959";
 1rbq1rk1/p5bp/3p2p1/2pP4/1p1n1BP1/3P3P/PP2N1B1/1R1Q1RK1 b - - bm Bxg4; id "arasan21.49"; c0 "Grefe-Kaplan, Berkeley 1968";
-k1b4r/1p3p2/pq2pNp1/5n1p/P3QP2/1P1R1BPP/2P5/1K6 b - - am Nxg3; id "arasan21.50"; c0 "Deep Fritz 13 Q6600-Arasan 17.2 Q6600, SSDF 2014";
+k1b4r/1p3p2/pq2pNp1/5n1p/P3QP2/1P1R1BPP/2P5/1K6 b - - bm Rd8 Qc7; id "arasan21.50"; c0 "Deep Fritz 13 Q6600-Arasan 17.2 Q6600, SSDF 2014";
 7b/8/kq6/8/8/1N2R3/K2P4/8 w - - bm Nd4; id "arasan21.51"; c0 "study by Kubbel";
 q3nrk1/4bppp/3p4/r3nPP1/4P2P/NpQ1B3/1P4B1/1K1R3R b - - bm Nc7; id "arasan21.52"; c0 "Karjakin-Anand, Corus Wijk aan Zee 2006";
 2r5/8/6k1/P1p3p1/2R5/1P1q4/1K4Q1/8 w - - bm a6; id "arasan21.53"; c0 "Stockfish 091114 - Houdini 4, TCEC Season 7, Stage 3 2014";
@@ -138,7 +138,7 @@ r1b2rk1/pppnq3/4ppp1/6N1/3P3Q/2PB4/P1PK2PP/3R3R w - - bm Nxe6; id "arasan21.136"
 r2r2k1/3bb1Pp/3pp1p1/p1q5/1p2PP2/P1N5/1PPQ4/1K1R1B1R w - - bm Nd5; id "arasan21.138"; c0 "Timman-Sisniega, Taxco izt 1985 (analysis by Timman)";
 8/2R5/3p4/3P4/3k3P/2p3K1/1r4P1/8 w - - bm Kf3; id "arasan21.139"; c0 "Flear-Legky, Le Touquet 1991 (anal. by Mueller)";
 r1bq2k1/1pp2ppp/3prn2/p3n3/2P5/PQN1PP2/1P1PB2P/R1B2R1K b - - bm Nfg4; id "arasan21.140"; c0 "Arasan-zerowin, FICS 2017";
-2kr3r/pp4pp/4pp2/2pq4/P1Nn4/4Q3/KP2B1PP/2RR4 b - - am Qxg2; id "arasan21.141"; c0 "Eklund-Berthelsen, DSU Jubilee 100-B corr 2003";
+2kr3r/pp4pp/4pp2/2pq4/P1Nn4/4Q3/KP2B1PP/2RR4 b - - bm Qc6; id "arasan21.141"; c0 "Eklund-Berthelsen, DSU Jubilee 100-B corr 2003";
 5r2/1p4k1/pP1pP1pp/2rP2q1/4Qp2/3Bb3/P5PP/4RR1K w - - bm Rf3; id "arasan21.142"; c0 "Hybl-Juarez, WC35/pr08 ICCF 2011";
 r2qr1k1/1b1pppbp/1p4p1/pP2P1B1/3N4/R7/1PP2PPP/3QR1K1 w - a6 bm Nf5; id "arasan21.143"; c0 "Godes-Morozov, Mirotvorsky mem-A corr8185 1981";
 4k3/1R6/Pb3p2/1P1n4/5p2/8/4K3/8 w - - bm Kd3; id "arasan21.144"; c0 "Ding Liren-Wang Yue, ch-CHN 2012 Xinghua 2012";
