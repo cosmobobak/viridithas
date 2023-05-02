@@ -217,7 +217,7 @@ impl<'a> TTView<'a> {
             let write = TTEntry {
                 key,
                 m: best_move,
-                score: score.try_into().unwrap(),
+                score: score.try_into().expect("attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table"),
                 depth: depth.try_into().unwrap(),
                 age_and_flag: AgeAndFlag::new(self.age, flag),
             };
