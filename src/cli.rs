@@ -49,6 +49,9 @@ pub struct Cli {
     /// Number of threads to use when doing an epd test suite.
     #[clap(long, value_name = "N_THREADS", default_value = "1")]
     pub epdthreads: usize,
+    /// Whether to print the program's thinking to stdout when doing an epd test suite.
+    #[clap(long)]
+    pub epdprint: bool,
     /// Path to a WDL data file to evaluate for NNUE data.
     #[clap(long, value_name = "PATH")]
     pub nnueconversionpath: Option<std::path::PathBuf>,

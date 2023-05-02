@@ -124,6 +124,8 @@ pub struct TimeManager {
     pub found_forced_move: ForcedMoveType,
     /// The last set of multiplicative factors.
     pub last_factors: [f64; 2],
+    /// Whether search has been ended early due to a correct move being found.
+    pub correct_move_found: bool,
 }
 
 impl Default for TimeManager {
@@ -141,6 +143,7 @@ impl Default for TimeManager {
             mate_counter: 0,
             found_forced_move: ForcedMoveType::None,
             last_factors: [1.0, 1.0],
+            correct_move_found: false,
         }
     }
 }
@@ -154,6 +157,7 @@ impl TimeManager {
         self.mate_counter = 0;
         self.found_forced_move = ForcedMoveType::None;
         self.last_factors = [1.0, 1.0];
+        self.correct_move_found = false;
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
             let (opt_time, hard_time, max_time) =
@@ -259,6 +263,7 @@ impl TimeManager {
         }
         if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
             if correct_moves.contains(&best_move) {
+                self.correct_move_found = true;
                 ControlFlow::Break(())
             } else {
                 ControlFlow::Continue(())

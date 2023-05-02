@@ -1,4 +1,4 @@
-use std::{path::Path, sync::atomic::AtomicBool, time::Instant};
+use std::{path::Path, sync::atomic::AtomicBool, time::{Instant, Duration}};
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
@@ -7,12 +7,13 @@ use crate::{
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
-    transpositiontable::TT,
+    transpositiontable::TT, cli,
 };
 
 const CONTROL_GREY: &str = "\u{001b}[38;5;243m";
 const CONTROL_GREEN: &str = "\u{001b}[32m";
 const CONTROL_RED: &str = "\u{001b}[31m";
+const CONTROL_YELLOW: &str = "\u{001b}[33m";
 const CONTROL_RESET: &str = "\u{001b}[0m";
 
 struct EpdPosition {
@@ -24,10 +25,13 @@ struct EpdPosition {
 pub fn gamut(
     epd_path: impl AsRef<Path>,
     params: &EvalParams,
-    time: u64,
-    hash: usize,
-    threads: usize,
+    cli: &cli::Cli,
 ) {
+    let time: u64 = cli.epdtime;
+    let hash: usize = cli.epdhash;
+    let threads: usize = cli.epdthreads;
+    let print = cli.epdprint;
+
     let mut board = Board::new();
     let raw_text = std::fs::read_to_string(epd_path).unwrap();
     let text = raw_text.trim();
@@ -41,7 +45,7 @@ pub fn gamut(
     let n_positions = positions.len();
     println!("successfully parsed {n_positions} positions!");
 
-    let successes = run_on_positions(positions, board, time, hash, threads, params);
+    let successes = run_on_positions(positions, board, time, hash, threads, params, print);
 
     println!("{successes}/{n_positions} passed");
 }
@@ -80,6 +84,7 @@ fn run_on_positions(
     hash: usize,
     threads: usize,
     params: &EvalParams,
+    print: bool
 ) -> i32 {
     let mut tt = TT::new();
     tt.resize(hash * MEGABYTE);
@@ -93,6 +98,7 @@ fn run_on_positions(
         board.set_from_fen(&fen).unwrap();
         tt.clear();
         for t in &mut thread_data {
+            t.clear_tables();
             t.nnue.refresh_acc(&board);
         }
         let stopped = AtomicBool::new(false);
@@ -102,7 +108,7 @@ fn run_on_positions(
         };
         let mut info = SearchInfo {
             time_manager,
-            print_to_stdout: false,
+            print_to_stdout: print,
             eval_params: params.clone(),
             ..SearchInfo::new(&stopped)
         };
@@ -110,6 +116,14 @@ fn run_on_positions(
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
         let elapsed = info.time_manager.start_time.elapsed();
         let passed = best_moves.contains(&bm);
+        if elapsed > Duration::from_millis(time + 20) {
+            eprintln!("{CONTROL_YELLOW}[WARNING] Used more than {time}ms on {id} (used {elapsed}ms){CONTROL_RESET}", elapsed = elapsed.as_millis());
+            break;
+        }
+        if info.time_manager.correct_move_found && !passed {
+            eprintln!("{CONTROL_YELLOW}[WARNING] Time manager claimed correct move found, but program chose {bm} for {id}{CONTROL_RESET}");
+            break;
+        }
         let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
         let failinfo = if passed {
             format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET}", elapsed.as_secs_f64())

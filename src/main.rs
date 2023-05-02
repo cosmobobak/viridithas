@@ -53,7 +53,7 @@ fn main() {
     }
 
     let eparams =
-        cli.eparams.map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
+        cli.eparams.clone().map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
             board::evaluation::parameters::EvalParams::from_file(p)
                 .expect("failed to load evaluation parameters")
         });
@@ -134,8 +134,8 @@ fn main() {
         return piecesquaretable::render_pst_table(&eparams.piece_square_tables);
     }
 
-    if let Some(epd_path) = cli.epdpath {
-        return epd::gamut(epd_path, &eparams, cli.epdtime, cli.epdhash, cli.epdthreads);
+    if let Some(epd_path) = cli.epdpath.as_deref() {
+        return epd::gamut(epd_path, &eparams, &cli);
     }
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {

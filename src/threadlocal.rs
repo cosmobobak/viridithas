@@ -59,7 +59,7 @@ impl ThreadData {
             depth: 0,
         };
 
-        td.alloc_tables();
+        td.clear_tables();
 
         td
     }
@@ -80,7 +80,7 @@ impl ThreadData {
             != 0
     }
 
-    fn alloc_tables(&mut self) {
+    pub fn clear_tables(&mut self) {
         self.main_history.clear();
         self.tactical_history.clear();
         self.followup_history.clear();

@@ -181,6 +181,7 @@ impl Board {
     /// Performs the iterative deepening search.
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `MAIN_THREAD = true`, and the helper threads with `MAIN_THREAD = false`.
+    #[allow(clippy::too_many_lines)]
     fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
         &mut self,
         info: &mut SearchInfo,
@@ -241,6 +242,14 @@ impl Board {
                     if MAIN_THREAD {
                         info.time_manager.report_aspiration_fail(depth, Bound::Lower);
                     }
+
+                    if let ControlFlow::Break(_) =
+                        info.time_manager.solved_breaker::<MAIN_THREAD>(pv.line[0], 0, d)
+                    {
+                        info.stopped.store(true, Ordering::SeqCst);
+                        break 'deepening;
+                    }
+
                     continue;
                 }
 
