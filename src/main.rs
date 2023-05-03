@@ -4,6 +4,12 @@
 
 //! Viridithas, a UCI chess engine written in Rust.
 
+use crate::{
+    board::evaluation::parameters::EvalParams,
+    nnue::{convert, network},
+    search::parameters::SearchParams,
+};
+
 #[macro_use]
 mod macros;
 
@@ -46,17 +52,20 @@ fn main() {
     // takes about 3ms to generate the attack tables on boot
     magic::initialise();
 
+    if std::env::args_os().len() == 1 {
+        // fast path to UCI:
+        return uci::main_loop(EvalParams::default(), false);
+    }
+
     let cli = <cli::Cli as clap::Parser>::parse();
 
     if let Some(config) = cli.datagen {
         return datagen::gen_data_main(config.as_deref());
     }
 
-    let eparams =
-        cli.eparams.clone().map_or_else(board::evaluation::parameters::EvalParams::default, |p| {
-            board::evaluation::parameters::EvalParams::from_file(p)
-                .expect("failed to load evaluation parameters")
-        });
+    let eparams = cli.eparams.clone().map_or_else(EvalParams::default, |p| {
+        EvalParams::from_file(p).expect("failed to load evaluation parameters")
+    });
 
     assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
     assert!([0, 2].contains(&cli.jsontobin.len()), "jsontobin requires exactly two paths");
@@ -79,10 +88,10 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(
+        return convert::evaluate_fens(
             input_file,
             output_file,
-            nnue::convert::Format::OurTexel,
+            convert::Format::OurTexel,
             cli.nnuedepth,
             true,
             cli.nnuefornnue,
@@ -94,10 +103,10 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::evaluate_fens(
+        return convert::evaluate_fens(
             path,
             output_path,
-            nnue::convert::Format::Marlinflow,
+            convert::Format::Marlinflow,
             cli.nnuedepth,
             true,
             cli.nnuefornnue,
@@ -109,7 +118,7 @@ fn main() {
             path.set_extension("nnuedata");
             path
         });
-        return nnue::convert::dedup(path, output_path).unwrap();
+        return convert::dedup(path, output_path).unwrap();
     } else if let [path_1, path_2] = cli.merge.as_slice() {
         let output_path = cli.output.unwrap_or_else(|| {
             // create merged.nnuedata in the current directory
@@ -117,7 +126,7 @@ fn main() {
             path.push("merged.nnuedata");
             path
         });
-        return nnue::convert::merge(path_1, path_2, output_path).unwrap();
+        return convert::merge(path_1, path_2, output_path).unwrap();
     }
 
     if cli.info {
@@ -126,7 +135,7 @@ fn main() {
 
     if cli.visparams {
         println!("{eparams}");
-        println!("{}", crate::search::parameters::SearchParams::default());
+        println!("{}", SearchParams::default());
         return;
     }
 
@@ -139,11 +148,11 @@ fn main() {
     }
 
     if let [json_path, bin_path] = cli.jsontobin.as_slice() {
-        return nnue::network::convert_json_to_binary(json_path, bin_path);
+        return network::convert_json_to_binary(json_path, bin_path);
     }
 
     if cli.visnnue {
-        return crate::nnue::network::visualise_nnue();
+        return network::visualise_nnue();
     }
 
     uci::main_loop(eparams, cli.bench.is_some());
