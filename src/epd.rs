@@ -128,10 +128,9 @@ fn run_on_positions(
         let passed = best_moves.contains(&bm);
         if elapsed > Duration::from_millis(time + 20) {
             eprintln!("{CONTROL_YELLOW}[WARNING] Used more than {time}ms on {id} (used {elapsed}ms){CONTROL_RESET}", elapsed = elapsed.as_millis());
-            break;
         }
         if info.time_manager.correct_move_found && !passed {
-            eprintln!("{CONTROL_YELLOW}[WARNING] Time manager claimed correct move found, but program chose {bm} for {id}{CONTROL_RESET}");
+            eprintln!("{CONTROL_RED}[WARNING] Time manager claimed correct move found, but program chose {bm} for {id}{CONTROL_RESET}");
             break;
         }
         let colour = if passed { CONTROL_GREEN } else { CONTROL_RED };
