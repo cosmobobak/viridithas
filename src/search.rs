@@ -411,26 +411,12 @@ impl Board {
             move_picker.skip_quiets = true;
         }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-            let worst_case =
-                self.estimated_see(m) - get_see_value(self.piece_at(m.from()).piece_type());
 
             if !self.make_move::<NNUE>(m, t, info) {
                 continue;
             }
             info.nodes += 1;
             moves_made += 1;
-
-            // low-effort SEE pruning - if the worst case is enough to beat beta, just stop.
-            // the worst case for a capture is that we lose the capturing piece immediately.
-            // as such, worst_case = (SEE of the capture) - (value of the capturing piece).
-            // we have to do this after make_move, because the move has to be legal.
-            let at_least = stand_pat + worst_case;
-            if at_least > beta && !is_game_theoretic_score(at_least * 2) {
-                self.unmake_move::<NNUE>(t, info);
-                pv.length = 1;
-                pv.line[0] = m;
-                return at_least;
-            }
 
             let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
             self.unmake_move::<NNUE>(t, info);
