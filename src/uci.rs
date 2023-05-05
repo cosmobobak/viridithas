@@ -598,7 +598,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 QUIT.store(true, Ordering::SeqCst);
                 break;
             }
-            "ucinewgame" => do_newgame(&mut pos, &tt),
+            "ucinewgame" => do_newgame(&mut pos, &tt, &mut thread_data),
             "eval" => {
                 let eval = if pos.in_check::<{ Board::US }>() {
                     0
@@ -722,7 +722,7 @@ fn bench(
     let mut node_sum = 0u64;
     let start = Instant::now();
     for fen in BENCH_POSITIONS {
-        let res = do_newgame(pos, tt);
+        let res = do_newgame(pos, tt, thread_data);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);
@@ -799,10 +799,11 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     );
 }
 
-fn do_newgame(pos: &mut Board, tt: &TT) -> Result<(), UciError> {
-    let res = parse_position("position startpos\n", pos);
+fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
+    parse_position("position startpos\n", pos)?;
     tt.clear();
-    res
+    thread_data.iter_mut().for_each(ThreadData::clear_tables);
+    Ok(())
 }
 
 /// Normalizes the internal value as reported by evaluate or search
