@@ -7,8 +7,6 @@ use crate::{
 const AGEING_DIVISOR: i16 = 2;
 
 const fn history_bonus(depth: Depth) -> i32 {
-    #![allow(clippy::cast_possible_truncation)]
-    // i'm genuinely unsure if this is the same way ethereal does it, operator precedence is a trip.
     let depth = depth.round();
     if depth > 13 {
         32
