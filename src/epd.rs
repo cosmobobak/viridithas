@@ -73,9 +73,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
         .collect::<Vec<_>>();
     let id_idx = line.find("id");
     let id = id_idx.map_or_else(
-        || {
-            format!("position {counter}")
-        },
+        || format!("position {counter}"),
         |id_idx| {
             line[id_idx + 4..]
                 .split(|c| c == '"')
@@ -139,18 +137,14 @@ fn run_on_positions(
         } else {
             format!(" {CONTROL_GREY}{:.1}s{CONTROL_RESET} program chose {CONTROL_RED}{bm}{CONTROL_RESET}", elapsed.as_secs_f64())
         };
-        let move_strings =
-            best_moves
-                .iter()
-                .map(|&m| {
-                    if m == bm {
-                        format!("{m}")
-                    } else {
-                        format!("{CONTROL_GREY}{m}{CONTROL_RESET}")
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+        let move_fmt = |&m| {
+            if m == bm {
+                format!("{m}")
+            } else {
+                format!("{CONTROL_GREY}{m}{CONTROL_RESET}")
+            }
+        };
+        let move_strings = best_moves.iter().map(move_fmt).collect::<Vec<_>>().join(", ");
         println!(
             "{CONTROL_GREY}{id:midl$}{CONTROL_RESET} {fen:mfl$} {colour}{}{CONTROL_RESET} [{move_strings}]{failinfo}",
             if passed { "PASS" } else { "FAIL" },
