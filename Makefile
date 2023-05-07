@@ -1,14 +1,15 @@
 EXE = Viridithas
+LXE = viridithas
 ifeq ($(OS),Windows_NT)
 	NAME := $(EXE).exe
-	V1NAME := $(EXE)-x86_64-v1.exe
-	V2NAME := $(EXE)-x86_64-v2.exe
-	V3NAME := $(EXE)-x86_64-v3.exe
+	V1NAME := $(LXE)-x86_64-win-v1.exe
+	V2NAME := $(LXE)-x86_64-win-v2.exe
+	V3NAME := $(LXE)-x86_64-win-v3.exe
 else
 	NAME := $(EXE)
-	V1NAME := $(EXE)-x86_64-v1
-	V2NAME := $(EXE)-x86_64-v2
-	V3NAME := $(EXE)-x86_64-v3
+	V1NAME := $(LXE)-x86_64-linux-v1
+	V2NAME := $(LXE)-x86_64-linux-v2
+	V3NAME := $(LXE)-x86_64-linux-v3
 endif
 
 rule:
