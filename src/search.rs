@@ -1078,7 +1078,7 @@ impl Board {
 
     /// Test if a move is *forced* - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position,
-    /// by a margin of at least `MARGIN`. (typically ~200cp).
+    /// by at least `margin`. (typically ~200cp).
     pub fn is_forced(
         &mut self,
         margin: i32,
