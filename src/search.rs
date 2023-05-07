@@ -13,8 +13,8 @@ use std::{
 use crate::{
     board::{
         evaluation::{
-            self, get_see_value, is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in,
-            MATE_SCORE, MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
+            self, is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+            MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
             bitboards::{self, first_square},
@@ -1128,7 +1128,7 @@ impl Board {
         }
 
         // worst case is losing the piece
-        balance -= get_see_value(next_victim);
+        balance -= next_victim.see_value();
 
         // if the worst case passes, we can return true immediately.
         if balance >= 0 {
@@ -1184,7 +1184,7 @@ impl Board {
 
             colour = colour.flip();
 
-            balance = -balance - 1 - get_see_value(next_victim);
+            balance = -balance - 1 - next_victim.see_value();
 
             if balance >= 0 {
                 // from Ethereal:

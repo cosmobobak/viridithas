@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::board::evaluation::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
     v: u8,
@@ -140,6 +142,19 @@ impl PieceType {
     pub fn from_symbol(c: u8) -> Option<Self> {
         const SYMBOLS: [u8; 7] = *b".PNBRQK";
         SYMBOLS.iter().position(|&x| x == c).and_then(|x| Some(Self::new(x.try_into().ok()?)))
+    }
+
+    pub const fn see_value(self) -> i32 {
+        const SEE_PIECE_VALUES: [i32; 7] = [
+            0,
+            PAWN_VALUE.value(128),
+            KNIGHT_VALUE.value(128),
+            BISHOP_VALUE.value(128),
+            ROOK_VALUE.value(128),
+            QUEEN_VALUE.value(128),
+            0,
+        ];
+        SEE_PIECE_VALUES[self.index()]
     }
 }
 
