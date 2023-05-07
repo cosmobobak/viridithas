@@ -157,9 +157,9 @@ impl Board {
     /// Computes a score for the position, from the point of view of the side to move.
     /// This function should strive to be as cheap to call as possible, relying on
     /// incremental updates in make-unmake to avoid recomputation.
-    pub fn evaluate_classical(&self, i: &SearchInfo, nodes: u64) -> i32 {
+    pub fn evaluate_classical(&self, t: &ThreadData, i: &SearchInfo, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == Colour::WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+            return if self.side == Colour::WHITE { draw_score(t, nodes, self.turn()) } else { -draw_score(t, nodes, self.turn()) };
         }
 
         let material = self.material();
@@ -187,7 +187,7 @@ impl Board {
 
         let score = score.value(self.phase());
 
-        let score = self.preprocess_drawish_scores(score, nodes);
+        let score = self.preprocess_drawish_scores(t, score, nodes);
 
         if self.side == Colour::WHITE {
             score
@@ -202,7 +202,7 @@ impl Board {
 
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == Colour::WHITE { draw_score(nodes) } else { -draw_score(nodes) };
+            return if self.side == Colour::WHITE { draw_score(t, nodes, self.turn()) } else { -draw_score(t, nodes, self.turn()) };
         }
 
         let v = t.nnue.evaluate(self.side);
@@ -219,7 +219,7 @@ impl Board {
         if USE_NNUE {
             self.evaluate_nnue(t, nodes)
         } else {
-            self.evaluate_classical(i, nodes)
+            self.evaluate_classical(t, i, nodes)
         }
     }
 
@@ -288,9 +288,9 @@ impl Board {
         false
     }
 
-    const fn preprocess_drawish_scores(&self, score: i32, nodes: u64) -> i32 {
+    fn preprocess_drawish_scores(&self, t: &ThreadData, score: i32, nodes: u64) -> i32 {
         // if we can't win with our material, we clamp the eval to zero.
-        let drawscore = draw_score(nodes);
+        let drawscore = draw_score(t, nodes, self.turn());
         if score > drawscore && self.unwinnable_for::<true>()
             || score < drawscore && self.unwinnable_for::<false>()
         {
@@ -635,14 +635,17 @@ struct KingDangerInfo {
 }
 
 mod tests {
+
     #[test]
     fn unwinnable() {
+        use crate::threadlocal::ThreadData;
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
         crate::magic::initialise();
         let board = super::Board::from_fen(FEN).unwrap();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let info = crate::searchinfo::SearchInfo::new(&stopped);
-        let eval = board.evaluate_classical(&info, 0);
+        let thread = ThreadData::new(0, &board);
+        let eval = board.evaluate_classical(&thread, &info, 0);
         assert!(
             (-2..=2).contains(&(eval.abs())),
             "eval is not a draw score in a position unwinnable for both sides."
@@ -652,6 +655,7 @@ mod tests {
     #[test]
     fn turn_equality() {
         use crate::board::evaluation::parameters::EvalParams;
+        use crate::threadlocal::ThreadData;
         const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
         crate::magic::initialise();
@@ -660,8 +664,10 @@ mod tests {
         let board2 = super::Board::from_fen(FEN2).unwrap();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let info = crate::searchinfo::SearchInfo::new(&stopped);
-        let eval1 = board1.evaluate_classical(&info, 0);
-        let eval2 = board2.evaluate_classical(&info, 0);
+        let thread1 = ThreadData::new(0, &board1);
+        let thread2 = ThreadData::new(0, &board2);
+        let eval1 = board1.evaluate_classical(&thread1, &info, 0);
+        let eval2 = board2.evaluate_classical(&thread2, &info, 0);
         assert_eq!(eval1, -eval2 + 2 * tempo);
     }
 
@@ -678,12 +684,14 @@ mod tests {
     #[test]
     fn startpos_eval_equality() {
         use crate::board::evaluation::parameters::EvalParams;
+        use crate::threadlocal::ThreadData;
         crate::magic::initialise();
         let tempo = EvalParams::default().tempo.0;
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let info = crate::searchinfo::SearchInfo::new(&stopped);
-        assert_eq!(board.evaluate_classical(&info, 0), tempo);
+        let thread = ThreadData::new(0, &board);
+        assert_eq!(board.evaluate_classical(&thread, &info, 0), tempo);
     }
 
     #[test]
@@ -756,6 +764,7 @@ mod tests {
     #[test]
     fn passers_should_be_pushed() {
         use super::Board;
+        use crate::threadlocal::ThreadData;
 
         let starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
         let end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
@@ -763,8 +772,11 @@ mod tests {
         let binding = std::sync::atomic::AtomicBool::new(false);
         let info = crate::searchinfo::SearchInfo::new(&binding);
 
-        let starting_rank_eval = starting_rank_passer.evaluate_classical(&info, 0);
-        let end_rank_eval = end_rank_passer.evaluate_classical(&info, 0);
+        let thread1 = ThreadData::new(0, &starting_rank_passer);
+        let thread2 = ThreadData::new(0, &end_rank_passer);
+
+        let starting_rank_eval = starting_rank_passer.evaluate_classical(&thread1, &info, 0);
+        let end_rank_eval = end_rank_passer.evaluate_classical(&thread2, &info, 0);
 
         // is should be better to have a passer that is more advanced.
         assert!(
