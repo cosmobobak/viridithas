@@ -351,7 +351,7 @@ impl Board {
 
         // check draw
         if self.is_draw() {
-            return draw_score(info.nodes);
+            return draw_score(t, info.nodes, self.turn());
         }
 
         let in_check = self.in_check::<{ Self::US }>();
@@ -497,7 +497,7 @@ impl Board {
         if !ROOT {
             // check draw
             if self.is_draw() {
-                return draw_score(info.nodes);
+                return draw_score(t, info.nodes, self.turn());
             }
 
             // are we too deep?
@@ -956,7 +956,7 @@ impl Board {
             if in_check {
                 return mated_in(height);
             }
-            return draw_score(info.nodes);
+            return draw_score(t, info.nodes, self.turn());
         }
 
         best_score = best_score.clamp(syzygy_min, syzygy_max);
@@ -1357,9 +1357,20 @@ impl Board {
     }
 }
 
-pub const fn draw_score(nodes: u64) -> i32 {
+pub fn draw_score(t: &ThreadData, nodes: u64, stm: Colour) -> i32 {
     // score fuzzing helps with threefolds.
-    (nodes & 0b11) as i32 - 2
+    let random_component = (nodes & 0b11) as i32 - 2;
+    // higher contempt means we will play on in drawn positions more often,
+    // so if we are to play in a drawn position, then we should return the
+    // negative of the contempt score.
+    let contempt = uci::CONTEMPT.load(Ordering::Relaxed);
+    let contempt_component = if stm == t.stm_at_root {
+        -contempt
+    } else {
+        contempt
+    };
+    
+    random_component + contempt_component
 }
 
 #[derive(Clone, Debug)]

@@ -50,6 +50,7 @@ pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
+pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
 }
@@ -370,6 +371,15 @@ fn parse_setoption(
             }
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
+        "Contempt" => {
+            let value: i32 = opt_value.parse()?;
+            if !(-10000..=10000).contains(&value) {
+                return Err(UciError::IllegalValue(
+                    "Contempt value must be between -10000 and 10000".to_string(),
+                ));
+            }
+            CONTEMPT.store(value, Ordering::SeqCst);
+        }
         _ => {
             eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options");
         }
@@ -516,6 +526,7 @@ fn print_uci_response(full: bool) {
     println!("option name SyzygyPath type string default <empty>");
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
+    println!("option name Contempt type spin default 0 min -10000 max 10000");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
@@ -582,6 +593,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 println!("SyzygyPath: {}", SYZYGY_PATH.lock().expect("failed to lock syzygy path"));
                 println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
                 println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
+                println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
                 // println!("MultiPV: {}", MULTI_PV.load(Ordering::SeqCst));
                 if arg == "ucidumpfull" {
                     for (id, default) in SearchParams::default().ids_with_values() {

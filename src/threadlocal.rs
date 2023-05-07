@@ -31,6 +31,8 @@ pub struct ThreadData {
     pub pvs: Vec<PVariation>,
     pub completed: usize,
     pub depth: usize,
+
+    pub stm_at_root: Colour,
 }
 
 impl ThreadData {
@@ -57,6 +59,7 @@ impl ThreadData {
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,
             depth: 0,
+            stm_at_root: board.turn(),
         };
 
         td.clear_tables();
@@ -103,6 +106,7 @@ impl ThreadData {
         self.completed = 0;
         self.pvs.fill(PVariation::default());
         self.nnue.refresh_acc(board);
+        self.stm_at_root = board.turn();
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
