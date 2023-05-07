@@ -820,9 +820,9 @@ fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Resul
 
 /// Normalizes the internal value as reported by evaluate or search
 /// to the UCI centipawn result used in output. This value is derived from
-/// the `win_rate_model` such that Viridithas outputs an advantage of
-/// "100 centipawns" for a position if the engine has a 50% probability to win
-/// from this position in selfplay at 8s+0.08s time control.
+/// [the WLD model](https://github.com/vondele/WLD_model) such that Viridithas
+/// outputs an advantage of 100 centipawns for a position if the engine has a 
+/// 50% probability to win from this position in selfplay at 16s+0.16s time control.
 const NORMALISE_TO_PAWN_VALUE: i32 = 215;
 fn win_rate_model(eval: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
