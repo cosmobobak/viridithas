@@ -411,7 +411,6 @@ impl Board {
             move_picker.skip_quiets = true;
         }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-
             if !self.make_move::<NNUE>(m, t, info) {
                 continue;
             }

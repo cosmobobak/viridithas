@@ -243,13 +243,21 @@ impl EvalParams {
         out
     }
 
-    pub fn save_param_vec<P: AsRef<Path>>(param_vec: &[i32], path: P) {
+    pub fn save_param_vec(param_vec: &[i32], path: impl AsRef<Path>) {
+        Self::save_param_vec_impl(param_vec, path.as_ref());
+    }
+
+    fn save_param_vec_impl(param_vec: &[i32], path: &Path) {
         let mut output = std::fs::File::create(path).unwrap();
         let out = param_vec.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
         std::io::Write::write_all(&mut output, out.as_bytes()).unwrap();
     }
 
-    pub fn load_param_vec<P: AsRef<Path>>(path: P) -> Result<Vec<i32>, Box<dyn Error>> {
+    pub fn load_param_vec(path: impl AsRef<Path>) -> Result<Vec<i32>, Box<dyn Error>> {
+        Self::load_param_vec_impl(path.as_ref())
+    }
+
+    fn load_param_vec_impl(path: &Path) -> Result<Vec<i32>, Box<dyn Error>> {
         let mut params = Vec::new();
         let input = std::fs::read_to_string(path)?;
         for param in input.trim().split(',') {
@@ -259,7 +267,7 @@ impl EvalParams {
         Ok(params)
     }
 
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let vec = Self::load_param_vec(path)?;
         Ok(Self::devectorise(&vec))
     }

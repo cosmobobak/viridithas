@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    path::Path,
     sync::atomic::AtomicBool,
     time::Instant,
 };
@@ -159,15 +160,13 @@ fn local_search_optimise<F1: FnMut(&[i32]) -> f64 + Sync>(
     best_params
 }
 
-pub fn tune<P>(
+pub fn tune(
     resume: bool,
     examples: usize,
     starting_params: &EvalParams,
     params_to_tune: Option<&[usize]>,
-    data_path: P,
-) where
-    P: AsRef<std::path::Path>,
-{
+    data_path: impl AsRef<Path>,
+) {
     println!("Parsing tuning data...");
     let start_time = Instant::now();
     let mut data = read_data(data_path);
@@ -207,10 +206,7 @@ pub fn tune<P>(
     EvalParams::save_param_vec(&best_params, "params/localsearchfinal.txt");
 }
 
-fn read_data<P>(path: P) -> Vec<TrainingExample>
-where
-    P: AsRef<std::path::Path>,
-{
+fn read_data(path: impl AsRef<Path>) -> Vec<TrainingExample> {
     let data = File::open(path).unwrap();
     BufReader::new(data)
         .lines()

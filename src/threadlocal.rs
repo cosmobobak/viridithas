@@ -2,7 +2,7 @@ use crate::{
     board::Board,
     chessmove::Move,
     definitions::{MAX_DEPTH, MAX_PLY},
-    historytable::{DoubleHistoryTable, HistoryTable, MoveTable, CaptureHistoryTable},
+    historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
     piece::Colour,
     search::PVariation,

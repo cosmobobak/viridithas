@@ -63,7 +63,7 @@ fn main() {
         return datagen::gen_data_main(config.as_deref());
     }
 
-    let eparams = cli.eparams.clone().map_or_else(EvalParams::default, |p| {
+    let eparams = cli.eparams.as_deref().map_or_else(EvalParams::default, |p| {
         EvalParams::from_file(p).expect("failed to load evaluation parameters")
     });
 

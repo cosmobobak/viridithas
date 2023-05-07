@@ -1,4 +1,8 @@
-use crate::{board::{Board, history}, chessmove::Move, threadlocal::ThreadData};
+use crate::{
+    board::{history, Board},
+    chessmove::Move,
+    threadlocal::ThreadData,
+};
 
 use super::{MoveList, MoveListEntry};
 
@@ -171,7 +175,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         self.index += 1;
 
         // as the scores of positive-SEE moves can be pushed below
-        // WINNING_CAPTURE_SCORE if their capture history is particularly 
+        // WINNING_CAPTURE_SCORE if their capture history is particularly
         // bad, this implicitly filters out moves with bad history scores.
         let not_winning = m.score < WINNING_CAPTURE_SCORE;
 
@@ -198,7 +202,12 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         t.get_followup_history_scores(pos, ms);
     }
 
-    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
+    pub fn score_captures(
+        t: &ThreadData,
+        pos: &Board,
+        moves: &mut [MoveListEntry],
+        see_threshold: i32,
+    ) {
         const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
         // zero-out the ordering scores
         for m in moves.iter_mut() {

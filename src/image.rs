@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{BufWriter, Write},
+    path::Path,
 };
 
 pub struct Image {
@@ -106,10 +107,7 @@ impl Image {
 
     // Write the image to a TGA file with the given name.
     // Format specification: http://www.gamers.org/dEngine/quake3/TGA.txt
-    pub fn save_as_tga<P>(&self, filename: P)
-    where
-        P: AsRef<std::path::Path>,
-    {
+    pub fn save_as_tga(&self, filename: impl AsRef<Path>) {
         #![allow(clippy::cast_possible_truncation)]
         let file = File::create(&filename).unwrap();
         // use a buffered writer

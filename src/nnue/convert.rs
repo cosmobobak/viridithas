@@ -79,9 +79,9 @@ fn batch_convert<const USE_NNUE: bool>(
     }
 }
 
-pub fn evaluate_fens<P1: AsRef<Path>, P2: AsRef<Path>>(
-    input_file: P1,
-    output_file: P2,
+pub fn evaluate_fens(
+    input_file: impl AsRef<Path>,
+    output_file: impl AsRef<Path>,
     format: Format,
     depth: i32,
     filter_quiescent: bool,
@@ -166,23 +166,26 @@ impl<'a> QuicklySortableString<'a> {
 
 /// Deduplicate a dataset by board.
 /// This deduplicates based on the first two parts of FENs, which are the board and the side to move.
-pub fn dedup<P1: AsRef<Path>, P2: AsRef<Path>>(input_file: P1, output_file: P2) -> io::Result<()> {
+pub fn dedup(input_file: impl AsRef<Path>, output_file: impl AsRef<Path>) -> io::Result<()> {
     #![allow(clippy::cast_precision_loss)]
     let start_time = std::time::Instant::now();
     let all_data = std::fs::read_to_string(input_file)?; // we need everything in memory anyway
     let mb = all_data.len() as f64 / 1_000_000.0;
     let elapsed = start_time.elapsed();
     println!("Read {mb:.0} bytes in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
-    dedup_inner(output_file, &all_data)
+    dedup_inner(output_file.as_ref(), &all_data)
 }
 
 /// Merge two datasets, deduplicating by boards, according to the same criterion as `nnue::convert::dedup`.
-pub fn merge<P1, P2, P3>(path_1: P1, path_2: P2, output: P3) -> Result<(), Box<dyn Error>>
-where
-    P1: AsRef<Path>,
-    P2: AsRef<Path>,
-    P3: AsRef<Path>,
-{
+pub fn merge(
+    path_1: impl AsRef<Path>,
+    path_2: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+) -> Result<(), Box<dyn Error>> {
+    merge_impl(path_1.as_ref(), path_2.as_ref(), output.as_ref())
+}
+
+fn merge_impl(path_1: &Path, path_2: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     #![allow(clippy::cast_precision_loss)]
     use std::io::Read;
     let start_time = std::time::Instant::now();
@@ -198,7 +201,7 @@ where
     Ok(dedup_inner(output, &all_data)?)
 }
 
-fn dedup_inner<P2: AsRef<Path>>(output_file: P2, all_data: &str) -> Result<(), io::Error> {
+fn dedup_inner(output_file: &Path, all_data: &str) -> Result<(), io::Error> {
     let mut output = BufWriter::new(File::create(output_file)?);
     let start_time = std::time::Instant::now();
     let mut data = all_data
