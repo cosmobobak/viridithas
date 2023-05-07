@@ -8,7 +8,7 @@ use crate::{
     board::evaluation::{is_mate_score, mate_in},
     chessmove::Move,
     definitions::depth::Depth,
-    search::PVariation,
+    search::pv::PVariation,
     transpositiontable::Bound,
 };
 

@@ -1,9 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod parameters;
+pub mod pv;
 
 use std::{
-    fmt::Display,
     ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
     thread,
@@ -25,11 +25,10 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    definitions::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, MAX_PLY,
-    },
+    definitions::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH},
     historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
+    search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
@@ -90,7 +89,7 @@ impl Board {
         thread_headers: &mut [ThreadData],
         tt: TTView,
     ) -> (i32, Move) {
-        self.reset_everything_for_root_search(info, thread_headers);
+        set_up_for_search(self, info, thread_headers);
 
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
@@ -163,19 +162,6 @@ impl Board {
 
         assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
         (if self.turn() == Colour::WHITE { score } else { -score }, bestmove)
-    }
-
-    fn reset_everything_for_root_search(
-        &mut self,
-        info: &mut SearchInfo,
-        thread_headers: &mut [ThreadData],
-    ) {
-        self.zero_height();
-        info.setup_for_search();
-        for td in thread_headers.iter_mut() {
-            td.setup_tables_for_search();
-            td.nnue.refresh_acc(self);
-        }
     }
 
     /// Performs the iterative deepening search.
@@ -1487,40 +1473,10 @@ impl AspirationWindow {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct PVariation {
-    length: usize,
-    score: i32,
-    line: [Move; MAX_PLY],
-}
-
-impl Default for PVariation {
-    fn default() -> Self {
-        Self { length: 0, score: 0, line: [Move::NULL; MAX_PLY] }
-    }
-}
-
-impl PVariation {
-    pub fn moves(&self) -> &[Move] {
-        &self.line[..self.length]
-    }
-
-    pub const fn score(&self) -> i32 {
-        self.score
-    }
-
-    fn load_from(&mut self, m: Move, rest: &Self) {
-        self.line[0] = m;
-        self.line[1..=rest.length].copy_from_slice(&rest.line[..rest.length]);
-        self.length = rest.length + 1;
-    }
-}
-
-impl Display for PVariation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for &m in self.moves() {
-            write!(f, "{m} ")?;
-        }
-        Ok(())
+fn set_up_for_search(board: &mut Board, info: &mut SearchInfo, thread_headers: &mut [ThreadData]) {
+    board.zero_height();
+    info.set_up_for_search();
+    for td in thread_headers.iter_mut() {
+        td.set_up_for_search(board);
     }
 }

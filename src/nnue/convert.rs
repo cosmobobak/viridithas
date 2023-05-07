@@ -54,8 +54,6 @@ fn batch_convert<const USE_NNUE: bool>(
             evals.push(None);
             continue;
         }
-        // no NNUE for generating training data.
-        t.nnue.refresh_acc(&pos);
         tt.clear();
         let stopped = AtomicBool::new(false);
         let time_manager =

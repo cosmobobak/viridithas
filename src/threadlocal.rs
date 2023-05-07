@@ -5,7 +5,7 @@ use crate::{
     historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
     piece::Colour,
-    search::PVariation,
+    search::pv::PVariation,
 };
 
 #[derive(Clone)]
@@ -92,7 +92,7 @@ impl ThreadData {
         self.pvs.fill(PVariation::default());
     }
 
-    pub fn setup_tables_for_search(&mut self) {
+    pub fn set_up_for_search(&mut self, board: &Board) {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.followup_history.age_entries();
@@ -102,6 +102,7 @@ impl ThreadData {
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());
+        self.nnue.refresh_acc(board);
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {

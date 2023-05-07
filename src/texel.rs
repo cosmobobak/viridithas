@@ -12,7 +12,7 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     definitions::{INFINITY, MEGABYTE},
     piece::Colour,
-    search::PVariation,
+    search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::TT,

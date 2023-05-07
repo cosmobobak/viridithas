@@ -29,7 +29,7 @@ use crate::{
     nnue::network::{Activate, Deactivate},
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
-    search::PVariation,
+    search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };

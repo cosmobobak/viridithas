@@ -270,7 +270,7 @@ fn generate_on_thread(
         board.set_startpos();
         thread_data.nnue.refresh_acc(&board);
         tt.clear();
-        info.setup_for_search();
+        info.set_up_for_search();
         // flush output buffer
         output_buffer.flush().unwrap();
         // generate game

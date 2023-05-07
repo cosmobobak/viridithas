@@ -81,7 +81,7 @@ impl<'a> SearchInfo<'a> {
         out
     }
 
-    pub fn setup_for_search(&mut self) {
+    pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
         self.time_manager.reset_for_id();
