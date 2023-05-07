@@ -823,11 +823,11 @@ fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Resul
 /// the `win_rate_model` such that Viridithas outputs an advantage of
 /// "100 centipawns" for a position if the engine has a 50% probability to win
 /// from this position in selfplay at 8s+0.08s time control.
-const NORMALISE_TO_PAWN_VALUE: i32 = 269;
+const NORMALISE_TO_PAWN_VALUE: i32 = 215;
 fn win_rate_model(eval: i32, ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const AS: [f64; 4] = [-26.994_571_68, 207.590_501_28, -214.904_939_28, 303.735_316_05];
-    const BS: [f64; 4] = [-19.224_614_27, 141.390_056_35, -283.690_790_60, 378.025_261_86];
+    const AS: [f64; 4] = [4.994_045_51, -30.169_386_37, 102.525_479_22, 138.533_157_46];
+    const BS: [f64; 4] = [-7.280_912_63, 54.012_150_81, -113.360_339_51, 139.055_294_64];
     let m = min!(240.0, ply as f64) / 64.0;
     debug_assert_eq!(NORMALISE_TO_PAWN_VALUE, AS.iter().sum::<f64>() as i32);
     let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
