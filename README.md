@@ -25,7 +25,7 @@ For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 - Subsequent networks were trained on additional self-play games by subsequent versions of Viridithas. The 13th-generation network, and many since, include positions from the Lichess Elite dataset rescored by Viridithas.
 - Between versions 7.0.0 and 8.0.0, original datagen code was written that allows Viridithas to generate data without need for an opening book to ensure game variety, resulting in even greater strength of play.
 
-In summary, the originality of the data for training Viridithas's NNUE is strong - it is about ~80% games played by Viridithas against himself, 20% positions from human games, and a small handful of positions games played in a Viridithas 2.7.0 vs. StockNemo 5.0.0.0 test match I ran on my own hardware, all reanalysed with Viridithas. Most importantly, I have never trained on the evaluation output of any engine other than Viridithas.
+In summary, the originality of the data for training Viridithas's NNUE is strong - it is about ~80% games played by Viridithas against himself, 20% positions from human games, and a small handful of positions from games played in a Viridithas 2.7.0 vs. StockNemo 5.0.0.0 test match I ran on my own hardware, all reanalysed with Viridithas. Most importantly, I have never trained on the evaluation output of any engine other than Viridithas.
 
 # Thanks and Acknowledgements
 [python-chess](https://github.com/niklasf/python-chess), without which I would never have been able to gain a love for chess programming.
