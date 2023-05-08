@@ -552,7 +552,7 @@ impl Board {
                 let tb_value = match wdl {
                     WDL::Win => tb_win_in(height),
                     WDL::Loss => tb_loss_in(height),
-                    WDL::Draw => 0,
+                    WDL::Draw => draw_score(t, info.nodes, self.turn()),
                 };
 
                 let tb_bound = match wdl {
