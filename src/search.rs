@@ -49,7 +49,7 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 20;
+const ASPIRATION_WINDOW: i32 = 7;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
 const RFP_MARGIN: i32 = 70;
 const RFP_IMPROVING_MARGIN: i32 = 57;
@@ -208,7 +208,7 @@ impl Board {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
-                    aw.widen_down(pv.score);
+                    aw.widen_down(pv.score, depth);
                     if MAIN_THREAD {
                         info.time_manager.report_aspiration_fail(depth, Bound::Upper);
                     }
@@ -224,7 +224,7 @@ impl Board {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
                         self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
-                    aw.widen_up(pv.score);
+                    aw.widen_up(pv.score, depth);
                     if MAIN_THREAD {
                         info.time_manager.report_aspiration_fail(depth, Bound::Lower);
                     }
@@ -284,7 +284,7 @@ impl Board {
 
             if depth > ASPIRATION_WINDOW_MIN_DEPTH {
                 let score = t.pvs[t.completed].score;
-                aw = AspirationWindow::from_last_score(score);
+                aw = AspirationWindow::from_last_score(score, depth);
             } else {
                 aw = AspirationWindow::infinite();
             }
@@ -1434,12 +1434,16 @@ pub struct AspirationWindow {
     pub beta_fails: i32,
 }
 
+pub fn asp_window(depth: Depth) -> i32 {
+    return (ASPIRATION_WINDOW + (50 / depth.round() - 3)).max(10);
+}
+
 impl AspirationWindow {
     pub const fn infinite() -> Self {
         Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
-    pub const fn from_last_score(last_score: i32) -> Self {
+    pub fn from_last_score(last_score: i32, depth: Depth) -> Self {
         if is_game_theoretic_score(last_score) {
             // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
@@ -1453,17 +1457,17 @@ impl AspirationWindow {
         } else {
             Self {
                 midpoint: last_score,
-                alpha: last_score - ASPIRATION_WINDOW,
-                beta: last_score + ASPIRATION_WINDOW,
+                alpha: last_score - asp_window(depth),
+                beta: last_score + asp_window(depth),
                 alpha_fails: 0,
                 beta_fails: 0,
             }
         }
     }
 
-    pub fn widen_down(&mut self, value: i32) {
+    pub fn widen_down(&mut self, value: i32, depth: Depth) {
         self.midpoint = value;
-        let margin = ASPIRATION_WINDOW << (self.alpha_fails + 1);
+        let margin = asp_window(depth) << (self.alpha_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.alpha = -INFINITY;
             return;
@@ -1473,9 +1477,9 @@ impl AspirationWindow {
         self.alpha_fails += 1;
     }
 
-    pub fn widen_up(&mut self, value: i32) {
+    pub fn widen_up(&mut self, value: i32, depth: Depth) {
         self.midpoint = value;
-        let margin = ASPIRATION_WINDOW << (self.beta_fails + 1);
+        let margin = asp_window(depth) << (self.beta_fails + 1);
         if margin > evaluation::QUEEN_VALUE.0 {
             self.beta = INFINITY;
             return;
