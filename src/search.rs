@@ -1376,9 +1376,9 @@ pub fn draw_score(t: &ThreadData, nodes: u64, stm: Colour) -> i32 {
 
 #[derive(Clone, Debug)]
 pub struct LMTable {
-    /// The reduction table. rtable[depth][played] is the base LMR reduction for a move
+    /// The reduction table. rtable\[depth]\[played] is the base LMR reduction for a move
     lm_reduction_table: [[i32; 64]; 64],
-    /// The movecount table. ptable[played][improving] is the movecount at which LMP is triggered.
+    /// The movecount table. ptable\[played]\[improving] is the movecount at which LMP is triggered.
     lmp_movecount_table: [[usize; 12]; 2],
 }
 
