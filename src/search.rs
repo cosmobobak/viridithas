@@ -106,7 +106,7 @@ impl Board {
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
-            self.readout_info(Bound::Exact, &pv, 0, info, tt, 1);
+            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1);
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
             }
@@ -147,7 +147,7 @@ impl Board {
 
         let d_move = self.default_move(tt, t1);
         let (bestmove, score) =
-            self.select_best(thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
+            select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
 
         if info.print_to_stdout {
             println!("bestmove {bestmove}");
@@ -206,7 +206,7 @@ impl Board {
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(Bound::Upper, &pv, d, info, tt, total_nodes);
+                        readout_info(self, Bound::Upper, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_down(pv.score, depth);
                     if MAIN_THREAD {
@@ -222,7 +222,7 @@ impl Board {
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        self.readout_info(Bound::Lower, &pv, d, info, tt, total_nodes);
+                        readout_info(self, Bound::Lower, &pv, d, info, tt, total_nodes);
                     }
                     aw.widen_up(pv.score, depth);
                     if MAIN_THREAD {
@@ -245,7 +245,7 @@ impl Board {
 
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    self.readout_info(Bound::Exact, &pv, d, info, tt, total_nodes);
+                    readout_info(self, Bound::Exact, &pv, d, info, tt, total_nodes);
                 }
 
                 if let ControlFlow::Break(_) =
@@ -1246,115 +1246,115 @@ impl Board {
     ) -> i32 {
         self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
     }
+}
 
-    pub fn select_best(
-        &mut self,
-        thread_headers: &[ThreadData],
-        info: &SearchInfo,
-        tt: TTView,
-        total_nodes: u64,
-        default_move: Move,
-    ) -> (Move, i32) {
-        let (mut best_thread, rest) = thread_headers.split_first().unwrap();
+pub fn select_best(
+    board: &mut Board,
+    thread_headers: &[ThreadData],
+    info: &SearchInfo,
+    tt: TTView,
+    total_nodes: u64,
+    default_move: Move,
+) -> (Move, i32) {
+    let (mut best_thread, rest) = thread_headers.split_first().unwrap();
 
-        if info.time_manager.is_test_suite() {
-            // we break early focusing only on the main thread.
-            return (best_thread.pv_move().unwrap_or(default_move), best_thread.pv_score());
-        }
-
-        for thread in rest {
-            let best_depth = best_thread.completed;
-            let best_score = best_thread.pvs[best_depth].score();
-            let this_depth = thread.completed;
-            let this_score = thread.pvs[this_depth].score();
-            if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE)
-                && this_score > best_score
-            {
-                best_thread = thread;
-            }
-            if this_depth > best_depth
-                && (this_score > best_score || best_score < MINIMUM_MATE_SCORE)
-            {
-                best_thread = thread;
-            }
-        }
-
-        let best_move = best_thread.pv_move().unwrap_or(default_move);
-        let best_score = best_thread.pv_score();
-
-        // if we aren't using the main thread (thread 0) then we need to do
-        // an extra uci info line to show the best move/score/pv
-        if best_thread.thread_id != 0 && info.print_to_stdout {
-            let pv = &best_thread.pvs[best_thread.completed];
-            let depth = best_thread.completed;
-            self.readout_info(Bound::Exact, pv, depth, info, tt, total_nodes);
-        }
-
-        (best_move, best_score)
+    if info.time_manager.is_test_suite() {
+        // we break early focusing only on the main thread.
+        return (best_thread.pv_move().unwrap_or(default_move), best_thread.pv_score());
     }
 
-    /// Print the info about an iteration of the search.
-    fn readout_info(
-        &mut self,
-        mut bound: Bound,
-        pv: &PVariation,
-        depth: usize,
-        info: &SearchInfo,
-        tt: TTView,
-        total_nodes: u64,
-    ) {
-        #![allow(
-            clippy::cast_precision_loss,
-            clippy::cast_sign_loss,
-            clippy::cast_possible_truncation
-        )]
-        // don't print anything if we are in the first 50ms of the search and we are in a game,
-        // this helps in ultra-fast time controls where we only have a few ms to think.
-        if info.time_manager.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
-            return;
+    for thread in rest {
+        let best_depth = best_thread.completed;
+        let best_score = best_thread.pvs[best_depth].score();
+        let this_depth = thread.completed;
+        let this_score = thread.pvs[this_depth].score();
+        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE)
+            && this_score > best_score
+        {
+            best_thread = thread;
         }
-        let sstr = uci::format_score(pv.score);
-        let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-        let nps =
-            (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
-        if self.turn() == Colour::BLACK {
-            bound = match bound {
-                Bound::Upper => Bound::Lower,
-                Bound::Lower => Bound::Upper,
-                _ => Bound::Exact,
-            };
+        if this_depth > best_depth
+            && (this_score > best_score || best_score < MINIMUM_MATE_SCORE)
+        {
+            best_thread = thread;
         }
-        let bound_string = match bound {
-            Bound::Upper => " upperbound",
-            Bound::Lower => " lowerbound",
-            _ => "",
+    }
+
+    let best_move = best_thread.pv_move().unwrap_or(default_move);
+    let best_score = best_thread.pv_score();
+
+    // if we aren't using the main thread (thread 0) then we need to do
+    // an extra uci info line to show the best move/score/pv
+    if best_thread.thread_id != 0 && info.print_to_stdout {
+        let pv = &best_thread.pvs[best_thread.completed];
+        let depth = best_thread.completed;
+        readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes);
+    }
+
+    (best_move, best_score)
+}
+
+/// Print the info about an iteration of the search.
+fn readout_info(
+    board: &mut Board,
+    mut bound: Bound,
+    pv: &PVariation,
+    depth: usize,
+    info: &SearchInfo,
+    tt: TTView,
+    total_nodes: u64,
+) {
+    #![allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    // don't print anything if we are in the first 50ms of the search and we are in a game,
+    // this helps in ultra-fast time controls where we only have a few ms to think.
+    if info.time_manager.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
+        return;
+    }
+    let sstr = uci::format_score(pv.score);
+    let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
+    let nps =
+        (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
+    if board.turn() == Colour::BLACK {
+        bound = match bound {
+            Bound::Upper => Bound::Lower,
+            Bound::Lower => Bound::Upper,
+            _ => Bound::Exact,
         };
-        if normal_uci_output {
-            println!(
-                "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
-                info.seldepth.ply_to_horizon(),
-                info.time_manager.start_time.elapsed().as_millis(),
-                hashfull = tt.hashfull(),
-                tbhits = TB_HITS.load(Ordering::SeqCst),
-                wdl = uci::format_wdl(pv.score, self.ply()),
-            );
+    }
+    let bound_string = match bound {
+        Bound::Upper => " upperbound",
+        Bound::Lower => " lowerbound",
+        _ => "",
+    };
+    if normal_uci_output {
+        println!(
+            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
+            info.seldepth.ply_to_horizon(),
+            info.time_manager.start_time.elapsed().as_millis(),
+            hashfull = tt.hashfull(),
+            tbhits = TB_HITS.load(Ordering::SeqCst),
+            wdl = uci::format_wdl(pv.score, board.ply()),
+        );
+    } else {
+        let value = uci::pretty_format_score(pv.score, board.turn());
+        let pv_string = board.pv_san(pv).unwrap();
+        let endchr = if bound == Bound::Exact {
+            "\n"
         } else {
-            let value = uci::pretty_format_score(pv.score, self.turn());
-            let pv_string = self.pv_san(pv).unwrap();
-            let endchr = if bound == Bound::Exact {
-                "\n"
-            } else {
-                "                                                                   \r"
-            };
-            eprint!(
-                " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
-                info.seldepth.ply_to_horizon(),
-                t = uci::format_time(info.time_manager.start_time.elapsed().as_millis()),
-                knps = nps / 1_000,
-                knodes = total_nodes / 1_000,
-                wdl = uci::pretty_format_wdl(pv.score, self.ply()),
-            );
-        }
+            "                                                                   \r"
+        };
+        eprint!(
+            " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
+            info.seldepth.ply_to_horizon(),
+            t = uci::format_time(info.time_manager.start_time.elapsed().as_millis()),
+            knps = nps / 1_000,
+            knodes = total_nodes / 1_000,
+            wdl = uci::pretty_format_wdl(pv.score, board.ply()),
+        );
     }
 }
 
