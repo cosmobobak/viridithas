@@ -1435,7 +1435,7 @@ pub struct AspirationWindow {
 }
 
 pub fn asp_window(depth: Depth) -> i32 {
-    return (ASPIRATION_WINDOW + (50 / depth.round() - 3)).max(10);
+    (ASPIRATION_WINDOW + (50 / depth.round() - 3)).max(10)
 }
 
 impl AspirationWindow {
