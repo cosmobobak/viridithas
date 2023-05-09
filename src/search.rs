@@ -1268,14 +1268,11 @@ pub fn select_best(
         let best_score = best_thread.pvs[best_depth].score();
         let this_depth = thread.completed;
         let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE)
-            && this_score > best_score
+        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE) && this_score > best_score
         {
             best_thread = thread;
         }
-        if this_depth > best_depth
-            && (this_score > best_score || best_score < MINIMUM_MATE_SCORE)
-        {
+        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_MATE_SCORE) {
             best_thread = thread;
         }
     }
@@ -1304,11 +1301,7 @@ fn readout_info(
     tt: TTView,
     total_nodes: u64,
 ) {
-    #![allow(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
+    #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,
     // this helps in ultra-fast time controls where we only have a few ms to think.
     if info.time_manager.in_game() && info.time_manager.time_since_start().as_millis() < 50 {
@@ -1316,8 +1309,7 @@ fn readout_info(
     }
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-    let nps =
-        (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
+    let nps = (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::BLACK {
         bound = match bound {
             Bound::Upper => Bound::Lower,
@@ -1365,12 +1357,8 @@ pub fn draw_score(t: &ThreadData, nodes: u64, stm: Colour) -> i32 {
     // so if we are to play in a drawn position, then we should return the
     // negative of the contempt score.
     let contempt = uci::CONTEMPT.load(Ordering::Relaxed);
-    let contempt_component = if stm == t.stm_at_root {
-        -contempt
-    } else {
-        contempt
-    };
-    
+    let contempt_component = if stm == t.stm_at_root { -contempt } else { contempt };
+
     random_component + contempt_component
 }
 
