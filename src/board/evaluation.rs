@@ -159,7 +159,11 @@ impl Board {
     /// incremental updates in make-unmake to avoid recomputation.
     pub fn evaluate_classical(&self, t: &ThreadData, i: &SearchInfo, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == Colour::WHITE { draw_score(t, nodes, self.turn()) } else { -draw_score(t, nodes, self.turn()) };
+            return if self.side == Colour::WHITE {
+                draw_score(t, nodes, self.turn())
+            } else {
+                -draw_score(t, nodes, self.turn())
+            };
         }
 
         let material = self.material();
@@ -202,7 +206,11 @@ impl Board {
 
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == Colour::WHITE { draw_score(t, nodes, self.turn()) } else { -draw_score(t, nodes, self.turn()) };
+            return if self.side == Colour::WHITE {
+                draw_score(t, nodes, self.turn())
+            } else {
+                -draw_score(t, nodes, self.turn())
+            };
         }
 
         let v = t.nnue.evaluate(self.side);

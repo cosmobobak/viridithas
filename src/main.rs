@@ -68,7 +68,6 @@ fn main() {
     });
 
     assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
-    assert!([0, 2].contains(&cli.jsontobin.len()), "jsontobin requires exactly two paths");
 
     if cli.gensource {
         return piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
@@ -145,10 +144,6 @@ fn main() {
 
     if let Some(epd_path) = cli.epdpath.as_deref() {
         return epd::gamut(epd_path, &eparams, &cli);
-    }
-
-    if let [json_path, bin_path] = cli.jsontobin.as_slice() {
-        return network::convert_json_to_binary(json_path, bin_path);
     }
 
     if cli.visnnue {

@@ -1,10 +1,7 @@
 use std::{
-    array::from_mut,
-    fs, mem,
+    mem,
     ops::{Deref, DerefMut},
 };
-
-use serde_json::Value;
 
 use crate::{
     board::{movegen::BitLoop, Board},
@@ -126,95 +123,6 @@ impl NNUEParams {
 
         let path = path.join(format!("neuron_{neuron}.tga"));
         image.save_as_tga(path);
-    }
-
-    pub fn from_json(path: impl AsRef<std::path::Path>) -> Box<Self> {
-        #![allow(clippy::cast_possible_truncation)]
-        fn weight<const LEN: usize>(
-            weight_relation: &Value,
-            weight_array: &mut [i16; LEN],
-            stride: usize,
-            k: i32,
-            flip: bool,
-        ) {
-            for (i, output) in weight_relation.as_array().unwrap().iter().enumerate() {
-                for (j, weight) in output.as_array().unwrap().iter().enumerate() {
-                    let index = if flip { j * stride + i } else { i * stride + j };
-                    let value = weight.as_f64().unwrap();
-                    weight_array[index] = (value * f64::from(k)) as i16;
-                }
-            }
-        }
-
-        fn bias<const LEN: usize>(bias_relation: &Value, bias_array: &mut [i16; LEN], k: i32) {
-            for (i, bias) in bias_relation.as_array().unwrap().iter().enumerate() {
-                let value = bias.as_f64().unwrap();
-                bias_array[i] = (value * f64::from(k)) as i16;
-            }
-        }
-
-        #[allow(clippy::large_stack_arrays)]
-        // we only run this function in release, so it shouldn't blow the stack.
-        let mut out = Box::new(Self {
-            feature_weights: Align([0; INPUT * LAYER_1_SIZE]),
-            feature_bias: Align([0; LAYER_1_SIZE]),
-            output_weights: Align([0; LAYER_1_SIZE * 2]),
-            output_bias: 0,
-        });
-
-        let file = fs::read_to_string(path).unwrap();
-        let json: Value = serde_json::from_str(&file).unwrap();
-
-        let mut things_found = 0;
-        for (key, value) in json.as_object().unwrap() {
-            match key.as_str() {
-                "perspective.weight" => {
-                    // weight(value, &mut out.feature_weights, INPUT, QA, false);
-                    weight(value, &mut out.feature_weights, LAYER_1_SIZE, QA, true);
-                    things_found += 1;
-                }
-                "perspective.bias" => {
-                    bias(value, &mut out.feature_bias, QA);
-                    things_found += 1;
-                }
-                "out.weight" => {
-                    weight(value, &mut out.output_weights, LAYER_1_SIZE * 2, QB, false);
-                    things_found += 1;
-                }
-                "out.bias" => {
-                    bias(value, from_mut(&mut out.output_bias), QAB);
-                    things_found += 1;
-                }
-                _ => {}
-            }
-        }
-        assert_eq!(things_found, 4, "Not all parameters found!");
-
-        out
-    }
-
-    pub fn to_bytes(&self) -> Vec<Vec<u8>> {
-        let mut out = Vec::new();
-
-        // let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
-        // assert!(head.is_empty() && tail.is_empty());
-        let (head, feature_weights, tail) = unsafe { self.feature_weights.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
-        let (head, feature_bias, tail) = unsafe { self.feature_bias.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
-        let (head, output_weights, tail) = unsafe { self.output_weights.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
-        let ob = [self.output_bias];
-        let (head, output_bias, tail) = unsafe { ob.align_to::<u8>() };
-        assert!(head.is_empty() && tail.is_empty());
-
-        // out.push(feature_weights.to_vec());
-        out.push(feature_weights.to_vec());
-        out.push(feature_bias.to_vec());
-        out.push(output_weights.to_vec());
-        out.push(output_bias.to_vec());
-
-        out
     }
 }
 
@@ -579,23 +487,6 @@ pub fn screlu_flatten(
         sum += screlu(i) * i32::from(w);
     }
     sum / QA
-}
-
-/// Load a network from a JSON file, and emit binary files.
-pub fn convert_json_to_binary(
-    json_path: impl AsRef<std::path::Path>,
-    output_path: impl AsRef<std::path::Path>,
-) {
-    let nnue = NNUEParams::from_json(json_path);
-    let bytes = nnue.to_bytes();
-    fs::create_dir(&output_path).unwrap();
-    for (fname, byte_vector) in
-        ["feature_weights", "feature_bias", "output_weights", "output_bias"].into_iter().zip(&bytes)
-    {
-        let mut f =
-            fs::File::create(output_path.as_ref().join(fname).with_extension("bin")).unwrap();
-        std::io::Write::write_all(&mut f, byte_vector).unwrap();
-    }
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.

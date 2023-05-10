@@ -67,9 +67,6 @@ pub struct Cli {
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
-    /// Do conversion from NNUE json to NNUE binary. Arg1 is the input path, arg2 is the output path. Due to clap's idiosyncrasies, this must be passed as two arguments, e.g. --jsontobin network.json --jsontobin binfolder
-    #[clap(long)]
-    pub jsontobin: Vec<std::path::PathBuf>,
     /// Deduplicate an NNUE data file by removing duplicate positions.
     #[clap(long, value_name = "PATH")]
     pub dedup: Option<std::path::PathBuf>,
