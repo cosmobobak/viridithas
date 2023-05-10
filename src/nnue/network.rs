@@ -499,8 +499,8 @@ impl NNUEState {
 
 /// Move a feature from one square to another.
 fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut [i16; SIZE],
-    delta: &[i16; WEIGHTS],
+    input: &mut Align<[i16; SIZE]>,
+    delta: &Align<[i16; WEIGHTS]>,
     offset_sub: usize,
     offset_add: usize,
 ) {
@@ -513,8 +513,8 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 
 /// Add a feature to a square.
 fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut [i16; SIZE],
-    delta: &[i16; WEIGHTS],
+    input: &mut Align<[i16; SIZE]>,
+    delta: &Align<[i16; WEIGHTS]>,
     offset_add: usize,
 ) {
     let a_block = &delta[offset_add..offset_add + SIZE];
@@ -525,8 +525,8 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 
 /// Subtract a feature from a square.
 fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut [i16; SIZE],
-    delta: &[i16; WEIGHTS],
+    input: &mut Align<[i16; SIZE]>,
+    delta: &Align<[i16; WEIGHTS]>,
     offset_sub: usize,
 ) {
     let s_block = &delta[offset_sub..offset_sub + SIZE];
@@ -544,9 +544,9 @@ fn crelu(x: i16) -> i32 {
 /// and accumulate the result into a sum.
 #[allow(dead_code)]
 pub fn crelu_flatten(
-    us: &[i16; LAYER_1_SIZE],
-    them: &[i16; LAYER_1_SIZE],
-    weights: &[i16; LAYER_1_SIZE * 2],
+    us: &Align<[i16; LAYER_1_SIZE]>,
+    them: &Align<[i16; LAYER_1_SIZE]>,
+    weights: &Align<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
@@ -567,9 +567,9 @@ fn screlu(x: i16) -> i32 {
 /// Execute squared + clipped relu on the partial activations,
 /// and accumulate the result into a sum.
 pub fn screlu_flatten(
-    us: &[i16; LAYER_1_SIZE],
-    them: &[i16; LAYER_1_SIZE],
-    weights: &[i16; LAYER_1_SIZE * 2],
+    us: &Align<[i16; LAYER_1_SIZE]>,
+    them: &Align<[i16; LAYER_1_SIZE]>,
+    weights: &Align<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
