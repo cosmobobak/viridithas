@@ -454,7 +454,7 @@ impl Board {
         t: &mut ThreadData,
         mut depth: Depth,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -508,10 +508,10 @@ impl Board {
             }
 
             // mate-distance pruning.
-            let r_alpha = alpha.max(mated_in(height));
-            let r_beta = beta.min(mate_in(height + 1));
-            if r_alpha >= r_beta {
-                return r_alpha;
+            alpha = alpha.max(mated_in(height));
+            beta = beta.min(mate_in(height + 1));
+            if alpha >= beta {
+                return alpha;
             }
         }
 
