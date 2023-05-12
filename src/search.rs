@@ -599,6 +599,9 @@ impl Board {
 
         t.double_extensions[height] = if ROOT { 0 } else { t.double_extensions[height - 1] };
 
+        // clear out the next set of killer moves.
+        t.killer_move_table[height + 1] = [Move::NULL; 2];
+
         // whole-node pruning techniques:
         if !ROOT && !PV && !in_check && excluded.is_null() {
             // razoring.

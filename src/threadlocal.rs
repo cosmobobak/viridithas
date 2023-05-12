@@ -1,7 +1,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{MAX_DEPTH, MAX_PLY},
+    definitions::MAX_PLY,
     historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
     piece::Colour,
@@ -23,7 +23,7 @@ pub struct ThreadData {
     pub tactical_history: Box<CaptureHistoryTable>,
     pub followup_history: Box<DoubleHistoryTable>,
     pub counter_move_history: Box<DoubleHistoryTable>,
-    pub killer_move_table: [[Move; 2]; MAX_DEPTH.ply_to_horizon()],
+    pub killer_move_table: [[Move; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
 
     pub thread_id: usize,
@@ -53,7 +53,7 @@ impl ThreadData {
             tactical_history: CaptureHistoryTable::boxed(),
             followup_history: DoubleHistoryTable::boxed(),
             counter_move_history: DoubleHistoryTable::boxed(),
-            killer_move_table: [[Move::NULL; 2]; MAX_PLY],
+            killer_move_table: [[Move::NULL; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
