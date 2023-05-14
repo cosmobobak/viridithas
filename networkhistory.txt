@@ -204,6 +204,6 @@ NET ID │ general concept                          │ notes
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     59 │ Proof-of-concept HalfKA network. Uses a  │ ELO   | 
        │ small 64x2 feature transformer, batch    │ SPRT  |
-       │ size 65536, and 45 epochs.               │ LLR   |
+       │ size 16384, and 45 epochs.               │ LLR   |
        │                                          │ GAMES |
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
