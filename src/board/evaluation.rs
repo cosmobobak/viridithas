@@ -215,7 +215,7 @@ impl Board {
 
         let v = t.nnue.evaluate(self.side);
 
-        v * (100 - i32::from(self.fifty_move_counter)) / 100
+        v * (200 - i32::from(self.fifty_move_counter)) / 200
     }
 
     pub fn evaluate<const USE_NNUE: bool>(
