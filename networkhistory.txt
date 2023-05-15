@@ -157,48 +157,53 @@ NET ID │ general concept                          │ notes
     49 │ Switch to squared ReLU instead of linear │ 35.8 +/─ 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
        │ ReLU. (Net 48 data)                      │ vs net─44.
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    50 │ Try a deeper network architecture.       │ ELO   | 
-       │ Went from 768->512x2->1 to               │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │ 768->512x2->8->1.                        │ LLR   | 
-       │                                          │ GAMES | 
+    50 │ Try a deeper network architecture.       │ ELO   │ 
+       │ Went from 768->512x2->1 to               │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │ 768->512x2->8->1.                        │ LLR   │ 
+       │                                          │ GAMES │ 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    51 │ Same as net 49 but training on 450M RL   │ ELO   | -68.36 +- 14.74 (95%)
-       │ FENs.                                    │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
-       │       (whoops! forgot to shuffle)        │ GAMES | N: 1184 W: 207 L: 437 D: 540
+    51 │ Same as net 49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
+       │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   │ -2.99 (-2.94, 2.94) [0.00, 3.00]
+       │       (whoops! forgot to shuffle)        │ GAMES │ N: 1184 W: 207 L: 437 D: 540
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    52 │ Same as net 51, training on 450M RL      │ ELO   | -16.40 +- 9.40 (95%)
-       │ FENs, but shuffled this time.            │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │ The weakness of smaller datasets is      │ LLR   | -3.02 (-2.94, 2.94) [0.00, 5.00]
-       │ apparent.                                │ GAMES | N: 2672 W: 617 L: 743 D: 1312
+    52 │ Same as net 51, training on 450M RL      │ ELO   │ -16.40 +- 9.40 (95%)
+       │ FENs, but shuffled this time.            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │ The weakness of smaller datasets is      │ LLR   │ -3.02 (-2.94, 2.94) [0.00, 5.00]
+       │ apparent.                                │ GAMES │ N: 2672 W: 617 L: 743 D: 1312
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    53 │ The net-49 dataset + 450M RL FENs give   │ ELO   | 6.95 +- 4.99 (95%)
-       │ a 1.35B FEN dataset.                     │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   | 2.98 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES | N: 9704 W: 2632 L: 2438 D: 4634
+    53 │ The net-49 dataset + 450M RL FENs give   │ ELO   │ 6.95 +- 4.99 (95%)
+       │ a 1.35B FEN dataset.                     │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   │ 2.98 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES │ N: 9704 W: 2632 L: 2438 D: 4634
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    54 │ Testing a PSQT-esque skip connection,    │ ELO   | -504.03 +- 252.80 (95%)
-       │ running on the smaller net-49 data with  │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │ only 45 epochs for speed.                │ LLR   | -2.98 (-2.94, 2.94) [-10.00, 0.00]
-       │ (turns out sign on the pqst was wrong)   │ GAMES | N: 96 W: 3 L: 89 D: 4
+    54 │ Testing a PSQT-esque skip connection,    │ ELO   │ -504.03 +- 252.80 (95%)
+       │ running on the smaller net-49 data with  │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │ only 45 epochs for speed.                │ LLR   │ -2.98 (-2.94, 2.94) [-10.00, 0.00]
+       │ (turns out sign on the pqst was wrong)   │ GAMES │ N: 96 W: 3 L: 89 D: 4
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    55 │ Same as net 54, but not broken.          │ ELO   | 
-       │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │      (still haven't made inf work)       │ LLR   | 
-       │                                          │ GAMES | 
+    55 │ Same as net 54, but not broken.          │ ELO   │ 
+       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │      (still haven't made inf work)       │ LLR   │ 
+       │                                          │ GAMES │ 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    56 │ Net 53 using AdamW instead of Adam.      │ ELO   | 10.16 +- 6.37 (95%)
-       │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   | 2.97 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES | N: 5816 W: 1568 L: 1398 D: 2850
+    56 │ Net 53 using AdamW instead of Adam.      │ ELO   │ 10.16 +- 6.37 (95%)
+       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES │ N: 5816 W: 1568 L: 1398 D: 2850
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    57 | Net 56 with 768 neurons.                 │ ELO   | 
-       │                                          │ SPRT  | 
-       │                                          │ LLR   | 
-       │                                          │ GAMES | 
+    57 │ Net 56 with 768 neurons.                 │ ELO   │ 
+       │                                          │ SPRT  │ 
+       │                                          │ LLR   │ 
+       │                                          │ GAMES │ 
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    58 | Net 56 with doubled batch-size.          │ ELO   | -2.73 +- 4.75 (95%)
-       │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   | -2.98 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES | N: 10448 W: 2623 L: 2705 D: 5120
+    58 │ Net 56 with doubled batch-size.          │ ELO   │ -2.73 +- 4.75 (95%)
+       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    59 │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
+       │ small 64x2 feature transformer, batch    │ SPRT  │
+       │ size 16384, and 45 epochs.               │ LLR   │
+       │                                          │ GAMES │
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
