@@ -8,6 +8,7 @@ readme = "README.md"
 keywords = ["chess", "treesearch"]
 categories = ["games"]
 repository = "https://github.com/cosmobobak/viridithas"
+authors = ["Cosmo Bobak (cosmobobak@gmail.com)"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,12 +20,12 @@ stats = []
 
 [build-dependencies]
 cc = { version = "1.0.73", optional = true }
-bindgen = { version = "0.60.1", optional = true }
+bindgen = { version = "0.65.1", optional = true }
 
 [dependencies]
 rand = "0.8.5"
 num_cpus = "1.13.1"
-clap = { version = "3.2.16", features = ["derive"] }
+clap = { version = "4.2.7", features = ["derive"] }
 regex = "1.6.0"
 chrono = "0.4.23"
 ctrlc = "3.2.5"
