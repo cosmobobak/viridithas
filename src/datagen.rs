@@ -281,7 +281,7 @@ fn generate_on_thread(
         if options.log_level > 2 {
             eprintln!("Making random moves...");
         }
-        for _ in 0..12 {
+        for _ in 0..8 {
             let res = board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
             if res.is_none() {
                 if options.log_level > 2 {
@@ -336,7 +336,8 @@ fn generate_on_thread(
                 std::array::from_mut(&mut thread_data),
                 tt.view(),
             );
-            if !board.is_tactical(best_move)
+            if board.ply() > 16
+                &&!board.is_tactical(best_move)
                 && !is_game_theoretic_score(score)
                 && !board.in_check::<{ Board::US }>()
             {
