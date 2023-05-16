@@ -61,9 +61,15 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
-    #[cfg(feature = "datagen")]
     if let Some(config) = cli.datagen {
+        #[cfg(feature = "datagen")]
         return datagen::gen_data_main(config.as_deref());
+        #[cfg(not(feature = "datagen"))]
+        {
+            std::mem::drop(config);
+            println!("datagen feature not enabled");
+            return;
+        }
     }
 
     let eparams = cli.eparams.as_deref().map_or_else(EvalParams::default, |p| {
