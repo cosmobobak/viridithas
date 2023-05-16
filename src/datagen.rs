@@ -85,6 +85,9 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
+    #[cfg(not(feature = "datagen"))]
+    panic!("This binary was not compiled with the datagen feature enabled.");
+
     FENS_GENERATED.store(0, Ordering::SeqCst);
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);

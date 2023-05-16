@@ -790,6 +790,7 @@ impl Board {
             let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
 
             // lmp & fp.
+            #[cfg(not(feature = "datagen"))]
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -811,6 +812,7 @@ impl Board {
 
             // static exchange evaluation pruning
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
+            #[cfg(not(feature = "datagen"))]
             if !ROOT
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.search_params.see_depth

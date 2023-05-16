@@ -1255,21 +1255,6 @@ impl Board {
         }
     }
 
-    pub fn make_random_move<const NNUE: bool>(
-        &mut self,
-        rng: &mut ThreadRng,
-        t: &mut ThreadData,
-        info: &SearchInfo,
-    ) -> Option<Move> {
-        let mut ml = MoveList::new();
-        self.generate_moves(&mut ml);
-        let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
-            return None;
-        };
-        self.make_move::<NNUE>(*mov, t, info);
-        Some(*mov)
-    }
-
     pub fn last_move_was_nullmove(&self) -> bool {
         if let Some(Undo { m, .. }) = self.history.last() {
             m.is_null()
@@ -1615,55 +1600,6 @@ impl Board {
         true
     }
 
-    pub const fn is_insufficient_material(&self) -> bool {
-        self.has_insufficient_material::<true>() && self.has_insufficient_material::<false>()
-    }
-
-    pub fn outcome(&mut self) -> GameOutcome {
-        if self.fifty_move_counter >= 100 {
-            return GameOutcome::DrawFiftyMoves;
-        }
-        let mut reps = 1;
-        for (key, undo) in
-            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
-        {
-            if *key == self.key {
-                reps += 1;
-                if reps == 3 {
-                    return GameOutcome::DrawRepetition;
-                }
-            }
-            // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
-            if undo.fifty_move_counter == 0 {
-                break;
-            }
-        }
-        if self.is_insufficient_material() {
-            return GameOutcome::DrawInsufficientMaterial;
-        }
-        let mut move_list = MoveList::new();
-        self.generate_moves(&mut move_list);
-        let mut legal_moves = false;
-        for &m in move_list.iter() {
-            if self.make_move_base(m) {
-                self.unmake_move_base();
-                legal_moves = true;
-                break;
-            }
-        }
-        if legal_moves {
-            GameOutcome::Ongoing
-        } else if self.in_check::<{ Self::US }>() {
-            match self.side {
-                Colour::WHITE => GameOutcome::BlackWinMate,
-                Colour::BLACK => GameOutcome::WhiteWinMate,
-                _ => unreachable!(),
-            }
-        } else {
-            GameOutcome::DrawStalemate
-        }
-    }
-
     pub fn write_fen_into(&self, mut f: impl std::io::Write) -> std::io::Result<usize> {
         #![allow(clippy::cast_possible_truncation)]
         let mut bytes_written = 0;
@@ -1741,8 +1677,76 @@ impl Board {
 
         Ok(bytes_written)
     }
+
+    #[allow(dead_code /* for datagen */)]
+    pub fn make_random_move<const NNUE: bool>(
+        &mut self,
+        rng: &mut ThreadRng,
+        t: &mut ThreadData,
+        info: &SearchInfo,
+    ) -> Option<Move> {
+        let mut ml = MoveList::new();
+        self.generate_moves(&mut ml);
+        let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
+            return None;
+        };
+        self.make_move::<NNUE>(*mov, t, info);
+        Some(*mov)
+    }
+
+    #[allow(dead_code /* for datagen */)]
+    pub const fn is_insufficient_material(&self) -> bool {
+        self.has_insufficient_material::<true>() && self.has_insufficient_material::<false>()
+    }
+
+    #[allow(dead_code /* for datagen */)]
+    pub fn outcome(&mut self) -> GameOutcome {
+        if self.fifty_move_counter >= 100 {
+            return GameOutcome::DrawFiftyMoves;
+        }
+        let mut reps = 1;
+        for (key, undo) in
+            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
+        {
+            if *key == self.key {
+                reps += 1;
+                if reps == 3 {
+                    return GameOutcome::DrawRepetition;
+                }
+            }
+            // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
+            if undo.fifty_move_counter == 0 {
+                break;
+            }
+        }
+        if self.is_insufficient_material() {
+            return GameOutcome::DrawInsufficientMaterial;
+        }
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        let mut legal_moves = false;
+        for &m in move_list.iter() {
+            if self.make_move_base(m) {
+                self.unmake_move_base();
+                legal_moves = true;
+                break;
+            }
+        }
+        if legal_moves {
+            GameOutcome::Ongoing
+        } else if self.in_check::<{ Self::US }>() {
+            match self.side {
+                Colour::WHITE => GameOutcome::BlackWinMate,
+                Colour::BLACK => GameOutcome::WhiteWinMate,
+                _ => unreachable!(),
+            }
+        } else {
+            GameOutcome::DrawStalemate
+        }
+    }
 }
 
+#[allow(dead_code /* for datagen */)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameOutcome {
     WhiteWinMate,
@@ -1760,6 +1764,7 @@ pub enum GameOutcome {
     Ongoing,
 }
 
+#[allow(dead_code /* for datagen */)]
 impl GameOutcome {
     pub const fn as_float_str(self) -> &'static str {
         match self {

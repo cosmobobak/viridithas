@@ -88,7 +88,7 @@ pub struct BitBoard {
 impl BitBoard {
     pub const NULL: Self = Self::new(0, 0, 0, 0, 0, 0, 0, 0);
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
     pub const fn new(
         p: u64,
         n: u64,
@@ -110,7 +110,7 @@ impl BitBoard {
         self.all_pawns() & self.our_pieces::<IS_WHITE>()
     }
 
-    pub fn occupied_co(&self, colour: Colour) -> u64 {
+    pub const fn occupied_co(&self, colour: Colour) -> u64 {
         self.colours[colour.index()]
     }
 

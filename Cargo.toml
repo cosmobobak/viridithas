@@ -17,6 +17,7 @@ syzygy = ["dep:cc"]
 bindgen = ["dep:bindgen"]
 tuning = []
 stats = []
+datagen = []
 
 [build-dependencies]
 cc = { version = "1.0.73", optional = true }

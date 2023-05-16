@@ -17,7 +17,6 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
-mod datagen;
 mod definitions;
 mod epd;
 mod errors;
@@ -40,6 +39,9 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 
+#[cfg(feature = "datagen")]
+mod datagen;
+
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
 /// The version of the engine.
@@ -59,6 +61,7 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
+    #[cfg(feature = "datagen")]
     if let Some(config) = cli.datagen {
         return datagen::gen_data_main(config.as_deref());
     }
