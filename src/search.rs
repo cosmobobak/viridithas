@@ -1139,8 +1139,8 @@ impl Board {
             return true;
         }
 
-        let diag_sliders = self.pieces.bishopqueen::<true>() | self.pieces.bishopqueen::<false>();
-        let orth_sliders = self.pieces.rookqueen::<true>() | self.pieces.rookqueen::<false>();
+        let diag_sliders = self.pieces.all_bishops() | self.pieces.all_queens();
+        let orth_sliders = self.pieces.all_rooks() | self.pieces.all_queens();
 
         // occupied starts with the position after the move `m` is made.
         let mut occupied = (self.pieces.occupied() ^ from.bitboard()) | to.bitboard();

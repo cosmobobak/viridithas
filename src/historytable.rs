@@ -88,11 +88,11 @@ impl CaptureHistoryTable {
     }
 
     pub const fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
-        self.table[capture.index() - 1].get(piece, sq)
+        self.table[capture.index()].get(piece, sq)
     }
 
     pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
-        self.table[capture.index() - 1].get_mut(piece, sq)
+        self.table[capture.index()].get_mut(piece, sq)
     }
 }
 

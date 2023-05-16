@@ -1365,7 +1365,7 @@ impl Board {
         let mut from_bb = BB_ALL;
 
         let promo = reg_match.get(5).map(|promo| {
-            b"..NBRQ."
+            b".NBRQ.."
                 .iter()
                 .position(|&c| c == *promo.as_str().as_bytes().last().unwrap())
                 .unwrap()
@@ -1394,7 +1394,7 @@ impl Board {
             let blackpbb = self.pieces.piece_bb(Piece::new(Colour::BLACK, piece_type));
             from_bb &= whitepbb | blackpbb;
         } else {
-            from_bb &= self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
+            from_bb &= self.pieces.all_pawns();
             if reg_match.get(2).is_none() {
                 from_bb &= BB_FILES[to_square.file() as usize];
             }
@@ -1414,7 +1414,7 @@ impl Board {
             }
             self.unmake_move_base();
             let legal_promo_t = m.safe_promotion_type();
-            if legal_promo_t.index() != promo.unwrap_or(0) {
+            if legal_promo_t.index() != promo.unwrap_or(PieceType::NONE.index()) {
                 continue;
             }
             let m_from_bb = m.from().bitboard();
@@ -1598,17 +1598,17 @@ impl Board {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
-            let kings = self.pieces.king::<true>() | self.pieces.king::<false>();
-            let queens = self.pieces.queens::<true>() | self.pieces.queens::<false>();
+            let kings = self.pieces.all_kings();
+            let queens = self.pieces.all_queens();
             return self.pieces.our_pieces::<IS_WHITE>().count_ones() <= 2
                 && (self.pieces.their_pieces::<IS_WHITE>() & !kings & !queens) == 0;
         }
 
         if self.pieces.bishops::<IS_WHITE>() != 0 {
-            let bishops = self.pieces.bishops::<true>() | self.pieces.bishops::<false>();
+            let bishops = self.pieces.all_bishops();
             let same_color = (bishops & BB_DARK_SQUARES) == 0 || (bishops & BB_LIGHT_SQUARES) == 0;
-            let pawns = self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
-            let knights = self.pieces.knights::<true>() | self.pieces.knights::<false>();
+            let pawns = self.pieces.all_pawns();
+            let knights = self.pieces.all_knights();
             return same_color && pawns == 0 && knights == 0;
         }
 

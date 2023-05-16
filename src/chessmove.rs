@@ -23,7 +23,7 @@ impl Move {
         debug_assert_ne!(promotion, PieceType::NONE, "attempted to construct promotion to none");
         debug_assert_ne!(promotion, PieceType::PAWN, "attempted to construct promotion to pawn");
         debug_assert_ne!(promotion, PieceType::KING, "attempted to construct promotion to king");
-        let promotion = u16::from(promotion.inner()).wrapping_sub(2) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
+        let promotion = u16::from(promotion.inner()).wrapping_sub(1) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
         Self {
             data: u16::from(from)
                 | (u16::from(to) << Self::TO_SHIFT)
@@ -61,7 +61,7 @@ impl Move {
     pub fn promotion_type(self) -> PieceType {
         debug_assert!(self.is_promo());
         let output =
-            PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 2);
+            PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1);
         debug_assert!(output.legal_promo());
         output
     }

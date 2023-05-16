@@ -63,9 +63,9 @@ pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH.ply_to_horizon() 
 
 #[rustfmt::skip]
 pub const PIECE_VALUES: [S; 13] = [
+    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, S(0, 0),
+    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, S(0, 0),
     S(0, 0),
-    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, S(0, 0),
-    PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, S(0, 0),
 ];
 
 /// The malus applied when a pawn has no pawns of its own colour to the left or right.
@@ -377,7 +377,7 @@ impl Board {
 
     fn is_file_open(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
-        let pawns = self.pieces.pawns::<true>() | self.pieces.pawns::<false>();
+        let pawns = self.pieces.all_pawns();
         (mask & pawns) == 0
     }
 
