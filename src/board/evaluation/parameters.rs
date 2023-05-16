@@ -67,7 +67,7 @@ impl EvalParams {
 impl Display for EvalParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         writeln!(f, "Parameters {{")?;
-        writeln!(f, "    piece_values: {:?},", &self.piece_values[1..6])?;
+        writeln!(f, "    piece_values: {:?},", &self.piece_values[0..5])?;
         writeln!(f, "    isolated_pawn_malus: {:?},", self.isolated_pawn_malus)?;
         writeln!(f, "    doubled_pawn_malus: {:?},", self.doubled_pawn_malus)?;
         writeln!(f, "    bishop_pair_bonus: {:?},", self.bishop_pair_bonus)?;
@@ -115,7 +115,7 @@ impl EvalParams {
     };
 
     pub fn vectorise(&self) -> Vec<i32> {
-        let ss = self.piece_values[1..6] // pawn to queen
+        let ss = self.piece_values[0..5] // pawn to queen
             .iter()
             .copied()
             .chain(Some(self.isolated_pawn_malus))
@@ -149,7 +149,7 @@ impl EvalParams {
     pub fn devectorise(data: &[i32]) -> Self {
         let mut out = Self::NULL;
         let mut s_iter = data[..data.len() - 3 - 8].chunks(2).map(|x| S(x[0], x[1]));
-        for p in 1..6 {
+        for p in 0..5 {
             let val = s_iter.next().expect("failed to read piece_value term from vector");
             out.piece_values[p] = val;
             out.piece_values[p + 6] = val;

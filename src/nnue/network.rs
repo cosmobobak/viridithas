@@ -147,8 +147,7 @@ const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
-    // shift into correct range.
-    let piece_type = piece_type.index() - 1;
+    let piece_type = piece_type.index();
     let colour = colour.index();
 
     let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
@@ -298,7 +297,7 @@ impl NNUEState {
         const COLOUR_STRIDE: usize = 64 * 6;
         const PIECE_STRIDE: usize = 64;
 
-        let piece_type = piece_type.index() - 1; // shift into correct range.
+        let piece_type = piece_type.index();
         let colour = colour.index();
 
         let white_idx_from = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + from.index();
@@ -327,7 +326,7 @@ impl NNUEState {
         const PIECE_STRIDE: usize = 64;
 
         let sq = sq;
-        let piece_type = piece_type.index() - 1; // shift into correct range.
+        let piece_type = piece_type.index();
         let colour = colour.index();
 
         let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
@@ -373,7 +372,7 @@ impl NNUEState {
         let rem = loc % COLOUR_STRIDE;
         let piece = (rem / PIECE_STRIDE) as u8;
         let sq = (rem % PIECE_STRIDE) as u8;
-        (Colour::new(colour), PieceType::new(piece + 1), Square::new(sq))
+        (Colour::new(colour), PieceType::new(piece), Square::new(sq))
     }
 
     /// Assert that the input feature planes (the two boards from white's and black's perspective)

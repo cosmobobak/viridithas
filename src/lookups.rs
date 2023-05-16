@@ -137,14 +137,14 @@ pub const SIDE_KEY: u64 = init_hash_keys().2;
 
 /// knights, bishops, rooks, and queens.
 pub static PIECE_BIG: [bool; 13] =
-    [false, false, true, true, true, true, false, false, true, true, true, true, false];
+    [false, true, true, true, true, false, false, true, true, true, true, false, false];
 /// rooks and queens.
 pub static PIECE_MAJ: [bool; 13] =
-    [false, false, false, false, true, true, false, false, false, false, true, true, false];
+    [false, false, false, true, true, false, false, false, false, true, true, false, false];
 /// knights and bishops.
 #[cfg(debug_assertions)]
 pub static PIECE_MIN: [bool; 13] =
-    [false, false, true, true, false, false, false, false, true, true, false, false, false];
+    [false, true, true, false, false, false, false, true, true, false, false, false, false];
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     let mut attacks = [0; 64];

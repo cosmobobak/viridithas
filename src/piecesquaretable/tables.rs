@@ -10,7 +10,6 @@ use super::PieceSquareTable;
 // Scores are explicit for files A to D, implicitly mirrored for E to H.
 const BONUS: [[[S; 4]; 8]; 7] = [
     [[S::NULL; 4]; 8],
-    [[S::NULL; 4]; 8],
     [
         // Knight
         [S(-61, 30), S(4, -8), S(-2, -4), S(7, 11)],
@@ -66,6 +65,7 @@ const BONUS: [[[S; 4]; 8]; 7] = [
         [S(241, 99), S(200, 202), S(231, 181), S(200, 160)],
         [S(243, -126), S(340, 121), S(268, 158), S(180, 125)],
     ],
+    [[S::NULL; 4]; 8],
 ];
 
 #[rustfmt::skip]
@@ -86,7 +86,6 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
     #[rustfmt::skip]
     println!(
 "static BONUS: [[[S; 4]; 8]; 7] = [
-    [[S::NULL; 4]; 8],
     [[S::NULL; 4]; 8],"
     );
     let names = ["NULL", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"];
@@ -105,6 +104,7 @@ pub fn printout_pst_source(pst: &PieceSquareTable) {
         }
         println!("    ],");
     }
+    println!("    [ S::NULL; 8 ],");
     println!("];");
     println!();
     #[rustfmt::skip]
@@ -130,7 +130,7 @@ static P_BONUS: [[S; 8]; 8] = [
 pub const fn construct_piece_square_table() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
     cfor!(let mut colour = 0; colour < 2; colour += 1; {
-        let offset = if colour == Colour::BLACK.inner() { 7 } else { 1 };
+        let offset = if colour == Colour::BLACK.inner() { 6 } else { 0 };
         let multiplier = if colour == Colour::BLACK.inner() { -1 } else { 1 };
         cfor!(let mut pieces_idx = 0; pieces_idx < 6; pieces_idx += 1; {
             cfor!(let mut pst_idx = 0; pst_idx < 64; pst_idx += 1; {
@@ -142,7 +142,7 @@ pub const fn construct_piece_square_table() -> PieceSquareTable {
                     P_BONUS[r][f]
                 } else {
                     let f = if f >= 4 { 7 - f } else { f };
-                    BONUS[pieces_idx + 1][r][f]
+                    BONUS[pieces_idx][r][f]
                 };
                 let S(mg, eg) = value;
                 pst[pieces_idx + offset][sq.index()] = S(mg * multiplier, eg * multiplier);
