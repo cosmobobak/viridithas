@@ -358,14 +358,17 @@ unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
 // this function is super-duper thread safe.
 pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
 pub fn initialise() {
+    static MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
     if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
+    let lock = MUTEX.lock().unwrap();
     unsafe {
         init_sliders_attacks::<true>();
         init_sliders_attacks::<false>();
     }
     MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
+    std::mem::drop(lock);
 }
 
 static BISHOP_MASKS: [u64; 64] = init_masks_with!(mask_bishop_attacks);
