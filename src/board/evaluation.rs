@@ -308,21 +308,12 @@ impl Board {
         }
     }
 
-    pub fn zugzwang_unlikely(&self) -> bool {
+    pub const fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
-        if stm == Colour::WHITE {
-            let white_king = self.pieces.king::<true>();
-            let white_pawns = self.pieces.pawns::<true>();
-            let white_occupied = self.pieces.our_pieces::<true>();
-            let pieces = white_occupied ^ white_pawns ^ white_king;
-            pieces != 0 // we have stuff that isn't a king or pawns
-        } else {
-            let black_king = self.pieces.king::<false>();
-            let black_pawns = self.pieces.pawns::<false>();
-            let black_occupied = self.pieces.our_pieces::<false>();
-            let pieces = black_occupied ^ black_pawns ^ black_king;
-            pieces != 0 // we have stuff that isn't a king or pawns
-        }
+        let us = self.pieces.occupied_co(stm);
+        let kings = self.pieces.all_kings();
+        let pawns = self.pieces.all_pawns();
+        (us & (kings | pawns)) != us
     }
 
     fn bishop_pair_term(&self, i: &SearchInfo) -> S {
