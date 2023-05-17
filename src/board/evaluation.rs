@@ -314,12 +314,12 @@ impl Board {
             let white_pawns = self.pieces.pawns::<true>();
             let white_occupied = self.pieces.our_pieces::<true>();
             let non_pawns = white_occupied ^ white_pawns;
-            non_pawns > 1 // we have a king and something else
+            non_pawns.count_ones() > 1 // we have a king and something else
         } else {
             let black_pawns = self.pieces.pawns::<false>();
             let black_occupied = self.pieces.our_pieces::<false>();
             let non_pawns = black_occupied ^ black_pawns;
-            non_pawns > 1 // we have a king and something else
+            non_pawns.count_ones() > 1 // we have a king and something else
         }
     }
 
