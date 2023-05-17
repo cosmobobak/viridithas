@@ -311,15 +311,17 @@ impl Board {
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
         if stm == Colour::WHITE {
+            let white_king = self.pieces.king::<true>();
             let white_pawns = self.pieces.pawns::<true>();
             let white_occupied = self.pieces.our_pieces::<true>();
-            let non_pawns = white_occupied ^ white_pawns;
-            non_pawns.count_ones() > 1 // we have a king and something else
+            let non_pawns = white_occupied ^ white_pawns ^ white_king;
+            non_pawns != 0 // we have stuff that isn't a king or pawns
         } else {
+            let black_king = self.pieces.king::<false>();
             let black_pawns = self.pieces.pawns::<false>();
             let black_occupied = self.pieces.our_pieces::<false>();
-            let non_pawns = black_occupied ^ black_pawns;
-            non_pawns.count_ones() > 1 // we have a king and something else
+            let non_pawns = black_occupied ^ black_pawns ^ black_king;
+            non_pawns != 0 // we have stuff that isn't a king or pawns
         }
     }
 
