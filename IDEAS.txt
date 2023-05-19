@@ -27,3 +27,6 @@ MINOR:
 - move lookup functions into being associated functions of Piece/PieceType/Colour/Move and so on.
 - self.skip_quiets && not_winning should exit straight to None, rather than wasting time.
 - embed magics
+- clean up magic gen code
+- SquareSet type
+- clean movegen more generally
