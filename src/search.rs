@@ -525,7 +525,7 @@ impl Board {
                 ProbeResult::Cutoff(s) => return s,
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
-                    // TT-reduction.
+                    // TT-reduction (IIR).
                     if PV && depth >= info.search_params.tt_reduction_depth {
                         depth -= 1;
                     }
