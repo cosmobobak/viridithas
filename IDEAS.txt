@@ -30,3 +30,4 @@ MINOR:
 - clean up magic gen code
 - SquareSet type
 - clean movegen more generally
+- book construction?
