@@ -175,6 +175,7 @@ impl Board {
         t: &mut ThreadData,
         total_nodes: &AtomicU64,
     ) {
+        assert!(!MAIN_THREAD || t.thread_id == 0, "main thread must have thread_id 0");
         let d_move = self.default_move(tt, t);
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
