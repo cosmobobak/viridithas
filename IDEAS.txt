@@ -31,3 +31,4 @@ MINOR:
 - SquareSet type
 - clean movegen more generally
 - book construction?
+- remove `pub` from everything that doesn't need it
