@@ -47,7 +47,7 @@ impl MoveList {
         debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
-            
+
         self.moves[self.count] = MoveListEntry { mov: m, score };
         self.count += 1;
     }

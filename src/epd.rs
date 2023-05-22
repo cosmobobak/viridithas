@@ -110,7 +110,10 @@ fn run_on_positions(
             t.nnue.refresh_acc(&board);
         }
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()));
+        let time_manager = TimeManager::default_with_limit(SearchLimit::TimeOrCorrectMoves(
+            time,
+            best_moves.clone(),
+        ));
         let mut info = SearchInfo {
             time_manager,
             print_to_stdout: print,

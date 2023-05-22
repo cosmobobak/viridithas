@@ -170,10 +170,7 @@ impl TimeManager {
     }
 
     pub fn default_with_limit(limit: SearchLimit) -> Self {
-        Self {
-            limit,
-            ..Default::default()
-        }
+        Self { limit, ..Default::default() }
     }
 
     pub fn reset_for_id(&mut self) {

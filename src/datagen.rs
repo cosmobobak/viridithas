@@ -340,7 +340,7 @@ fn generate_on_thread(
                 tt.view(),
             );
             if board.ply() > 16
-                &&!board.is_tactical(best_move)
+                && !board.is_tactical(best_move)
                 && !is_game_theoretic_score(score)
                 && !board.in_check::<{ Board::US }>()
             {
