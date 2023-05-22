@@ -101,31 +101,31 @@ impl SearchLimit {
 #[derive(Clone, Debug)]
 pub struct TimeManager {
     /// The starting time of the search.
-    pub start_time: Instant,
+    start_time: Instant,
     /// The limit on the search.
-    pub limit: SearchLimit,
+    limit: SearchLimit,
     /// The maximum time that the search may last for without losing on the clock.
-    pub max_time: Duration,
+    max_time: Duration,
     /// The time after which search will be halted even mid-search.
-    pub hard_time: Duration,
+    hard_time: Duration,
     /// The time after which we will stop upon completing a depth.
-    pub opt_time: Duration,
+    opt_time: Duration,
     /// The value from the last iteration of search.
-    pub prev_score: i32,
+    prev_score: i32,
     /// The best move from the last iteration of search.
-    pub prev_move: Move,
+    prev_move: Move,
     /// The number of ID iterations for which the best move remained.
-    pub stability: usize,
+    stability: usize,
     /// Number of times that we have failed low.
-    pub failed_low: i32,
+    failed_low: i32,
     /// Number of ID iterations that a mate score has remained.
-    pub mate_counter: usize,
+    mate_counter: usize,
     /// The nature of the forced move (if any)
-    pub found_forced_move: ForcedMoveType,
+    found_forced_move: ForcedMoveType,
     /// The last set of multiplicative factors.
-    pub last_factors: [f64; 2],
+    last_factors: [f64; 2],
     /// Whether search has been ended early due to a correct move being found.
-    pub correct_move_found: bool,
+    correct_move_found: bool,
 }
 
 impl Default for TimeManager {
@@ -149,6 +149,33 @@ impl Default for TimeManager {
 }
 
 impl TimeManager {
+    pub fn set_limit(&mut self, limit: SearchLimit) {
+        self.limit = limit;
+    }
+
+    pub fn start(&mut self) {
+        self.start_time = Instant::now();
+    }
+
+    pub fn elapsed(&self) -> Duration {
+        self.start_time.elapsed()
+    }
+
+    pub const fn limit(&self) -> &SearchLimit {
+        &self.limit
+    }
+
+    pub const fn correct_move_found(&self) -> bool {
+        self.correct_move_found
+    }
+
+    pub fn default_with_limit(limit: SearchLimit) -> Self {
+        Self {
+            limit,
+            ..Default::default()
+        }
+    }
+
     pub fn reset_for_id(&mut self) {
         self.prev_score = 0;
         self.prev_move = Move::NULL;

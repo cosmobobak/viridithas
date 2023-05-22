@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     sync::atomic::{AtomicBool, AtomicUsize},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use crate::{
@@ -110,24 +110,21 @@ fn run_on_positions(
             t.nnue.refresh_acc(&board);
         }
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager {
-            limit: SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()),
-            ..TimeManager::default()
-        };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::TimeOrCorrectMoves(time, best_moves.clone()));
         let mut info = SearchInfo {
             time_manager,
             print_to_stdout: print,
             eval_params: params.clone(),
             ..SearchInfo::new(&stopped)
         };
-        info.time_manager.start_time = Instant::now();
+        info.time_manager.start();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());
-        let elapsed = info.time_manager.start_time.elapsed();
+        let elapsed = info.time_manager.elapsed();
         let passed = best_moves.contains(&bm);
         if elapsed > Duration::from_millis(time + 20) {
             eprintln!("{CONTROL_YELLOW}[WARNING] Used more than {time}ms on {id} (used {elapsed}ms){CONTROL_RESET}", elapsed = elapsed.as_millis());
         }
-        if info.time_manager.correct_move_found && !passed {
+        if info.time_manager.correct_move_found() && !passed {
             eprintln!("{CONTROL_RED}[WARNING] Time manager claimed correct move found, but program chose {bm} for {id}{CONTROL_RESET}");
             break;
         }

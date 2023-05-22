@@ -169,6 +169,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     let mut clocks: [Option<i64>; 2] = [None, None];
     let mut incs: [Option<i64>; 2] = [None, None];
     let mut nodes: Option<u64> = None;
+    let mut limit = SearchLimit::Infinite;
 
     let mut parts = text.split_ascii_whitespace();
     let command = parts
@@ -187,26 +188,26 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
             "btime" => clocks[pos.turn().flip().index()] = Some(part_parse("btime", parts.next())?),
             "winc" => incs[pos.turn().index()] = Some(part_parse("winc", parts.next())?),
             "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
-            "infinite" => info.time_manager.limit = SearchLimit::Infinite,
+            "infinite" => limit = SearchLimit::Infinite,
             "mate" => {
                 let mate_distance: usize = part_parse("mate", parts.next())?;
                 let ply = mate_distance * 2; // gives padding when we're giving mate, but whatever
                 GO_MATE_MAX_DEPTH.store(ply, Ordering::SeqCst);
-                info.time_manager.limit = SearchLimit::Mate { ply };
+                limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
             other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
-    if !matches!(info.time_manager.limit, SearchLimit::Mate { .. }) {
+    if !matches!(limit, SearchLimit::Mate { .. }) {
         GO_MATE_MAX_DEPTH.store(MAX_DEPTH.ply_to_horizon(), Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
-        info.time_manager.limit = SearchLimit::Time(movetime);
+        limit = SearchLimit::Time(movetime);
     }
     if let Some(depth) = depth {
-        info.time_manager.limit = SearchLimit::Depth(depth.into());
+        limit = SearchLimit::Depth(depth.into());
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
@@ -215,7 +216,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        info.time_manager.limit =
+        limit =
             SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
         return Err(UciError::InvalidFormat(
@@ -224,10 +225,11 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), Uc
     }
 
     if let Some(nodes) = nodes {
-        info.time_manager.limit = SearchLimit::Nodes(nodes);
+        limit = SearchLimit::Nodes(nodes);
     }
 
-    info.time_manager.start_time = Instant::now();
+    info.time_manager.set_limit(limit);
+    info.time_manager.start();
 
     Ok(())
 }

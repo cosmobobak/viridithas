@@ -56,8 +56,7 @@ fn batch_convert<const USE_NNUE: bool>(
         }
         tt.clear();
         let stopped = AtomicBool::new(false);
-        let time_manager =
-            TimeManager { limit: SearchLimit::Depth(Depth::new(depth)), ..TimeManager::default() };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::Depth(Depth::new(depth)));
         let mut info =
             SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
         let (score, bm) =

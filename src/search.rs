@@ -178,7 +178,7 @@ impl Board {
         let d_move = self.default_move(tt, t);
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
-        let max_depth = info.time_manager.limit.depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
+        let max_depth = info.time_manager.limit().depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
@@ -1314,7 +1314,7 @@ fn readout_info(
     }
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-    let nps = (total_nodes as f64 / info.time_manager.start_time.elapsed().as_secs_f64()) as u64;
+    let nps = (total_nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::BLACK {
         bound = match bound {
             Bound::Upper => Bound::Lower,
@@ -1331,7 +1331,7 @@ fn readout_info(
         println!(
             "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
             info.seldepth.ply_to_horizon(),
-            info.time_manager.start_time.elapsed().as_millis(),
+            info.time_manager.elapsed().as_millis(),
             hashfull = tt.hashfull(),
             tbhits = TB_HITS.load(Ordering::SeqCst),
             wdl = uci::format_wdl(pv.score, board.ply()),
@@ -1347,7 +1347,7 @@ fn readout_info(
         eprint!(
             " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth.ply_to_horizon(),
-            t = uci::format_time(info.time_manager.start_time.elapsed().as_millis()),
+            t = uci::format_time(info.time_manager.elapsed().as_millis()),
             knps = nps / 1_000,
             knodes = total_nodes / 1_000,
             wdl = uci::pretty_format_wdl(pv.score, board.ply()),

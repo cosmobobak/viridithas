@@ -229,7 +229,7 @@ mod tests {
         let mut position =
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager { limit: SearchLimit::mate_in(2), ..TimeManager::default() };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -250,7 +250,7 @@ mod tests {
         let mut position =
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager { limit: SearchLimit::mate_in(2), ..TimeManager::default() };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -271,7 +271,7 @@ mod tests {
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager { limit: SearchLimit::mate_in(2), ..TimeManager::default() };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
@@ -292,7 +292,7 @@ mod tests {
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager { limit: SearchLimit::mate_in(2), ..TimeManager::default() };
+        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
