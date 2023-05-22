@@ -204,7 +204,7 @@ fn generate_on_thread(
     tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager {
-        limit: match options.limit {
+        limit: match options.limit() {
             DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
             DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
         },
@@ -298,8 +298,8 @@ fn generate_on_thread(
         if options.log_level > 2 {
             eprintln!("Evaluating position...");
         }
-        let temp_limit =
-            std::mem::replace(&mut info.time_manager.limit, SearchLimit::Depth(Depth::new(10)));
+        let temp_limit = info.time_manager.limit().clone();
+        info.time_manager.set_limit(SearchLimit::Depth(Depth::new(10)));
         let (eval, _) = board.search_position::<true>(
             &mut info,
             std::array::from_mut(&mut thread_data),
@@ -312,7 +312,7 @@ fn generate_on_thread(
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        info.time_manager.limit = temp_limit;
+        info.time_manager.set_limit(temp_limit);
         // STEP 3: play out to the end of the game
         if options.log_level > 2 {
             eprintln!("Playing out game...");
