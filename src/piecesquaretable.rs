@@ -6,7 +6,7 @@ pub type PieceSquareTable = [[S; 64]; 13];
 
 pub fn pst_value(piece: Piece, sq: Square, pst: &PieceSquareTable) -> S {
     debug_assert!(sq.on_board());
-    unsafe { *pst.get_unchecked(piece.index()).get_unchecked(sq.index()) }
+    pst[piece.index()][sq.index()]
 }
 
 pub fn render_pst_table(pst: &PieceSquareTable) {

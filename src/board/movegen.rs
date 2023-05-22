@@ -47,14 +47,8 @@ impl MoveList {
         debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
-
-        // SAFETY: this function is only called inside this file, and only in a single
-        // move-generation cycle. The maximum number of pseudolegal moves that can exist
-        // in a chess position is 218, and self.count is always zeroed at the start of
-        // movegen, so we can't ever exceed the bounds of self.moves.
-        unsafe {
-            *self.moves.get_unchecked_mut(self.count) = MoveListEntry { mov: m, score };
-        }
+            
+        self.moves[self.count] = MoveListEntry { mov: m, score };
         self.count += 1;
     }
 

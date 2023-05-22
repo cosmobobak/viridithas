@@ -175,9 +175,9 @@ pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> u64 {
     debug_assert!(sq.on_board());
     debug_assert!(PIECE_TYPE == PieceType::KNIGHT.inner() || PIECE_TYPE == PieceType::KING.inner());
     if PIECE_TYPE == PieceType::KNIGHT.inner() {
-        unsafe { *KNIGHT_ATTACKS.get_unchecked(sq.index()) }
+        KNIGHT_ATTACKS[sq.index()]
     } else {
-        unsafe { *KING_ATTACKS.get_unchecked(sq.index()) }
+        KING_ATTACKS[sq.index()]
     }
 }
 

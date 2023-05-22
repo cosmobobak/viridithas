@@ -24,7 +24,6 @@ use crate::{
     definitions::{CheckState, File, Rank, Square, Undo, BKCA, BQCA, WKCA, WQCA},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
-    macros,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
     nnue::network::{Activate, Deactivate},
     piece::{Colour, Piece, PieceType},
@@ -161,7 +160,7 @@ impl Board {
         let sq = match side {
             Colour::WHITE => self.pieces.king::<true>().first_square(),
             Colour::BLACK => self.pieces.king::<false>().first_square(),
-            _ => unsafe { macros::inconceivable!() },
+            _ => unreachable!(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(self.piece_at(sq).colour(), side);
@@ -748,13 +747,15 @@ impl Board {
     /// Gets the piece that will be moved by the given move.
     pub fn moved_piece(&self, m: Move) -> Piece {
         debug_assert!(m.from().on_board());
-        unsafe { *self.piece_array.get_unchecked(m.from().index()) }
+        let idx = m.from().index();
+        self.piece_array[idx]
     }
 
     /// Gets the piece that will be captured by the given move.
     pub fn captured_piece(&self, m: Move) -> Piece {
         debug_assert!(m.to().on_board());
-        unsafe { *self.piece_array.get_unchecked(m.to().index()) }
+        let idx = m.to().index();
+        self.piece_array[idx]
     }
 
     /// Determines whether this move would be a capture in the current position.
@@ -788,13 +789,13 @@ impl Board {
     /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: Square) -> Piece {
         debug_assert!(sq.on_board());
-        unsafe { *self.piece_array.get_unchecked(sq.index()) }
+        self.piece_array[sq.index()]
     }
 
     /// Gets a mutable reference to the piece at the given square.
     pub fn piece_at_mut(&mut self, sq: Square) -> &mut Piece {
         debug_assert!(sq.on_board());
-        unsafe { self.piece_array.get_unchecked_mut(sq.index()) }
+        &mut self.piece_array[sq.index()]
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -847,8 +848,8 @@ impl Board {
         });
         self.repetition_cache.push(saved_key);
 
-        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(from.index()) };
-        self.castle_perm &= unsafe { *CASTLE_PERM_MASKS.get_unchecked(to.index()) };
+        self.castle_perm &= CASTLE_PERM_MASKS[from.index()];
+        self.castle_perm &= CASTLE_PERM_MASKS[to.index()];
         self.ep_sq = Square::NO_SQUARE;
 
         // reinsert the castling rights

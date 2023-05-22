@@ -11,14 +11,14 @@ use crate::{
 
 pub fn hash_castling(key: &mut u64, castle_perm: u8) {
     debug_assert!((castle_perm as usize) < CASTLE_KEYS.len());
-    let castle_key = unsafe { *CASTLE_KEYS.get_unchecked(castle_perm as usize) };
+    let castle_key = CASTLE_KEYS[castle_perm as usize];
     *key ^= castle_key;
 }
 
 pub fn hash_piece(key: &mut u64, piece: Piece, sq: Square) {
     debug_assert!((piece.index()) < PIECE_KEYS.len());
     debug_assert!(sq.on_board());
-    let piece_key = unsafe { *PIECE_KEYS.get_unchecked(piece.index()).get_unchecked(sq.index()) };
+    let piece_key = PIECE_KEYS[piece.index()][sq.index()];
     *key ^= piece_key;
 }
 
@@ -28,8 +28,7 @@ pub fn hash_side(key: &mut u64) {
 
 pub fn hash_ep(key: &mut u64, ep_sq: Square) {
     debug_assert!(ep_sq.on_board());
-    let ep_key =
-        unsafe { *PIECE_KEYS.get_unchecked(Piece::EMPTY.index()).get_unchecked(ep_sq.index()) };
+    let ep_key = PIECE_KEYS[Piece::EMPTY.index()][ep_sq.index()];
     *key ^= ep_key;
 }
 
