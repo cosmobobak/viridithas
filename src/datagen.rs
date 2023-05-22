@@ -203,13 +203,10 @@ fn generate_on_thread(
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
-    let time_manager = TimeManager {
-        limit: match options.limit() {
-            DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-            DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
-        },
-        ..TimeManager::default()
-    };
+    let time_manager = TimeManager::default_with_limit(match options.limit {
+        DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
+        DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
+    });
     let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
