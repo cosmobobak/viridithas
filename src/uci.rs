@@ -748,7 +748,7 @@ fn bench(
         for t in thread_data.iter_mut() {
             t.nnue.refresh_acc(pos);
         }
-        pos.refresh_psqt(&*info);
+        pos.refresh_psqt(info);
         let res = parse_go("go depth 16\n", info, pos);
         if let Err(e) = res {
             info.print_to_stdout = true;
