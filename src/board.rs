@@ -514,7 +514,7 @@ impl Board {
         false
     }
 
-    /// Checks whether a move is pseudo-legal
+    /// Checks whether a move is pseudo-legal.
     /// This means that it is a legal move, except for the fact that it might leave the king in check.
     pub fn is_pseudo_legal(&self, m: Move) -> bool {
         if m.is_null() {
