@@ -706,9 +706,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 }
                 res
             }
-            benchcmd @ ("bench" | "benchfull") => {
-                bench(benchcmd)
-            }
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd),
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -725,9 +723,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 }
 
 const BENCH_DEPTH: usize = 16;
-fn bench(
-    benchcmd: &str,
-) -> Result<(), UciError> {
+fn bench(benchcmd: &str) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
     let mut info = SearchInfo::new(&stopped);
@@ -735,10 +731,8 @@ fn bench(
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut thread_data = (0..1)
-        .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p))
-        .collect::<Vec<_>>();
+    let mut thread_data =
+        (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
     for fen in BENCH_POSITIONS {
