@@ -890,7 +890,7 @@ impl Board {
                 // calculation of LMR stuff
                 let r = if (is_quiet || !is_winning_capture)
                     && depth >= Depth::new(3)
-                    && moves_made >= (1 + usize::from(PV))
+                    && moves_made >= (2 + usize::from(PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
