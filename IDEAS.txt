@@ -10,22 +10,13 @@ MAJOR:
 -- Crazyhouse
 
 MINOR:
-- replace all the false/true constgen stuff with a proper type.
-- fullwindow on big scores (+30?)
-- remove `as` casts and unsafe code FOR REAL
-- try to reduce attr use, it's ugly.
-- make FEN conversion not halt singlethreaded when writing to file. or generally.
-- the slow part of deduplication is the file I/O, consider mmap?.
-- multipv. put the moves in ThreadData and use ROOT.
 - Rust features to watch for: full const generics, const floating-point maths.
 - make the big-piece and other stuff better named
 - filter training positions that are forced.
 -- datagen, data reanalysis, maybe other things
 - add Shuffle Chess starting positions for datagen. (double shuffle chess?)
-- cool Stash-style time management
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
 - move lookup functions into being associated functions of Piece/PieceType/Colour/Move and so on.
-- self.skip_quiets && not_winning should exit straight to None, rather than wasting time.
 - embed magics
 - clean up magic gen code
 - SquareSet type
