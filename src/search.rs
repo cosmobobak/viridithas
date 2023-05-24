@@ -231,7 +231,9 @@ impl Board {
                         info.time_manager.report_aspiration_fail(depth, Bound::Lower);
                     }
                     // decrement depth:
-                    depth = (depth - 1).max(min_depth);
+                    if pv.score.abs() < MINIMUM_TB_WIN_SCORE {
+                        depth = (depth - 1).max(min_depth);
+                    }
 
                     if let ControlFlow::Break(_) =
                         info.time_manager.solved_breaker::<MAIN_THREAD>(pv.line[0], 0, d)
