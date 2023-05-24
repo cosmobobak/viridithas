@@ -203,7 +203,12 @@ NET ID │ general concept                          │ notes
        │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     59 │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
-       │ small 64x2 feature transformer, batch    │ SPRT  │
-       │ size 16384, and 45 epochs.               │ LLR   │
-       │                                          │ GAMES │
+       │ small 64x2 feature transformer, batch    │ SPRT  │ 
+       │ size 16384, and 45 epochs.               │ LLR   │ 
+       │                                          │ GAMES │ 
+───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    60 │ Net 58 with 1024 neurons.                │ ELO   │ 20.20 +- 9.42 (95%)
+       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+       │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+       │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
 ───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
