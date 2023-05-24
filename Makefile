@@ -15,7 +15,7 @@ else
 endif
 
 rule:
-	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
+	cargo rustc --release -- -C target-cpu=x86-64-v3 --emit link=$(NAME)
 
 release:
 	cargo rustc --release --features syzygy,bindgen -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
