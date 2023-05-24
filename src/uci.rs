@@ -556,7 +556,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     println!("{NAME} {VERSION} by Cosmo");
 
     if global_bench {
-        bench(&mut info, &mut pos, &mut tt, &mut thread_data, "openbench").expect("bench failed");
+        bench("openbench").expect("bench failed");
         return;
     }
 
@@ -707,7 +707,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 res
             }
             benchcmd @ ("bench" | "benchfull") => {
-                bench(&mut info, &mut pos, &mut tt, &mut thread_data, benchcmd)
+                bench(benchcmd)
             }
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
@@ -726,41 +726,46 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 
 const BENCH_DEPTH: usize = 16;
 fn bench(
-    info: &mut SearchInfo,
-    pos: &mut Board,
-    tt: &mut TT,
-    thread_data: &mut [ThreadData],
     benchcmd: &str,
 ) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
+    let stopped = AtomicBool::new(false);
+    let mut info = SearchInfo::new(&stopped);
     info.print_to_stdout = false;
+    let mut pos = Board::default();
+    let mut tt = TT::new();
+    tt.resize(16 * MEGABYTE);
+    let mut thread_data = (0..1)
+        .zip(std::iter::repeat(&pos))
+        .map(|(i, p)| ThreadData::new(i, p))
+        .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
     for fen in BENCH_POSITIONS {
-        let res = do_newgame(pos, tt, thread_data);
+        let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);
         }
-        let res = parse_position(&format!("position fen {fen}\n"), pos);
+        let res = parse_position(&format!("position fen {fen}\n"), &mut pos);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);
         }
-        for t in thread_data.iter_mut() {
-            t.nnue.refresh_acc(pos);
+        for t in &mut thread_data {
+            t.nnue.refresh_acc(&pos);
         }
-        pos.refresh_psqt(info);
-        let res = parse_go(&bench_string, info, pos);
+        pos.refresh_psqt(&info);
+        let res = parse_go(&bench_string, &mut info, &mut pos);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);
         }
         tt.increase_age();
         if USE_NNUE.load(Ordering::SeqCst) {
-            pos.search_position::<true>(info, thread_data, tt.view());
+            pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
         } else {
-            pos.search_position::<false>(info, thread_data, tt.view());
+            pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
         }
         node_sum += info.nodes;
         if matches!(benchcmd, "benchfull" | "openbench") {
