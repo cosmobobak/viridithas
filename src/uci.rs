@@ -724,7 +724,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }
 
-const BENCH_DEPTH: usize = 13;
+const BENCH_DEPTH: usize = 16;
 fn bench(
     info: &mut SearchInfo,
     pos: &mut Board,
