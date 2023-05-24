@@ -724,6 +724,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
 }
 
+const BENCH_DEPTH: usize = 13;
 fn bench(
     info: &mut SearchInfo,
     pos: &mut Board,
@@ -731,6 +732,7 @@ fn bench(
     thread_data: &mut [ThreadData],
     benchcmd: &str,
 ) -> Result<(), UciError> {
+    let bench_string = format!("go depth {BENCH_DEPTH}\n");
     info.print_to_stdout = false;
     let mut node_sum = 0u64;
     let start = Instant::now();
@@ -749,7 +751,7 @@ fn bench(
             t.nnue.refresh_acc(pos);
         }
         pos.refresh_psqt(info);
-        let res = parse_go("go depth 16\n", info, pos);
+        let res = parse_go(&bench_string, info, pos);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);
