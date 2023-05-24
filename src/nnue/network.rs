@@ -215,14 +215,14 @@ impl NNUEState {
                 let piece_bb = board.pieces.piece_bb(piece);
 
                 for sq in BitLoop::new(piece_bb) {
-                    self.efficiently_update_manual::<Activate>(piece_type, colour, sq);
+                    self.update_feature::<Activate>(piece_type, colour, sq);
                 }
             }
         }
     }
 
     /// Update the state from a move.
-    pub fn efficiently_update_from_move(
+    pub fn move_feature(
         &mut self,
         piece_type: PieceType,
         colour: Colour,
@@ -259,7 +259,7 @@ impl NNUEState {
     }
 
     /// Update by activating or deactivating a piece.
-    pub fn efficiently_update_manual<A: Activation>(
+    pub fn update_feature<A: Activation>(
         &mut self,
         piece_type: PieceType,
         colour: Colour,

@@ -1050,11 +1050,11 @@ impl Board {
         t.nnue.push_acc();
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.efficiently_update_manual::<Deactivate>(PieceType::PAWN, colour.flip(), ep_sq);
+            t.nnue.update_feature::<Deactivate>(PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match to {
                 Square::C1 => {
-                    t.nnue.efficiently_update_from_move(
+                    t.nnue.move_feature(
                         PieceType::ROOK,
                         colour,
                         Square::A1,
@@ -1062,7 +1062,7 @@ impl Board {
                     );
                 }
                 Square::C8 => {
-                    t.nnue.efficiently_update_from_move(
+                    t.nnue.move_feature(
                         PieceType::ROOK,
                         colour,
                         Square::A8,
@@ -1070,7 +1070,7 @@ impl Board {
                     );
                 }
                 Square::G1 => {
-                    t.nnue.efficiently_update_from_move(
+                    t.nnue.move_feature(
                         PieceType::ROOK,
                         colour,
                         Square::H1,
@@ -1078,7 +1078,7 @@ impl Board {
                     );
                 }
                 Square::G8 => {
-                    t.nnue.efficiently_update_from_move(
+                    t.nnue.move_feature(
                         PieceType::ROOK,
                         colour,
                         Square::H8,
@@ -1092,16 +1092,16 @@ impl Board {
         }
 
         if capture != Piece::EMPTY {
-            t.nnue.efficiently_update_manual::<Deactivate>(capture.piece_type(), colour.flip(), to);
+            t.nnue.update_feature::<Deactivate>(capture.piece_type(), colour.flip(), to);
         }
 
         if m.is_promo() {
             let promo = m.promotion_type();
             debug_assert!(promo.legal_promo());
-            t.nnue.efficiently_update_manual::<Deactivate>(PieceType::PAWN, colour, from);
-            t.nnue.efficiently_update_manual::<Activate>(promo, colour, to);
+            t.nnue.update_feature::<Deactivate>(PieceType::PAWN, colour, from);
+            t.nnue.update_feature::<Activate>(promo, colour, to);
         } else {
-            t.nnue.efficiently_update_from_move(piece_type, colour, from, to);
+            t.nnue.move_feature(piece_type, colour, from, to);
         }
 
         true
