@@ -1073,18 +1073,15 @@ impl Board {
             // re-make the singular move.
             self.make_move::<NNUE>(m, t, info);
         }
+
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
-        if double_extend {
-            ONE_PLY * 2 // double-extend if we failed low by a lot (the move is very singular)
-        } else if value < r_beta {
-            ONE_PLY // singular extension
-        } else if tt_value >= beta // somewhat multi-cut-y
-         || tt_value <= alpha
-        // tt_value <= alpha is from Weiss https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/
-        {
-            -ONE_PLY
-        } else {
-            ZERO_PLY // no extension
+
+        match () {
+            _ if double_extend => ONE_PLY * 2,  // double-extend if we failed low by a lot (the move is very singular)
+            _ if value < r_beta => ONE_PLY,     // singular extension
+            _ if tt_value >= beta => -ONE_PLY,  // somewhat multi-cut-y
+            _ if tt_value <= alpha => -ONE_PLY, // tt_value <= alpha is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/)
+            _ => ZERO_PLY,                      // no extension
         }
     }
 
