@@ -192,7 +192,8 @@ impl Board {
                 info.stopped.store(true, Ordering::SeqCst);
                 break 'deepening;
             }
-            let depth = Depth::new(d.try_into().unwrap());
+            let mut depth = Depth::new(d.try_into().unwrap());
+            let min_depth = (depth / 2).max(ONE_PLY);
             // aspiration loop:
             loop {
                 let nodes_before = info.nodes;
@@ -228,6 +229,10 @@ impl Board {
                     aw.widen_up(pv.score, depth);
                     if MAIN_THREAD {
                         info.time_manager.report_aspiration_fail(depth, Bound::Lower);
+                    }
+                    // decrement depth:
+                    if pv.score.abs() < MINIMUM_TB_WIN_SCORE {
+                        depth = (depth - 1).max(min_depth);
                     }
 
                     if let ControlFlow::Break(_) =
