@@ -1623,12 +1623,26 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
+        let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
         let res = list
             .iter()
             .copied()
             .find(|&m| {
+                let m_to = if frc_cleanup && m.is_castle() {
+                    // if we're in normal UCI mode, we'll receive castling moves in the form of
+                    // "king moves two squares", but we want them as king-captures-rook.
+                    match m.to() {
+                        Square::G1 => Square::H1,
+                        Square::C1 => Square::A1,
+                        Square::G8 => Square::H8,
+                        Square::C8 => Square::A8,
+                        _ => m.to(),
+                    }
+                } else {
+                    m.to()
+                };
                 m.from() == from
-                    && m.to() == to
+                    && m_to == to
                     && (san_bytes.len() == 4
                         || m.safe_promotion_type().promo_char().unwrap() == san_bytes[4] as char)
             })
