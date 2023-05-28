@@ -357,6 +357,18 @@ impl CastlingRights {
         }
         index as usize
     }
+
+    pub fn remove(&mut self, sq: Square) {
+        if self.wk == sq {
+            self.wk = Square::NO_SQUARE;
+        } else if self.wq == sq {
+            self.wq = Square::NO_SQUARE;
+        } else if self.bk == sq {
+            self.bk = Square::NO_SQUARE;
+        } else if self.bq == sq {
+            self.bq = Square::NO_SQUARE;
+        }
+    }
 }
 
 impl Display for CastlingRights {

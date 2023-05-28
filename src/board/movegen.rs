@@ -380,7 +380,7 @@ impl Board {
                 let king_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wk.index()];
                 if occupied & (king_side_path | king_side_path_to_rook) == 0
-                    && !self.any_attacked(king_side_path, Colour::BLACK)
+                    && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::BLACK)
                 {
                     move_list.push::<false>(Move::new_with_flags(
                         king_sq,
@@ -396,7 +396,7 @@ impl Board {
                 let queen_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wq.index()];
                 if occupied & (queen_side_path | queen_side_path_to_rook) == 0
-                    && !self.any_attacked(queen_side_path, Colour::BLACK)
+                    && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::BLACK)
                 {
                     move_list.push::<false>(Move::new_with_flags(
                         king_sq,
@@ -413,7 +413,7 @@ impl Board {
                 let king_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bk.index()];
                 if occupied & (king_side_path | king_side_path_to_rook) == 0
-                    && !self.any_attacked(king_side_path, Colour::WHITE)
+                    && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::WHITE)
                 {
                     move_list.push::<false>(Move::new_with_flags(
                         king_sq,
@@ -429,7 +429,7 @@ impl Board {
                 let queen_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bq.index()];
                 if occupied & (queen_side_path | queen_side_path_to_rook) == 0
-                    && !self.any_attacked(queen_side_path, Colour::WHITE)
+                    && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::WHITE)
                 {
                     move_list.push::<false>(Move::new_with_flags(
                         king_sq,

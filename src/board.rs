@@ -938,9 +938,6 @@ impl Board {
         });
         self.repetition_cache.push(saved_key);
 
-        // self.castle_perm &= CASTLE_PERM_MASKS[from.index()];
-        // self.castle_perm &= CASTLE_PERM_MASKS[to.index()];
-
         // update castling rights
         let mut new_rights = self.castle_perm;
         if piece == Piece::WR {
@@ -962,6 +959,7 @@ impl Board {
             new_rights.bk = Square::NO_SQUARE;
             new_rights.bq = Square::NO_SQUARE;
         }
+        new_rights.remove(to);
         self.castle_perm = new_rights;
 
         self.ep_sq = Square::NO_SQUARE;
