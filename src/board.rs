@@ -250,9 +250,19 @@ impl Board {
             let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
         }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::PAWN));
+        }
         for (file, &piece_type) in backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
         }
         let mut rook_indices = backrank.iter().enumerate().filter_map(|(i, &piece)| {
             if piece == PieceType::ROOK {
@@ -281,9 +291,19 @@ impl Board {
             let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
         }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::PAWN));
+        }
         for (file, &piece_type) in black_backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
         }
         let mut white_rook_indices = white_backrank.iter().enumerate().filter_map(|(i, &piece)| {
             if piece == PieceType::ROOK {
@@ -493,6 +513,20 @@ impl Board {
         let mut out = Self::new();
         out.set_from_fen(fen)?;
         Ok(out)
+    }
+
+    #[allow(dead_code)]
+    pub fn from_frc_idx(scharnagl: usize) -> Self {
+        let mut out = Self::new();
+        out.set_frc_idx(scharnagl);
+        out
+    }
+
+    #[allow(dead_code)]
+    pub fn from_dfrc_idx(scharnagl: usize) -> Self {
+        let mut out = Self::new();
+        out.set_dfrc_idx(scharnagl);
+        out
     }
 
     pub fn fen(&self) -> String {
@@ -2231,10 +2265,21 @@ mod tests {
     }
 
     #[test]
-    fn scharnagl_works() {
+    fn scharnagl_backrank_works() {
         use super::Board;
         use crate::piece::PieceType;
         let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
         assert_eq!(normal_chess_arrangement, [PieceType::ROOK, PieceType::KNIGHT, PieceType::BISHOP, PieceType::QUEEN, PieceType::KING, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK]);
+    }
+
+    #[test]
+    fn scharnagl_full_works() {
+        #![allow(clippy::similar_names)]
+        use super::Board;
+        let normal = Board::from_fen(Board::STARTING_FEN).unwrap();
+        let frc = Board::from_frc_idx(518);
+        let dfrc = Board::from_dfrc_idx(518 * 960 + 518);
+        assert_eq!(normal, frc);
+        assert_eq!(normal, dfrc);
     }
 }
