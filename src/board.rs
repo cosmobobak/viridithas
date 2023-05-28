@@ -755,7 +755,7 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let captured_piece = self.piece_at(to);
+        let captured_piece = self.captured_piece(m);
         let is_capture = !captured_piece.is_empty();
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
@@ -1771,7 +1771,7 @@ impl Board {
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from());
-        let is_capture = !self.piece_at(to_sq).is_empty()
+        let is_capture = self.is_capture(m)
             || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::PAWN if !is_capture => "",
