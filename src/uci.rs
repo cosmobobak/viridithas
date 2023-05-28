@@ -533,6 +533,7 @@ fn print_uci_response(full: bool) {
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
+    println!("option name UCI_Chess960 type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {
