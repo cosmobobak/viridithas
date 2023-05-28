@@ -755,7 +755,11 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let captured_piece = self.captured_piece(m);
+        let captured_piece = if m.is_castle() {
+            Piece::EMPTY
+        } else {
+            self.piece_at(to)
+        };
         let is_capture = !captured_piece.is_empty();
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
