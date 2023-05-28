@@ -83,6 +83,10 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 }
 
 pub fn gamut() {
+    #[cfg(debug_assertions)]
+    const NODES_LIMIT: u64 = 60_000;
+    #[cfg(not(debug_assertions))]
+    const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
     let f = File::open("epds/perftsuite.epd").unwrap();
     let mut pos = Board::new();
@@ -96,7 +100,7 @@ pub fn gamut() {
             let (d, nodes) = depth_part.split_once(' ').unwrap();
             let d = d.chars().nth(1).unwrap().to_digit(10).unwrap();
             let nodes = nodes.parse::<u64>().unwrap();
-            if nodes > 60_000_000 {
+            if nodes > NODES_LIMIT {
                 println!("Skipping...");
                 break;
             }

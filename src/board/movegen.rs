@@ -13,7 +13,7 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    definitions::{Square, BKCA, BQCA, WKCA, WQCA},
+    definitions::{Square, ORTHO_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
 };
@@ -370,60 +370,73 @@ impl Board {
     }
 
     fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
-        const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 =
-            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
-        const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 =
-            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
         let occupied = self.pieces.occupied();
         if IS_WHITE {
-            if self.castle_perm & WKCA != 0
-                && occupied & WK_FREESPACE == 0
-                && !self.sq_attacked_by::<false>(Square::E1)
-                && !self.sq_attacked_by::<false>(Square::F1)
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    Square::E1,
-                    Square::G1,
-                    Move::CASTLE_FLAG,
-                ));
+            let king_sq = self.king_sq(Colour::WHITE);
+            if self.castle_perm.wk != Square::NO_SQUARE {
+                assert_eq!(self.castle_perm.wk, Square::H1);
+                let king_dst = Square::G1;
+                let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let king_side_path_to_rook =
+                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wk.index()];
+                if occupied & (king_side_path | king_side_path_to_rook) == 0
+                    && !self.any_attacked(king_side_path, Colour::BLACK)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        king_sq,
+                        self.castle_perm.wk,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
             }
 
-            if self.castle_perm & WQCA != 0
-                && occupied & WQ_FREESPACE == 0
-                && !self.sq_attacked_by::<false>(Square::E1)
-                && !self.sq_attacked_by::<false>(Square::D1)
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    Square::E1,
-                    Square::C1,
-                    Move::CASTLE_FLAG,
-                ));
+            if self.castle_perm.wq != Square::NO_SQUARE {
+                let king_dst = Square::C1;
+                let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let queen_side_path_to_rook =
+                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wq.index()];
+                if occupied & (queen_side_path | queen_side_path_to_rook) == 0
+                    && !self.any_attacked(queen_side_path, Colour::BLACK)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        king_sq,
+                        self.castle_perm.wq,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
             }
         } else {
-            if self.castle_perm & BKCA != 0
-                && occupied & BK_FREESPACE == 0
-                && !self.sq_attacked_by::<true>(Square::E8)
-                && !self.sq_attacked_by::<true>(Square::F8)
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    Square::E8,
-                    Square::G8,
-                    Move::CASTLE_FLAG,
-                ));
+            let king_sq = self.king_sq(Colour::BLACK);
+            if self.castle_perm.bk != Square::NO_SQUARE {
+                let king_dst = Square::G8;
+                let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let king_side_path_to_rook =
+                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bk.index()];
+                if occupied & (king_side_path | king_side_path_to_rook) == 0
+                    && !self.any_attacked(king_side_path, Colour::WHITE)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        king_sq,
+                        self.castle_perm.bk,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
             }
 
-            if self.castle_perm & BQCA != 0
-                && occupied & BQ_FREESPACE == 0
-                && !self.sq_attacked_by::<true>(Square::E8)
-                && !self.sq_attacked_by::<true>(Square::D8)
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    Square::E8,
-                    Square::C8,
-                    Move::CASTLE_FLAG,
-                ));
+            if self.castle_perm.bq != Square::NO_SQUARE {
+                let king_dst = Square::C8;
+                let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let queen_side_path_to_rook =
+                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bq.index()];
+                if occupied & (queen_side_path | queen_side_path_to_rook) == 0
+                    && !self.any_attacked(queen_side_path, Colour::WHITE)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        king_sq,
+                        self.castle_perm.bq,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
             }
         }
     }

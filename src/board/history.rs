@@ -85,7 +85,11 @@ impl ThreadData {
             return;
         }
         let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_piece = if prev_move.is_castle() {
+            Piece::new(pos.turn().flip(), PieceType::KING)
+        } else {
+            pos.piece_at(prev_to)
+        };
 
         debug_assert_ne!(
             prev_piece,
@@ -115,7 +119,11 @@ impl ThreadData {
             return;
         }
         let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_piece = if prev_move.is_castle() {
+            Piece::new(pos.turn().flip(), PieceType::KING)
+        } else {
+            pos.piece_at(prev_to)
+        };
 
         debug_assert_ne!(
             prev_piece,
@@ -159,7 +167,7 @@ impl ThreadData {
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
             debug_assert!(
-                at_target_square != Piece::EMPTY || prev_move.is_ep(),
+                at_target_square != Piece::EMPTY || prev_move.is_ep() || move_to_follow_up.is_castle(),
                 "Piece on target square of move to follow up on has to exist!"
             );
             if prev_move.is_ep() {
@@ -170,6 +178,8 @@ impl ThreadData {
                     move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
                 );
                 Piece::new(pos.turn(), PieceType::PAWN)
+            } else if move_to_follow_up.is_castle() {
+                Piece::new(pos.turn(), PieceType::KING)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
@@ -221,7 +231,7 @@ impl ThreadData {
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
             debug_assert!(
-                at_target_square != Piece::EMPTY || prev_move.is_ep(),
+                at_target_square != Piece::EMPTY || prev_move.is_ep() || move_to_follow_up.is_castle(),
                 "Piece on target square of move to follow up on has to exist!"
             );
             if prev_move.is_ep() {
@@ -232,6 +242,8 @@ impl ThreadData {
                     move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
                 );
                 Piece::new(pos.turn(), PieceType::PAWN)
+            } else if move_to_follow_up.is_castle() {
+                Piece::new(pos.turn(), PieceType::KING)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
@@ -288,7 +300,11 @@ impl ThreadData {
             return;
         }
         let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_piece = if prev_move.is_castle() {
+            Piece::new(pos.turn().flip(), PieceType::KING)
+        } else {
+            pos.piece_at(prev_to)
+        };
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
@@ -301,8 +317,13 @@ impl ThreadData {
         if prev_move == Move::NULL {
             return Move::NULL;
         }
+
         let prev_to = prev_move.to();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_piece = if prev_move.is_castle() {
+            Piece::new(pos.turn().flip(), PieceType::KING)
+        } else {
+            pos.piece_at(prev_to)
+        };
 
         self.counter_move_table.get(prev_piece, prev_to)
     }

@@ -90,12 +90,12 @@ impl Move {
         self.data == 0
     }
 
-    pub const fn is_kingside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), Square::G1 | Square::G8)
+    pub fn is_kingside_castling(self) -> bool {
+        self.is_castle() && self.to() > self.from()
     }
 
-    pub const fn is_queenside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), Square::C1 | Square::C8)
+    pub fn is_queenside_castling(self) -> bool {
+        self.is_castle() && self.to() < self.from()
     }
 
     pub fn is_valid(self) -> bool {
