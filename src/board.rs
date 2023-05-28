@@ -242,6 +242,150 @@ impl Board {
         self.repetition_cache.clear();
     }
 
+    pub fn set_frc_idx(&mut self, scharnagl: usize) {
+        assert!(scharnagl < 960, "scharnagl index out of range");
+        let backrank = Self::get_scharnagl_backrank(scharnagl);
+        self.reset();
+        for (file, &piece_type) in backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+        }
+        for (file, &piece_type) in backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        let mut rook_indices = backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let queenside_file = rook_indices.next().unwrap();
+        let kingside_file = rook_indices.next().unwrap();
+        self.castle_perm = CastlingRights {
+            wk: Square::from_rank_file(Rank::RANK_1, kingside_file.try_into().unwrap()),
+            wq: Square::from_rank_file(Rank::RANK_1, queenside_file.try_into().unwrap()),
+            bk: Square::from_rank_file(Rank::RANK_8, kingside_file.try_into().unwrap()),
+            bq: Square::from_rank_file(Rank::RANK_8, queenside_file.try_into().unwrap()),
+        };
+        self.key = self.generate_pos_key();
+    }
+
+    pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
+        assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
+        let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
+        let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
+        self.reset();
+        for (file, &piece_type) in white_backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+        }
+        for (file, &piece_type) in black_backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        let mut white_rook_indices = white_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let white_queenside_file = white_rook_indices.next().unwrap();
+        let white_kingside_file = white_rook_indices.next().unwrap();
+        let mut black_rook_indices = black_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let black_queenside_file = black_rook_indices.next().unwrap();
+        let black_kingside_file = black_rook_indices.next().unwrap();
+        self.castle_perm = CastlingRights {
+            wk: Square::from_rank_file(Rank::RANK_1, white_kingside_file.try_into().unwrap()),
+            wq: Square::from_rank_file(Rank::RANK_1, white_queenside_file.try_into().unwrap()),
+            bk: Square::from_rank_file(Rank::RANK_8, black_kingside_file.try_into().unwrap()),
+            bq: Square::from_rank_file(Rank::RANK_8, black_queenside_file.try_into().unwrap()),
+        };
+        self.key = self.generate_pos_key();
+    }
+
+    pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
+        // White's starting array can be derived from its number N (0 ... 959) as follows (https://en.wikipedia.org/wiki/Fischer_random_chess_numbering_scheme#Direct_derivation):
+        // A. Divide N by 4, yielding quotient N2 and remainder B1. Place a Bishop upon the bright square corresponding to B1 (0=b, 1=d, 2=f, 3=h).
+        // B. Divide N2 by 4 again, yielding quotient N3 and remainder B2. Place a second Bishop upon the dark square corresponding to B2 (0=a, 1=c, 2=e, 3=g).
+        // C. Divide N3 by 6, yielding quotient N4 and remainder Q. Place the Queen according to Q, where 0 is the first free square starting from a, 1 is the second, etc.
+        // D. N4 will be a single digit, 0 ... 9. Ignoring Bishops and Queen, find the positions of two Knights within the remaining five spaces.
+        //    Place the Knights according to its value by consulting the following N5N table:
+        // DIGIT | Knight Positioning
+        //   0   | N N - - -
+        //   1   | N - N - -
+        //   2   | N - - N -
+        //   3   | N - - - N
+        //   4   | - N N - -
+        //   5   | - N - N -
+        //   6   | - N - - N
+        //   7   | - - N N -
+        //   8   | - - N - N
+        //   9   | - - - N N
+        // E. There are three blank squares remaining; place a Rook in each of the outer two and the King in the middle one.
+        let mut out = [PieceType::NONE; 8];
+        let n = scharnagl;
+        let (n2, b1) = (n / 4, n % 4);
+        match b1 {
+            0 => out[File::FILE_B as usize] = PieceType::BISHOP,
+            1 => out[File::FILE_D as usize] = PieceType::BISHOP,
+            2 => out[File::FILE_F as usize] = PieceType::BISHOP,
+            3 => out[File::FILE_H as usize] = PieceType::BISHOP,
+            _ => unreachable!(),
+        }
+        let (n3, b2) = (n2 / 4, n2 % 4);
+        match b2 {
+            0 => out[File::FILE_A as usize] = PieceType::BISHOP,
+            1 => out[File::FILE_C as usize] = PieceType::BISHOP,
+            2 => out[File::FILE_E as usize] = PieceType::BISHOP,
+            3 => out[File::FILE_G as usize] = PieceType::BISHOP,
+            _ => unreachable!(),
+        }
+        let (n4, mut q) = (n3 / 6, n3 % 6);
+        for (idx, &piece) in out.iter().enumerate() {
+            if piece == PieceType::NONE {
+                if q == 0 {
+                    out[idx] = PieceType::QUEEN;
+                    break;
+                }
+                q -= 1;
+            }
+        }
+        let remaining_slots = out.iter_mut().filter(|piece| **piece == PieceType::NONE);
+        let selection = match n4 {
+            0 => [0, 1],
+            1 => [0, 2],
+            2 => [0, 3],
+            3 => [0, 4],
+            4 => [1, 2],
+            5 => [1, 3],
+            6 => [1, 4],
+            7 => [2, 3],
+            8 => [2, 4],
+            9 => [3, 4],
+            _ => unreachable!(),
+        };
+        for (i, slot) in remaining_slots.enumerate() {
+            if i == selection[0] || i == selection[1] {
+                *slot = PieceType::KNIGHT;
+            }
+        }
+
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::KING;
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
+
+        out
+    }
+
     pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
         if !fen.is_ascii() {
             return Err(format!("FEN string is not ASCII: {fen}"));
@@ -806,8 +950,20 @@ impl Board {
     fn move_piece(&mut self, from: Square, to: Square) {
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
-        debug_assert!(self.piece_at(from) != Piece::EMPTY, "from: {}, to: {}, board: {}", from, to, self.fen());
-        debug_assert!(self.piece_at(to) == Piece::EMPTY, "from: {}, to: {}, board: {}", from, to, self.fen());
+        debug_assert!(
+            self.piece_at(from) != Piece::EMPTY,
+            "from: {}, to: {}, board: {}",
+            from,
+            to,
+            self.fen()
+        );
+        debug_assert!(
+            self.piece_at(to) == Piece::EMPTY,
+            "from: {}, to: {}, board: {}",
+            from,
+            to,
+            self.fen()
+        );
         if from == to {
             return;
         }
@@ -2072,5 +2228,13 @@ mod tests {
                 assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen());
             }
         }
+    }
+
+    #[test]
+    fn scharnagl_works() {
+        use super::Board;
+        use crate::piece::PieceType;
+        let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
+        assert_eq!(normal_chess_arrangement, [PieceType::ROOK, PieceType::KNIGHT, PieceType::BISHOP, PieceType::QUEEN, PieceType::KING, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK]);
     }
 }
