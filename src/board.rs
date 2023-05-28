@@ -904,6 +904,7 @@ impl Board {
                 self.clear_piece(to.add(8));
             }
         } else if m.is_castle() {
+            self.clear_piece(from);
             match to {
                 _ if to == self.castle_perm.wk => {
                     self.move_piece(self.castle_perm.wk, Square::F1);
@@ -1001,6 +1002,8 @@ impl Board {
             debug_assert!(promo.piece_type().legal_promo());
             self.clear_piece(from);
             self.add_piece(to, promo);
+        } else if m.is_castle() {
+            self.add_piece(to, piece); // stupid hack for piece-swapping
         } else {
             self.move_piece(from, to);
         }
@@ -1063,20 +1066,24 @@ impl Board {
         } else if m.is_castle() {
             match to {
                 _ if to == self.castle_perm.wk => {
-                    self.move_piece(Square::F1, self.castle_perm.wk);
                     to = Square::G1;
+                    self.clear_piece(to);
+                    self.move_piece(Square::F1, self.castle_perm.wk);
                 }
                 _ if to == self.castle_perm.wq => {
-                    self.move_piece(Square::D1, self.castle_perm.wq);
                     to = Square::C1;
+                    self.clear_piece(to);
+                    self.move_piece(Square::D1, self.castle_perm.wq);
                 }
                 _ if to == self.castle_perm.bk => {
-                    self.move_piece(Square::F8, self.castle_perm.bk);
                     to = Square::G8;
+                    self.clear_piece(to);
+                    self.move_piece(Square::F8, self.castle_perm.bk);
                 }
                 _ if to == self.castle_perm.bq => {
-                    self.move_piece(Square::D8, self.castle_perm.bq);
                     to = Square::C8;
+                    self.clear_piece(to);
+                    self.move_piece(Square::D8, self.castle_perm.bq);
                 }
                 _ => {
                     panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
@@ -1090,6 +1097,8 @@ impl Board {
             debug_assert_eq!(promotion.colour(), self.piece_at(to).colour());
             self.clear_piece(to);
             self.add_piece(from, if self.side == Colour::WHITE { Piece::WP } else { Piece::BP });
+        } else if m.is_castle() {
+            self.add_piece(from, Piece::new(self.side, PieceType::KING));
         } else {
             self.move_piece(to, from);
         }
