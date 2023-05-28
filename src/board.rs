@@ -806,6 +806,11 @@ impl Board {
     fn move_piece(&mut self, from: Square, to: Square) {
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
+        debug_assert!(self.piece_at(from) != Piece::EMPTY, "from: {}, to: {}, board: {}", from, to, self.fen());
+        debug_assert!(self.piece_at(to) == Piece::EMPTY, "from: {}, to: {}, board: {}", from, to, self.fen());
+        if from == to {
+            return;
+        }
 
         let piece_moved = self.piece_at(from);
 

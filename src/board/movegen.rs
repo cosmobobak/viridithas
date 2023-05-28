@@ -374,12 +374,13 @@ impl Board {
         if IS_WHITE {
             let king_sq = self.king_sq(Colour::WHITE);
             if self.castle_perm.wk != Square::NO_SQUARE {
-                assert_eq!(self.castle_perm.wk, Square::H1);
                 let king_dst = Square::G1;
+                let rook_dst = Square::F1;
                 let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let king_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wk.index()];
-                if occupied & (king_side_path | king_side_path_to_rook) == 0
+                let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.wk.bitboard();
+                if relevant_occupied & (king_side_path | king_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::BLACK)
                 {
                     move_list.push::<false>(Move::new_with_flags(
@@ -392,10 +393,12 @@ impl Board {
 
             if self.castle_perm.wq != Square::NO_SQUARE {
                 let king_dst = Square::C1;
+                let rook_dst = Square::D1;
                 let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let queen_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wq.index()];
-                if occupied & (queen_side_path | queen_side_path_to_rook) == 0
+                let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.wq.bitboard();
+                if relevant_occupied & (queen_side_path | queen_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::BLACK)
                 {
                     move_list.push::<false>(Move::new_with_flags(
@@ -409,10 +412,12 @@ impl Board {
             let king_sq = self.king_sq(Colour::BLACK);
             if self.castle_perm.bk != Square::NO_SQUARE {
                 let king_dst = Square::G8;
+                let rook_dst = Square::F8;
                 let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let king_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bk.index()];
-                if occupied & (king_side_path | king_side_path_to_rook) == 0
+                let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.bk.bitboard();
+                if relevant_occupied & (king_side_path | king_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::WHITE)
                 {
                     move_list.push::<false>(Move::new_with_flags(
@@ -425,10 +430,12 @@ impl Board {
 
             if self.castle_perm.bq != Square::NO_SQUARE {
                 let king_dst = Square::C8;
+                let rook_dst = Square::D8;
                 let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let queen_side_path_to_rook =
                     ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bq.index()];
-                if occupied & (queen_side_path | queen_side_path_to_rook) == 0
+                let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.bq.bitboard();
+                if relevant_occupied & (queen_side_path | queen_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::WHITE)
                 {
                     move_list.push::<false>(Move::new_with_flags(
