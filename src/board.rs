@@ -1629,13 +1629,13 @@ impl Board {
             .copied()
             .find(|&m| {
                 let m_to = if frc_cleanup && m.is_castle() {
-                    // if we're in normal UCI mode, we'll receive castling moves in the form of
-                    // "king moves two squares", but we want them as king-captures-rook.
+                    // if we're in normal UCI mode, we'll rework our castling moves into the
+                    // standard format.
                     match m.to() {
-                        Square::G1 => Square::H1,
-                        Square::C1 => Square::A1,
-                        Square::G8 => Square::H8,
-                        Square::C8 => Square::A8,
+                        Square::A1 => Square::C1,
+                        Square::H1 => Square::G1,
+                        Square::A8 => Square::C8,
+                        Square::H8 => Square::G8,
                         _ => m.to(),
                     }
                 } else {
