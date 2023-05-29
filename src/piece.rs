@@ -17,6 +17,16 @@ impl Debug for Colour {
     }
 }
 
+impl Display for Colour {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::WHITE => write!(f, "White"),
+            Self::BLACK => write!(f, "Black"),
+            _ => write!(f, "?"),
+        }
+    }
+}
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PieceType {
@@ -34,6 +44,21 @@ impl Debug for PieceType {
             5 => write!(f, "PieceType::KING"),
             6 => write!(f, "PieceType::NO_PIECE_TYPE"),
             _ => write!(f, "PieceType::INVALID({})", self.v),
+        }
+    }
+}
+
+impl Display for PieceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.v {
+            0 => write!(f, "Pawn"),
+            1 => write!(f, "Knight"),
+            2 => write!(f, "Bishop"),
+            3 => write!(f, "Rook"),
+            4 => write!(f, "Queen"),
+            5 => write!(f, "King"),
+            6 => write!(f, "NoPieceType"),
+            _ => write!(f, "?"),
         }
     }
 }

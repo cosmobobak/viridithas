@@ -3,12 +3,15 @@ pub mod depth;
 use std::{
     fmt::{self, Display},
     str::FromStr,
+    sync::atomic::Ordering,
 };
 
 use crate::{
     board::evaluation::MATE_SCORE,
+    cfor,
     chessmove::Move,
     piece::{Colour, Piece},
+    uci::CHESS960,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -150,6 +153,14 @@ impl Square {
         Self(self.0 ^ 0b000_111)
     }
 
+    pub const fn relative_to(self, side: Colour) -> Self {
+        if side.inner() == Colour::WHITE.inner() {
+            self
+        } else {
+            self.flip_rank()
+        }
+    }
+
     /// The file that this square is on.
     pub const fn file(self) -> u8 {
         self.0 % 8
@@ -180,6 +191,17 @@ impl Square {
         )]
         let res = self.0 + offset;
         debug_assert!(res < 64, "Square::add overflowed");
+        Self(res)
+    }
+
+    pub const fn add_beyond_board(self, offset: u8) -> Self {
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
+        let res = self.0 + offset;
+        debug_assert!(res < 65, "Square::add_beyond_board overflowed");
         Self(res)
     }
 
@@ -282,7 +304,7 @@ pub const BQCA: u8 = 0b1000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
     pub m: Move,
-    pub castle_perm: u8,
+    pub castle_perm: CastlingRights,
     pub ep_square: Square,
     pub fifty_move_counter: u8,
     pub capture: Piece,
@@ -314,6 +336,122 @@ impl<T: Copy, const CAPACITY: usize> StackVec<T, CAPACITY> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CastlingRights {
+    pub wk: Square,
+    pub wq: Square,
+    pub bk: Square,
+    pub bq: Square,
+}
+
+impl CastlingRights {
+    pub const NONE: Self = Self {
+        wk: Square::NO_SQUARE,
+        wq: Square::NO_SQUARE,
+        bk: Square::NO_SQUARE,
+        bq: Square::NO_SQUARE,
+    };
+
+    pub fn hashkey_index(self) -> usize {
+        let mut index = 0;
+        if self.wk != Square::NO_SQUARE {
+            index |= WKCA;
+        }
+        if self.wq != Square::NO_SQUARE {
+            index |= WQCA;
+        }
+        if self.bk != Square::NO_SQUARE {
+            index |= BKCA;
+        }
+        if self.bq != Square::NO_SQUARE {
+            index |= BQCA;
+        }
+        index as usize
+    }
+
+    pub fn remove(&mut self, sq: Square) {
+        if self.wk == sq {
+            self.wk = Square::NO_SQUARE;
+        } else if self.wq == sq {
+            self.wq = Square::NO_SQUARE;
+        } else if self.bk == sq {
+            self.bk = Square::NO_SQUARE;
+        } else if self.bq == sq {
+            self.bq = Square::NO_SQUARE;
+        }
+    }
+
+    pub fn kingside(self, side: Colour) -> Square {
+        if side == Colour::WHITE {
+            self.wk
+        } else {
+            self.bk
+        }
+    }
+
+    pub fn queenside(self, side: Colour) -> Square {
+        if side == Colour::WHITE {
+            self.wq
+        } else {
+            self.bq
+        }
+    }
+}
+
+impl Display for CastlingRights {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const FILE_NAMES: &[u8] = b"abcdefgh";
+        if CHESS960.load(Ordering::Relaxed) {
+            if self.wk != Square::NO_SQUARE {
+                write!(f, "{}", FILE_NAMES[self.wk.file() as usize].to_ascii_uppercase() as char)?;
+            }
+            if self.wq != Square::NO_SQUARE {
+                write!(f, "{}", FILE_NAMES[self.wq.file() as usize].to_ascii_uppercase() as char)?;
+            }
+            if self.bk != Square::NO_SQUARE {
+                write!(f, "{}", FILE_NAMES[self.bk.file() as usize] as char)?;
+            }
+            if self.bq != Square::NO_SQUARE {
+                write!(f, "{}", FILE_NAMES[self.bq.file() as usize] as char)?;
+            }
+        } else {
+            if self.wk != Square::NO_SQUARE {
+                write!(f, "K")?;
+            }
+            if self.wq != Square::NO_SQUARE {
+                write!(f, "Q")?;
+            }
+            if self.bk != Square::NO_SQUARE {
+                write!(f, "k")?;
+            }
+            if self.bq != Square::NO_SQUARE {
+                write!(f, "q")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+pub static HORIZONTAL_RAY_BETWEEN: [[u64; 64]; 64] = {
+    let mut res = [[0; 64]; 64];
+    cfor!(let mut from = Square::A1; from.0 < Square::NO_SQUARE.0; from = from.add_beyond_board(1); {
+        cfor!(let mut to = Square::A1; to.0 < Square::NO_SQUARE.0; to = to.add_beyond_board(1); {
+            if from.rank() == to.rank() {
+                let low_square = min!(from.0, to.0);
+                let high_square = max!(from.0, to.0);
+                let mut bb = 0;
+                let mut between = low_square + 1;
+                while between < high_square {
+                    bb |= 1 << between;
+                    between += 1;
+                }
+                res[from.index()][to.index()] = bb;
+            }
+        });
+    });
+    res
+};
+
 mod tests {
     #[test]
     fn square_flipping() {
@@ -328,5 +466,37 @@ mod tests {
         assert_eq!(Square::H1.flip_file(), Square::A1);
         assert_eq!(Square::A8.flip_file(), Square::H8);
         assert_eq!(Square::H8.flip_file(), Square::A8);
+    }
+
+    #[test]
+    fn ray_test() {
+        use super::{Square, HORIZONTAL_RAY_BETWEEN};
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], 0);
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], 0);
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
+            Square::B1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
+            Square::B1.bitboard() | Square::C1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()],
+            Square::C1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()],
+            Square::C1.bitboard()
+        );
+
+        for from in Square::all() {
+            for to in Square::all() {
+                assert_eq!(
+                    HORIZONTAL_RAY_BETWEEN[from.index()][to.index()],
+                    HORIZONTAL_RAY_BETWEEN[to.index()][from.index()]
+                );
+            }
+        }
     }
 }

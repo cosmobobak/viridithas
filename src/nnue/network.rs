@@ -576,6 +576,7 @@ mod tests {
 
     #[test]
     fn pov_preserved_promo() {
+        use crate::nnue::network::NNUEState;
         crate::magic::initialise();
         let mut board = crate::board::Board::from_fen(
             "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
@@ -596,10 +597,22 @@ mod tests {
             println!("unmade move");
             for i in 0..768 {
                 if initial_white[i] != t.nnue.white_pov[i] {
-                    eprintln!("{i}: {} != {}", initial_white[i], t.nnue.white_pov[i]);
+                    let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
+                    eprintln!(
+                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
+                        initial_white[i],
+                        t.nnue.white_pov[i],
+                        board.fen()
+                    );
                 }
                 if initial_black[i] != t.nnue.black_pov[i] {
-                    eprintln!("{i}: {} != {}", initial_black[i], t.nnue.black_pov[i]);
+                    let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
+                    eprintln!(
+                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
+                        initial_black[i],
+                        t.nnue.black_pov[i],
+                        board.fen()
+                    );
                 }
             }
             assert_eq!(initial_white, t.nnue.white_pov);

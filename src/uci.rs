@@ -51,6 +51,7 @@ pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
+pub static CHESS960: AtomicBool = AtomicBool::new(false);
 pub fn is_multipv() -> bool {
     MULTI_PV.load(Ordering::SeqCst) > 1
 }
@@ -381,6 +382,10 @@ fn parse_setoption(
             }
             CONTEMPT.store(value, Ordering::SeqCst);
         }
+        "UCI_Chess960" => {
+            let val = opt_value.parse()?;
+            CHESS960.store(val, Ordering::SeqCst);
+        }
         _ => {
             eprintln!("info string ignoring option {opt_name}, type \"uci\" for a list of options");
         }
@@ -528,6 +533,7 @@ fn print_uci_response(full: bool) {
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
+    println!("option name UCI_Chess960 type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default) in SearchParams::default().ids_with_values() {

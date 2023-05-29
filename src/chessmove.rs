@@ -1,6 +1,13 @@
-use std::fmt::{Debug, Display, Formatter};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    sync::atomic::Ordering,
+};
 
-use crate::{definitions::Square, piece::PieceType};
+use crate::{
+    definitions::{File, Square},
+    piece::PieceType,
+    uci::CHESS960,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {
@@ -90,12 +97,28 @@ impl Move {
         self.data == 0
     }
 
-    pub const fn is_kingside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), Square::G1 | Square::G8)
+    pub fn is_kingside_castling(self) -> bool {
+        self.is_castle() && self.to() > self.from()
     }
 
-    pub const fn is_queenside_castling(self) -> bool {
-        self.is_castle() && matches!(self.to(), Square::C1 | Square::C8)
+    pub fn is_queenside_castling(self) -> bool {
+        self.is_castle() && self.to() < self.from()
+    }
+
+    /// Handles castling moves, which are a bit weird.
+    pub fn history_to_square(self) -> Square {
+        if self.is_castle() {
+            let to_rank = self.from().rank();
+            if self.to() > self.from() {
+                // kingside castling, king goes to the G file
+                Square::from_rank_file(to_rank, File::FILE_G)
+            } else {
+                // queenside castling, king goes to the C file
+                Square::from_rank_file(to_rank, File::FILE_C)
+            }
+        } else {
+            self.to()
+        }
     }
 
     pub fn is_valid(self) -> bool {
@@ -114,11 +137,31 @@ impl Display for Move {
             return write!(f, "null");
         }
 
-        if self.is_promo() {
-            let pchar = self.promotion_type().promo_char().unwrap_or('?');
-            write!(f, "{}{}{pchar}", self.from(), self.to())?;
+        if CHESS960.load(Ordering::Relaxed) {
+            if self.is_promo() {
+                let pchar = self.promotion_type().promo_char().unwrap_or('?');
+                write!(f, "{}{}{pchar}", self.from(), self.to())?;
+            } else {
+                write!(f, "{}{}", self.from(), self.to())?;
+            }
         } else {
-            write!(f, "{}{}", self.from(), self.to())?;
+            let mut to = self.to();
+            // fix up castling moves for normal UCI.
+            if self.is_castle() {
+                to = match to {
+                    Square::H1 => Square::G1,
+                    Square::A1 => Square::C1,
+                    Square::H8 => Square::G8,
+                    Square::A8 => Square::C8,
+                    _ => unreachable!(),
+                }
+            }
+            if self.is_promo() {
+                let pchar = self.promotion_type().promo_char().unwrap_or('?');
+                write!(f, "{}{}{}", self.from(), to, pchar)?;
+            } else {
+                write!(f, "{}{}", self.from(), to)?;
+            }
         }
 
         Ok(())

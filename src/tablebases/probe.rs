@@ -3,7 +3,7 @@
 use crate::{
     board::{evaluation::TB_WIN_SCORE, movegen::MoveList, Board},
     chessmove::Move,
-    definitions::Square,
+    definitions::{CastlingRights, Square},
     piece::{Colour, PieceType},
     tablebases::bindings::{
         tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST,
@@ -58,7 +58,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     const BLACK: bool = false;
 
     // guards for invalid positions
-    if board.castling_rights() != 0 || board.fifty_move_counter() != 0 {
+    if board.castling_rights() != CastlingRights::NONE || board.fifty_move_counter() != 0 {
         return None;
     }
 

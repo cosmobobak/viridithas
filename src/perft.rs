@@ -3,9 +3,13 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    sync::atomic::Ordering,
 };
 
-use crate::board::{movegen::MoveList, Board};
+use crate::{
+    board::{movegen::MoveList, Board},
+    uci::CHESS960,
+};
 #[cfg(test)]
 use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 
@@ -83,7 +87,12 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 }
 
 pub fn gamut() {
+    #[cfg(debug_assertions)]
+    const NODES_LIMIT: u64 = 60_000;
+    #[cfg(not(debug_assertions))]
+    const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
+    println!("running perft on perftsuite.epd");
     let f = File::open("epds/perftsuite.epd").unwrap();
     let mut pos = Board::new();
     for line in BufReader::new(f).lines() {
@@ -96,7 +105,7 @@ pub fn gamut() {
             let (d, nodes) = depth_part.split_once(' ').unwrap();
             let d = d.chars().nth(1).unwrap().to_digit(10).unwrap();
             let nodes = nodes.parse::<u64>().unwrap();
-            if nodes > 60_000_000 {
+            if nodes > NODES_LIMIT {
                 println!("Skipping...");
                 break;
             }
@@ -109,6 +118,35 @@ pub fn gamut() {
             }
         }
     }
+    // open frcperftsuite.epd
+    println!("running perft on frcperftsuite.epd");
+    CHESS960.store(true, Ordering::SeqCst);
+    let f = File::open("epds/frcperftsuite.epd").unwrap();
+    let mut pos = Board::new();
+    for line in BufReader::new(f).lines() {
+        let line = line.unwrap();
+        let mut parts = line.split(';');
+        let fen = parts.next().unwrap().trim();
+        pos.set_from_fen(fen).unwrap();
+        for depth_part in parts {
+            let depth_part = depth_part.trim();
+            let (d, nodes) = depth_part.split_once(' ').unwrap();
+            let d = d.chars().nth(1).unwrap().to_digit(10).unwrap();
+            let nodes = nodes.parse::<u64>().unwrap();
+            if nodes > NODES_LIMIT {
+                println!("Skipping...");
+                break;
+            }
+            let perft_nodes = perft(&mut pos, d as usize);
+            if perft_nodes == nodes {
+                println!("PASS: fen {fen}, depth {d}");
+            } else {
+                println!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
+                panic!("perft failed");
+            }
+        }
+    }
+    CHESS960.store(false, Ordering::SeqCst);
 }
 
 mod tests {

@@ -1077,9 +1077,9 @@ impl Board {
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
         match () {
-            _ if double_extend => ONE_PLY * 2,  // double-extend if we failed low by a lot (the move is very singular)
-            _ if value < r_beta => ONE_PLY,     // singular extension
-            _ if tt_value >= beta => -ONE_PLY,  // somewhat multi-cut-y
+            _ if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
+            _ if value < r_beta => ONE_PLY,    // singular extension
+            _ if tt_value >= beta => -ONE_PLY, // somewhat multi-cut-y
             _ if tt_value <= alpha => -ONE_PLY, // tt_value <= alpha is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/)
             _ => ZERO_PLY,                      // no extension
         }

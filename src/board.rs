@@ -5,7 +5,7 @@ pub mod validation;
 
 use std::{
     fmt::{self, Debug, Display, Formatter, Write},
-    sync::Once,
+    sync::{atomic::Ordering, Once},
 };
 
 use rand::prelude::SliceRandom;
@@ -21,22 +21,23 @@ use crate::{
         MoveList,
     },
     chessmove::Move,
-    definitions::{CheckState, File, Rank, Square, Undo, BKCA, BQCA, WKCA, WQCA},
+    definitions::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
-    makemove::{hash_castling, hash_ep, hash_piece, hash_side, CASTLE_PERM_MASKS},
+    makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{Activate, Deactivate},
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
+    uci::CHESS960,
 };
 
 use self::{
     evaluation::score::S,
     movegen::{
-        bitboards::{BitBoard, BB_DARK_SQUARES, BB_LIGHT_SQUARES},
+        bitboards::{BitBoard, BitLoop, BB_DARK_SQUARES, BB_LIGHT_SQUARES, BB_RANK_1, BB_RANK_8},
         MoveListEntry,
     },
 };
@@ -67,8 +68,8 @@ pub struct Board {
     side: Colour,
     /// The en passant square.
     ep_sq: Square,
-    /// The castling permissions.
-    castle_perm: u8,
+    /// A mask of the rooks that can castle.
+    castle_perm: CastlingRights,
     /// The number of half moves made since the last capture or pawn advance.
     fifty_move_counter: u8,
     /// The number of half moves made since the start of the game.
@@ -127,7 +128,7 @@ impl Board {
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
             material: [S(0, 0); 2],
-            castle_perm: 0,
+            castle_perm: CastlingRights::NONE,
             history: Vec::new(),
             repetition_cache: Vec::new(),
             pst_vals: S(0, 0),
@@ -192,7 +193,7 @@ impl Board {
         self.side
     }
 
-    pub const fn castling_rights(&self) -> u8 {
+    pub const fn castling_rights(&self) -> CastlingRights {
         self.castle_perm
     }
 
@@ -215,7 +216,6 @@ impl Board {
             hash_ep(&mut key, self.ep_sq);
         }
 
-        debug_assert!(self.castle_perm <= 15);
         hash_castling(&mut key, self.castle_perm);
 
         debug_assert!(self.fifty_move_counter <= 100);
@@ -235,11 +235,175 @@ impl Board {
         self.fifty_move_counter = 0;
         self.height = 0;
         self.ply = 0;
-        self.castle_perm = 0;
+        self.castle_perm = CastlingRights::NONE;
         self.key = 0;
         self.pst_vals = S(0, 0);
         self.history.clear();
         self.repetition_cache.clear();
+    }
+
+    pub fn set_frc_idx(&mut self, scharnagl: usize) {
+        assert!(scharnagl < 960, "scharnagl index out of range");
+        let backrank = Self::get_scharnagl_backrank(scharnagl);
+        self.reset();
+        for (file, &piece_type) in backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::PAWN));
+        }
+        for (file, &piece_type) in backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
+        }
+        let mut rook_indices = backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let queenside_file = rook_indices.next().unwrap();
+        let kingside_file = rook_indices.next().unwrap();
+        self.castle_perm = CastlingRights {
+            wk: Square::from_rank_file(Rank::RANK_1, kingside_file.try_into().unwrap()),
+            wq: Square::from_rank_file(Rank::RANK_1, queenside_file.try_into().unwrap()),
+            bk: Square::from_rank_file(Rank::RANK_8, kingside_file.try_into().unwrap()),
+            bq: Square::from_rank_file(Rank::RANK_8, queenside_file.try_into().unwrap()),
+        };
+        self.key = self.generate_pos_key();
+    }
+
+    pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
+        assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
+        let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
+        let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
+        self.reset();
+        for (file, &piece_type) in white_backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::PAWN));
+        }
+        for (file, &piece_type) in black_backrank.iter().enumerate() {
+            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+        }
+        for file in 0..8 {
+            // add pawns
+            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
+        }
+        let mut white_rook_indices = white_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let white_queenside_file = white_rook_indices.next().unwrap();
+        let white_kingside_file = white_rook_indices.next().unwrap();
+        let mut black_rook_indices = black_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::ROOK {
+                Some(i)
+            } else {
+                None
+            }
+        });
+        let black_queenside_file = black_rook_indices.next().unwrap();
+        let black_kingside_file = black_rook_indices.next().unwrap();
+        self.castle_perm = CastlingRights {
+            wk: Square::from_rank_file(Rank::RANK_1, white_kingside_file.try_into().unwrap()),
+            wq: Square::from_rank_file(Rank::RANK_1, white_queenside_file.try_into().unwrap()),
+            bk: Square::from_rank_file(Rank::RANK_8, black_kingside_file.try_into().unwrap()),
+            bq: Square::from_rank_file(Rank::RANK_8, black_queenside_file.try_into().unwrap()),
+        };
+        self.key = self.generate_pos_key();
+    }
+
+    pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
+        // White's starting array can be derived from its number N (0 ... 959) as follows (https://en.wikipedia.org/wiki/Fischer_random_chess_numbering_scheme#Direct_derivation):
+        // A. Divide N by 4, yielding quotient N2 and remainder B1. Place a Bishop upon the bright square corresponding to B1 (0=b, 1=d, 2=f, 3=h).
+        // B. Divide N2 by 4 again, yielding quotient N3 and remainder B2. Place a second Bishop upon the dark square corresponding to B2 (0=a, 1=c, 2=e, 3=g).
+        // C. Divide N3 by 6, yielding quotient N4 and remainder Q. Place the Queen according to Q, where 0 is the first free square starting from a, 1 is the second, etc.
+        // D. N4 will be a single digit, 0 ... 9. Ignoring Bishops and Queen, find the positions of two Knights within the remaining five spaces.
+        //    Place the Knights according to its value by consulting the following N5N table:
+        // DIGIT | Knight Positioning
+        //   0   | N N - - -
+        //   1   | N - N - -
+        //   2   | N - - N -
+        //   3   | N - - - N
+        //   4   | - N N - -
+        //   5   | - N - N -
+        //   6   | - N - - N
+        //   7   | - - N N -
+        //   8   | - - N - N
+        //   9   | - - - N N
+        // E. There are three blank squares remaining; place a Rook in each of the outer two and the King in the middle one.
+        let mut out = [PieceType::NONE; 8];
+        let n = scharnagl;
+        let (n2, b1) = (n / 4, n % 4);
+        match b1 {
+            0 => out[File::FILE_B as usize] = PieceType::BISHOP,
+            1 => out[File::FILE_D as usize] = PieceType::BISHOP,
+            2 => out[File::FILE_F as usize] = PieceType::BISHOP,
+            3 => out[File::FILE_H as usize] = PieceType::BISHOP,
+            _ => unreachable!(),
+        }
+        let (n3, b2) = (n2 / 4, n2 % 4);
+        match b2 {
+            0 => out[File::FILE_A as usize] = PieceType::BISHOP,
+            1 => out[File::FILE_C as usize] = PieceType::BISHOP,
+            2 => out[File::FILE_E as usize] = PieceType::BISHOP,
+            3 => out[File::FILE_G as usize] = PieceType::BISHOP,
+            _ => unreachable!(),
+        }
+        let (n4, mut q) = (n3 / 6, n3 % 6);
+        for (idx, &piece) in out.iter().enumerate() {
+            if piece == PieceType::NONE {
+                if q == 0 {
+                    out[idx] = PieceType::QUEEN;
+                    break;
+                }
+                q -= 1;
+            }
+        }
+        let remaining_slots = out.iter_mut().filter(|piece| **piece == PieceType::NONE);
+        let selection = match n4 {
+            0 => [0, 1],
+            1 => [0, 2],
+            2 => [0, 3],
+            3 => [0, 4],
+            4 => [1, 2],
+            5 => [1, 3],
+            6 => [1, 4],
+            7 => [2, 3],
+            8 => [2, 4],
+            9 => [3, 4],
+            _ => unreachable!(),
+        };
+        for (i, slot) in remaining_slots.enumerate() {
+            if i == selection[0] || i == selection[1] {
+                *slot = PieceType::KNIGHT;
+            }
+        }
+
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::KING;
+        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
+
+        out
     }
 
     pub fn set_from_fen(&mut self, fen: &str) -> Result<(), FenParseError> {
@@ -351,6 +515,20 @@ impl Board {
         Ok(out)
     }
 
+    #[allow(dead_code)]
+    pub fn from_frc_idx(scharnagl: usize) -> Self {
+        let mut out = Self::new();
+        out.set_frc_idx(scharnagl);
+        out
+    }
+
+    #[allow(dead_code)]
+    pub fn from_dfrc_idx(scharnagl: usize) -> Self {
+        let mut out = Self::new();
+        out.set_dfrc_idx(scharnagl);
+        out
+    }
+
     pub fn fen(&self) -> String {
         let mut out = Vec::with_capacity(60);
         self.write_fen_into(&mut out).expect("something terrible happened while writing FEN");
@@ -376,15 +554,67 @@ impl Board {
     fn set_castling(&mut self, castling_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match castling_part {
             None => return Err("FEN string is invalid, expected castling part.".into()),
-            Some([b'-']) => self.castle_perm = 0,
-            Some(castling) => {
+            Some(b"-") => self.castle_perm = CastlingRights::NONE,
+            Some(castling) if !CHESS960.load(Ordering::SeqCst) => {
                 for &c in castling {
                     match c {
-                        b'K' => self.castle_perm |= WKCA,
-                        b'Q' => self.castle_perm |= WQCA,
-                        b'k' => self.castle_perm |= BKCA,
-                        b'q' => self.castle_perm |= BQCA,
+                        b'K' => self.castle_perm.wk = Square::H1,
+                        b'Q' => self.castle_perm.wq = Square::A1,
+                        b'k' => self.castle_perm.bk = Square::H8,
+                        b'q' => self.castle_perm.bq = Square::A8,
                         _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", std::str::from_utf8(castling).unwrap_or("<invalid utf8>"))),
+                    }
+                }
+            }
+            Some(shredder_castling) => {
+                // valid shredder castling strings are of the form "AHah", "Bd"
+                let white_king = self.king_sq(Colour::WHITE);
+                let black_king = self.king_sq(Colour::BLACK);
+                if white_king.rank() != Rank::RANK_1
+                    && shredder_castling.iter().any(u8::is_ascii_uppercase)
+                {
+                    return Err(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                }
+                if black_king.rank() != Rank::RANK_8
+                    && shredder_castling.iter().any(u8::is_ascii_lowercase)
+                {
+                    return Err(format!("FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                }
+                for &c in shredder_castling {
+                    match c {
+                        c if c.is_ascii_uppercase() => {
+                            let file = c - b'A';
+                            let king_file = white_king.file();
+                            if file == king_file {
+                                return Err(format!("FEN string is invalid, white king is on file {}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                            }
+                            let sq = Square::from_rank_file(Rank::RANK_1, file);
+                            if file > king_file {
+                                // castling rights are to the right of the king, so it's "kingside" castling rights.
+                                self.castle_perm.wk = sq;
+                            } else {
+                                // castling rights are to the left of the king, so it's "queenside" castling rights.
+                                self.castle_perm.wq = sq;
+                            }
+                        }
+                        c if c.is_ascii_lowercase() => {
+                            let file = c - b'a';
+                            let king_file = black_king.file();
+                            if file == king_file {
+                                return Err(format!("FEN string is invalid, black king is on file {}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                            }
+                            let sq = Square::from_rank_file(Rank::RANK_8, file);
+                            if file > king_file {
+                                // castling rights are to the right of the king, so it's "kingside" castling rights.
+                                self.castle_perm.bk = sq;
+                            } else {
+                                // castling rights are to the left of the king, so it's "queenside" castling rights.
+                                self.castle_perm.bq = sq;
+                            }
+                        }
+                        _ => {
+                            return Err(format!("FEN string is invalid, expected castling part to be of the form 'AHah', 'Bd', or '-', got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                        }
                     }
                 }
             }
@@ -525,7 +755,7 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let captured_piece = self.piece_at(to);
+        let captured_piece = if m.is_castle() { Piece::EMPTY } else { self.piece_at(to) };
         let is_capture = !captured_piece.is_empty();
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
@@ -556,7 +786,7 @@ impl Board {
         }
 
         if m.is_castle() {
-            return self.is_pseudo_legal_castling(to);
+            return self.is_pseudo_legal_castling(m);
         }
 
         if moved_piece.piece_type() == PieceType::PAWN {
@@ -585,53 +815,82 @@ impl Board {
             != BB_NONE
     }
 
-    pub fn is_pseudo_legal_castling(&self, to: Square) -> bool {
-        const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-        const WQ_FREESPACE: u64 =
-            Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
-        const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-        const BQ_FREESPACE: u64 =
-            Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
-        let occupied = self.pieces.occupied();
-
-        assert!(to == Square::C1 || to == Square::G1 || to == Square::C8 || to == Square::G8);
-
-        // illegal if
+    pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
+        // illegal if:
+        // - we're not moving the king
+        // - we're not doing everything on the home rank
         // - we don't have castling rights on the target square
         // - we're in check
         // - there are pieces between the king and the rook
         // - the king passes through a square that is attacked by the opponent
         // - the king ends up in check (not checked here)
-
-        let (target_castling_perm, occ_mask, from_sq, next_sq) = match (self.side, to) {
-            (Colour::WHITE, Square::C1) => {
-                (self.castle_perm & WQCA, WQ_FREESPACE, Square::E1, Square::D1)
+        let moved = self.piece_at(m.from());
+        if moved.piece_type() != PieceType::KING {
+            return false;
+        }
+        let home_rank = if self.side == Colour::WHITE { BB_RANK_1 } else { BB_RANK_8 };
+        if m.to().bitboard() & home_rank == BB_NONE {
+            return false;
+        }
+        if m.from().bitboard() & home_rank == BB_NONE {
+            return false;
+        }
+        let (king_dst, rook_dst) = if m.to() > m.from() {
+            // kingside castling.
+            if m.to()
+                != (if self.side == Colour::BLACK {
+                    self.castle_perm.bk
+                } else {
+                    self.castle_perm.wk
+                })
+            {
+                // the to-square doesn't match the castling rights
+                // (it goes to the wrong place, or the rights don't exist)
+                return false;
             }
-            (Colour::WHITE, Square::G1) => {
-                (self.castle_perm & WKCA, WK_FREESPACE, Square::E1, Square::F1)
+            if self.side == Colour::BLACK {
+                (Square::G8, Square::F8)
+            } else {
+                (Square::G1, Square::F1)
             }
-            (Colour::BLACK, Square::C8) => {
-                (self.castle_perm & BQCA, BQ_FREESPACE, Square::E8, Square::D8)
+        } else {
+            // queenside castling.
+            if m.to()
+                != (if self.side == Colour::BLACK {
+                    self.castle_perm.bq
+                } else {
+                    self.castle_perm.wq
+                })
+            {
+                // the to-square doesn't match the castling rights
+                // (it goes to the wrong place, or the rights don't exist)
+                return false;
             }
-            (Colour::BLACK, Square::G8) => {
-                (self.castle_perm & BKCA, BK_FREESPACE, Square::E8, Square::F8)
+            if self.side == Colour::BLACK {
+                (Square::C8, Square::D8)
+            } else {
+                (Square::C1, Square::D1)
             }
-            (_, _) => return false,
         };
-        if target_castling_perm == 0 {
-            return false;
-        }
-        if occupied & occ_mask != 0 {
-            return false;
-        }
-        if self.sq_attacked(from_sq, self.side.flip()) {
-            return false;
-        }
-        if self.sq_attacked(next_sq, self.side.flip()) {
-            return false;
-        }
 
-        true
+        // king_path is the path the king takes to get to its destination.
+        let king_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][king_dst.index()];
+        // rook_path is the path the rook takes to get to its destination.
+        let rook_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][m.to().index()];
+        // castle_occ is the occupancy that "counts" for castling.
+        let castle_occ = self.pieces.occupied() ^ m.from().bitboard() ^ m.to().bitboard();
+
+        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())) == 0
+            && !self.any_attacked(king_path | m.from().bitboard(), self.side.flip())
+    }
+
+    pub fn any_attacked(&self, squares: u64, by: Colour) -> bool {
+        for sq in BitLoop::new(squares) {
+            if self.sq_attacked(sq, by) {
+                return true;
+            }
+        }
+        false
     }
 
     fn clear_piece(&mut self, sq: Square) {
@@ -731,6 +990,25 @@ impl Board {
     fn move_piece(&mut self, from: Square, to: Square) {
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
+        debug_assert!(
+            self.piece_at(from) != Piece::EMPTY,
+            "from: {}, to: {}, board: {}, history: {:?}",
+            from,
+            to,
+            self.fen(),
+            self.history,
+        );
+        debug_assert!(
+            self.piece_at(to) == Piece::EMPTY,
+            "from: {}, to: {}, board: {}, history: {:?}",
+            from,
+            to,
+            self.fen(),
+            self.history,
+        );
+        if from == to {
+            return;
+        }
 
         let piece_moved = self.piece_at(from);
 
@@ -754,6 +1032,9 @@ impl Board {
     /// Gets the piece that will be captured by the given move.
     pub fn captured_piece(&self, m: Move) -> Piece {
         debug_assert!(m.to().on_board());
+        if m.is_castle() {
+            return Piece::EMPTY;
+        }
         let idx = m.to().index();
         self.piece_array[idx]
     }
@@ -798,13 +1079,13 @@ impl Board {
         &mut self.piece_array[sq.index()]
     }
 
-    #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub fn make_move_base(&mut self, m: Move) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
         let from = m.from();
-        let to = m.to();
+        let mut to = m.to();
         let side = self.side;
         let piece = self.moved_piece(m);
         let captured = self.captured_piece(m);
@@ -821,13 +1102,26 @@ impl Board {
                 self.clear_piece(to.add(8));
             }
         } else if m.is_castle() {
+            self.clear_piece(from);
             match to {
-                Square::C1 => self.move_piece(Square::A1, Square::D1),
-                Square::C8 => self.move_piece(Square::A8, Square::D8),
-                Square::G1 => self.move_piece(Square::H1, Square::F1),
-                Square::G8 => self.move_piece(Square::H8, Square::F8),
+                _ if to == self.castle_perm.wk => {
+                    self.move_piece(self.castle_perm.wk, Square::F1);
+                    to = Square::G1;
+                }
+                _ if to == self.castle_perm.wq => {
+                    self.move_piece(self.castle_perm.wq, Square::D1);
+                    to = Square::C1;
+                }
+                _ if to == self.castle_perm.bk => {
+                    self.move_piece(self.castle_perm.bk, Square::F8);
+                    to = Square::G8;
+                }
+                _ if to == self.castle_perm.bq => {
+                    self.move_piece(self.castle_perm.bq, Square::D8);
+                    to = Square::C8;
+                }
                 _ => {
-                    panic!("Invalid castle move");
+                    panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
                 }
             }
         }
@@ -848,8 +1142,30 @@ impl Board {
         });
         self.repetition_cache.push(saved_key);
 
-        self.castle_perm &= CASTLE_PERM_MASKS[from.index()];
-        self.castle_perm &= CASTLE_PERM_MASKS[to.index()];
+        // update castling rights
+        let mut new_rights = self.castle_perm;
+        if piece == Piece::WR {
+            if from == self.castle_perm.wk {
+                new_rights.wk = Square::NO_SQUARE;
+            } else if from == self.castle_perm.wq {
+                new_rights.wq = Square::NO_SQUARE;
+            }
+        } else if piece == Piece::BR {
+            if from == self.castle_perm.bk {
+                new_rights.bk = Square::NO_SQUARE;
+            } else if from == self.castle_perm.bq {
+                new_rights.bq = Square::NO_SQUARE;
+            }
+        } else if piece == Piece::WK {
+            new_rights.wk = Square::NO_SQUARE;
+            new_rights.wq = Square::NO_SQUARE;
+        } else if piece == Piece::BK {
+            new_rights.bk = Square::NO_SQUARE;
+            new_rights.bq = Square::NO_SQUARE;
+        }
+        new_rights.remove(to);
+        self.castle_perm = new_rights;
+
         self.ep_sq = Square::NO_SQUARE;
 
         // reinsert the castling rights
@@ -884,6 +1200,8 @@ impl Board {
             debug_assert!(promo.piece_type().legal_promo());
             self.clear_piece(from);
             self.add_piece(to, promo);
+        } else if m.is_castle() {
+            self.add_piece(to, piece); // stupid hack for piece-swapping
         } else {
             self.move_piece(from, to);
         }
@@ -914,7 +1232,7 @@ impl Board {
             self.history.pop().expect("No move to unmake!");
 
         let from = m.from();
-        let to = m.to();
+        let mut to = m.to();
 
         if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut self.key, self.ep_sq);
@@ -945,12 +1263,28 @@ impl Board {
             }
         } else if m.is_castle() {
             match to {
-                Square::C1 => self.move_piece(Square::D1, Square::A1),
-                Square::C8 => self.move_piece(Square::D8, Square::A8),
-                Square::G1 => self.move_piece(Square::F1, Square::H1),
-                Square::G8 => self.move_piece(Square::F8, Square::H8),
+                _ if to == self.castle_perm.wk => {
+                    to = Square::G1;
+                    self.clear_piece(to);
+                    self.move_piece(Square::F1, self.castle_perm.wk);
+                }
+                _ if to == self.castle_perm.wq => {
+                    to = Square::C1;
+                    self.clear_piece(to);
+                    self.move_piece(Square::D1, self.castle_perm.wq);
+                }
+                _ if to == self.castle_perm.bk => {
+                    to = Square::G8;
+                    self.clear_piece(to);
+                    self.move_piece(Square::F8, self.castle_perm.bk);
+                }
+                _ if to == self.castle_perm.bq => {
+                    to = Square::C8;
+                    self.clear_piece(to);
+                    self.move_piece(Square::D8, self.castle_perm.bq);
+                }
                 _ => {
-                    panic!("Invalid castle move");
+                    panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
                 }
             }
         }
@@ -961,6 +1295,8 @@ impl Board {
             debug_assert_eq!(promotion.colour(), self.piece_at(to).colour());
             self.clear_piece(to);
             self.add_piece(from, if self.side == Colour::WHITE { Piece::WP } else { Piece::BP });
+        } else if m.is_castle() {
+            self.add_piece(from, Piece::new(self.side, PieceType::KING));
         } else {
             self.move_piece(to, from);
         }
@@ -1041,52 +1377,37 @@ impl Board {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let capture = self.captured_piece(m);
+        let saved_castle_perm = self.castle_perm;
         let res = self.make_move_base(m);
         if !res {
             return false;
         }
         let from = m.from();
-        let to = m.to();
+        let mut to = m.to();
         t.nnue.push_acc();
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
             t.nnue.update_feature::<Deactivate>(PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
-            match to {
-                Square::C1 => {
-                    t.nnue.move_feature(
-                        PieceType::ROOK,
-                        colour,
-                        Square::A1,
-                        Square::D1,
-                    );
+            match () {
+                _ if to == saved_castle_perm.wk => {
+                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1);
+                    to = Square::G1;
                 }
-                Square::C8 => {
-                    t.nnue.move_feature(
-                        PieceType::ROOK,
-                        colour,
-                        Square::A8,
-                        Square::D8,
-                    );
+                _ if to == saved_castle_perm.wq => {
+                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1);
+                    to = Square::C1;
                 }
-                Square::G1 => {
-                    t.nnue.move_feature(
-                        PieceType::ROOK,
-                        colour,
-                        Square::H1,
-                        Square::F1,
-                    );
+                _ if to == saved_castle_perm.bk => {
+                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8);
+                    to = Square::G8;
                 }
-                Square::G8 => {
-                    t.nnue.move_feature(
-                        PieceType::ROOK,
-                        colour,
-                        Square::H8,
-                        Square::F8,
-                    );
+                _ if to == saved_castle_perm.bq => {
+                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8);
+                    to = Square::C8;
                 }
                 _ => {
-                    panic!("Invalid castle move");
+                    panic!("Invalid castle move {m} with castle_perm {saved_castle_perm} in position {fen}", fen = self.fen());
                 }
             }
         }
@@ -1169,18 +1490,32 @@ impl Board {
         {
             let piece = self.moved_piece(m).piece_type();
             let from = m.from();
-            let to = m.to();
+            let mut to = m.to();
             let colour = self.turn();
             if m.is_ep() {
                 let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
                 t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
             } else if m.is_castle() {
-                let (rook_from, rook_to) = match to {
-                    Square::C1 => (Square::D1, Square::A1),
-                    Square::G8 => (Square::F8, Square::H8),
-                    Square::C8 => (Square::D8, Square::A8),
-                    Square::G1 => (Square::F1, Square::H1),
-                    _ => panic!("Invalid castle move"),
+                let (rook_from, rook_to) = match () {
+                    _ if to == self.castle_perm.wk => {
+                        to = Square::G1;
+                        (Square::F1, self.castle_perm.wk)
+                    }
+                    _ if to == self.castle_perm.wq => {
+                        to = Square::C1;
+                        (Square::D1, self.castle_perm.wq)
+                    }
+                    _ if to == self.castle_perm.bk => {
+                        to = Square::G8;
+                        (Square::F8, self.castle_perm.bk)
+                    }
+                    _ if to == self.castle_perm.bq => {
+                        to = Square::C8;
+                        (Square::D8, self.castle_perm.bq)
+                    }
+                    _ => {
+                        panic!("Invalid castle move {m} with castle_perm {castle_perm} in position {fen}", castle_perm = self.castle_perm, fen = self.fen());
+                    }
                 };
                 t.nnue.update_pov_move(PieceType::ROOK, colour, rook_from, rook_to);
             }
@@ -1296,12 +1631,26 @@ impl Board {
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
 
+        let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
         let res = list
             .iter()
             .copied()
             .find(|&m| {
+                let m_to = if frc_cleanup && m.is_castle() {
+                    // if we're in normal UCI mode, we'll rework our castling moves into the
+                    // standard format.
+                    match m.to() {
+                        Square::A1 => Square::C1,
+                        Square::H1 => Square::G1,
+                        Square::A8 => Square::C8,
+                        Square::H8 => Square::G8,
+                        _ => m.to(),
+                    }
+                } else {
+                    m.to()
+                };
                 m.from() == from
-                    && m.to() == to
+                    && m_to == to
                     && (san_bytes.len() == 4
                         || m.safe_promotion_type().promo_char().unwrap() == san_bytes[4] as char)
             })
@@ -1422,15 +1771,15 @@ impl Board {
             CheckState::Checkmate => "#",
         };
         if m.is_castle() {
-            match m.to() {
-                Square::G1 | Square::G8 => return Some(format!("O-O{check_char}")),
-                Square::C1 | Square::C8 => return Some(format!("O-O-O{check_char}")),
+            match () {
+                _ if m.to() > m.from() => return Some(format!("O-O{check_char}")),
+                _ if m.to() < m.from() => return Some(format!("O-O-O{check_char}")),
                 _ => unreachable!(),
             }
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from());
-        let is_capture = !self.piece_at(to_sq).is_empty()
+        let is_capture = self.is_capture(m)
             || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::PAWN if !is_capture => "",
@@ -1636,14 +1985,19 @@ impl Board {
             bytes_written += f.write(b"b")?;
         }
         bytes_written += f.write(b" ")?;
-        if self.castle_perm == 0 {
+        if self.castle_perm == CastlingRights::NONE {
             bytes_written += f.write(b"-")?;
         } else {
-            bytes_written += [WKCA, WQCA, BKCA, BQCA]
-                .into_iter()
-                .zip(b"KQkq")
-                .filter(|(m, _)| self.castle_perm & m != 0)
-                .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
+            bytes_written += [
+                self.castle_perm.wk,
+                self.castle_perm.wq,
+                self.castle_perm.bk,
+                self.castle_perm.bq,
+            ]
+            .into_iter()
+            .zip(b"KQkq")
+            .filter(|(m, _)| *m != Square::NO_SQUARE)
+            .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
         }
         bytes_written += f.write(b" ")?;
         if self.ep_sq == Square::NO_SQUARE {
@@ -1930,5 +2284,48 @@ mod tests {
                 assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen());
             }
         }
+    }
+
+    #[test]
+    fn scharnagl_backrank_works() {
+        use super::Board;
+        use crate::piece::PieceType;
+        let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
+        assert_eq!(
+            normal_chess_arrangement,
+            [
+                PieceType::ROOK,
+                PieceType::KNIGHT,
+                PieceType::BISHOP,
+                PieceType::QUEEN,
+                PieceType::KING,
+                PieceType::BISHOP,
+                PieceType::KNIGHT,
+                PieceType::ROOK
+            ]
+        );
+    }
+
+    #[test]
+    fn scharnagl_full_works() {
+        #![allow(clippy::similar_names)]
+        use super::Board;
+        let normal = Board::from_fen(Board::STARTING_FEN).unwrap();
+        let frc = Board::from_frc_idx(518);
+        let dfrc = Board::from_dfrc_idx(518 * 960 + 518);
+        assert_eq!(normal, frc);
+        assert_eq!(normal, dfrc);
+    }
+
+    #[test]
+    fn castling_pseudolegality() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::definitions::Square;
+        let board =
+            Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
+                .unwrap();
+        let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
+        assert!(!board.is_pseudo_legal(kingside_castle));
     }
 }

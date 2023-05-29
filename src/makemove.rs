@@ -4,14 +4,13 @@
 // the Board::make_move() function.
 
 use crate::{
-    definitions::Square,
+    definitions::{CastlingRights, Square},
     lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
     piece::Piece,
 };
 
-pub fn hash_castling(key: &mut u64, castle_perm: u8) {
-    debug_assert!((castle_perm as usize) < CASTLE_KEYS.len());
-    let castle_key = CASTLE_KEYS[castle_perm as usize];
+pub fn hash_castling(key: &mut u64, castle_perm: CastlingRights) {
+    let castle_key = CASTLE_KEYS[castle_perm.hashkey_index()];
     *key ^= castle_key;
 }
 
@@ -31,15 +30,3 @@ pub fn hash_ep(key: &mut u64, ep_sq: Square) {
     let ep_key = PIECE_KEYS[Piece::EMPTY.index()][ep_sq.index()];
     *key ^= ep_key;
 }
-
-#[rustfmt::skip]
-pub static CASTLE_PERM_MASKS: [u8; 64] = [
-    13, 15, 15, 15, 12, 15, 15, 14, // 0b1101, 0b1100, 0b1110
-    15, 15, 15, 15, 15, 15, 15, 15,
-    15, 15, 15, 15, 15, 15, 15, 15,
-    15, 15, 15, 15, 15, 15, 15, 15,
-    15, 15, 15, 15, 15, 15, 15, 15,
-    15, 15, 15, 15, 15, 15, 15, 15,
-    15, 15, 15, 15, 15, 15, 15, 15,
-     7, 15, 15, 15,  3, 15, 15, 11, // 0b0111, 0b0011, 0b1011
-];
