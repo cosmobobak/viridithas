@@ -374,12 +374,13 @@ impl Board {
     fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let occupied = self.pieces.occupied();
         let side = if IS_WHITE { Colour::WHITE } else { Colour::BLACK };
-        let king_sq = self.king_sq(side);
-        if self.sq_attacked(king_sq, side.flip()) {
-            return;
-        }
 
         if CHESS960.load(Ordering::Relaxed) {
+            let king_sq = self.king_sq(side);
+            if self.sq_attacked(king_sq, side.flip()) {
+                return;
+            }
+
             let castling_kingside = self.castle_perm.kingside(side);
             if castling_kingside != Square::NO_SQUARE {
                 let king_dst = Square::G1.relative_to(side);
@@ -408,32 +409,70 @@ impl Board {
                 );
             }
         } else {
-            let king_occupancy_mask =
-                if IS_WHITE { 0x0000_0000_0000_0060 } else { 0x6000_0000_0000_0000 };
-            let queen_occupancy_mask =
-                if IS_WHITE { 0x0000_0000_0000_000E } else { 0x0E00_0000_0000_0000 };
-            let castling_kingside = self.castle_perm.kingside(side);
-            if castling_kingside != Square::NO_SQUARE
-                && occupied & king_occupancy_mask == 0
-                && !self.sq_attacked(Square::F1.relative_to(side), side.flip())
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    king_sq,
-                    castling_kingside,
-                    Move::CASTLE_FLAG,
-                ));
-            }
+            const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
+            const WQ_FREESPACE: u64 =
+                Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
+            const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
+            const BQ_FREESPACE: u64 =
+                Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
 
-            let castling_queenside = self.castle_perm.queenside(side);
-            if castling_queenside != Square::NO_SQUARE
-                && occupied & queen_occupancy_mask == 0
-                && !self.sq_attacked(Square::D1.relative_to(side), side.flip())
-            {
-                move_list.push::<false>(Move::new_with_flags(
-                    king_sq,
-                    castling_queenside,
-                    Move::CASTLE_FLAG,
-                ));
+            // stupid hack to avoid redoing or eagerly doing hard work.
+            let mut got_attacked_king = false;
+
+            if IS_WHITE {
+                if self.castle_perm.wk != Square::NO_SQUARE
+                    && occupied & WK_FREESPACE == 0
+                    && {
+                        got_attacked_king = self.sq_attacked_by::<false>(Square::E1);
+                        !got_attacked_king
+                    }
+                    && !self.sq_attacked_by::<false>(Square::F1)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        Square::E1,
+                        Square::H1,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
+
+                if self.castle_perm.wq != Square::NO_SQUARE
+                    && occupied & WQ_FREESPACE == 0
+                    && !(got_attacked_king || self.sq_attacked_by::<false>(Square::E1))
+                    && !self.sq_attacked_by::<false>(Square::D1)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        Square::E1,
+                        Square::A1,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
+            } else {
+                if self.castle_perm.bk != Square::NO_SQUARE
+                    && occupied & BK_FREESPACE == 0
+                    && {
+                        got_attacked_king = self.sq_attacked_by::<true>(Square::E8);
+                        !got_attacked_king
+                    }
+                    && !self.sq_attacked_by::<true>(Square::F8)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        Square::E8,
+                        Square::H8,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
+
+                if self.castle_perm.bq != Square::NO_SQUARE
+                    && occupied & BQ_FREESPACE == 0
+                    && !(got_attacked_king || self.sq_attacked_by::<true>(Square::E8))
+                    && !self.sq_attacked_by::<true>(Square::D8)
+                {
+                    move_list.push::<false>(Move::new_with_flags(
+                        Square::E8,
+                        Square::A8,
+                        Move::CASTLE_FLAG,
+                    ));
+                }
             }
         }
     }
