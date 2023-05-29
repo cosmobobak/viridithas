@@ -1,6 +1,6 @@
 use std::{fmt::{Debug, Display, Formatter}, sync::atomic::Ordering};
 
-use crate::{definitions::Square, piece::PieceType, uci::CHESS960};
+use crate::{definitions::{Square, File}, piece::PieceType, uci::CHESS960};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {
@@ -96,6 +96,22 @@ impl Move {
 
     pub fn is_queenside_castling(self) -> bool {
         self.is_castle() && self.to() < self.from()
+    }
+
+    /// Handles castling moves, which are a bit weird.
+    pub fn history_to_square(self) -> Square {
+        if self.is_castle() {
+            let to_rank = self.from().rank();
+            if self.to() > self.from() {
+                // kingside castling, king goes to the G file
+                Square::from_rank_file(to_rank, File::FILE_G)
+            } else {
+                // queenside castling, king goes to the C file
+                Square::from_rank_file(to_rank, File::FILE_C)
+            }
+        } else {
+            self.to()
+        }
     }
 
     pub fn is_valid(self) -> bool {

@@ -23,7 +23,7 @@ impl ThreadData {
                 piece_moved != Piece::EMPTY,
                 "Invalid piece moved by move {m} in position \n{pos}"
             );
-            let to = m.to();
+            let to = m.history_to_square();
             let val = self.main_history.get_mut(piece_moved, to);
             update_history(val, depth, m == best_move);
         }
@@ -33,7 +33,7 @@ impl ThreadData {
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
             let piece_moved = pos.moved_piece(m.mov);
-            let to = m.mov.to();
+            let to = m.mov.history_to_square();
             m.score += i32::from(self.main_history.get(piece_moved, to));
         }
     }
@@ -84,7 +84,7 @@ impl ThreadData {
         if prev_move.is_null() {
             return;
         }
-        let prev_to = prev_move.to();
+        let prev_to = prev_move.history_to_square();
         let prev_piece = if prev_move.is_castle() {
             Piece::new(pos.turn().flip(), PieceType::KING)
         } else {
@@ -104,7 +104,7 @@ impl ThreadData {
 
         let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
         for &m in moves_to_adjust {
-            let to = m.to();
+            let to = m.history_to_square();
             let piece = pos.moved_piece(m);
             update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
         }
@@ -118,7 +118,7 @@ impl ThreadData {
         if prev_move.is_null() {
             return;
         }
-        let prev_to = prev_move.to();
+        let prev_to = prev_move.history_to_square();
         let prev_piece = if prev_move.is_castle() {
             Piece::new(pos.turn().flip(), PieceType::KING)
         } else {
@@ -138,7 +138,7 @@ impl ThreadData {
 
         let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
         for m in ms {
-            let to = m.mov.to();
+            let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov);
             m.score += i32::from(cmh_block.get(piece, to));
         }
@@ -159,7 +159,7 @@ impl ThreadData {
         if move_to_follow_up.is_null() || prev_move.is_null() {
             return;
         }
-        let tpa_to = move_to_follow_up.to();
+        let tpa_to = move_to_follow_up.history_to_square();
         // getting the previous piece type is a little awkward,
         // because follow-up history looks two ply into the past,
         // meaning that the piece on the target square of the move
@@ -178,8 +178,6 @@ impl ThreadData {
                     move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
                 );
                 Piece::new(pos.turn(), PieceType::PAWN)
-            } else if move_to_follow_up.is_castle() {
-                Piece::new(pos.turn(), PieceType::KING)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
@@ -209,7 +207,7 @@ impl ThreadData {
 
         let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
         for &m in moves_to_adjust {
-            let to = m.to();
+            let to = m.history_to_square();
             let piece = pos.moved_piece(m);
             update_history(fuh_block.get_mut(piece, to), depth, m == best_move);
         }
@@ -223,7 +221,7 @@ impl ThreadData {
         if move_to_follow_up.is_null() || prev_move.is_null() {
             return;
         }
-        let tpa_to = move_to_follow_up.to();
+        let tpa_to = move_to_follow_up.history_to_square();
         // getting the previous piece type is a little awkward,
         // because follow-up history looks two ply into the past,
         // meaning that the piece on the target square of the move
@@ -242,8 +240,6 @@ impl ThreadData {
                     move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
                 );
                 Piece::new(pos.turn(), PieceType::PAWN)
-            } else if move_to_follow_up.is_castle() {
-                Piece::new(pos.turn(), PieceType::KING)
             } else if at_target_square.colour() == pos.turn() {
                 // if the piece on the target square is the same colour as us
                 // then nothing happened to our piece, so we can use it directly.
@@ -273,7 +269,7 @@ impl ThreadData {
 
         let fuh_block = self.followup_history.get(tpa_piece, tpa_to);
         for m in ms {
-            let to = m.mov.to();
+            let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov);
             m.score += i32::from(fuh_block.get(piece, to));
         }
@@ -299,12 +295,9 @@ impl ThreadData {
         if prev_move.is_null() {
             return;
         }
-        let prev_to = prev_move.to();
-        let prev_piece = if prev_move.is_castle() {
-            Piece::new(pos.turn().flip(), PieceType::KING)
-        } else {
-            pos.piece_at(prev_to)
-        };
+
+        let prev_to = prev_move.history_to_square();
+        let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
@@ -318,12 +311,8 @@ impl ThreadData {
             return Move::NULL;
         }
 
-        let prev_to = prev_move.to();
-        let prev_piece = if prev_move.is_castle() {
-            Piece::new(pos.turn().flip(), PieceType::KING)
-        } else {
-            pos.piece_at(prev_to)
-        };
+        let prev_to = prev_move.history_to_square();
+        let prev_piece = pos.piece_at(prev_to);
 
         self.counter_move_table.get(prev_piece, prev_to)
     }
