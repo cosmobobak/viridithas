@@ -417,13 +417,14 @@ impl Board {
                 Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
 
             // stupid hack to avoid redoing or eagerly doing hard work.
-            let mut got_attacked_king = false;
+            let mut cache = None;
 
             if IS_WHITE {
                 if self.castle_perm.wk != Square::NO_SQUARE
                     && occupied & WK_FREESPACE == 0
                     && {
-                        got_attacked_king = self.sq_attacked_by::<false>(Square::E1);
+                        let got_attacked_king = self.sq_attacked_by::<false>(Square::E1);
+                        cache = Some(got_attacked_king);
                         !got_attacked_king
                     }
                     && !self.sq_attacked_by::<false>(Square::F1)
@@ -437,7 +438,7 @@ impl Board {
 
                 if self.castle_perm.wq != Square::NO_SQUARE
                     && occupied & WQ_FREESPACE == 0
-                    && !(got_attacked_king || self.sq_attacked_by::<false>(Square::E1))
+                    && cache.unwrap_or_else(|| self.sq_attacked_by::<false>(Square::E1))
                     && !self.sq_attacked_by::<false>(Square::D1)
                 {
                     move_list.push::<false>(Move::new_with_flags(
@@ -450,7 +451,8 @@ impl Board {
                 if self.castle_perm.bk != Square::NO_SQUARE
                     && occupied & BK_FREESPACE == 0
                     && {
-                        got_attacked_king = self.sq_attacked_by::<true>(Square::E8);
+                        let got_attacked_king = self.sq_attacked_by::<true>(Square::E8);
+                        cache = Some(got_attacked_king);
                         !got_attacked_king
                     }
                     && !self.sq_attacked_by::<true>(Square::F8)
@@ -464,7 +466,7 @@ impl Board {
 
                 if self.castle_perm.bq != Square::NO_SQUARE
                     && occupied & BQ_FREESPACE == 0
-                    && !(got_attacked_king || self.sq_attacked_by::<true>(Square::E8))
+                    && cache.unwrap_or_else(|| self.sq_attacked_by::<true>(Square::E8))
                     && !self.sq_attacked_by::<true>(Square::D8)
                 {
                     move_list.push::<false>(Move::new_with_flags(
