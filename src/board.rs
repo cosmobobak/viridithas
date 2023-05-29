@@ -755,11 +755,7 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let captured_piece = if m.is_castle() {
-            Piece::EMPTY
-        } else {
-            self.piece_at(to)
-        };
+        let captured_piece = if m.is_castle() { Piece::EMPTY } else { self.piece_at(to) };
         let is_capture = !captured_piece.is_empty();
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
@@ -2295,7 +2291,19 @@ mod tests {
         use super::Board;
         use crate::piece::PieceType;
         let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
-        assert_eq!(normal_chess_arrangement, [PieceType::ROOK, PieceType::KNIGHT, PieceType::BISHOP, PieceType::QUEEN, PieceType::KING, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK]);
+        assert_eq!(
+            normal_chess_arrangement,
+            [
+                PieceType::ROOK,
+                PieceType::KNIGHT,
+                PieceType::BISHOP,
+                PieceType::QUEEN,
+                PieceType::KING,
+                PieceType::BISHOP,
+                PieceType::KNIGHT,
+                PieceType::ROOK
+            ]
+        );
     }
 
     #[test]
@@ -2314,7 +2322,9 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::definitions::Square;
-        let board = Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20").unwrap();
+        let board =
+            Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
+                .unwrap();
         let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
         assert!(!board.is_pseudo_legal(kingside_castle));
     }

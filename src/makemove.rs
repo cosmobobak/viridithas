@@ -4,7 +4,7 @@
 // the Board::make_move() function.
 
 use crate::{
-    definitions::{Square, CastlingRights},
+    definitions::{CastlingRights, Square},
     lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
     piece::Piece,
 };

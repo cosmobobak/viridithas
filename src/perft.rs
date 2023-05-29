@@ -2,10 +2,14 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader}, sync::atomic::Ordering,
+    io::{BufRead, BufReader},
+    sync::atomic::Ordering,
 };
 
-use crate::{board::{movegen::MoveList, Board}, uci::CHESS960};
+use crate::{
+    board::{movegen::MoveList, Board},
+    uci::CHESS960,
+};
 #[cfg(test)]
 use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 

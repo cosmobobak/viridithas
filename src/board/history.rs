@@ -167,7 +167,9 @@ impl ThreadData {
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
             debug_assert!(
-                at_target_square != Piece::EMPTY || prev_move.is_ep() || move_to_follow_up.is_castle(),
+                at_target_square != Piece::EMPTY
+                    || prev_move.is_ep()
+                    || move_to_follow_up.is_castle(),
                 "Piece on target square of move to follow up on has to exist!"
             );
             if prev_move.is_ep() {
@@ -229,7 +231,9 @@ impl ThreadData {
         let tpa_piece = {
             let at_target_square = pos.piece_at(tpa_to);
             debug_assert!(
-                at_target_square != Piece::EMPTY || prev_move.is_ep() || move_to_follow_up.is_castle(),
+                at_target_square != Piece::EMPTY
+                    || prev_move.is_ep()
+                    || move_to_follow_up.is_castle(),
                 "Piece on target square of move to follow up on has to exist!"
             );
             if prev_move.is_ep() {

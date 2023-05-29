@@ -3,7 +3,7 @@
 use crate::{
     board::{evaluation::TB_WIN_SCORE, movegen::MoveList, Board},
     chessmove::Move,
-    definitions::{Square, CastlingRights},
+    definitions::{CastlingRights, Square},
     piece::{Colour, PieceType},
     tablebases::bindings::{
         tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST,

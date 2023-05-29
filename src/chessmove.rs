@@ -1,6 +1,13 @@
-use std::{fmt::{Debug, Display, Formatter}, sync::atomic::Ordering};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    sync::atomic::Ordering,
+};
 
-use crate::{definitions::{Square, File}, piece::PieceType, uci::CHESS960};
+use crate::{
+    definitions::{File, Square},
+    piece::PieceType,
+    uci::CHESS960,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Move {

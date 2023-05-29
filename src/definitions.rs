@@ -2,13 +2,16 @@ pub mod depth;
 
 use std::{
     fmt::{self, Display},
-    str::FromStr, sync::atomic::Ordering,
+    str::FromStr,
+    sync::atomic::Ordering,
 };
 
 use crate::{
     board::evaluation::MATE_SCORE,
+    cfor,
     chessmove::Move,
-    piece::{Colour, Piece}, cfor, uci::CHESS960,
+    piece::{Colour, Piece},
+    uci::CHESS960,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -148,6 +151,14 @@ impl Square {
 
     pub const fn flip_file(self) -> Self {
         Self(self.0 ^ 0b000_111)
+    }
+
+    pub const fn relative_to(self, side: Colour) -> Self {
+        if side.inner() == Colour::WHITE.inner() {
+            self
+        } else {
+            self.flip_rank()
+        }
     }
 
     /// The file that this square is on.
@@ -369,6 +380,22 @@ impl CastlingRights {
             self.bq = Square::NO_SQUARE;
         }
     }
+
+    pub fn kingside(self, side: Colour) -> Square {
+        if side == Colour::WHITE {
+            self.wk
+        } else {
+            self.bk
+        }
+    }
+
+    pub fn queenside(self, side: Colour) -> Square {
+        if side == Colour::WHITE {
+            self.wq
+        } else {
+            self.bq
+        }
+    }
 }
 
 impl Display for CastlingRights {
@@ -446,14 +473,29 @@ mod tests {
         use super::{Square, HORIZONTAL_RAY_BETWEEN};
         assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], 0);
         assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], 0);
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.bitboard());
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()], Square::B1.bitboard() | Square::C1.bitboard());
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.bitboard());
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.bitboard());
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
+            Square::B1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
+            Square::B1.bitboard() | Square::C1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()],
+            Square::C1.bitboard()
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()],
+            Square::C1.bitboard()
+        );
 
         for from in Square::all() {
             for to in Square::all() {
-                assert_eq!(HORIZONTAL_RAY_BETWEEN[from.index()][to.index()], HORIZONTAL_RAY_BETWEEN[to.index()][from.index()]);
+                assert_eq!(
+                    HORIZONTAL_RAY_BETWEEN[from.index()][to.index()],
+                    HORIZONTAL_RAY_BETWEEN[to.index()][from.index()]
+                );
             }
         }
     }

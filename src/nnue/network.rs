@@ -598,11 +598,21 @@ mod tests {
             for i in 0..768 {
                 if initial_white[i] != t.nnue.white_pov[i] {
                     let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-                    eprintln!("{i}: {} != {} ({colour}, {piecetype}, {square}) in {}", initial_white[i], t.nnue.white_pov[i], board.fen());
+                    eprintln!(
+                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
+                        initial_white[i],
+                        t.nnue.white_pov[i],
+                        board.fen()
+                    );
                 }
                 if initial_black[i] != t.nnue.black_pov[i] {
                     let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-                    eprintln!("{i}: {} != {} ({colour}, {piecetype}, {square}) in {}", initial_black[i], t.nnue.black_pov[i], board.fen());
+                    eprintln!(
+                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
+                        initial_black[i],
+                        t.nnue.black_pov[i],
+                        board.fen()
+                    );
                 }
             }
             assert_eq!(initial_white, t.nnue.white_pov);
