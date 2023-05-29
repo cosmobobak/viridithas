@@ -21,7 +21,7 @@ use crate::{
         MoveList,
     },
     chessmove::Move,
-    definitions::{CastlingRights, CheckState, File, Rank, Square, Undo, ORTHO_RAY_BETWEEN},
+    definitions::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
@@ -828,7 +828,6 @@ impl Board {
         // - there are pieces between the king and the rook
         // - the king passes through a square that is attacked by the opponent
         // - the king ends up in check (not checked here)
-
         let moved = self.piece_at(m.from());
         if moved.piece_type() != PieceType::KING {
             return false;
@@ -849,6 +848,8 @@ impl Board {
                     self.castle_perm.wk
                 })
             {
+                // the to-square doesn't match the castling rights
+                // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
             if self.side == Colour::BLACK {
@@ -865,6 +866,8 @@ impl Board {
                     self.castle_perm.wq
                 })
             {
+                // the to-square doesn't match the castling rights
+                // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
             if self.side == Colour::BLACK {
@@ -874,12 +877,15 @@ impl Board {
             }
         };
 
-        let king_path = ORTHO_RAY_BETWEEN[m.from().index()][king_dst.index()];
-        let rook_path = ORTHO_RAY_BETWEEN[m.from().index()][m.to().index()];
+        // king_path is the path the king takes to get to its destination.
+        let king_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][king_dst.index()];
+        // rook_path is the path the rook takes to get to its destination.
+        let rook_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][m.to().index()];
+        // castle_occ is the occupancy that "counts" for castling.
         let castle_occ = self.pieces.occupied() ^ m.from().bitboard() ^ m.to().bitboard();
 
-        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())) != 0
-            && !self.any_attacked(king_path | king_dst.bitboard(), self.side.flip())
+        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())) == 0
+            && !self.any_attacked(king_path | m.from().bitboard(), self.side.flip())
     }
 
     pub fn any_attacked(&self, squares: u64, by: Colour) -> bool {
@@ -990,17 +996,19 @@ impl Board {
         debug_assert!(to.on_board());
         debug_assert!(
             self.piece_at(from) != Piece::EMPTY,
-            "from: {}, to: {}, board: {}",
+            "from: {}, to: {}, board: {}, history: {:?}",
             from,
             to,
-            self.fen()
+            self.fen(),
+            self.history,
         );
         debug_assert!(
             self.piece_at(to) == Piece::EMPTY,
-            "from: {}, to: {}, board: {}",
+            "from: {}, to: {}, board: {}, history: {:?}",
             from,
             to,
-            self.fen()
+            self.fen(),
+            self.history,
         );
         if from == to {
             return;
@@ -2299,5 +2307,15 @@ mod tests {
         let dfrc = Board::from_dfrc_idx(518 * 960 + 518);
         assert_eq!(normal, frc);
         assert_eq!(normal, dfrc);
+    }
+
+    #[test]
+    fn castling_pseudolegality() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::definitions::Square;
+        let board = Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20").unwrap();
+        let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
+        assert!(!board.is_pseudo_legal(kingside_castle));
     }
 }

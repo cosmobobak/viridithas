@@ -405,7 +405,7 @@ impl Display for CastlingRights {
     }
 }
 
-pub static ORTHO_RAY_BETWEEN: [[u64; 64]; 64] = {
+pub static HORIZONTAL_RAY_BETWEEN: [[u64; 64]; 64] = {
     let mut res = [[0; 64]; 64];
     cfor!(let mut from = Square::A1; from.0 < Square::NO_SQUARE.0; from = from.add_beyond_board(1); {
         cfor!(let mut to = Square::A1; to.0 < Square::NO_SQUARE.0; to = to.add_beyond_board(1); {
@@ -443,17 +443,17 @@ mod tests {
 
     #[test]
     fn ray_test() {
-        use super::{Square, ORTHO_RAY_BETWEEN};
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], 0);
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], 0);
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.bitboard());
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::A1.index()][Square::D1.index()], Square::B1.bitboard() | Square::C1.bitboard());
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.bitboard());
-        assert_eq!(ORTHO_RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.bitboard());
+        use super::{Square, HORIZONTAL_RAY_BETWEEN};
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], 0);
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], 0);
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.bitboard());
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()], Square::B1.bitboard() | Square::C1.bitboard());
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.bitboard());
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.bitboard());
 
         for from in Square::all() {
             for to in Square::all() {
-                assert_eq!(ORTHO_RAY_BETWEEN[from.index()][to.index()], ORTHO_RAY_BETWEEN[to.index()][from.index()]);
+                assert_eq!(HORIZONTAL_RAY_BETWEEN[from.index()][to.index()], HORIZONTAL_RAY_BETWEEN[to.index()][from.index()]);
             }
         }
     }

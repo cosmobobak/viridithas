@@ -13,7 +13,7 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    definitions::{Square, ORTHO_RAY_BETWEEN},
+    definitions::{Square, HORIZONTAL_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
 };
@@ -376,9 +376,9 @@ impl Board {
             if self.castle_perm.wk != Square::NO_SQUARE {
                 let king_dst = Square::G1;
                 let rook_dst = Square::F1;
-                let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let king_side_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let king_side_path_to_rook =
-                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wk.index()];
+                    HORIZONTAL_RAY_BETWEEN[king_sq.index()][self.castle_perm.wk.index()];
                 let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.wk.bitboard();
                 if relevant_occupied & (king_side_path | king_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::BLACK)
@@ -394,9 +394,9 @@ impl Board {
             if self.castle_perm.wq != Square::NO_SQUARE {
                 let king_dst = Square::C1;
                 let rook_dst = Square::D1;
-                let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let queen_side_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let queen_side_path_to_rook =
-                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.wq.index()];
+                    HORIZONTAL_RAY_BETWEEN[king_sq.index()][self.castle_perm.wq.index()];
                 let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.wq.bitboard();
                 if relevant_occupied & (queen_side_path | queen_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::BLACK)
@@ -413,9 +413,9 @@ impl Board {
             if self.castle_perm.bk != Square::NO_SQUARE {
                 let king_dst = Square::G8;
                 let rook_dst = Square::F8;
-                let king_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let king_side_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let king_side_path_to_rook =
-                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bk.index()];
+                    HORIZONTAL_RAY_BETWEEN[king_sq.index()][self.castle_perm.bk.index()];
                 let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.bk.bitboard();
                 if relevant_occupied & (king_side_path | king_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(king_side_path | king_sq.bitboard(), Colour::WHITE)
@@ -431,9 +431,9 @@ impl Board {
             if self.castle_perm.bq != Square::NO_SQUARE {
                 let king_dst = Square::C8;
                 let rook_dst = Square::D8;
-                let queen_side_path = ORTHO_RAY_BETWEEN[king_sq.index()][king_dst.index()];
+                let queen_side_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
                 let queen_side_path_to_rook =
-                    ORTHO_RAY_BETWEEN[king_sq.index()][self.castle_perm.bq.index()];
+                    HORIZONTAL_RAY_BETWEEN[king_sq.index()][self.castle_perm.bq.index()];
                 let relevant_occupied = occupied ^ king_sq.bitboard() ^ self.castle_perm.bq.bitboard();
                 if relevant_occupied & (queen_side_path | queen_side_path_to_rook | king_dst.bitboard() | rook_dst.bitboard()) == 0
                     && !self.any_attacked(queen_side_path | king_sq.bitboard(), Colour::WHITE)
