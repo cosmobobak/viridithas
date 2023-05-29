@@ -438,7 +438,7 @@ impl Board {
 
                 if self.castle_perm.wq != Square::NO_SQUARE
                     && occupied & WQ_FREESPACE == 0
-                    && cache.unwrap_or_else(|| self.sq_attacked_by::<false>(Square::E1))
+                    && !cache.unwrap_or_else(|| self.sq_attacked_by::<false>(Square::E1))
                     && !self.sq_attacked_by::<false>(Square::D1)
                 {
                     move_list.push::<false>(Move::new_with_flags(
@@ -466,7 +466,7 @@ impl Board {
 
                 if self.castle_perm.bq != Square::NO_SQUARE
                     && occupied & BQ_FREESPACE == 0
-                    && cache.unwrap_or_else(|| self.sq_attacked_by::<true>(Square::E8))
+                    && !cache.unwrap_or_else(|| self.sq_attacked_by::<true>(Square::E8))
                     && !self.sq_attacked_by::<true>(Square::D8)
                 {
                     move_list.push::<false>(Move::new_with_flags(
