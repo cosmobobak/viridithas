@@ -946,10 +946,10 @@ impl Board {
 
             if score > best_score {
                 best_score = score;
-                best_move = m;
                 if score > alpha {
+                    best_move = m;
                     alpha = score;
-                    pv.load_from(best_move, l_pv);
+                    pv.load_from(m, l_pv);
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
