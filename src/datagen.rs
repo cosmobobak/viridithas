@@ -22,7 +22,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
-    uci::{SYZYGY_ENABLED, SYZYGY_PATH},
+    uci::{SYZYGY_ENABLED, SYZYGY_PATH, CHESS960},
 };
 
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
@@ -89,6 +89,7 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     panic!("This binary was not compiled with the datagen feature enabled.");
 
     FENS_GENERATED.store(0, Ordering::SeqCst);
+    CHESS960.store(true, Ordering::SeqCst);
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
         println!("Stopping generation, please don't force quit.");
