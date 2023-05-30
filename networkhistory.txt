@@ -1,214 +1,219 @@
-NET ID │ general concept                          │ notes
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-     0 │ first network 90% eval, 10% WDL          │ much weaker than the HCE.
-       │ 30 epochs, batch size 16384, lr 1e─2     │
-       │ trained on the mountain of games from    │
-       │ old Viridithas 2.X.X versions            │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-     1 │ second network, same data as net 0, but  │ net used in v3.0.0, crushes HCE.
-       │ data was shuffled, which fixed problems. │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-     2 │ third network, pure WDL.                 │ none
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-     3 │ fourth network, pure evaluation.         │ none
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-     4 │ fifth network, 50/50 WDL/eval.           │ none
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  5─10 │ fiddling with parameters and data        │ nothing improved on net 1.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    11 │ filtering of noisy positions, more data. │ first improvement on net 1, ~20 Elo.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    12 │ net─11 data reanalyzed with net─11.      │ +50 Elo, worried about overfitting.
-       │                                          │ net used in v4.0.0.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    13 │ lichess─elite games analysed with HCE,   │ +20 Elo.
-       │ merged with the net─12 data.             │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    14 │ net─13 data reanalyzed with net─13,      │ +25 Elo.
-       │ deduplicated using a new tool i wrote.   │ 
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    15 │ same as net─14, but trying 120 epochs,   │ ─41.6 +/─ 7.5 Elo, LOS: 0.0 %
-       │ and batch size 8192.                     │ vs net─14.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    16 │ same as net─14, but trying 80 epochs,    │ 111.6 +/─ 18.4 Elo, LOS: 100.0 %
-       │ and lr drop at 30 epochs                 │ vs net─14.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    17 │ injected 320K positions from net─16      │ 16.0 +/─ 12.1, LOS: 99.5 %
-       │ into net─14 data.                        │ vs net─16.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    18 │ re─evaluated whole net─17 data with      │ 23.9 +/─ 7.2, LOS: 100.0 %
-       │ net─17.                                  │ vs net─17.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    19 │ same as net─18, but with 90% WDL focus.  │ ─75.3 +/─ 8.0, LOS: 0.0 %
-       │ not intended to gain, just to test.      │ vs net─18.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    20 │ trained on 320K net─18 self─play games   │ ─106.2 +/─ 21.2, LOS: 0.0 %
-       │ from the uhobook, eval'd with net─18.    │ vs net─18.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    21 │ those 320K net─18 games mixed in to the  │ 7.6 +/─ 6.5, LOS: 98.9 %
-       │ big pile of data use to train net─18.    │ vs net─18.
-       │ NOTE/WARN: shuffled based on FEN hash.   │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    22 │ net 21 data re─evaluated with HCE at     │ ─10.5 +/─ 4.5, LOS: 0.0 %
-       │ depth 8.                                 │ vs net─21.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    23 │ net 22 data re─evaluated with net─22.    │ ─23.5 +/─ 9.9, LOS: 0.0 %
-       │ Hopefully will be less overfitted.       │ vs net─21.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    24 │ net 21 data with 25% WDL focus.          │ 16.1 +/─ 7.6, LOS: 100.0 %
-       │                                          │ vs net─21.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    25 │ 320K net─24 self─play games from uhobook │ 1.0 +/─ 12.2, LOS: 56.3 %
-       │ injected into net─24 data.               │ vs net─24.
-       │ NOTE/WARN: shuffled based on FEN hash.   │ I don't really trust this net, weird results.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    26 │ turns out those 320K games were eval'd   │ 7.1 +/─ 6.5, LOS: 98.3 %
-       │ with HCE, so we redid it.                │ vs net─24.
-       │ didn't pass SPRT, but it's still better. │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    27 │ net─26 data but 40% WDL focus.           │ 8.0 +/─ 6.6, LOS: 99.1 %
-       │                                          │ vs net─26.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    28 │ same as net─27 but with LR=5e─3.         │ 2.3 +/─ 6.6, LOS: 75.3 %
-       │                                          │ vs net─27.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    29 │ combination of pure viri data            │ ~ ─60 elo vs net─28
-       │ from v5.1.0, v6.0.0, and v6.0.0─dev      │ seems that either the Lichess Elite data has
-       │                                          │ really important stuff to learn, or 960k games
-       │                                          │ is not enough to train a good net.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    30 │ 320K net─28 self─play games from uhobook │ 7.2 +/─ 6.7, LOS: 98.2 %
-       │ injected into net─28 data.               │ vs net─28.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    31 │ net 30 data re─evaluated with net─30.    │ ─3.0 +/─ 6.6, LOS: 18.7 %
-       │ feeling somewhat discouraged.            │ vs net─30.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    32 │ net XX data, using MinusKelvin's         │ ???? +/─ ????, LOS: ????
-       │ marlinflow fork, and his default hyper─  │ vs net─XX.
-       │ parameters:                              │
-       │  ─ LR = 0.001                            │
-       │  ─ LR drop at 30 epochs                  │
-       │  ─ 45 epochs                             │
-       │  ─ whatever his fork sets for batch size │ (this still has not been done,
-       │  ─ WDL focus 10%                         │  in case you're reading this in the future)
-       │ this arch uses buckets and a 384x2 net,  │
-       │ so it requires rewriting the inference   │
-       │ code.                                    │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    33 │ experiment with some Frozenight training │ 12.3 +/─ 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
-       │ params while I work up the energy to     │ vs net─30.
-       │ implement the new arch.                  │
-       │ (LR = 0.0001, 45 epochs, WDL 10%, 384N)  │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    34 │ same as net 33, but with 512 neurons.    │ ─31.8 +/─ 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
-       │                                          │ vs net─33.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    35 │ injected 320K net─34 self─play games     │ 4.3 +/─ 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
-       │ from uhobook into the net─31 data.       │ vs net─33.
-       │ same training setup as net 33.           │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    36 │ net 35 data with 40% WDL focus.          │ 16.2 +/─ 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
-       │                                          │ vs net─35.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    37 │ net 36 data + 60M of the new datagen     │ ─58.1 +/─ 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
-       │ FENs.                                    │ vs net─36.
-       │ datagen does not handle noisy─move       │
-       │ exclusion, and might have other issues,  │
-       │ so this isn't a damning refutation of    │
-       │ the new datagen.                         │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    38 │ 80M net─36 FENs (run_2023─02─14_23─54─59 │ ─87.6 +/─ 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
-       │ _1000000g─64t─tb5─nnue─d8)               │ vs net─36.
-       │ This was with "fixed" datagen, which is  │
-       │ disheartening.                           │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    39 │ Those 80M FENs + the net─36 training     │ 24.8 +/─ 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
-       │ data.                                    │ vs net─36.
-       │ Seems like the main problem was the      │
-       │ simple reduction in dataset size.        │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    40 │ 88M more FENs added to the net─39 data.  │ ─5.9 +/─ 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
-       │                                          │ vs net─39.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    41 │ interleave all the net─40 data for more  │ 6.0 +/─ 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
-       │ homogeneous training.                    │ vs net─39.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    42 │ add 2.5M net─41 games to the net─41 data │ ─1.7 +/─ 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
-       │ it would be 5M, but I accidentally       │ vs net─41.
-       │ deleted half of it, like an idiot.       │
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    43 │ same as net 42, but with 30% WDL focus.  │ 8.7 +/─ 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
-       │                                          │ vs net─41.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    44 │ net 43 with 512 neurons.                 │ 19.1 +/─ 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
-       │                                          │ vs net─43.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    45 │ couple days worth of datagen with net 44 │ ─27.0 +/─ 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
-       │ added to the pile of net─44 data.        │ vs net─44.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    46 │ net 44 data reshuffled on the off─chance │ ─11.2 +/─ 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
-       │ that it would help. 45 epochs.           │ vs net─44.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    47 │ net 44 data with 20% WDL focus.          │ ─28.8 +/─ 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
-       │ 65 epochs.                               │ vs net─44.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    48 │ inject extra data into net 45 data.      │ essentially indistinguishable from net─44.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    49 │ Switch to squared ReLU instead of linear │ 35.8 +/─ 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
-       │ ReLU. (Net 48 data)                      │ vs net─44.
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    50 │ Try a deeper network architecture.       │ ELO   │ 
-       │ Went from 768->512x2->1 to               │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │ 768->512x2->8->1.                        │ LLR   │ 
-       │                                          │ GAMES │ 
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    51 │ Same as net 49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
-       │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   │ -2.99 (-2.94, 2.94) [0.00, 3.00]
-       │       (whoops! forgot to shuffle)        │ GAMES │ N: 1184 W: 207 L: 437 D: 540
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    52 │ Same as net 51, training on 450M RL      │ ELO   │ -16.40 +- 9.40 (95%)
-       │ FENs, but shuffled this time.            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │ The weakness of smaller datasets is      │ LLR   │ -3.02 (-2.94, 2.94) [0.00, 5.00]
-       │ apparent.                                │ GAMES │ N: 2672 W: 617 L: 743 D: 1312
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    53 │ The net-49 dataset + 450M RL FENs give   │ ELO   │ 6.95 +- 4.99 (95%)
-       │ a 1.35B FEN dataset.                     │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   │ 2.98 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES │ N: 9704 W: 2632 L: 2438 D: 4634
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    54 │ Testing a PSQT-esque skip connection,    │ ELO   │ -504.03 +- 252.80 (95%)
-       │ running on the smaller net-49 data with  │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │ only 45 epochs for speed.                │ LLR   │ -2.98 (-2.94, 2.94) [-10.00, 0.00]
-       │ (turns out sign on the pqst was wrong)   │ GAMES │ N: 96 W: 3 L: 89 D: 4
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    55 │ Same as net 54, but not broken.          │ ELO   │ 
-       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │      (still haven't made inf work)       │ LLR   │ 
-       │                                          │ GAMES │ 
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    56 │ Net 53 using AdamW instead of Adam.      │ ELO   │ 10.16 +- 6.37 (95%)
-       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES │ N: 5816 W: 1568 L: 1398 D: 2850
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    57 │ Net 56 with 768 neurons.                 │ ELO   │ 
-       │                                          │ SPRT  │ 
-       │                                          │ LLR   │ 
-       │                                          │ GAMES │ 
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    58 │ Net 56 with doubled batch-size.          │ ELO   │ -2.73 +- 4.75 (95%)
-       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    59 │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
-       │ small 64x2 feature transformer, batch    │ SPRT  │ 
-       │ size 16384, and 45 epochs.               │ LLR   │ 
-       │                                          │ GAMES │ 
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    60 │ Net 58 with 1024 neurons.                │ ELO   │ 20.20 +- 9.42 (95%)
-       │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-       │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
-       │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
-───────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   NET ID │ general concept                          │ notes
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    viri0 │ first network 90% eval, 10% WDL          │ much weaker than the HCE.
+          │ 30 epochs, batch size 16384, lr 1e─2     │
+          │ trained on the mountain of games from    │
+          │ old Viridithas 2.X.X versions            │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    viri1 │ second network, same data as net 0, but  │ net used in v3.0.0, crushes HCE.
+          │ data was shuffled, which fixed problems. │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    viri2 │ third network, pure WDL.                 │ none
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    viri3 │ fourth network, pure evaluation.         │ none
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    viri4 │ fifth network, 50/50 WDL/eval.           │ none
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     5─10 │ fiddling with parameters and data        │ nothing improved on net 1.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri11 │ filtering of noisy positions, more data. │ first improvement on net 1, ~20 Elo.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri12 │ net─11 data reanalyzed with net─11.      │ +50 Elo, worried about overfitting.
+          │                                          │ net used in v4.0.0.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri13 │ lichess─elite games analysed with HCE,   │ +20 Elo.
+          │ merged with the net─12 data.             │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri14 │ net─13 data reanalyzed with net─13,      │ +25 Elo.
+          │ deduplicated using a new tool i wrote.   │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri15 │ same as net─14, but trying 120 epochs,   │ ─41.6 +/─ 7.5 Elo, LOS: 0.0 %
+          │ and batch size 8192.                     │ vs net─14.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri16 │ same as net─14, but trying 80 epochs,    │ 111.6 +/─ 18.4 Elo, LOS: 100.0 %
+          │ and lr drop at 30 epochs                 │ vs net─14.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri17 │ injected 320K positions from net─16      │ 16.0 +/─ 12.1, LOS: 99.5 %
+          │ into net─14 data.                        │ vs net─16.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri18 │ re─evaluated whole net─17 data with      │ 23.9 +/─ 7.2, LOS: 100.0 %
+          │ net─17.                                  │ vs net─17.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri19 │ same as net─18, but with 90% WDL focus.  │ ─75.3 +/─ 8.0, LOS: 0.0 %
+          │ not intended to gain, just to test.      │ vs net─18.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri20 │ trained on 320K net─18 self─play games   │ ─106.2 +/─ 21.2, LOS: 0.0 %
+          │ from the uhobook, eval'd with net─18.    │ vs net─18.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri21 │ those 320K net─18 games mixed in to the  │ 7.6 +/─ 6.5, LOS: 98.9 %
+          │ big pile of data use to train net─18.    │ vs net─18.
+          │ NOTE/WARN: shuffled based on FEN hash.   │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri22 │ net 21 data re─evaluated with HCE at     │ ─10.5 +/─ 4.5, LOS: 0.0 %
+          │ depth 8.                                 │ vs net─21.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri23 │ net 22 data re─evaluated with net─22.    │ ─23.5 +/─ 9.9, LOS: 0.0 %
+          │ Hopefully will be less overfitted.       │ vs net─21.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri24 │ net 21 data with 25% WDL focus.          │ 16.1 +/─ 7.6, LOS: 100.0 %
+          │                                          │ vs net─21.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri25 │ 320K net─24 self─play games from uhobook │ 1.0 +/─ 12.2, LOS: 56.3 %
+          │ injected into net─24 data.               │ vs net─24.
+          │ NOTE/WARN: shuffled based on FEN hash.   │ I don't really trust this net, weird results.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri26 │ turns out those 320K games were eval'd   │ 7.1 +/─ 6.5, LOS: 98.3 %
+          │ with HCE, so we redid it.                │ vs net─24.
+          │ didn't pass SPRT, but it's still better. │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri27 │ net─26 data but 40% WDL focus.           │ 8.0 +/─ 6.6, LOS: 99.1 %
+          │                                          │ vs net─26.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri28 │ same as net─27 but with LR=5e─3.         │ 2.3 +/─ 6.6, LOS: 75.3 %
+          │                                          │ vs net─27.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri29 │ combination of pure viri data            │ ~ ─60 elo vs net─28
+          │ from v5.1.0, v6.0.0, and v6.0.0─dev      │ seems that either the Lichess Elite data has
+          │                                          │ really important stuff to learn, or 960k games
+          │                                          │ is not enough to train a good net.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri30 │ 320K net─28 self─play games from uhobook │ 7.2 +/─ 6.7, LOS: 98.2 %
+          │ injected into net─28 data.               │ vs net─28.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri31 │ net 30 data re─evaluated with net─30.    │ ─3.0 +/─ 6.6, LOS: 18.7 %
+          │ feeling somewhat discouraged.            │ vs net─30.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri32 │ net XX data, using MinusKelvin's         │ ???? +/─ ????, LOS: ????
+          │ marlinflow fork, and his default hyper─  │ vs net─XX.
+          │ parameters:                              │
+          │  ─ LR = 0.001                            │
+          │  ─ LR drop at 30 epochs                  │
+          │  ─ 45 epochs                             │
+          │  ─ whatever his fork sets for batch size │ (this still has not been done,
+          │  ─ WDL focus 10%                         │  in case you're reading this in the future)
+          │ this arch uses buckets and a 384x2 net,  │
+          │ so it requires rewriting the inference   │
+          │ code.                                    │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri33 │ experiment with some Frozenight training │ 12.3 +/─ 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
+          │ params while I work up the energy to     │ vs net─30.
+          │ implement the new arch.                  │
+          │ (LR = 0.0001, 45 epochs, WDL 10%, 384N)  │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri34 │ same as net 33, but with 512 neurons.    │ ─31.8 +/─ 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
+          │                                          │ vs net─33.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri35 │ injected 320K net─34 self─play games     │ 4.3 +/─ 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
+          │ from uhobook into the net─31 data.       │ vs net─33.
+          │ same training setup as net 33.           │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri36 │ net 35 data with 40% WDL focus.          │ 16.2 +/─ 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
+          │                                          │ vs net─35.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri37 │ net 36 data + 60M of the new datagen     │ ─58.1 +/─ 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
+          │ FENs.                                    │ vs net─36.
+          │ datagen does not handle noisy─move       │
+          │ exclusion, and might have other issues,  │
+          │ so this isn't a damning refutation of    │
+          │ the new datagen.                         │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri38 │ 80M net─36 FENs (run_2023─02─14_23─54─59 │ ─87.6 +/─ 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
+          │ _1000000g─64t─tb5─nnue─d8)               │ vs net─36.
+          │ This was with "fixed" datagen, which is  │
+          │ disheartening.                           │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri39 │ Those 80M FENs + the net─36 training     │ 24.8 +/─ 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
+          │ data.                                    │ vs net─36.
+          │ Seems like the main problem was the      │
+          │ simple reduction in dataset size.        │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri40 │ 88M more FENs added to the net─39 data.  │ ─5.9 +/─ 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
+          │                                          │ vs net─39.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri41 │ interleave all the net─40 data for more  │ 6.0 +/─ 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
+          │ homogeneous training.                    │ vs net─39.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri42 │ add 2.5M net─41 games to the net─41 data │ ─1.7 +/─ 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
+          │ it would be 5M, but I accidentally       │ vs net─41.
+          │ deleted half of it, like an idiot.       │
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri43 │ same as net 42, but with 30% WDL focus.  │ 8.7 +/─ 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
+          │                                          │ vs net─41.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri44 │ net 43 with 512 neurons.                 │ 19.1 +/─ 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
+          │                                          │ vs net─43.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri45 │ couple days worth of datagen with net 44 │ ─27.0 +/─ 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
+          │ added to the pile of net─44 data.        │ vs net─44.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri46 │ net 44 data reshuffled on the off─chance │ ─11.2 +/─ 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
+          │ that it would help. 45 epochs.           │ vs net─44.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri47 │ net 44 data with 20% WDL focus.          │ ─28.8 +/─ 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
+          │ 65 epochs.                               │ vs net─44.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri48 │ inject extra data into net 45 data.      │ essentially indistinguishable from net─44.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri49 │ Switch to squared ReLU instead of linear │ 35.8 +/─ 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
+          │ ReLU. (Net 48 data)                      │ vs net─44.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri50 │ Try a deeper network architecture.       │ ELO   │ 
+          │ Went from 768->512x2->1 to               │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ 768->512x2->8->1.                        │ LLR   │ 
+          │                                          │ GAMES │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri51 │ Same as net 49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
+          │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.99 (-2.94, 2.94) [0.00, 3.00]
+          │       (whoops! forgot to shuffle)        │ GAMES │ N: 1184 W: 207 L: 437 D: 540
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri52 │ Same as net 51, training on 450M RL      │ ELO   │ -16.40 +- 9.40 (95%)
+          │ FENs, but shuffled this time.            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ The weakness of smaller datasets is      │ LLR   │ -3.02 (-2.94, 2.94) [0.00, 5.00]
+          │ apparent.                                │ GAMES │ N: 2672 W: 617 L: 743 D: 1312
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri53 │ The net-49 dataset + 450M RL FENs give   │ ELO   │ 6.95 +- 4.99 (95%)
+          │ a 1.35B FEN dataset.                     │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.98 (-2.94, 2.94) [0.00, 5.00]
+          │                                          │ GAMES │ N: 9704 W: 2632 L: 2438 D: 4634
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri54 │ Testing a PSQT-esque skip connection,    │ ELO   │ -504.03 +- 252.80 (95%)
+          │ running on the smaller net-49 data with  │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ only 45 epochs for speed.                │ LLR   │ -2.98 (-2.94, 2.94) [-10.00, 0.00]
+          │ (turns out sign on the pqst was wrong)   │ GAMES │ N: 96 W: 3 L: 89 D: 4
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri55 │ Same as net 54, but not broken.          │ ELO   │ 
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │      (still haven't made inf work)       │ LLR   │ 
+          │                                          │ GAMES │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri56 │ Net 53 using AdamW instead of Adam.      │ ELO   │ 10.16 +- 6.37 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+          │                                          │ GAMES │ N: 5816 W: 1568 L: 1398 D: 2850
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri57 │ Net 56 with 768 neurons.                 │ ELO   │ 
+          │                                          │ SPRT  │ 
+          │                                          │ LLR   │ 
+          │                                          │ GAMES │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri58 │ Net 56 with doubled batch-size.          │ ELO   │ -2.73 +- 4.75 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 5.00]
+          │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  hugenet │ Net 58 with 1024 neurons.                │ ELO   │ 20.20 +- 9.42 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+          │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+ luminary │ Net 60 with 768 neurons, trained with    │ ELO   │ 
+          │ ~110M extra net-58 FENs, and ~270M extra │ SPRT  │ 
+          │ hugenet FENs.                            │ LLR   │ 
+          │                                          │ GAMES │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
+          │ small 64x2 feature transformer, batch    │ SPRT  │ 
+          │ size 16384, and 45 epochs.               │ LLR   │ 
+          │                                          │ GAMES │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
