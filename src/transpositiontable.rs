@@ -120,7 +120,7 @@ pub struct TTHit {
 }
 
 pub enum ProbeResult {
-    Cutoff(i32),
+    Cutoff(TTHit),
     Hit(TTHit),
     Nothing,
 }
@@ -268,14 +268,14 @@ impl<'a> TTView<'a> {
             Bound::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             Bound::Upper => {
                 if tt_value <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(alpha) // never cutoff at root.
+                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value }) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value })
                 }
             }
             Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(beta) // never cutoff at root.
+                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value }) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value })
                 }
@@ -284,7 +284,7 @@ impl<'a> TTView<'a> {
                 if do_not_cut {
                     ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value })
                 } else {
-                    ProbeResult::Cutoff(tt_value) // never cutoff at root.
+                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value }) // never cutoff at root.
                 }
             }
         }

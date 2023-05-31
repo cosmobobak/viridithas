@@ -371,7 +371,7 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
         let tt_hit = match tt.probe(key, height, alpha, beta, ZERO_PLY, do_not_cut) {
-            ProbeResult::Cutoff(s) => return s,
+            ProbeResult::Cutoff(tt_hit) => return tt_hit.tt_value,
             ProbeResult::Hit(tt_hit) => Some(tt_hit),
             ProbeResult::Nothing => None,
         };
@@ -528,7 +528,9 @@ impl Board {
         let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
             match tt.probe(key, height, alpha, beta, depth, do_not_cut) {
-                ProbeResult::Cutoff(s) => return s,
+                ProbeResult::Cutoff(tt_hit) => {
+                    return tt_hit.tt_value;
+                }
                 ProbeResult::Hit(tt_hit) => Some(tt_hit),
                 ProbeResult::Nothing => {
                     // TT-reduction (IIR).
