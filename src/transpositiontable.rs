@@ -275,7 +275,7 @@ impl<'a> TTView<'a> {
             }
             Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value }) // never cutoff at root.
+                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value }) // never cutoff at root.
                 } else {
                     ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value })
                 }
@@ -284,7 +284,7 @@ impl<'a> TTView<'a> {
                 if do_not_cut {
                     ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value })
                 } else {
-                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value }) // never cutoff at root.
+                    ProbeResult::Cutoff(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value }) // never cutoff at root.
                 }
             }
         }
