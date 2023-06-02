@@ -159,6 +159,7 @@ const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (
 
 impl NNUEState {
     /// Create a new `NNUEState`.
+    #[allow(clippy::unnecessary_box_returns)]
     pub fn new(board: &Board) -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
