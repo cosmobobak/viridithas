@@ -17,7 +17,7 @@ const DEFAULT_MOVES_TO_GO: u64 = 26;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
-    Extreme,
+    OneLegal,
     Strong,
     Weak,
     None,
@@ -26,7 +26,7 @@ pub enum ForcedMoveType {
 impl ForcedMoveType {
     pub const fn tm_multiplier(self) -> f64 {
         match self {
-            Self::Extreme => 0.01,
+            Self::OneLegal => 0.01,
             Self::Strong => 0.25,
             Self::Weak => 0.5,
             Self::None => 1.0,
@@ -126,6 +126,8 @@ pub struct TimeManager {
     last_factors: [f64; 2],
     /// Whether search has been ended early due to a correct move being found.
     correct_move_found: bool,
+    /// Fraction of nodes that were underneath the best move.
+    best_move_nodes_fraction: Option<f64>,
 }
 
 impl Default for TimeManager {
@@ -144,6 +146,7 @@ impl Default for TimeManager {
             found_forced_move: ForcedMoveType::None,
             last_factors: [1.0, 1.0],
             correct_move_found: false,
+            best_move_nodes_fraction: None,
         }
     }
 }
@@ -182,6 +185,7 @@ impl TimeManager {
         self.found_forced_move = ForcedMoveType::None;
         self.last_factors = [1.0, 1.0];
         self.correct_move_found = false;
+        self.best_move_nodes_fraction = None;
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
             let (opt_time, hard_time, max_time) =
@@ -235,37 +239,6 @@ impl TimeManager {
 
     pub fn time_since_start(&self) -> Duration {
         self.start_time.elapsed()
-    }
-
-    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
-        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
-        let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit else {
-            return;
-        };
-        if depth >= FAIL_LOW_UPDATE_THRESHOLD && bound == Bound::Upper && self.failed_low < 2 {
-            self.failed_low += 1;
-
-            let (opt_time, hard_time, max_time) =
-                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
-            let max_time = Duration::from_millis(max_time);
-            let hard_time = Duration::from_millis(hard_time);
-            let opt_time = Duration::from_millis(opt_time);
-
-            let stability_multiplier = self.last_factors[0];
-            // calculate the failed low multiplier
-            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
-            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
-
-            let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
-
-            let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
-            let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
-
-            self.hard_time = hard_time.min(max_time);
-            self.opt_time = opt_time.min(max_time);
-
-            self.last_factors[1] = failed_low_multiplier;
-        }
     }
 
     pub const fn is_test_suite(&self) -> bool {
@@ -361,7 +334,7 @@ impl TimeManager {
 
     pub fn notify_one_legal_move(&mut self) {
         self.opt_time = Duration::from_millis(0);
-        self.found_forced_move = ForcedMoveType::Extreme;
+        self.found_forced_move = ForcedMoveType::OneLegal;
     }
 
     fn best_move_stability_multiplier(stability: usize) -> f64 {
@@ -375,7 +348,17 @@ impl TimeManager {
         VALUES[stability]
     }
 
-    pub fn report_completed_depth(&mut self, _depth: Depth, eval: i32, best_move: Move) {
+    fn best_move_subtree_size_multiplier(nodes_fraction: f64) -> f64 {
+        (1.5 - nodes_fraction) * 1.35
+    }
+
+    pub fn report_completed_depth(
+        &mut self,
+        _depth: Depth,
+        eval: i32,
+        best_move: Move,
+        best_move_nodes_fraction: Option<f64>,
+    ) {
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
             let (opt_time, hard_time, max_time) =
                 SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
@@ -388,13 +371,19 @@ impl TimeManager {
             } else {
                 self.stability = 0;
             }
+            self.best_move_nodes_fraction = best_move_nodes_fraction;
 
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
             // retain time added by windows that failed low
             let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier();
+            let subtree_size_multiplier =
+                self.best_move_nodes_fraction.map_or(1.0, Self::best_move_subtree_size_multiplier);
 
-            let multiplier = stability_multiplier * failed_low_multiplier * forced_move_multiplier;
+            let multiplier = stability_multiplier
+                * failed_low_multiplier
+                * forced_move_multiplier
+                * subtree_size_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
@@ -407,5 +396,41 @@ impl TimeManager {
 
         self.prev_move = best_move;
         self.prev_score = eval;
+    }
+
+    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound) {
+        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
+        let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit else {
+            return;
+        };
+        if depth >= FAIL_LOW_UPDATE_THRESHOLD && bound == Bound::Upper && self.failed_low < 2 {
+            self.failed_low += 1;
+
+            let (opt_time, hard_time, max_time) =
+                SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc);
+            let max_time = Duration::from_millis(max_time);
+            let hard_time = Duration::from_millis(hard_time);
+            let opt_time = Duration::from_millis(opt_time);
+
+            let stability_multiplier = self.last_factors[0];
+            // calculate the failed low multiplier
+            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
+            let subtree_size_multiplier =
+                self.best_move_nodes_fraction.map_or(1.0, Self::best_move_subtree_size_multiplier);
+
+            let multiplier = stability_multiplier
+                * failed_low_multiplier
+                * forced_move_multiplier
+                * subtree_size_multiplier;
+
+            let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
+            let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
+
+            self.hard_time = hard_time.min(max_time);
+            self.opt_time = opt_time.min(max_time);
+
+            self.last_factors[1] = failed_low_multiplier;
+        }
     }
 }

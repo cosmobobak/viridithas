@@ -19,6 +19,8 @@ use crate::board::movegen::MAX_POSITION_MOVES;
 pub struct SearchInfo<'a> {
     /// The number of nodes searched.
     pub nodes: u64,
+    /// A table storing the number of nodes under the root move(s).
+    pub root_move_nodes: [[u64; 64]; 64], // [from][to]
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
     /// The highest depth reached (selective depth).
@@ -58,6 +60,7 @@ impl<'a> SearchInfo<'a> {
     pub fn new(stopped: &'a AtomicBool) -> Self {
         let out = Self {
             nodes: 0,
+            root_move_nodes: [[0; 64]; 64],
             stopped,
             seldepth: ZERO_PLY,
             stdin_rx: None,
@@ -84,6 +87,7 @@ impl<'a> SearchInfo<'a> {
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes = 0;
+        self.root_move_nodes = [[0; 64]; 64];
         self.time_manager.reset_for_id();
         #[cfg(feature = "stats")]
         {

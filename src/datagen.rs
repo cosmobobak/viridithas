@@ -22,7 +22,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
-    uci::{SYZYGY_ENABLED, SYZYGY_PATH, CHESS960},
+    uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
 };
 
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
@@ -268,7 +268,7 @@ fn generate_on_thread(
             }
         }
         // reset everything: board, thread data, tt, search info
-        board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960*960));
+        board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
         thread_data.nnue.refresh_acc(&board);
         tt.clear();
         info.set_up_for_search();
