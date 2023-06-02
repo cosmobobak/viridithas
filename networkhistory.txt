@@ -187,9 +187,15 @@
           │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
           │                                          │ vs viri58.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- luminary │ hugenet with 768 neurons, trained with   │ ELO   │ 
-          │ ~110M extra viri58 FENs, and ~270M extra │ SPRT  │ 
-          │ hugenet FENs.                            │ LLR   │ 
+ luminary │ hugenet with 768 neurons, trained with   │ ELO   │ 1.12 +- 3.82 (95%)
+          │ ~110M extra viri58 FENs, and ~270M extra │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ hugenet FENs.                            │ LLR   │ 0.01 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 15488 W: 3808 L: 3758 D: 7922
+          │                                          │ vs hugenet. (did not merge)
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+ gemstone │ luminary with the dataset pruned down to │ ELO   │ 
+          │ 963M positions from only non-bugged      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ datagen runs. (no lichess)               │ LLR   │ ???? (-2.94, 2.94) [0.00, 3.00]
           │                                          │ GAMES │ 
           │                                          │ vs hugenet.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
