@@ -7,7 +7,6 @@ use std::{
     ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
     thread,
-    time::Duration,
 };
 
 use crate::{
@@ -33,7 +32,7 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     transpositiontable::{Bound, ProbeResult, TTHit, TTView},
-    uci::{self, PRETTY_PRINT},
+    uci,
 };
 
 use self::parameters::SearchParams;
@@ -183,14 +182,12 @@ impl Board {
         let starting_depth = 1 + t.thread_id % 10;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
-            // consider stopping early if we've neatly completed a depth:
-            if MAIN_THREAD
-                && d > 8
-                && info.time_manager.in_game()
-                && info.time_manager.is_past_opt_time()
-            {
-                info.stopped.store(true, Ordering::SeqCst);
-                break 'deepening;
+            if MAIN_THREAD {
+                // consider stopping early if we've neatly completed a depth:
+                if info.time_manager.in_game() && info.time_manager.is_past_opt_time() {
+                    info.stopped.store(true, Ordering::SeqCst);
+                    break 'deepening;
+                }
             }
             let mut depth = Depth::new(d.try_into().unwrap());
             let min_depth = (depth / 2).max(ONE_PLY);
@@ -296,10 +293,21 @@ impl Board {
             }
 
             if MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+                let bm_frac = if d > 8 {
+                    let best_move = t.pvs[t.completed].line[0];
+                    let best_move_subtree_size =
+                        info.root_move_nodes[best_move.from().index()][best_move.to().index()];
+                    let tree_size = info.nodes;
+                    #[allow(clippy::cast_precision_loss)]
+                    Some(best_move_subtree_size as f64 / tree_size as f64)
+                } else {
+                    None
+                };
                 info.time_manager.report_completed_depth(
                     depth,
                     pv.score,
                     t.pvs[t.completed].line[0],
+                    bm_frac,
                 );
             }
 
@@ -840,16 +848,9 @@ impl Board {
                 tacticals_tried.push(m);
             }
 
+            let nodes_before_search = info.nodes;
             info.nodes += 1;
             moves_made += 1;
-            if ROOT
-                && t.thread_id == 0
-                && info.print_to_stdout
-                && info.time_manager.time_since_start() > Duration::from_secs(5)
-                && !PRETTY_PRINT.load(Ordering::SeqCst)
-            {
-                println!("info currmove {m} currmovenumber {moves_made} nodes {}", info.nodes);
-            }
 
             let maybe_singular = depth >= info.search_params.singularity_depth
                 && excluded.is_null()
@@ -938,6 +939,13 @@ impl Board {
                 }
             }
             self.unmake_move::<NNUE>(t, info);
+
+            // record subtree size for TimeManager
+            if ROOT && t.thread_id == 0 {
+                let subtree_size = info.nodes - nodes_before_search;
+                info.root_move_nodes[m.from().index()][m.to().index()] += subtree_size;
+            }
+
             if extension >= ONE_PLY * 2 {
                 t.double_extensions[height] -= 1;
             }
