@@ -1433,29 +1433,34 @@ impl Board {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let capture = self.captured_piece(m);
+        let saved_castle_perm = self.castle_perm;
         let res = self.make_move_base(m);
         if !res {
             return false;
         }
         let from = m.from();
-        let to = m.to();
+        let mut to = m.to();
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
             // deactivate pawn on ep_sq
             self.deactivate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match to {
-                Square::C1 => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::A1, Square::D1);
+                _ if to == saved_castle_perm.wk => {
+                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1);
+                    to = Square::G1;
                 }
-                Square::C8 => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::A8, Square::D8);
+                _ if to == saved_castle_perm.wq => {
+                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1);
+                    to = Square::C1;
                 }
-                Square::G1 => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::H1, Square::F1);
+                _ if to == saved_castle_perm.bk => {
+                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8);
+                    to = Square::G8;
                 }
-                Square::G8 => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::H8, Square::F8);
+                _ if to == saved_castle_perm.bq => {
+                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8);
+                    to = Square::C8;
                 }
                 _ => {
                     panic!("Invalid castle move");
@@ -1546,20 +1551,30 @@ impl Board {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
             self.activate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
-            let (rook_from, rook_to) = match to {
-                Square::C1 => (Square::D1, Square::A1),
-                Square::G8 => (Square::F8, Square::H8),
-                Square::C8 => (Square::D8, Square::A8),
-                Square::G1 => (Square::F1, Square::H1),
+            match to {
+                _ if to == self.castle_perm.wk => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::F1, self.castle_perm.wk);
+                }
+                _ if to == self.castle_perm.wq => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::D1, self.castle_perm.wq);
+                }
+                _ if to == self.castle_perm.bk => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::F8, self.castle_perm.bk);
+                }
+                _ if to == self.castle_perm.bq => {
+                    self.move_psqt(info, PieceType::ROOK, colour, Square::D8, self.castle_perm.bq);
+                }
                 _ => panic!("Invalid castle move"),
             };
-            self.move_psqt(info, PieceType::ROOK, colour, rook_from, rook_to);
         }
         if m.is_promo() {
             let promo = m.promotion_type();
             debug_assert!(promo.legal_promo());
             self.deactivate_psqt(info, promo, colour, to);
             self.activate_psqt(info, PieceType::PAWN, colour, from);
+        } else if m.is_castle() {
+            let king_to_sq = m.history_to_square();
+            self.move_psqt(info, PieceType::KING, colour, king_to_sq, from);
         } else {
             self.move_psqt(info, piece, colour, to, from);
         }
