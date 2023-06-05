@@ -193,10 +193,10 @@
           │                                          │ GAMES │ N: 15488 W: 3808 L: 3758 D: 7922
           │                                          │ vs hugenet. (did not merge)
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- gemstone │ luminary with the dataset pruned down to │ ELO   │ 
+ gemstone │ luminary with the dataset pruned down to │ ELO   │ 6.14 +- 3.85 (95%)
           │ 963M positions from only non-bugged      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
           │ datagen runs. (no lichess)               │ LLR   │ ???? (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ 
+          │                                          │ GAMES │ N: 15896 W: 4181 L: 3900 D: 7815
           │                                          │ vs hugenet.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 

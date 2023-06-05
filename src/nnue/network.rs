@@ -23,7 +23,7 @@ const CR_MAX: i16 = 255;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 1024;
+pub const LAYER_1_SIZE: usize = 768;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
