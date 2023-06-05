@@ -13,7 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
-const DEFAULT_MOVES_TO_GO: u64 = 26;
+const DEFAULT_MOVES_TO_GO: u64 = 25;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
@@ -86,7 +86,7 @@ impl SearchLimit {
         }
 
         // Otherwise, we use DEFAULT_MOVES_TO_GO.
-        let computed_time_window = our_clock / DEFAULT_MOVES_TO_GO + our_inc / 2 - MOVE_OVERHEAD;
+        let computed_time_window = our_clock / DEFAULT_MOVES_TO_GO + our_inc * 3 / 4 - MOVE_OVERHEAD;
         let hard_time_window = computed_time_window.min(absolute_maximum);
         let optimal_time_window = hard_time_window * 6 / 10;
         (optimal_time_window, hard_time_window, absolute_maximum)
