@@ -121,6 +121,10 @@ impl<'a> SearchInfo<'a> {
         }
     }
 
+    pub fn skip_print(&self) -> bool {
+        self.time_manager.time_since_start().as_millis() < 50
+    }
+
     pub fn stopped(&self) -> bool {
         self.stopped.load(Ordering::SeqCst)
     }

@@ -145,11 +145,17 @@ impl Board {
         global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
-        let (bestmove, score) =
-            select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst), d_move);
+        let best_thread = select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
+        let best_move = best_thread.pv_move().unwrap_or(d_move);
+        let score = best_thread.pv_score();
+
+        if info.print_to_stdout && info.skip_print() {
+            // we haven't printed any ID logging yet, so give one as we leave search.
+            readout_info(self, Bound::Exact, best_thread.pv(), best_thread.completed, info, tt, total_nodes.load(Ordering::SeqCst), true);
+        }
 
         if info.print_to_stdout {
-            println!("bestmove {bestmove}");
+            println!("bestmove {best_move}");
             #[cfg(feature = "stats")]
             info.print_stats();
             #[cfg(feature = "stats")]
@@ -159,8 +165,8 @@ impl Board {
             );
         }
 
-        assert!(legal_moves.contains(&bestmove), "search returned an illegal move.");
-        (if self.turn() == Colour::WHITE { score } else { -score }, bestmove)
+        assert!(legal_moves.contains(&best_move), "search returned an illegal move.");
+        (if self.turn() == Colour::WHITE { score } else { -score }, best_move)
     }
 
     /// Performs the iterative deepening search.
@@ -1266,19 +1272,18 @@ impl Board {
     }
 }
 
-pub fn select_best(
+pub fn select_best<'a>(
     board: &mut Board,
-    thread_headers: &[ThreadData],
+    thread_headers: &'a [ThreadData],
     info: &SearchInfo,
     tt: TTView,
     total_nodes: u64,
-    default_move: Move,
-) -> (Move, i32) {
+) -> &'a ThreadData {
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
 
     if info.time_manager.is_test_suite() {
         // we break early focusing only on the main thread.
-        return (best_thread.pv_move().unwrap_or(default_move), best_thread.pv_score());
+        return best_thread;
     }
 
     for thread in rest {
@@ -1295,9 +1300,6 @@ pub fn select_best(
         }
     }
 
-    let best_move = best_thread.pv_move().unwrap_or(default_move);
-    let best_score = best_thread.pv_score();
-
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
     if best_thread.thread_id != 0 && info.print_to_stdout {
@@ -1306,7 +1308,7 @@ pub fn select_best(
         readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes, false);
     }
 
-    (best_move, best_score)
+    best_thread
 }
 
 /// Print the info about an iteration of the search.
@@ -1323,7 +1325,7 @@ fn readout_info(
     #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,
     // this helps in ultra-fast time controls where we only have a few ms to think.
-    if info.time_manager.in_game() && info.time_manager.time_since_start().as_millis() < 50 && !force_print {
+    if info.time_manager.in_game() && info.skip_print() && !force_print {
         return;
     }
     let sstr = uci::format_score(pv.score);
