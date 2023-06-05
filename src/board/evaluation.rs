@@ -204,6 +204,15 @@ impl Board {
         self.material[Colour::WHITE.index()] - self.material[Colour::BLACK.index()]
     }
 
+    const fn material_scale(&self) -> i32 {
+        #![allow(clippy::cast_possible_wrap)]
+        700 + (PieceType::KNIGHT.see_value() * self.pieces.all_knights().count_ones() as i32
+            + PieceType::BISHOP.see_value() * self.pieces.all_bishops().count_ones() as i32
+            + PieceType::ROOK.see_value() * self.pieces.all_rooks().count_ones() as i32
+            + PieceType::QUEEN.see_value() * self.pieces.all_queens().count_ones() as i32)
+            / 32
+    }
+
     pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
         if !self.pieces.any_pawns() && self.is_material_draw() {
             return if self.side == Colour::WHITE {
@@ -214,6 +223,7 @@ impl Board {
         }
 
         let v = t.nnue.evaluate(self.side);
+        let v = v * self.material_scale() / 1024;
 
         v * (200 - i32::from(self.fifty_move_counter)) / 200
     }
