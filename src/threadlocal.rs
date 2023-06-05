@@ -125,4 +125,8 @@ impl ThreadData {
     pub fn pv_score(&self) -> i32 {
         self.pvs[self.completed].score()
     }
+
+    pub fn pv(&self) -> &PVariation {
+        &self.pvs[self.completed]
+    }
 }
