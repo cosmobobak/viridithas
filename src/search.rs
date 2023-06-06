@@ -292,15 +292,14 @@ impl Board {
             }
 
             if depth > ASPIRATION_WINDOW_MIN_DEPTH {
-                let score = t.pvs[t.completed].score;
-                aw = AspirationWindow::from_last_score(score, depth);
+                aw = AspirationWindow::from_last_score(pv.score, depth);
             } else {
                 aw = AspirationWindow::infinite();
             }
 
             if MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
-                    let best_move = t.pvs[t.completed].line[0];
+                    let best_move = pv.line[0];
                     let best_move_subtree_size =
                         info.root_move_nodes[best_move.from().index()][best_move.to().index()];
                     let tree_size = info.nodes;
@@ -312,7 +311,7 @@ impl Board {
                 info.time_manager.report_completed_depth(
                     depth,
                     pv.score,
-                    t.pvs[t.completed].line[0],
+                    pv.line[0],
                     bm_frac,
                 );
             }
