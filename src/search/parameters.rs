@@ -175,3 +175,13 @@ impl SearchParams {
         ]
     }
 }
+
+mod tests {
+    #[test]
+    fn macro_hackery_same_length() {
+        let mut sp = super::SearchParams::default();
+        let l1 = sp.ids_with_parsers().len();
+        let l2 = sp.ids_with_values().len();
+        assert_eq!(l1, l2);
+    }
+}
