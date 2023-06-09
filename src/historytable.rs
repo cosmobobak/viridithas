@@ -6,20 +6,21 @@ use crate::{
 
 const AGEING_DIVISOR: i16 = 2;
 
-const fn history_bonus(depth: Depth) -> i32 {
+const fn history_bonus(depth: Depth, history_factor_mul: u8) -> i32 {
     let depth = depth.round();
+    
     if depth > 13 {
-        32
+        32 * (depth * depth + history_factor_mul as i32 * max!(depth / 3, 1))
     } else {
-        16 * depth * depth + 128 * max!(depth - 1, 0)
+        16 * (depth * depth + history_factor_mul as i32 * max!(depth / 3, 1))
     }
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
 
-pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
+pub fn update_history(val: &mut i16, depth: Depth, is_good: bool, history_factor_mul: u8) {
     #![allow(clippy::cast_possible_truncation)]
-    let delta = if is_good { history_bonus(depth) } else { -history_bonus(depth) };
+    let delta = if is_good { history_bonus(depth, history_factor_mul) } else { -history_bonus(depth, history_factor_mul) };
     *val += delta as i16 - (i32::from(*val) * delta.abs() / i32::from(MAX_HISTORY)) as i16;
 }
 

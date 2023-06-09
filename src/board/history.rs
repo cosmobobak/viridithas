@@ -17,7 +17,7 @@ impl ThreadData {
         best_move: Move,
         depth: Depth,
     ) {
-        for &m in moves_to_adjust {
+        for (i, &m) in moves_to_adjust.iter().enumerate() {
             let piece_moved = pos.moved_piece(m);
             debug_assert!(
                 piece_moved != Piece::EMPTY,
@@ -25,7 +25,8 @@ impl ThreadData {
             );
             let to = m.history_to_square();
             let val = self.main_history.get_mut(piece_moved, to);
-            update_history(val, depth, m == best_move);
+            let history_factor_mul = if m == best_move { i } else { moves_to_adjust.len() - 1 - i };
+            update_history(val, depth, m == best_move, (history_factor_mul as usize).try_into().unwrap());
         }
     }
 
@@ -46,7 +47,7 @@ impl ThreadData {
         best_move: Move,
         depth: Depth,
     ) {
-        for &m in moves_to_adjust {
+        for (i, &m) in moves_to_adjust.iter().enumerate() {
             let piece_moved = pos.moved_piece(m);
             let capture = caphist_piece_type(pos, m);
             debug_assert!(
@@ -55,7 +56,8 @@ impl ThreadData {
             );
             let to = m.to();
             let val = self.tactical_history.get_mut(piece_moved, to, capture);
-            update_history(val, depth, m == best_move);
+            let history_factor_mul = if m == best_move { i } else { moves_to_adjust.len() - 1 - i };
+            update_history(val, depth, m == best_move, (history_factor_mul as usize).try_into().unwrap());
         }
     }
 
@@ -103,10 +105,11 @@ impl ThreadData {
         );
 
         let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
-        for &m in moves_to_adjust {
+        for (i, &m) in moves_to_adjust.iter().enumerate() {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m);
-            update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
+            let history_factor_mul = if m == best_move { i } else { moves_to_adjust.len() - 1 - i };
+            update_history(cmh_block.get_mut(piece, to), depth, m == best_move, (history_factor_mul as usize).try_into().unwrap());
         }
     }
 
@@ -208,10 +211,11 @@ impl ThreadData {
         );
 
         let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
-        for &m in moves_to_adjust {
+        for (i, &m) in moves_to_adjust.iter().enumerate() {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m);
-            update_history(fuh_block.get_mut(piece, to), depth, m == best_move);
+            let history_factor_mul = if m == best_move { i } else { moves_to_adjust.len() - 1 - i };
+            update_history(fuh_block.get_mut(piece, to), depth, m == best_move, (history_factor_mul as usize).try_into().unwrap());
         }
     }
 
