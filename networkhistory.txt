@@ -199,6 +199,12 @@
           │                                          │ GAMES │ N: 15896 W: 4181 L: 3900 D: 7815
           │                                          │ vs hugenet.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   gemini │ gemstone with ~250M extra DFRC training  │ ELO   │ 
+          │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 
+          │                                          │ GAMES │ 
+          │                                          │ vs gemstone.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
           │ small 64x2 feature transformer, batch    │ SPRT  │ 
           │ size 16384, and 45 epochs.               │ LLR   │ 
