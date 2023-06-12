@@ -11,6 +11,8 @@ use std::{
     time::Instant,
 };
 
+use rand::Rng;
+
 use crate::{
     board::{
         evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
@@ -268,7 +270,8 @@ fn generate_on_thread(
             }
         }
         // reset everything: board, thread data, tt, search info
-        board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
+        // board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
+        board.set_startpos();
         thread_data.nnue.refresh_acc(&board);
         tt.clear();
         info.set_up_for_search();
@@ -282,7 +285,9 @@ fn generate_on_thread(
         if options.log_level > 2 {
             eprintln!("Making random moves...");
         }
-        for _ in 0..8 {
+        // pick either 8 or 9 random moves (to balance out the win/loss/draw ratio)
+        let max = if rng.gen_bool(0.5) { 8 } else { 9 };
+        for _ in 0..max {
             let res = board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
             if res.is_none() {
                 if options.log_level > 2 {
