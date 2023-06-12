@@ -105,7 +105,7 @@ impl Board {
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
-            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true);
+            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true, None);
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
             }
@@ -151,7 +151,7 @@ impl Board {
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
-            readout_info(self, Bound::Exact, best_thread.pv(), best_thread.completed, info, tt, total_nodes.load(Ordering::SeqCst), true);
+            readout_info(self, Bound::Exact, best_thread.pv(), best_thread.completed, info, tt, total_nodes.load(Ordering::SeqCst), true, None);
         }
 
         if info.print_to_stdout {
@@ -211,7 +211,7 @@ impl Board {
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        readout_info(self, Bound::Upper, t.pv(), d, info, tt, total_nodes, false);
+                        readout_info(self, Bound::Upper, t.pv(), d, info, tt, total_nodes, false, Some(pv.score));
                     }
                     aw.widen_down(pv.score, depth);
                     if MAIN_THREAD {
@@ -227,7 +227,7 @@ impl Board {
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        readout_info(self, Bound::Lower, t.pv(), d, info, tt, total_nodes, false);
+                        readout_info(self, Bound::Lower, t.pv(), d, info, tt, total_nodes, false, None);
                     }
                     aw.widen_up(pv.score, depth);
                     if MAIN_THREAD {
@@ -254,7 +254,7 @@ impl Board {
 
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = total_nodes.load(Ordering::SeqCst);
-                    readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false);
+                    readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false, None);
                 }
 
                 if let ControlFlow::Break(_) =
@@ -1304,7 +1304,7 @@ pub fn select_best<'a>(
     if best_thread.thread_id != 0 && info.print_to_stdout {
         let pv = &best_thread.pvs[best_thread.completed];
         let depth = best_thread.completed;
-        readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes, false);
+        readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes, false, None);
     }
 
     best_thread
@@ -1320,12 +1320,17 @@ fn readout_info(
     tt: TTView,
     total_nodes: u64,
     force_print: bool,
+    override_eval: Option<i32>
 ) {
     #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,
     // this helps in ultra-fast time controls where we only have a few ms to think.
     if info.time_manager.in_game() && info.skip_print() && !force_print {
         return;
+    }
+    let mut pv = pv.clone();
+    if let Some(eval) = override_eval {
+        pv.score = eval;
     }
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
@@ -1353,7 +1358,7 @@ fn readout_info(
         );
     } else {
         let value = uci::pretty_format_score(pv.score, board.turn());
-        let pv_string = board.pv_san(pv).unwrap();
+        let pv_string = board.pv_san(&pv).unwrap();
         let endchr = if bound == Bound::Exact {
             "\n"
         } else {
