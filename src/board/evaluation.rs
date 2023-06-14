@@ -13,13 +13,10 @@ use crate::{
     piece::{Colour, Piece, PieceType},
     search::draw_score,
     searchinfo::SearchInfo,
-    threadlocal::ThreadData,
+    threadlocal::ThreadData, squareset::SquareSet,
 };
 
-use super::movegen::{
-    bitboards::{attacks, BitHackExt, DARK_SQUARE, LIGHT_SQUARE},
-    BitLoop, BB_NONE,
-};
+use super::movegen::bitboards::{attacks, DARK_SQUARE, LIGHT_SQUARE};
 
 pub const PAWN_VALUE: S = S(126, 196);
 pub const KNIGHT_VALUE: S = S(437, 455);
@@ -118,12 +115,12 @@ const QUEEN_PHASE: i32 = 40;
 const TOTAL_PHASE: i32 =
     16 * PAWN_PHASE + 4 * KNIGHT_PHASE + 4 * BISHOP_PHASE + 4 * ROOK_PHASE + 2 * QUEEN_PHASE;
 
-pub static FILE_BB: [u64; 8] = init_eval_masks().1;
+pub static FILE_BB: [SquareSet; 8] = init_eval_masks().1;
 
-pub static WHITE_PASSED_BB: [u64; 64] = init_passed_isolated_bb().0;
-pub static BLACK_PASSED_BB: [u64; 64] = init_passed_isolated_bb().1;
+pub static WHITE_PASSED_BB: [SquareSet; 64] = init_passed_isolated_bb().0;
+pub static BLACK_PASSED_BB: [SquareSet; 64] = init_passed_isolated_bb().1;
 
-pub static ISOLATED_BB: [u64; 64] = init_passed_isolated_bb().2;
+pub static ISOLATED_BB: [SquareSet; 64] = init_passed_isolated_bb().2;
 
 /// `game_phase` computes a number between 0 and 256, which is the phase of the game.
 /// 0 is the opening, 256 is the endgame.
@@ -206,10 +203,10 @@ impl Board {
 
     const fn material_scale(&self) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        700 + (PieceType::KNIGHT.see_value() * self.pieces.all_knights().count_ones() as i32
-            + PieceType::BISHOP.see_value() * self.pieces.all_bishops().count_ones() as i32
-            + PieceType::ROOK.see_value() * self.pieces.all_rooks().count_ones() as i32
-            + PieceType::QUEEN.see_value() * self.pieces.all_queens().count_ones() as i32)
+        700 + (PieceType::KNIGHT.see_value() * self.pieces.all_knights().count() as i32
+            + PieceType::BISHOP.see_value() * self.pieces.all_bishops().count() as i32
+            + PieceType::ROOK.see_value() * self.pieces.all_rooks().count() as i32
+            + PieceType::QUEEN.see_value() * self.pieces.all_queens().count() as i32)
             / 32
     }
 
@@ -241,7 +238,7 @@ impl Board {
         }
     }
 
-    const fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
+    fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
         if IS_WHITE {
             if self.major_piece_counts[Colour::WHITE.index()] != 0 {
                 return false;
@@ -267,7 +264,7 @@ impl Board {
         true
     }
 
-    const fn is_material_draw(&self) -> bool {
+    fn is_material_draw(&self) -> bool {
         if self.num_pt(PieceType::ROOK) == 0 && self.num_pt(PieceType::QUEEN) == 0 {
             if self.num_pt(PieceType::BISHOP) == 0 {
                 if self.num(Piece::WN) < 3 && self.num(Piece::BN) < 3 {
@@ -318,7 +315,7 @@ impl Board {
         }
     }
 
-    pub const fn zugzwang_unlikely(&self) -> bool {
+    pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
         let us = self.pieces.occupied_co(stm);
         let kings = self.pieces.all_kings();
@@ -327,10 +324,10 @@ impl Board {
     }
 
     fn bishop_pair_term(&self, i: &SearchInfo) -> S {
-        let white_pair = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>() != 0
-            && self.pieces.bishops_sqco::<true, DARK_SQUARE>() != 0;
-        let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>() != 0
-            && self.pieces.bishops_sqco::<false, DARK_SQUARE>() != 0;
+        let white_pair = self.pieces.bishops_sqco::<true, LIGHT_SQUARE>().non_empty()
+            && self.pieces.bishops_sqco::<true, DARK_SQUARE>().non_empty();
+        let black_pair = self.pieces.bishops_sqco::<false, LIGHT_SQUARE>().non_empty()
+            && self.pieces.bishops_sqco::<false, DARK_SQUARE>().non_empty();
         let multiplier = i32::from(white_pair) - i32::from(black_pair);
         i.eval_params.bishop_pair_bonus * multiplier
     }
@@ -344,33 +341,33 @@ impl Board {
         let white_pawns = self.pieces.pawns::<true>();
         let black_pawns = self.pieces.pawns::<false>();
 
-        for white_pawn_loc in BitLoop::new(white_pawns) {
-            if ISOLATED_BB[white_pawn_loc.index()] & white_pawns == 0 {
+        for white_pawn_loc in white_pawns.iter() {
+            if (ISOLATED_BB[white_pawn_loc.index()] & white_pawns).is_empty() {
                 w_score -= i.eval_params.isolated_pawn_malus;
             }
 
-            if WHITE_PASSED_BB[white_pawn_loc.index()] & black_pawns == 0 {
+            if (WHITE_PASSED_BB[white_pawn_loc.index()] & black_pawns).is_empty() {
                 let rank = white_pawn_loc.rank() as usize;
                 w_score += i.eval_params.passed_pawn_bonus[rank - 1];
             }
         }
 
-        for black_pawn_loc in BitLoop::new(black_pawns) {
-            if ISOLATED_BB[black_pawn_loc.index()] & black_pawns == 0 {
+        for black_pawn_loc in black_pawns.iter() {
+            if (ISOLATED_BB[black_pawn_loc.index()] & black_pawns).is_empty() {
                 b_score -= i.eval_params.isolated_pawn_malus;
             }
 
-            if BLACK_PASSED_BB[black_pawn_loc.index()] & white_pawns == 0 {
+            if (BLACK_PASSED_BB[black_pawn_loc.index()] & white_pawns).is_empty() {
                 let rank = black_pawn_loc.rank() as usize;
                 b_score += i.eval_params.passed_pawn_bonus[7 - rank - 1];
             }
         }
 
         for &file_mask in &FILE_BB {
-            let pawns_in_file = (file_mask & white_pawns).count_ones() as usize;
+            let pawns_in_file = (file_mask & white_pawns).count() as usize;
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             w_score -= i.eval_params.doubled_pawn_malus * multiplier;
-            let pawns_in_file = (file_mask & black_pawns).count_ones() as usize;
+            let pawns_in_file = (file_mask & black_pawns).count() as usize;
             let multiplier = DOUBLED_PAWN_MAPPING[pawns_in_file];
             b_score -= i.eval_params.doubled_pawn_malus * multiplier;
         }
@@ -381,7 +378,7 @@ impl Board {
     fn is_file_open(&self, file: u8) -> bool {
         let mask = FILE_BB[file as usize];
         let pawns = self.pieces.all_pawns();
-        (mask & pawns) == 0
+        (mask & pawns).is_empty()
     }
 
     fn is_file_halfopen<const SIDE: u8>(&self, file: u8) -> bool {
@@ -391,12 +388,12 @@ impl Board {
         } else {
             self.pieces.pawns::<false>()
         };
-        (mask & pawns) == 0
+        (mask & pawns).is_empty()
     }
 
     fn rook_open_file_term(&self, i: &SearchInfo) -> S {
         let mut score = S(0, 0);
-        for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
+        for rook_sq in self.pieces.rooks::<true>().iter() {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score += i.eval_params.rook_open_file_bonus;
@@ -404,7 +401,7 @@ impl Board {
                 score += i.eval_params.rook_half_open_file_bonus;
             }
         }
-        for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
+        for rook_sq in self.pieces.rooks::<false>().iter() {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score -= i.eval_params.rook_open_file_bonus;
@@ -417,7 +414,7 @@ impl Board {
 
     fn queen_open_file_term(&self, i: &SearchInfo) -> S {
         let mut score = S(0, 0);
-        for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
+        for queen_sq in self.pieces.queens::<true>().iter() {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score += i.eval_params.queen_open_file_bonus;
@@ -425,7 +422,7 @@ impl Board {
                 score += i.eval_params.queen_half_open_file_bonus;
             }
         }
-        for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
+        for queen_sq in self.pieces.queens::<false>().iter() {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score -= i.eval_params.queen_open_file_bonus;
@@ -437,7 +434,7 @@ impl Board {
     }
 
     /// `phase` computes a number between 0 and 256, which is the phase of the game. 0 is the opening, 256 is the endgame.
-    pub const fn phase(&self) -> i32 {
+    pub fn phase(&self) -> i32 {
         // todo: this can be incrementally updated.
         let pawns = self.num(Piece::WP) + self.num(Piece::BP);
         let knights = self.num(Piece::WN) + self.num(Piece::BN);
@@ -449,7 +446,7 @@ impl Board {
 
     #[allow(clippy::too_many_lines)]
     fn mobility_threats_kingdanger(&self, i: &SearchInfo) -> (S, S, KingDangerInfo) {
-        #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // for count_ones, which can return at most 64.
+        #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // for count, which can return at most 64.
         let mut king_danger_info =
             KingDangerInfo { attack_units_on_white: 0, attack_units_on_black: 0 };
         let ptmul = &i.eval_params.king_danger_piece_weights;
@@ -464,142 +461,142 @@ impl Board {
         let white_major = self.pieces.majors::<true>();
         let black_major = self.pieces.majors::<false>();
         threat_score += i.eval_params.pawn_threat_on_minor
-            * (black_minor & white_pawn_attacks).count_ones() as i32;
+            * (black_minor & white_pawn_attacks).count() as i32;
         threat_score -= i.eval_params.pawn_threat_on_minor
-            * (white_minor & black_pawn_attacks).count_ones() as i32;
+            * (white_minor & black_pawn_attacks).count() as i32;
         threat_score += i.eval_params.pawn_threat_on_major
-            * (black_major & white_pawn_attacks).count_ones() as i32;
+            * (black_major & white_pawn_attacks).count() as i32;
         threat_score -= i.eval_params.pawn_threat_on_major
-            * (white_major & black_pawn_attacks).count_ones() as i32;
+            * (white_major & black_pawn_attacks).count() as i32;
         let safe_white_moves = !black_pawn_attacks;
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
-        for knight_sq in BitLoop::new(self.pieces.knights::<true>()) {
-            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, BB_NONE);
+        for knight_sq in self.pieces.knights::<true>().iter() {
+            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, SquareSet::EMPTY);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black +=
-                attacks_on_black_king.count_ones() as i32 * ptmul[0];
+                attacks_on_black_king.count() as i32 * ptmul[0];
             king_danger_info.attack_units_on_white -=
-                defense_of_white_king.count_ones() as i32 * ptmul[1];
+                defense_of_white_king.count() as i32 * ptmul[1];
             // threats
             let attacks_on_majors = attacks & black_major;
             threat_score +=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score += i.eval_params.knight_mobility_bonus[attacks];
         }
-        for knight_sq in BitLoop::new(self.pieces.knights::<false>()) {
-            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, BB_NONE);
+        for knight_sq in self.pieces.knights::<false>().iter() {
+            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, SquareSet::EMPTY);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white +=
-                attacks_on_white_king.count_ones() as i32 * ptmul[0];
+                attacks_on_white_king.count() as i32 * ptmul[0];
             king_danger_info.attack_units_on_black -=
-                defense_of_black_king.count_ones() as i32 * ptmul[1];
+                defense_of_black_king.count() as i32 * ptmul[1];
             // threats
             let attacks_on_majors = attacks & white_major;
             threat_score -=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.knight_mobility_bonus[attacks];
         }
-        for bishop_sq in BitLoop::new(self.pieces.bishops::<true>()) {
+        for bishop_sq in self.pieces.bishops::<true>().iter() {
             let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black +=
-                attacks_on_black_king.count_ones() as i32 * ptmul[2];
+                attacks_on_black_king.count() as i32 * ptmul[2];
             king_danger_info.attack_units_on_white -=
-                defense_of_white_king.count_ones() as i32 * ptmul[3];
+                defense_of_white_king.count() as i32 * ptmul[3];
             // threats
             let attacks_on_majors = attacks & black_major;
             threat_score +=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score += i.eval_params.bishop_mobility_bonus[attacks];
         }
-        for bishop_sq in BitLoop::new(self.pieces.bishops::<false>()) {
+        for bishop_sq in self.pieces.bishops::<false>().iter() {
             let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white +=
-                attacks_on_white_king.count_ones() as i32 * ptmul[2];
+                attacks_on_white_king.count() as i32 * ptmul[2];
             king_danger_info.attack_units_on_black -=
-                defense_of_black_king.count_ones() as i32 * ptmul[3];
+                defense_of_black_king.count() as i32 * ptmul[3];
             // threats
             let attacks_on_majors = attacks & white_major;
             threat_score -=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count_ones() as i32;
+                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.bishop_mobility_bonus[attacks];
         }
-        for rook_sq in BitLoop::new(self.pieces.rooks::<true>()) {
+        for rook_sq in self.pieces.rooks::<true>().iter() {
             let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black +=
-                attacks_on_black_king.count_ones() as i32 * ptmul[4];
+                attacks_on_black_king.count() as i32 * ptmul[4];
             king_danger_info.attack_units_on_white -=
-                defense_of_white_king.count_ones() as i32 * ptmul[5];
+                defense_of_white_king.count() as i32 * ptmul[5];
             // mobility
             let attacks = attacks & safe_white_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score += i.eval_params.rook_mobility_bonus[attacks];
         }
-        for rook_sq in BitLoop::new(self.pieces.rooks::<false>()) {
+        for rook_sq in self.pieces.rooks::<false>().iter() {
             let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white +=
-                attacks_on_white_king.count_ones() as i32 * ptmul[4];
+                attacks_on_white_king.count() as i32 * ptmul[4];
             king_danger_info.attack_units_on_black -=
-                defense_of_black_king.count_ones() as i32 * ptmul[5];
+                defense_of_black_king.count() as i32 * ptmul[5];
             // mobility
             let attacks = attacks & safe_black_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.rook_mobility_bonus[attacks];
         }
-        for queen_sq in BitLoop::new(self.pieces.queens::<true>()) {
+        for queen_sq in self.pieces.queens::<true>().iter() {
             let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
             king_danger_info.attack_units_on_black +=
-                attacks_on_black_king.count_ones() as i32 * ptmul[6];
+                attacks_on_black_king.count() as i32 * ptmul[6];
             king_danger_info.attack_units_on_white -=
-                defense_of_white_king.count_ones() as i32 * ptmul[7];
+                defense_of_white_king.count() as i32 * ptmul[7];
             // mobility
             let attacks = attacks & safe_white_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score += i.eval_params.queen_mobility_bonus[attacks];
         }
-        for queen_sq in BitLoop::new(self.pieces.queens::<false>()) {
+        for queen_sq in self.pieces.queens::<false>().iter() {
             let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
             king_danger_info.attack_units_on_white +=
-                attacks_on_white_king.count_ones() as i32 * ptmul[6];
+                attacks_on_white_king.count() as i32 * ptmul[6];
             king_danger_info.attack_units_on_black -=
-                defense_of_black_king.count_ones() as i32 * ptmul[7];
+                defense_of_black_king.count() as i32 * ptmul[7];
             // mobility
             let attacks = attacks & safe_black_moves;
-            let attacks = attacks.count_ones() as usize;
+            let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.queen_mobility_bonus[attacks];
         }
         king_danger_info.attack_units_on_white /= KINGDANGER_DESCALE;
@@ -633,8 +630,8 @@ impl Board {
     }
 }
 
-pub fn king_area<const IS_WHITE: bool>(king_sq: Square) -> u64 {
-    let king_attacks = attacks::<{ PieceType::KING.inner() }>(king_sq, BB_NONE);
+pub fn king_area<const IS_WHITE: bool>(king_sq: Square) -> SquareSet {
+    let king_attacks = attacks::<{ PieceType::KING.inner() }>(king_sq, SquareSet::EMPTY);
     let forward_area = if IS_WHITE { king_attacks.north_one() } else { king_attacks.south_one() };
     king_attacks | forward_area
 }

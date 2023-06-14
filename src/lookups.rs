@@ -6,7 +6,7 @@ use crate::{
     nnue,
     piece::PieceType,
     rng::XorShiftState,
-    transpositiontable,
+    transpositiontable, squareset::SquareSet,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -47,17 +47,17 @@ const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
     (piece_keys, castle_keys, side_key)
 }
 
-pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
-    let mut rank_masks = [0; 8];
-    let mut file_masks = [0; 8];
+pub const fn init_eval_masks() -> ([SquareSet; 8], [SquareSet; 8]) {
+    let mut rank_masks = [SquareSet::EMPTY; 8];
+    let mut file_masks = [SquareSet::EMPTY; 8];
 
     let mut r = Rank::RANK_8;
     loop {
         let mut f = File::FILE_A;
         while f <= File::FILE_H {
-            let sq = r * 8 + f;
-            file_masks[f as usize] |= 1 << sq;
-            rank_masks[r as usize] |= 1 << sq;
+            let sq = Square::from_rank_file(r, f);
+            file_masks[f as usize] = file_masks[f as usize].add_square(sq);
+            rank_masks[r as usize] = rank_masks[r as usize].add_square(sq);
             f += 1;
         }
         if r == Rank::RANK_1 {
@@ -69,55 +69,61 @@ pub const fn init_eval_masks() -> ([u64; 8], [u64; 8]) {
     (rank_masks, file_masks)
 }
 
-pub const fn init_passed_isolated_bb() -> ([u64; 64], [u64; 64], [u64; 64]) {
-    #![allow(clippy::cast_possible_wrap)]
-    const _FILE_BB: [u64; 8] = init_eval_masks().1;
-    let mut white_passed_bb = [0; 64];
-    let mut black_passed_bb = [0; 64];
-    let mut isolated_bb = [0; 64];
+pub const fn init_passed_isolated_bb() -> ([SquareSet; 64], [SquareSet; 64], [SquareSet; 64]) {
+    #![allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    const _FILE_BB: [SquareSet; 8] = init_eval_masks().1;
+    let mut white_passed_bb = [SquareSet::EMPTY; 64];
+    let mut black_passed_bb = [SquareSet::EMPTY; 64];
+    let mut isolated_bb = [SquareSet::EMPTY; 64];
 
     let mut sq = Square::A1;
     loop {
         let mut t_sq = sq.signed_inner() + 8;
         while t_sq < 64 {
-            white_passed_bb[sq.index()] |= 1 << t_sq;
+            let add = Square::new(t_sq as u8);
+            white_passed_bb[sq.index()] = white_passed_bb[sq.index()].add_square(add);
             t_sq += 8;
         }
 
         t_sq = sq.signed_inner() - 8;
         while t_sq >= 0 {
-            black_passed_bb[sq.index()] |= 1 << t_sq;
+            let add = Square::new(t_sq as u8);
+            black_passed_bb[sq.index()] = black_passed_bb[sq.index()].add_square(add);
             t_sq -= 8;
         }
 
         if sq.file() > File::FILE_A {
-            isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize - 1];
+            isolated_bb[sq.index()] = isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize - 1]);
 
             t_sq = sq.signed_inner() + 7;
             while t_sq < 64 {
-                white_passed_bb[sq.index()] |= 1 << t_sq;
+                let add = Square::new(t_sq as u8);
+                white_passed_bb[sq.index()] = white_passed_bb[sq.index()].add_square(add);
                 t_sq += 8;
             }
 
             t_sq = sq.signed_inner() - 9;
             while t_sq >= 0 {
-                black_passed_bb[sq.index()] |= 1 << t_sq;
+                let add = Square::new(t_sq as u8);
+                black_passed_bb[sq.index()] = black_passed_bb[sq.index()].add_square(add);
                 t_sq -= 8;
             }
         }
 
         if sq.file() < File::FILE_H {
-            isolated_bb[sq.index()] |= _FILE_BB[sq.file() as usize + 1];
+            isolated_bb[sq.index()] = isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize + 1]);
 
             t_sq = sq.signed_inner() + 9;
             while t_sq < 64 {
-                white_passed_bb[sq.index()] |= 1 << t_sq;
+                let add = Square::new(t_sq as u8);
+                white_passed_bb[sq.index()] = white_passed_bb[sq.index()].add_square(add);
                 t_sq += 8;
             }
 
             t_sq = sq.signed_inner() - 7;
             while t_sq >= 0 {
-                black_passed_bb[sq.index()] |= 1 << t_sq;
+                let add = Square::new(t_sq as u8);
+                black_passed_bb[sq.index()] = black_passed_bb[sq.index()].add_square(add);
                 t_sq -= 8;
             }
         }
@@ -146,8 +152,8 @@ pub static PIECE_MAJ: [bool; 13] =
 pub static PIECE_MIN: [bool; 13] =
     [false, true, true, false, false, false, false, true, true, false, false, false, false];
 
-const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
-    let mut attacks = [0; 64];
+const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
+    let mut attacks = [SquareSet::EMPTY; 64];
     let deltas =
         if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
     cfor!(let mut sq = Square::A1; true; sq = sq.add(1); {
@@ -160,7 +166,7 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
                 attacks_bb |= 1 << attacked_sq;
             }
         });
-        attacks[sq.index()] = attacks_bb;
+        attacks[sq.index()] = SquareSet::from_inner(attacks_bb);
         if matches!(sq, Square::H8) {
             break;
         }
@@ -168,9 +174,9 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [u64; 64] {
     attacks
 }
 
-pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> u64 {
-    static KNIGHT_ATTACKS: [u64; 64] = init_jumping_attacks::<true>();
-    static KING_ATTACKS: [u64; 64] = init_jumping_attacks::<false>();
+pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> SquareSet {
+    static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
+    static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
     debug_assert!(PIECE_TYPE < 7);
     debug_assert!(sq.on_board());
     debug_assert!(PIECE_TYPE == PieceType::KNIGHT.inner() || PIECE_TYPE == PieceType::KING.inner());
@@ -226,21 +232,22 @@ mod tests {
         use crate::definitions::Square;
         use crate::lookups::get_jumping_piece_attack;
         use crate::piece::PieceType;
+        use crate::squareset::SquareSet;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(
             get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(0)),
-            132_096
+            SquareSet::from_inner(132_096)
         );
         assert_eq!(
             get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(63)),
-            9_077_567_998_918_656
+            SquareSet::from_inner(9_077_567_998_918_656)
         );
 
-        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)), 770);
+        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)), SquareSet::from_inner(770));
         assert_eq!(
             get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)),
-            4_665_729_213_955_833_856
+            SquareSet::from_inner(4_665_729_213_955_833_856)
         );
     }
 }

@@ -38,6 +38,7 @@ mod threadlocal;
 mod timemgmt;
 mod transpositiontable;
 mod uci;
+mod squareset;
 
 #[cfg(feature = "datagen")]
 mod datagen;
