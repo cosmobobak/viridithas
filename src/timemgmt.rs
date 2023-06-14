@@ -375,7 +375,7 @@ impl TimeManager {
 
             let stability_multiplier = Self::best_move_stability_multiplier(self.stability);
             // retain time added by windows that failed low
-            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let failed_low_multiplier = f64::from(self.failed_low).mul_add(0.25, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier();
             let subtree_size_multiplier =
                 self.best_move_nodes_fraction.map_or(1.0, Self::best_move_subtree_size_multiplier);
@@ -414,7 +414,7 @@ impl TimeManager {
 
             let stability_multiplier = self.last_factors[0];
             // calculate the failed low multiplier
-            let failed_low_multiplier = 0.25f64.mul_add(f64::from(self.failed_low), 1.0);
+            let failed_low_multiplier = f64::from(self.failed_low).mul_add(0.25, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier();
             let subtree_size_multiplier =
                 self.best_move_nodes_fraction.map_or(1.0, Self::best_move_subtree_size_multiplier);
