@@ -193,21 +193,38 @@
           │                                          │ GAMES │ N: 15488 W: 3808 L: 3758 D: 7922
           │                                          │ vs hugenet. (did not merge)
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- gemstone │ luminary with the dataset pruned down to │ ELO   │ 6.14 +- 3.85 (95%)
-          │ 963M positions from only non-bugged      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ datagen runs. (no lichess)               │ LLR   │ ???? (-2.94, 2.94) [0.00, 3.00]
+ gemstone │ luminary with the dataset pruned down to │ STC: 
+          │ 963M positions from only non-bugged      │ ELO   │ 6.14 +- 3.85 (95%)
+          │ datagen runs.                            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ no lichess, first net with DFRC data.    │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
           │                                          │ GAMES │ N: 15896 W: 4181 L: 3900 D: 7815
+          │                                          │ LTC:
+          │                                          │ ELO   │ 7.02 +- 4.11 (95%)
+          │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 13208 W: 3323 L: 3056 D: 6829
+          │                                          │ DFRC:
+          │                                          │ ELO   │ 133.02 +- 28.39 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 3.03 (-2.94, 2.94) [0.00, 5.00]
+          │                                          │ GAMES │ N: 408 W: 204 L: 55 D: 149
           │                                          │ vs hugenet.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   gemini │ gemstone with ~250M extra DFRC training  │ ELO   │ 
-          │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 
-          │                                          │ GAMES │ 
+   gemini │ gemstone with ~250M extra DFRC FENs      │ STC:
+          │ generated with gemstone.                 │ ELO   │ -5.11 +- 4.22 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -3.01 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 12912 W: 3111 L: 3301 D: 6500
+          │                                          │ DFRC:
+          │                                          │ ELO   │ 18.36 +- 6.96 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 4488 W: 1171 L: 934 D: 2383
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
           │ small 64x2 feature transformer, batch    │ SPRT  │ 
-          │ size 16384, and 45 epochs.               │ LLR   │ 
+          │ size 16384, and 35 epochs.               │ LLR   │ 
           │                                          │ GAMES │ 
           │                                          │ vs ???.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
