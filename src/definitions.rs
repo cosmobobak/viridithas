@@ -11,7 +11,7 @@ use crate::{
     cfor,
     chessmove::Move,
     piece::{Colour, Piece},
-    uci::CHESS960,
+    uci::CHESS960, squareset::SquareSet,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -220,8 +220,8 @@ impl Square {
         self.0 < 64
     }
 
-    pub const fn bitboard(self) -> u64 {
-        1 << self.0
+    pub const fn bitboard(self) -> SquareSet {
+        SquareSet::from_inner(1 << self.0)
     }
 
     pub fn pawn_push(self, side: Colour) -> Self {
@@ -432,8 +432,8 @@ impl Display for CastlingRights {
     }
 }
 
-pub static HORIZONTAL_RAY_BETWEEN: [[u64; 64]; 64] = {
-    let mut res = [[0; 64]; 64];
+pub static HORIZONTAL_RAY_BETWEEN: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
     cfor!(let mut from = Square::A1; from.0 < Square::NO_SQUARE.0; from = from.add_beyond_board(1); {
         cfor!(let mut to = Square::A1; to.0 < Square::NO_SQUARE.0; to = to.add_beyond_board(1); {
             if from.rank() == to.rank() {
@@ -445,7 +445,7 @@ pub static HORIZONTAL_RAY_BETWEEN: [[u64; 64]; 64] = {
                     bb |= 1 << between;
                     between += 1;
                 }
-                res[from.index()][to.index()] = bb;
+                res[from.index()][to.index()] = SquareSet::from_inner(bb);
             }
         });
     });
@@ -471,8 +471,9 @@ mod tests {
     #[test]
     fn ray_test() {
         use super::{Square, HORIZONTAL_RAY_BETWEEN};
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], 0);
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], 0);
+        use crate::squareset::SquareSet;
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
+        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
             Square::B1.bitboard()

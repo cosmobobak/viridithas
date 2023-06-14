@@ -1,8 +1,7 @@
 pub mod bitboards;
 pub mod movepicker;
 
-use self::bitboards::{first_square, BitHackExt, BB_RANK_2, BB_RANK_7};
-pub use self::bitboards::{BitLoop, BB_NONE};
+pub use self::bitboards::BitLoop;
 
 use super::Board;
 
@@ -17,7 +16,7 @@ use crate::{
     definitions::{Square, HORIZONTAL_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
-    uci::CHESS960,
+    uci::CHESS960, squareset::SquareSet,
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -104,27 +103,27 @@ impl Board {
         } else {
             their_pieces.north_west_one() & our_pawns
         };
-        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
-        for from in BitLoop::new(attacking_west & !promo_rank) {
+        let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
+        for from in (attacking_west & !promo_rank).iter() {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             move_list.push::<true>(Move::new(from, to));
         }
-        for from in BitLoop::new(attacking_east & !promo_rank) {
+        for from in (attacking_east & !promo_rank).iter() {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to));
         }
         if QS {
             // in quiescence search, we only generate promotions to queen.
-            for from in BitLoop::new(attacking_west & promo_rank) {
+            for from in (attacking_west & promo_rank).iter() {
                 let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             }
-            for from in BitLoop::new(attacking_east & promo_rank) {
+            for from in (attacking_east & promo_rank).iter() {
                 let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             }
         } else {
-            for from in BitLoop::new(attacking_west & promo_rank) {
+            for from in (attacking_west & promo_rank).iter() {
                 let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
                 for promo in
                     [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
@@ -132,7 +131,7 @@ impl Board {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
-            for from in BitLoop::new(attacking_east & promo_rank) {
+            for from in (attacking_east & promo_rank).iter() {
                 let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
                 for promo in
                     [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
@@ -160,19 +159,19 @@ impl Board {
             ep_bb.north_west_one() & our_pawns
         };
 
-        if attacks_west != 0 {
-            let from_sq = first_square(attacks_west);
+        if attacks_west.non_empty() {
+            let from_sq = attacks_west.first();
             move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, Move::EP_FLAG));
         }
-        if attacks_east != 0 {
-            let from_sq = first_square(attacks_east);
+        if attacks_east.non_empty() {
+            let from_sq = attacks_east.first();
             move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, Move::EP_FLAG));
         }
     }
 
     fn generate_pawn_forward<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
-        let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
-        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let start_rank = if IS_WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
+        let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let double_shifted_empty_squares =
@@ -181,15 +180,15 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
+        for sq in (pushable_pawns & !promoting_pawns).iter() {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in BitLoop::new(double_pushable_pawns) {
+        for sq in double_pushable_pawns.iter() {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in BitLoop::new(promoting_pawns) {
+        for sq in promoting_pawns.iter() {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new_with_promo(sq, to, promo));
@@ -201,13 +200,13 @@ impl Board {
         &self,
         move_list: &mut MoveList,
     ) {
-        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in BitLoop::new(promoting_pawns) {
+        for sq in promoting_pawns.iter() {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if QS {
                 // in quiescence search, we only generate promotions to queen.
@@ -245,24 +244,24 @@ impl Board {
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         let freespace = self.pieces.empty();
-        for sq in BitLoop::new(our_knights) {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & their_pieces) {
+        for sq in our_knights.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
-            for to in BitLoop::new(moves & freespace) {
+            for to in (moves & freespace).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
 
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
-        for sq in BitLoop::new(our_king) {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & their_pieces) {
+        for sq in our_king.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
-            for to in BitLoop::new(moves & freespace) {
+            for to in (moves & freespace).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
@@ -270,24 +269,24 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_diagonal_sliders) {
+        for sq in our_diagonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & their_pieces) {
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
-            for to in BitLoop::new(moves & freespace) {
+            for to in (moves & freespace).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
 
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
-        for sq in BitLoop::new(our_orthogonal_sliders) {
+        for sq in our_orthogonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & their_pieces) {
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
-            for to in BitLoop::new(moves & freespace) {
+            for to in (moves & freespace).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
@@ -323,18 +322,18 @@ impl Board {
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
-        for sq in BitLoop::new(our_knights) {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & their_pieces) {
+        for sq in our_knights.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
 
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
-        for sq in BitLoop::new(our_king) {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & their_pieces) {
+        for sq in our_king.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
@@ -342,9 +341,9 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_diagonal_sliders) {
+        for sq in our_diagonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & their_pieces) {
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
@@ -352,9 +351,9 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_orthogonal_sliders) {
+        for sq in our_orthogonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & their_pieces) {
+            for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
@@ -409,19 +408,17 @@ impl Board {
                 );
             }
         } else {
-            const WK_FREESPACE: u64 = Square::F1.bitboard() | Square::G1.bitboard();
-            const WQ_FREESPACE: u64 =
-                Square::B1.bitboard() | Square::C1.bitboard() | Square::D1.bitboard();
-            const BK_FREESPACE: u64 = Square::F8.bitboard() | Square::G8.bitboard();
-            const BQ_FREESPACE: u64 =
-                Square::B8.bitboard() | Square::C8.bitboard() | Square::D8.bitboard();
+            const WK_FREESPACE: SquareSet = Square::F1.bitboard().union(Square::G1.bitboard());
+            const WQ_FREESPACE: SquareSet = Square::B1.bitboard().union(Square::C1.bitboard()).union(Square::D1.bitboard());
+            const BK_FREESPACE: SquareSet = Square::F8.bitboard().union(Square::G8.bitboard());
+            const BQ_FREESPACE: SquareSet = Square::B8.bitboard().union(Square::C8.bitboard()).union(Square::D8.bitboard());
 
             // stupid hack to avoid redoing or eagerly doing hard work.
             let mut cache = None;
 
             if IS_WHITE {
                 if self.castle_perm.wk != Square::NO_SQUARE
-                    && occupied & WK_FREESPACE == 0
+                    && (occupied & WK_FREESPACE).is_empty()
                     && {
                         let got_attacked_king = self.sq_attacked_by::<false>(Square::E1);
                         cache = Some(got_attacked_king);
@@ -437,7 +434,7 @@ impl Board {
                 }
 
                 if self.castle_perm.wq != Square::NO_SQUARE
-                    && occupied & WQ_FREESPACE == 0
+                    && (occupied & WQ_FREESPACE).is_empty()
                     && !cache.unwrap_or_else(|| self.sq_attacked_by::<false>(Square::E1))
                     && !self.sq_attacked_by::<false>(Square::D1)
                 {
@@ -449,7 +446,7 @@ impl Board {
                 }
             } else {
                 if self.castle_perm.bk != Square::NO_SQUARE
-                    && occupied & BK_FREESPACE == 0
+                    && (occupied & BK_FREESPACE).is_empty()
                     && {
                         let got_attacked_king = self.sq_attacked_by::<true>(Square::E8);
                         cache = Some(got_attacked_king);
@@ -465,7 +462,7 @@ impl Board {
                 }
 
                 if self.castle_perm.bq != Square::NO_SQUARE
-                    && occupied & BQ_FREESPACE == 0
+                    && (occupied & BQ_FREESPACE).is_empty()
                     && !cache.unwrap_or_else(|| self.sq_attacked_by::<true>(Square::E8))
                     && !self.sq_attacked_by::<true>(Square::D8)
                 {
@@ -485,14 +482,13 @@ impl Board {
         castling_sq: Square,
         king_dst: Square,
         rook_dst: Square,
-        occupied: u64,
+        occupied: SquareSet,
         move_list: &mut MoveList,
     ) {
         let king_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
         let rook_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][castling_sq.index()];
         let relevant_occupied = occupied ^ king_sq.bitboard() ^ castling_sq.bitboard();
-        if relevant_occupied & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())
-            == 0
+        if (relevant_occupied & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())).is_empty()
             && !self.any_attacked(king_path, if IS_WHITE { Colour::BLACK } else { Colour::WHITE })
         {
             move_list.push::<false>(Move::new_with_flags(king_sq, castling_sq, Move::CASTLE_FLAG));
@@ -511,8 +507,8 @@ impl Board {
     }
 
     fn generate_pawn_quiet<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
-        let start_rank = if IS_WHITE { BB_RANK_2 } else { BB_RANK_7 };
-        let promo_rank = if IS_WHITE { BB_RANK_7 } else { BB_RANK_2 };
+        let start_rank = if IS_WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
+        let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let double_shifted_empty_squares =
@@ -521,11 +517,11 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in BitLoop::new(pushable_pawns & !promoting_pawns) {
+        for sq in (pushable_pawns & !promoting_pawns).iter() {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in BitLoop::new(double_pushable_pawns) {
+        for sq in double_pushable_pawns.iter() {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             move_list.push::<false>(Move::new(sq, to));
         }
@@ -538,9 +534,9 @@ impl Board {
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_knights) {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & !blockers) {
+        for sq in our_knights.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
@@ -548,9 +544,9 @@ impl Board {
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_king) {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
-            for to in BitLoop::new(moves & !blockers) {
+        for sq in our_king.iter() {
+            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
@@ -558,9 +554,9 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_diagonal_sliders) {
+        for sq in our_diagonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & !blockers) {
+            for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
@@ -568,9 +564,9 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
-        for sq in BitLoop::new(our_orthogonal_sliders) {
+        for sq in our_orthogonal_sliders.iter() {
             let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
-            for to in BitLoop::new(moves & !blockers) {
+            for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }

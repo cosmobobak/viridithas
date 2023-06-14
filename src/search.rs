@@ -16,7 +16,7 @@ use crate::{
             MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
-            bitboards::{self, first_square},
+            bitboards,
             movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
@@ -1175,19 +1175,19 @@ impl Board {
 
         loop {
             let my_attackers = attackers & self.pieces.occupied_co(colour);
-            if my_attackers == 0 {
+            if my_attackers.is_empty() {
                 break;
             }
 
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if my_attackers & self.pieces.of_type(victim) != 0 {
+                if (my_attackers & self.pieces.of_type(victim)).non_empty() {
                     break;
                 }
             }
 
-            occupied ^= first_square(my_attackers & self.pieces.of_type(next_victim)).bitboard();
+            occupied ^= (my_attackers & self.pieces.of_type(next_victim)).first().bitboard();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::PAWN
@@ -1216,7 +1216,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::KING
-                    && attackers & self.pieces.occupied_co(colour) != 0
+                    && (attackers & self.pieces.occupied_co(colour)).non_empty()
                 {
                     colour = colour.flip();
                 }

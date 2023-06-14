@@ -15,8 +15,7 @@ use regex::Regex;
 use crate::{
     board::movegen::{
         bitboards::{
-            self, pawn_attacks, BitHackExt, BB_ALL, BB_FILES, BB_NONE, BB_RANKS, BB_RANK_2,
-            BB_RANK_4, BB_RANK_5, BB_RANK_7,
+            self, pawn_attacks,
         },
         MoveList,
     },
@@ -31,13 +30,13 @@ use crate::{
     search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
-    uci::CHESS960,
+    uci::CHESS960, squareset::{SquareSet, self},
 };
 
 use self::{
     evaluation::score::S,
     movegen::{
-        bitboards::{BitBoard, BitLoop, BB_DARK_SQUARES, BB_LIGHT_SQUARES, BB_RANK_1, BB_RANK_8},
+        bitboards::BitBoard,
         MoveListEntry,
     },
 };
@@ -145,9 +144,9 @@ impl Board {
         self.key
     }
 
-    pub const fn n_men(&self) -> u8 {
+    pub fn n_men(&self) -> u8 {
         #![allow(clippy::cast_possible_truncation)]
-        self.pieces.occupied().count_ones() as u8
+        self.pieces.occupied().count() as u8
     }
 
     pub const fn ply(&self) -> usize {
@@ -156,11 +155,11 @@ impl Board {
 
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::WHITE || side == Colour::BLACK);
-        debug_assert_eq!(self.pieces.king::<true>().count_ones(), 1);
-        debug_assert_eq!(self.pieces.king::<false>().count_ones(), 1);
+        debug_assert_eq!(self.pieces.king::<true>().count(), 1);
+        debug_assert_eq!(self.pieces.king::<false>().count(), 1);
         let sq = match side {
-            Colour::WHITE => self.pieces.king::<true>().first_square(),
-            Colour::BLACK => self.pieces.king::<false>().first_square(),
+            Colour::WHITE => self.pieces.king::<true>().first(),
+            Colour::BLACK => self.pieces.king::<false>().first(),
             _ => unreachable!(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
@@ -709,35 +708,35 @@ impl Board {
 
         // pawns
         let attacks = pawn_attacks::<IS_WHITE>(our_pawns);
-        if attacks & sq_bb != 0 {
+        if (attacks & sq_bb).non_empty() {
             return true;
         }
 
         // knights
         let knight_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, BB_NONE);
-        if our_knights & knight_attacks_from_this_square != BB_NONE {
+            bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+        if (our_knights & knight_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // bishops, queens
         let diag_attacks_from_this_square =
             bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
-        if our_diags & diag_attacks_from_this_square != BB_NONE {
+        if (our_diags & diag_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // rooks, queens
         let ortho_attacks_from_this_square =
             bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
-        if our_orthos & ortho_attacks_from_this_square != BB_NONE {
+        if (our_orthos & ortho_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // king
         let king_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::KING.inner() }>(sq, BB_NONE);
-        if our_king & king_attacks_from_this_square != BB_NONE {
+            bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+        if (our_king & king_attacks_from_this_square).non_empty() {
             return true;
         }
 
@@ -805,14 +804,14 @@ impl Board {
             }
             // pawn capture
             if self.side == Colour::WHITE {
-                return pawn_attacks::<true>(from.bitboard()) & to.bitboard() != 0;
+                return (pawn_attacks::<true>(from.bitboard()) & to.bitboard()).non_empty();
             }
-            return pawn_attacks::<false>(from.bitboard()) & to.bitboard() != 0;
+            return (pawn_attacks::<false>(from.bitboard()) & to.bitboard()).non_empty();
         }
 
-        to.bitboard()
-            & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())
-            != BB_NONE
+        (to.bitboard()
+            & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied()))
+        .non_empty()
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -828,11 +827,11 @@ impl Board {
         if moved.piece_type() != PieceType::KING {
             return false;
         }
-        let home_rank = if self.side == Colour::WHITE { BB_RANK_1 } else { BB_RANK_8 };
-        if m.to().bitboard() & home_rank == BB_NONE {
+        let home_rank = if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
+        if (m.to().bitboard() & home_rank).is_empty() {
             return false;
         }
-        if m.from().bitboard() & home_rank == BB_NONE {
+        if (m.from().bitboard() & home_rank).is_empty() {
             return false;
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
@@ -880,12 +879,12 @@ impl Board {
         // castle_occ is the occupancy that "counts" for castling.
         let castle_occ = self.pieces.occupied() ^ m.from().bitboard() ^ m.to().bitboard();
 
-        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())) == 0
+        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())).is_empty()
             && !self.any_attacked(king_path | m.from().bitboard(), self.side.flip())
     }
 
-    pub fn any_attacked(&self, squares: u64, by: Colour) -> bool {
-        for sq in BitLoop::new(squares) {
+    pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
+        for sq in squares.iter() {
             if self.sq_attacked(sq, by) {
                 return true;
             }
@@ -1051,11 +1050,11 @@ impl Board {
         debug_assert!(m.from().on_board());
         debug_assert!(m.to().on_board());
         let from_bb = m.from().bitboard();
-        if from_bb & (BB_RANK_2 | BB_RANK_7) == 0 {
+        if (from_bb & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
             return false;
         }
         let to_bb = m.to().bitboard();
-        if to_bb & (BB_RANK_4 | BB_RANK_5) == 0 {
+        if (to_bb & (SquareSet::RANK_4 | SquareSet::RANK_5)).is_empty() {
             return false;
         }
         let piece_moved = self.moved_piece(m);
@@ -1712,7 +1711,7 @@ impl Board {
         let to_sq_name = reg_match.get(4).unwrap().as_str();
         let to_square = to_sq_name.parse::<Square>().unwrap();
         let to_bb = to_square.bitboard();
-        let mut from_bb = BB_ALL;
+        let mut from_bb = SquareSet::FULL;
 
         let promo = reg_match.get(5).map(|promo| {
             b".NBRQ.."
@@ -1721,20 +1720,20 @@ impl Board {
                 .unwrap()
         });
         if promo.is_some() {
-            let legal_mask = if self.side == Colour::WHITE { BB_RANK_7 } else { BB_RANK_2 };
+            let legal_mask = if self.side == Colour::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
             from_bb &= legal_mask;
         }
 
         if let Some(file) = reg_match.get(2) {
             let fname = file.as_str().as_bytes()[0];
             let file = usize::from(fname - b'a');
-            from_bb &= BB_FILES[file];
+            from_bb &= squareset::BB_FILES[file];
         }
 
         if let Some(rank) = reg_match.get(3) {
             let rname = rank.as_str().as_bytes()[0];
             let rank = usize::from(rname - b'1');
-            from_bb &= BB_RANKS[rank];
+            from_bb &= squareset::BB_RANKS[rank];
         }
 
         if let Some(piece) = reg_match.get(1) {
@@ -1746,11 +1745,11 @@ impl Board {
         } else {
             from_bb &= self.pieces.all_pawns();
             if reg_match.get(2).is_none() {
-                from_bb &= BB_FILES[to_square.file() as usize];
+                from_bb &= squareset::BB_FILES[to_square.file() as usize];
             }
         }
 
-        if from_bb == 0 {
+        if from_bb.is_empty() {
             return Err(IllegalMove(san.to_string()));
         }
 
@@ -1769,7 +1768,7 @@ impl Board {
             }
             let m_from_bb = m.from().bitboard();
             let m_to_bb = m.to().bitboard();
-            if (m_from_bb & from_bb) != 0 && (m_to_bb & to_bb) != 0 {
+            if (m_from_bb & from_bb).non_empty() && (m_to_bb & to_bb).non_empty() {
                 if legal_move.is_some() {
                     return Err(AmbiguousSAN(san.to_string()));
                 }
@@ -1808,19 +1807,19 @@ impl Board {
             _ => unreachable!(),
         };
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::PAWN {
-            0
+            SquareSet::EMPTY
         } else {
             bitboards::attacks_by_type(moved_piece.piece_type(), to_sq, self.pieces.occupied())
                 & self.pieces.piece_bb(moved_piece)
         };
-        let needs_disambiguation = possible_ambiguous_attackers.count_ones() > 1
+        let needs_disambiguation = possible_ambiguous_attackers.count() > 1
             && moved_piece.piece_type() != PieceType::PAWN;
-        let from_file = BB_FILES[m.from().file() as usize];
-        let from_rank = BB_RANKS[m.from().rank() as usize];
+        let from_file = squareset::BB_FILES[m.from().file() as usize];
+        let from_rank = squareset::BB_RANKS[m.from().rank() as usize];
         let can_be_disambiguated_by_file =
-            (possible_ambiguous_attackers & from_file).count_ones() == 1;
+            (possible_ambiguous_attackers & from_file).count() == 1;
         let can_be_disambiguated_by_rank =
-            (possible_ambiguous_attackers & from_rank).count_ones() == 1;
+            (possible_ambiguous_attackers & from_rank).count() == 1;
         let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;
         let must_be_disambiguated_by_file = needs_both || can_be_disambiguated_by_file;
         let must_be_disambiguated_by_rank =
@@ -1895,12 +1894,12 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub const fn num(&self, piece: Piece) -> u8 {
+    pub fn num(&self, piece: Piece) -> u8 {
         #![allow(clippy::cast_possible_truncation)]
-        self.pieces.piece_bb(piece).count_ones() as u8
+        self.pieces.piece_bb(piece).count() as u8
     }
 
-    pub const fn num_pt(&self, pt: PieceType) -> u8 {
+    pub fn num_pt(&self, pt: PieceType) -> u8 {
         self.num(Piece::new(Colour::WHITE, pt)) + self.num(Piece::new(Colour::BLACK, pt))
     }
 
@@ -1935,31 +1934,31 @@ impl Board {
         self.fifty_move_counter
     }
 
-    pub const fn has_insufficient_material<const IS_WHITE: bool>(&self) -> bool {
+    pub fn has_insufficient_material<const IS_WHITE: bool>(&self) -> bool {
         if (self.pieces.pawns::<IS_WHITE>()
             | self.pieces.rooks::<IS_WHITE>()
             | self.pieces.queens::<IS_WHITE>())
-            != 0
+            .non_empty()
         {
             return false;
         }
 
-        if self.pieces.knights::<IS_WHITE>() != 0 {
+        if self.pieces.knights::<IS_WHITE>().non_empty() {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
             let kings = self.pieces.all_kings();
             let queens = self.pieces.all_queens();
-            return self.pieces.our_pieces::<IS_WHITE>().count_ones() <= 2
-                && (self.pieces.their_pieces::<IS_WHITE>() & !kings & !queens) == 0;
+            return self.pieces.our_pieces::<IS_WHITE>().count() <= 2
+                && (self.pieces.their_pieces::<IS_WHITE>() & !kings & !queens).is_empty();
         }
 
-        if self.pieces.bishops::<IS_WHITE>() != 0 {
+        if self.pieces.bishops::<IS_WHITE>().non_empty() {
             let bishops = self.pieces.all_bishops();
-            let same_color = (bishops & BB_DARK_SQUARES) == 0 || (bishops & BB_LIGHT_SQUARES) == 0;
+            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty() || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
             let pawns = self.pieces.all_pawns();
             let knights = self.pieces.all_knights();
-            return same_color && pawns == 0 && knights == 0;
+            return same_color && pawns.is_empty() && knights.is_empty();
         }
 
         true
@@ -2065,7 +2064,7 @@ impl Board {
     }
 
     #[allow(dead_code /* for datagen */)]
-    pub const fn is_insufficient_material(&self) -> bool {
+    pub fn is_insufficient_material(&self) -> bool {
         self.has_insufficient_material::<true>() && self.has_insufficient_material::<false>()
     }
 

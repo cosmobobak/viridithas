@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    board::{movegen::BitLoop, Board},
+    board::Board,
     definitions::{Square, MAX_DEPTH},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
@@ -215,7 +215,7 @@ impl NNUEState {
                 let piece = Piece::new(colour, piece_type);
                 let piece_bb = board.pieces.piece_bb(piece);
 
-                for sq in BitLoop::new(piece_bb) {
+                for sq in piece_bb.iter() {
                     self.update_feature::<Activate>(piece_type, colour, sq);
                 }
             }

@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::{definitions::Square, macros, rng::XorShiftState};
+use crate::{definitions::Square, macros, rng::XorShiftState, squareset::SquareSet};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -47,17 +47,16 @@ static ROOK_REL_BITS: [i32; 64] = [
     12, 11, 11, 11, 11, 11, 11, 12,
 ];
 
-const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: u64) -> u64 {
-    use crate::board::movegen::bitboards::lsb;
-    let mut occupancy = 0;
+const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: SquareSet) -> SquareSet {
+    let mut occupancy = SquareSet::EMPTY;
 
     let mut count = 0;
     while count < bits_in_mask {
-        let square = lsb(attack_mask);
-        attack_mask &= !(1 << square);
+        let square = attack_mask.first();
+        attack_mask = attack_mask.remove_square(square);
         // this bitwise AND seems really weird
         if index & (1 << count) != 0 {
-            occupancy |= 1 << square;
+            occupancy = occupancy.add_square(square);
         }
         count += 1;
     }
@@ -65,7 +64,7 @@ const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: u64) ->
     occupancy
 }
 
-const fn mask_bishop_attacks(sq: i32) -> u64 {
+const fn mask_bishop_attacks(sq: i32) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
@@ -88,10 +87,10 @@ const fn mask_bishop_attacks(sq: i32) -> u64 {
         attacks |= 1 << (r * 8 + f);
     });
 
-    attacks
+    SquareSet::from_inner(attacks)
 }
 
-const fn mask_rook_attacks(sq: i32) -> u64 {
+const fn mask_rook_attacks(sq: i32) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
@@ -114,11 +113,14 @@ const fn mask_rook_attacks(sq: i32) -> u64 {
         attacks |= 1 << (tr * 8 + f);
     });
 
-    attacks
+    SquareSet::from_inner(attacks)
 }
 
-const fn bishop_attacks_on_the_fly(square: i32, block: u64) -> u64 {
+const fn bishop_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
+
+    // so sue me
+    let block = block.inner();
 
     // file and rank
     let (mut f, mut r);
@@ -156,11 +158,14 @@ const fn bishop_attacks_on_the_fly(square: i32, block: u64) -> u64 {
         }
     });
 
-    attacks
+    SquareSet::from_inner(attacks)
 }
 
-const fn rook_attacks_on_the_fly(square: i32, block: u64) -> u64 {
+const fn rook_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
+
+    // so sue me
+    let block = block.inner();
 
     // file and rank
     let (mut f, mut r);
@@ -198,7 +203,7 @@ const fn rook_attacks_on_the_fly(square: i32, block: u64) -> u64 {
         }
     });
 
-    attacks
+    SquareSet::from_inner(attacks)
 }
 
 /**************************************\
@@ -208,13 +213,13 @@ const fn rook_attacks_on_the_fly(square: i32, block: u64) -> u64 {
 
 fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
     // occupancies array
-    let mut occupancies = [0u64; 4096];
+    let mut occupancies = [SquareSet::EMPTY; 4096];
 
     // attacks array
-    let mut attacks = [0u64; 4096];
+    let mut attacks = [SquareSet::EMPTY; 4096];
 
     // used indices array
-    let mut used_indices = [0u64; 4096];
+    let mut used_indices = [SquareSet::EMPTY; 4096];
 
     // mask piece attack
     let mask_attack =
@@ -241,13 +246,13 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
     cfor!(let mut random_count = 0; random_count < 100_000_000; random_count += 1; {
         let magic = rng.random_few_bits();
 
-        if ((mask_attack.wrapping_mul(magic)) & 0xFF00_0000_0000_0000).count_ones() < 6 {
+        if ((mask_attack.inner().wrapping_mul(magic)) & 0xFF00_0000_0000_0000).count_ones() < 6 {
             continue;
         }
 
         // reset used attacks
         cfor!(let mut i = 0; i < used_indices.len(); i += 1; {
-            used_indices[i] = 0;
+            used_indices[i] = SquareSet::EMPTY;
         });
 
         // init count & fail flag
@@ -256,10 +261,10 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
         // test magic index
         cfor!((count, fail) = (0, false); !fail && count < occupancy_variations; count += 1; {
             #[allow(clippy::cast_possible_truncation)]
-            let magic_index = ((occupancies[count].wrapping_mul(magic)) >> (64 - relevant_bits)) as usize;
+            let magic_index = ((occupancies[count].inner().wrapping_mul(magic)) >> (64 - relevant_bits)) as usize;
 
             // if got free index
-            if used_indices[magic_index] == 0 {
+            if used_indices[magic_index].is_empty() {
                 // assign attack map
                 used_indices[magic_index] = attacks[count];
             }
@@ -317,7 +322,7 @@ pub fn init_magics() {
 
 macro_rules! init_masks_with {
     ($attack_function:ident) => {{
-        let mut masks = [0u64; 64];
+        let mut masks = [SquareSet::EMPTY; 64];
         cfor!(let mut square = 0; square < 64; square += 1; {
             masks[square] = $attack_function(square as _);
         });
@@ -326,15 +331,15 @@ macro_rules! init_masks_with {
 }
 
 unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
-    const BISHOP_MASKS: [u64; 64] = init_masks_with!(mask_bishop_attacks);
-    const ROOK_MASKS: [u64; 64] = init_masks_with!(mask_rook_attacks);
+    const BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
+    const ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
     // CONTRACT: take a lock before calling this function.
     for square in 0..64 {
         // init the current mask
         let mask = if IS_BISHOP { BISHOP_MASKS[square] } else { ROOK_MASKS[square] };
 
         // count attack mask bits
-        let bit_count = mask.count_ones();
+        let bit_count = mask.count();
 
         // occupancy var count
         let occupancy_variations = 1 << bit_count;
@@ -345,10 +350,10 @@ unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
             let occupancy = set_occupancy(count, bit_count.try_into().unwrap(), mask);
 
             if IS_BISHOP {
-                let magic_index: usize = ((occupancy.wrapping_mul(BISHOP_MAGICS[square])) >> (64 - BISHOP_REL_BITS[square])).try_into().unwrap();
+                let magic_index: usize = ((occupancy.inner().wrapping_mul(BISHOP_MAGICS[square])) >> (64 - BISHOP_REL_BITS[square])).try_into().unwrap();
                 BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
             } else {
-                let magic_index: usize = ((occupancy.wrapping_mul(ROOK_MAGICS[square])) >> (64 - ROOK_REL_BITS[square])).try_into().unwrap();
+                let magic_index: usize = ((occupancy.inner().wrapping_mul(ROOK_MAGICS[square])) >> (64 - ROOK_REL_BITS[square])).try_into().unwrap();
                 ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
             }
         });
@@ -371,12 +376,12 @@ pub fn initialise() {
     std::mem::drop(lock);
 }
 
-static BISHOP_MASKS: [u64; 64] = init_masks_with!(mask_bishop_attacks);
-static ROOK_MASKS: [u64; 64] = init_masks_with!(mask_rook_attacks);
+static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
+static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
-static mut BISHOP_ATTACKS: [[u64; 512]; 64] = [[0; 512]; 64];
+static mut BISHOP_ATTACKS: [[SquareSet; 512]; 64] = [[SquareSet::EMPTY; 512]; 64];
 #[allow(clippy::large_stack_arrays)]
-static mut ROOK_ATTACKS: [[u64; 4096]; 64] = [[0; 4096]; 64];
+static mut ROOK_ATTACKS: [[SquareSet; 4096]; 64] = [[SquareSet::EMPTY; 4096]; 64];
 
 static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,
@@ -513,7 +518,7 @@ static ROOK_MAGICS: [u64; 64] = [
 ];
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_bishop_attacks(sq: Square, blockers: u64) -> u64 {
+pub fn get_bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let sq = sq.index();
     if sq >= 64 {
         unsafe {
@@ -522,7 +527,7 @@ pub fn get_bishop_attacks(sq: Square, blockers: u64) -> u64 {
         }
     }
     let relevant_blockers = blockers & BISHOP_MASKS[sq];
-    let data = relevant_blockers.wrapping_mul(BISHOP_MAGICS[sq]);
+    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
     let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
     unsafe {
         if idx >= BISHOP_ATTACKS[sq].len() {
@@ -534,7 +539,7 @@ pub fn get_bishop_attacks(sq: Square, blockers: u64) -> u64 {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_rook_attacks(sq: Square, blockers: u64) -> u64 {
+pub fn get_rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let sq = sq.index();
     if sq >= 64 {
         unsafe {
@@ -543,7 +548,7 @@ pub fn get_rook_attacks(sq: Square, blockers: u64) -> u64 {
         }
     }
     let relevant_blockers = blockers & ROOK_MASKS[sq];
-    let data = relevant_blockers.wrapping_mul(ROOK_MAGICS[sq]);
+    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
     let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
     unsafe {
         if idx >= ROOK_ATTACKS[sq].len() {
