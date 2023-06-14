@@ -145,13 +145,24 @@ impl Board {
         global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
-        let best_thread = select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
+        let best_thread =
+            select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
         let best_move = best_thread.pv_move().unwrap_or(d_move);
         let score = best_thread.pv_score();
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
-            readout_info(self, Bound::Exact, best_thread.pv(), best_thread.completed, info, tt, total_nodes.load(Ordering::SeqCst), true, None);
+            readout_info(
+                self,
+                Bound::Exact,
+                best_thread.pv(),
+                best_thread.completed,
+                info,
+                tt,
+                total_nodes.load(Ordering::SeqCst),
+                true,
+                None,
+            );
         }
 
         if info.print_to_stdout {
@@ -211,7 +222,17 @@ impl Board {
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        readout_info(self, Bound::Upper, t.pv(), d, info, tt, total_nodes, false, Some(pv.score));
+                        readout_info(
+                            self,
+                            Bound::Upper,
+                            t.pv(),
+                            d,
+                            info,
+                            tt,
+                            total_nodes,
+                            false,
+                            Some(pv.score),
+                        );
                     }
                     aw.widen_down(pv.score, depth);
                     if MAIN_THREAD {
@@ -227,7 +248,17 @@ impl Board {
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
                         let total_nodes = total_nodes.load(Ordering::SeqCst);
-                        readout_info(self, Bound::Lower, t.pv(), d, info, tt, total_nodes, false, None);
+                        readout_info(
+                            self,
+                            Bound::Lower,
+                            t.pv(),
+                            d,
+                            info,
+                            tt,
+                            total_nodes,
+                            false,
+                            None,
+                        );
                     }
                     aw.widen_up(pv.score, depth);
                     if MAIN_THREAD {
@@ -308,12 +339,7 @@ impl Board {
                 } else {
                     None
                 };
-                info.time_manager.report_completed_depth(
-                    depth,
-                    pv.score,
-                    pv.line[0],
-                    bm_frac,
-                );
+                info.time_manager.report_completed_depth(depth, pv.score, pv.line[0], bm_frac);
             }
 
             if info.check_up() {
@@ -1320,7 +1346,7 @@ fn readout_info(
     tt: TTView,
     total_nodes: u64,
     force_print: bool,
-    override_eval: Option<i32>
+    override_eval: Option<i32>,
 ) {
     #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,

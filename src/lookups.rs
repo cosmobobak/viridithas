@@ -6,7 +6,8 @@ use crate::{
     nnue,
     piece::PieceType,
     rng::XorShiftState,
-    transpositiontable, squareset::SquareSet,
+    squareset::SquareSet,
+    transpositiontable,
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -93,7 +94,8 @@ pub const fn init_passed_isolated_bb() -> ([SquareSet; 64], [SquareSet; 64], [Sq
         }
 
         if sq.file() > File::FILE_A {
-            isolated_bb[sq.index()] = isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize - 1]);
+            isolated_bb[sq.index()] =
+                isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize - 1]);
 
             t_sq = sq.signed_inner() + 7;
             while t_sq < 64 {
@@ -111,7 +113,8 @@ pub const fn init_passed_isolated_bb() -> ([SquareSet; 64], [SquareSet; 64], [Sq
         }
 
         if sq.file() < File::FILE_H {
-            isolated_bb[sq.index()] = isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize + 1]);
+            isolated_bb[sq.index()] =
+                isolated_bb[sq.index()].union(_FILE_BB[sq.file() as usize + 1]);
 
             t_sq = sq.signed_inner() + 9;
             while t_sq < 64 {
@@ -189,11 +192,7 @@ pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> SquareSet {
 
 pub fn info_dump() {
     use crate::{NAME, VERSION};
-    let version_extension = if cfg!(feature = "final-release") {
-        ""
-    } else {
-        "-dev"
-    };
+    let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
     println!("{NAME} {VERSION}{version_extension}");
     println!("Compiled with architecture: {}", std::env::consts::ARCH);
     println!("Compiled for OS: {}", std::env::consts::OS);
@@ -249,7 +248,10 @@ mod tests {
             SquareSet::from_inner(9_077_567_998_918_656)
         );
 
-        assert_eq!(get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)), SquareSet::from_inner(770));
+        assert_eq!(
+            get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)),
+            SquareSet::from_inner(770)
+        );
         assert_eq!(
             get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)),
             SquareSet::from_inner(4_665_729_213_955_833_856)

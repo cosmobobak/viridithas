@@ -16,7 +16,8 @@ use crate::{
     definitions::{Square, HORIZONTAL_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
-    uci::CHESS960, squareset::SquareSet,
+    squareset::SquareSet,
+    uci::CHESS960,
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -409,9 +410,11 @@ impl Board {
             }
         } else {
             const WK_FREESPACE: SquareSet = Square::F1.bitboard().union(Square::G1.bitboard());
-            const WQ_FREESPACE: SquareSet = Square::B1.bitboard().union(Square::C1.bitboard()).union(Square::D1.bitboard());
+            const WQ_FREESPACE: SquareSet =
+                Square::B1.bitboard().union(Square::C1.bitboard()).union(Square::D1.bitboard());
             const BK_FREESPACE: SquareSet = Square::F8.bitboard().union(Square::G8.bitboard());
-            const BQ_FREESPACE: SquareSet = Square::B8.bitboard().union(Square::C8.bitboard()).union(Square::D8.bitboard());
+            const BQ_FREESPACE: SquareSet =
+                Square::B8.bitboard().union(Square::C8.bitboard()).union(Square::D8.bitboard());
 
             // stupid hack to avoid redoing or eagerly doing hard work.
             let mut cache = None;
@@ -488,7 +491,8 @@ impl Board {
         let king_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
         let rook_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][castling_sq.index()];
         let relevant_occupied = occupied ^ king_sq.bitboard() ^ castling_sq.bitboard();
-        if (relevant_occupied & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())).is_empty()
+        if (relevant_occupied & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard()))
+            .is_empty()
             && !self.any_attacked(king_path, if IS_WHITE { Colour::BLACK } else { Colour::WHITE })
         {
             move_list.push::<false>(Move::new_with_flags(king_sq, castling_sq, Move::CASTLE_FLAG));

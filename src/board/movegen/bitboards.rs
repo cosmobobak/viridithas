@@ -3,7 +3,8 @@ use std::fmt::Display;
 use crate::{
     definitions::Square,
     lookups, magic,
-    piece::{Colour, Piece, PieceType}, squareset::SquareSet,
+    piece::{Colour, Piece, PieceType},
+    squareset::SquareSet,
 };
 
 pub const LIGHT_SQUARE: bool = true;
@@ -45,7 +46,16 @@ pub struct BitBoard {
 }
 
 impl BitBoard {
-    pub const NULL: Self = Self::new(SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY, SquareSet::EMPTY);
+    pub const NULL: Self = Self::new(
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+        SquareSet::EMPTY,
+    );
 
     #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
     pub const fn new(

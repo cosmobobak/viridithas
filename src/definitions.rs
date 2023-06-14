@@ -11,7 +11,8 @@ use crate::{
     cfor,
     chessmove::Move,
     piece::{Colour, Piece},
-    uci::CHESS960, squareset::SquareSet,
+    squareset::SquareSet,
+    uci::CHESS960,
 };
 
 pub const BOARD_N_SQUARES: usize = 64;
@@ -472,8 +473,14 @@ mod tests {
     fn ray_test() {
         use super::{Square, HORIZONTAL_RAY_BETWEEN};
         use crate::squareset::SquareSet;
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
-        assert_eq!(HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()],
+            SquareSet::EMPTY
+        );
+        assert_eq!(
+            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()],
+            SquareSet::EMPTY
+        );
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
             Square::B1.bitboard()

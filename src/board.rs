@@ -14,9 +14,7 @@ use regex::Regex;
 
 use crate::{
     board::movegen::{
-        bitboards::{
-            self, pawn_attacks,
-        },
+        bitboards::{self, pawn_attacks},
         MoveList,
     },
     chessmove::Move,
@@ -29,16 +27,14 @@ use crate::{
     piecesquaretable::pst_value,
     search::pv::PVariation,
     searchinfo::SearchInfo,
+    squareset::{self, SquareSet},
     threadlocal::ThreadData,
-    uci::CHESS960, squareset::{SquareSet, self},
+    uci::CHESS960,
 };
 
 use self::{
     evaluation::score::S,
-    movegen::{
-        bitboards::BitBoard,
-        MoveListEntry,
-    },
+    movegen::{bitboards::BitBoard, MoveListEntry},
 };
 
 static SAN_REGEX_INIT: Once = Once::new();
@@ -827,7 +823,8 @@ impl Board {
         if moved.piece_type() != PieceType::KING {
             return false;
         }
-        let home_rank = if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
+        let home_rank =
+            if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
         if (m.to().bitboard() & home_rank).is_empty() {
             return false;
         }
@@ -879,7 +876,8 @@ impl Board {
         // castle_occ is the occupancy that "counts" for castling.
         let castle_occ = self.pieces.occupied() ^ m.from().bitboard() ^ m.to().bitboard();
 
-        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard())).is_empty()
+        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard()))
+            .is_empty()
             && !self.any_attacked(king_path | m.from().bitboard(), self.side.flip())
     }
 
@@ -1720,7 +1718,8 @@ impl Board {
                 .unwrap()
         });
         if promo.is_some() {
-            let legal_mask = if self.side == Colour::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
+            let legal_mask =
+                if self.side == Colour::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
             from_bb &= legal_mask;
         }
 
@@ -1812,14 +1811,12 @@ impl Board {
             bitboards::attacks_by_type(moved_piece.piece_type(), to_sq, self.pieces.occupied())
                 & self.pieces.piece_bb(moved_piece)
         };
-        let needs_disambiguation = possible_ambiguous_attackers.count() > 1
-            && moved_piece.piece_type() != PieceType::PAWN;
+        let needs_disambiguation =
+            possible_ambiguous_attackers.count() > 1 && moved_piece.piece_type() != PieceType::PAWN;
         let from_file = squareset::BB_FILES[m.from().file() as usize];
         let from_rank = squareset::BB_RANKS[m.from().rank() as usize];
-        let can_be_disambiguated_by_file =
-            (possible_ambiguous_attackers & from_file).count() == 1;
-        let can_be_disambiguated_by_rank =
-            (possible_ambiguous_attackers & from_rank).count() == 1;
+        let can_be_disambiguated_by_file = (possible_ambiguous_attackers & from_file).count() == 1;
+        let can_be_disambiguated_by_rank = (possible_ambiguous_attackers & from_rank).count() == 1;
         let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;
         let must_be_disambiguated_by_file = needs_both || can_be_disambiguated_by_file;
         let must_be_disambiguated_by_rank =
@@ -1938,7 +1935,7 @@ impl Board {
         if (self.pieces.pawns::<IS_WHITE>()
             | self.pieces.rooks::<IS_WHITE>()
             | self.pieces.queens::<IS_WHITE>())
-            .non_empty()
+        .non_empty()
         {
             return false;
         }
@@ -1955,7 +1952,8 @@ impl Board {
 
         if self.pieces.bishops::<IS_WHITE>().non_empty() {
             let bishops = self.pieces.all_bishops();
-            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty() || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
+            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty()
+                || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
             let pawns = self.pieces.all_pawns();
             let knights = self.pieces.all_knights();
             return same_color && pawns.is_empty() && knights.is_empty();

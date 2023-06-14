@@ -13,7 +13,8 @@ use crate::{
     piece::{Colour, Piece, PieceType},
     search::draw_score,
     searchinfo::SearchInfo,
-    threadlocal::ThreadData, squareset::SquareSet,
+    squareset::SquareSet,
+    threadlocal::ThreadData,
 };
 
 use super::movegen::bitboards::{attacks, DARK_SQUARE, LIGHT_SQUARE};
@@ -460,14 +461,14 @@ impl Board {
         let black_minor = self.pieces.minors::<false>();
         let white_major = self.pieces.majors::<true>();
         let black_major = self.pieces.majors::<false>();
-        threat_score += i.eval_params.pawn_threat_on_minor
-            * (black_minor & white_pawn_attacks).count() as i32;
-        threat_score -= i.eval_params.pawn_threat_on_minor
-            * (white_minor & black_pawn_attacks).count() as i32;
-        threat_score += i.eval_params.pawn_threat_on_major
-            * (black_major & white_pawn_attacks).count() as i32;
-        threat_score -= i.eval_params.pawn_threat_on_major
-            * (white_major & black_pawn_attacks).count() as i32;
+        threat_score +=
+            i.eval_params.pawn_threat_on_minor * (black_minor & white_pawn_attacks).count() as i32;
+        threat_score -=
+            i.eval_params.pawn_threat_on_minor * (white_minor & black_pawn_attacks).count() as i32;
+        threat_score +=
+            i.eval_params.pawn_threat_on_major * (black_major & white_pawn_attacks).count() as i32;
+        threat_score -=
+            i.eval_params.pawn_threat_on_major * (white_major & black_pawn_attacks).count() as i32;
         let safe_white_moves = !black_pawn_attacks;
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
@@ -482,8 +483,7 @@ impl Board {
                 defense_of_white_king.count() as i32 * ptmul[1];
             // threats
             let attacks_on_majors = attacks & black_major;
-            threat_score +=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
+            threat_score += i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count() as usize;
@@ -500,8 +500,7 @@ impl Board {
                 defense_of_black_king.count() as i32 * ptmul[1];
             // threats
             let attacks_on_majors = attacks & white_major;
-            threat_score -=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
+            threat_score -= i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count() as usize;
@@ -518,8 +517,7 @@ impl Board {
                 defense_of_white_king.count() as i32 * ptmul[3];
             // threats
             let attacks_on_majors = attacks & black_major;
-            threat_score +=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
+            threat_score += i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_white_moves;
             let attacks = attacks.count() as usize;
@@ -536,8 +534,7 @@ impl Board {
                 defense_of_black_king.count() as i32 * ptmul[3];
             // threats
             let attacks_on_majors = attacks & white_major;
-            threat_score -=
-                i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
+            threat_score -= i.eval_params.minor_threat_on_major * attacks_on_majors.count() as i32;
             // mobility
             let attacks = attacks & safe_black_moves;
             let attacks = attacks.count() as usize;

@@ -32,13 +32,13 @@ mod piecesquaretable;
 mod rng;
 mod search;
 mod searchinfo;
+mod squareset;
 mod tablebases;
 mod texel;
 mod threadlocal;
 mod timemgmt;
 mod transpositiontable;
 mod uci;
-mod squareset;
 
 #[cfg(feature = "datagen")]
 mod datagen;
