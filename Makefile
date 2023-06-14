@@ -17,11 +17,17 @@ endif
 rule:
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 
-release:
+final-release:
 	cargo rustc --release --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
 	cargo rustc --release --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v2 --emit link=$(V2NAME)
 	cargo rustc --release --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v3 --emit link=$(V3NAME)
 	cargo rustc --release --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=x86-64-v4 --emit link=$(V4NAME)
+
+release:
+	cargo rustc --release --features syzygy,bindgen, -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
+	cargo rustc --release --features syzygy,bindgen, -- -C target-feature=+crt-static -C target-cpu=x86-64-v2 --emit link=$(V2NAME)
+	cargo rustc --release --features syzygy,bindgen, -- -C target-feature=+crt-static -C target-cpu=x86-64-v3 --emit link=$(V3NAME)
+	cargo rustc --release --features syzygy,bindgen, -- -C target-feature=+crt-static -C target-cpu=x86-64-v4 --emit link=$(V4NAME)
 
 datagen:
 	cargo rustc --release --features syzygy,bindgen,datagen -- -C target-cpu=native
