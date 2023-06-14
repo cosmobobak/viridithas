@@ -523,7 +523,12 @@ pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
 }
 
 fn print_uci_response(full: bool) {
-    println!("id name {NAME} {VERSION}");
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
+    println!("id name {NAME} {VERSION}{version_extension}");
     println!("id author Cosmo");
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
     println!("option name Threads type spin default 1 min 1 max 512");
@@ -559,7 +564,12 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     let mut thread_data = vec![ThreadData::new(0, &pos)];
     pos.refresh_psqt(&info);
 
-    println!("{NAME} {VERSION} by Cosmo");
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
+    println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
         bench("openbench").expect("bench failed");

@@ -189,7 +189,12 @@ pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> SquareSet {
 
 pub fn info_dump() {
     use crate::{NAME, VERSION};
-    println!("{NAME} {VERSION}");
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
+    println!("{NAME} {VERSION}{version_extension}");
     println!("Compiled with architecture: {}", std::env::consts::ARCH);
     println!("Compiled for OS: {}", std::env::consts::OS);
     println!(
