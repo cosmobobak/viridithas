@@ -1,7 +1,7 @@
    NET ID │ general concept                          │ notes
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     viri0 │ first network 90% eval, 10% WDL          │ much weaker than the HCE.
-          │ 30 epochs, batch size 16384, lr 1e─2     │
+          │ 30 epochs, batch size 16384, lr 1e-2     │
           │ trained on the mountain of games from    │
           │ old Viridithas 2.X.X versions            │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
@@ -21,128 +21,128 @@
    viri12 │ viri11 data reanalyzed with viri11.      │ +50 Elo, worried about overfitting.
           │                                          │ net used in v4.0.0.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri13 │ lichess─elite games analysed with HCE,   │ +20 Elo.
+   viri13 │ lichess-elite games analysed with HCE,   │ +20 Elo.
           │ merged with the viri12 data.             │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
    viri14 │ viri13 data reanalyzed with viri13,      │ +25 Elo.
           │ deduplicated using a new tool i wrote.   │ 
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri15 │ same as viri14, but trying 120 epochs,   │ ─41.6 +/─ 7.5 Elo, LOS: 0.0 %
+   viri15 │ same as viri14, but trying 120 epochs,   │ -41.6 +/- 7.5 Elo, LOS: 0.0 %
           │ and batch size 8192.                     │ vs viri14.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri16 │ same as viri14, but trying 80 epochs,    │ 111.6 +/─ 18.4 Elo, LOS: 100.0 %
+   viri16 │ same as viri14, but trying 80 epochs,    │ 111.6 +/- 18.4 Elo, LOS: 100.0 %
           │ and lr drop at 30 epochs                 │ vs viri14.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri17 │ injected 320K positions from viri16      │ 16.0 +/─ 12.1, LOS: 99.5 %
+   viri17 │ injected 320K positions from viri16      │ 16.0 +/- 12.1, LOS: 99.5 %
           │ into viri14 data.                        │ vs viri16.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri18 │ re─evaluated whole viri17 data with      │ 23.9 +/─ 7.2, LOS: 100.0 %
+   viri18 │ re-evaluated whole viri17 data with      │ 23.9 +/- 7.2, LOS: 100.0 %
           │ viri17.                                  │ vs viri17.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri19 │ same as viri18, but with 90% WDL focus.  │ ─75.3 +/─ 8.0, LOS: 0.0 %
+   viri19 │ same as viri18, but with 90% WDL focus.  │ -75.3 +/- 8.0, LOS: 0.0 %
           │ not intended to gain, just to test.      │ vs viri18.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri20 │ trained on 320K viri18 self─play games   │ ─106.2 +/─ 21.2, LOS: 0.0 %
+   viri20 │ trained on 320K viri18 self-play games   │ -106.2 +/- 21.2, LOS: 0.0 %
           │ from the uhobook, eval'd with viri18.    │ vs viri18.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri21 │ those 320K viri18 games mixed in to the  │ 7.6 +/─ 6.5, LOS: 98.9 %
+   viri21 │ those 320K viri18 games mixed in to the  │ 7.6 +/- 6.5, LOS: 98.9 %
           │ big pile of data use to train viri18.    │ vs viri18.
           │ NOTE/WARN: shuffled based on FEN hash.   │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri22 │ viri21 data re─evaluated with HCE at     │ ─10.5 +/─ 4.5, LOS: 0.0 %
+   viri22 │ viri21 data re-evaluated with HCE at     │ -10.5 +/- 4.5, LOS: 0.0 %
           │ depth 8.                                 │ vs viri21.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri23 │ viri22 data re─evaluated with viri22.    │ ─23.5 +/─ 9.9, LOS: 0.0 %
+   viri23 │ viri22 data re-evaluated with viri22.    │ -23.5 +/- 9.9, LOS: 0.0 %
           │ Hopefully will be less overfitted.       │ vs viri21.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri24 │ viri21 data with 25% WDL focus.          │ 16.1 +/─ 7.6, LOS: 100.0 %
+   viri24 │ viri21 data with 25% WDL focus.          │ 16.1 +/- 7.6, LOS: 100.0 %
           │                                          │ vs viri21.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri25 │ 320K viri24 self─play games from uhobook │ 1.0 +/─ 12.2, LOS: 56.3 %
+   viri25 │ 320K viri24 self-play games from uhobook │ 1.0 +/- 12.2, LOS: 56.3 %
           │ injected into viri24 data.               │ vs viri24.
           │ NOTE/WARN: shuffled based on FEN hash.   │ I don't really trust this net, weird results.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri26 │ turns out those 320K games were eval'd   │ 7.1 +/─ 6.5, LOS: 98.3 %
+   viri26 │ turns out those 320K games were eval'd   │ 7.1 +/- 6.5, LOS: 98.3 %
           │ with HCE, so we redid it.                │ vs viri24.
           │ didn't pass SPRT, but it's still better. │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri27 │ viri26 data but 40% WDL focus.           │ 8.0 +/─ 6.6, LOS: 99.1 %
+   viri27 │ viri26 data but 40% WDL focus.           │ 8.0 +/- 6.6, LOS: 99.1 %
           │                                          │ vs viri26.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri28 │ same as viri27 but with LR=5e─3.         │ 2.3 +/─ 6.6, LOS: 75.3 %
+   viri28 │ same as viri27 but with LR=5e-3.         │ 2.3 +/- 6.6, LOS: 75.3 %
           │                                          │ vs viri27.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri29 │ combination of pure viri data            │ ~ ─60 elo vs viri28
-          │ from v5.1.0, v6.0.0, and v6.0.0─dev      │ seems that either the Lichess Elite data has
+   viri29 │ combination of pure viri data            │ ~ -60 elo vs viri28
+          │ from v5.1.0, v6.0.0, and v6.0.0-dev      │ seems that either the Lichess Elite data has
           │                                          │ really important stuff to learn, or 960k games
           │                                          │ is not enough to train a good net.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri30 │ 320K viri28 self─play games from uhobook │ 7.2 +/─ 6.7, LOS: 98.2 %
+   viri30 │ 320K viri28 self-play games from uhobook │ 7.2 +/- 6.7, LOS: 98.2 %
           │ injected into viri28 data.               │ vs viri28.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri31 │ viri30 data re─evaluated with viri30.    │ ─3.0 +/─ 6.6, LOS: 18.7 %
+   viri31 │ viri30 data re-evaluated with viri30.    │ -3.0 +/- 6.6, LOS: 18.7 %
           │ feeling somewhat discouraged.            │ vs viri30.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri33 │ experiment with some Frozenight training │ 12.3 +/─ 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
+   viri33 │ experiment with some Frozenight training │ 12.3 +/- 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
           │ params while I work up the energy to     │ vs viri30.
           │ implement a new arch.                    │
           │ (LR = 0.0001, 45 epochs, WDL 10%, 384N)  │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri34 │ same as viri33, but with 512 neurons.    │ ─31.8 +/─ 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
+   viri34 │ same as viri33, but with 512 neurons.    │ -31.8 +/- 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
           │                                          │ vs viri33.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri35 │ injected 320K viri34 self─play games     │ 4.3 +/─ 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
+   viri35 │ injected 320K viri34 self-play games     │ 4.3 +/- 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
           │ from uhobook into the viri31 data.       │ vs viri33.
           │ same training setup as viri33.           │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri36 │ viri35 data with 40% WDL focus.          │ 16.2 +/─ 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
+   viri36 │ viri35 data with 40% WDL focus.          │ 16.2 +/- 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
           │                                          │ vs viri35.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri37 │ viri36 data + 60M of the new datagen     │ ─58.1 +/─ 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
+   viri37 │ viri36 data + 60M of the new datagen     │ -58.1 +/- 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
           │ FENs.                                    │ vs viri36.
-          │ datagen does not handle noisy─move       │
+          │ datagen does not handle noisy-move       │
           │ exclusion, and might have other issues,  │
           │ so this isn't a damning refutation of    │
           │ the new datagen.                         │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri38 │ 80M viri36 FENs (run_2023─02─14_23─54─59 │ ─87.6 +/─ 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
-          │ _1000000g─64t─tb5─nnue─d8)               │ vs viri36.
+   viri38 │ 80M viri36 FENs (run_2023-02-14_23-54-59 │ -87.6 +/- 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
+          │ _1000000g-64t-tb5-nnue-d8)               │ vs viri36.
           │ This was with "fixed" datagen, which is  │
           │ disheartening.                           │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri39 │ Those 80M FENs + the viri36 training     │ 24.8 +/─ 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
+   viri39 │ Those 80M FENs + the viri36 training     │ 24.8 +/- 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
           │ data.                                    │ vs viri36.
           │ Seems like the main problem was the      │
           │ simple reduction in dataset size.        │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri40 │ 88M more FENs added to the viri39 data.  │ ─5.9 +/─ 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
+   viri40 │ 88M more FENs added to the viri39 data.  │ -5.9 +/- 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
           │                                          │ vs viri39.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri41 │ interleave all the viri40 data for more  │ 6.0 +/─ 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
+   viri41 │ interleave all the viri40 data for more  │ 6.0 +/- 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
           │ homogeneous training.                    │ vs viri39.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri42 │ add 2.5M viri41 games to the viri41 data │ ─1.7 +/─ 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
+   viri42 │ add 2.5M viri41 games to the viri41 data │ -1.7 +/- 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
           │ it would be 5M, but I accidentally       │ vs viri41.
           │ deleted half of it, like an idiot.       │
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri43 │ same as viri42, but with 30% WDL focus.  │ 8.7 +/─ 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
+   viri43 │ same as viri42, but with 30% WDL focus.  │ 8.7 +/- 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
           │                                          │ vs viri41.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri44 │ viri43 with 512 neurons.                 │ 19.1 +/─ 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
+   viri44 │ viri43 with 512 neurons.                 │ 19.1 +/- 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
           │                                          │ vs viri43.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri45 │ couple days worth of datagen with viri44 │ ─27.0 +/─ 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
+   viri45 │ couple days worth of datagen with viri44 │ -27.0 +/- 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
           │ added to the pile of viri44 data.        │ vs viri44.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri46 │ viri44 data reshuffled on the off─chance │ ─11.2 +/─ 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
+   viri46 │ viri44 data reshuffled on the off-chance │ -11.2 +/- 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
           │ that it would help. 45 epochs.           │ vs viri44.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri47 │ viri44 data with 20% WDL focus.          │ ─28.8 +/─ 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
+   viri47 │ viri44 data with 20% WDL focus.          │ -28.8 +/- 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
           │ 65 epochs.                               │ vs viri44.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
    viri48 │ inject extra data into viri45 data.      │ essentially indistinguishable from viri44.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri49 │ Switch to squared ReLU instead of linear │ 35.8 +/─ 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
+   viri49 │ Switch to squared ReLU instead of linear │ 35.8 +/- 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
           │ ReLU. (viri48 data)                      │ vs viri44.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
    viri51 │ Same as viri49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
@@ -224,7 +224,7 @@
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
           │ small 64x2 feature transformer, batch    │ SPRT  │ 
-          │ size 16384, and 35 epochs.               │ LLR   │ 
-          │                                          │ GAMES │ 
-          │                                          │ vs ???.
+          │ size 16384, and 35 epochs. Trained on    │ LLR   │ 
+          │ the gemini dataset to maximise variety   │ GAMES │ 
+          │ of king positioning.                     │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
