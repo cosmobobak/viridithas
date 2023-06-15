@@ -1044,6 +1044,7 @@ impl Board {
         }
 
         if excluded.is_null() {
+            debug_assert!(alpha != original_alpha || best_move.is_null(), "alpha was not raised, but best_move was not null!");
             tt.store::<ROOT>(key, height, best_move, best_score, flag, depth);
         }
 
