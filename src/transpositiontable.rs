@@ -187,7 +187,7 @@ impl<'a> TTView<'a> {
         let key = TT::pack_key(key);
         let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
-        if best_move.is_null() {
+        if best_move.is_null() && entry.key == key {
             best_move = entry.m;
         }
 
