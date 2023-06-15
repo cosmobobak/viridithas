@@ -685,6 +685,7 @@ impl Board {
                     >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
+                && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_bound: b, .. }) if b == Bound::Upper && v < beta)
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / 3
