@@ -183,17 +183,21 @@ impl<'a> TTView<'a> {
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
+        // get index into the table:
         let index = self.wrap_key(key);
+        // create a small key from the full key:
         let key = TT::pack_key(key);
+        // load the entry:
         let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
 
-        if best_move.is_null() {
+        if best_move.is_null() && entry.key == key {
+            // if we don't have a best move, and the entry is for the same position,
+            // then we should retain the best move from the previous entry.
             best_move = entry.m;
         }
 
+        // normalise mate / TB scores:
         let score = normalise_gt_truth_score(score, ply);
-
-        let record_depth: Depth = entry.depth.into();
 
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
@@ -207,8 +211,13 @@ impl<'a> TTView<'a> {
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
         let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4;
-        let record_prority = record_depth + record_flag_bonus;
+        let record_prority = Depth::from(entry.depth) + record_flag_bonus;
 
+        // replace the entry:
+        // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
+        // 2. if the entry is for a different position
+        // 3. if it's an exact entry, and the old entry is not exact
+        // 4. if the new entry is of higher priority than the old entry
         if ROOT
             || entry.key != key
             || flag == Bound::Exact && entry.age_and_flag.flag() != Bound::Exact
