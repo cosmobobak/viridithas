@@ -49,15 +49,15 @@ impl Activation for Deactivate {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C, align(64))]
-pub struct Align<T>(pub T);
+pub struct Align64<T>(pub T);
 
-impl<T, const SIZE: usize> Deref for Align<[T; SIZE]> {
+impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
     type Target = [T; SIZE];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<T, const SIZE: usize> DerefMut for Align<[T; SIZE]> {
+impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -73,9 +73,9 @@ pub static NNUE: NNUEParams = NNUEParams {
 };
 
 pub struct NNUEParams {
-    pub feature_weights: Align<[i16; INPUT * LAYER_1_SIZE]>,
-    pub feature_bias: Align<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align<[i16; LAYER_1_SIZE * 2]>,
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
+    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
 
@@ -132,10 +132,10 @@ impl NNUEParams {
 pub struct NNUEState {
     /// Active features from white's perspective.
     #[cfg(debug_assertions)]
-    pub white_pov: Align<[i16; INPUT]>,
+    pub white_pov: Align64<[i16; INPUT]>,
     /// Active features from black's perspective.
     #[cfg(debug_assertions)]
-    pub black_pov: Align<[i16; INPUT]>,
+    pub black_pov: Align64<[i16; INPUT]>,
 
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
@@ -407,8 +407,8 @@ impl NNUEState {
 
 /// Move a feature from one square to another.
 fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align<[i16; SIZE]>,
-    delta: &Align<[i16; WEIGHTS]>,
+    input: &mut Align64<[i16; SIZE]>,
+    delta: &Align64<[i16; WEIGHTS]>,
     offset_sub: usize,
     offset_add: usize,
 ) {
@@ -421,8 +421,8 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 
 /// Add a feature to a square.
 fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align<[i16; SIZE]>,
-    delta: &Align<[i16; WEIGHTS]>,
+    input: &mut Align64<[i16; SIZE]>,
+    delta: &Align64<[i16; WEIGHTS]>,
     offset_add: usize,
 ) {
     let a_block = &delta[offset_add..offset_add + SIZE];
@@ -433,8 +433,8 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 
 /// Subtract a feature from a square.
 fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align<[i16; SIZE]>,
-    delta: &Align<[i16; WEIGHTS]>,
+    input: &mut Align64<[i16; SIZE]>,
+    delta: &Align64<[i16; WEIGHTS]>,
     offset_sub: usize,
 ) {
     let s_block = &delta[offset_sub..offset_sub + SIZE];
@@ -452,9 +452,9 @@ fn crelu(x: i16) -> i32 {
 /// and accumulate the result into a sum.
 #[allow(dead_code)]
 pub fn crelu_flatten(
-    us: &Align<[i16; LAYER_1_SIZE]>,
-    them: &Align<[i16; LAYER_1_SIZE]>,
-    weights: &Align<[i16; LAYER_1_SIZE * 2]>,
+    us: &Align64<[i16; LAYER_1_SIZE]>,
+    them: &Align64<[i16; LAYER_1_SIZE]>,
+    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
@@ -475,9 +475,9 @@ fn screlu(x: i16) -> i32 {
 /// Execute squared + clipped relu on the partial activations,
 /// and accumulate the result into a sum.
 pub fn screlu_flatten(
-    us: &Align<[i16; LAYER_1_SIZE]>,
-    them: &Align<[i16; LAYER_1_SIZE]>,
-    weights: &Align<[i16; LAYER_1_SIZE * 2]>,
+    us: &Align64<[i16; LAYER_1_SIZE]>,
+    them: &Align64<[i16; LAYER_1_SIZE]>,
+    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
