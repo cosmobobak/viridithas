@@ -11,8 +11,8 @@ pub struct Accumulator<const HIDDEN: usize> {
 
 impl<const HIDDEN: usize> Accumulator<HIDDEN> {
     /// Initializes the accumulator with the given bias.
-    pub fn init(&mut self, bias: &[i16; HIDDEN]) {
-        self.white.copy_from_slice(bias);
-        self.black.copy_from_slice(bias);
+    pub fn init(&mut self, white_bias: &Align64<[i16; HIDDEN]>, black_bias: &Align64<[i16; HIDDEN]>) {
+        self.white = *white_bias;
+        self.black = *black_bias;
     }
 }
