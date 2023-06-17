@@ -75,9 +75,9 @@ pub static NNUE: NNUEParams = NNUEParams {
 };
 
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE]>,
     pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align64<[i8; LAYER_1_SIZE * 2]>,
+    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
 
