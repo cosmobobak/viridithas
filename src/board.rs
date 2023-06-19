@@ -1382,25 +1382,35 @@ impl Board {
         let from = m.from();
         let mut to = m.to();
         t.nnue.push_acc();
+
+        let king_moved = piece_type == PieceType::KING;
+        if king_moved {
+            t.nnue.refresh_accumulator(self);
+            return true;
+        }
+
+        let white_king = self.king_sq(Colour::WHITE);
+        let black_king = self.king_sq(Colour::BLACK);
+
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.update_feature::<Deactivate>(PieceType::PAWN, colour.flip(), ep_sq);
+            t.nnue.update_feature::<Deactivate>(white_king, black_king, PieceType::PAWN, colour.flip(), ep_sq);
         } else if m.is_castle() {
             match () {
                 _ if to == saved_castle_perm.wk => {
-                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1);
+                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1);
                     to = Square::G1;
                 }
                 _ if to == saved_castle_perm.wq => {
-                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1);
+                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1);
                     to = Square::C1;
                 }
                 _ if to == saved_castle_perm.bk => {
-                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8);
+                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8);
                     to = Square::G8;
                 }
                 _ if to == saved_castle_perm.bq => {
-                    t.nnue.move_feature(PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8);
+                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8);
                     to = Square::C8;
                 }
                 _ => {
@@ -1410,16 +1420,16 @@ impl Board {
         }
 
         if capture != Piece::EMPTY {
-            t.nnue.update_feature::<Deactivate>(capture.piece_type(), colour.flip(), to);
+            t.nnue.update_feature::<Deactivate>(white_king, black_king, capture.piece_type(), colour.flip(), to);
         }
 
         if m.is_promo() {
             let promo = m.promotion_type();
             debug_assert!(promo.legal_promo());
-            t.nnue.update_feature::<Deactivate>(PieceType::PAWN, colour, from);
-            t.nnue.update_feature::<Activate>(promo, colour, to);
+            t.nnue.update_feature::<Deactivate>(white_king, black_king, PieceType::PAWN, colour, from);
+            t.nnue.update_feature::<Activate>(white_king, black_king, promo, colour, to);
         } else {
-            t.nnue.move_feature(piece_type, colour, from, to);
+            t.nnue.move_feature(white_king, black_king, piece_type, colour, from, to);
         }
 
         true
