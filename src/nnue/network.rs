@@ -144,6 +144,24 @@ impl NNUEParams {
             &*ptr.cast()
         }
     }
+
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
+    }
 }
 
 /// State of the partial activations of the NNUE network.
@@ -161,6 +179,10 @@ pub struct NNUEState {
     pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
+    /// White king locations.
+    pub white_king_locs: [Square; ACC_STACK_SIZE],
+    /// Black king locations.
+    pub black_king_locs: [Square; ACC_STACK_SIZE],
 }
 
 const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (usize, usize) {
@@ -203,7 +225,7 @@ impl NNUEState {
             Box::from_raw(ptr.cast())
         };
 
-        net.refresh_acc(board);
+        net.reinit_from(board);
 
         net
     }
@@ -220,9 +242,13 @@ impl NNUEState {
     }
 
     /// Reinitialise the state from a board.
-    pub fn refresh_acc(&mut self, board: &Board) {
+    pub fn reinit_from(&mut self, board: &Board) {
         self.current_acc = 0;
 
+        self.refresh_accumulator(board);
+    }
+
+    pub fn refresh_accumulator(&mut self, board: &Board) {
         #[cfg(debug_assertions)]
         self.white_pov.fill(0);
         #[cfg(debug_assertions)]
@@ -232,8 +258,8 @@ impl NNUEState {
         let black_king = board.king_sq(Colour::BLACK);
 
         self.accumulators[self.current_acc].init(
-            NNUEParams::select_feature_bias(white_king.index()),
-            NNUEParams::select_feature_bias(black_king.index()),
+            NNUEParams::select_feature_bias(&NNUE, white_king.index()),
+            NNUEParams::select_feature_bias(&NNUE, black_king.index()),
         );
 
         for colour in [Colour::WHITE, Colour::BLACK] {
@@ -251,6 +277,8 @@ impl NNUEState {
     /// Update the state from a move.
     pub fn move_feature(
         &mut self,
+        white_king: Square,
+        black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         from: Square,
@@ -261,15 +289,18 @@ impl NNUEState {
 
         let acc = &mut self.accumulators[self.current_acc];
 
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.index());
+
         subtract_and_add_to_all(
             &mut acc.white,
-            &NNUE.feature_weights,
+            white_bucket,
             white_from * LAYER_1_SIZE,
             white_to * LAYER_1_SIZE,
         );
         subtract_and_add_to_all(
             &mut acc.black,
-            &NNUE.feature_weights,
+            black_bucket,
             black_from * LAYER_1_SIZE,
             black_to * LAYER_1_SIZE,
         );
@@ -288,20 +319,23 @@ impl NNUEState {
     /// Update by activating or deactivating a piece.
     pub fn update_feature<A: Activation>(
         &mut self,
+        white_king: Square,
+        black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         sq: Square,
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
-        let white_bucket = 
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.index());
 
         if A::ACTIVATE {
-            add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
-            add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
+            add_to_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+            add_to_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
         } else {
-            sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
-            sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
+            sub_from_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+            sub_from_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
         }
 
         #[cfg(debug_assertions)]

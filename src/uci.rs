@@ -671,7 +671,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 let res = parse_position(input, &mut pos);
                 if res.is_ok() {
                     for t in &mut thread_data {
-                        t.nnue.refresh_acc(&pos);
+                        t.nnue.reinit_from(&pos);
                     }
                     pos.refresh_psqt(&info);
                 }
@@ -755,7 +755,7 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
             return Err(e);
         }
         for t in &mut thread_data {
-            t.nnue.refresh_acc(&pos);
+            t.nnue.reinit_from(&pos);
         }
         pos.refresh_psqt(&info);
         let res = parse_go(&bench_string, &mut info, &mut pos);
