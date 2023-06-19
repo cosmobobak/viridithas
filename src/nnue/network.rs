@@ -137,11 +137,11 @@ impl NNUEParams {
         // so we know that the lifetime is valid.
         unsafe {
             // don't immediately cast to Align64, as we want to check the alignment first.
-            let ptr = slice.as_ptr().cast::<[i16; LAYER_1_SIZE]>();
+            let ptr = slice.as_ptr();
             assert_eq!(ptr.align_offset(64), 0);
             // alignments are sensible, so we can safely cast.
             #[allow(clippy::cast_ptr_alignment)]
-            &*ptr.cast::<Align64<[i16; LAYER_1_SIZE]>>()
+            &*ptr.cast()
         }
     }
 }
