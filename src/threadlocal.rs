@@ -105,7 +105,7 @@ impl ThreadData {
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());
-        self.nnue.refresh_acc(board);
+        self.nnue.reinit_from(board);
         self.stm_at_root = board.turn();
     }
 
