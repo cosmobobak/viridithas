@@ -75,8 +75,8 @@ pub static NNUE: NNUEParams = NNUEParams {
 };
 
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
+    pub feature_bias: Align64<[i16; LAYER_1_SIZE * BUCKETS]>,
     pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
@@ -286,6 +286,9 @@ impl NNUEState {
 
         let acc = &mut self.accumulators[self.current_acc];
 
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.index());
+
         subtract_and_add_to_all(
             &mut acc.white,
             white_bucket,
@@ -321,7 +324,8 @@ impl NNUEState {
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
-        let white_bucket = 
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
 
         if A::ACTIVATE {
             add_to_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
