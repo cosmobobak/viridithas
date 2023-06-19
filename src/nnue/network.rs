@@ -76,7 +76,7 @@ pub static NNUE: NNUEParams = NNUEParams {
 
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
-    pub feature_bias: Align64<[i16; LAYER_1_SIZE * BUCKETS]>,
+    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
     pub output_weights: Align64<[i8; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
@@ -125,24 +125,6 @@ impl NNUEParams {
 
         let path = path.join(format!("neuron_{neuron}.tga"));
         image.save_as_tga(path);
-    }
-
-    fn select_feature_bias(&self, bucket: usize) -> &Align64<[i16; LAYER_1_SIZE]> {
-        let start = bucket * LAYER_1_SIZE;
-        let end = start + LAYER_1_SIZE;
-        let slice = &self.feature_bias[start..end];
-        // SAFETY: The resulting slice is indeed LAYER_1_SIZE long,
-        // and we check that the slice is aligned to 64 bytes.
-        // additionally, we're generating the reference from our own data,
-        // so we know that the lifetime is valid.
-        unsafe {
-            // don't immediately cast to Align64, as we want to check the alignment first.
-            let ptr = slice.as_ptr();
-            assert_eq!(ptr.align_offset(64), 0);
-            // alignments are sensible, so we can safely cast.
-            #[allow(clippy::cast_ptr_alignment)]
-            &*ptr.cast()
-        }
     }
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
@@ -257,10 +239,7 @@ impl NNUEState {
         let white_king = board.king_sq(Colour::WHITE);
         let black_king = board.king_sq(Colour::BLACK);
 
-        self.accumulators[self.current_acc].init(
-            NNUEParams::select_feature_bias(&NNUE, white_king.index()),
-            NNUEParams::select_feature_bias(&NNUE, black_king.index()),
-        );
+        self.accumulators[self.current_acc].init(&NNUE.feature_bias);
 
         for colour in [Colour::WHITE, Colour::BLACK] {
             for piece_type in PieceType::all() {
@@ -290,7 +269,7 @@ impl NNUEState {
         let acc = &mut self.accumulators[self.current_acc];
 
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
 
         subtract_and_add_to_all(
             &mut acc.white,
@@ -328,7 +307,7 @@ impl NNUEState {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.index());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
 
         if A::ACTIVATE {
             add_to_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
