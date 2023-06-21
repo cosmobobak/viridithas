@@ -527,12 +527,14 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+#[allow(dead_code)]
 fn crelu(x: i16) -> i32 {
     i32::from(x.clamp(CR_MIN, CR_MAX))
 }
 
 /// Execute clipped relu on the partial activations,
 /// and accumulate the result into a sum.
+#[allow(dead_code)]
 pub fn crelu_flatten(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
