@@ -23,7 +23,7 @@ const CR_MAX: i16 = 255;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 64;
+pub const LAYER_1_SIZE: usize = 384;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 64;
 
@@ -390,7 +390,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = crelu_flatten(us, them, &NNUE.output_weights);
+        let output = screlu_flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
