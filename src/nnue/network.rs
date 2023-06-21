@@ -319,12 +319,25 @@ impl NNUEState {
 
         #[cfg(debug_assertions)]
         {
-            self.assert_state::<Activate>(white_from, black_from, (colour, piece_type, from), update);
+            self.assert_state::<Activate>(
+                white_from,
+                black_from,
+                (colour, piece_type, from),
+                update,
+            );
             self.assert_state::<Deactivate>(white_to, black_to, (colour, piece_type, to), update);
-            if update.white { self.white_pov[white_from] = 0; }
-            if update.black { self.black_pov[black_from] = 0; }
-            if update.white { self.white_pov[white_to] = 1; }
-            if update.black { self.black_pov[black_to] = 1; }
+            if update.white {
+                self.white_pov[white_from] = 0;
+            }
+            if update.black {
+                self.black_pov[black_from] = 0;
+            }
+            if update.white {
+                self.white_pov[white_to] = 1;
+            }
+            if update.black {
+                self.black_pov[black_to] = 1;
+            }
         }
     }
 
@@ -363,8 +376,12 @@ impl NNUEState {
         #[cfg(debug_assertions)]
         {
             self.assert_state::<A::Reverse>(white_idx, black_idx, (colour, piece_type, sq), update);
-            if update.white { self.white_pov[white_idx] = A::ACTIVATE.into(); }
-            if update.black { self.black_pov[black_idx] = A::ACTIVATE.into(); }
+            if update.white {
+                self.white_pov[white_idx] = A::ACTIVATE.into();
+            }
+            if update.black {
+                self.black_pov[black_idx] = A::ACTIVATE.into();
+            }
         }
     }
 
@@ -472,20 +489,24 @@ impl NNUEState {
         #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
         let (colour, piece_type, sq) = feature;
         let val = if A::ACTIVATE { 1 } else { 0 };
-        if update.white {assert_eq!(
-            self.white_pov[white],
-            val,
-            "piece: {}, sq: {}",
-            Piece::new(colour, piece_type),
-            sq,
-        );}
-        if update.black {assert_eq!(
-            self.black_pov[black],
-            val,
-            "piece: {}, sq: {}",
-            Piece::new(colour, piece_type),
-            sq,
-        );}
+        if update.white {
+            assert_eq!(
+                self.white_pov[white],
+                val,
+                "piece: {}, sq: {}",
+                Piece::new(colour, piece_type),
+                sq,
+            );
+        }
+        if update.black {
+            assert_eq!(
+                self.black_pov[black],
+                val,
+                "piece: {}, sq: {}",
+                Piece::new(colour, piece_type),
+                sq,
+            );
+        }
     }
 }
 
@@ -527,12 +548,14 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
+#[allow(dead_code)]
 fn crelu(x: i16) -> i32 {
     i32::from(x.clamp(CR_MIN, CR_MAX))
 }
 
 /// Execute clipped relu on the partial activations,
 /// and accumulate the result into a sum.
+#[allow(dead_code)]
 pub fn crelu_flatten(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
