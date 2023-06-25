@@ -834,7 +834,7 @@ fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Resul
 /// outputs an advantage of 100 centipawns for a position if the engine has a
 /// 50% probability to win from this position in selfplay at 16s+0.16s time control.
 const NORMALISE_TO_PAWN_VALUE: i32 = 215;
-fn win_rate_model(eval: i32, ply: usize) -> i32 {
+fn win_rate_model(eval: i32, ply: usize) -> (i32, i32) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     const AS: [f64; 4] = [4.994_045_51, -30.169_386_37, 102.525_479_22, 138.533_157_46];
     const BS: [f64; 4] = [-7.280_912_63, 54.012_150_81, -113.360_339_51, 139.055_294_64];
@@ -847,7 +847,10 @@ fn win_rate_model(eval: i32, ply: usize) -> i32 {
     let x = f64::from(eval.clamp(-4000, 4000));
 
     // Return the win rate in per mille units rounded to the nearest value
-    (0.5 + 1000.0 / (1.0 + f64::exp((a - x) / b))) as i32
+    let win = (0.5 + 1000.0 / (1.0 + f64::exp((a - x) / b))) as i32;
+    let loss = (0.5 + 1000.0 / (1.0 + f64::exp((a + x) / b))) as i32;
+
+    (win, loss)
 }
 
 struct UciWdlFormat {
@@ -856,8 +859,7 @@ struct UciWdlFormat {
 }
 impl Display for UciWdlFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let wdl_w = win_rate_model(self.eval, self.ply);
-        let wdl_l = win_rate_model(-self.eval, self.ply);
+        let (wdl_w, wdl_l) = win_rate_model(self.eval, self.ply);
         let wdl_d = 1000 - wdl_w - wdl_l;
         write!(f, "{wdl_w} {wdl_d} {wdl_l}")
     }
@@ -870,8 +872,7 @@ struct PrettyUciWdlFormat {
 impl Display for PrettyUciWdlFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #![allow(clippy::cast_possible_truncation)]
-        let wdl_w = win_rate_model(self.eval, self.ply);
-        let wdl_l = win_rate_model(-self.eval, self.ply);
+        let (wdl_w, wdl_l) = win_rate_model(self.eval, self.ply);
         let wdl_d = 1000 - wdl_w - wdl_l;
         let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
         let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
