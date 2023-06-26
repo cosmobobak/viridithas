@@ -75,7 +75,7 @@ pub static NNUE: NNUEParams = NNUEParams {
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE]>,
     pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
+    pub output_weights: Align64<[i8; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
 }
 
@@ -477,7 +477,7 @@ fn screlu(x: i16) -> i32 {
 pub fn screlu_flatten(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+    weights: &Align64<[i8; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
