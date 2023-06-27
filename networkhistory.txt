@@ -222,9 +222,15 @@
           │                                          │ GAMES │ N: 4488 W: 1171 L: 934 D: 2383
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  echelon │ Proof-of-concept HalfKA network. Uses a  │ ELO   │ 
-          │ small 64x2 feature transformer, batch    │ SPRT  │ 
-          │ size 16384, and 35 epochs. Trained on    │ LLR   │ 
-          │ the gemini dataset to maximise variety   │ GAMES │ 
-          │ of king positioning.                     │ vs gemstone.
+  echelon │ Proof-of-concept HalfKA network. Uses a  │ est. -80 Elo vs gemstone.
+          │ small 64x2 feature transformer, CReLU    │ 
+          │ activation, batch size 16384, and 35     │ 
+          │ epochs. Trained on the gemini dataset to │ 
+          │ maximise variety of king positioning.    │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9 (95%)
+          │ and using SCReLU activation.             │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
+          │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
