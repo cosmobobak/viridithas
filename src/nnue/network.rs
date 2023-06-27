@@ -146,6 +146,24 @@ impl NNUEParams {
         let path = path.join(format!("neuron_{neuron}.tga"));
         image.save_as_tga(path);
     }
+
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
+    }
 }
 
 /// State of the partial activations of the NNUE network.
