@@ -222,6 +222,13 @@
           │                                          │ GAMES │ N: 4488 W: 1171 L: 934 D: 2383
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+ grimoire │ gemini with 444M extra classical chess   │ STC:
+          │ FENs.                                    │ ELO   | -0.37 +- 2.90 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   | -1.51 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES | N: 27224 W: 6717 L: 6746 D: 13761
+          │                                          │ vs gemstone.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ est. -80 Elo vs gemstone.
           │ small 64x2 feature transformer, CReLU    │ 
           │ activation, batch size 16384, and 35     │ 
