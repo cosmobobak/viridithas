@@ -241,3 +241,11 @@ excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9
           │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   zhudun │ excalibur with 768x2 feature transformer │ ELO   │ 
+          │ with 134M extra FENs generated using     │ SPRT  │ 
+          │ excalibur. (using excalibur over         │ LLR   │ 
+          │ gemstone for the extra FENs because      │ GAMES │ 
+          │ i want to get selfplay to reveal any     │ vs gemstone.
+          │ halfka-induced overfitting to help the   │ 
+          │ next net)                                │ 
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
