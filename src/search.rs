@@ -399,7 +399,7 @@ impl Board {
             return draw_score(t, info.nodes, self.turn());
         }
 
-        let in_check = self.in_check::<{ Self::US }>();
+        let in_check = self.in_check();
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
@@ -516,7 +516,7 @@ impl Board {
 
         tt.prefetch(key);
 
-        let in_check = self.in_check::<{ Self::US }>();
+        let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
             return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
         }
@@ -910,8 +910,8 @@ impl Board {
                     // so we just bail out.
                     return Self::singularity_margin(tt_value, depth);
                 }
-            } else if self.in_check::<{ Self::US }>() {
-                // self.in_check::<{ Self::US }>() determines if the opponent is in check,
+            } else if self.in_check() {
+                // self.in_check() determines if the opponent is in check,
                 // because we have already made the move.
                 extension = Depth::from(is_quiet || is_winning_capture);
             } else {

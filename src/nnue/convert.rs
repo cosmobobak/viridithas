@@ -50,7 +50,7 @@ fn batch_convert<const USE_NNUE: bool>(
             std::io::stdout().flush().unwrap();
         }
         pos.set_from_fen(fen).unwrap();
-        if filter_quiescent && pos.in_check::<{ Board::US }>() {
+        if filter_quiescent && pos.in_check() {
             evals.push(None);
             continue;
         }

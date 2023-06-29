@@ -164,16 +164,9 @@ impl Board {
         sq
     }
 
-    pub const US: u8 = 0;
-    pub const THEM: u8 = 1;
-    pub fn in_check<const SIDE: u8>(&self) -> bool {
-        if SIDE == Self::US {
-            let king_sq = self.king_sq(self.side);
-            self.sq_attacked(king_sq, self.side.flip())
-        } else {
-            let king_sq = self.king_sq(self.side.flip());
-            self.sq_attacked(king_sq, self.side)
-        }
+    pub fn in_check(&self) -> bool {
+        let king_sq = self.king_sq(self.side);
+        self.sq_attacked(king_sq, self.side.flip())
     }
 
     pub fn zero_height(&mut self) {
@@ -1205,7 +1198,7 @@ impl Board {
         self.check_validity().unwrap();
 
         // reversed in_check fn, as we have now swapped sides
-        if self.in_check::<{ Self::THEM }>() {
+        if self.sq_attacked(self.king_sq(side.flip()), self.side) {
             self.unmake_move_base();
             return false;
         }
@@ -1307,7 +1300,7 @@ impl Board {
     pub fn make_nullmove(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-        debug_assert!(!self.in_check::<{ Self::US }>());
+        debug_assert!(!self.in_check());
 
         self.history.push(Undo {
             m: Move::NULL,
@@ -1843,7 +1836,7 @@ impl Board {
         if !self.make_move_base(m) {
             return CheckState::None;
         }
-        let gives_check = self.in_check::<{ Self::US }>();
+        let gives_check = self.in_check();
         if gives_check {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
@@ -2096,7 +2089,7 @@ impl Board {
         }
         if legal_moves {
             GameOutcome::Ongoing
-        } else if self.in_check::<{ Self::US }>() {
+        } else if self.in_check() {
             match self.side {
                 Colour::WHITE => GameOutcome::BlackWinMate,
                 Colour::BLACK => GameOutcome::WhiteWinMate,
