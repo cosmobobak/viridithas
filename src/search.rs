@@ -1044,7 +1044,10 @@ impl Board {
         }
 
         if excluded.is_null() {
-            debug_assert!(alpha != original_alpha || best_move.is_null(), "alpha was not raised, but best_move was not null!");
+            debug_assert!(
+                alpha != original_alpha || best_move.is_null(),
+                "alpha was not raised, but best_move was not null!"
+            );
             tt.store::<ROOT>(key, height, best_move, best_score, flag, depth);
         }
 
@@ -1191,9 +1194,9 @@ impl Board {
         let orth_sliders = self.pieces.all_rooks() | self.pieces.all_queens();
 
         // occupied starts with the position after the move `m` is made.
-        let mut occupied = (self.pieces.occupied() ^ from.bitboard()) | to.bitboard();
+        let mut occupied = (self.pieces.occupied() ^ from.as_set()) | to.as_set();
         if m.is_ep() {
-            occupied ^= self.ep_sq().bitboard();
+            occupied ^= self.ep_sq().as_set();
         }
 
         let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;
@@ -1215,21 +1218,19 @@ impl Board {
                 }
             }
 
-            occupied ^= (my_attackers & self.pieces.of_type(next_victim)).first().bitboard();
+            occupied ^= (my_attackers & self.pieces.of_type(next_victim)).first().as_set();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::PAWN
                 || next_victim == PieceType::BISHOP
                 || next_victim == PieceType::QUEEN
             {
-                attackers |= bitboards::attacks::<{ PieceType::BISHOP.inner() }>(to, occupied)
-                    & diag_sliders;
+                attackers |= bitboards::bishop_attacks(to, occupied) & diag_sliders;
             }
 
             // orthogonal moves reveal rooks and queens:
             if next_victim == PieceType::ROOK || next_victim == PieceType::QUEEN {
-                attackers |=
-                    bitboards::attacks::<{ PieceType::ROOK.inner() }>(to, occupied) & orth_sliders;
+                attackers |= bitboards::rook_attacks(to, occupied) & orth_sliders;
             }
 
             attackers &= occupied;

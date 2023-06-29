@@ -17,7 +17,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use super::movegen::bitboards::{attacks, DARK_SQUARE, LIGHT_SQUARE};
+use super::movegen::bitboards::{self, DARK_SQUARE, LIGHT_SQUARE};
 
 pub const PAWN_VALUE: S = S(126, 196);
 pub const KNIGHT_VALUE: S = S(437, 455);
@@ -473,7 +473,7 @@ impl Board {
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
         for knight_sq in self.pieces.knights::<true>().iter() {
-            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, SquareSet::EMPTY);
+            let attacks = bitboards::knight_attacks(knight_sq);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -490,7 +490,7 @@ impl Board {
             mob_score += i.eval_params.knight_mobility_bonus[attacks];
         }
         for knight_sq in self.pieces.knights::<false>().iter() {
-            let attacks = attacks::<{ PieceType::KNIGHT.inner() }>(knight_sq, SquareSet::EMPTY);
+            let attacks = bitboards::knight_attacks(knight_sq);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -507,7 +507,7 @@ impl Board {
             mob_score -= i.eval_params.knight_mobility_bonus[attacks];
         }
         for bishop_sq in self.pieces.bishops::<true>().iter() {
-            let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
+            let attacks = bitboards::bishop_attacks(bishop_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -524,7 +524,7 @@ impl Board {
             mob_score += i.eval_params.bishop_mobility_bonus[attacks];
         }
         for bishop_sq in self.pieces.bishops::<false>().iter() {
-            let attacks = attacks::<{ PieceType::BISHOP.inner() }>(bishop_sq, blockers);
+            let attacks = bitboards::bishop_attacks(bishop_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -541,7 +541,7 @@ impl Board {
             mob_score -= i.eval_params.bishop_mobility_bonus[attacks];
         }
         for rook_sq in self.pieces.rooks::<true>().iter() {
-            let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
+            let attacks = bitboards::rook_attacks(rook_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -555,7 +555,7 @@ impl Board {
             mob_score += i.eval_params.rook_mobility_bonus[attacks];
         }
         for rook_sq in self.pieces.rooks::<false>().iter() {
-            let attacks = attacks::<{ PieceType::ROOK.inner() }>(rook_sq, blockers);
+            let attacks = bitboards::rook_attacks(rook_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -569,7 +569,7 @@ impl Board {
             mob_score -= i.eval_params.rook_mobility_bonus[attacks];
         }
         for queen_sq in self.pieces.queens::<true>().iter() {
-            let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
+            let attacks = bitboards::queen_attacks(queen_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
             let defense_of_white_king = attacks & white_king_area;
@@ -583,7 +583,7 @@ impl Board {
             mob_score += i.eval_params.queen_mobility_bonus[attacks];
         }
         for queen_sq in self.pieces.queens::<false>().iter() {
-            let attacks = attacks::<{ PieceType::QUEEN.inner() }>(queen_sq, blockers);
+            let attacks = bitboards::queen_attacks(queen_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
             let defense_of_black_king = attacks & black_king_area;
@@ -628,7 +628,7 @@ impl Board {
 }
 
 pub fn king_area<const IS_WHITE: bool>(king_sq: Square) -> SquareSet {
-    let king_attacks = attacks::<{ PieceType::KING.inner() }>(king_sq, SquareSet::EMPTY);
+    let king_attacks = bitboards::king_attacks(king_sq);
     let forward_area = if IS_WHITE { king_attacks.north_one() } else { king_attacks.south_one() };
     king_attacks | forward_area
 }
