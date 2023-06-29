@@ -1198,7 +1198,7 @@ impl Board {
         self.check_validity().unwrap();
 
         // reversed in_check fn, as we have now swapped sides
-        if self.sq_attacked(self.king_sq(side.flip()), self.side) {
+        if self.sq_attacked(self.king_sq(self.side.flip()), self.side) {
             self.unmake_move_base();
             return false;
         }
