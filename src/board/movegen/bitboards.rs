@@ -271,10 +271,10 @@ pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
-    lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq)
+    lookups::get_knight_attacks(sq)
 }
 pub fn king_attacks(sq: Square) -> SquareSet {
-    lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq)
+    lookups::get_king_attacks(sq)
 }
 pub fn pawn_attacks<const IS_WHITE: bool>(bb: SquareSet) -> SquareSet {
     if IS_WHITE {
@@ -291,8 +291,8 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
         PieceType::QUEEN => {
             magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
         }
-        PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
-        PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
+        PieceType::KNIGHT => lookups::get_knight_attacks(sq),
+        PieceType::KING => lookups::get_king_attacks(sq),
         _ => panic!("Invalid piece type: {pt:?}"),
     }
 }

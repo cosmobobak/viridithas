@@ -4,7 +4,6 @@ use crate::{
     board,
     definitions::{File, Rank, Square},
     nnue,
-    piece::PieceType,
     rng::XorShiftState,
     squareset::SquareSet,
     transpositiontable,
@@ -177,17 +176,15 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
-pub fn get_jumping_piece_attack<const PIECE_TYPE: u8>(sq: Square) -> SquareSet {
+pub fn get_knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
-    static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
-    debug_assert!(PIECE_TYPE < 7);
     debug_assert!(sq.on_board());
-    debug_assert!(PIECE_TYPE == PieceType::KNIGHT.inner() || PIECE_TYPE == PieceType::KING.inner());
-    if PIECE_TYPE == PieceType::KNIGHT.inner() {
-        KNIGHT_ATTACKS[sq.index()]
-    } else {
-        KING_ATTACKS[sq.index()]
-    }
+    KNIGHT_ATTACKS[sq.index()]
+}
+pub fn get_king_attacks(sq: Square) -> SquareSet {
+    static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
+    debug_assert!(sq.on_board());
+    KING_ATTACKS[sq.index()]
 }
 
 pub fn info_dump() {
@@ -234,26 +231,19 @@ mod tests {
     #[test]
     fn python_chess_validation() {
         use crate::definitions::Square;
-        use crate::lookups::get_jumping_piece_attack;
-        use crate::piece::PieceType;
+        use crate::lookups::{get_king_attacks, get_knight_attacks};
         use crate::squareset::SquareSet;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
+        assert_eq!(get_knight_attacks(Square::new(0)), SquareSet::from_inner(132_096));
         assert_eq!(
-            get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(0)),
-            SquareSet::from_inner(132_096)
-        );
-        assert_eq!(
-            get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(Square::new(63)),
+            get_knight_attacks(Square::new(63)),
             SquareSet::from_inner(9_077_567_998_918_656)
         );
 
+        assert_eq!(get_king_attacks(Square::new(0)), SquareSet::from_inner(770));
         assert_eq!(
-            get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(0)),
-            SquareSet::from_inner(770)
-        );
-        assert_eq!(
-            get_jumping_piece_attack::<{ PieceType::KING.inner() }>(Square::new(63)),
+            get_king_attacks(Square::new(63)),
             SquareSet::from_inner(4_665_729_213_955_833_856)
         );
     }
