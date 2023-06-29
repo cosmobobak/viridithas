@@ -147,7 +147,7 @@ impl Board {
         if self.ep_sq == Square::NO_SQUARE {
             return;
         }
-        let ep_bb = self.ep_sq.bitboard();
+        let ep_bb = self.ep_sq.as_set();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let attacks_west = if IS_WHITE {
             ep_bb.south_east_one() & our_pawns
@@ -246,7 +246,7 @@ impl Board {
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         let freespace = self.pieces.empty();
         for sq in our_knights.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::knight_attacks(sq);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -258,7 +258,7 @@ impl Board {
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
         for sq in our_king.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::king_attacks(sq);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -271,7 +271,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+            let moves = bitboards::bishop_attacks(sq, blockers);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -283,7 +283,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         for sq in our_orthogonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+            let moves = bitboards::rook_attacks(sq, blockers);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -324,7 +324,7 @@ impl Board {
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         for sq in our_knights.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::knight_attacks(sq);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -333,7 +333,7 @@ impl Board {
         // kings
         let our_king = self.pieces.king::<IS_WHITE>();
         for sq in our_king.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::king_attacks(sq);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -343,7 +343,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+            let moves = bitboards::bishop_attacks(sq, blockers);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -353,7 +353,7 @@ impl Board {
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_orthogonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+            let moves = bitboards::rook_attacks(sq, blockers);
             for to in (moves & their_pieces).iter() {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -409,12 +409,12 @@ impl Board {
                 );
             }
         } else {
-            const WK_FREESPACE: SquareSet = Square::F1.bitboard().union(Square::G1.bitboard());
+            const WK_FREESPACE: SquareSet = Square::F1.as_set().add_square(Square::G1);
             const WQ_FREESPACE: SquareSet =
-                Square::B1.bitboard().union(Square::C1.bitboard()).union(Square::D1.bitboard());
-            const BK_FREESPACE: SquareSet = Square::F8.bitboard().union(Square::G8.bitboard());
+                Square::B1.as_set().add_square(Square::C1).add_square(Square::D1);
+            const BK_FREESPACE: SquareSet = Square::F8.as_set().add_square(Square::G8);
             const BQ_FREESPACE: SquareSet =
-                Square::B8.bitboard().union(Square::C8.bitboard()).union(Square::D8.bitboard());
+                Square::B8.as_set().add_square(Square::C8).add_square(Square::D8);
 
             // stupid hack to avoid redoing or eagerly doing hard work.
             let mut cache = None;
@@ -490,8 +490,8 @@ impl Board {
     ) {
         let king_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][king_dst.index()];
         let rook_path = HORIZONTAL_RAY_BETWEEN[king_sq.index()][castling_sq.index()];
-        let relevant_occupied = occupied ^ king_sq.bitboard() ^ castling_sq.bitboard();
-        if (relevant_occupied & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard()))
+        let relevant_occupied = occupied ^ king_sq.as_set() ^ castling_sq.as_set();
+        if (relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set()))
             .is_empty()
             && !self.any_attacked(king_path, if IS_WHITE { Colour::BLACK } else { Colour::WHITE })
         {
@@ -539,7 +539,7 @@ impl Board {
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_knights.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::knight_attacks(sq);
             for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
@@ -549,7 +549,7 @@ impl Board {
         let our_king = self.pieces.king::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_king.iter() {
-            let moves = bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+            let moves = bitboards::king_attacks(sq);
             for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
@@ -559,7 +559,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+            let moves = bitboards::bishop_attacks(sq, blockers);
             for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }
@@ -569,7 +569,7 @@ impl Board {
         let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_orthogonal_sliders.iter() {
-            let moves = bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+            let moves = bitboards::rook_attacks(sq, blockers);
             for to in (moves & !blockers).iter() {
                 move_list.push::<false>(Move::new(sq, to));
             }

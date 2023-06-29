@@ -181,13 +181,13 @@ impl BitBoard {
     }
 
     pub fn set_piece_at(&mut self, sq: Square, piece: Piece) {
-        let sq_bb = sq.bitboard();
+        let sq_bb = sq.as_set();
         self.pieces[piece.piece_type().index()] |= sq_bb;
         self.colours[piece.colour().index()] |= sq_bb;
     }
 
     pub fn clear_piece_at(&mut self, sq: Square, piece: Piece) {
-        let sq_bb = sq.bitboard();
+        let sq_bb = sq.as_set();
         self.pieces[piece.piece_type().index()] &= !sq_bb;
         self.colours[piece.colour().index()] &= !sq_bb;
     }
@@ -213,17 +213,14 @@ impl BitBoard {
     }
 
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
-        let sq_bb = sq.bitboard();
+        let sq_bb = sq.as_set();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.pawns::<false>();
         let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.pawns::<true>();
-        let knight_attackers =
-            attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY) & (self.all_knights());
-        let diag_attackers = attacks::<{ PieceType::BISHOP.inner() }>(sq, occupied)
-            & (self.all_bishops() | self.all_queens());
-        let orth_attackers = attacks::<{ PieceType::ROOK.inner() }>(sq, occupied)
-            & (self.all_rooks() | self.all_queens());
-        let king_attackers =
-            attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY) & (self.all_kings());
+        let knight_attackers = knight_attacks(sq) & (self.all_knights());
+        let diag_attackers =
+            bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
+        let orth_attackers = rook_attacks(sq, occupied) & (self.all_rooks() | self.all_queens());
+        let king_attackers = king_attacks(sq) & (self.all_kings());
         black_pawn_attackers
             | white_pawn_attackers
             | knight_attackers
@@ -233,7 +230,7 @@ impl BitBoard {
     }
 
     fn piece_at(&self, sq: Square) -> Piece {
-        let sq_bb = sq.bitboard();
+        let sq_bb = sq.as_set();
         let colour = if (self.our_pieces::<true>() & sq_bb).non_empty() {
             Colour::WHITE
         } else if (self.our_pieces::<false>() & sq_bb).non_empty() {
@@ -264,17 +261,26 @@ impl BitBoard {
     }
 }
 
-pub fn attacks<const PIECE_TYPE: u8>(sq: Square, blockers: SquareSet) -> SquareSet {
-    debug_assert_ne!(PieceType::new(PIECE_TYPE), PieceType::PAWN);
-    match PieceType::new(PIECE_TYPE) {
-        PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
-        PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
-        PieceType::QUEEN => {
-            magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
-        }
-        PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
-        PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
-        _ => panic!("Invalid piece type"),
+pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    magic::get_bishop_attacks(sq, blockers)
+}
+pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    magic::get_rook_attacks(sq, blockers)
+}
+pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
+}
+pub fn knight_attacks(sq: Square) -> SquareSet {
+    lookups::get_knight_attacks(sq)
+}
+pub fn king_attacks(sq: Square) -> SquareSet {
+    lookups::get_king_attacks(sq)
+}
+pub fn pawn_attacks<const IS_WHITE: bool>(bb: SquareSet) -> SquareSet {
+    if IS_WHITE {
+        bb.north_east_one() | bb.north_west_one()
+    } else {
+        bb.south_east_one() | bb.south_west_one()
     }
 }
 
@@ -285,17 +291,9 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
         PieceType::QUEEN => {
             magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
         }
-        PieceType::KNIGHT => lookups::get_jumping_piece_attack::<{ PieceType::KNIGHT.inner() }>(sq),
-        PieceType::KING => lookups::get_jumping_piece_attack::<{ PieceType::KING.inner() }>(sq),
+        PieceType::KNIGHT => lookups::get_knight_attacks(sq),
+        PieceType::KING => lookups::get_king_attacks(sq),
         _ => panic!("Invalid piece type: {pt:?}"),
-    }
-}
-
-pub fn pawn_attacks<const IS_WHITE: bool>(bb: SquareSet) -> SquareSet {
-    if IS_WHITE {
-        bb.north_east_one() | bb.north_west_one()
-    } else {
-        bb.south_east_one() | bb.south_west_one()
     }
 }
 

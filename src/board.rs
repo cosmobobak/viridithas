@@ -164,16 +164,9 @@ impl Board {
         sq
     }
 
-    pub const US: u8 = 0;
-    pub const THEM: u8 = 1;
-    pub fn in_check<const SIDE: u8>(&self) -> bool {
-        if SIDE == Self::US {
-            let king_sq = self.king_sq(self.side);
-            self.sq_attacked(king_sq, self.side.flip())
-        } else {
-            let king_sq = self.king_sq(self.side.flip());
-            self.sq_attacked(king_sq, self.side)
-        }
+    pub fn in_check(&self) -> bool {
+        let king_sq = self.king_sq(self.side);
+        self.sq_attacked(king_sq, self.side.flip())
     }
 
     pub fn zero_height(&mut self) {
@@ -694,7 +687,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let sq_bb = sq.bitboard();
+        let sq_bb = sq.as_set();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let our_diags = self.pieces.bishopqueen::<IS_WHITE>();
@@ -709,29 +702,25 @@ impl Board {
         }
 
         // knights
-        let knight_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::KNIGHT.inner() }>(sq, SquareSet::EMPTY);
+        let knight_attacks_from_this_square = bitboards::knight_attacks(sq);
         if (our_knights & knight_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // bishops, queens
-        let diag_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::BISHOP.inner() }>(sq, blockers);
+        let diag_attacks_from_this_square = bitboards::bishop_attacks(sq, blockers);
         if (our_diags & diag_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::ROOK.inner() }>(sq, blockers);
+        let ortho_attacks_from_this_square = bitboards::rook_attacks(sq, blockers);
         if (our_orthos & ortho_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square =
-            bitboards::attacks::<{ PieceType::KING.inner() }>(sq, SquareSet::EMPTY);
+        let king_attacks_from_this_square = bitboards::king_attacks(sq);
         if (our_king & king_attacks_from_this_square).non_empty() {
             return true;
         }
@@ -800,12 +789,12 @@ impl Board {
             }
             // pawn capture
             if self.side == Colour::WHITE {
-                return (pawn_attacks::<true>(from.bitboard()) & to.bitboard()).non_empty();
+                return (pawn_attacks::<true>(from.as_set()) & to.as_set()).non_empty();
             }
-            return (pawn_attacks::<false>(from.bitboard()) & to.bitboard()).non_empty();
+            return (pawn_attacks::<false>(from.as_set()) & to.as_set()).non_empty();
         }
 
-        (to.bitboard()
+        (to.as_set()
             & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied()))
         .non_empty()
     }
@@ -825,10 +814,10 @@ impl Board {
         }
         let home_rank =
             if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
-        if (m.to().bitboard() & home_rank).is_empty() {
+        if (m.to().as_set() & home_rank).is_empty() {
             return false;
         }
-        if (m.from().bitboard() & home_rank).is_empty() {
+        if (m.from().as_set() & home_rank).is_empty() {
             return false;
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
@@ -874,11 +863,10 @@ impl Board {
         // rook_path is the path the rook takes to get to its destination.
         let rook_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][m.to().index()];
         // castle_occ is the occupancy that "counts" for castling.
-        let castle_occ = self.pieces.occupied() ^ m.from().bitboard() ^ m.to().bitboard();
+        let castle_occ = self.pieces.occupied() ^ m.from().as_set() ^ m.to().as_set();
 
-        (castle_occ & (king_path | rook_path | king_dst.bitboard() | rook_dst.bitboard()))
-            .is_empty()
-            && !self.any_attacked(king_path | m.from().bitboard(), self.side.flip())
+        (castle_occ & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())).is_empty()
+            && !self.any_attacked(king_path | m.from().as_set(), self.side.flip())
     }
 
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
@@ -1009,7 +997,7 @@ impl Board {
 
         let piece_moved = self.piece_at(from);
 
-        let from_to_bb = from.bitboard() | to.bitboard();
+        let from_to_bb = from.as_set() | to.as_set();
         self.pieces.move_piece(from_to_bb, piece_moved);
 
         hash_piece(&mut self.key, piece_moved, from);
@@ -1047,11 +1035,11 @@ impl Board {
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
         debug_assert!(m.from().on_board());
         debug_assert!(m.to().on_board());
-        let from_bb = m.from().bitboard();
+        let from_bb = m.from().as_set();
         if (from_bb & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
             return false;
         }
-        let to_bb = m.to().bitboard();
+        let to_bb = m.to().as_set();
         if (to_bb & (SquareSet::RANK_4 | SquareSet::RANK_5)).is_empty() {
             return false;
         }
@@ -1210,7 +1198,7 @@ impl Board {
         self.check_validity().unwrap();
 
         // reversed in_check fn, as we have now swapped sides
-        if self.in_check::<{ Self::THEM }>() {
+        if self.sq_attacked(self.king_sq(self.side.flip()), self.side) {
             self.unmake_move_base();
             return false;
         }
@@ -1312,7 +1300,7 @@ impl Board {
     pub fn make_nullmove(&mut self) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-        debug_assert!(!self.in_check::<{ Self::US }>());
+        debug_assert!(!self.in_check());
 
         self.history.push(Undo {
             m: Move::NULL,
@@ -1708,7 +1696,7 @@ impl Board {
 
         let to_sq_name = reg_match.get(4).unwrap().as_str();
         let to_square = to_sq_name.parse::<Square>().unwrap();
-        let to_bb = to_square.bitboard();
+        let to_bb = to_square.as_set();
         let mut from_bb = SquareSet::FULL;
 
         let promo = reg_match.get(5).map(|promo| {
@@ -1765,8 +1753,8 @@ impl Board {
             if legal_promo_t.index() != promo.unwrap_or(PieceType::NONE.index()) {
                 continue;
             }
-            let m_from_bb = m.from().bitboard();
-            let m_to_bb = m.to().bitboard();
+            let m_from_bb = m.from().as_set();
+            let m_to_bb = m.to().as_set();
             if (m_from_bb & from_bb).non_empty() && (m_to_bb & to_bb).non_empty() {
                 if legal_move.is_some() {
                     return Err(AmbiguousSAN(san.to_string()));
@@ -1848,7 +1836,7 @@ impl Board {
         if !self.make_move_base(m) {
             return CheckState::None;
         }
-        let gives_check = self.in_check::<{ Self::US }>();
+        let gives_check = self.in_check();
         if gives_check {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
@@ -2101,7 +2089,7 @@ impl Board {
         }
         if legal_moves {
             GameOutcome::Ongoing
-        } else if self.in_check::<{ Self::US }>() {
+        } else if self.in_check() {
             match self.side {
                 Colour::WHITE => GameOutcome::BlackWinMate,
                 Colour::BLACK => GameOutcome::WhiteWinMate,

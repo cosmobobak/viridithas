@@ -155,7 +155,7 @@ impl Square {
     }
 
     pub const fn relative_to(self, side: Colour) -> Self {
-        if side.inner() == Colour::WHITE.inner() {
+        if matches!(side, Colour::WHITE) {
             self
         } else {
             self.flip_rank()
@@ -221,7 +221,7 @@ impl Square {
         self.0 < 64
     }
 
-    pub const fn bitboard(self) -> SquareSet {
+    pub const fn as_set(self) -> SquareSet {
         SquareSet::from_inner(1 << self.0)
     }
 
@@ -483,19 +483,19 @@ mod tests {
         );
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
-            Square::B1.bitboard()
+            Square::B1.as_set()
         );
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
-            Square::B1.bitboard() | Square::C1.bitboard()
+            Square::B1.as_set() | Square::C1.as_set()
         );
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()],
-            Square::C1.bitboard()
+            Square::C1.as_set()
         );
         assert_eq!(
             HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()],
-            Square::C1.bitboard()
+            Square::C1.as_set()
         );
 
         for from in Square::all() {

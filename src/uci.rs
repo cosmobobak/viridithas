@@ -621,7 +621,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             }
             "ucinewgame" => do_newgame(&mut pos, &tt, &mut thread_data),
             "eval" => {
-                let eval = if pos.in_check::<{ Board::US }>() {
+                let eval = if pos.in_check() {
                     0
                 } else {
                     pos.evaluate::<true>(

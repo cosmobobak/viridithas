@@ -345,7 +345,7 @@ fn generate_on_thread(
             if board.ply() > 16
                 && !board.is_tactical(best_move)
                 && !is_game_theoretic_score(score)
-                && !board.in_check::<{ Board::US }>()
+                && !board.in_check()
             {
                 // we only save FENs where the best move is not tactical (promotions or captures)
                 // and the score is not game theoretic (mate or TB-win),
