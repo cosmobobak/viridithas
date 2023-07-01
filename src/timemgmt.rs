@@ -13,7 +13,7 @@ use crate::{
 };
 
 const MOVE_OVERHEAD: u64 = 10;
-const DEFAULT_MOVES_TO_GO: u64 = 25;
+const DEFAULT_MOVES_TO_GO: u64 = 20;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
