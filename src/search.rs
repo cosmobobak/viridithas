@@ -1537,4 +1537,5 @@ fn set_up_for_search(board: &mut Board, info: &mut SearchInfo, thread_headers: &
     for td in thread_headers.iter_mut() {
         td.set_up_for_search(board);
     }
+    TB_HITS.store(0, Ordering::Relaxed);
 }
