@@ -350,7 +350,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = screlu_flatten(us, them, &NNUE.output_weights);
+        let output = flatten::<SquaredClippedRelu<CR_MIN, CR_MAX>>(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
@@ -443,50 +443,46 @@ fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     }
 }
 
-#[allow(dead_code)]
-fn crelu(x: i16) -> i32 {
-    i32::from(x.clamp(CR_MIN, CR_MAX))
+trait ActivationFunction {
+    fn activate(x: i16) -> i32;
+    const ACCUMULATED_RENORMALISATION: i32;
 }
 
-/// Execute clipped relu on the partial activations,
-/// and accumulate the result into a sum.
-#[allow(dead_code)]
-pub fn crelu_flatten(
-    us: &Align64<[i16; LAYER_1_SIZE]>,
-    them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-) -> i32 {
-    let mut sum: i32 = 0;
-    for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += crelu(i) * i32::from(w);
+struct ClippedRelu<const MIN: i16, const MAX: i16>;
+
+impl<const MIN: i16, const MAX: i16> ActivationFunction for ClippedRelu<MIN, MAX> {
+    fn activate(x: i16) -> i32 {
+        i32::from(x.clamp(MIN, MAX))
     }
-    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += crelu(i) * i32::from(w);
+    const ACCUMULATED_RENORMALISATION: i32 = 1;
+}
+
+struct SquaredClippedRelu<const MIN: i16, const MAX: i16>;
+
+impl<const MIN: i16, const MAX: i16> ActivationFunction for SquaredClippedRelu<MIN, MAX> {
+    fn activate(x: i16) -> i32 {
+        let x = x.clamp(MIN, MAX);
+        let x = i32::from(x);
+        x * x
     }
-    sum
+    const ACCUMULATED_RENORMALISATION: i32 = QA;
 }
 
-fn screlu(x: i16) -> i32 {
-    let x = x.clamp(CR_MIN, CR_MAX);
-    let x = i32::from(x);
-    x * x
-}
-
-/// Execute squared + clipped relu on the partial activations,
+/// Execute an activation on the partial activations,
 /// and accumulate the result into a sum.
-pub fn screlu_flatten(
+fn flatten<F: ActivationFunction>(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i8; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += screlu(i) * i32::from(w);
+        sum += F::activate(i) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += screlu(i) * i32::from(w);
+        sum += F::activate(i) * i32::from(w);
     }
-    sum / QA
+    sum / F::ACCUMULATED_RENORMALISATION
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.
