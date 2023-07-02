@@ -107,7 +107,7 @@ fn run_on_positions(
         tt.clear();
         for t in &mut thread_data {
             t.clear_tables();
-            t.nnue.refresh_acc(&board);
+            t.nnue.reinit_from(&board);
         }
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::TimeOrCorrectMoves(
