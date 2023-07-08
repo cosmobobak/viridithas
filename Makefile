@@ -16,7 +16,6 @@ else
 endif
 
 openbench:
-	git lfs pull
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 
 final-release:
