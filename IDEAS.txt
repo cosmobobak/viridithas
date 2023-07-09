@@ -1,12 +1,9 @@
 ideas for viri
 MAJOR:
 - docs
-- check evasions
-- deeper conthists
-- big tuning run (check that the UCI tune parameters actually make it in to the engine!!)
-- support chess variants
--- FRC
--- DFRC
+- lazy NNUE updates
+- eval caching
+- train with gradual LR drop
 -- Crazyhouse
 
 MINOR:
