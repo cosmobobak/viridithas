@@ -15,8 +15,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - run: wget https://github.com/cosmobobak/viridithas-networks/releases/download/zhudun/zhudun.nnue
+    - run: EVALFILE=zhudun.nnue
     - uses: actions/checkout@v3
     - name: build and test
       run: cargo build --verbose
-    - name: Run tests
+    - name: run tests
       run: cargo test --verbose
