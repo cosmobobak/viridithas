@@ -1,6 +1,6 @@
 use std::{
     mem,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut}, env,
 };
 
 use crate::{
@@ -24,6 +24,8 @@ const CR_MAX: i16 = 255;
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 768;
+/// The number of buckets in the feature transformer.
+pub const BUCKETS: usize = 64;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -46,6 +48,26 @@ impl Activation for Deactivate {
     const ACTIVATE: bool = false;
     type Reverse = Activate;
 }
+#[derive(Debug, Copy, Clone)]
+pub struct Update {
+    pub white: bool,
+    pub black: bool,
+}
+impl Update {
+    pub const BOTH: Self = Self { white: true, black: true };
+
+    pub const fn opposite(self) -> Self {
+        Self { white: self.black, black: self.white }
+    }
+
+    pub fn colour(colour: Colour) -> Self {
+        match colour {
+            Colour::WHITE => Self { white: true, black: false },
+            Colour::BLACK => Self { white: false, black: true },
+            _ => unreachable!(),
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(C, align(64))]
@@ -63,17 +85,19 @@ impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
     }
 }
 
-// read in bytes from files and transmute them into u16s.
+// read in the binary file containing the network parameters
+// have to do some path manipulation to get relative paths to work
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = NNUEParams {
-    feature_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_weights.bin")) },
-    feature_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/feature_bias.bin")) },
-    output_weights: unsafe { mem::transmute(*include_bytes!("../../nnue/output_weights.bin")) },
-    output_bias: unsafe { mem::transmute(*include_bytes!("../../nnue/output_bias.bin")) },
+pub static NNUE: NNUEParams = unsafe {
+    mem::transmute(*include_bytes!(concat!(
+        "../../",
+        env!("EVALFILE"),
+    )))
 };
 
+#[repr(C)]
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
     pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
     pub output_weights: Align64<[i8; LAYER_1_SIZE * 2]>,
     pub output_bias: i16,
@@ -124,6 +148,24 @@ impl NNUEParams {
         let path = path.join(format!("neuron_{neuron}.tga"));
         image.save_as_tga(path);
     }
+
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
+    }
 }
 
 /// State of the partial activations of the NNUE network.
@@ -141,6 +183,10 @@ pub struct NNUEState {
     pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
+    /// White king locations.
+    pub white_king_locs: [Square; ACC_STACK_SIZE],
+    /// Black king locations.
+    pub black_king_locs: [Square; ACC_STACK_SIZE],
 }
 
 const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (usize, usize) {
@@ -183,7 +229,7 @@ impl NNUEState {
             Box::from_raw(ptr.cast())
         };
 
-        net.refresh_acc(board);
+        net.reinit_from(board);
 
         net
     }
@@ -200,15 +246,26 @@ impl NNUEState {
     }
 
     /// Reinitialise the state from a board.
-    pub fn refresh_acc(&mut self, board: &Board) {
+    pub fn reinit_from(&mut self, board: &Board) {
         self.current_acc = 0;
 
-        #[cfg(debug_assertions)]
-        self.white_pov.fill(0);
-        #[cfg(debug_assertions)]
-        self.black_pov.fill(0);
+        self.refresh_accumulators(board, Update { white: true, black: true });
+    }
 
-        self.accumulators[self.current_acc].init(&NNUE.feature_bias);
+    pub fn refresh_accumulators(&mut self, board: &Board, update: Update) {
+        #[cfg(debug_assertions)]
+        if update.white {
+            self.white_pov.fill(0);
+        }
+        #[cfg(debug_assertions)]
+        if update.black {
+            self.black_pov.fill(0);
+        }
+
+        let white_king = board.king_sq(Colour::WHITE);
+        let black_king = board.king_sq(Colour::BLACK);
+
+        self.accumulators[self.current_acc].init(&NNUE.feature_bias, update);
 
         for colour in [Colour::WHITE, Colour::BLACK] {
             for piece_type in PieceType::all() {
@@ -216,72 +273,117 @@ impl NNUEState {
                 let piece_bb = board.pieces.piece_bb(piece);
 
                 for sq in piece_bb.iter() {
-                    self.update_feature::<Activate>(piece_type, colour, sq);
+                    self.update_feature::<Activate>(
+                        white_king, black_king, piece_type, colour, sq, update,
+                    );
                 }
             }
         }
     }
 
     /// Update the state from a move.
+    #[allow(clippy::too_many_arguments)]
     pub fn move_feature(
         &mut self,
+        white_king: Square,
+        black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         from: Square,
         to: Square,
+        update: Update,
     ) {
         let (white_from, black_from) = feature_indices(from, piece_type, colour);
         let (white_to, black_to) = feature_indices(to, piece_type, colour);
 
         let acc = &mut self.accumulators[self.current_acc];
 
-        subtract_and_add_to_all(
-            &mut acc.white,
-            &NNUE.feature_weights,
-            white_from * LAYER_1_SIZE,
-            white_to * LAYER_1_SIZE,
-        );
-        subtract_and_add_to_all(
-            &mut acc.black,
-            &NNUE.feature_weights,
-            black_from * LAYER_1_SIZE,
-            black_to * LAYER_1_SIZE,
-        );
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket =
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
+
+        if update.white {
+            subtract_and_add_to_all(
+                &mut acc.white,
+                white_bucket,
+                white_from * LAYER_1_SIZE,
+                white_to * LAYER_1_SIZE,
+            );
+        }
+        if update.black {
+            subtract_and_add_to_all(
+                &mut acc.black,
+                black_bucket,
+                black_from * LAYER_1_SIZE,
+                black_to * LAYER_1_SIZE,
+            );
+        }
 
         #[cfg(debug_assertions)]
         {
-            self.assert_state::<Activate>(white_from, black_from, (colour, piece_type, from));
-            self.assert_state::<Deactivate>(white_to, black_to, (colour, piece_type, to));
-            self.white_pov[white_from] = 0;
-            self.black_pov[black_from] = 0;
-            self.white_pov[white_to] = 1;
-            self.black_pov[black_to] = 1;
+            self.assert_state::<Activate>(
+                white_from,
+                black_from,
+                (colour, piece_type, from),
+                update,
+            );
+            self.assert_state::<Deactivate>(white_to, black_to, (colour, piece_type, to), update);
+            if update.white {
+                self.white_pov[white_from] = 0;
+            }
+            if update.black {
+                self.black_pov[black_from] = 0;
+            }
+            if update.white {
+                self.white_pov[white_to] = 1;
+            }
+            if update.black {
+                self.black_pov[black_to] = 1;
+            }
         }
     }
 
     /// Update by activating or deactivating a piece.
     pub fn update_feature<A: Activation>(
         &mut self,
+        white_king: Square,
+        black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         sq: Square,
+        update: Update,
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let black_bucket =
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
 
         if A::ACTIVATE {
-            add_to_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
-            add_to_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
+            if update.white {
+                add_to_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+            }
+            if update.black {
+                add_to_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
+            }
         } else {
-            sub_from_all(&mut acc.white, &NNUE.feature_weights, white_idx * LAYER_1_SIZE);
-            sub_from_all(&mut acc.black, &NNUE.feature_weights, black_idx * LAYER_1_SIZE);
+            if update.white {
+                sub_from_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+            }
+            if update.black {
+                sub_from_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
+            }
         }
 
         #[cfg(debug_assertions)]
         {
-            self.assert_state::<A::Reverse>(white_idx, black_idx, (colour, piece_type, sq));
-            self.white_pov[white_idx] = A::ACTIVATE.into();
-            self.black_pov[black_idx] = A::ACTIVATE.into();
+            self.assert_state::<A::Reverse>(white_idx, black_idx, (colour, piece_type, sq), update);
+            if update.white {
+                self.white_pov[white_idx] = A::ACTIVATE.into();
+            }
+            if update.black {
+                self.black_pov[black_idx] = A::ACTIVATE.into();
+            }
         }
     }
 
@@ -384,24 +486,29 @@ impl NNUEState {
         white: usize,
         black: usize,
         feature: (Colour, PieceType, Square),
+        update: Update,
     ) {
         #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
         let (colour, piece_type, sq) = feature;
         let val = if A::ACTIVATE { 1 } else { 0 };
-        assert_eq!(
-            self.white_pov[white],
-            val,
-            "piece: {}, sq: {}",
-            Piece::new(colour, piece_type),
-            sq,
-        );
-        assert_eq!(
-            self.black_pov[black],
-            val,
-            "piece: {}, sq: {}",
-            Piece::new(colour, piece_type),
-            sq,
-        );
+        if update.white {
+            assert_eq!(
+                self.white_pov[white],
+                val,
+                "piece: {}, sq: {}",
+                Piece::new(colour, piece_type),
+                sq,
+            );
+        }
+        if update.black {
+            assert_eq!(
+                self.black_pov[black],
+                val,
+                "piece: {}, sq: {}",
+                Piece::new(colour, piece_type),
+                sq,
+            );
+        }
     }
 }
 

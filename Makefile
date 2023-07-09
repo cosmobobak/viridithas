@@ -15,7 +15,7 @@ else
 	V4NAME := $(LXE)-$(VERSION)-x86_64-linux-v4
 endif
 
-rule:
+openbench:
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 
 final-release:
