@@ -268,8 +268,10 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
+        let hit = TTHit { tt_move, tt_depth, tt_bound, tt_value };
+
         if tt_depth < depth {
-            return ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound, tt_value });
+            return ProbeResult::Hit(hit);
         }
 
         debug_assert!(tt_value >= -INFINITY);
@@ -277,38 +279,23 @@ impl<'a> TTView<'a> {
             Bound::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             Bound::Upper => {
                 if tt_value <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Upper,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value })
+                    ProbeResult::Hit(hit)
                 }
             }
             Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Lower,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value })
+                    ProbeResult::Hit(hit)
                 }
             }
             Bound::Exact => {
                 if do_not_cut {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value })
+                    ProbeResult::Hit(hit)
                 } else {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Exact,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 }
             }
         }
