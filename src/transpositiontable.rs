@@ -67,10 +67,12 @@ pub struct TTEntry {
     pub score: i16,                 // 16 bits
     pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
+    pub evaluation: i16,            // 16 bits
+    pub dummy: [u8; 6],             // 48 bits
 }
 
 const _TT_ENTRIES_ARE_ONE_WORD: () =
-    assert!(std::mem::size_of::<TTEntry>() == 8, "TT entry is not one word");
+    assert!(std::mem::size_of::<TTEntry>() == 16, "TT entry is not one word");
 
 impl TTEntry {
     pub const NULL: Self = Self {
@@ -79,18 +81,20 @@ impl TTEntry {
         score: 0,
         depth: CompactDepthStorage::NULL,
         age_and_flag: AgeAndFlag::NULL,
+        evaluation: 0,
+        dummy: [0; 6],
     };
 }
 
-impl From<u64> for TTEntry {
-    fn from(data: u64) -> Self {
+impl From<[u64; 2]> for TTEntry {
+    fn from(data: [u64; 2]) -> Self {
         // SAFETY: This is safe because all fields of TTEntry are (at base) integral types,
         // and TTEntry is repr(C).
         unsafe { std::mem::transmute(data) }
     }
 }
 
-impl From<TTEntry> for u64 {
+impl From<TTEntry> for [u64; 2] {
     fn from(entry: TTEntry) -> Self {
         // SAFETY: This is safe because all bitpatterns of `u64` are valid.
         unsafe { std::mem::transmute(entry) }
@@ -101,13 +105,13 @@ const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 
 #[derive(Debug)]
 pub struct TT {
-    table: Vec<AtomicU64>,
+    table: Vec<[AtomicU64; 2]>,
     age: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct TTView<'a> {
-    table: &'a [AtomicU64],
+    table: &'a [[AtomicU64; 2]],
     age: u8,
 }
 
@@ -117,6 +121,7 @@ pub struct TTHit {
     pub tt_depth: Depth,
     pub tt_bound: Bound,
     pub tt_value: i32,
+    pub tt_eval: i32,
 }
 
 pub enum ProbeResult {
@@ -134,13 +139,13 @@ impl TT {
 
     pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
-        self.table.resize_with(new_len, || AtomicU64::new(Self::NULL_VALUE));
+        self.table.resize_with(new_len, || [AtomicU64::new(Self::NULL_VALUE), AtomicU64::new(Self::NULL_VALUE)]);
         self.table.shrink_to_fit();
-        self.table.iter_mut().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
+        self.table.iter_mut().flatten().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     pub fn clear(&self) {
-        self.table.iter().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
+        self.table.iter().flatten().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
     }
 
     const fn pack_key(key: u64) -> u16 {
@@ -176,6 +181,7 @@ impl<'a> TTView<'a> {
         ply: usize,
         mut best_move: Move,
         score: i32,
+        eval: i32,
         flag: Bound,
         depth: Depth,
     ) {
@@ -188,7 +194,11 @@ impl<'a> TTView<'a> {
         // create a small key from the full key:
         let key = TT::pack_key(key);
         // load the entry:
-        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
+        let parts = [
+            self.table[index][0].load(Ordering::Relaxed),
+            self.table[index][1].load(Ordering::Relaxed),
+        ];
+        let entry: TTEntry = parts.into();
 
         if best_move.is_null() && entry.key == key {
             // if we don't have a best move, and the entry is for the same position,
@@ -223,14 +233,17 @@ impl<'a> TTView<'a> {
             || flag == Bound::Exact && entry.age_and_flag.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
-            let write = TTEntry {
+            let write: [u64; 2] = TTEntry {
                 key,
                 m: best_move,
                 score: score.try_into().expect("attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table"),
                 depth: depth.try_into().unwrap(),
                 age_and_flag: AgeAndFlag::new(self.age, flag),
-            };
-            self.table[index].store(write.into(), Ordering::SeqCst);
+                evaluation: eval.try_into().expect("attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table"),
+                dummy: Default::default(),
+            }.into();
+            self.table[index][0].store(write[0], Ordering::Relaxed);
+            self.table[index][1].store(write[1], Ordering::Relaxed);
         }
     }
 
@@ -252,7 +265,12 @@ impl<'a> TTView<'a> {
         debug_assert!(beta >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
-        let entry: TTEntry = self.table[index].load(Ordering::SeqCst).into();
+        // load the entry:
+        let parts = [
+            self.table[index][0].load(Ordering::Relaxed),
+            self.table[index][1].load(Ordering::Relaxed),
+        ];
+        let entry: TTEntry = parts.into();
 
         if entry.key != key {
             return ProbeResult::Nothing;
@@ -268,8 +286,16 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
+        let hit = TTHit {
+            tt_move,
+            tt_depth,
+            tt_bound,
+            tt_value,
+            tt_eval: entry.evaluation.into(),
+        };
+
         if tt_depth < depth {
-            return ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound, tt_value });
+            return ProbeResult::Hit(hit);
         }
 
         debug_assert!(tt_value >= -INFINITY);
@@ -277,38 +303,23 @@ impl<'a> TTView<'a> {
             Bound::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
             Bound::Upper => {
                 if tt_value <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Upper,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Upper, tt_value })
+                    ProbeResult::Hit(hit)
                 }
             }
             Bound::Lower => {
                 if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Lower,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 } else {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower, tt_value })
+                    ProbeResult::Hit(hit)
                 }
             }
             Bound::Exact => {
                 if do_not_cut {
-                    ProbeResult::Hit(TTHit { tt_move, tt_depth, tt_bound: Bound::Exact, tt_value })
+                    ProbeResult::Hit(hit)
                 } else {
-                    ProbeResult::Cutoff(TTHit {
-                        tt_move,
-                        tt_depth,
-                        tt_bound: Bound::Exact,
-                        tt_value,
-                    }) // never cutoff at root.
+                    ProbeResult::Cutoff(hit) // never cutoff at root.
                 }
             }
         }
@@ -337,7 +348,7 @@ impl<'a> TTView<'a> {
     }
 
     pub fn hashfull(&self) -> usize {
-        self.table.iter().take(1000).filter(|e| e.load(Ordering::Relaxed) != 0).count()
+        self.table.iter().take(1000).filter(|e| e[0].load(Ordering::Relaxed) != 0).count()
     }
 }
 
@@ -375,8 +386,10 @@ mod tests {
             score: 0,
             depth: ZERO_PLY.try_into().unwrap(),
             age_and_flag: AgeAndFlag::new(63, Bound::Exact),
+            evaluation: 1337,
+            dummy: [0; 6]
         };
-        let packed: u64 = entry.into();
+        let packed: [u64; 2] = entry.into();
         let unpacked: TTEntry = packed.into();
         assert_eq!(entry, unpacked);
     }
@@ -384,7 +397,7 @@ mod tests {
     #[test]
     fn null_tt_entry_is_zero() {
         let entry = TTEntry::NULL;
-        let packed: u64 = entry.into();
-        assert_eq!(packed, TT::NULL_VALUE);
+        let packed: [u64; 2] = entry.into();
+        assert_eq!(packed, [TT::NULL_VALUE; 2]);
     }
 }

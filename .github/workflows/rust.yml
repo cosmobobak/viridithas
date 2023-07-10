@@ -16,7 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: fetch evalfile
+      run: |
+        wget https://github.com/cosmobobak/viridithas-networks/releases/download/zhudun/zhudun.nnue
+        echo "EVALFILE=zhudun.nnue" >> $GITHUB_ENV
     - name: build and test
       run: cargo build --verbose
-    - name: Run tests
+    - name: run tests
       run: cargo test --verbose

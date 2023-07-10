@@ -272,7 +272,7 @@ fn generate_on_thread(
         // reset everything: board, thread data, tt, search info
         // board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
         board.set_startpos();
-        thread_data.nnue.refresh_acc(&board);
+        thread_data.nnue.reinit_from(&board);
         tt.clear();
         info.set_up_for_search();
         // flush output buffer
