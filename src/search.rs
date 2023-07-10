@@ -24,7 +24,7 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    definitions::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH},
+    definitions::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE},
     historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     search::pv::PVariation,
@@ -478,7 +478,7 @@ impl Board {
             Bound::Upper
         };
 
-        tt.store::<false>(key, height, best_move, best_score, flag, ZERO_PLY);
+        tt.store::<false>(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY);
 
         best_score
     }
@@ -612,7 +612,7 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    tt.store::<false>(key, height, Move::NULL, tb_value, tb_bound, depth);
+                    tt.store::<false>(key, height, Move::NULL, tb_value, VALUE_NONE, tb_bound, depth);
                     return tb_value;
                 }
 
@@ -631,6 +631,13 @@ impl Board {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
+        } else if let Some(TTHit { tt_eval, .. }) = &tt_hit {
+            let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+            if v != VALUE_NONE {
+                v // if the TT eval is not VALUE_NONE, use it.
+            } else {
+                self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
+            }
         } else {
             self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
         };
@@ -785,7 +792,7 @@ impl Board {
                 self.unmake_move::<NNUE>(t, info);
 
                 if value >= pc_beta {
-                    tt.store::<false>(key, height, m, value, Bound::Lower, depth - 3);
+                    tt.store::<false>(key, height, m, value, static_eval, Bound::Lower, depth - 3);
                     return value;
                 }
             }
@@ -1048,7 +1055,7 @@ impl Board {
                 alpha != original_alpha || best_move.is_null(),
                 "alpha was not raised, but best_move was not null!"
             );
-            tt.store::<ROOT>(key, height, best_move, best_score, flag, depth);
+            tt.store::<ROOT>(key, height, best_move, best_score, static_eval, flag, depth);
         }
 
         t.best_moves[height] = best_move;
