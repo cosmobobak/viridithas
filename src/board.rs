@@ -5,7 +5,7 @@ pub mod validation;
 
 use std::{
     fmt::{self, Debug, Display, Formatter, Write},
-    sync::{atomic::Ordering, Once},
+    sync::{atomic::Ordering, OnceLock},
 };
 
 use rand::prelude::SliceRandom;
@@ -37,20 +37,12 @@ use self::{
     movegen::{bitboards::BitBoard, MoveListEntry},
 };
 
-static SAN_REGEX_INIT: Once = Once::new();
-static mut SAN_REGEX: Option<Regex> = None;
+static SAN_REGEX: OnceLock<Regex> = OnceLock::new();
 fn get_san_regex() -> &'static Regex {
-    unsafe {
-        SAN_REGEX_INIT.call_once(|| {
-            SAN_REGEX = Some(
-                Regex::new(
-                    r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$",
-                )
-                .unwrap(),
-            );
-        });
-        SAN_REGEX.as_ref().unwrap()
-    }
+    SAN_REGEX.get_or_init(|| {
+        Regex::new(r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$")
+            .unwrap()
+    })
 }
 
 #[derive(Clone, PartialEq, Eq)]
