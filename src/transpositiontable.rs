@@ -175,6 +175,7 @@ impl<'a> TTView<'a> {
         ((key * len) >> 64) as usize
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn store<const ROOT: bool>(
         &self,
         key: u64,

@@ -633,10 +633,10 @@ impl Board {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
         } else if let Some(TTHit { tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
-            if v != VALUE_NONE {
-                v // if the TT eval is not VALUE_NONE, use it.
+            if v == VALUE_NONE {
+                self.evaluate::<NNUE>(info, t, info.nodes) // regenerate the static eval if it's VALUE_NONE.
             } else {
-                self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
+                v // if the TT eval is not VALUE_NONE, use it.
             }
         } else {
             self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
