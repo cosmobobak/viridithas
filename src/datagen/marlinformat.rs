@@ -179,6 +179,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn roundtrip() {
         CHESS960.store(true, std::sync::atomic::Ordering::SeqCst);
         // Grab `valid.sfens` from `cozy-chess` to run test
