@@ -530,6 +530,13 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 };
                 options.limit = limit;
             }
+            "dfrc" => {
+                if let Some(dfrc) = value.parse::<bool>().ok() {
+                    options.generate_dfrc = dfrc;
+                } else {
+                    eprintln!("Invalid value for dfrc, must be a boolean");
+                }
+            }
             "log_level" => {
                 let log_level = match value.parse::<u8>() {
                     Ok(log_level) => log_level,
@@ -620,7 +627,7 @@ impl Display for DataGenOptions {
                 DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
             }
         )?;
-        writeln!(f, " |> generate_dfrc: {}", self.generate_dfrc)?;
+        writeln!(f, " |> dfrc: {}", self.generate_dfrc)?;
         writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
             writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
