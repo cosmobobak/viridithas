@@ -40,7 +40,6 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 
-#[cfg(feature = "datagen")]
 mod datagen;
 
 /// The name of the engine.

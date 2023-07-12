@@ -41,6 +41,7 @@ pub enum SearchLimit {
     Time(u64),
     TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
+    SoftNodes(u64),
     Mate {
         ply: usize,
     },
@@ -227,13 +228,23 @@ impl TimeManager {
                 }
                 past_limit
             }
+            SearchLimit::SoftNodes(limit) => {
+                // this should never *really* return true, but we do this in case of search explosions.
+                let hard_limit = limit * 128;
+                let past_limit = nodes_so_far >= hard_limit;
+                if past_limit {
+                    stopped.store(true, Ordering::SeqCst);
+                }
+                past_limit
+            }
         }
     }
 
     /// If we have used enough time that stopping after finishing a depth would be good here.
-    pub fn is_past_opt_time(&self) -> bool {
+    pub fn is_past_opt_time(&self, nodes: u64) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
+            SearchLimit::SoftNodes(limit) => nodes >= limit,
             _ => false,
         }
     }

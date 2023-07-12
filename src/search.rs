@@ -201,7 +201,7 @@ impl Board {
             t.depth = d;
             if MAIN_THREAD {
                 // consider stopping early if we've neatly completed a depth:
-                if info.time_manager.in_game() && info.time_manager.is_past_opt_time() {
+                if info.time_manager.in_game() && info.time_manager.is_past_opt_time(info.nodes) {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }

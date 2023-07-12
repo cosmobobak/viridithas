@@ -50,6 +50,8 @@ struct DataGenOptions {
     use_nnue: bool,
     // The depth or node limit for searches.
     limit: DataGenLimit,
+    // Whether to generate DFRC data.
+    generate_dfrc: bool,
     // log level
     log_level: u8,
 }
@@ -63,6 +65,7 @@ impl DataGenOptions {
             tablebases_path: None,
             use_nnue: true,
             limit: DataGenLimit::Depth(8),
+            generate_dfrc: true,
             log_level: 1,
         }
     }
@@ -70,7 +73,7 @@ impl DataGenOptions {
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}t-{}-{}-{}",
+            "{}g-{}t-{}-{}-{}-{}",
             self.num_games,
             self.num_threads,
             self.tablebases_path.as_ref().map_or_else(
@@ -78,6 +81,7 @@ impl DataGenOptions {
                 |tablebases_path| tablebases_path.to_string_lossy()
             ),
             if self.use_nnue { "nnue" } else { "hce" },
+            if self.generate_dfrc { "dfrc" } else { "classical" },
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
@@ -87,11 +91,10 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
-    #[cfg(not(feature = "datagen"))]
-    panic!("This binary was not compiled with the datagen feature enabled.");
+    if cfg!(not(feature = "datagen")) {
+        panic!("Data generation is not enabled, please enable the 'datagen' feature to use this functionality.");
+    }
 
-    FENS_GENERATED.store(0, Ordering::SeqCst);
-    // CHESS960.store(true, Ordering::SeqCst);
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
         println!("Stopping generation, please don't force quit.");
@@ -103,6 +106,10 @@ pub fn gen_data_main(cli_config: Option<&str>) {
             show_boot_info(&options);
             config_loop(options)
         }, |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"));
+
+    CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
+    FENS_GENERATED.store(0, Ordering::SeqCst);
+
     if options.log_level > 0 {
         println!("Starting data generation with the following configuration:");
         println!("{options}");
@@ -208,7 +215,7 @@ fn generate_on_thread(
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
+        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes(nodes),
     });
     let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
 
@@ -547,7 +554,7 @@ impl FromStr for DataGenOptions {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut options = Self::new();
         let parts = s.split('-').collect::<Vec<_>>();
-        if parts.len() != 5 {
+        if parts.len() != 6 {
             return Err(format!("Invalid options string: {s}"));
         }
         options.num_games = parts[0]
@@ -564,22 +571,27 @@ impl FromStr for DataGenOptions {
             options.tablebases_path = Some(PathBuf::from(parts[2]));
         }
         options.use_nnue = parts[3] == "nnue";
-        let limit = match parts[4].chars().next() {
+        options.generate_dfrc = match parts[4] {
+            "dfrc" => true,
+            "classical" => false,
+            _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
+        };
+        let limit = match parts[5].chars().next() {
             Some('d') => DataGenLimit::Depth(
-                parts[4]
+                parts[5]
                     .strip_prefix('d')
-                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[4]))?
+                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[5]))?
                     .parse()
-                    .map_err(|_| format!("Invalid depth limit: {}", parts[4]))?,
+                    .map_err(|_| format!("Invalid depth limit: {}", parts[5]))?,
             ),
             Some('n') => DataGenLimit::Nodes(
-                parts[4]
+                parts[5]
                     .strip_prefix('n')
-                    .ok_or_else(|| format!("Invalid node limit: {}", parts[4]))?
+                    .ok_or_else(|| format!("Invalid node limit: {}", parts[5]))?
                     .parse()
-                    .map_err(|_| format!("Invalid node limit: {}", parts[4]))?,
+                    .map_err(|_| format!("Invalid node limit: {}", parts[5]))?,
             ),
-            _ => return Err(format!("Invalid limit: {}", parts[4])),
+            _ => return Err(format!("Invalid limit: {}", parts[5])),
         };
         options.limit = limit;
         options.log_level = 1;
