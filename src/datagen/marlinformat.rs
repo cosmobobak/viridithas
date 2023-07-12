@@ -36,14 +36,15 @@ impl PackedBoard {
                 Rank::RANK_8
             };
             if piece_type == PieceType::ROOK && sq.rank() == rank1 {
-                let castling_sq = match board.king_sq(colour) < sq {
-                    true => board.castling_rights().kingside(colour),
-                    false => board.castling_rights().queenside(colour),
-                };
-                let castling_file = if castling_sq != Square::NO_SQUARE {
-                    Some(castling_sq.file())
+                let castling_sq = if board.king_sq(colour) < sq {
+                    board.castling_rights().kingside(colour)
                 } else {
+                    board.castling_rights().queenside(colour)
+                };
+                let castling_file = if castling_sq == Square::NO_SQUARE {
                     None
+                } else {
+                    Some(castling_sq.file())
                 };
                 if Some(sq.file()) == castling_file {
                     piece_code = UNMOVED_ROOK;
@@ -61,19 +62,19 @@ impl PackedBoard {
             stm_ep_square: (board.turn().inner()) << 7
                 | board.ep_sq().inner(),
             halfmove_clock: board.fifty_move_counter(),
-            fullmove_number: util::U16Le::new(board.full_move_number() as u16),
+            fullmove_number: util::U16Le::new(board.full_move_number().try_into().unwrap()),
             wdl,
             eval: util::I16Le::new(eval),
             extra,
         }
     }
 
-    pub fn unpack(&self) -> Option<(Board, i16, u8, u8)> {
+    pub fn unpack(&self) -> (Board, i16, u8, u8) {
         let mut builder = Board::new();
 
         let mut seen_king = [false; 2];
         for (i, sq) in SquareSet::from_inner(self.occupancy.get()).iter().enumerate() {
-            let colour = Colour::new((self.pieces.get(i) as usize >> 3) as u8);
+            let colour = Colour::new(self.pieces.get(i) >> 3);
             let piece_code = self.pieces.get(i) & 0b0111;
             let piece_type = match piece_code {
                 UNMOVED_ROOK => {
@@ -92,14 +93,14 @@ impl PackedBoard {
             builder.add_piece(sq, Piece::new(colour, piece_type));
         }
 
-        *builder.ep_sq_mut() = Square::new((self.stm_ep_square as usize & 0b0111_1111) as u8);
-        *builder.turn_mut() = Colour::new((self.stm_ep_square as usize >> 7) as u8);
+        *builder.ep_sq_mut() = Square::new(self.stm_ep_square & 0b0111_1111);
+        *builder.turn_mut() = Colour::new(self.stm_ep_square >> 7);
         *builder.halfmove_clock_mut() = self.halfmove_clock;
         builder.set_fullmove_clock(self.fullmove_number.get());
 
         builder.regenerate_zobrist();
 
-        Some((builder, self.eval.get(), self.wdl, self.extra))
+        (builder, self.eval.get(), self.wdl, self.extra)
     }
 }
 
@@ -108,7 +109,7 @@ impl Board {
         PackedBoard::pack(self, eval, wdl, extra)
     }
 
-    pub fn unpack(packed: &PackedBoard) -> Option<(Self, i16, u8, u8)> {
+    pub fn unpack(packed: &PackedBoard) -> (Self, i16, u8, u8) {
         packed.unpack()
     }
 }
@@ -119,11 +120,11 @@ mod util {
     pub struct U64Le(u64);
 
     impl U64Le {
-        pub fn new(v: u64) -> Self {
+        pub const fn new(v: u64) -> Self {
             Self(v.to_le())
         }
 
-        pub fn get(self) -> u64 {
+        pub const fn get(self) -> u64 {
             u64::from_le(self.0)
         }
     }
@@ -133,11 +134,11 @@ mod util {
     pub struct U16Le(u16);
 
     impl U16Le {
-        pub fn new(v: u16) -> Self {
+        pub const fn new(v: u16) -> Self {
             Self(v.to_le())
         }
 
-        pub fn get(self) -> u16 {
+        pub const fn get(self) -> u16 {
             u16::from_le(self.0)
         }
     }
@@ -147,11 +148,11 @@ mod util {
     pub struct I16Le(i16);
 
     impl I16Le {
-        pub fn new(v: i16) -> Self {
+        pub const fn new(v: i16) -> Self {
             Self(v.to_le())
         }
 
-        pub fn get(self) -> i16 {
+        pub const fn get(self) -> i16 {
             i16::from_le(self.0)
         }
     }
@@ -161,7 +162,7 @@ mod util {
     pub struct U4Array32([u8; 16]);
 
     impl U4Array32 {
-        pub fn get(&self, i: usize) -> u8 {
+        pub const fn get(&self, i: usize) -> u8 {
             (self.0[i / 2] >> ((i % 2) * 4)) & 0xF
         }
 
@@ -186,9 +187,7 @@ mod tests {
         for sfen in include_str!("valid.sfens").lines() {
             let board = Board::from_fen(sfen).unwrap();
             let packed = PackedBoard::pack(&board, 0, 0, 0);
-            let (unpacked, _, _, _) = packed
-                .unpack()
-                .unwrap_or_else(|| panic!("Failed to unpack {}. {:#X?}", sfen, packed));
+            let (unpacked, _, _, _) = packed.unpack();
             crate::board::check_eq(&board, &unpacked, sfen);
         }
     }

@@ -474,7 +474,7 @@ pub static HORIZONTAL_RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
-pub unsafe fn slice_into_bytes_with_lifetime<'a, T>(slice: &'a [T]) -> &'a [u8] {
+pub const unsafe fn slice_into_bytes_with_lifetime<T>(slice: &[T]) -> &[u8] {
     std::slice::from_raw_parts(
         slice.as_ptr().cast(),
         slice.len() * std::mem::size_of::<T>(),

@@ -79,6 +79,7 @@ pub struct Board {
 
 /// Check that two boards are equal.
 /// This is used for debugging.
+#[allow(dead_code)]
 pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn bitboards {msg}");
     assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight bitboards {msg}");

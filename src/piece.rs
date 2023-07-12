@@ -302,6 +302,7 @@ impl Piece {
         PiecesIterator::new()
     }
 
+    #[allow(dead_code)]
     pub const fn inner(self) -> u8 {
         self.v
     }

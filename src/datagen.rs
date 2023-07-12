@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod marlinformat;
 
 use std::{
@@ -93,9 +95,7 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
-    if cfg!(not(feature = "datagen")) {
-        panic!("Data generation is not enabled, please enable the 'datagen' feature to use this functionality.");
-    }
+    assert!(!cfg!(not(feature = "datagen")), "Data generation is not enabled, please enable the 'datagen' feature to use this functionality.");
 
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
@@ -449,7 +449,7 @@ fn show_boot_info(options: &DataGenOptions) {
 }
 
 fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
-    #![allow(clippy::option_if_let_else)]
+    #![allow(clippy::option_if_let_else, clippy::too_many_lines)]
     println!();
     let mut user_input = String::new();
     loop {
@@ -580,9 +580,9 @@ impl FromStr for DataGenOptions {
             options.tablebases_path = Some(PathBuf::from(parts[2]));
         }
         options.use_nnue = parts[3] == "nnue";
-        options.generate_dfrc = match parts[4] {
-            "dfrc" => true,
-            "classical" => false,
+        options.generate_dfrc = match parts.get(4).copied() {
+            Some("dfrc") => true,
+            Some("classical") => false,
             _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
         };
         let limit = match parts[5].chars().next() {
