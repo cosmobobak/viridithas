@@ -77,6 +77,36 @@ pub struct Board {
     repetition_cache: Vec<u64>,
 }
 
+/// Check that two boards are equal.
+/// This is used for debugging.
+pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
+    assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn bitboards {msg}");
+    assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight bitboards {msg}");
+    assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop bitboards {msg}");
+    assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook bitboards {msg}");
+    assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen bitboards {msg}");
+    assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king bitboards {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::WHITE), rhs.pieces.occupied_co(Colour::WHITE), "white bitboards {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::BLACK), rhs.pieces.occupied_co(Colour::BLACK), "black bitboards {msg}");
+    for sq in Square::all() {
+        assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({:?}) {msg}", sq);
+    }
+    assert_eq!(lhs.side, rhs.side, "side {msg}");
+    assert_eq!(lhs.ep_sq, rhs.ep_sq, "ep_sq {msg}");
+    assert_eq!(lhs.castle_perm, rhs.castle_perm, "castle_perm {msg}");
+    assert_eq!(lhs.fifty_move_counter, rhs.fifty_move_counter, "fifty_move_counter {msg}");
+    assert_eq!(lhs.ply, rhs.ply, "ply {msg}");
+    assert_eq!(lhs.key, rhs.key, "key {msg}");
+    assert_eq!(lhs.big_piece_counts, rhs.big_piece_counts, "big_piece_counts {msg}");
+    assert_eq!(lhs.major_piece_counts, rhs.major_piece_counts, "major_piece_counts {msg}");
+    assert_eq!(lhs.minor_piece_counts, rhs.minor_piece_counts, "minor_piece_counts {msg}");
+    assert_eq!(lhs.material, rhs.material, "material {msg}");
+    assert_eq!(lhs.pst_vals, rhs.pst_vals, "pst_vals {msg}");
+    assert_eq!(lhs.height, rhs.height, "height {msg}");
+    assert_eq!(lhs.history, rhs.history, "history {msg}");
+    assert_eq!(lhs.repetition_cache, rhs.repetition_cache, "repetition_cache {msg}");
+}
+
 impl Debug for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Board")
@@ -128,6 +158,22 @@ impl Board {
         self.ep_sq
     }
 
+    pub fn ep_sq_mut(&mut self) -> &mut Square {
+        &mut self.ep_sq
+    }
+
+    pub fn turn_mut(&mut self) -> &mut Colour {
+        &mut self.side
+    }
+
+    pub fn halfmove_clock_mut(&mut self) -> &mut u8 {
+        &mut self.fifty_move_counter
+    }
+
+    pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
+        self.ply = (fullmove_clock as usize - 1) * 2 + (self.side == Colour::BLACK) as usize;
+    }
+
     pub const fn hashkey(&self) -> u64 {
         self.key
     }
@@ -177,6 +223,10 @@ impl Board {
         self.castle_perm
     }
 
+    pub fn castling_rights_mut(&mut self) -> &mut CastlingRights {
+        &mut self.castle_perm
+    }
+
     pub fn generate_pos_key(&self) -> u64 {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
@@ -201,6 +251,10 @@ impl Board {
         debug_assert!(self.fifty_move_counter <= 100);
 
         key
+    }
+
+    pub fn regenerate_zobrist(&mut self) {
+        self.key = self.generate_pos_key();
     }
 
     pub fn reset(&mut self) {
@@ -943,7 +997,7 @@ impl Board {
         }
     }
 
-    fn add_piece(&mut self, sq: Square, piece: Piece) {
+    pub fn add_piece(&mut self, sq: Square, piece: Piece) {
         debug_assert!(sq.on_board());
 
         self.pieces.set_piece_at(sq, piece);
@@ -2036,6 +2090,10 @@ impl Board {
         bytes_written += f.write(&[ones + b'0'])?;
 
         Ok(bytes_written)
+    }
+
+    pub const fn full_move_number(&self) -> usize {
+        self.ply / 2 + 1
     }
 
     #[allow(dead_code /* for datagen */)]

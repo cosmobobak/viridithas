@@ -185,6 +185,10 @@ impl Square {
         self.0 as usize
     }
 
+    pub const fn inner(self) -> u8 {
+        self.0
+    }
+
     pub const fn add(self, offset: u8) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
@@ -391,11 +395,27 @@ impl CastlingRights {
         }
     }
 
+    pub fn kingside_mut(&mut self, side: Colour) -> &mut Square {
+        if side == Colour::WHITE {
+            &mut self.wk
+        } else {
+            &mut self.bk
+        }
+    }
+
     pub fn queenside(self, side: Colour) -> Square {
         if side == Colour::WHITE {
             self.wq
         } else {
             self.bq
+        }
+    }
+
+    pub fn queenside_mut(&mut self, side: Colour) -> &mut Square {
+        if side == Colour::WHITE {
+            &mut self.wq
+        } else {
+            &mut self.bq
         }
     }
 }

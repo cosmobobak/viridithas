@@ -1,3 +1,5 @@
+mod marlinformat;
+
 use std::{
     cmp::Reverse,
     collections::HashMap,

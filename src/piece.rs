@@ -301,6 +301,10 @@ impl Piece {
     pub const fn all() -> PiecesIterator {
         PiecesIterator::new()
     }
+
+    pub const fn inner(self) -> u8 {
+        self.v
+    }
 }
 
 pub struct PiecesIterator {
