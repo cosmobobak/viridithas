@@ -2197,6 +2197,21 @@ impl GameOutcome {
             Self::Ongoing => panic!("Game is not over!"),
         }
     }
+
+    pub const fn as_packed_u8(self) -> u8 {
+        // 0 for black win, 1 for draw, 2 for white win
+        match self {
+            Self::WhiteWinMate | Self::WhiteWinTB | Self::WhiteWinAdjudication => 2,
+            Self::BlackWinMate | Self::BlackWinTB | Self::BlackWinAdjudication => 0,
+            Self::DrawFiftyMoves
+            | Self::DrawRepetition
+            | Self::DrawStalemate
+            | Self::DrawInsufficientMaterial
+            | Self::DrawTB
+            | Self::DrawAdjudication => 1,
+            Self::Ongoing => panic!("Game is not over!"),
+        }
+    }
 }
 
 impl Default for Board {

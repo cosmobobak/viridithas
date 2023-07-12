@@ -1,4 +1,4 @@
-use crate::{piece::{PieceType, Colour, Piece}, board::Board, definitions::{Rank, Square}, squareset::SquareSet};
+use crate::{piece::{PieceType, Colour, Piece}, board::{Board, GameOutcome}, definitions::{Rank, Square}, squareset::SquareSet};
 
 const UNMOVED_ROOK: u8 = PieceType::NONE.inner();
 
@@ -16,6 +16,10 @@ pub struct PackedBoard {
 }
 
 impl PackedBoard {
+    pub fn set_outcome(&mut self, outcome: GameOutcome) {
+        self.wdl = outcome.as_packed_u8();
+    }
+
     pub fn pack(board: &Board, eval: i16, wdl: u8, extra: u8) -> Self {
         let occupancy = board.pieces.occupied();
 
