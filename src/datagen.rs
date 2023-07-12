@@ -620,6 +620,7 @@ impl Display for DataGenOptions {
                 DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
             }
         )?;
+        writeln!(f, " |> generate_dfrc: {}", self.generate_dfrc)?;
         writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
             writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
