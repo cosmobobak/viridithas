@@ -51,7 +51,7 @@ impl PackedBoard {
             pieces.set(i, piece_code | (colour.inner()) << 3);
         }
 
-        PackedBoard {
+        Self {
             occupancy: util::U64Le::new(occupancy.inner()),
             pieces,
             stm_ep_square: (board.turn().inner()) << 7
@@ -104,7 +104,7 @@ impl Board {
         PackedBoard::pack(self, eval, wdl, extra)
     }
 
-    pub fn unpack(packed: &PackedBoard) -> Option<(Board, i16, u8, u8)> {
+    pub fn unpack(packed: &PackedBoard) -> Option<(Self, i16, u8, u8)> {
         packed.unpack()
     }
 }
@@ -116,7 +116,7 @@ mod util {
 
     impl U64Le {
         pub fn new(v: u64) -> Self {
-            U64Le(v.to_le())
+            Self(v.to_le())
         }
 
         pub fn get(self) -> u64 {
@@ -130,7 +130,7 @@ mod util {
 
     impl U16Le {
         pub fn new(v: u16) -> Self {
-            U16Le(v.to_le())
+            Self(v.to_le())
         }
 
         pub fn get(self) -> u16 {
@@ -144,7 +144,7 @@ mod util {
 
     impl I16Le {
         pub fn new(v: i16) -> Self {
-            I16Le(v.to_le())
+            Self(v.to_le())
         }
 
         pub fn get(self) -> i16 {
@@ -158,12 +158,12 @@ mod util {
 
     impl U4Array32 {
         pub fn get(&self, i: usize) -> u8 {
-            (self.0[i / 2] >> (i % 2) * 4) & 0xF
+            (self.0[i / 2] >> ((i % 2) * 4)) & 0xF
         }
 
         pub fn set(&mut self, i: usize, v: u8) {
             debug_assert!(v < 0x10);
-            self.0[i / 2] |= v << (i % 2) * 4;
+            self.0[i / 2] |= v << ((i % 2) * 4);
         }
     }
 }

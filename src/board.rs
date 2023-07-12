@@ -89,7 +89,7 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.occupied_co(Colour::WHITE), rhs.pieces.occupied_co(Colour::WHITE), "white bitboards {msg}");
     assert_eq!(lhs.pieces.occupied_co(Colour::BLACK), rhs.pieces.occupied_co(Colour::BLACK), "black bitboards {msg}");
     for sq in Square::all() {
-        assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({:?}) {msg}", sq);
+        assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
     }
     assert_eq!(lhs.side, rhs.side, "side {msg}");
     assert_eq!(lhs.ep_sq, rhs.ep_sq, "ep_sq {msg}");
@@ -171,7 +171,7 @@ impl Board {
     }
 
     pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
-        self.ply = (fullmove_clock as usize - 1) * 2 + (self.side == Colour::BLACK) as usize;
+        self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::BLACK);
     }
 
     pub const fn hashkey(&self) -> u64 {

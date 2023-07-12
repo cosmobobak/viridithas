@@ -533,7 +533,7 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 options.limit = limit;
             }
             "dfrc" => {
-                if let Some(dfrc) = value.parse::<bool>().ok() {
+                if let Ok(dfrc) = value.parse::<bool>() {
                     options.generate_dfrc = dfrc;
                 } else {
                     eprintln!("Invalid value for dfrc, must be a boolean");
