@@ -24,7 +24,9 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    definitions::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE},
+    definitions::{
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
+    },
     historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     search::pv::PVariation,
@@ -92,6 +94,7 @@ impl Board {
 
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
+            eprintln!("info string warning search called on a position with no legal moves");
             return (0, Move::NULL);
         }
         if legal_moves.len() == 1 {
@@ -201,7 +204,9 @@ impl Board {
             t.depth = d;
             if MAIN_THREAD {
                 // consider stopping early if we've neatly completed a depth:
-                if info.time_manager.in_game() && info.time_manager.is_past_opt_time() {
+                if (info.time_manager.is_dynamic() || info.time_manager.is_soft_nodes())
+                    && info.time_manager.is_past_opt_time(info.nodes)
+                {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
@@ -612,7 +617,15 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    tt.store::<false>(key, height, Move::NULL, tb_value, VALUE_NONE, tb_bound, depth);
+                    tt.store::<false>(
+                        key,
+                        height,
+                        Move::NULL,
+                        tb_value,
+                        VALUE_NONE,
+                        tb_bound,
+                        depth,
+                    );
                     return tb_value;
                 }
 
@@ -1361,7 +1374,7 @@ fn readout_info(
     #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,
     // this helps in ultra-fast time controls where we only have a few ms to think.
-    if info.time_manager.in_game() && info.skip_print() && !force_print {
+    if info.time_manager.is_dynamic() && info.skip_print() && !force_print {
         return;
     }
     let mut pv = pv.clone();

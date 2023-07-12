@@ -41,6 +41,7 @@ pub enum SearchLimit {
     Time(u64),
     TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
+    SoftNodes(u64),
     Mate {
         ply: usize,
     },
@@ -227,13 +228,23 @@ impl TimeManager {
                 }
                 past_limit
             }
+            SearchLimit::SoftNodes(limit) => {
+                // this should never *really* return true, but we do this in case of search explosions.
+                let hard_limit = limit * 128;
+                let past_limit = nodes_so_far >= hard_limit;
+                if past_limit {
+                    stopped.store(true, Ordering::SeqCst);
+                }
+                past_limit
+            }
         }
     }
 
     /// If we have used enough time that stopping after finishing a depth would be good here.
-    pub fn is_past_opt_time(&self) -> bool {
+    pub fn is_past_opt_time(&self, nodes: u64) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
+            SearchLimit::SoftNodes(limit) => nodes >= limit,
             _ => false,
         }
     }
@@ -246,8 +257,12 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::TimeOrCorrectMoves(_, _))
     }
 
-    pub const fn in_game(&self) -> bool {
+    pub const fn is_dynamic(&self) -> bool {
         matches!(self.limit, SearchLimit::Dynamic { .. })
+    }
+
+    pub const fn is_soft_nodes(&self) -> bool {
+        matches!(self.limit, SearchLimit::SoftNodes(_))
     }
 
     pub fn solved_breaker<const MAIN_THREAD: bool>(
@@ -287,7 +302,7 @@ impl TimeManager {
     ) -> ControlFlow<()> {
         const MINIMUM_MATE_BREAK_DEPTH: Depth = Depth::new(10);
         if MAIN_THREAD
-            && self.in_game()
+            && self.is_dynamic()
             && is_mate_score(pv.score())
             && depth > MINIMUM_MATE_BREAK_DEPTH
         {
@@ -320,7 +335,7 @@ impl TimeManager {
     }
 
     pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
-        if self.found_forced_move == ForcedMoveType::None && self.in_game() {
+        if self.found_forced_move == ForcedMoveType::None && self.is_dynamic() {
             if depth >= Self::SLIGHTLY_FORCED {
                 Some(170)
             } else if depth >= Self::VERY_FORCED {

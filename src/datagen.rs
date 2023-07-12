@@ -1,3 +1,5 @@
+mod marlinformat;
+
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -18,7 +20,7 @@ use crate::{
         evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
         Board, GameOutcome,
     },
-    definitions::{depth::Depth, MEGABYTE},
+    definitions::{depth::Depth, MEGABYTE, self},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
@@ -50,6 +52,8 @@ struct DataGenOptions {
     use_nnue: bool,
     // The depth or node limit for searches.
     limit: DataGenLimit,
+    // Whether to generate DFRC data.
+    generate_dfrc: bool,
     // log level
     log_level: u8,
 }
@@ -63,6 +67,7 @@ impl DataGenOptions {
             tablebases_path: None,
             use_nnue: true,
             limit: DataGenLimit::Depth(8),
+            generate_dfrc: true,
             log_level: 1,
         }
     }
@@ -70,7 +75,7 @@ impl DataGenOptions {
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}t-{}-{}-{}",
+            "{}g-{}t-{}-{}-{}-{}",
             self.num_games,
             self.num_threads,
             self.tablebases_path.as_ref().map_or_else(
@@ -78,6 +83,7 @@ impl DataGenOptions {
                 |tablebases_path| tablebases_path.to_string_lossy()
             ),
             if self.use_nnue { "nnue" } else { "hce" },
+            if self.generate_dfrc { "dfrc" } else { "classical" },
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
@@ -87,11 +93,10 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
-    #[cfg(not(feature = "datagen"))]
-    panic!("This binary was not compiled with the datagen feature enabled.");
+    if cfg!(not(feature = "datagen")) {
+        panic!("Data generation is not enabled, please enable the 'datagen' feature to use this functionality.");
+    }
 
-    FENS_GENERATED.store(0, Ordering::SeqCst);
-    // CHESS960.store(true, Ordering::SeqCst);
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
         println!("Stopping generation, please don't force quit.");
@@ -103,6 +108,10 @@ pub fn gen_data_main(cli_config: Option<&str>) {
             show_boot_info(&options);
             config_loop(options)
         }, |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"));
+
+    CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
+    FENS_GENERATED.store(0, Ordering::SeqCst);
+
     if options.log_level > 0 {
         println!("Starting data generation with the following configuration:");
         println!("{options}");
@@ -186,10 +195,6 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     }
 }
 
-const EST_FEN_LENGTH: usize = 56;
-const EST_GAME_LENGTH: usize = 500;
-const FEN_BUFFER_SIZE: usize = EST_FEN_LENGTH * EST_GAME_LENGTH * 150 / 100; // 150% of estimated game length, to give some leeway
-
 #[allow(clippy::cognitive_complexity)]
 fn generate_on_thread(
     id: usize,
@@ -208,13 +213,13 @@ fn generate_on_thread(
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => SearchLimit::Nodes(nodes),
+        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes(nodes),
     });
     let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
-    let mut output_file = File::create(data_dir.join(format!("thread_{id}.txt"))).unwrap();
+    let mut output_file = File::create(data_dir.join(format!("thread_{id}.bin"))).unwrap();
     let mut output_buffer = BufWriter::new(&mut output_file);
 
     let mut single_game_buffer = Vec::new();
@@ -235,9 +240,6 @@ fn generate_on_thread(
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();
-
-    // to store the FENs of the game
-    let mut fen_buffer = Vec::with_capacity(FEN_BUFFER_SIZE);
 
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
@@ -270,13 +272,14 @@ fn generate_on_thread(
             }
         }
         // reset everything: board, thread data, tt, search info
-        // board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
-        board.set_startpos();
+        if options.generate_dfrc {
+            board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
+        } else {
+            board.set_startpos();
+        }
         thread_data.nnue.reinit_from(&board);
         tt.clear();
         info.set_up_for_search();
-        // flush output buffer
-        output_buffer.flush().unwrap();
         // generate game
         if options.log_level > 1 {
             eprintln!("Generating game {game}...");
@@ -308,6 +311,7 @@ fn generate_on_thread(
             std::array::from_mut(&mut thread_data),
             tt.view(),
         );
+        info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             if options.log_level > 2 {
                 eprintln!("Position is too good or too bad, skipping...");
@@ -315,7 +319,6 @@ fn generate_on_thread(
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        info.time_manager.set_limit(temp_limit);
         // STEP 3: play out to the end of the game
         if options.log_level > 2 {
             eprintln!("Playing out game...");
@@ -350,10 +353,7 @@ fn generate_on_thread(
                 // we only save FENs where the best move is not tactical (promotions or captures)
                 // and the score is not game theoretic (mate or TB-win),
                 // and the side to move is not in check.
-                let fen_start = fen_buffer.len();
-                let bytes_written = board.write_fen_into(&mut fen_buffer).unwrap();
-                let fen_end = fen_start + bytes_written;
-                single_game_buffer.push((score, fen_start..fen_end));
+                single_game_buffer.push(board.pack(score.try_into().unwrap(), 0, 0));
             }
 
             let abs_score = score.abs();
@@ -396,20 +396,27 @@ fn generate_on_thread(
             eprintln!("Game is over, outcome: {outcome:?}");
         }
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
-        let outcome_str = outcome.as_float_str();
         // STEP 4: write the game to the output file
         if options.log_level > 2 {
             eprintln!("Writing {} moves to output file...", single_game_buffer.len());
         }
         let count = single_game_buffer.len();
-        #[allow(clippy::iter_with_drain)] // we want to reuse the buffer
-        for (score, fen) in single_game_buffer.drain(..) {
-            let fen = unsafe {
-                // SAFETY: we know that the FEN is valid UTF-8, it came from the board.
-                std::str::from_utf8_unchecked(&fen_buffer[fen])
-            };
-            writeln!(output_buffer, "{fen} | {score} | {outcome_str}").unwrap();
+        // update with outcomes
+        for board in &mut single_game_buffer {
+            board.set_outcome(outcome);
         }
+        // convert to bytes
+        // SAFETY: PackedBoards are totally chill to reinterpret as bytes, 
+        // trust me bro.
+        let byte_view = unsafe {
+            definitions::slice_into_bytes_with_lifetime(single_game_buffer.as_slice())
+        };
+        // write to file
+        output_buffer.write_all(byte_view).unwrap();
+        // clear the buffer
+        single_game_buffer.clear();
+
+        // increment the counter
         FENS_GENERATED.fetch_add(count as u64, Ordering::SeqCst);
 
         // STEP 5: update the game outcome statistics
@@ -420,6 +427,8 @@ fn generate_on_thread(
             break 'generation_main_loop;
         }
     }
+
+    output_buffer.flush().unwrap();
 
     counters
 }
@@ -523,6 +532,13 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 };
                 options.limit = limit;
             }
+            "dfrc" => {
+                if let Ok(dfrc) = value.parse::<bool>() {
+                    options.generate_dfrc = dfrc;
+                } else {
+                    eprintln!("Invalid value for dfrc, must be a boolean");
+                }
+            }
             "log_level" => {
                 let log_level = match value.parse::<u8>() {
                     Ok(log_level) => log_level,
@@ -547,7 +563,7 @@ impl FromStr for DataGenOptions {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut options = Self::new();
         let parts = s.split('-').collect::<Vec<_>>();
-        if parts.len() != 5 {
+        if parts.len() != 6 {
             return Err(format!("Invalid options string: {s}"));
         }
         options.num_games = parts[0]
@@ -564,22 +580,27 @@ impl FromStr for DataGenOptions {
             options.tablebases_path = Some(PathBuf::from(parts[2]));
         }
         options.use_nnue = parts[3] == "nnue";
-        let limit = match parts[4].chars().next() {
+        options.generate_dfrc = match parts[4] {
+            "dfrc" => true,
+            "classical" => false,
+            _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
+        };
+        let limit = match parts[5].chars().next() {
             Some('d') => DataGenLimit::Depth(
-                parts[4]
+                parts[5]
                     .strip_prefix('d')
-                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[4]))?
+                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[5]))?
                     .parse()
-                    .map_err(|_| format!("Invalid depth limit: {}", parts[4]))?,
+                    .map_err(|_| format!("Invalid depth limit: {}", parts[5]))?,
             ),
             Some('n') => DataGenLimit::Nodes(
-                parts[4]
+                parts[5]
                     .strip_prefix('n')
-                    .ok_or_else(|| format!("Invalid node limit: {}", parts[4]))?
+                    .ok_or_else(|| format!("Invalid node limit: {}", parts[5]))?
                     .parse()
-                    .map_err(|_| format!("Invalid node limit: {}", parts[4]))?,
+                    .map_err(|_| format!("Invalid node limit: {}", parts[5]))?,
             ),
-            _ => return Err(format!("Invalid limit: {}", parts[4])),
+            _ => return Err(format!("Invalid limit: {}", parts[5])),
         };
         options.limit = limit;
         options.log_level = 1;
@@ -608,6 +629,7 @@ impl Display for DataGenOptions {
                 DataGenLimit::Nodes(nodes) => format!("nodes {nodes}"),
             }
         )?;
+        writeln!(f, " |> dfrc: {}", self.generate_dfrc)?;
         writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
             writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
