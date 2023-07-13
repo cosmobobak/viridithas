@@ -1,4 +1,4 @@
-# Viridithas, a UCI chess engine written in Rust.
+# Viridithas, a UCI chess engine written in Rust
 
 <div align="center">
 
@@ -17,7 +17,8 @@ Viridithas is not a complete chess program and requires a UCI-compatible graphic
 
 For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 
-# Evaluation Development History/Originality (HCE/NNUE)
+## Evaluation Development History/Originality (HCE/NNUE)
+
 - First evaluation was a simple piece value / psqt table approach, using values from PeSTO. (as far as I remember)
 - Early in development, a local-search texel tuning module was developed, and trained on the Lichess Elite dataset, removing the PeSTO values with increased strength.
 - Many new evaluation terms were added during development, and were continually re-tuned on Viridithas's self-play games.
@@ -27,7 +28,8 @@ For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 
 In summary, the originality of the data for training Viridithas's NNUE is strong - it is about ~80% games played by Viridithas against himself, 20% positions from human games, and a small handful of positions from games played in a Viridithas 2.7.0 vs. StockNemo 5.0.0.0 test match I ran on my own hardware, all reanalysed with Viridithas. Most importantly, I have never trained on the evaluation output of any engine other than Viridithas.
 
-# Thanks and Acknowledgements
+## Thanks and Acknowledgements
+
 [python-chess](https://github.com/niklasf/python-chess), without which I would never have been able to gain a love for chess programming.
 
 The [VICE](https://www.youtube.com/playlist?list=PLZ1QII7yudbc-Ky058TEaOstZHVbT-2hg) video series, which was invaluable for explaining how various chess engine concepts can be implemented.
