@@ -298,6 +298,12 @@ fn generate_on_thread(
                 }
                 continue 'generation_main_loop;
             }
+            if board.outcome() != GameOutcome::Ongoing {
+                if options.log_level > 2 {
+                    eprintln!("Game ended early, skipping...");
+                }
+                continue 'generation_main_loop;
+            }
         }
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
