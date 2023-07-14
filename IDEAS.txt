@@ -20,3 +20,4 @@ MINOR:
 - clean movegen more generally
 - book construction?
 - remove `pub` from everything that doesn't need it
+- add module docs
