@@ -513,12 +513,13 @@ impl<'a> GlobalNodeCounter<'a> {
     }
 
     pub const fn get_local(&self) -> u64 {
-        self.local
+        self.local + self.buffer
     }
 
     pub fn reset(&mut self) {
         self.buffer = 0;
         self.global.store(0, Ordering::Relaxed);
+        self.local = 0;
     }
 
     pub const fn just_ticked_over(&self) -> bool {
