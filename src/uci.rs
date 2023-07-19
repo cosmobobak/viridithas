@@ -6,7 +6,7 @@ use std::{
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, ParseBoolError},
     sync::{
-        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering, AtomicU64},
         mpsc, Mutex,
     },
     time::Instant,
@@ -22,7 +22,7 @@ use crate::{
         movegen::MoveList,
         Board,
     },
-    definitions::{MAX_DEPTH, MEGABYTE},
+    util::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
     nnue, perft,
     piece::Colour,
@@ -553,7 +553,8 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 
     let stopped = AtomicBool::new(false);
     let stdin = Mutex::new(stdin_reader());
-    let mut info = SearchInfo::new(&stopped);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
     info.eval_params = params;
 
@@ -734,7 +735,8 @@ const BENCH_DEPTH: usize = 16;
 fn bench(benchcmd: &str) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
-    let mut info = SearchInfo::new(&stopped);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
@@ -769,10 +771,11 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
         } else {
             pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
         }
-        node_sum += info.nodes;
+        node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
-            println!("{fen} has {} nodes", info.nodes);
+            println!("{fen} has {} nodes", info.nodes.get_global());
         }
+        assert_eq!(info.nodes.get_global(), info.nodes.get_local(), "running bench with multiple threads is not supported");
     }
     let time = start.elapsed();
     #[allow(clippy::cast_precision_loss)]

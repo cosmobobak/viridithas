@@ -2,7 +2,7 @@
 
 use crate::{
     board::evaluation::score::S,
-    definitions::{Rank, Square},
+    util::{Rank, Square},
     lookups::{PIECE_BIG, PIECE_MAJ},
     nnue::network::NNUEState,
     piece::{Colour, Piece},

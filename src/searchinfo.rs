@@ -1,11 +1,11 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, Ordering, AtomicU64},
     mpsc, Mutex,
 };
 
 use crate::{
     board::evaluation::parameters::EvalParams,
-    definitions::depth::{Depth, ZERO_PLY},
+    util::{depth::{Depth, ZERO_PLY}, GlobalNodeCounter},
     search::{parameters::SearchParams, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
@@ -18,7 +18,7 @@ use crate::board::movegen::MAX_POSITION_MOVES;
 #[derive(Clone, Debug)]
 pub struct SearchInfo<'a> {
     /// The number of nodes searched.
-    pub nodes: u64,
+    pub nodes: GlobalNodeCounter<'a>,
     /// A table storing the number of nodes under the root move(s).
     pub root_move_nodes: [[u64; 64]; 64], // [from][to]
     /// Signal to stop the search.
@@ -57,9 +57,9 @@ pub struct SearchInfo<'a> {
 }
 
 impl<'a> SearchInfo<'a> {
-    pub fn new(stopped: &'a AtomicBool) -> Self {
+    pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64) -> Self {
         let out = Self {
-            nodes: 0,
+            nodes: GlobalNodeCounter::new(nodes),
             root_move_nodes: [[0; 64]; 64],
             stopped,
             seldepth: ZERO_PLY,
@@ -86,7 +86,7 @@ impl<'a> SearchInfo<'a> {
 
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
-        self.nodes = 0;
+        self.nodes.reset();
         self.root_move_nodes = [[0; 64]; 64];
         self.time_manager.reset_for_id();
         #[cfg(feature = "stats")]
@@ -108,7 +108,7 @@ impl<'a> SearchInfo<'a> {
         if already_stopped {
             return true;
         }
-        let res = self.time_manager.check_up(self.stopped, self.nodes);
+        let res = self.time_manager.check_up(self.stopped, self.nodes.get_global());
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
             self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
@@ -212,7 +212,7 @@ enum FailHighType {
 
 mod tests {
     #![allow(unused_imports)]
-    use std::{array, sync::atomic::AtomicBool};
+    use std::{array, sync::atomic::{AtomicBool, AtomicU64}};
 
     use super::{SearchInfo, SearchLimit};
     use crate::{
@@ -220,7 +220,7 @@ mod tests {
             evaluation::{mate_in, mated_in},
             Board,
         },
-        definitions::MEGABYTE,
+        util::MEGABYTE,
         magic,
         threadlocal::ThreadData,
         timemgmt::TimeManager,
@@ -238,7 +238,8 @@ mod tests {
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
+        let nodes = AtomicU64::new(0);
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -259,7 +260,8 @@ mod tests {
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
+        let nodes = AtomicU64::new(0);
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -280,7 +282,8 @@ mod tests {
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
+        let nodes = AtomicU64::new(0);
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
@@ -301,7 +304,8 @@ mod tests {
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
+        let nodes = AtomicU64::new(0);
+        let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);

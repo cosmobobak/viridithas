@@ -1,4 +1,4 @@
-use crate::{piece::{PieceType, Colour, Piece}, board::{Board, GameOutcome}, definitions::{Rank, Square}, squareset::SquareSet};
+use crate::{piece::{PieceType, Colour, Piece}, board::{Board, GameOutcome}, util::{Rank, Square}, squareset::SquareSet};
 
 const UNMOVED_ROOK: u8 = PieceType::NONE.inner();
 

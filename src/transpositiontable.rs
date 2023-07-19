@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
-    definitions::{
+    util::{
         depth::Depth,
         depth::{CompactDepthStorage, ZERO_PLY},
         INFINITY, MAX_DEPTH,
@@ -375,7 +375,7 @@ const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{definitions::Square, piece::PieceType};
+    use crate::{util::Square, piece::PieceType};
 
     use super::*;
 

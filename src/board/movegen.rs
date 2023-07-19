@@ -13,7 +13,7 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    definitions::{Square, HORIZONTAL_RAY_BETWEEN},
+    util::{Square, HORIZONTAL_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
     squareset::SquareSet,

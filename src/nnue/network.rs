@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     board::Board,
-    definitions::{Square, MAX_DEPTH},
+    util::{Square, MAX_DEPTH},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
 };

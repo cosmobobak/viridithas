@@ -24,7 +24,7 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    definitions::{
+    util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
     },
     historytable::MAX_HISTORY,
@@ -122,11 +122,10 @@ impl Board {
         let info_copy = info.clone();
         let mut board_info_copies =
             rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
-        let total_nodes = AtomicU64::new(0);
 
         thread::scope(|s| {
             let main_thread_handle = s.spawn(|| {
-                self.iterative_deepening::<USE_NNUE, true>(info, tt, t1, &total_nodes);
+                self.iterative_deepening::<USE_NNUE, true>(info, tt, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             // we need to eagerly start the threads or nothing will happen
@@ -136,7 +135,7 @@ impl Board {
                 .zip(board_info_copies.iter_mut())
                 .map(|(t, (board, info))| {
                     s.spawn(|| {
-                        board.iterative_deepening::<USE_NNUE, false>(info, tt, t, &total_nodes);
+                        board.iterative_deepening::<USE_NNUE, false>(info, tt, t);
                     })
                 })
                 .collect::<Vec<_>>();
@@ -149,7 +148,7 @@ impl Board {
 
         let d_move = self.default_move(tt, t1);
         let best_thread =
-            select_best(self, thread_headers, info, tt, total_nodes.load(Ordering::SeqCst));
+            select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let best_move = best_thread.pv_move().unwrap_or(d_move);
         let score = best_thread.pv_score();
 
@@ -162,7 +161,7 @@ impl Board {
                 best_thread.completed,
                 info,
                 tt,
-                total_nodes.load(Ordering::SeqCst),
+                info.nodes.get_global(),
                 true,
                 None,
             );
@@ -192,7 +191,6 @@ impl Board {
         info: &mut SearchInfo,
         tt: TTView,
         t: &mut ThreadData,
-        total_nodes: &AtomicU64,
     ) {
         assert!(!MAIN_THREAD || t.thread_id == 0, "main thread must have thread_id 0");
         let d_move = self.default_move(tt, t);
@@ -205,7 +203,7 @@ impl Board {
             if MAIN_THREAD {
                 // consider stopping early if we've neatly completed a depth:
                 if (info.time_manager.is_dynamic() || info.time_manager.is_soft_nodes())
-                    && info.time_manager.is_past_opt_time(info.nodes)
+                    && info.time_manager.is_past_opt_time(info.nodes.get_global())
                 {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
@@ -215,18 +213,14 @@ impl Board {
             let min_depth = (depth / 2).max(ONE_PLY);
             // aspiration loop:
             loop {
-                let nodes_before = info.nodes;
                 pv.score =
                     self.root_search::<USE_NNUE>(tt, &mut pv, info, t, depth, aw.alpha, aw.beta);
                 if info.check_up() {
                     break 'deepening;
                 }
-                let nodes = info.nodes - nodes_before;
-                total_nodes.fetch_add(nodes, Ordering::SeqCst);
 
                 if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                     if MAIN_THREAD && info.print_to_stdout {
-                        let total_nodes = total_nodes.load(Ordering::SeqCst);
                         readout_info(
                             self,
                             Bound::Upper,
@@ -234,7 +228,7 @@ impl Board {
                             d,
                             info,
                             tt,
-                            total_nodes,
+                            info.nodes.get_global(),
                             false,
                             Some(pv.score),
                         );
@@ -252,7 +246,6 @@ impl Board {
                 t.update_best_line(&pv);
                 if aw.beta != INFINITY && pv.score >= aw.beta {
                     if MAIN_THREAD && info.print_to_stdout {
-                        let total_nodes = total_nodes.load(Ordering::SeqCst);
                         readout_info(
                             self,
                             Bound::Lower,
@@ -260,7 +253,7 @@ impl Board {
                             d,
                             info,
                             tt,
-                            total_nodes,
+                            info.nodes.get_global(),
                             false,
                             None,
                         );
@@ -289,7 +282,7 @@ impl Board {
                 let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
 
                 if MAIN_THREAD && info.print_to_stdout {
-                    let total_nodes = total_nodes.load(Ordering::SeqCst);
+                    let total_nodes = info.nodes.get_global();
                     readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false, None);
                 }
 
@@ -338,7 +331,7 @@ impl Board {
                     let best_move = pv.line[0];
                     let best_move_subtree_size =
                         info.root_move_nodes[best_move.from().index()][best_move.to().index()];
-                    let tree_size = info.nodes;
+                    let tree_size = info.nodes.get_local();
                     #[allow(clippy::cast_precision_loss)]
                     Some(best_move_subtree_size as f64 / tree_size as f64)
                 } else {
@@ -384,7 +377,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        if info.nodes % 1024 == 0 && info.check_up() {
+        if info.nodes.just_ticked_over() && info.check_up() {
             return 0;
         }
 
@@ -401,14 +394,14 @@ impl Board {
 
         // check draw
         if self.is_draw() {
-            return draw_score(t, info.nodes, self.turn());
+            return draw_score(t, info.nodes.get_local(), self.turn());
         }
 
         let in_check = self.in_check();
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
-            return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes) };
+            return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes.get_local()) };
         }
 
         // probe the TT and see if we get a cutoff.
@@ -423,7 +416,7 @@ impl Board {
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
         } else {
-            self.evaluate::<NNUE>(info, t, info.nodes)
+            self.evaluate::<NNUE>(info, t, info.nodes.get_local())
         };
 
         if stand_pat >= beta {
@@ -450,7 +443,7 @@ impl Board {
             if !self.make_move::<NNUE>(m, t, info) {
                 continue;
             }
-            info.nodes += 1;
+            info.nodes.increment();
             moves_made += 1;
 
             let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
@@ -530,7 +523,7 @@ impl Board {
 
         pv.length = 0;
 
-        if info.nodes % 1024 == 0 && info.check_up() {
+        if info.nodes.just_ticked_over() && info.check_up() {
             return 0;
         }
 
@@ -547,14 +540,14 @@ impl Board {
         if !ROOT {
             // check draw
             if self.is_draw() {
-                return draw_score(t, info.nodes, self.turn());
+                return draw_score(t, info.nodes.get_local(), self.turn());
             }
 
             // are we too deep?
             let max_height =
                 MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
-                return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes) };
+                return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes.get_local()) };
             }
 
             // mate-distance pruning.
@@ -604,7 +597,7 @@ impl Board {
                 let tb_value = match wdl {
                     WDL::Win => tb_win_in(height),
                     WDL::Loss => tb_loss_in(height),
-                    WDL::Draw => draw_score(t, info.nodes, self.turn()),
+                    WDL::Draw => draw_score(t, info.nodes.get_buffer(), self.turn()),
                 };
 
                 let tb_bound = match wdl {
@@ -647,12 +640,12 @@ impl Board {
         } else if let Some(TTHit { tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
-                self.evaluate::<NNUE>(info, t, info.nodes) // regenerate the static eval if it's VALUE_NONE.
+                self.evaluate::<NNUE>(info, t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
             } else {
                 v // if the TT eval is not VALUE_NONE, use it.
             }
         } else {
-            self.evaluate::<NNUE>(info, t, info.nodes) // otherwise, use the static evaluation.
+            self.evaluate::<NNUE>(info, t, info.nodes.get_local()) // otherwise, use the static evaluation.
         };
 
         t.evals[height] = static_eval;
@@ -900,8 +893,8 @@ impl Board {
                 tacticals_tried.push(m);
             }
 
-            let nodes_before_search = info.nodes;
-            info.nodes += 1;
+            let nodes_before_search = info.nodes.get_local();
+            info.nodes.increment();
             moves_made += 1;
 
             let maybe_singular = depth >= info.search_params.singularity_depth
@@ -994,7 +987,7 @@ impl Board {
 
             // record subtree size for TimeManager
             if ROOT && t.thread_id == 0 {
-                let subtree_size = info.nodes - nodes_before_search;
+                let subtree_size = info.nodes.get_local() - nodes_before_search;
                 info.root_move_nodes[m.from().index()][m.to().index()] += subtree_size;
             }
 
@@ -1030,7 +1023,7 @@ impl Board {
             if in_check {
                 return mated_in(height);
             }
-            return draw_score(t, info.nodes, self.turn());
+            return draw_score(t, info.nodes.get_local(), self.turn());
         }
 
         best_score = best_score.clamp(syzygy_min, syzygy_max);

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::definitions::depth::Depth;
+use crate::util::depth::Depth;
 
 use super::{
     ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
