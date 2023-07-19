@@ -482,13 +482,13 @@ pub const unsafe fn slice_into_bytes_with_lifetime<T>(slice: &[T]) -> &[u8] {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GlobalNodeCounter<'a> {
+pub struct BatchedAtomicCounter<'a> {
     buffer: u64,
     global: &'a AtomicU64,
     local: u64,
 }
 
-impl<'a> GlobalNodeCounter<'a> {
+impl<'a> BatchedAtomicCounter<'a> {
     const GRANULARITY: u64 = 1024;
 
     pub const fn new(global: &'a AtomicU64) -> Self {

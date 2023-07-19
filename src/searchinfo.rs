@@ -5,7 +5,7 @@ use std::sync::{
 
 use crate::{
     board::evaluation::parameters::EvalParams,
-    util::{depth::{Depth, ZERO_PLY}, GlobalNodeCounter},
+    util::{depth::{Depth, ZERO_PLY}, BatchedAtomicCounter},
     search::{parameters::SearchParams, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
@@ -18,7 +18,7 @@ use crate::board::movegen::MAX_POSITION_MOVES;
 #[derive(Clone, Debug)]
 pub struct SearchInfo<'a> {
     /// The number of nodes searched.
-    pub nodes: GlobalNodeCounter<'a>,
+    pub nodes: BatchedAtomicCounter<'a>,
     /// A table storing the number of nodes under the root move(s).
     pub root_move_nodes: [[u64; 64]; 64], // [from][to]
     /// Signal to stop the search.
@@ -59,7 +59,7 @@ pub struct SearchInfo<'a> {
 impl<'a> SearchInfo<'a> {
     pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64) -> Self {
         let out = Self {
-            nodes: GlobalNodeCounter::new(nodes),
+            nodes: BatchedAtomicCounter::new(nodes),
             root_move_nodes: [[0; 64]; 64],
             stopped,
             seldepth: ZERO_PLY,
