@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Rank, Undo, MAX_DEPTH},
+    util::{depth::Depth, Rank, Undo, MAX_DEPTH},
     historytable::update_history,
     piece::{Piece, PieceType},
     threadlocal::ThreadData,

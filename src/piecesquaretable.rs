@@ -1,6 +1,6 @@
 pub mod tables;
 
-use crate::{board::evaluation::score::S, definitions::Square, piece::Piece};
+use crate::{board::evaluation::score::S, util::Square, piece::Piece};
 
 pub type PieceSquareTable = [[S; 64]; 13];
 

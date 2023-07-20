@@ -22,7 +22,7 @@ use crate::{
         evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
         Board, GameOutcome,
     },
-    definitions::{depth::Depth, MEGABYTE, self},
+    util::{depth::Depth, MEGABYTE, self},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
@@ -215,7 +215,8 @@ fn generate_on_thread(
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes(nodes),
     });
-    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped, &nodes) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -415,7 +416,7 @@ fn generate_on_thread(
         // SAFETY: PackedBoards are totally chill to reinterpret as bytes, 
         // trust me bro.
         let byte_view = unsafe {
-            definitions::slice_into_bytes_with_lifetime(single_game_buffer.as_slice())
+            util::slice_into_bytes_with_lifetime(single_game_buffer.as_slice())
         };
         // write to file
         output_buffer.write_all(byte_view).unwrap();

@@ -151,9 +151,9 @@ pub fn gamut() {
 
 mod tests {
     #![allow(unused_imports)]
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicU64};
 
-    use crate::{chessmove::Move, definitions::Square, piece::PieceType};
+    use crate::{chessmove::Move, util::Square, piece::PieceType};
 
     #[test]
     fn perft_hard_position() {
@@ -193,7 +193,8 @@ mod tests {
         crate::magic::initialise();
         let mut pos = Board::new();
         let stopped = AtomicBool::new(false);
-        let info = SearchInfo::new(&stopped);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
         pos.set_startpos();
         pos.refresh_psqt(&info);
         assert_eq!(hce_perft(&mut pos, &info, 1), 20, "got {}", {

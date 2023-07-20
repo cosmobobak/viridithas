@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    definitions::{File, Square},
+    util::{File, Square},
     piece::PieceType,
     uci::CHESS960,
 };

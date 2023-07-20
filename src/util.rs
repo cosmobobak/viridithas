@@ -3,7 +3,7 @@ pub mod depth;
 use std::{
     fmt::{self, Display},
     str::FromStr,
-    sync::atomic::Ordering,
+    sync::atomic::{Ordering, AtomicU64},
 };
 
 use crate::{
@@ -479,6 +479,52 @@ pub const unsafe fn slice_into_bytes_with_lifetime<T>(slice: &[T]) -> &[u8] {
         slice.as_ptr().cast(),
         slice.len() * std::mem::size_of::<T>(),
     )
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BatchedAtomicCounter<'a> {
+    buffer: u64,
+    global: &'a AtomicU64,
+    local: u64,
+}
+
+impl<'a> BatchedAtomicCounter<'a> {
+    const GRANULARITY: u64 = 1024;
+
+    pub const fn new(global: &'a AtomicU64) -> Self {
+        Self { buffer: 0, global, local: 0 }
+    }
+
+    pub fn increment(&mut self) {
+        self.buffer += 1;
+        if self.buffer >= Self::GRANULARITY {
+            self.global.fetch_add(self.buffer, Ordering::Relaxed);
+            self.local += self.buffer;
+            self.buffer = 0;
+        }
+    }
+
+    pub fn get_global(&self) -> u64 {
+        self.global.load(Ordering::Relaxed) + self.buffer
+    }
+
+    pub const fn get_buffer(&self) -> u64 {
+        self.buffer
+    }
+
+    pub const fn get_local(&self) -> u64 {
+        self.local + self.buffer
+    }
+
+    pub fn reset(&mut self) {
+        self.buffer = 0;
+        self.global.store(0, Ordering::Relaxed);
+        self.local = 0;
+    }
+
+    pub const fn just_ticked_over(&self) -> bool {
+        self.buffer == 0
+    }
 }
 
 mod tests {

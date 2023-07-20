@@ -2,7 +2,7 @@
 
 use crate::{
     board,
-    definitions::{File, Rank, Square},
+    util::{File, Rank, Square},
     nnue,
     rng::XorShiftState,
     squareset::SquareSet,
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn python_chess_validation() {
-        use crate::definitions::Square;
+        use crate::util::Square;
         use crate::lookups::{get_king_attacks, get_knight_attacks};
         use crate::squareset::SquareSet;
         // testing that the attack bitboards match the ones in the python-chess library,

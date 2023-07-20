@@ -17,7 +17,7 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
-mod definitions;
+mod util;
 mod epd;
 mod errors;
 mod historytable;

@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Square, BOARD_N_SQUARES},
+    util::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::{Piece, PieceType},
 };
 

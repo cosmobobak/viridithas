@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    definitions::Square,
+    util::Square,
     lookups, magic,
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,

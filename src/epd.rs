@@ -1,6 +1,6 @@
 use std::{
     path::Path,
-    sync::atomic::{AtomicBool, AtomicUsize},
+    sync::atomic::{AtomicBool, AtomicUsize, AtomicU64},
     time::Duration,
 };
 
@@ -8,7 +8,7 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     cli,
-    definitions::MEGABYTE,
+    util::MEGABYTE,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
@@ -114,11 +114,12 @@ fn run_on_positions(
             time,
             best_moves.clone(),
         ));
+        let nodes = AtomicU64::new(0);
         let mut info = SearchInfo {
             time_manager,
             print_to_stdout: print,
             eval_params: params.clone(),
-            ..SearchInfo::new(&stopped)
+            ..SearchInfo::new(&stopped, &nodes)
         };
         info.time_manager.start();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());

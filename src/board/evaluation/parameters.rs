@@ -1,7 +1,7 @@
 use std::{error::Error, fmt::Display, path::Path};
 
 use crate::{
-    definitions::Square,
+    util::Square,
     piece::{Piece, PieceType},
 };
 

@@ -18,7 +18,7 @@ use crate::{
         MoveList,
     },
     chessmove::Move,
-    definitions::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
+    util::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
@@ -2263,7 +2263,7 @@ mod tests {
     fn game_end_states() {
         use super::Board;
         use super::GameOutcome;
-        use crate::{chessmove::Move, definitions::Square};
+        use crate::{chessmove::Move, util::Square};
 
         crate::magic::initialise();
 
@@ -2400,7 +2400,7 @@ mod tests {
     fn castling_pseudolegality() {
         use super::Board;
         use crate::chessmove::Move;
-        use crate::definitions::Square;
+        use crate::util::Square;
         let board =
             Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
                 .unwrap();

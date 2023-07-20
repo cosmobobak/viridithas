@@ -2,7 +2,7 @@ use std::ops::{
     BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
 };
 
-use crate::{board::movegen::BitLoop, definitions::Square};
+use crate::{board::movegen::BitLoop, util::Square};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SquareSet {

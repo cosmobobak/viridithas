@@ -1,7 +1,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::MAX_PLY,
+    util::MAX_PLY,
     historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
     piece::Colour,
