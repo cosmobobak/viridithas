@@ -29,7 +29,7 @@ fn batch_convert<const USE_NNUE: bool>(
 ) {
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut t = ThreadData::new(0, &pos);
     let mut local_ticker = 0;
     if printing_thread {
@@ -54,7 +54,7 @@ fn batch_convert<const USE_NNUE: bool>(
             evals.push(None);
             continue;
         }
-        tt.clear();
+        tt.clear(1);
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::Depth(Depth::new(depth)));
         let mut info =

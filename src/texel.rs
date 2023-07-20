@@ -39,7 +39,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let mut pos = Board::default();
     let mut info = SearchInfo::new(&stopped);
     let mut tt = TT::new();
-    tt.resize(MEGABYTE);
+    tt.resize(MEGABYTE, 1);
     let mut t = ThreadData::new(0, &pos);
     info.eval_params = params.clone();
     data.iter()

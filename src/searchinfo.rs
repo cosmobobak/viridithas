@@ -240,7 +240,7 @@ mod tests {
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -261,7 +261,7 @@ mod tests {
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -282,7 +282,7 @@ mod tests {
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -303,7 +303,7 @@ mod tests {
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
