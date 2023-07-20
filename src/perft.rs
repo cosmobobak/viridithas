@@ -153,7 +153,7 @@ mod tests {
     #![allow(unused_imports)]
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
-    use crate::{chessmove::Move, util::Square, piece::PieceType};
+    use crate::{chessmove::Move, piece::PieceType, util::Square};
 
     #[test]
     fn perft_hard_position() {

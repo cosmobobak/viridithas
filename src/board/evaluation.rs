@@ -8,13 +8,13 @@ use score::S;
 use crate::{
     board::Board,
     chessmove::Move,
-    util::{Square, MAX_DEPTH},
     lookups::{init_eval_masks, init_passed_isolated_bb},
     piece::{Colour, Piece, PieceType},
     search::draw_score,
     searchinfo::SearchInfo,
     squareset::SquareSet,
     threadlocal::ThreadData,
+    util::{Square, MAX_DEPTH},
 };
 
 use super::movegen::bitboards::{self, DARK_SQUARE, LIGHT_SQUARE};

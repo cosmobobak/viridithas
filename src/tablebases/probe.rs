@@ -3,7 +3,6 @@
 use crate::{
     board::{evaluation::TB_WIN_SCORE, movegen::MoveList, Board},
     chessmove::Move,
-    util::{CastlingRights, Square},
     piece::{Colour, PieceType},
     tablebases::bindings::{
         tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST,
@@ -13,6 +12,7 @@ use crate::{
         TB_RESULT_TO_SHIFT, TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT, TB_WIN,
     },
     uci,
+    util::{CastlingRights, Square},
 };
 use std::ffi::CString;
 use std::ptr;

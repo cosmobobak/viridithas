@@ -24,9 +24,6 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    util::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
-    },
     historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     search::pv::PVariation,
@@ -35,6 +32,9 @@ use crate::{
     threadlocal::ThreadData,
     transpositiontable::{Bound, ProbeResult, TTHit, TTView},
     uci,
+    util::{
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
+    },
 };
 
 use self::parameters::SearchParams;
@@ -147,8 +147,7 @@ impl Board {
         global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
-        let best_thread =
-            select_best(self, thread_headers, info, tt, info.nodes.get_global());
+        let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let best_move = best_thread.pv_move().unwrap_or(d_move);
         let score = best_thread.pv_score();
 
@@ -401,7 +400,11 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
-            return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes.get_local()) };
+            return if in_check {
+                0
+            } else {
+                self.evaluate::<NNUE>(info, t, info.nodes.get_local())
+            };
         }
 
         // probe the TT and see if we get a cutoff.
@@ -547,7 +550,11 @@ impl Board {
             let max_height =
                 MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
-                return if in_check { 0 } else { self.evaluate::<NNUE>(info, t, info.nodes.get_local()) };
+                return if in_check {
+                    0
+                } else {
+                    self.evaluate::<NNUE>(info, t, info.nodes.get_local())
+                };
             }
 
             // mate-distance pruning.

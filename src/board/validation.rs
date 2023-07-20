@@ -2,12 +2,12 @@
 
 use crate::{
     board::evaluation::score::S,
-    util::{Rank, Square},
     lookups::{PIECE_BIG, PIECE_MAJ},
     nnue::network::NNUEState,
     piece::{Colour, Piece},
     piecesquaretable::pst_value,
     searchinfo::SearchInfo,
+    util::{Rank, Square},
 };
 
 #[cfg(debug_assertions)]

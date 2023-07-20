@@ -10,12 +10,12 @@ use rand::prelude::SliceRandom;
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
-    util::{INFINITY, MEGABYTE},
     piece::Colour,
     search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::TT,
+    util::{INFINITY, MEGABYTE},
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";

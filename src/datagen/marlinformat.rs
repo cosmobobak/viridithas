@@ -1,4 +1,9 @@
-use crate::{piece::{PieceType, Colour, Piece}, board::{Board, GameOutcome}, util::{Rank, Square}, squareset::SquareSet};
+use crate::{
+    board::{Board, GameOutcome},
+    piece::{Colour, Piece, PieceType},
+    squareset::SquareSet,
+    util::{Rank, Square},
+};
 
 const UNMOVED_ROOK: u8 = PieceType::NONE.inner();
 
@@ -30,22 +35,15 @@ impl PackedBoard {
             let colour = piece.colour();
 
             let mut piece_code = piece_type.inner();
-            let rank1 = if colour == Colour::WHITE {
-                Rank::RANK_1
-            } else {
-                Rank::RANK_8
-            };
+            let rank1 = if colour == Colour::WHITE { Rank::RANK_1 } else { Rank::RANK_8 };
             if piece_type == PieceType::ROOK && sq.rank() == rank1 {
                 let castling_sq = if board.king_sq(colour) < sq {
                     board.castling_rights().kingside(colour)
                 } else {
                     board.castling_rights().queenside(colour)
                 };
-                let castling_file = if castling_sq == Square::NO_SQUARE {
-                    None
-                } else {
-                    Some(castling_sq.file())
-                };
+                let castling_file =
+                    if castling_sq == Square::NO_SQUARE { None } else { Some(castling_sq.file()) };
                 if Some(sq.file()) == castling_file {
                     piece_code = UNMOVED_ROOK;
                 }
@@ -59,8 +57,7 @@ impl PackedBoard {
         Self {
             occupancy: util::U64Le::new(occupancy.inner()),
             pieces,
-            stm_ep_square: (board.turn().inner()) << 7
-                | board.ep_sq().inner(),
+            stm_ep_square: (board.turn().inner()) << 7 | board.ep_sq().inner(),
             halfmove_clock: board.fifty_move_counter(),
             fullmove_number: util::U16Le::new(board.full_move_number().try_into().unwrap()),
             wdl,

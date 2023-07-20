@@ -1,13 +1,13 @@
 use std::{
-    mem,
-    ops::{Deref, DerefMut}, env,
+    env, mem,
+    ops::{Deref, DerefMut},
 };
 
 use crate::{
     board::Board,
-    util::{Square, MAX_DEPTH},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
+    util::{Square, MAX_DEPTH},
 };
 
 use super::accumulator::Accumulator;
@@ -88,12 +88,8 @@ impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = unsafe {
-    mem::transmute(*include_bytes!(concat!(
-        "../../",
-        env!("EVALFILE"),
-    )))
-};
+pub static NNUE: NNUEParams =
+    unsafe { mem::transmute(*include_bytes!(concat!("../../", env!("EVALFILE"),))) };
 
 #[repr(C)]
 pub struct NNUEParams {

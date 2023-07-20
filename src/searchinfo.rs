@@ -1,14 +1,17 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering, AtomicU64},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc, Mutex,
 };
 
 use crate::{
     board::evaluation::parameters::EvalParams,
-    util::{depth::{Depth, ZERO_PLY}, BatchedAtomicCounter},
     search::{parameters::SearchParams, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
+    util::{
+        depth::{Depth, ZERO_PLY},
+        BatchedAtomicCounter,
+    },
 };
 
 #[cfg(feature = "stats")]
@@ -212,7 +215,10 @@ enum FailHighType {
 
 mod tests {
     #![allow(unused_imports)]
-    use std::{array, sync::atomic::{AtomicBool, AtomicU64}};
+    use std::{
+        array,
+        sync::atomic::{AtomicBool, AtomicU64},
+    };
 
     use super::{SearchInfo, SearchLimit};
     use crate::{
@@ -220,11 +226,11 @@ mod tests {
             evaluation::{mate_in, mated_in},
             Board,
         },
-        util::MEGABYTE,
         magic,
         threadlocal::ThreadData,
         timemgmt::TimeManager,
         transpositiontable::TT,
+        util::MEGABYTE,
     };
 
     #[cfg(test)] // while running tests, we don't want multiple concurrent searches

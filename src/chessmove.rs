@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::{
-    util::{File, Square},
     piece::PieceType,
     uci::CHESS960,
+    util::{File, Square},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

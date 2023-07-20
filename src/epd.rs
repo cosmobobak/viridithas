@@ -1,6 +1,6 @@
 use std::{
     path::Path,
-    sync::atomic::{AtomicBool, AtomicUsize, AtomicU64},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize},
     time::Duration,
 };
 
@@ -8,11 +8,11 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     cli,
-    util::MEGABYTE,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
+    util::MEGABYTE,
 };
 
 const CONTROL_GREY: &str = "\u{001b}[38;5;243m";

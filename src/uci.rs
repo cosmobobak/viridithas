@@ -6,7 +6,7 @@ use std::{
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, ParseBoolError},
     sync::{
-        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering, AtomicU64},
+        atomic::{self, AtomicBool, AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
         mpsc, Mutex,
     },
     time::Instant,
@@ -22,7 +22,6 @@ use crate::{
         movegen::MoveList,
         Board,
     },
-    util::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
     nnue, perft,
     piece::Colour,
@@ -32,6 +31,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::SearchLimit,
     transpositiontable::TT,
+    util::{MAX_DEPTH, MEGABYTE},
     NAME, VERSION,
 };
 
@@ -775,7 +775,11 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!("{fen} has {} nodes", info.nodes.get_global());
         }
-        assert_eq!(info.nodes.get_global(), info.nodes.get_local(), "running bench with multiple threads is not supported");
+        assert_eq!(
+            info.nodes.get_global(),
+            info.nodes.get_local(),
+            "running bench with multiple threads is not supported"
+        );
     }
     let time = start.elapsed();
     #[allow(clippy::cast_precision_loss)]

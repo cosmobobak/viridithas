@@ -12,7 +12,11 @@ pub struct Accumulator<const HIDDEN: usize> {
 impl<const HIDDEN: usize> Accumulator<HIDDEN> {
     /// Initializes the accumulator with the given bias.
     pub fn init(&mut self, bias: &Align64<[i16; HIDDEN]>, update: Update) {
-        if update.white { self.white = *bias; }
-        if update.black { self.black = *bias; }
+        if update.white {
+            self.white = *bias;
+        }
+        if update.black {
+            self.black = *bias;
+        }
     }
 }
