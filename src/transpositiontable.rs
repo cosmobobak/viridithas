@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    mem::MaybeUninit,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
@@ -31,6 +34,16 @@ macro_rules! impl_from_bound {
 
 impl_from_bound!(u8);
 impl_from_bound!(i32);
+
+fn divide_into_chunks<T>(slice: &[T], n_chunks: usize) -> impl Iterator<Item = &[T]> {
+    let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
+    slice.chunks(chunk_size)
+}
+
+fn divide_into_chunks_mut<T>(slice: &mut [T], n_chunks: usize) -> impl Iterator<Item = &mut [T]> {
+    let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
+    slice.chunks_mut(chunk_size)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgeAndFlag {
@@ -137,15 +150,54 @@ impl TT {
         Self { table: Vec::new(), age: 0 }
     }
 
-    pub fn resize(&mut self, bytes: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
-        self.table.resize_with(new_len, || [AtomicU64::new(Self::NULL_VALUE), AtomicU64::new(Self::NULL_VALUE)]);
-        self.table.shrink_to_fit();
-        self.table.iter_mut().flatten().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
+        // dealloc the old table:
+        self.table = Vec::new();
+        // alloc the new table:
+        self.table.reserve_exact(new_len);
+        // initialise the new table:
+        unsafe {
+            let ptr = self.table.as_mut_ptr().cast();
+            // hey, aren't we creating a mutable reference to memory owned by this vec,
+            // thus violating strict aliasing rules?
+            // well, no. this is because we're only creating a reference to the uninitialised
+            // portion of the Vec, which *cannot be accessed* through self.table.
+            // as such, all is well in the world :3.
+            let uninit: &mut [MaybeUninit<u8>] =
+                std::slice::from_raw_parts_mut(ptr, new_len * TT_ENTRY_SIZE);
+            std::thread::scope(|s| {
+                let mut handles = Vec::with_capacity(threads);
+                for chunk in divide_into_chunks_mut(uninit, threads) {
+                    let handle = s.spawn(move || {
+                        chunk.as_mut_ptr().write_bytes(0, chunk.len());
+                    });
+                    handles.push(handle);
+                }
+                for handle in handles {
+                    handle.join().unwrap();
+                }
+            });
+            self.table.set_len(new_len);
+        }
     }
 
-    pub fn clear(&self) {
-        self.table.iter().flatten().for_each(|x| x.store(Self::NULL_VALUE, Ordering::SeqCst));
+    pub fn clear(&self, threads: usize) {
+        std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(threads);
+            for chunk in divide_into_chunks(&self.table, threads) {
+                let handle = s.spawn(move || {
+                    for entry in chunk {
+                        entry[0].store(Self::NULL_VALUE, Ordering::Relaxed);
+                        entry[1].store(Self::NULL_VALUE, Ordering::Relaxed);
+                    }
+                });
+                handles.push(handle);
+            }
+            for handle in handles {
+                handle.join().unwrap();
+            }
+        });
     }
 
     const fn pack_key(key: u64) -> u16 {
@@ -287,13 +339,7 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        let hit = TTHit {
-            tt_move,
-            tt_depth,
-            tt_bound,
-            tt_value,
-            tt_eval: entry.evaluation.into(),
-        };
+        let hit = TTHit { tt_move, tt_depth, tt_bound, tt_value, tt_eval: entry.evaluation.into() };
 
         if tt_depth < depth {
             return ProbeResult::Hit(hit);
@@ -388,7 +434,7 @@ mod tests {
             depth: ZERO_PLY.try_into().unwrap(),
             age_and_flag: AgeAndFlag::new(63, Bound::Exact),
             evaluation: 1337,
-            dummy: [0; 6]
+            dummy: [0; 6],
         };
         let packed: [u64; 2] = entry.into();
         let unpacked: TTEntry = packed.into();

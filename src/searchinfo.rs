@@ -241,7 +241,7 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -263,7 +263,7 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -285,7 +285,7 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
@@ -307,7 +307,7 @@ mod tests {
         let nodes = AtomicU64::new(0);
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let mut t = ThreadData::new(0, &position);
         let (value, mov) =
             position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());

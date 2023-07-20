@@ -95,7 +95,7 @@ fn run_on_positions(
     print: bool,
 ) -> i32 {
     let mut tt = TT::new();
-    tt.resize(hash * MEGABYTE);
+    tt.resize(hash * MEGABYTE, threads);
     let mut thread_data = (0..threads).map(|i| ThreadData::new(i, &board)).collect::<Vec<_>>();
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
@@ -104,7 +104,7 @@ fn run_on_positions(
     let start_time = std::time::Instant::now();
     for EpdPosition { fen, best_moves, id } in positions {
         board.set_from_fen(&fen).unwrap();
-        tt.clear();
+        tt.clear(threads);
         for t in &mut thread_data {
             t.clear_tables();
             t.nnue.reinit_from(&board);
