@@ -223,10 +223,10 @@
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
  grimoire │ gemini with 444M extra classical chess   │ STC:
-          │ FENs.                                    │ ELO   | -0.37 +- 2.90 (95%)
+          │ FENs.                                    │ ELO   │ -0.37 +- 2.90 (95%)
           │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   | -1.51 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES | N: 27224 W: 6717 L: 6746 D: 13761
+          │                                          │ LLR   │ -1.51 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 27224 W: 6717 L: 6746 D: 13761
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   echelon │ Proof-of-concept HalfKA network. Uses a  │ est. -80 Elo vs gemstone.
@@ -241,11 +241,22 @@ excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9
           │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
           │                                          │ vs gemstone.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   zhudun │ excalibur with 768x2 feature transformer │ ELO   │ 
-          │ with 134M extra FENs generated using     │ SPRT  │ 
-          │ excalibur. (using excalibur over         │ LLR   │ 
-          │ gemstone for the extra FENs because      │ GAMES │ 
-          │ i want to get selfplay to reveal any     │ vs gemstone.
-          │ halfka-induced overfitting to help the   │ 
-          │ next net)                                │ 
+   zhudun │ excalibur with 768x2 feature transformer │ STC:
+          │ with 134M extra FENs generated using     │ ELO   │ -0.49 +- 2.23 (95%)
+          │ excalibur. (using excalibur over         │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ gemstone for the extra FENs because      │ LLR   │ -2.97 (-2.94, 2.94) [0.00, 3.00]
+          │ i want to get selfplay to reveal any     │ GAMES │ N: 48992 W: 12875 L: 12944 D: 23173
+          │ halfka-induced overfitting to help the   │ LTC:
+          │ next net)                                │ ELO   │ 7.67 +- 4.38 (95%)
+          │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 12098 W: 3162 L: 2895 D: 6041
+          │                                          │ vs gemstone.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  arcanum │ zhudun retrained with exponentially      │ STC:
+          │ decreasing LR (10 epochs)                │ ELO   │ -15.84 +- 7.13 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 4720 W: 1113 L: 1328 D: 2279
+          │                                          │ vs zhudun
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
