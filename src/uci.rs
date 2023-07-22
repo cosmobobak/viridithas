@@ -6,7 +6,7 @@ use std::{
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, ParseBoolError},
     sync::{
-        atomic::{self, AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
         mpsc, Mutex,
     },
     time::Instant,
@@ -22,7 +22,6 @@ use crate::{
         movegen::MoveList,
         Board,
     },
-    definitions::{MAX_DEPTH, MEGABYTE},
     errors::{FenParseError, MoveParseError},
     nnue, perft,
     piece::Colour,
@@ -32,6 +31,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::SearchLimit,
     transpositiontable::TT,
+    util::{MAX_DEPTH, MEGABYTE},
     NAME, VERSION,
 };
 
@@ -549,11 +549,12 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
 
     let stopped = AtomicBool::new(false);
     let stdin = Mutex::new(stdin_reader());
-    let mut info = SearchInfo::new(&stopped);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
     info.eval_params = params;
 
@@ -654,7 +655,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                         info.lm_table = LMTable::new(&info.search_params);
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
-                            tt.resize(new_size);
+                            tt.resize(new_size, thread_data.len());
                         }
                         if let Some(threads) = conf.threads {
                             thread_data = (0..threads)
@@ -734,11 +735,12 @@ const BENCH_DEPTH: usize = 16;
 fn bench(benchcmd: &str) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
-    let mut info = SearchInfo::new(&stopped);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data =
         (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
     let mut node_sum = 0u64;
@@ -769,10 +771,15 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
         } else {
             pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
         }
-        node_sum += info.nodes;
+        node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
-            println!("{fen} has {} nodes", info.nodes);
+            println!("{fen} has {} nodes", info.nodes.get_global());
         }
+        assert_eq!(
+            info.nodes.get_global(),
+            info.nodes.get_local(),
+            "running bench with multiple threads is not supported"
+        );
     }
     let time = start.elapsed();
     #[allow(clippy::cast_precision_loss)]
@@ -823,7 +830,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
 
 fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
     parse_position("position startpos\n", pos)?;
-    tt.clear();
+    tt.clear(thread_data.len());
     thread_data.iter_mut().for_each(ThreadData::clear_tables);
     Ok(())
 }

@@ -1,12 +1,11 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    board,
-    definitions::{File, Rank, Square},
-    nnue,
+    board, nnue,
     rng::XorShiftState,
     squareset::SquareSet,
     transpositiontable,
+    util::{File, Rank, Square},
 };
 
 /// Implements a C-style for loop, for use in const fn.
@@ -230,9 +229,9 @@ mod tests {
 
     #[test]
     fn python_chess_validation() {
-        use crate::definitions::Square;
         use crate::lookups::{get_king_attacks, get_knight_attacks};
         use crate::squareset::SquareSet;
+        use crate::util::Square;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(get_knight_attacks(Square::new(0)), SquareSet::from_inner(132_096));

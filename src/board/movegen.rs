@@ -13,11 +13,11 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    definitions::{Square, HORIZONTAL_RAY_BETWEEN},
     magic::MAGICS_READY,
     piece::{Colour, PieceType},
     squareset::SquareSet,
     uci::CHESS960,
+    util::{Square, HORIZONTAL_RAY_BETWEEN},
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;

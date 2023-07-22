@@ -7,9 +7,9 @@ use std::{
 use crate::{
     board::evaluation::{is_mate_score, mate_in},
     chessmove::Move,
-    definitions::depth::Depth,
     search::pv::PVariation,
     transpositiontable::Bound,
+    util::depth::Depth,
 };
 
 const MOVE_OVERHEAD: u64 = 10;

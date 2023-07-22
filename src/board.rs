@@ -18,7 +18,6 @@ use crate::{
         MoveList,
     },
     chessmove::Move,
-    definitions::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
@@ -30,6 +29,7 @@ use crate::{
     squareset::{self, SquareSet},
     threadlocal::ThreadData,
     uci::CHESS960,
+    util::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
 };
 
 use self::{
@@ -87,8 +87,16 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook bitboards {msg}");
     assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen bitboards {msg}");
     assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::WHITE), rhs.pieces.occupied_co(Colour::WHITE), "white bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::BLACK), rhs.pieces.occupied_co(Colour::BLACK), "black bitboards {msg}");
+    assert_eq!(
+        lhs.pieces.occupied_co(Colour::WHITE),
+        rhs.pieces.occupied_co(Colour::WHITE),
+        "white bitboards {msg}"
+    );
+    assert_eq!(
+        lhs.pieces.occupied_co(Colour::BLACK),
+        rhs.pieces.occupied_co(Colour::BLACK),
+        "black bitboards {msg}"
+    );
     for sq in Square::all() {
         assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
     }
@@ -1432,23 +1440,62 @@ impl Board {
 
         if m.is_ep() {
             let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.update_feature::<Deactivate>(white_king, black_king, PieceType::PAWN, colour.flip(), ep_sq, ue);
+            t.nnue.update_feature::<Deactivate>(
+                white_king,
+                black_king,
+                PieceType::PAWN,
+                colour.flip(),
+                ep_sq,
+                ue,
+            );
         } else if m.is_castle() {
             match () {
                 _ if to == saved_castle_perm.wk => {
-                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1, ue);
+                    t.nnue.move_feature(
+                        white_king,
+                        black_king,
+                        PieceType::ROOK,
+                        colour,
+                        saved_castle_perm.wk,
+                        Square::F1,
+                        ue,
+                    );
                     to = Square::G1;
                 }
                 _ if to == saved_castle_perm.wq => {
-                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1, ue);
+                    t.nnue.move_feature(
+                        white_king,
+                        black_king,
+                        PieceType::ROOK,
+                        colour,
+                        saved_castle_perm.wq,
+                        Square::D1,
+                        ue,
+                    );
                     to = Square::C1;
                 }
                 _ if to == saved_castle_perm.bk => {
-                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8, ue);
+                    t.nnue.move_feature(
+                        white_king,
+                        black_king,
+                        PieceType::ROOK,
+                        colour,
+                        saved_castle_perm.bk,
+                        Square::F8,
+                        ue,
+                    );
                     to = Square::G8;
                 }
                 _ if to == saved_castle_perm.bq => {
-                    t.nnue.move_feature(white_king, black_king, PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8, ue);
+                    t.nnue.move_feature(
+                        white_king,
+                        black_king,
+                        PieceType::ROOK,
+                        colour,
+                        saved_castle_perm.bq,
+                        Square::D8,
+                        ue,
+                    );
                     to = Square::C8;
                 }
                 _ => {
@@ -1458,13 +1505,27 @@ impl Board {
         }
 
         if capture != Piece::EMPTY {
-            t.nnue.update_feature::<Deactivate>(white_king, black_king, capture.piece_type(), colour.flip(), to, ue);
+            t.nnue.update_feature::<Deactivate>(
+                white_king,
+                black_king,
+                capture.piece_type(),
+                colour.flip(),
+                to,
+                ue,
+            );
         }
 
         if m.is_promo() {
             let promo = m.promotion_type();
             debug_assert!(promo.legal_promo());
-            t.nnue.update_feature::<Deactivate>(white_king, black_king, PieceType::PAWN, colour, from, ue);
+            t.nnue.update_feature::<Deactivate>(
+                white_king,
+                black_king,
+                PieceType::PAWN,
+                colour,
+                from,
+                ue,
+            );
             t.nnue.update_feature::<Activate>(white_king, black_king, promo, colour, to, ue);
         } else {
             t.nnue.move_feature(white_king, black_king, piece_type, colour, from, to, ue);
@@ -2263,7 +2324,7 @@ mod tests {
     fn game_end_states() {
         use super::Board;
         use super::GameOutcome;
-        use crate::{chessmove::Move, definitions::Square};
+        use crate::{chessmove::Move, util::Square};
 
         crate::magic::initialise();
 
@@ -2400,7 +2461,7 @@ mod tests {
     fn castling_pseudolegality() {
         use super::Board;
         use crate::chessmove::Move;
-        use crate::definitions::Square;
+        use crate::util::Square;
         let board =
             Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
                 .unwrap();

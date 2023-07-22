@@ -1,7 +1,7 @@
 use crate::{
     chessmove::Move,
-    definitions::{depth::Depth, Square, BOARD_N_SQUARES},
     piece::{Piece, PieceType},
+    util::{depth::Depth, Square, BOARD_N_SQUARES},
 };
 
 const AGEING_DIVISOR: i16 = 2;

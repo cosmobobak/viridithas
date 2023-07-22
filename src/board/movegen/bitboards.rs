@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
 use crate::{
-    definitions::Square,
     lookups, magic,
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,
+    util::Square,
 };
 
 pub const LIGHT_SQUARE: bool = true;

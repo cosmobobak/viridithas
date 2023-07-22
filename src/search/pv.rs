@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::definitions::MAX_PLY;
+use crate::util::MAX_PLY;
 
 use crate::chessmove::Move;
 

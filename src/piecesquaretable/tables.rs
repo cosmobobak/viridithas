@@ -1,8 +1,8 @@
 use crate::{
     board::evaluation::score::S,
     cfor,
-    definitions::{File, Rank, Square},
     piece::{Colour, Piece},
+    util::{File, Rank, Square},
 };
 
 use super::PieceSquareTable;

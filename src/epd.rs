@@ -1,6 +1,6 @@
 use std::{
     path::Path,
-    sync::atomic::{AtomicBool, AtomicUsize},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize},
     time::Duration,
 };
 
@@ -8,11 +8,11 @@ use crate::{
     board::{evaluation::parameters::EvalParams, Board},
     chessmove::Move,
     cli,
-    definitions::MEGABYTE,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
+    util::MEGABYTE,
 };
 
 const CONTROL_GREY: &str = "\u{001b}[38;5;243m";
@@ -95,7 +95,7 @@ fn run_on_positions(
     print: bool,
 ) -> i32 {
     let mut tt = TT::new();
-    tt.resize(hash * MEGABYTE);
+    tt.resize(hash * MEGABYTE, threads);
     let mut thread_data = (0..threads).map(|i| ThreadData::new(i, &board)).collect::<Vec<_>>();
     let mut successes = 0;
     let maxfenlen = positions.iter().map(|pos| pos.fen.len()).max().unwrap();
@@ -104,7 +104,7 @@ fn run_on_positions(
     let start_time = std::time::Instant::now();
     for EpdPosition { fen, best_moves, id } in positions {
         board.set_from_fen(&fen).unwrap();
-        tt.clear();
+        tt.clear(threads);
         for t in &mut thread_data {
             t.clear_tables();
             t.nnue.reinit_from(&board);
@@ -114,11 +114,12 @@ fn run_on_positions(
             time,
             best_moves.clone(),
         ));
+        let nodes = AtomicU64::new(0);
         let mut info = SearchInfo {
             time_manager,
             print_to_stdout: print,
             eval_params: params.clone(),
-            ..SearchInfo::new(&stopped)
+            ..SearchInfo::new(&stopped, &nodes)
         };
         info.time_manager.start();
         let (_, bm) = board.search_position::<true>(&mut info, &mut thread_data, tt.view());

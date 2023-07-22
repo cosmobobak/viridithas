@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, AtomicU64},
     time::Instant,
 };
 
@@ -10,12 +10,12 @@ use rand::prelude::SliceRandom;
 
 use crate::{
     board::{evaluation::parameters::EvalParams, Board},
-    definitions::{INFINITY, MEGABYTE},
     piece::Colour,
     search::pv::PVariation,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     transpositiontable::TT,
+    util::{INFINITY, MEGABYTE},
 };
 
 const CONTROL_GREEN: &str = "\u{001b}[32m";
@@ -37,9 +37,10 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let stopped = AtomicBool::new(false);
     let mut pv = PVariation::default();
     let mut pos = Board::default();
-    let mut info = SearchInfo::new(&stopped);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
     let mut tt = TT::new();
-    tt.resize(MEGABYTE);
+    tt.resize(MEGABYTE, 1);
     let mut t = ThreadData::new(0, &pos);
     info.eval_params = params.clone();
     data.iter()

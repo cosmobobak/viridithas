@@ -11,11 +11,11 @@ use std::{
 
 use crate::{
     board::{evaluation::is_game_theoretic_score, Board},
-    definitions::{depth::Depth, MEGABYTE},
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
+    util::{depth::Depth, MEGABYTE},
 };
 
 fn batch_convert<const USE_NNUE: bool>(
@@ -29,7 +29,7 @@ fn batch_convert<const USE_NNUE: bool>(
 ) {
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut t = ThreadData::new(0, &pos);
     let mut local_ticker = 0;
     if printing_thread {
@@ -54,11 +54,15 @@ fn batch_convert<const USE_NNUE: bool>(
             evals.push(None);
             continue;
         }
-        tt.clear();
+        tt.clear(1);
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::Depth(Depth::new(depth)));
-        let mut info =
-            SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
+        let nodes = AtomicU64::new(0);
+        let mut info = SearchInfo {
+            time_manager,
+            print_to_stdout: false,
+            ..SearchInfo::new(&stopped, &nodes)
+        };
         let (score, bm) =
             pos.search_position::<USE_NNUE>(&mut info, array::from_mut(&mut t), tt.view());
         if filter_quiescent && (pos.is_tactical(bm) || is_game_theoretic_score(score)) {

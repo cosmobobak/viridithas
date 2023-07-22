@@ -22,13 +22,13 @@ use crate::{
         evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
         Board, GameOutcome,
     },
-    definitions::{depth::Depth, MEGABYTE, self},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
+    util::{self, depth::Depth, MEGABYTE},
 };
 
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
@@ -209,13 +209,15 @@ fn generate_on_thread(
     let mut board = Board::new();
     let mut thread_data = ThreadData::new(0, &board);
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes(nodes),
     });
-    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped) };
+    let nodes = AtomicU64::new(0);
+    let mut info =
+        SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped, &nodes) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -278,7 +280,7 @@ fn generate_on_thread(
             board.set_startpos();
         }
         thread_data.nnue.reinit_from(&board);
-        tt.clear();
+        tt.clear(1);
         info.set_up_for_search();
         // generate game
         if options.log_level > 1 {
@@ -412,11 +414,10 @@ fn generate_on_thread(
             board.set_outcome(outcome);
         }
         // convert to bytes
-        // SAFETY: PackedBoards are totally chill to reinterpret as bytes, 
+        // SAFETY: PackedBoards are totally chill to reinterpret as bytes,
         // trust me bro.
-        let byte_view = unsafe {
-            definitions::slice_into_bytes_with_lifetime(single_game_buffer.as_slice())
-        };
+        let byte_view =
+            unsafe { util::slice_into_bytes_with_lifetime(single_game_buffer.as_slice()) };
         // write to file
         output_buffer.write_all(byte_view).unwrap();
         // clear the buffer
@@ -589,7 +590,12 @@ impl FromStr for DataGenOptions {
         options.generate_dfrc = match parts.get(4).copied() {
             Some("dfrc") => true,
             Some("classical") => false,
-            _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
+            _ => {
+                return Err(format!(
+                    "Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"",
+                    parts[4]
+                ))
+            }
         };
         let limit = match parts[5].chars().next() {
             Some('d') => DataGenLimit::Depth(

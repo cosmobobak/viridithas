@@ -1,8 +1,8 @@
 use std::{error::Error, fmt::Display, path::Path};
 
 use crate::{
-    definitions::Square,
     piece::{Piece, PieceType},
+    util::Square,
 };
 
 use super::{

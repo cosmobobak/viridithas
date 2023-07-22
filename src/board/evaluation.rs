@@ -8,13 +8,13 @@ use score::S;
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::{Square, MAX_DEPTH},
     lookups::{init_eval_masks, init_passed_isolated_bb},
     piece::{Colour, Piece, PieceType},
     search::draw_score,
     searchinfo::SearchInfo,
     squareset::SquareSet,
     threadlocal::ThreadData,
+    util::{Square, MAX_DEPTH},
 };
 
 use super::movegen::bitboards::{self, DARK_SQUARE, LIGHT_SQUARE};
@@ -640,7 +640,6 @@ struct KingDangerInfo {
 }
 
 mod tests {
-
     #[test]
     fn unwinnable() {
         use crate::threadlocal::ThreadData;
@@ -648,7 +647,8 @@ mod tests {
         crate::magic::initialise();
         let board = super::Board::from_fen(FEN).unwrap();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         let thread = ThreadData::new(0, &board);
         let eval = board.evaluate_classical(&thread, &info, 0);
         assert!(
@@ -668,7 +668,8 @@ mod tests {
         let board1 = super::Board::from_fen(FEN1).unwrap();
         let board2 = super::Board::from_fen(FEN2).unwrap();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         let thread1 = ThreadData::new(0, &board1);
         let thread2 = ThreadData::new(0, &board2);
         let eval1 = board1.evaluate_classical(&thread1, &info, 0);
@@ -682,7 +683,8 @@ mod tests {
         crate::magic::initialise();
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         assert_eq!(board.mobility_threats_kingdanger(&info).0, S(0, 0));
     }
 
@@ -694,7 +696,8 @@ mod tests {
         let tempo = EvalParams::default().tempo.0;
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         let thread = ThreadData::new(0, &board);
         assert_eq!(board.evaluate_classical(&thread, &info, 0), tempo);
     }
@@ -707,7 +710,8 @@ mod tests {
 
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
 
         let material =
             board.material[Colour::WHITE.index()] - board.material[Colour::BLACK.index()];
@@ -733,7 +737,8 @@ mod tests {
         crate::magic::initialise();
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         assert_eq!(board.pawn_structure_term(&info), S(0, 0));
     }
 
@@ -743,7 +748,8 @@ mod tests {
         crate::magic::initialise();
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&stopped);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
         let rook_points = board.rook_open_file_term(&info);
         let queen_points = board.queen_open_file_term(&info);
         assert_eq!(rook_points + queen_points, S(0, 0));
@@ -753,8 +759,9 @@ mod tests {
     fn double_pawn_eval() {
         use super::Board;
         use crate::board::evaluation::DOUBLED_PAWN_MALUS;
-        let binding = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&binding);
+        let stopped = std::sync::atomic::AtomicBool::new(false);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
 
         let board =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/5P2/PPPP1PPP/RNBQKBNR w KQkq - 0 1").unwrap();
@@ -774,8 +781,9 @@ mod tests {
         let starting_rank_passer = Board::from_fen("8/k7/8/8/8/8/K6P/8 w - - 0 1").unwrap();
         let end_rank_passer = Board::from_fen("8/k6P/8/8/8/8/K7/8 w - - 0 1").unwrap();
 
-        let binding = std::sync::atomic::AtomicBool::new(false);
-        let info = crate::searchinfo::SearchInfo::new(&binding);
+        let stopped = std::sync::atomic::AtomicBool::new(false);
+        let nodes = std::sync::atomic::AtomicU64::new(0);
+        let info = crate::searchinfo::SearchInfo::new(&stopped, &nodes);
 
         let thread1 = ThreadData::new(0, &starting_rank_passer);
         let thread2 = ThreadData::new(0, &end_rank_passer);

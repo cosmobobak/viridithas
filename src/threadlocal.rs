@@ -1,11 +1,11 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    definitions::MAX_PLY,
     historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
     nnue,
     piece::Colour,
     search::pv::PVariation,
+    util::MAX_PLY,
 };
 
 #[derive(Clone)]

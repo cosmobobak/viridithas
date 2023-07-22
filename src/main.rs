@@ -17,7 +17,6 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
-mod definitions;
 mod epd;
 mod errors;
 mod historytable;
@@ -39,6 +38,7 @@ mod threadlocal;
 mod timemgmt;
 mod transpositiontable;
 mod uci;
+mod util;
 
 mod datagen;
 
