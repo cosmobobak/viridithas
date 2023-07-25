@@ -21,7 +21,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{Activate, Deactivate, Update},
+    nnue::network::{Activate, Deactivate, Update, self},
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::pv::PVariation,
@@ -1427,7 +1427,7 @@ impl Board {
         t.nnue.push_acc();
 
         let king_moved = piece_type == PieceType::KING;
-        let ue = if king_moved {
+        let ue = if network::BUCKETS != 1 && king_moved {
             let refresh = Update::colour(colour);
             t.nnue.refresh_accumulators(self, refresh);
             refresh.opposite()
