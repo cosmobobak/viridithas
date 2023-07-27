@@ -589,17 +589,6 @@ impl Board {
                     return hit.tt_value;
                 }
 
-                if matches!(hit.tt_bound, Bound::Exact | Bound::Upper)
-                    && hit.tt_depth < depth
-                    && depth - hit.tt_depth < Depth::new(5)
-                    && hit.tt_value > -MINIMUM_TB_WIN_SCORE
-                    && alpha < MINIMUM_TB_WIN_SCORE
-                    && hit.tt_value + 128 * (depth - hit.tt_depth) <= alpha
-                {
-                    // accept TT cutoff from shallower search if the score is way below alpha
-                    return alpha;
-                }
-
                 Some(hit)
             } else {
                 // TT-reduction (IIR).
