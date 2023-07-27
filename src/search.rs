@@ -410,7 +410,7 @@ impl Board {
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
-        let tt_hit = if let Some(hit) = tt.probe(key, height, alpha, beta, ZERO_PLY) {
+        let tt_hit = if let Some(hit) = tt.probe(key, height) {
             if !do_not_cut
                 && (hit.tt_bound == Bound::Exact
                     || (hit.tt_bound == Bound::Lower && hit.tt_value >= beta)
@@ -578,7 +578,7 @@ impl Board {
         let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_null() {
-            if let Some(hit) = tt.probe(key, height, alpha, beta, depth) {
+            if let Some(hit) = tt.probe(key, height) {
                 if !PV
                     && hit.tt_depth >= depth
                     && !fifty_move_rule_near

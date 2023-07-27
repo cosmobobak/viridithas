@@ -298,18 +298,9 @@ impl<'a> TTView<'a> {
         &self,
         key: u64,
         ply: usize,
-        alpha: i32,
-        beta: i32,
-        depth: Depth,
     ) -> Option<TTHit> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
-
-        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
-        debug_assert!(alpha < beta);
-        debug_assert!(alpha >= -INFINITY);
-        debug_assert!(beta >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         // load the entry:
         let parts = [
@@ -350,7 +341,7 @@ impl<'a> TTView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe(key, 0, -INFINITY, INFINITY, ZERO_PLY);
+        let result = self.probe(key, 0);
         match result {
             Some(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
             _ => None,
