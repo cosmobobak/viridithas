@@ -260,3 +260,28 @@ excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9
           │                                          │ GAMES │ N: 4720 W: 1113 L: 1328 D: 2279
           │                                          │ vs zhudun
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+astralite │ gemstone-arch, with 386M extra zhudun    │ v2 STC:
+          │ FENs. 20 epochs with lr 0.001, wdl 0.3,  │ ELO   │ 5.32 +- 3.55 (95%)
+          │ then three different continuations:      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │ v1: 5 epochs lr 0.0001, wdl 0.3          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+          │ v2: 5 epochs lr 0.0001, wdl 0.4          │ GAMES │ N: 19464 W: 5304 L: 5006 D: 9154
+          │ v3: 5 epochs lr 0.0001, wdl 0.5          │ vs zhudun.
+          │                                          │ v2 LTC:
+          │ This arch is faster than zhudun, so it   │ ELO   │ -0.06 +- 3.78 (95%)
+          │ gets better performance in STC, but      │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+          │ scales poorly.                           │ LLR   │ -0.72 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 16322 W: 4105 L: 4108 D: 8109
+          │                                          │ vs zhudun.
+          │                                          │ v1 STC:
+          │                                          │ ELO   │ -1.10 +- 2.47 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 35952 W: 8471 L: 8585 D: 18896
+          │                                          │ vs astralite-v2.
+          │                                          │ v3 STC:
+          │                                          │ ELO   │ 
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 
+          │                                          │ GAMES │ 
+          │                                          │ vs astralite-v2.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
