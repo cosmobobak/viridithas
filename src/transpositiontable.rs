@@ -137,12 +137,6 @@ pub struct TTHit {
     pub tt_eval: i32,
 }
 
-pub enum ProbeResult {
-    Cutoff(TTHit),
-    Hit(TTHit),
-    Nothing,
-}
-
 impl TT {
     const NULL_VALUE: u64 = 0;
 
@@ -304,19 +298,9 @@ impl<'a> TTView<'a> {
         &self,
         key: u64,
         ply: usize,
-        alpha: i32,
-        beta: i32,
-        depth: Depth,
-        do_not_cut: bool,
-    ) -> ProbeResult {
+    ) -> Option<TTHit> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
-
-        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
-        debug_assert!(alpha < beta);
-        debug_assert!(alpha >= -INFINITY);
-        debug_assert!(beta >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
 
         // load the entry:
         let parts = [
@@ -326,7 +310,7 @@ impl<'a> TTView<'a> {
         let entry: TTEntry = parts.into();
 
         if entry.key != key {
-            return ProbeResult::Nothing;
+            return None;
         }
 
         let tt_move = entry.m;
@@ -339,37 +323,7 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        let hit = TTHit { tt_move, tt_depth, tt_bound, tt_value, tt_eval: entry.evaluation.into() };
-
-        if tt_depth < depth {
-            return ProbeResult::Hit(hit);
-        }
-
-        debug_assert!(tt_value >= -INFINITY);
-        match tt_bound {
-            Bound::None => ProbeResult::Nothing, // this only gets hit when the hashkey manages to have all zeroes in the lower 16 bits.
-            Bound::Upper => {
-                if tt_value <= alpha && !do_not_cut {
-                    ProbeResult::Cutoff(hit) // never cutoff at root.
-                } else {
-                    ProbeResult::Hit(hit)
-                }
-            }
-            Bound::Lower => {
-                if tt_value >= beta && !do_not_cut {
-                    ProbeResult::Cutoff(hit) // never cutoff at root.
-                } else {
-                    ProbeResult::Hit(hit)
-                }
-            }
-            Bound::Exact => {
-                if do_not_cut {
-                    ProbeResult::Hit(hit)
-                } else {
-                    ProbeResult::Cutoff(hit) // never cutoff at root.
-                }
-            }
-        }
+        Some(TTHit { tt_move, tt_depth, tt_bound, tt_value, tt_eval: entry.evaluation.into() })
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -387,9 +341,9 @@ impl<'a> TTView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe(key, 0, -INFINITY, INFINITY, ZERO_PLY, true);
+        let result = self.probe(key, 0);
         match result {
-            ProbeResult::Hit(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
+            Some(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
             _ => None,
         }
     }
