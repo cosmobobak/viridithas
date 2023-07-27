@@ -28,8 +28,11 @@ use crate::{
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{self, depth::Depth, MEGABYTE},
+    util::{self, depth::Depth, MEGABYTE}, datagen::marlinformat::PackedBoard,
 };
+
+const MIN_SAVE_PLY: usize = 16;
+const MAX_RNG_PLY: usize = 24;
 
 static FENS_GENERATED: AtomicU64 = AtomicU64::new(0);
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
@@ -353,7 +356,7 @@ fn generate_on_thread(
                 std::array::from_mut(&mut thread_data),
                 tt.view(),
             );
-            if board.ply() > 16
+            if board.ply() > MIN_SAVE_PLY
                 && !board.is_tactical(best_move)
                 && !is_game_theoretic_score(score)
                 && !board.in_check()
@@ -361,7 +364,7 @@ fn generate_on_thread(
                 // we only save FENs where the best move is not tactical (promotions or captures)
                 // and the score is not game theoretic (mate or TB-win),
                 // and the side to move is not in check.
-                single_game_buffer.push(board.pack(score.try_into().unwrap(), 0, 0));
+                single_game_buffer.push(board.pack(score.try_into().unwrap(), PackedBoard::WDL_DRAW, 0));
             }
 
             let abs_score = score.abs();
@@ -398,7 +401,13 @@ fn generate_on_thread(
                     _ => unreachable!(),
                 };
             }
-            board.make_move::<true>(best_move, &mut thread_data, &info);
+
+            if board.ply() < MAX_RNG_PLY && rng.gen_bool(0.01) {
+                // 1% chance of making a random move
+                board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
+            } else {
+                board.make_move::<true>(best_move, &mut thread_data, &info);
+            }
         };
         if options.log_level > 2 {
             eprintln!("Game is over, outcome: {outcome:?}");

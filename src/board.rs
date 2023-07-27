@@ -1413,6 +1413,7 @@ impl Board {
         self.check_validity().unwrap();
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();

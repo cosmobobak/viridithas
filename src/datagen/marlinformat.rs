@@ -21,6 +21,10 @@ pub struct PackedBoard {
 }
 
 impl PackedBoard {
+    pub const WDL_WIN: u8 = 2;
+    pub const WDL_DRAW: u8 = 1;
+    pub const WDL_LOSS: u8 = 0;
+
     pub fn set_outcome(&mut self, outcome: GameOutcome) {
         self.wdl = outcome.as_packed_u8();
     }
