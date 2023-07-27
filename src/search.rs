@@ -589,7 +589,7 @@ impl Board {
                     return hit.tt_value;
                 }
 
-                if (hit.tt_bound == Bound::Upper)
+                if matches!(hit.tt_bound, Bound::Exact | Bound::Upper)
                     && hit.tt_depth < depth
                     && depth - hit.tt_depth < Depth::new(5)
                     && hit.tt_value > -MINIMUM_TB_WIN_SCORE
