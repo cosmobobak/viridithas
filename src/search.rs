@@ -30,7 +30,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, ProbeResult, TTHit, TTView},
+    transpositiontable::{Bound, TTHit, TTView},
     uci,
     util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
@@ -410,10 +410,18 @@ impl Board {
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let do_not_cut = PV || in_check || fifty_move_rule_near;
-        let tt_hit = match tt.probe(key, height, alpha, beta, ZERO_PLY, do_not_cut) {
-            ProbeResult::Cutoff(tt_hit) => return tt_hit.tt_value,
-            ProbeResult::Hit(tt_hit) => Some(tt_hit),
-            ProbeResult::Nothing => None,
+        let tt_hit = if let Some(hit) = tt.probe(key, height, alpha, beta, ZERO_PLY) {
+            if !do_not_cut
+                && (hit.tt_bound == Bound::Exact
+                    || (hit.tt_bound == Bound::Lower && hit.tt_value >= beta)
+                    || (hit.tt_bound == Bound::Upper && hit.tt_value <= alpha))
+            {
+                return hit.tt_value;
+            }
+
+            Some(hit)
+        } else {
+            None
         };
 
         let stand_pat = if in_check {
@@ -569,20 +577,36 @@ impl Board {
 
         let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let do_not_cut = ROOT || PV || fifty_move_rule_near;
         let tt_hit = if excluded.is_null() {
-            match tt.probe(key, height, alpha, beta, depth, do_not_cut) {
-                ProbeResult::Cutoff(tt_hit) => {
-                    return tt_hit.tt_value;
+            if let Some(hit) = tt.probe(key, height, alpha, beta, depth) {
+                if !PV
+                    && hit.tt_depth >= depth
+                    && !fifty_move_rule_near
+                    && (hit.tt_bound == Bound::Exact
+                        || (hit.tt_bound == Bound::Lower && hit.tt_value >= beta)
+                        || (hit.tt_bound == Bound::Upper && hit.tt_value <= alpha))
+                {
+                    return hit.tt_value;
                 }
-                ProbeResult::Hit(tt_hit) => Some(tt_hit),
-                ProbeResult::Nothing => {
-                    // TT-reduction (IIR).
-                    if PV && depth >= info.search_params.tt_reduction_depth {
-                        depth -= 1;
-                    }
-                    None
+
+                if (hit.tt_bound == Bound::Upper)
+                    && hit.tt_depth < depth
+                    && depth - hit.tt_depth < Depth::new(5)
+                    && hit.tt_value > -MINIMUM_TB_WIN_SCORE
+                    && alpha < MINIMUM_TB_WIN_SCORE
+                    && hit.tt_value + 128 * (depth - hit.tt_depth) <= alpha
+                {
+                    // accept TT cutoff from shallower search if the score is way below alpha
+                    return alpha;
                 }
+
+                Some(hit)
+            } else {
+                // TT-reduction (IIR).
+                if PV && depth >= info.search_params.tt_reduction_depth {
+                    depth -= 1;
+                }
+                None
             }
         } else {
             None // do not probe the TT if we're in a singular-verification search.
