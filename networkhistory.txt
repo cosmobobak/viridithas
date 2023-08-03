@@ -285,3 +285,17 @@ astralite │ gemstone-arch, with 386M extra zhudun    │ v2 STC:
           │                                          │ GAMES │ 
           │                                          │ vs astralite-v2.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+alchemist │ astralite but trained with wdl 0.4 the   │ STC:
+          │ whole time.                              │ ELO   │ -0.06 +- 1.87 (95%)
+          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 66792 W: 16861 L: 16872 D: 33059
+          │                                          │ vs astralite-v2.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  majesty │ HalfKA + 768nn + 0.4 WDL + 15 epochs,    │ STC:
+          │ lr-drop 10, dataset of only 766M FRC     │ ELO   │ 
+          │ positions generated using zhudun.        │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+          │                                          │ LLR   │ 
+          │                                          │ GAMES │ 
+          │                                          │ vs zhudun.
+──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
