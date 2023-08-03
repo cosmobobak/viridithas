@@ -279,10 +279,10 @@ astralite │ gemstone-arch, with 386M extra zhudun    │ v2 STC:
           │                                          │ GAMES │ N: 35952 W: 8471 L: 8585 D: 18896
           │                                          │ vs astralite-v2.
           │                                          │ v3 STC:
-          │                                          │ ELO   │ 
+          │                                          │ ELO   │ -3.87 +- 3.79 (95%)
           │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 
-          │                                          │ GAMES │ 
+          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+          │                                          │ GAMES │ N: 15816 W: 3795 L: 3971 D: 8050
           │                                          │ vs astralite-v2.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
 alchemist │ astralite but trained with wdl 0.4 the   │ STC:
