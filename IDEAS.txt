@@ -16,3 +16,4 @@ MINOR:
 - embed magics
 - clean up magic gen code
 - add module docs
+- right-align seldepth in pretty UCI output
