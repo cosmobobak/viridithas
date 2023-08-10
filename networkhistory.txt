@@ -293,9 +293,9 @@ alchemist │ astralite but trained with wdl 0.4 the   │ STC:
           │                                          │ vs astralite-v2.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
   majesty │ HalfKA + 768nn + 0.4 WDL + 15 epochs,    │ STC:
-          │ lr-drop 10, dataset of only 766M FRC     │ ELO   │ 
+          │ lr-drop 10, dataset of only 766M FRC     │ ELO   │ -106.16 +- 19.05 (95%)
           │ positions generated using zhudun.        │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 
-          │                                          │ GAMES │ 
-          │                                          │ vs zhudun.
+          │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
+          │ Either dataset was too small or might    │ GAMES │ N: 776 W: 109 L: 339 D: 328
+          │ have been shuffled wrong.                │ vs zhudun.
 ──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
