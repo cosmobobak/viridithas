@@ -25,7 +25,10 @@ const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 768;
 /// The number of buckets in the feature transformer.
+#[cfg(not(feature = "relnet"))]
 pub const BUCKETS: usize = 64;
+#[cfg(feature = "relnet")]
+pub const BUCKETS: usize = 1;
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -146,7 +149,8 @@ impl NNUEParams {
     }
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        if BUCKETS == 64 {
+        #[cfg(not(feature = "relnet"))]
+        {
             let start = bucket * INPUT * LAYER_1_SIZE;
             let end = start + INPUT * LAYER_1_SIZE;
             let slice = &self.feature_weights[start..end];
@@ -162,11 +166,9 @@ impl NNUEParams {
                 #[allow(clippy::cast_ptr_alignment)]
                 &*ptr.cast()
             }
-        } else if BUCKETS == 1 {
-            &self.feature_weights
-        } else {
-            unimplemented!("only 1 or 64 buckets are supported")
         }
+        #[cfg(feature = "relnet")]
+        &self.feature_weights
     }
 }
 
