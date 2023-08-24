@@ -1568,7 +1568,7 @@ impl AspirationWindow {
 fn set_up_for_search(board: &mut Board, info: &mut SearchInfo, thread_headers: &mut [ThreadData]) {
     board.zero_height();
     info.set_up_for_search();
-    for td in thread_headers.iter_mut() {
+    for td in thread_headers {
         td.set_up_for_search(board);
     }
     TB_HITS.store(0, Ordering::Relaxed);

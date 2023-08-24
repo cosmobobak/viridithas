@@ -123,11 +123,11 @@ impl EvalParams {
             .chain(Some(self.bishop_pair_bonus))
             .chain(Some(S(self.rook_open_file_bonus.0, self.rook_half_open_file_bonus.0)))
             .chain(Some(S(self.queen_open_file_bonus.0, self.queen_half_open_file_bonus.0)))
-            .chain(self.knight_mobility_bonus.into_iter())
-            .chain(self.bishop_mobility_bonus.into_iter())
-            .chain(self.rook_mobility_bonus.into_iter())
-            .chain(self.queen_mobility_bonus.into_iter())
-            .chain(self.passed_pawn_bonus.into_iter())
+            .chain(self.knight_mobility_bonus)
+            .chain(self.bishop_mobility_bonus)
+            .chain(self.rook_mobility_bonus)
+            .chain(self.queen_mobility_bonus)
+            .chain(self.passed_pawn_bonus)
             // take the left halves of the white piece square tables, except for the pawn table.
             .chain(self.piece_square_tables[Piece::WP.index()].iter().copied())
             .chain(
