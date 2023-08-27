@@ -1122,7 +1122,7 @@ impl Board {
 
     /// The reduced beta margin for Singular Extension.
     fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
-        (tt_value - depth.round()).max(-MATE_SCORE)
+        (tt_value - (depth * 3 / 4).round()).max(-MATE_SCORE)
     }
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
