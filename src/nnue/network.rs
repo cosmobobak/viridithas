@@ -23,11 +23,8 @@ const CR_MAX: i16 = 255;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 768;
+pub const LAYER_1_SIZE: usize = 1024;
 /// The number of buckets in the feature transformer.
-#[cfg(not(feature = "relnet"))]
-pub const BUCKETS: usize = 64;
-#[cfg(feature = "relnet")]
 pub const BUCKETS: usize = 1;
 
 const QA: i32 = 255;
@@ -149,25 +146,25 @@ impl NNUEParams {
     }
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        #[cfg(not(feature = "relnet"))]
-        {
-            let start = bucket * INPUT * LAYER_1_SIZE;
-            let end = start + INPUT * LAYER_1_SIZE;
-            let slice = &self.feature_weights[start..end];
-            // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-            // and we check that the slice is aligned to 64 bytes.
-            // additionally, we're generating the reference from our own data,
-            // so we know that the lifetime is valid.
-            unsafe {
-                // don't immediately cast to Align64, as we want to check the alignment first.
-                let ptr = slice.as_ptr();
-                assert_eq!(ptr.align_offset(64), 0);
-                // alignments are sensible, so we can safely cast.
-                #[allow(clippy::cast_ptr_alignment)]
-                &*ptr.cast()
-            }
-        }
-        #[cfg(feature = "relnet")]
+        // #[cfg(not(feature = "relnet"))]
+        // {
+        //     let start = bucket * INPUT * LAYER_1_SIZE;
+        //     let end = start + INPUT * LAYER_1_SIZE;
+        //     let slice = &self.feature_weights[start..end];
+        //     // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        //     // and we check that the slice is aligned to 64 bytes.
+        //     // additionally, we're generating the reference from our own data,
+        //     // so we know that the lifetime is valid.
+        //     unsafe {
+        //         // don't immediately cast to Align64, as we want to check the alignment first.
+        //         let ptr = slice.as_ptr();
+        //         assert_eq!(ptr.align_offset(64), 0);
+        //         // alignments are sensible, so we can safely cast.
+        //         #[allow(clippy::cast_ptr_alignment)]
+        //         &*ptr.cast()
+        //     }
+        // }
+        // #[cfg(feature = "relnet")]
         &self.feature_weights
     }
 }
