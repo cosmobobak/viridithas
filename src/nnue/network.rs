@@ -146,7 +146,6 @@ impl NNUEParams {
     }
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        // #[cfg(not(feature = "relnet"))]
         // {
         //     let start = bucket * INPUT * LAYER_1_SIZE;
         //     let end = start + INPUT * LAYER_1_SIZE;
@@ -164,7 +163,6 @@ impl NNUEParams {
         //         &*ptr.cast()
         //     }
         // }
-        // #[cfg(feature = "relnet")]
         &self.feature_weights
     }
 }
