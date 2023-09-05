@@ -19,7 +19,7 @@ jobs:
     - name: fetch evalfile
       run: |
         wget https://github.com/cosmobobak/viridithas-networks/releases/download/cyc/cyc-epoch15.nnue
-        echo "EVALFILE=zhudun.nnue" >> $GITHUB_ENV
+        echo "EVALFILE=cyc-epoch15.nnue" >> $GITHUB_ENV
     - name: build and test
       run: cargo build --verbose
     - name: run tests
