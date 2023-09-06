@@ -119,6 +119,10 @@ impl Colour {
     pub const fn inner(self) -> u8 {
         self.v
     }
+
+    pub fn all() -> impl Iterator<Item = Self> {
+        [Self::WHITE, Self::BLACK].iter().copied()
+    }
 }
 
 impl PieceType {

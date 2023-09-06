@@ -109,8 +109,17 @@ impl NNUEParams {
         // remap pieces to keep opposite colours together
         static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
         assert!(neuron < LAYER_1_SIZE);
-        let starting_idx = neuron * INPUT;
-        let slice = &self.feature_weights[starting_idx..starting_idx + INPUT];
+        let starting_idx = neuron;
+        let mut slice = Vec::with_capacity(768);
+        for colour in Colour::all() {
+            for piece in PieceType::all() {
+                for square in Square::all() {
+                    let feature_indices = feature_indices(square, piece, colour);
+                    let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
+                    slice.push(self.feature_weights[index]);
+                }
+            }
+        }
 
         let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
 
