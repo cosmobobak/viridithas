@@ -79,8 +79,8 @@ impl ThreatsHistoryTable {
         self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
     }
 
-    pub const fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
-        self.table[threat_from as usize][threat_to as usize].get(piece, sq)
+    pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
+        self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
     }
 
     pub fn get_mut(
