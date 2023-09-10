@@ -84,7 +84,7 @@ pub struct Board {
 
 /// Check that two boards are equal.
 /// This is used for debugging.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::cognitive_complexity)]
 pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn bitboards {msg}");
     assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight bitboards {msg}");
@@ -274,7 +274,7 @@ impl Board {
     }
 
     pub fn regenerate_threats(&mut self) {
-        self.threats = self.generate_threats(self.side.flip())
+        self.threats = self.generate_threats(self.side.flip());
     }
 
     pub fn generate_threats(&self, side: Colour) -> SquareSet {
@@ -2533,7 +2533,7 @@ mod tests {
         use crate::squareset::SquareSet;
         
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
-        assert_eq!(board.threats, SquareSet::from_inner(0x14549d56bddd5f3f));
+        assert_eq!(board.threats, SquareSet::from_inner(0x1454_9d56_bddd_5f3f));
     }
 
     #[test]
@@ -2542,6 +2542,6 @@ mod tests {
         use crate::squareset::SquareSet;
         
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
-        assert_eq!(board.threats, SquareSet::from_inner(0xfcfabbbd6ab92a28));
+        assert_eq!(board.threats, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
     }
 }

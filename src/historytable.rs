@@ -90,7 +90,7 @@ impl ThreatsHistoryTable {
         threat_from: bool,
         threat_to: bool,
     ) -> &mut i16 {
-        self.table[threat_from as usize][threat_to as usize].get_mut(piece, sq)
+        self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
     }
 }
 
