@@ -13,7 +13,6 @@ use std::{
 
 use crate::{
     chessmove::Move,
-    magic::MAGICS_READY,
     piece::{Colour, PieceType},
     squareset::SquareSet,
     uci::CHESS960,
@@ -223,7 +222,6 @@ impl Board {
     }
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
-        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_moves_for::<true>(move_list);
@@ -296,7 +294,6 @@ impl Board {
     }
 
     pub fn generate_captures<const QS: bool>(&self, move_list: &mut MoveList) {
-        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_captures_for::<true, QS>(move_list);
@@ -361,7 +358,6 @@ impl Board {
     }
 
     pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
-        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
         if self.side == Colour::WHITE {
             self.generate_castling_moves_for::<true>(move_list);
@@ -500,7 +496,6 @@ impl Board {
     }
 
     pub fn generate_quiets(&self, move_list: &mut MoveList) {
-        debug_assert!(MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst));
         // we don't need to clear the move list here because we're only adding to it.
         if self.side == Colour::WHITE {
             self.generate_quiets_for::<true>(move_list);
@@ -628,7 +623,6 @@ mod tests {
 
             count
         }
-        crate::magic::initialise();
 
         let mut pos = Board::default();
 

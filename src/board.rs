@@ -2371,8 +2371,6 @@ mod tests {
     fn read_fen_validity() {
         use super::Board;
 
-        crate::magic::initialise();
-
         let mut board_1 = Board::new();
         board_1.set_from_fen(Board::STARTING_FEN).expect("setfen failed.");
         board_1.check_validity().unwrap();
@@ -2388,8 +2386,6 @@ mod tests {
         use super::Board;
         use super::GameOutcome;
         use crate::{chessmove::Move, util::Square};
-
-        crate::magic::initialise();
 
         let mut fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
@@ -2430,7 +2426,7 @@ mod tests {
             fs::File,
             io::{BufRead, BufReader},
         };
-        crate::magic::initialise();
+        
         let fens = BufReader::new(File::open("epds/perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
@@ -2466,7 +2462,6 @@ mod tests {
             fs::File,
             io::{BufRead, BufReader},
         };
-        crate::magic::initialise();
 
         let f = File::open("epds/perftsuite.epd").unwrap();
         let mut pos = Board::new();

@@ -133,6 +133,7 @@ impl CaptureHistoryTable {
     }
 }
 
+#[allow(clippy::large_stack_frames)]
 #[derive(Clone)]
 pub struct DoubleHistoryTable {
     table: [[HistoryTable; BOARD_N_SQUARES]; 12],
