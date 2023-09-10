@@ -474,7 +474,9 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
         user_input.clear();
         std::io::stdin().read_line(&mut user_input).unwrap();
         let mut user_input = user_input.split_whitespace();
-        let Some(command) = user_input.next() else { continue; };
+        let Some(command) = user_input.next() else {
+            continue;
+        };
         if matches!(command, "start" | "go") {
             break;
         }
@@ -485,11 +487,15 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
             continue;
         }
         let Some(param) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            );
             continue;
         };
         let Some(value) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            );
             continue;
         };
         match param {

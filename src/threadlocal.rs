@@ -1,7 +1,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    historytable::{CaptureHistoryTable, DoubleHistoryTable, HistoryTable, MoveTable},
+    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
     nnue,
     piece::Colour,
     search::pv::PVariation,
@@ -19,7 +19,7 @@ pub struct ThreadData {
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::network::NNUEState>,
 
-    pub main_history: HistoryTable,
+    pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
     pub followup_history: Box<DoubleHistoryTable>,
     pub counter_move_history: Box<DoubleHistoryTable>,
@@ -49,7 +49,7 @@ impl ThreadData {
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
             nnue: nnue::network::NNUEState::new(board),
-            main_history: HistoryTable::new(),
+            main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
             followup_history: DoubleHistoryTable::boxed(),
             counter_move_history: DoubleHistoryTable::boxed(),

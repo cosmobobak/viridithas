@@ -100,6 +100,7 @@ impl PackedBoard {
         builder.set_fullmove_clock(self.fullmove_number.get());
 
         builder.regenerate_zobrist();
+        builder.regenerate_threats();
 
         (builder, self.eval.get(), self.wdl, self.extra)
     }
