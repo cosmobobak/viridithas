@@ -266,7 +266,7 @@ fn generate_on_thread(
             );
             let est_completion_date = chrono::Local::now()
                 .checked_add_signed(chrono::Duration::seconds(
-                    (n_games_to_run - game) as i64 * time_per_game as i64,
+                    <usize as std::convert::TryInto<i64>>::try_into(n_games_to_run - game).unwrap() * time_per_game as i64,
                 ))
                 .unwrap();
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");

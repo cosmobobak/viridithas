@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-
 use crate::{macros, rng::XorShiftState, squareset::SquareSet, util::Square};
 
 macro_rules! cfor {
@@ -330,58 +328,16 @@ macro_rules! init_masks_with {
     }};
 }
 
-unsafe fn init_sliders_attacks<const IS_BISHOP: bool>() {
-    const BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
-    const ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
-    // CONTRACT: take a lock before calling this function.
-    for square in 0..64 {
-        // init the current mask
-        let mask = if IS_BISHOP { BISHOP_MASKS[square] } else { ROOK_MASKS[square] };
-
-        // count attack mask bits
-        let bit_count = mask.count();
-
-        // occupancy var count
-        let occupancy_variations = 1 << bit_count;
-
-        // loop over all occupancy variations
-        cfor!(let mut count = 0; count < occupancy_variations; count += 1; {
-            // init occupancies
-            let occupancy = set_occupancy(count, bit_count.try_into().unwrap(), mask);
-
-            if IS_BISHOP {
-                let magic_index: usize = ((occupancy.inner().wrapping_mul(BISHOP_MAGICS[square])) >> (64 - BISHOP_REL_BITS[square])).try_into().unwrap();
-                BISHOP_ATTACKS[square][magic_index] = bishop_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
-            } else {
-                let magic_index: usize = ((occupancy.inner().wrapping_mul(ROOK_MAGICS[square])) >> (64 - ROOK_REL_BITS[square])).try_into().unwrap();
-                ROOK_ATTACKS[square][magic_index] = rook_attacks_on_the_fly(square.try_into().unwrap(), occupancy);
-            }
-        });
-    }
-}
-
-// this function is super-duper thread safe.
-pub static MAGICS_READY: AtomicBool = AtomicBool::new(false);
-pub fn initialise() {
-    static MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    if MAGICS_READY.load(std::sync::atomic::Ordering::SeqCst) {
-        return;
-    }
-    let lock = MUTEX.lock().unwrap();
-    unsafe {
-        init_sliders_attacks::<true>();
-        init_sliders_attacks::<false>();
-    }
-    MAGICS_READY.store(true, std::sync::atomic::Ordering::SeqCst);
-    std::mem::drop(lock);
-}
-
 static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
 static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
-static mut BISHOP_ATTACKS: [[SquareSet; 512]; 64] = [[SquareSet::EMPTY; 512]; 64];
+pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] = unsafe {
+    std::mem::transmute(*include_bytes!("../magics/diagonal_attacks.bin"))
+};
 #[allow(clippy::large_stack_arrays)]
-static mut ROOK_ATTACKS: [[SquareSet; 4096]; 64] = [[SquareSet::EMPTY; 4096]; 64];
+pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] = unsafe {
+    std::mem::transmute(*include_bytes!("../magics/orthogonal_attacks.bin"))
+};
 
 static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,

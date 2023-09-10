@@ -193,7 +193,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
         // zero-out the ordering scores
-        for m in ms.iter_mut() {
+        for m in &mut *ms {
             m.score = 0;
         }
 
@@ -210,7 +210,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     ) {
         const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
         // zero-out the ordering scores
-        for m in moves.iter_mut() {
+        for m in &mut *moves {
             m.score = 0;
         }
 

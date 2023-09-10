@@ -154,7 +154,7 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+    pub const fn select_feature_weights(&self, _bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // {
         //     let start = bucket * INPUT * LAYER_1_SIZE;
         //     let end = start + INPUT * LAYER_1_SIZE;
@@ -177,7 +177,7 @@ impl NNUEParams {
 }
 
 /// State of the partial activations of the NNUE network.
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
     /// Active features from white's perspective.
@@ -625,7 +625,6 @@ pub fn visualise_nnue() {
 mod tests {
     #[test]
     fn pov_preserved() {
-        crate::magic::initialise();
         let mut board = crate::board::Board::default();
         let mut t = crate::threadlocal::ThreadData::new(0, &board);
         let mut ml = crate::board::movegen::MoveList::new();
@@ -644,7 +643,6 @@ mod tests {
 
     #[test]
     fn pov_preserved_ep() {
-        crate::magic::initialise();
         let mut board = crate::board::Board::from_fen(
             "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
         )
@@ -666,7 +664,6 @@ mod tests {
 
     #[test]
     fn pov_preserved_castling() {
-        crate::magic::initialise();
         let mut board = crate::board::Board::from_fen(
             "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
         )
@@ -689,7 +686,7 @@ mod tests {
     #[test]
     fn pov_preserved_promo() {
         use crate::nnue::network::NNUEState;
-        crate::magic::initialise();
+        
         let mut board = crate::board::Board::from_fen(
             "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
         )

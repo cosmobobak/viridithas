@@ -51,9 +51,6 @@ fn main() {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    // takes about 3ms to generate the attack tables on boot
-    magic::initialise();
-
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return uci::main_loop(EvalParams::default(), false);
