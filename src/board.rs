@@ -2531,7 +2531,7 @@ mod tests {
     fn threat_generation_white() {
         use super::Board;
         use crate::squareset::SquareSet;
-        crate::magic::initialise();
+        
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
         assert_eq!(board.threats, SquareSet::from_inner(0x14549d56bddd5f3f));
     }
@@ -2540,7 +2540,7 @@ mod tests {
     fn threat_generation_black() {
         use super::Board;
         use crate::squareset::SquareSet;
-        crate::magic::initialise();
+        
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
         assert_eq!(board.threats, SquareSet::from_inner(0xfcfabbbd6ab92a28));
     }
