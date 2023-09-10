@@ -220,8 +220,7 @@ impl Board {
     }
 
     pub fn in_check(&self) -> bool {
-        let king_sq = self.king_sq(self.side);
-        self.sq_attacked(king_sq, self.side.flip())
+        self.threats.contains_square(self.king_sq(self.side))
     }
 
     pub fn zero_height(&mut self) {
@@ -275,7 +274,7 @@ impl Board {
     }
 
     pub fn regenerate_threats(&mut self) {
-        self.threats = self.generate_threats(self.side)
+        self.threats = self.generate_threats(self.side.flip())
     }
 
     pub fn generate_threats(&self, side: Colour) -> SquareSet {
@@ -299,9 +298,7 @@ impl Board {
         threats |= pawn_attacks::<IS_WHITE>(their_pawns);
 
         their_knights.iter().for_each(|sq| threats |= knight_attacks(sq));
-
         their_diags.iter().for_each(|sq| threats |= bishop_attacks(sq, blockers));
-
         their_orthos.iter().for_each(|sq| threats |= rook_attacks(sq, blockers));
 
         threats |= king_attacks(their_king);
@@ -367,7 +364,7 @@ impl Board {
             bq: Square::from_rank_file(Rank::RANK_8, queenside_file.try_into().unwrap()),
         };
         self.key = self.generate_pos_key();
-        self.threats = self.generate_threats(self.side);
+        self.threats = self.generate_threats(self.side.flip());
     }
 
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
@@ -418,7 +415,7 @@ impl Board {
             bq: Square::from_rank_file(Rank::RANK_8, black_queenside_file.try_into().unwrap()),
         };
         self.key = self.generate_pos_key();
-        self.threats = self.generate_threats(self.side);
+        self.threats = self.generate_threats(self.side.flip());
     }
 
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
@@ -564,7 +561,7 @@ impl Board {
         self.set_fullmove(info_parts.next())?;
 
         self.key = self.generate_pos_key();
-        self.threats = self.generate_threats(self.side);
+        self.threats = self.generate_threats(self.side.flip());
 
         Ok(())
     }
@@ -789,6 +786,10 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
+        if IS_WHITE == (self.side == Colour::BLACK) {
+            return self.threats.contains_square(sq);
+        }
+
         let sq_bb = sq.as_set();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let our_knights = self.pieces.knights::<IS_WHITE>();
@@ -972,12 +973,16 @@ impl Board {
     }
 
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
-        for sq in squares.iter() {
-            if self.sq_attacked(sq, by) {
-                return true;
+        if by == self.side.flip() {
+            (squares & self.threats).non_empty()
+        } else {
+            for sq in squares.iter() {
+                if self.sq_attacked(sq, by) {
+                    return true;
+                }
             }
+            false
         }
-        false
     }
 
     fn clear_piece(&mut self, sq: Square) {
@@ -1297,7 +1302,7 @@ impl Board {
         self.side = self.side.flip();
         hash_side(&mut self.key);
 
-        self.threats = self.generate_threats(self.side);
+        self.threats = self.generate_threats(self.side.flip());
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1429,7 +1434,7 @@ impl Board {
         self.height += 1;
         hash_side(&mut self.key);
 
-        self.threats = self.generate_threats(self.side);
+        self.threats = self.generate_threats(self.side.flip());
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -2525,5 +2530,23 @@ mod tests {
                 .unwrap();
         let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
         assert!(!board.is_pseudo_legal(kingside_castle));
+    }
+
+    #[test]
+    fn threat_generation_white() {
+        use super::Board;
+        use crate::squareset::SquareSet;
+        crate::magic::initialise();
+        let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
+        assert_eq!(board.threats, SquareSet::from_inner(0x14549d56bddd5f3f));
+    }
+
+    #[test]
+    fn threat_generation_black() {
+        use super::Board;
+        use crate::squareset::SquareSet;
+        crate::magic::initialise();
+        let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
+        assert_eq!(board.threats, SquareSet::from_inner(0xfcfabbbd6ab92a28));
     }
 }
