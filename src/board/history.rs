@@ -23,8 +23,14 @@ impl ThreadData {
                 piece_moved != Piece::EMPTY,
                 "Invalid piece moved by move {m} in position \n{pos}"
             );
+            let from = m.from();
             let to = m.history_to_square();
-            let val = self.main_history.get_mut(piece_moved, to);
+            let val = self.main_history.get_mut(
+                piece_moved,
+                to,
+                pos.threats.contains_square(from),
+                pos.threats.contains_square(to),
+            );
             update_history(val, depth, m == best_move);
         }
     }
@@ -33,8 +39,14 @@ impl ThreadData {
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
             let piece_moved = pos.moved_piece(m.mov);
+            let from = m.mov.from();
             let to = m.mov.history_to_square();
-            m.score += i32::from(self.main_history.get(piece_moved, to));
+            m.score += i32::from(self.main_history.get(
+                piece_moved,
+                to,
+                pos.threats.contains_square(from),
+                pos.threats.contains_square(to),
+            ));
         }
     }
 

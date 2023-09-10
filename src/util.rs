@@ -314,6 +314,7 @@ pub struct Undo {
     pub ep_square: Square,
     pub fifty_move_counter: u8,
     pub capture: Piece,
+    pub threats: SquareSet,
 }
 
 pub enum CheckState {

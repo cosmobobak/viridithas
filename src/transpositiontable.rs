@@ -294,11 +294,7 @@ impl<'a> TTView<'a> {
         }
     }
 
-    pub fn probe(
-        &self,
-        key: u64,
-        ply: usize,
-    ) -> Option<TTHit> {
+    pub fn probe(&self, key: u64, ply: usize) -> Option<TTHit> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 

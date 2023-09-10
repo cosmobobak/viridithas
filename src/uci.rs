@@ -278,7 +278,9 @@ fn parse_setoption(
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
     let Some(value_part) = parts.next() else {
-        return Err(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
+        return Err(UciError::InvalidFormat(
+            "no \"value\" after \"setoption name {opt_name}\"".into(),
+        ));
     };
     if value_part != "value" {
         return Err(UciError::InvalidFormat(format!(
@@ -571,10 +573,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 
     loop {
         std::io::stdout().flush().expect("couldn't flush stdout");
-        let Ok(line) = stdin
-            .lock()
-            .expect("failed to take lock on stdin")
-            .recv() else {
+        let Ok(line) = stdin.lock().expect("failed to take lock on stdin").recv() else {
             break;
         };
         let input = line.trim();

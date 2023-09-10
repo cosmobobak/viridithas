@@ -58,6 +58,43 @@ impl HistoryTable {
 }
 
 #[derive(Clone)]
+pub struct ThreatsHistoryTable {
+    table: [[HistoryTable; 2]; 2],
+}
+
+impl ThreatsHistoryTable {
+    pub const fn new() -> Self {
+        const ELEM: HistoryTable = HistoryTable::new();
+        const SLICE: [HistoryTable; 2] = [ELEM; 2];
+        const ARRAY: [[HistoryTable; 2]; 2] = [SLICE; 2];
+        Self { table: ARRAY }
+    }
+
+    pub fn clear(&mut self) {
+        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
+    }
+
+    pub fn age_entries(&mut self) {
+        assert!(!self.table.is_empty());
+        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+    }
+
+    pub const fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
+        self.table[threat_from as usize][threat_to as usize].get(piece, sq)
+    }
+
+    pub fn get_mut(
+        &mut self,
+        piece: Piece,
+        sq: Square,
+        threat_from: bool,
+        threat_to: bool,
+    ) -> &mut i16 {
+        self.table[threat_from as usize][threat_to as usize].get_mut(piece, sq)
+    }
+}
+
+#[derive(Clone)]
 pub struct CaptureHistoryTable {
     table: [HistoryTable; 6],
 }
