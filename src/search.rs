@@ -197,6 +197,7 @@ impl Board {
         let mut pv = PVariation::default();
         let max_depth = info.time_manager.limit().depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
         let starting_depth = 1 + t.thread_id % 10;
+        let mut average_value = VALUE_NONE;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
             if MAIN_THREAD {
@@ -279,6 +280,11 @@ impl Board {
                 // if we've made it here, it means we got an exact score.
                 let score = pv.score;
                 let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
+                average_value = if average_value == VALUE_NONE {
+                    score
+                } else {
+                    (2 * score + average_value) / 3
+                };
 
                 if MAIN_THREAD && info.print_to_stdout {
                     let total_nodes = info.nodes.get_global();
@@ -320,7 +326,7 @@ impl Board {
             }
 
             if depth > ASPIRATION_WINDOW_MIN_DEPTH {
-                aw = AspirationWindow::from_last_score(pv.score, depth);
+                aw = AspirationWindow::around_value(average_value, depth);
             } else {
                 aw = AspirationWindow::infinite();
             }
@@ -1519,7 +1525,7 @@ impl AspirationWindow {
         Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
-    pub fn from_last_score(last_score: i32, depth: Depth) -> Self {
+    pub fn around_value(last_score: i32, depth: Depth) -> Self {
         if is_game_theoretic_score(last_score) {
             // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
