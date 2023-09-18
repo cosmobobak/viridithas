@@ -18,8 +18,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: fetch evalfile
       run: |
-        wget https://github.com/cosmobobak/viridithas-networks/releases/download/cyc/cyc-epoch15.nnue
-        echo "EVALFILE=cyc-epoch15.nnue" >> $GITHUB_ENV
+        wget curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue
+        echo "EVALFILE=viridithas.nnue" >> $GITHUB_ENV
     - name: build and test
       run: cargo build --verbose
     - name: run tests
