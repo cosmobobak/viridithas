@@ -1525,12 +1525,12 @@ impl AspirationWindow {
         Self { alpha: -INFINITY, beta: INFINITY, midpoint: 0, alpha_fails: 0, beta_fails: 0 }
     }
 
-    pub fn around_value(last_score: i32, depth: Depth) -> Self {
-        if is_game_theoretic_score(last_score) {
+    pub fn around_value(value: i32, depth: Depth) -> Self {
+        if is_game_theoretic_score(value) {
             // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
             Self {
-                midpoint: last_score,
+                midpoint: value,
                 alpha: -INFINITY,
                 beta: INFINITY,
                 alpha_fails: 0,
@@ -1538,9 +1538,9 @@ impl AspirationWindow {
             }
         } else {
             Self {
-                midpoint: last_score,
-                alpha: last_score - asp_window(depth),
-                beta: last_score + asp_window(depth),
+                midpoint: value,
+                alpha: value - asp_window(depth),
+                beta: value + asp_window(depth),
                 alpha_fails: 0,
                 beta_fails: 0,
             }
