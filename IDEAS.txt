@@ -2,18 +2,18 @@ ideas for viri
 MAJOR:
 - docs
 - lazy NNUE updates
-- eval caching
-- train with gradual LR drop
 -- Crazyhouse
 
 MINOR:
 - Rust features to watch for: full const generics, const floating-point maths.
-- make the big-piece and other stuff better named
-- filter training positions that are forced.
 -- datagen, data reanalysis, maybe other things
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
-- move lookup functions into being associated functions of Piece/PieceType/Colour/Move and so on.
-- embed magics
-- clean up magic gen code
-- add module docs
-- right-align seldepth in pretty UCI output
+- reduce all moves including good captures
+- make optimism work
+- move-ordering tricks
+- NNUE output bucketing
+- LayerStack for NNUE
+- return of PSQT subnet for complexity
+- HalfKAT?
+- extra features in the unused pawn backranks for NNUE
+- linear history
