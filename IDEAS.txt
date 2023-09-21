@@ -16,4 +16,9 @@ MINOR:
 - return of PSQT subnet for complexity
 - HalfKAT?
 - extra features in the unused pawn backranks for NNUE
+  - opposite coloured bishops
+  - locked pawns?
+  - bishop pair
+  - passed pawns by file?
 - linear history
+- do_{deeper, shallower}_search for LMR
