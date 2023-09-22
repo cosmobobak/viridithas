@@ -62,7 +62,7 @@ fn parse_epd(line: &str, board: &mut Board) -> EpdPosition {
     let best_moves = &line[best_move_idx + 3..];
     let end_of_best_moves =
         best_moves.find(';').unwrap_or_else(|| panic!("no end of bestmove found in {line}"));
-    let best_moves = &best_moves[..end_of_best_moves].split(' ').collect::<Vec<_>>();
+    let best_moves = best_moves[..end_of_best_moves].split(' ').collect::<Vec<_>>();
     let best_moves = best_moves
         .iter()
         .map(|best_move| {
