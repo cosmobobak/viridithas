@@ -32,3 +32,7 @@ release:
 
 datagen:
 	cargo rustc --release --features syzygy,bindgen,datagen -- -C target-cpu=native
+
+bench:
+	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
+	target/release/$(NAME) bench
