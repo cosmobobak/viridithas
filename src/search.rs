@@ -994,8 +994,7 @@ impl Board {
                 score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
-                let r = if (is_quiet || !is_winning_capture)
-                    && depth >= Depth::new(3)
+                let r = if depth >= Depth::new(3)
                     && moves_made >= (2 + usize::from(PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
@@ -1013,6 +1012,9 @@ impl Board {
                         } else if history < i32::from(-MAX_HISTORY) / 2 {
                             r += 1;
                         }
+                    } else if is_winning_capture {
+                        // reduce winning captures less
+                        r -= 1;
                     }
                     Depth::new(r).clamp(ONE_PLY, depth - 1)
                 } else {
