@@ -1026,7 +1026,7 @@ impl Board {
                 // if we failed above alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
-                    let new_depth = depth + extension - 1;
+                    let new_depth = depth + extension - 1 + Depth::from(score > best_score + 75);
                     score =
                         -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth, -alpha - 1, -alpha);
                 }
