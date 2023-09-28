@@ -95,6 +95,12 @@ impl Board {
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
             eprintln!("info string warning search called on a position with no legal moves");
+            if self.in_check() {
+                println!("info depth 0 score mate 0");
+            } else {
+                println!("info depth 0 score cp 0");
+            }
+            println!("bestmove (none)");
             return (0, Move::NULL);
         }
         if legal_moves.len() == 1 {
@@ -116,6 +122,7 @@ impl Board {
         }
 
         let global_stopped = info.stopped;
+        assert!(!global_stopped.load(Ordering::SeqCst), "global_stopped must be false");
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
         let board_copy = self.clone();
@@ -124,13 +131,12 @@ impl Board {
             rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
 
         thread::scope(|s| {
-            let main_thread_handle = s.spawn(|| {
+            s.spawn(|| {
                 self.iterative_deepening::<USE_NNUE, true>(info, tt, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             // we need to eagerly start the threads or nothing will happen
-            #[allow(clippy::needless_collect)]
-            let helper_handles = rest
+            let _ = rest
                 .iter_mut()
                 .zip(board_info_copies.iter_mut())
                 .map(|(t, (board, info))| {
@@ -139,12 +145,7 @@ impl Board {
                     })
                 })
                 .collect::<Vec<_>>();
-            main_thread_handle.join().unwrap();
-            for hh in helper_handles {
-                hh.join().unwrap();
-            }
         });
-        global_stopped.store(false, Ordering::SeqCst);
 
         let d_move = self.default_move(tt, t1);
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
