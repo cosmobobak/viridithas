@@ -142,18 +142,19 @@ impl Board {
             }
         });
 
-        let d_move = self.default_move(tt, t1);
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
-        let best_move = best_thread.pv_move().unwrap_or(d_move);
-        let score = best_thread.pv_score();
+        let depth_achieved = best_thread.completed;
+        let pv = best_thread.pv().clone();
+        let best_move =
+            pv.moves().get(0).copied().unwrap_or_else(|| self.default_move(tt, &thread_headers[0]));
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
             readout_info(
                 self,
                 Bound::Exact,
-                best_thread.pv(),
-                best_thread.completed,
+                &pv,
+                depth_achieved,
                 info,
                 tt,
                 info.nodes.get_global(),
@@ -174,21 +175,20 @@ impl Board {
         }
 
         assert!(legal_moves.contains(&best_move), "search returned an illegal move.");
-        (if self.turn() == Colour::WHITE { score } else { -score }, best_move)
+        (if self.turn() == Colour::WHITE { pv.score } else { -pv.score }, best_move)
     }
 
     /// Performs the iterative deepening search.
     /// Returns the score of the position, from the side to move's perspective, and the best move.
-    /// For Lazy SMP, the main thread calls this function with `MAIN_THREAD = true`, and the helper threads with `MAIN_THREAD = false`.
+    /// For Lazy SMP, the main thread calls this function with `T0 = true`, and the helper threads with `T0 = false`.
     #[allow(clippy::too_many_lines)]
-    fn iterative_deepening<const USE_NNUE: bool, const MAIN_THREAD: bool>(
+    fn iterative_deepening<const NNUE: bool, const T0: bool>(
         &mut self,
         info: &mut SearchInfo,
         tt: TTView,
         t: &mut ThreadData,
     ) {
-        assert!(!MAIN_THREAD || t.thread_id == 0, "main thread must have thread_id 0");
-        let d_move = self.default_move(tt, t);
+        assert!(!T0 || t.thread_id == 0, "main thread must have thread_id 0");
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
         let max_depth = info.time_manager.limit().depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
@@ -196,7 +196,7 @@ impl Board {
         let mut average_value = VALUE_NONE;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
-            if MAIN_THREAD {
+            if T0 {
                 // consider stopping early if we've neatly completed a depth:
                 if (info.time_manager.is_dynamic() || info.time_manager.is_soft_nodes())
                     && info.time_manager.is_past_opt_time(info.nodes.get_global())
@@ -205,24 +205,14 @@ impl Board {
                     break 'deepening;
                 }
             }
-            let mut depth = Depth::new(d.try_into().unwrap());
-            let min_depth = (depth / 2).max(ONE_PLY);
             // aspiration loop:
-            let cf = self.aspiration::<USE_NNUE, MAIN_THREAD>(
-                &mut pv,
-                tt,
-                info,
-                t,
-                &mut depth,
-                &mut aw,
-                d,
-                min_depth,
-                d_move,
-                &mut average_value,
-            );
-            if let ControlFlow::Break(_) = cf {
+            // (depth can be dynamically modified in the aspiration loop,
+            // so we return out the value of depth to the caller)
+            let ControlFlow::Continue(depth) =
+                self.aspiration::<NNUE, T0>(&mut pv, tt, info, t, &mut aw, d, &mut average_value)
+            else {
                 break 'deepening;
-            }
+            };
 
             if depth > ASPIRATION_WINDOW_MIN_DEPTH {
                 aw = AspirationWindow::around_value(average_value, depth);
@@ -230,7 +220,7 @@ impl Board {
                 aw = AspirationWindow::infinite();
             }
 
-            if MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+            if T0 && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
                     let best_move = pv.line[0];
                     let best_move_subtree_size =
@@ -250,27 +240,26 @@ impl Board {
         }
     }
 
-    fn aspiration<const USE_NNUE: bool, const MAIN_THREAD: bool>(
+    fn aspiration<const NNUE: bool, const T0: bool>(
         &mut self,
         pv: &mut PVariation,
         tt: TTView<'_>,
         info: &mut SearchInfo<'_>,
         t: &mut ThreadData,
-        depth: &mut Depth,
         aw: &mut AspirationWindow,
         d: usize,
-        min_depth: Depth,
-        d_move: Move,
         average_value: &mut i32,
-    ) -> ControlFlow<()> {
+    ) -> ControlFlow<(), Depth> {
+        let mut depth = Depth::new(d.try_into().unwrap());
+        let min_depth = (depth / 2).max(ONE_PLY);
         loop {
-            pv.score = self.root_search::<USE_NNUE>(tt, pv, info, t, *depth, aw.alpha, aw.beta);
+            pv.score = self.root_search::<NNUE>(tt, pv, info, t, depth, aw.alpha, aw.beta);
             if info.check_up() {
                 return ControlFlow::Break(()); // we've been told to stop searching.
             }
 
             if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-                if MAIN_THREAD && info.print_to_stdout {
+                if T0 && info.print_to_stdout {
                     readout_info(
                         self,
                         Bound::Upper,
@@ -283,9 +272,9 @@ impl Board {
                         Some(pv.score),
                     );
                 }
-                aw.widen_down(pv.score, *depth);
-                if MAIN_THREAD {
-                    info.time_manager.report_aspiration_fail(*depth, Bound::Upper);
+                aw.widen_down(pv.score, depth);
+                if T0 {
+                    info.time_manager.report_aspiration_fail(depth, Bound::Upper);
                 }
                 // search failed low, so we might have to
                 // revert a fail-high pv update
@@ -295,7 +284,7 @@ impl Board {
             // search is either exact or fail-high, so we can update the best line.
             t.update_best_line(&*pv);
             if aw.beta != INFINITY && pv.score >= aw.beta {
-                if MAIN_THREAD && info.print_to_stdout {
+                if T0 && info.print_to_stdout {
                     readout_info(
                         self,
                         Bound::Lower,
@@ -308,17 +297,17 @@ impl Board {
                         None,
                     );
                 }
-                aw.widen_up(pv.score, *depth);
-                if MAIN_THREAD {
-                    info.time_manager.report_aspiration_fail(*depth, Bound::Lower);
+                aw.widen_up(pv.score, depth);
+                if T0 {
+                    info.time_manager.report_aspiration_fail(depth, Bound::Lower);
                 }
                 // decrement depth:
                 if pv.score.abs() < MINIMUM_TB_WIN_SCORE {
-                    *depth = (*depth - 1).max(min_depth);
+                    depth = (depth - 1).max(min_depth);
                 }
 
                 if let ControlFlow::Break(_) =
-                    info.time_manager.solved_breaker::<MAIN_THREAD>(pv.line[0], 0, d)
+                    info.time_manager.solved_breaker::<T0>(pv.line[0], 0, d)
                 {
                     info.stopped.store(true, Ordering::SeqCst);
                     return ControlFlow::Break(()); // we've been told to stop searching.
@@ -329,38 +318,40 @@ impl Board {
 
             // if we've made it here, it means we got an exact score.
             let score = pv.score;
-            let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or(d_move);
+            let bestmove = t.pvs[t.completed]
+                .moves()
+                .first()
+                .copied()
+                .unwrap_or_else(|| self.default_move(tt, t));
             *average_value =
                 if *average_value == VALUE_NONE { score } else { (2 * score + *average_value) / 3 };
 
-            if MAIN_THREAD && info.print_to_stdout {
+            if T0 && info.print_to_stdout {
                 let total_nodes = info.nodes.get_global();
                 readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false, None);
             }
 
             if let ControlFlow::Break(_) =
-                info.time_manager.solved_breaker::<MAIN_THREAD>(bestmove, pv.score, d)
+                info.time_manager.solved_breaker::<T0>(bestmove, pv.score, d)
             {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
 
-            if let ControlFlow::Break(_) =
-                info.time_manager.mate_found_breaker::<MAIN_THREAD>(pv, *depth)
-            {
+            if let ControlFlow::Break(_) = info.time_manager.mate_found_breaker::<T0>(pv, depth) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
 
-            if MAIN_THREAD {
-                if let Some(margin) = info.time_manager.check_for_forced_move(*depth) {
+            if T0 {
+                if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
                     let saved_seldepth = info.seldepth;
                     let forced =
-                        self.is_forced(margin, tt, info, t, bestmove, score, (*depth - 1) / 2);
+                        self.is_forced(margin, tt, info, t, bestmove, score, (depth - 1) / 2);
                     info.seldepth = saved_seldepth;
 
                     if forced {
-                        info.time_manager.report_forced_move(*depth);
+                        info.time_manager.report_forced_move(depth);
                     }
                 }
             }
@@ -369,7 +360,7 @@ impl Board {
                 return ControlFlow::Break(());
             }
 
-            break ControlFlow::Continue(()); // we got an exact score, so we can stop the aspiration loop.
+            break ControlFlow::Continue(depth); // we got an exact score, so we can stop the aspiration loop.
         }
     }
 
