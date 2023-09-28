@@ -235,7 +235,7 @@
             │ epochs. Trained on the gemini dataset to │ 
             │ maximise variety of king positioning.    │ 
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9 (95%)
+  excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9 (95%)
             │ and using SCReLU activation.             │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
             │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
             │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
