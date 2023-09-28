@@ -135,16 +135,11 @@ impl Board {
                 self.iterative_deepening::<USE_NNUE, true>(info, tt, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
-            // we need to eagerly start the threads or nothing will happen
-            let _ = rest
-                .iter_mut()
-                .zip(board_info_copies.iter_mut())
-                .map(|(t, (board, info))| {
-                    s.spawn(|| {
-                        board.iterative_deepening::<USE_NNUE, false>(info, tt, t);
-                    })
-                })
-                .collect::<Vec<_>>();
+            for (t, (board, info)) in rest.iter_mut().zip(&mut board_info_copies) {
+                s.spawn(|| {
+                    board.iterative_deepening::<USE_NNUE, false>(info, tt, t);
+                });
+            }
         });
 
         let d_move = self.default_move(tt, t1);
