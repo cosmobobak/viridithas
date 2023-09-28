@@ -114,7 +114,7 @@ impl Board {
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
-            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true, None);
+            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true);
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
             }
@@ -150,17 +150,8 @@ impl Board {
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
-            readout_info(
-                self,
-                Bound::Exact,
-                &pv,
-                depth_achieved,
-                info,
-                tt,
-                info.nodes.get_global(),
-                true,
-                None,
-            );
+            let nodes = info.nodes.get_global();
+            readout_info(self, Bound::Exact, &pv, depth_achieved, info, tt, nodes, true);
         }
 
         if info.print_to_stdout {
@@ -260,17 +251,10 @@ impl Board {
 
             if aw.alpha != -INFINITY && pv.score <= aw.alpha {
                 if T0 && info.print_to_stdout {
-                    readout_info(
-                        self,
-                        Bound::Upper,
-                        t.pv(),
-                        d,
-                        info,
-                        tt,
-                        info.nodes.get_global(),
-                        false,
-                        Some(pv.score),
-                    );
+                    let nodes = info.nodes.get_global();
+                    let mut apv = t.pv().clone();
+                    apv.score = pv.score;
+                    readout_info(self, Bound::Upper, &apv, d, info, tt, nodes, false);
                 }
                 aw.widen_down(pv.score, depth);
                 if T0 {
@@ -285,17 +269,8 @@ impl Board {
             t.update_best_line(&*pv);
             if aw.beta != INFINITY && pv.score >= aw.beta {
                 if T0 && info.print_to_stdout {
-                    readout_info(
-                        self,
-                        Bound::Lower,
-                        t.pv(),
-                        d,
-                        info,
-                        tt,
-                        info.nodes.get_global(),
-                        false,
-                        None,
-                    );
+                    let nodes = info.nodes.get_global();
+                    readout_info(self, Bound::Lower, t.pv(), d, info, tt, nodes, false);
                 }
                 aw.widen_up(pv.score, depth);
                 if T0 {
@@ -328,7 +303,7 @@ impl Board {
 
             if T0 && info.print_to_stdout {
                 let total_nodes = info.nodes.get_global();
-                readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false, None);
+                readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false);
             }
 
             if let ControlFlow::Break(_) =
@@ -1386,7 +1361,7 @@ pub fn select_best<'a>(
     if best_thread.thread_id != 0 && info.print_to_stdout {
         let pv = &best_thread.pvs[best_thread.completed];
         let depth = best_thread.completed;
-        readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes, false, None);
+        readout_info(board, Bound::Exact, pv, depth, info, tt, total_nodes, false);
     }
 
     best_thread
@@ -1400,9 +1375,8 @@ fn readout_info(
     depth: usize,
     info: &SearchInfo,
     tt: TTView,
-    total_nodes: u64,
+    nodes: u64,
     force_print: bool,
-    override_eval: Option<i32>,
 ) {
     #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     // don't print anything if we are in the first 50ms of the search and we are in a game,
@@ -1410,13 +1384,9 @@ fn readout_info(
     if info.time_manager.is_dynamic() && info.skip_print() && !force_print {
         return;
     }
-    let mut pv = pv.clone();
-    if let Some(eval) = override_eval {
-        pv.score = eval;
-    }
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-    let nps = (total_nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
+    let nps = (nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::BLACK {
         bound = match bound {
             Bound::Upper => Bound::Lower,
@@ -1431,7 +1401,7 @@ fn readout_info(
     };
     if normal_uci_output {
         println!(
-            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {total_nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
+            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
             info.seldepth.ply_to_horizon(),
             info.time_manager.elapsed().as_millis(),
             hashfull = tt.hashfull(),
@@ -1440,7 +1410,7 @@ fn readout_info(
         );
     } else {
         let value = uci::pretty_format_score(pv.score, board.turn());
-        let pv_string = board.pv_san(&pv).unwrap();
+        let pv_string = board.pv_san(pv).unwrap();
         let endchr = if bound == Bound::Exact {
             "\n"
         } else {
@@ -1451,7 +1421,7 @@ fn readout_info(
             info.seldepth.ply_to_horizon(),
             t = uci::format_time(info.time_manager.elapsed().as_millis()),
             knps = nps / 1_000,
-            knodes = total_nodes / 1_000,
+            knodes = nodes / 1_000,
             wdl = uci::pretty_format_wdl(pv.score, board.ply()),
         );
     }
