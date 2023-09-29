@@ -983,21 +983,22 @@ impl Board {
                     ONE_PLY
                 };
                 // perform a zero-window search
-                let new_depth = depth + extension - r;
-                score = -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth, -alpha - 1, -alpha);
+                let mut new_depth = depth + extension;
+                score = -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth - r, -alpha - 1, -alpha);
                 // if we failed above alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
-                    let new_depth = depth + extension - 1 + Depth::from(score > best_score + 75);
+                    let do_deeper_search = score > (best_score + 64 + 11 * r);
+                    let do_shallower_search = score < best_score + new_depth.round();
+                    new_depth += Depth::from(do_deeper_search) - Depth::from(do_shallower_search);
                     score =
-                        -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth, -alpha - 1, -alpha);
+                        -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth - 1, -alpha - 1, -alpha);
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    let new_depth = depth + extension - 1;
                     score =
-                        -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
+                        -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth - 1, -beta, -alpha);
                 }
             }
             self.unmake_move::<NNUE>(t, info);
