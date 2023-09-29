@@ -1,301 +1,379 @@
    NET ID │ general concept                          │ notes
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    viri0 │ first network 90% eval, 10% WDL          │ much weaker than the HCE.
-          │ 30 epochs, batch size 16384, lr 1e-2     │
-          │ trained on the mountain of games from    │
-          │ old Viridithas 2.X.X versions            │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    viri1 │ second network, same data as viri0, but  │ net used in v3.0.0, crushes HCE.
-          │ data was shuffled, which fixed problems. │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    viri2 │ third network, pure WDL.                 │ none
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    viri3 │ fourth network, pure evaluation.         │ none
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    viri4 │ fifth network, 50/50 WDL/eval.           │ none
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- viri5─10 │ fiddling with parameters and data        │ nothing improved on viri1.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri11 │ filtering of noisy positions, more data. │ first improvement on viri1, ~20 Elo.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri12 │ viri11 data reanalyzed with viri11.      │ +50 Elo, worried about overfitting.
-          │                                          │ net used in v4.0.0.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri13 │ lichess-elite games analysed with HCE,   │ +20 Elo.
-          │ merged with the viri12 data.             │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri14 │ viri13 data reanalyzed with viri13,      │ +25 Elo.
-          │ deduplicated using a new tool i wrote.   │ 
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri15 │ same as viri14, but trying 120 epochs,   │ -41.6 +/- 7.5 Elo, LOS: 0.0 %
-          │ and batch size 8192.                     │ vs viri14.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri16 │ same as viri14, but trying 80 epochs,    │ 111.6 +/- 18.4 Elo, LOS: 100.0 %
-          │ and lr drop at 30 epochs                 │ vs viri14.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri17 │ injected 320K positions from viri16      │ 16.0 +/- 12.1, LOS: 99.5 %
-          │ into viri14 data.                        │ vs viri16.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri18 │ re-evaluated whole viri17 data with      │ 23.9 +/- 7.2, LOS: 100.0 %
-          │ viri17.                                  │ vs viri17.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri19 │ same as viri18, but with 90% WDL focus.  │ -75.3 +/- 8.0, LOS: 0.0 %
-          │ not intended to gain, just to test.      │ vs viri18.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri20 │ trained on 320K viri18 self-play games   │ -106.2 +/- 21.2, LOS: 0.0 %
-          │ from the uhobook, eval'd with viri18.    │ vs viri18.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri21 │ those 320K viri18 games mixed in to the  │ 7.6 +/- 6.5, LOS: 98.9 %
-          │ big pile of data use to train viri18.    │ vs viri18.
-          │ NOTE/WARN: shuffled based on FEN hash.   │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri22 │ viri21 data re-evaluated with HCE at     │ -10.5 +/- 4.5, LOS: 0.0 %
-          │ depth 8.                                 │ vs viri21.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri23 │ viri22 data re-evaluated with viri22.    │ -23.5 +/- 9.9, LOS: 0.0 %
-          │ Hopefully will be less overfitted.       │ vs viri21.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri24 │ viri21 data with 25% WDL focus.          │ 16.1 +/- 7.6, LOS: 100.0 %
-          │                                          │ vs viri21.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri25 │ 320K viri24 self-play games from uhobook │ 1.0 +/- 12.2, LOS: 56.3 %
-          │ injected into viri24 data.               │ vs viri24.
-          │ NOTE/WARN: shuffled based on FEN hash.   │ I don't really trust this net, weird results.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri26 │ turns out those 320K games were eval'd   │ 7.1 +/- 6.5, LOS: 98.3 %
-          │ with HCE, so we redid it.                │ vs viri24.
-          │ didn't pass SPRT, but it's still better. │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri27 │ viri26 data but 40% WDL focus.           │ 8.0 +/- 6.6, LOS: 99.1 %
-          │                                          │ vs viri26.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri28 │ same as viri27 but with LR=5e-3.         │ 2.3 +/- 6.6, LOS: 75.3 %
-          │                                          │ vs viri27.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri29 │ combination of pure viri data            │ ~ -60 elo vs viri28
-          │ from v5.1.0, v6.0.0, and v6.0.0-dev      │ seems that either the Lichess Elite data has
-          │                                          │ really important stuff to learn, or 960k games
-          │                                          │ is not enough to train a good net.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri30 │ 320K viri28 self-play games from uhobook │ 7.2 +/- 6.7, LOS: 98.2 %
-          │ injected into viri28 data.               │ vs viri28.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri31 │ viri30 data re-evaluated with viri30.    │ -3.0 +/- 6.6, LOS: 18.7 %
-          │ feeling somewhat discouraged.            │ vs viri30.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri33 │ experiment with some Frozenight training │ 12.3 +/- 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
-          │ params while I work up the energy to     │ vs viri30.
-          │ implement a new arch.                    │
-          │ (LR = 0.0001, 45 epochs, WDL 10%, 384N)  │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri34 │ same as viri33, but with 512 neurons.    │ -31.8 +/- 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
-          │                                          │ vs viri33.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri35 │ injected 320K viri34 self-play games     │ 4.3 +/- 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
-          │ from uhobook into the viri31 data.       │ vs viri33.
-          │ same training setup as viri33.           │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri36 │ viri35 data with 40% WDL focus.          │ 16.2 +/- 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
-          │                                          │ vs viri35.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri37 │ viri36 data + 60M of the new datagen     │ -58.1 +/- 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
-          │ FENs.                                    │ vs viri36.
-          │ datagen does not handle noisy-move       │
-          │ exclusion, and might have other issues,  │
-          │ so this isn't a damning refutation of    │
-          │ the new datagen.                         │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri38 │ 80M viri36 FENs (run_2023-02-14_23-54-59 │ -87.6 +/- 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
-          │ _1000000g-64t-tb5-nnue-d8)               │ vs viri36.
-          │ This was with "fixed" datagen, which is  │
-          │ disheartening.                           │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri39 │ Those 80M FENs + the viri36 training     │ 24.8 +/- 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
-          │ data.                                    │ vs viri36.
-          │ Seems like the main problem was the      │
-          │ simple reduction in dataset size.        │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri40 │ 88M more FENs added to the viri39 data.  │ -5.9 +/- 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
-          │                                          │ vs viri39.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri41 │ interleave all the viri40 data for more  │ 6.0 +/- 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
-          │ homogeneous training.                    │ vs viri39.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri42 │ add 2.5M viri41 games to the viri41 data │ -1.7 +/- 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
-          │ it would be 5M, but I accidentally       │ vs viri41.
-          │ deleted half of it, like an idiot.       │
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri43 │ same as viri42, but with 30% WDL focus.  │ 8.7 +/- 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
-          │                                          │ vs viri41.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri44 │ viri43 with 512 neurons.                 │ 19.1 +/- 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
-          │                                          │ vs viri43.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri45 │ couple days worth of datagen with viri44 │ -27.0 +/- 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
-          │ added to the pile of viri44 data.        │ vs viri44.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri46 │ viri44 data reshuffled on the off-chance │ -11.2 +/- 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
-          │ that it would help. 45 epochs.           │ vs viri44.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri47 │ viri44 data with 20% WDL focus.          │ -28.8 +/- 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
-          │ 65 epochs.                               │ vs viri44.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri48 │ inject extra data into viri45 data.      │ essentially indistinguishable from viri44.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri49 │ Switch to squared ReLU instead of linear │ 35.8 +/- 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
-          │ ReLU. (viri48 data)                      │ vs viri44.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri51 │ Same as viri49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
-          │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.99 (-2.94, 2.94) [0.00, 3.00]
-          │       (whoops! forgot to shuffle)        │ GAMES │ N: 1184 W: 207 L: 437 D: 540
-          │                                          │ vs viri49.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri52 │ Same as viri51, training on 450M RL      │ ELO   │ -16.40 +- 9.40 (95%)
-          │ FENs, but shuffled this time.            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ The weakness of smaller datasets is      │ LLR   │ -3.02 (-2.94, 2.94) [0.00, 5.00]
-          │ apparent.                                │ GAMES │ N: 2672 W: 617 L: 743 D: 1312
-          │                                          │ vs viri49.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri53 │ The viri49 dataset + 450M RL FENs give   │ ELO   │ 6.95 +- 4.99 (95%)
-          │ a 1.35B FEN dataset.                     │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.98 (-2.94, 2.94) [0.00, 5.00]
-          │                                          │ GAMES │ N: 9704 W: 2632 L: 2438 D: 4634
-          │                                          │ vs viri49.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri54 │ Testing a PSQT-esque skip connection,    │ ELO   │ -504.03 +- 252.80 (95%)
-          │ running on the smaller viri49 data with  │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ only 45 epochs for speed.                │ LLR   │ -2.98 (-2.94, 2.94) [-10.00, 0.00]
-          │ (turns out sign on the pqst was wrong)   │ GAMES │ N: 96 W: 3 L: 89 D: 4
-          │                                          │ vs viri53.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri56 │ viri53 using AdamW instead of Adam.      │ ELO   │ 10.16 +- 6.37 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
-          │                                          │ GAMES │ N: 5816 W: 1568 L: 1398 D: 2850
-          │                                          │ vs viri53.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   viri58 │ viri56 with doubled batch-size.          │ ELO   │ -2.73 +- 4.75 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 5.00]
-          │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
-          │                                          │ vs viri56.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  hugenet │ viri58 with 1024 neurons.                │ ELO   │ 20.20 +- 9.42 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
-          │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
-          │                                          │ vs viri58.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- luminary │ hugenet with 768 neurons, trained with   │ ELO   │ 1.12 +- 3.82 (95%)
-          │ ~110M extra viri58 FENs, and ~270M extra │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ hugenet FENs.                            │ LLR   │ 0.01 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 15488 W: 3808 L: 3758 D: 7922
-          │                                          │ vs hugenet. (did not merge)
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- gemstone │ luminary with the dataset pruned down to │ STC: 
-          │ 963M positions from only non-bugged      │ ELO   │ 6.14 +- 3.85 (95%)
-          │ datagen runs.                            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ no lichess, first net with DFRC data.    │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 15896 W: 4181 L: 3900 D: 7815
-          │                                          │ LTC:
-          │                                          │ ELO   │ 7.02 +- 4.11 (95%)
-          │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 13208 W: 3323 L: 3056 D: 6829
-          │                                          │ DFRC:
-          │                                          │ ELO   │ 133.02 +- 28.39 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 3.03 (-2.94, 2.94) [0.00, 5.00]
-          │                                          │ GAMES │ N: 408 W: 204 L: 55 D: 149
-          │                                          │ vs hugenet.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   gemini │ gemstone with ~250M extra DFRC FENs      │ STC:
-          │ generated with gemstone.                 │ ELO   │ -5.11 +- 4.22 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -3.01 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 12912 W: 3111 L: 3301 D: 6500
-          │                                          │ DFRC:
-          │                                          │ ELO   │ 18.36 +- 6.96 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 4488 W: 1171 L: 934 D: 2383
-          │                                          │ vs gemstone.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
- grimoire │ gemini with 444M extra classical chess   │ STC:
-          │ FENs.                                    │ ELO   │ -0.37 +- 2.90 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -1.51 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 27224 W: 6717 L: 6746 D: 13761
-          │                                          │ vs gemstone.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  echelon │ Proof-of-concept HalfKA network. Uses a  │ est. -80 Elo vs gemstone.
-          │ small 64x2 feature transformer, CReLU    │ 
-          │ activation, batch size 16384, and 35     │ 
-          │ epochs. Trained on the gemini dataset to │ 
-          │ maximise variety of king positioning.    │ 
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9 (95%)
-          │ and using SCReLU activation.             │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
-          │                                          │ vs gemstone.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-   zhudun │ excalibur with 768x2 feature transformer │ STC:
-          │ with 134M extra FENs generated using     │ ELO   │ -0.49 +- 2.23 (95%)
-          │ excalibur. (using excalibur over         │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ gemstone for the extra FENs because      │ LLR   │ -2.97 (-2.94, 2.94) [0.00, 3.00]
-          │ i want to get selfplay to reveal any     │ GAMES │ N: 48992 W: 12875 L: 12944 D: 23173
-          │ halfka-induced overfitting to help the   │ LTC:
-          │ next net)                                │ ELO   │ 7.67 +- 4.38 (95%)
-          │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
-          │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 12098 W: 3162 L: 2895 D: 6041
-          │                                          │ vs gemstone.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  arcanum │ zhudun retrained with exponentially      │ STC:
-          │ decreasing LR (10 epochs)                │ ELO   │ -15.84 +- 7.13 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 4720 W: 1113 L: 1328 D: 2279
-          │                                          │ vs zhudun
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-astralite │ gemstone-arch, with 386M extra zhudun    │ v2 STC:
-          │ FENs. 20 epochs with lr 0.001, wdl 0.3,  │ ELO   │ 5.32 +- 3.55 (95%)
-          │ then three different continuations:      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │ v1: 5 epochs lr 0.0001, wdl 0.3          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
-          │ v2: 5 epochs lr 0.0001, wdl 0.4          │ GAMES │ N: 19464 W: 5304 L: 5006 D: 9154
-          │ v3: 5 epochs lr 0.0001, wdl 0.5          │ vs zhudun.
-          │                                          │ v2 LTC:
-          │ This arch is faster than zhudun, so it   │ ELO   │ -0.06 +- 3.78 (95%)
-          │ gets better performance in STC, but      │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
-          │ scales poorly.                           │ LLR   │ -0.72 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 16322 W: 4105 L: 4108 D: 8109
-          │                                          │ vs zhudun.
-          │                                          │ v1 STC:
-          │                                          │ ELO   │ -1.10 +- 2.47 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 35952 W: 8471 L: 8585 D: 18896
-          │                                          │ vs astralite-v2.
-          │                                          │ v3 STC:
-          │                                          │ ELO   │ -3.87 +- 3.79 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 15816 W: 3795 L: 3971 D: 8050
-          │                                          │ vs astralite-v2.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-alchemist │ astralite but trained with wdl 0.4 the   │ STC:
-          │ whole time.                              │ ELO   │ -0.06 +- 1.87 (95%)
-          │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
-          │                                          │ GAMES │ N: 66792 W: 16861 L: 16872 D: 33059
-          │                                          │ vs astralite-v2.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-  majesty │ HalfKA + 768nn + 0.4 WDL + 15 epochs,    │ STC:
-          │ lr-drop 10, dataset of only 766M FRC     │ ELO   │ -106.16 +- 19.05 (95%)
-          │ positions generated using zhudun.        │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-          │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
-          │ Either dataset was too small or might    │ GAMES │ N: 776 W: 109 L: 339 D: 328
-          │ have been shuffled wrong.                │ vs zhudun.
-──────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      viri0 │ first network 90% eval, 10% WDL          │ much weaker than the HCE.
+            │ 30 epochs, batch size 16384, lr 1e-2     │
+            │ trained on the mountain of games from    │
+            │ old Viridithas 2.X.X versions            │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      viri1 │ second network, same data as viri0, but  │ net used in v3.0.0, crushes HCE.
+            │ data was shuffled, which fixed problems. │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      viri2 │ third network, pure WDL.                 │ none
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      viri3 │ fourth network, pure evaluation.         │ none
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      viri4 │ fifth network, 50/50 WDL/eval.           │ none
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   viri5─10 │ fiddling with parameters and data        │ nothing improved on viri1.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri11 │ filtering of noisy positions, more data. │ first improvement on viri1, ~20 Elo.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri12 │ viri11 data reanalyzed with viri11.      │ +50 Elo, worried about overfitting.
+            │                                          │ net used in v4.0.0.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri13 │ lichess-elite games analysed with HCE,   │ +20 Elo.
+            │ merged with the viri12 data.             │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri14 │ viri13 data reanalyzed with viri13,      │ +25 Elo.
+            │ deduplicated using a new tool i wrote.   │ 
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri15 │ same as viri14, but trying 120 epochs,   │ -41.6 +/- 7.5 Elo, LOS: 0.0 %
+            │ and batch size 8192.                     │ vs viri14.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri16 │ same as viri14, but trying 80 epochs,    │ 111.6 +/- 18.4 Elo, LOS: 100.0 %
+            │ and lr drop at 30 epochs                 │ vs viri14.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri17 │ injected 320K positions from viri16      │ 16.0 +/- 12.1, LOS: 99.5 %
+            │ into viri14 data.                        │ vs viri16.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri18 │ re-evaluated whole viri17 data with      │ 23.9 +/- 7.2, LOS: 100.0 %
+            │ viri17.                                  │ vs viri17.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri19 │ same as viri18, but with 90% WDL focus.  │ -75.3 +/- 8.0, LOS: 0.0 %
+            │ not intended to gain, just to test.      │ vs viri18.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri20 │ trained on 320K viri18 self-play games   │ -106.2 +/- 21.2, LOS: 0.0 %
+            │ from the uhobook, eval'd with viri18.    │ vs viri18.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri21 │ those 320K viri18 games mixed in to the  │ 7.6 +/- 6.5, LOS: 98.9 %
+            │ big pile of data use to train viri18.    │ vs viri18.
+            │ NOTE/WARN: shuffled based on FEN hash.   │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri22 │ viri21 data re-evaluated with HCE at     │ -10.5 +/- 4.5, LOS: 0.0 %
+            │ depth 8.                                 │ vs viri21.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri23 │ viri22 data re-evaluated with viri22.    │ -23.5 +/- 9.9, LOS: 0.0 %
+            │ Hopefully will be less overfitted.       │ vs viri21.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri24 │ viri21 data with 25% WDL focus.          │ 16.1 +/- 7.6, LOS: 100.0 %
+            │                                          │ vs viri21.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri25 │ 320K viri24 self-play games from uhobook │ 1.0 +/- 12.2, LOS: 56.3 %
+            │ injected into viri24 data.               │ vs viri24.
+            │ NOTE/WARN: shuffled based on FEN hash.   │ I don't really trust this net, weird results.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri26 │ turns out those 320K games were eval'd   │ 7.1 +/- 6.5, LOS: 98.3 %
+            │ with HCE, so we redid it.                │ vs viri24.
+            │ didn't pass SPRT, but it's still better. │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri27 │ viri26 data but 40% WDL focus.           │ 8.0 +/- 6.6, LOS: 99.1 %
+            │                                          │ vs viri26.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri28 │ same as viri27 but with LR=5e-3.         │ 2.3 +/- 6.6, LOS: 75.3 %
+            │                                          │ vs viri27.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri29 │ combination of pure viri data            │ ~ -60 elo vs viri28
+            │ from v5.1.0, v6.0.0, and v6.0.0-dev      │ seems that either the Lichess Elite data has
+            │                                          │ really important stuff to learn, or 960k games
+            │                                          │ is not enough to train a good net.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri30 │ 320K viri28 self-play games from uhobook │ 7.2 +/- 6.7, LOS: 98.2 %
+            │ injected into viri28 data.               │ vs viri28.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri31 │ viri30 data re-evaluated with viri30.    │ -3.0 +/- 6.6, LOS: 18.7 %
+            │ feeling somewhat discouraged.            │ vs viri30.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri33 │ experiment with some Frozenight training │ 12.3 +/- 6.9, LOS: 100.0 %, DrawRatio: 39.1 %
+            │ params while I work up the energy to     │ vs viri30.
+            │ implement a new arch.                    │
+            │ (LR = 0.0001, 45 epochs, WDL 10%, 384N)  │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri34 │ same as viri33, but with 512 neurons.    │ -31.8 +/- 11.4, LOS: 0.0 %, DrawRatio: 42.2 %
+            │                                          │ vs viri33.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri35 │ injected 320K viri34 self-play games     │ 4.3 +/- 6.7, LOS: 89.7 %, DrawRatio: 41.3 %
+            │ from uhobook into the viri31 data.       │ vs viri33.
+            │ same training setup as viri33.           │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri36 │ viri35 data with 40% WDL focus.          │ 16.2 +/- 7.6, LOS: 100.0 %, DrawRatio: 41.6 %
+            │                                          │ vs viri35.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri37 │ viri36 data + 60M of the new datagen     │ -58.1 +/- 15.4, LOS: 0.0 %, DrawRatio: 34.2 %
+            │ FENs.                                    │ vs viri36.
+            │ datagen does not handle noisy-move       │
+            │ exclusion, and might have other issues,  │
+            │ so this isn't a damning refutation of    │
+            │ the new datagen.                         │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri38 │ 80M viri36 FENs (run_2023-02-14_23-54-59 │ -87.6 +/- 19.1, LOS: 0.0 %, DrawRatio: 32.5 %
+            │ _1000000g-64t-tb5-nnue-d8)               │ vs viri36.
+            │ This was with "fixed" datagen, which is  │
+            │ disheartening.                           │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri39 │ Those 80M FENs + the viri36 training     │ 24.8 +/- 9.6, LOS: 100.0 %, DrawRatio: 37.3 %
+            │ data.                                    │ vs viri36.
+            │ Seems like the main problem was the      │
+            │ simple reduction in dataset size.        │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri40 │ 88M more FENs added to the viri39 data.  │ -5.9 +/- 6.6, LOS: 4.1 %, DrawRatio: 42.7 %
+            │                                          │ vs viri39.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri41 │ interleave all the viri40 data for more  │ 6.0 +/- 7.4, LOS: 94.4 %, DrawRatio: 40.3 %
+            │ homogeneous training.                    │ vs viri39.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri42 │ add 2.5M viri41 games to the viri41 data │ -1.7 +/- 6.6, LOS: 31.3 %, DrawRatio: 40.5 %
+            │ it would be 5M, but I accidentally       │ vs viri41.
+            │ deleted half of it, like an idiot.       │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri43 │ same as viri42, but with 30% WDL focus.  │ 8.7 +/- 5.3, LOS: 99.9 %, DrawRatio: 36.5 %
+            │                                          │ vs viri41.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri44 │ viri43 with 512 neurons.                 │ 19.1 +/- 8.3, LOS: 100.0 %, DrawRatio: 33.3 %
+            │                                          │ vs viri43.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri45 │ couple days worth of datagen with viri44 │ -27.0 +/- 10.6, LOS: 0.0 %, DrawRatio: 31.1 %
+            │ added to the pile of viri44 data.        │ vs viri44.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri46 │ viri44 data reshuffled on the off-chance │ -11.2 +/- 7.0, LOS: 0.1 %, DrawRatio: 30.9 %
+            │ that it would help. 45 epochs.           │ vs viri44.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri47 │ viri44 data with 20% WDL focus.          │ -28.8 +/- 10.9, LOS: 0.0 %, DrawRatio: 30.7 %
+            │ 65 epochs.                               │ vs viri44.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri48 │ inject extra data into viri45 data.      │ essentially indistinguishable from viri44.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri49 │ Switch to squared ReLU instead of linear │ 35.8 +/- 11.6, LOS: 100.0 %, DrawRatio: 44.2 %
+            │ ReLU. (viri48 data)                      │ vs viri44.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri51 │ Same as viri49 but training on 450M RL   │ ELO   │ -68.36 +- 14.74 (95%)
+            │ FENs.                                    │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.99 (-2.94, 2.94) [0.00, 3.00]
+            │       (whoops! forgot to shuffle)        │ GAMES │ N: 1184 W: 207 L: 437 D: 540
+            │                                          │ vs viri49.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri52 │ Same as viri51, training on 450M RL      │ ELO   │ -16.40 +- 9.40 (95%)
+            │ FENs, but shuffled this time.            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ The weakness of smaller datasets is      │ LLR   │ -3.02 (-2.94, 2.94) [0.00, 5.00]
+            │ apparent.                                │ GAMES │ N: 2672 W: 617 L: 743 D: 1312
+            │                                          │ vs viri49.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri53 │ The viri49 dataset + 450M RL FENs give   │ ELO   │ 6.95 +- 4.99 (95%)
+            │ a 1.35B FEN dataset.                     │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.98 (-2.94, 2.94) [0.00, 5.00]
+            │                                          │ GAMES │ N: 9704 W: 2632 L: 2438 D: 4634
+            │                                          │ vs viri49.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri54 │ Testing a PSQT-esque skip connection,    │ ELO   │ -504.03 +- 252.80 (95%)
+            │ running on the smaller viri49 data with  │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ only 45 epochs for speed.                │ LLR   │ -2.98 (-2.94, 2.94) [-10.00, 0.00]
+            │ (turns out sign on the pqst was wrong)   │ GAMES │ N: 96 W: 3 L: 89 D: 4
+            │                                          │ vs viri53.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri56 │ viri53 using AdamW instead of Adam.      │ ELO   │ 10.16 +- 6.37 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+            │                                          │ GAMES │ N: 5816 W: 1568 L: 1398 D: 2850
+            │                                          │ vs viri53.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     viri58 │ viri56 with doubled batch-size.          │ ELO   │ -2.73 +- 4.75 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 5.00]
+            │                                          │ GAMES │ N: 10448 W: 2623 L: 2705 D: 5120
+            │                                          │ vs viri56.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    hugenet │ viri58 with 1024 neurons.                │ ELO   │ 20.20 +- 9.42 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.97 (-2.94, 2.94) [0.00, 5.00]
+            │                                          │ GAMES │ N: 2600 W: 722 L: 571 D: 1307
+            │                                          │ vs viri58.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   luminary │ hugenet with 768 neurons, trained with   │ ELO   │ 1.12 +- 3.82 (95%)
+            │ ~110M extra viri58 FENs, and ~270M extra │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ hugenet FENs.                            │ LLR   │ 0.01 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 15488 W: 3808 L: 3758 D: 7922
+            │                                          │ vs hugenet. (did not merge)
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   gemstone │ luminary with the dataset pruned down to │ STC: 
+            │ 963M positions from only non-bugged      │ ELO   │ 6.14 +- 3.85 (95%)
+            │ datagen runs.                            │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ no lichess, first net with DFRC data.    │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 15896 W: 4181 L: 3900 D: 7815
+            │                                          │ LTC:
+            │                                          │ ELO   │ 7.02 +- 4.11 (95%)
+            │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 13208 W: 3323 L: 3056 D: 6829
+            │                                          │ DFRC:
+            │                                          │ ELO   │ 133.02 +- 28.39 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 3.03 (-2.94, 2.94) [0.00, 5.00]
+            │                                          │ GAMES │ N: 408 W: 204 L: 55 D: 149
+            │                                          │ vs hugenet.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     gemini │ gemstone with ~250M extra DFRC FENs      │ STC:
+            │ generated with gemstone.                 │ ELO   │ -5.11 +- 4.22 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -3.01 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 12912 W: 3111 L: 3301 D: 6500
+            │                                          │ DFRC:
+            │                                          │ ELO   │ 18.36 +- 6.96 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 4488 W: 1171 L: 934 D: 2383
+            │                                          │ vs gemstone.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   grimoire │ gemini with 444M extra classical chess   │ STC:
+            │ FENs.                                    │ ELO   │ -0.37 +- 2.90 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -1.51 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 27224 W: 6717 L: 6746 D: 13761
+            │                                          │ vs gemstone.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    echelon │ Proof-of-concept HalfKA network. Uses a  │ est. -80 Elo vs gemstone.
+            │ small 64x2 feature transformer, CReLU    │ 
+            │ activation, batch size 16384, and 35     │ 
+            │ epochs. Trained on the gemini dataset to │ 
+            │ maximise variety of king positioning.    │ 
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  excalibur │ echelon with 384x2 feature transformer,  │ ELO   │ -4.6 +- 4.9 (95%)
+            │ and using SCReLU activation.             │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 10414 W: 2719 L: 2857 D: 4838
+            │                                          │ vs gemstone.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     zhudun │ excalibur with 768x2 feature transformer │ STC:
+            │ with 134M extra FENs generated using     │ ELO   │ -0.49 +- 2.23 (95%)
+            │ excalibur. (using excalibur over         │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ gemstone for the extra FENs because      │ LLR   │ -2.97 (-2.94, 2.94) [0.00, 3.00]
+            │ i want to get selfplay to reveal any     │ GAMES │ N: 48992 W: 12875 L: 12944 D: 23173
+            │ halfka-induced overfitting to help the   │ LTC:
+            │ next net)                                │ ELO   │ 7.67 +- 4.38 (95%)
+            │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 12098 W: 3162 L: 2895 D: 6041
+            │                                          │ vs gemstone.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    arcanum │ zhudun retrained with exponentially      │ STC:
+            │ decreasing LR (10 epochs)                │ ELO   │ -15.84 +- 7.13 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 4720 W: 1113 L: 1328 D: 2279
+            │                                          │ vs zhudun
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  astralite │ gemstone-arch, with 386M extra zhudun    │ v2 STC:
+            │ FENs. 20 epochs with lr 0.001, wdl 0.3,  │ ELO   │ 5.32 +- 3.55 (95%)
+            │ then three different continuations:      │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ v1: 5 epochs lr 0.0001, wdl 0.3          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │ v2: 5 epochs lr 0.0001, wdl 0.4          │ GAMES │ N: 19464 W: 5304 L: 5006 D: 9154
+            │ v3: 5 epochs lr 0.0001, wdl 0.5          │ vs zhudun.
+            │                                          │ v2 LTC:
+            │ This arch is faster than zhudun, so it   │ ELO   │ -0.06 +- 3.78 (95%)
+            │ gets better performance in STC, but      │ SPRT  │ 40.0+0.40s Threads=1 Hash=16MB
+            │ scales poorly.                           │ LLR   │ -0.72 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 16322 W: 4105 L: 4108 D: 8109
+            │                                          │ vs zhudun.
+            │                                          │ v1 STC:
+            │                                          │ ELO   │ -1.10 +- 2.47 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 35952 W: 8471 L: 8585 D: 18896
+            │                                          │ vs astralite-v2.
+            │                                          │ v3 STC:
+            │                                          │ ELO   │ -3.87 +- 3.79 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 15816 W: 3795 L: 3971 D: 8050
+            │                                          │ vs astralite-v2.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+  alchemist │ astralite but trained with wdl 0.4 the   │ STC:
+            │ whole time.                              │ ELO   │ -0.06 +- 1.87 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 66792 W: 16861 L: 16872 D: 33059
+            │                                          │ vs astralite-v2.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    majesty │ HalfKA + 768nn + 0.4 WDL + 15 epochs,    │ STC:
+            │ lr-drop 10, dataset of only 766M FRC     │ ELO   │ -106.16 +- 19.05 (95%)
+            │ positions generated using zhudun.        │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.96 (-2.94, 2.94) [0.00, 3.00]
+            │ Either dataset was too small or might    │ GAMES │ N: 776 W: 109 L: 339 D: 328
+            │ have been shuffled wrong.                │ vs zhudun.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+         xi │ alchemist using marlinflow's cuda boards │ STC:
+            │                                          │ ELO   │ 0.00 +- 0.00 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 0.00 (-2.94, 2.94) [0.00, 3.00]
+            │ makes me think that it's broken.         │ GAMES │ N: 112 W: 0 L: 112 D: 0
+            │                                          │ vs astralite-v2.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+marlineater │ alchemist with WDL 1.0.                  │ STC:
+            │                                          │ ELO   │ -35.43 +- 10.52 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.98 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 2224 W: 474 L: 700 D: 1050
+            │                                          │ vs astralite-v2.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    neutron │ another uninspired alchemist variation   │ STC:
+            │                                          │ ELO   │ -1.17 +- 2.63 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 34544 W: 8869 L: 8985 D: 16690
+            │                                          │ vs astralite-v2.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+ piledriver │ alchemist with a PSQT subnet!            │ - test 1 was -196 elo
+            │                                          │ - test 2 was -295 elo
+            │                                          │ discovered that I had mis-implemented the
+            │                                          │ memory layout of the subnet weights.
+            │                                          │ STC:
+            │                                          │ ELO   │ 1.50 +- 1.88 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 0.85 (-2.25, 2.89) [0.00, 3.00]
+            │ testing methodology was a bit of a mess  │ GAMES │ N: 69952 W: 18803 L: 18500 D: 32649
+            │ but this is promising either way.        │ vs zhudun.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+        cyc │ 1024x2 relative network, lr 0.001        │ STC (epoch 5)
+            │ drop every 4 epochs, 15 epochs total,    │ ELO   │ -9.60 +- 6.46 (95%)
+            │ lr-drop-gamma of 0.3, wdl 0.4.           │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.29 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 5792 W: 1433 L: 1593 D: 2766
+            │                                          │ vs zhudun.
+            │                                          │ STC (epoch 11)
+            │                                          │ ELO   │ 10.80 +- 5.46 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.91 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 8304 W: 2353 L: 2095 D: 3856
+            │                                          │ vs zhudun.
+            │                                          │ LTC (epoch 11)
+            │                                          │ ELO   │ 7.66 +- 4.41 (95%)
+            │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=128MB
+            │                                          │ LLR   │ 2.89 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 11892 W: 3108 L: 2846 D: 5938
+            │                                          │ vs zhudun.
+            │                                          │ net was then merged, next test is vs. self
+            │                                          │ STC (epoch 15)
+            │                                          │ ELO   │ 5.33 +- 3.49 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.92 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 18256 W: 4529 L: 4249 D: 9478
+            │                                          │ vs cyc-epoch11.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+      omega │ 1536x2, otherwise identical to cyc.      │ STC (epoch 14)
+            │                                          │ ELO   │ -2.51 +- 3.72 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.25 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 16624 W: 4083 L: 4203 D: 8338
+            │                                          │ vs cyc (epoch 15).
+            │                                          │ LTC (epoch 14)
+            │                                          │ ELO   │ 1.98 +- 1.60 (95%)
+            │                                          │ SPRT  │ 40.0+0.40s Threads=1 Hash=128MB
+            │                                          │ LLR   │ 2.90 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 85312 W: 20504 L: 20017 D: 44791
+            │                                          │ vs cyc (epoch 15).
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   vanguard │ replication of omega using JW's bullet   │ STC regression
+            │ trainer.                                 │ ELO   │ -0.00 +- 0.00 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 0.00 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 112 W: 0 L: 112 D: 0
+            │                                          │ vs omega.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
