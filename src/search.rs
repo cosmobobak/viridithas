@@ -1024,7 +1024,7 @@ impl Board {
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
                 score = -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha);
-                // if we failed above alpha, and reduced more than one ply,
+                // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
                     let do_deeper_search = score > (best_score + 64 + 11 * r);
