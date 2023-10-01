@@ -371,9 +371,20 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ vs cyc (epoch 15).
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
    vanguard │ replication of omega using JW's bullet   │ STC regression
-            │ trainer.                                 │ ELO   │ -0.00 +- 0.00 (95%)
+            │ trainer.                                 │ ELO   │ 0.2 +/- 2.2 (95%)
             │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
-            │                                          │ LLR   │ 0.00 (-2.25, 2.89) [0.00, 3.00]
-            │                                          │ GAMES │ N: 112 W: 0 L: 112 D: 0
+            │                                          │ LLR   │ -2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ GAMES │ N: 48792 W: 12720 L: 12687 D: 23385
+            │                                          │ vs omega.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+       elua │ 1024x2 HalfKA network trained using JW's │ Issues with the feature factoriser
+            │ bullet trainer, with vanguard's          │ resulted in bugs that are unclear to me.
+            │ hyperparameters.                         │ 
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   callosum │ 1024x2 HalfKA network trained using JW's │ STC (epoch 15)
+            │ bullet trainer, with vanguard's          │ ELO   │ -35.56 +- 12.24 (95%)
+            │ hyperparameters, but without a feature   │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │ factoriser.                              │ LLR   │ -2.26 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 1696 W: 375 L: 548 D: 773
             │                                          │ vs omega.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
