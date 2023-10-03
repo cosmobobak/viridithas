@@ -22,3 +22,4 @@ MINOR:
   - passed pawns by file?
 - linear history
 - do_{deeper, shallower}_search for LMR
+- superextend when one legal move
