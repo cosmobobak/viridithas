@@ -62,6 +62,8 @@ struct DataGenOptions {
     generate_dfrc: bool,
     // log level
     log_level: u8,
+    // position count limit
+    position_count_limit: Option<u64>,
 }
 
 impl DataGenOptions {
@@ -75,6 +77,7 @@ impl DataGenOptions {
             limit: DataGenLimit::Depth(8),
             generate_dfrc: true,
             log_level: 1,
+            position_count_limit: None,
         }
     }
 
@@ -266,7 +269,8 @@ fn generate_on_thread(
             );
             let est_completion_date = chrono::Local::now()
                 .checked_add_signed(chrono::Duration::seconds(
-                    <usize as std::convert::TryInto<i64>>::try_into(n_games_to_run - game).unwrap() * time_per_game as i64,
+                    <usize as std::convert::TryInto<i64>>::try_into(n_games_to_run - game).unwrap()
+                        * time_per_game as i64,
                 ))
                 .unwrap();
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
@@ -439,7 +443,13 @@ fn generate_on_thread(
         *counters.get_mut(&outcome).unwrap() += 1;
 
         // STEP 6: check if we should stop
-        if STOP_GENERATION.load(Ordering::SeqCst) {
+        // either because the STOP_GENERATION signal was set,
+        // or because we have generated enough positions.
+        if STOP_GENERATION.load(Ordering::SeqCst)
+            || options
+                .position_count_limit
+                .map_or(false, |limit| FENS_GENERATED.load(Ordering::SeqCst) >= limit)
+        {
             break 'generation_main_loop;
         }
     }
@@ -457,6 +467,7 @@ fn show_boot_info(options: &DataGenOptions) {
             "You can configure the data generation process by setting the following parameters:"
         );
         println!("{options}");
+        println!("you can also set positions_limit to limit the number of positions generated.");
         println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
         println!("(You have {} logical cores on your CPU)", num_cpus::get());
         println!("To set a parameter, type \"set <PARAM> <VALUE>\"");
@@ -570,6 +581,16 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                     }
                 };
                 options.log_level = log_level;
+            }
+            "positions_limit" => {
+                let positions_limit = match value.parse::<u64>() {
+                    Ok(positions_limit) => positions_limit,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        continue;
+                    }
+                };
+                options.position_count_limit = Some(positions_limit);
             }
             other => {
                 eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
