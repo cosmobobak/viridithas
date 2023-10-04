@@ -8,7 +8,6 @@ MINOR:
 - Rust features to watch for: full const generics, const floating-point maths.
 -- datagen, data reanalysis, maybe other things
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
-- reduce all moves including good captures
 - make optimism work
 - move-ordering tricks
 - NNUE output bucketing
