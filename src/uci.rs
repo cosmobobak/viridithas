@@ -162,7 +162,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     Ok(())
 }
 
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &mut Board) -> Result<(), UciError> {
+fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciError> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -703,7 +703,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 }
             }
             input if input.starts_with("go") => {
-                let res = parse_go(input, &mut info, &mut pos);
+                let res = parse_go(input, &mut info, &pos);
                 if res.is_ok() {
                     tt.increase_age();
                     if USE_NNUE.load(Ordering::SeqCst) {
@@ -759,7 +759,7 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
             t.nnue.reinit_from(&pos);
         }
         pos.refresh_psqt(&info);
-        let res = parse_go(&bench_string, &mut info, &mut pos);
+        let res = parse_go(&bench_string, &mut info, &pos);
         if let Err(e) = res {
             info.print_to_stdout = true;
             return Err(e);

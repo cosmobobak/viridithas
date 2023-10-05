@@ -644,7 +644,7 @@ mod tests {
     fn unwinnable() {
         use crate::threadlocal::ThreadData;
         const FEN: &str = "8/8/8/8/2K2k2/2n2P2/8/8 b - - 1 1";
-        
+
         let board = super::Board::from_fen(FEN).unwrap();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let nodes = std::sync::atomic::AtomicU64::new(0);
@@ -663,7 +663,7 @@ mod tests {
         use crate::threadlocal::ThreadData;
         const FEN1: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         const FEN2: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
-        
+
         let tempo = EvalParams::default().tempo.0;
         let board1 = super::Board::from_fen(FEN1).unwrap();
         let board2 = super::Board::from_fen(FEN2).unwrap();
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn startpos_mobility_equality() {
         use crate::board::evaluation::S;
-        
+
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let nodes = std::sync::atomic::AtomicU64::new(0);
@@ -692,7 +692,7 @@ mod tests {
     fn startpos_eval_equality() {
         use crate::board::evaluation::parameters::EvalParams;
         use crate::threadlocal::ThreadData;
-        
+
         let tempo = EvalParams::default().tempo.0;
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn startpos_pawn_structure_equality() {
         use crate::board::evaluation::S;
-        
+
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let nodes = std::sync::atomic::AtomicU64::new(0);
@@ -744,7 +744,7 @@ mod tests {
     #[test]
     fn startpos_open_file_equality() {
         use crate::board::evaluation::S;
-        
+
         let board = super::Board::default();
         let stopped = std::sync::atomic::AtomicBool::new(false);
         let nodes = std::sync::atomic::AtomicU64::new(0);

@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
-        
+
         let mut position =
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
@@ -261,7 +261,7 @@ mod tests {
     #[test]
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
-        
+
         let mut position =
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
-        
+
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
-        
+
         let mut position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);

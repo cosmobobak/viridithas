@@ -331,13 +331,11 @@ macro_rules! init_masks_with {
 static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
 static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
-pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] = unsafe {
-    std::mem::transmute(*include_bytes!("../magics/diagonal_attacks.bin"))
-};
+pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
+    unsafe { std::mem::transmute(*include_bytes!("../magics/diagonal_attacks.bin")) };
 #[allow(clippy::large_stack_arrays)]
-pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] = unsafe {
-    std::mem::transmute(*include_bytes!("../magics/orthogonal_attacks.bin"))
-};
+pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] =
+    unsafe { std::mem::transmute(*include_bytes!("../magics/orthogonal_attacks.bin")) };
 
 static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,

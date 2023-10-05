@@ -281,8 +281,8 @@ impl Board {
                     depth = (depth - 1).max(min_depth);
                 }
 
-                if let ControlFlow::Break(_) =
-                    info.time_manager.solved_breaker::<T0>(pv.line[0], 0, d)
+                if info.time_manager.solved_breaker::<T0>(pv.line[0], 0, d)
+                    == ControlFlow::Break(())
                 {
                     info.stopped.store(true, Ordering::SeqCst);
                     return ControlFlow::Break(()); // we've been told to stop searching.
@@ -306,14 +306,14 @@ impl Board {
                 readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false);
             }
 
-            if let ControlFlow::Break(_) =
-                info.time_manager.solved_breaker::<T0>(bestmove, pv.score, d)
+            if info.time_manager.solved_breaker::<T0>(bestmove, pv.score, d)
+                == ControlFlow::Break(())
             {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
 
-            if let ControlFlow::Break(_) = info.time_manager.mate_found_breaker::<T0>(pv, depth) {
+            if info.time_manager.mate_found_breaker::<T0>(pv, depth) == ControlFlow::Break(()) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
@@ -956,9 +956,7 @@ impl Board {
                 score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3)
-                    && moves_made >= (2 + usize::from(PV))
-                {
+                let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     r += i32::from(!PV);
                     if is_quiet {
@@ -985,7 +983,8 @@ impl Board {
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
-                score = -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha);
+                score =
+                    -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha);
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
@@ -997,15 +996,29 @@ impl Board {
                     // check if we're actually going to do a deeper search than before
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
-                        score =
-                            -self.zw_search::<NNUE>(tt, l_pv, info, t, new_depth - 1, -alpha - 1, -alpha);
+                        score = -self.zw_search::<NNUE>(
+                            tt,
+                            l_pv,
+                            info,
+                            t,
+                            new_depth - 1,
+                            -alpha - 1,
+                            -alpha,
+                        );
                     }
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score =
-                        -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth - 1, -beta, -alpha);
+                    score = -self.full_search::<PV, NNUE>(
+                        tt,
+                        l_pv,
+                        info,
+                        t,
+                        new_depth - 1,
+                        -beta,
+                        -alpha,
+                    );
                 }
             }
             self.unmake_move::<NNUE>(t, info);
@@ -1161,11 +1174,11 @@ impl Board {
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
         match () {
-            _ if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
-            _ if value < r_beta => ONE_PLY,    // singular extension
-            _ if tt_value >= beta => -ONE_PLY, // somewhat multi-cut-y
-            _ if tt_value <= alpha => -ONE_PLY, // tt_value <= alpha is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/)
-            _ => ZERO_PLY,                      // no extension
+            () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
+            () if value < r_beta => ONE_PLY,    // singular extension
+            () if tt_value >= beta => -ONE_PLY, // somewhat multi-cut-y
+            () if tt_value <= alpha => -ONE_PLY, // tt_value <= alpha is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/)
+            () => ZERO_PLY,                      // no extension
         }
     }
 

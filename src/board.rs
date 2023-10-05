@@ -1513,7 +1513,7 @@ impl Board {
             );
         } else if m.is_castle() {
             match () {
-                _ if to == saved_castle_perm.wk => {
+                () if to == saved_castle_perm.wk => {
                     t.nnue.move_feature(
                         white_king,
                         black_king,
@@ -1525,7 +1525,7 @@ impl Board {
                     );
                     to = Square::G1;
                 }
-                _ if to == saved_castle_perm.wq => {
+                () if to == saved_castle_perm.wq => {
                     t.nnue.move_feature(
                         white_king,
                         black_king,
@@ -1537,7 +1537,7 @@ impl Board {
                     );
                     to = Square::C1;
                 }
-                _ if to == saved_castle_perm.bk => {
+                () if to == saved_castle_perm.bk => {
                     t.nnue.move_feature(
                         white_king,
                         black_king,
@@ -1549,7 +1549,7 @@ impl Board {
                     );
                     to = Square::G8;
                 }
-                _ if to == saved_castle_perm.bq => {
+                () if to == saved_castle_perm.bq => {
                     t.nnue.move_feature(
                         white_king,
                         black_king,
@@ -1561,7 +1561,7 @@ impl Board {
                     );
                     to = Square::C8;
                 }
-                _ => {
+                () => {
                     panic!("Invalid castle move {m} with castle_perm {saved_castle_perm} in position {fen}", fen = self.fen());
                 }
             }
@@ -1671,23 +1671,23 @@ impl Board {
                 t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
             } else if m.is_castle() {
                 let (rook_from, rook_to) = match () {
-                    _ if to == self.castle_perm.wk => {
+                    () if to == self.castle_perm.wk => {
                         to = Square::G1;
                         (Square::F1, self.castle_perm.wk)
                     }
-                    _ if to == self.castle_perm.wq => {
+                    () if to == self.castle_perm.wq => {
                         to = Square::C1;
                         (Square::D1, self.castle_perm.wq)
                     }
-                    _ if to == self.castle_perm.bk => {
+                    () if to == self.castle_perm.bk => {
                         to = Square::G8;
                         (Square::F8, self.castle_perm.bk)
                     }
-                    _ if to == self.castle_perm.bq => {
+                    () if to == self.castle_perm.bq => {
                         to = Square::C8;
                         (Square::D8, self.castle_perm.bq)
                     }
-                    _ => {
+                    () => {
                         panic!("Invalid castle move {m} with castle_perm {castle_perm} in position {fen}", castle_perm = self.castle_perm, fen = self.fen());
                     }
                 };
@@ -1957,9 +1957,9 @@ impl Board {
         };
         if m.is_castle() {
             match () {
-                _ if m.to() > m.from() => return Some(format!("O-O{check_char}")),
-                _ if m.to() < m.from() => return Some(format!("O-O-O{check_char}")),
-                _ => unreachable!(),
+                () if m.to() > m.from() => return Some(format!("O-O{check_char}")),
+                () if m.to() < m.from() => return Some(format!("O-O-O{check_char}")),
+                () => unreachable!(),
             }
         }
         let to_sq = m.to();
@@ -2426,7 +2426,7 @@ mod tests {
             fs::File,
             io::{BufRead, BufReader},
         };
-        
+
         let fens = BufReader::new(File::open("epds/perftsuite.epd").unwrap())
             .lines()
             .map(|l| l.unwrap().split_once(';').unwrap().0.trim().to_owned())
@@ -2531,7 +2531,7 @@ mod tests {
     fn threat_generation_white() {
         use super::Board;
         use crate::squareset::SquareSet;
-        
+
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
         assert_eq!(board.threats, SquareSet::from_inner(0x1454_9d56_bddd_5f3f));
     }
@@ -2540,7 +2540,7 @@ mod tests {
     fn threat_generation_black() {
         use super::Board;
         use crate::squareset::SquareSet;
-        
+
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
         assert_eq!(board.threats, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
     }
