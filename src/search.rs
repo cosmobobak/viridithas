@@ -504,6 +504,7 @@ impl Board {
         mut depth: Depth,
         mut alpha: i32,
         mut beta: i32,
+        cut_node: bool,
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -721,7 +722,7 @@ impl Board {
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let mut null_score =
-                    -self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, -beta, -beta + 1);
+                    -self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -744,7 +745,7 @@ impl Board {
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
                     let veri_score =
-                        self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, beta - 1, beta);
+                        self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, beta - 1, beta, false);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -807,6 +808,7 @@ impl Board {
                         pc_depth,
                         -pc_beta,
                         -pc_beta + 1,
+                        !cut_node,
                     );
                 }
 
@@ -832,7 +834,7 @@ impl Board {
         // and help along the history tables.
         if PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
-            self.alpha_beta::<PV, ROOT, NNUE>(tt, l_pv, info, t, iid_depth, alpha, beta);
+            self.alpha_beta::<PV, ROOT, NNUE>(tt, l_pv, info, t, iid_depth, alpha, beta, cut_node);
             tt_move = t.best_moves[height];
         }
 
@@ -931,6 +933,7 @@ impl Board {
                     beta,
                     depth,
                     &mut move_picker,
+                    cut_node,
                 );
 
                 if move_picker.stage == Stage::Done {
@@ -953,7 +956,7 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha);
+                score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
@@ -984,7 +987,7 @@ impl Board {
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
                 score =
-                    -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha);
+                    -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha, true);
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
@@ -1004,6 +1007,7 @@ impl Board {
                             new_depth - 1,
                             -alpha - 1,
                             -alpha,
+                            !cut_node,
                         );
                     }
                 }
@@ -1018,6 +1022,7 @@ impl Board {
                         new_depth - 1,
                         -beta,
                         -alpha,
+                        false,
                     );
                 }
             }
@@ -1155,6 +1160,7 @@ impl Board {
         beta: i32,
         depth: Depth,
         mp: &mut MainMovePicker,
+        cut_node: bool,
     ) -> Depth {
         let mut lpv = PVariation::default();
         let r_beta = Self::singularity_margin(tt_value, depth);
@@ -1162,7 +1168,7 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move::<NNUE>(t, info);
         t.excluded[self.height()] = m;
-        let value = self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta);
+        let value = self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
@@ -1208,6 +1214,7 @@ impl Board {
             r_depth,
             r_beta - 1,
             r_beta,
+            false,
         );
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
@@ -1319,7 +1326,7 @@ impl Board {
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<true, true, NNUE>(tt, pv, info, t, depth, alpha, beta)
+        self.alpha_beta::<true, true, NNUE>(tt, pv, info, t, depth, alpha, beta, false)
     }
 
     /// zero-window alpha-beta search.
@@ -1332,8 +1339,9 @@ impl Board {
         depth: Depth,
         alpha: i32,
         beta: i32,
+        cut_node: bool,
     ) -> i32 {
-        self.alpha_beta::<false, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
+        self.alpha_beta::<false, false, NNUE>(tt, pv, info, t, depth, alpha, beta, cut_node)
     }
 
     /// full-window alpha-beta search.
@@ -1346,8 +1354,9 @@ impl Board {
         depth: Depth,
         alpha: i32,
         beta: i32,
+        cut_node: bool,
     ) -> i32 {
-        self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta)
+        self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta, cut_node)
     }
 }
 
