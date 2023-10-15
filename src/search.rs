@@ -975,6 +975,11 @@ impl Board {
                         } else if history < i32::from(-MAX_HISTORY) / 2 {
                             r += 1;
                         }
+
+                        // reduce more if it's a cut-node
+                        if cut_node {
+                            r += 1;
+                        }
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
