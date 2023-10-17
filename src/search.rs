@@ -756,6 +756,10 @@ impl Board {
 
         let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.tt_move);
 
+        if cut_node && depth >= TT_REDUCTION_DEPTH * 2 && tt_move.is_null() {
+            depth -= 1;
+        }
+
         let see_table = [
             info.search_params.see_tactical_margin * depth.squared(),
             info.search_params.see_quiet_margin * depth.round(),
