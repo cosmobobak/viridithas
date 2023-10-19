@@ -965,7 +965,6 @@ impl Board {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
-                    r += i32::from(!PV);
                     if is_quiet {
                         // ordering_score is only robustly a history score
                         // if this is a quiet move. Otherwise, it would be
@@ -980,10 +979,10 @@ impl Board {
                             r += 1;
                         }
 
+                        // reduce more on non-PV nodes
+                        r += i32::from(!PV);
                         // reduce more if it's a cut-node
-                        if cut_node {
-                            r += 1;
-                        }
+                        r += i32::from(cut_node);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
