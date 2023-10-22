@@ -24,6 +24,7 @@ pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
 }
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
 }
