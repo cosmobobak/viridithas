@@ -17,7 +17,6 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
-mod epd;
 mod errors;
 mod historytable;
 mod image;
@@ -146,10 +145,6 @@ fn main() {
 
     if cli.vispsqt {
         return piecesquaretable::render_pst_table(&eparams.piece_square_tables);
-    }
-
-    if let Some(epd_path) = cli.epdpath.as_deref() {
-        return epd::gamut(epd_path, &eparams, &cli);
     }
 
     if cli.visnnue {

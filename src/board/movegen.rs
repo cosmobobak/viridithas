@@ -357,16 +357,6 @@ impl Board {
         }
     }
 
-    pub fn generate_castling_moves(&self, move_list: &mut MoveList) {
-        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
-        if self.side == Colour::WHITE {
-            self.generate_castling_moves_for::<true>(move_list);
-        } else {
-            self.generate_castling_moves_for::<false>(move_list);
-        }
-        debug_assert!(move_list.iter().all(|m| m.is_valid()));
-    }
-
     fn generate_castling_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
         let occupied = self.pieces.occupied();
         let side = if IS_WHITE { Colour::WHITE } else { Colour::BLACK };

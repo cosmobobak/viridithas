@@ -39,7 +39,6 @@ pub enum SearchLimit {
     Infinite,
     Depth(Depth),
     Time(u64),
-    TimeOrCorrectMoves(u64, Vec<Move>),
     Nodes(u64),
     SoftNodes(u64),
     Mate {
@@ -126,8 +125,6 @@ pub struct TimeManager {
     found_forced_move: ForcedMoveType,
     /// The last set of multiplicative factors.
     last_factors: [f64; 2],
-    /// Whether search has been ended early due to a correct move being found.
-    correct_move_found: bool,
     /// Fraction of nodes that were underneath the best move.
     best_move_nodes_fraction: Option<f64>,
 }
@@ -147,7 +144,6 @@ impl Default for TimeManager {
             mate_counter: 0,
             found_forced_move: ForcedMoveType::None,
             last_factors: [1.0, 1.0],
-            correct_move_found: false,
             best_move_nodes_fraction: None,
         }
     }
@@ -170,10 +166,6 @@ impl TimeManager {
         &self.limit
     }
 
-    pub const fn correct_move_found(&self) -> bool {
-        self.correct_move_found
-    }
-
     pub fn default_with_limit(limit: SearchLimit) -> Self {
         Self { limit, ..Default::default() }
     }
@@ -186,7 +178,6 @@ impl TimeManager {
         self.mate_counter = 0;
         self.found_forced_move = ForcedMoveType::None;
         self.last_factors = [1.0, 1.0];
-        self.correct_move_found = false;
         self.best_move_nodes_fraction = None;
 
         if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
@@ -210,7 +201,7 @@ impl TimeManager {
                 }
                 past_limit
             }
-            SearchLimit::Time(millis) | SearchLimit::TimeOrCorrectMoves(millis, _) => {
+            SearchLimit::Time(millis) => {
                 let elapsed = self.start_time.elapsed();
                 // this cast is safe to do, because u64::MAX milliseconds is 585K centuries.
                 #[allow(clippy::cast_possible_truncation)]
@@ -253,10 +244,6 @@ impl TimeManager {
         self.start_time.elapsed()
     }
 
-    pub const fn is_test_suite(&self) -> bool {
-        matches!(self.limit, SearchLimit::TimeOrCorrectMoves(_, _))
-    }
-
     pub const fn is_dynamic(&self) -> bool {
         matches!(self.limit, SearchLimit::Dynamic { .. })
     }
@@ -267,21 +254,13 @@ impl TimeManager {
 
     pub fn solved_breaker<const MAIN_THREAD: bool>(
         &mut self,
-        best_move: Move,
         value: i32,
         depth: usize,
     ) -> ControlFlow<()> {
         if !MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
-        if let SearchLimit::TimeOrCorrectMoves(_, correct_moves) = &self.limit {
-            if correct_moves.contains(&best_move) {
-                self.correct_move_found = true;
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
-        } else if let &SearchLimit::Mate { ply } = &self.limit {
+        if let &SearchLimit::Mate { ply } = &self.limit {
             let expected_score = mate_in(ply);
             let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
