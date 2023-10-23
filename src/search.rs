@@ -1096,7 +1096,10 @@ impl Board {
                 t.insert_countermove(self, best_move);
 
                 let moves_to_adjust = quiets_tried.as_slice();
-                self.update_quiet_history(t, moves_to_adjust, best_move, depth);
+                // this heuristic is on the whole unmotivated, beyond mere empiricism.
+                // perhaps it's really important to know which quiet moves are good in "bad" positions?
+                let history_depth_boost = i32::from(static_eval <= alpha);
+                self.update_quiet_history(t, moves_to_adjust, best_move, depth + history_depth_boost);
             }
 
             // we unconditionally update the tactical history table
