@@ -37,9 +37,6 @@ pub struct Cli {
     /// Visualise the Piece-Square Tables
     #[clap(long)]
     pub vispsqt: bool,
-    /// Path to an Extended Position Description file to run as a test suite.
-    #[clap(long, value_name = "PATH")]
-    pub epdpath: Option<std::path::PathBuf>,
     /// Time in milliseconds to search for each move when doing an epd test suite.
     #[clap(long, value_name = "MS", default_value = "3000")]
     pub epdtime: u64,

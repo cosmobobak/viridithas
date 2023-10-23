@@ -5,12 +5,11 @@ pub mod validation;
 
 use std::{
     fmt::{self, Debug, Display, Formatter, Write},
-    sync::{atomic::Ordering, OnceLock},
+    sync::atomic::Ordering,
 };
 
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
-use regex::Regex;
 
 use crate::{
     board::movegen::{
@@ -38,14 +37,6 @@ use self::{
     evaluation::score::S,
     movegen::{bitboards::BitBoard, MoveListEntry},
 };
-
-static SAN_REGEX: OnceLock<Regex> = OnceLock::new();
-fn get_san_regex() -> &'static Regex {
-    SAN_REGEX.get_or_init(|| {
-        Regex::new(r"^([NBKRQ])?([a-h])?([1-8])?[\-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[\+#]?$")
-            .unwrap()
-    })
-}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
@@ -1843,112 +1834,6 @@ impl Board {
         res
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn parse_san(&mut self, san: &str) -> Result<Move, MoveParseError> {
-        use crate::errors::MoveParseError::{AmbiguousSAN, IllegalMove, InvalidSAN};
-
-        if ["O-O", "O-O+", "O-O#", "0-0", "0-0+", "0-0#"].contains(&san) {
-            let mut ml = MoveList::new();
-            self.generate_castling_moves(&mut ml);
-            let m = ml
-                .iter()
-                .copied()
-                .find(|&m| m.is_kingside_castling())
-                .ok_or_else(|| IllegalMove(san.to_string()));
-            return m;
-        }
-        if ["O-O-O", "O-O-O+", "O-O-O#", "0-0-0", "0-0-0+", "0-0-0#"].contains(&san) {
-            let mut ml = MoveList::new();
-            self.generate_castling_moves(&mut ml);
-            let m = ml
-                .iter()
-                .copied()
-                .find(|&m| m.is_queenside_castling())
-                .ok_or_else(|| IllegalMove(san.to_string()));
-            return m;
-        }
-
-        let regex = get_san_regex();
-        let reg_match = regex.captures(san);
-        if reg_match.is_none() {
-            if ["--", "Z0", "0000", "@@@@"].contains(&san) {
-                return Ok(Move::NULL);
-            }
-            return Err(InvalidSAN(san.to_string()));
-        }
-        let reg_match = reg_match.unwrap();
-
-        let to_sq_name = reg_match.get(4).unwrap().as_str();
-        let to_square = to_sq_name.parse::<Square>().unwrap();
-        let to_bb = to_square.as_set();
-        let mut from_bb = SquareSet::FULL;
-
-        let promo = reg_match.get(5).map(|promo| {
-            b".NBRQ.."
-                .iter()
-                .position(|&c| c == *promo.as_str().as_bytes().last().unwrap())
-                .unwrap()
-        });
-        if promo.is_some() {
-            let legal_mask =
-                if self.side == Colour::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
-            from_bb &= legal_mask;
-        }
-
-        if let Some(file) = reg_match.get(2) {
-            let fname = file.as_str().as_bytes()[0];
-            let file = usize::from(fname - b'a');
-            from_bb &= squareset::BB_FILES[file];
-        }
-
-        if let Some(rank) = reg_match.get(3) {
-            let rname = rank.as_str().as_bytes()[0];
-            let rank = usize::from(rname - b'1');
-            from_bb &= squareset::BB_RANKS[rank];
-        }
-
-        if let Some(piece) = reg_match.get(1) {
-            let piece_char = piece.as_str().as_bytes()[0];
-            let piece_type = PieceType::from_symbol(piece_char).unwrap();
-            let whitepbb = self.pieces.piece_bb(Piece::new(Colour::WHITE, piece_type));
-            let blackpbb = self.pieces.piece_bb(Piece::new(Colour::BLACK, piece_type));
-            from_bb &= whitepbb | blackpbb;
-        } else {
-            from_bb &= self.pieces.all_pawns();
-            if reg_match.get(2).is_none() {
-                from_bb &= squareset::BB_FILES[to_square.file() as usize];
-            }
-        }
-
-        if from_bb.is_empty() {
-            return Err(IllegalMove(san.to_string()));
-        }
-
-        let mut ml = MoveList::new();
-        self.generate_moves(&mut ml);
-
-        let mut legal_move = None;
-        for &m in ml.iter() {
-            if !self.make_move_base(m) {
-                continue;
-            }
-            self.unmake_move_base();
-            let legal_promo_t = m.safe_promotion_type();
-            if legal_promo_t.index() != promo.unwrap_or(PieceType::NONE.index()) {
-                continue;
-            }
-            let m_from_bb = m.from().as_set();
-            let m_to_bb = m.to().as_set();
-            if (m_from_bb & from_bb).non_empty() && (m_to_bb & to_bb).non_empty() {
-                if legal_move.is_some() {
-                    return Err(AmbiguousSAN(san.to_string()));
-                }
-                legal_move = Some(m);
-            }
-        }
-        legal_move.ok_or_else(|| IllegalMove(san.to_string()))
-    }
-
     pub fn san(&mut self, m: Move) -> Option<String> {
         let check_char = match self.gives(m) {
             CheckState::None => "",
@@ -2452,35 +2337,6 @@ mod tests {
             Piece::all().take(6).zip(Piece::all().skip(6).take(6)).zip(PieceType::all())
         {
             assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
-        }
-    }
-
-    #[test]
-    fn test_san() {
-        use super::Board;
-        use std::{
-            fs::File,
-            io::{BufRead, BufReader},
-        };
-
-        let f = File::open("epds/perftsuite.epd").unwrap();
-        let mut pos = Board::new();
-        let mut ml = crate::board::movegen::MoveList::new();
-        for line in BufReader::new(f).lines() {
-            let line = line.unwrap();
-            let fen = line.split_once(';').unwrap().0.trim();
-            pos.set_from_fen(fen).unwrap();
-            pos.generate_moves(&mut ml);
-            for &m in ml.iter() {
-                if !pos.make_move_base(m) {
-                    continue;
-                }
-                pos.unmake_move_base();
-                let san_repr = pos.san(m);
-                let san_repr = san_repr.unwrap();
-                let parsed_move = pos.parse_san(&san_repr);
-                assert_eq!(parsed_move, Ok(m), "{san_repr} != {m} in fen {}", pos.fen());
-            }
         }
     }
 

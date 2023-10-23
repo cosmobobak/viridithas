@@ -281,7 +281,7 @@ impl Board {
                     depth = (depth - 1).max(min_depth);
                 }
 
-                if info.time_manager.solved_breaker::<T0>(pv.line[0], 0, d)
+                if info.time_manager.solved_breaker::<T0>(0, d)
                     == ControlFlow::Break(())
                 {
                     info.stopped.store(true, Ordering::SeqCst);
@@ -306,7 +306,7 @@ impl Board {
                 readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false);
             }
 
-            if info.time_manager.solved_breaker::<T0>(bestmove, pv.score, d)
+            if info.time_manager.solved_breaker::<T0>(pv.score, d)
                 == ControlFlow::Break(())
             {
                 info.stopped.store(true, Ordering::SeqCst);
@@ -1379,11 +1379,6 @@ pub fn select_best<'a>(
     total_nodes: u64,
 ) -> &'a ThreadData {
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
-
-    if info.time_manager.is_test_suite() {
-        // we break early focusing only on the main thread.
-        return best_thread;
-    }
 
     for thread in rest {
         let best_depth = best_thread.completed;
