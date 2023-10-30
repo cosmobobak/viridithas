@@ -145,6 +145,7 @@ impl TT {
     }
 
     pub fn resize(&mut self, bytes: usize, threads: usize) {
+        let start = std::time::Instant::now();
         let new_len = bytes / TT_ENTRY_SIZE;
         // dealloc the old table:
         self.table = Vec::new();
@@ -173,6 +174,7 @@ impl TT {
                 }
             });
             self.table.set_len(new_len);
+            println!("info string allocated {} bytes for the transposition table in {:?}ms", bytes, start.elapsed().as_millis());
         }
     }
 
