@@ -40,7 +40,7 @@ fn total_squared_error(data: &[TrainingExample], params: &EvalParams, k: f64) ->
     let nodes = AtomicU64::new(0);
     let mut info = SearchInfo::new(&stopped, &nodes);
     let mut tt = TT::new();
-    tt.resize(MEGABYTE, 1);
+    tt.resize(MEGABYTE);
     let mut t = ThreadData::new(0, &pos);
     info.eval_params = params.clone();
     data.iter()

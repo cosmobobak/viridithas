@@ -551,7 +551,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let stopped = AtomicBool::new(false);
     let stdin = Mutex::new(stdin_reader());
@@ -654,7 +654,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                         info.lm_table = LMTable::new(&info.search_params);
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
-                            tt.resize(new_size, thread_data.len());
+                            tt.resize(new_size);
                         }
                         if let Some(threads) = conf.threads {
                             thread_data = (0..threads)
@@ -739,7 +739,7 @@ fn bench(benchcmd: &str) -> Result<(), UciError> {
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, 1);
+    tt.resize(16 * MEGABYTE);
     let mut thread_data =
         (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
     let mut node_sum = 0u64;

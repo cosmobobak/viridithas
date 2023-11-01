@@ -216,7 +216,7 @@ fn generate_on_thread(
     let mut board = Board::new();
     let mut thread_data = ThreadData::new(0, &board);
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, 1);
+    tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),

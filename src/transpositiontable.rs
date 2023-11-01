@@ -1,7 +1,4 @@
-use std::{
-    mem::MaybeUninit,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
@@ -38,11 +35,6 @@ impl_from_bound!(i32);
 fn divide_into_chunks<T>(slice: &[T], n_chunks: usize) -> impl Iterator<Item = &[T]> {
     let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
     slice.chunks(chunk_size)
-}
-
-fn divide_into_chunks_mut<T>(slice: &mut [T], n_chunks: usize) -> impl Iterator<Item = &mut [T]> {
-    let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
-    slice.chunks_mut(chunk_size)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,8 +136,7 @@ impl TT {
         Self { table: Vec::new(), age: 0 }
     }
 
-    pub fn resize(&mut self, bytes: usize, threads: usize) {
-        let start = std::time::Instant::now();
+    pub fn resize(&mut self, bytes: usize) {
         let new_len = bytes / TT_ENTRY_SIZE;
         // dealloc the old table:
         self.table = Vec::new();
@@ -157,7 +148,6 @@ impl TT {
                 std::alloc::handle_alloc_error(layout);
             }
             self.table = Vec::from_raw_parts(ptr.cast(), new_len, new_len);
-            println!("info string allocated {} bytes for the transposition table in {:?}ms", bytes, start.elapsed().as_millis());
         }
     }
 
