@@ -154,7 +154,10 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub const fn select_feature_weights(&self, _bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+    pub const fn select_feature_weights(
+        &self,
+        _bucket: usize,
+    ) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // {
         //     let start = bucket * INPUT * LAYER_1_SIZE;
         //     let end = start + INPUT * LAYER_1_SIZE;
@@ -686,7 +689,7 @@ mod tests {
     #[test]
     fn pov_preserved_promo() {
         use crate::nnue::network::NNUEState;
-        
+
         let mut board = crate::board::Board::from_fen(
             "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
         )

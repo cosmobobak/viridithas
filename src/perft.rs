@@ -160,7 +160,7 @@ mod tests {
         use super::*;
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-        
+
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn perft_start_position() {
         use super::*;
-        
+
         let mut pos = Board::new();
         std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn perft_hce_start_position() {
         use super::*;
-        
+
         let mut pos = Board::new();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn perft_nnue_start_position() {
         use super::*;
-        
+
         let mut pos = Board::default();
         let mut t = ThreadData::new(0, &pos);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn perft_krk() {
         use super::*;
-        
+
         let mut pos = Board::new();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn simple_move_undoability() {
         use super::*;
-        
+
         let mut pos = Board::new();
         pos.set_startpos();
         let e4 = Move::new(Square::E2, Square::E4);
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn simple_capture_undoability() {
         use super::*;
-        
+
         let mut pos = Board::new();
         pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2").unwrap();
         let exd5 = Move::new(Square::E4, Square::D5);
