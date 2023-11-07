@@ -525,12 +525,12 @@ impl NNUEState {
 /// Move a feature from one square to another.
 fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut Align64<[i16; SIZE]>,
-    delta: &Align64<[i16; WEIGHTS]>,
+    bucket: &Align64<[i16; WEIGHTS]>,
     offset_sub: usize,
     offset_add: usize,
 ) {
-    let s_block = &delta[offset_sub..offset_sub + SIZE];
-    let a_block = &delta[offset_add..offset_add + SIZE];
+    let s_block = &bucket[offset_sub..offset_sub + SIZE];
+    let a_block = &bucket[offset_add..offset_add + SIZE];
     for ((i, ds), da) in input.iter_mut().zip(s_block).zip(a_block) {
         *i = *i - *ds + *da;
     }
@@ -539,10 +539,10 @@ fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 /// Add a feature to a square.
 fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut Align64<[i16; SIZE]>,
-    delta: &Align64<[i16; WEIGHTS]>,
+    bucket: &Align64<[i16; WEIGHTS]>,
     offset_add: usize,
 ) {
-    let a_block = &delta[offset_add..offset_add + SIZE];
+    let a_block = &bucket[offset_add..offset_add + SIZE];
     for (i, d) in input.iter_mut().zip(a_block) {
         *i += *d;
     }
@@ -551,10 +551,10 @@ fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
 /// Subtract a feature from a square.
 fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
     input: &mut Align64<[i16; SIZE]>,
-    delta: &Align64<[i16; WEIGHTS]>,
+    bucket: &Align64<[i16; WEIGHTS]>,
     offset_sub: usize,
 ) {
-    let s_block = &delta[offset_sub..offset_sub + SIZE];
+    let s_block = &bucket[offset_sub..offset_sub + SIZE];
     for (i, d) in input.iter_mut().zip(s_block) {
         *i -= *d;
     }
