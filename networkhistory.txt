@@ -388,3 +388,10 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ GAMES │ N: 1696 W: 375 L: 548 D: 773
             │                                          │ vs omega.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    artemis │ same arch as omega / vanguard, with 497M │ STC
+            │ additional positions generated using     │ ELO   │ 4.27 +- 3.04 (95%)
+            │ omega.                                   │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.91 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 24752 W: 6288 L: 5984 D: 12480
+            │                                          │ vs omega.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
