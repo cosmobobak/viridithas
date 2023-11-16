@@ -23,9 +23,21 @@ const CR_MAX: i16 = 255;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 1536;
+pub const LAYER_1_SIZE: usize = 1024;
 /// The number of buckets in the feature transformer.
-pub const BUCKETS: usize = 1;
+pub const BUCKETS: usize = 4;
+/// The mapping from square to bucket.
+#[rustfmt::skip]
+pub const BUCKET_MAP: [usize; 64] = [
+    0, 0, 0, 0, 1, 1, 1, 1,
+    0, 0, 0, 0, 1, 1, 1, 1,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+];
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -154,28 +166,29 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub const fn select_feature_weights(
+    pub fn select_feature_weights(
         &self,
-        _bucket: usize,
+        king_sq: Square,
     ) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        // {
-        //     let start = bucket * INPUT * LAYER_1_SIZE;
-        //     let end = start + INPUT * LAYER_1_SIZE;
-        //     let slice = &self.feature_weights[start..end];
-        //     // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-        //     // and we check that the slice is aligned to 64 bytes.
-        //     // additionally, we're generating the reference from our own data,
-        //     // so we know that the lifetime is valid.
-        //     unsafe {
-        //         // don't immediately cast to Align64, as we want to check the alignment first.
-        //         let ptr = slice.as_ptr();
-        //         assert_eq!(ptr.align_offset(64), 0);
-        //         // alignments are sensible, so we can safely cast.
-        //         #[allow(clippy::cast_ptr_alignment)]
-        //         &*ptr.cast()
-        //     }
-        // }
-        &self.feature_weights
+        {
+            let bucket = BUCKET_MAP[king_sq.index()];
+            let start = bucket * INPUT * LAYER_1_SIZE;
+            let end = start + INPUT * LAYER_1_SIZE;
+            let slice = &self.feature_weights[start..end];
+            // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+            // and we check that the slice is aligned to 64 bytes.
+            // additionally, we're generating the reference from our own data,
+            // so we know that the lifetime is valid.
+            unsafe {
+                // don't immediately cast to Align64, as we want to check the alignment first.
+                let ptr = slice.as_ptr();
+                assert_eq!(ptr.align_offset(64), 0);
+                // alignments are sensible, so we can safely cast.
+                #[allow(clippy::cast_ptr_alignment)]
+                &*ptr.cast()
+            }
+        }
+        // &self.feature_weights
     }
 }
 
@@ -309,9 +322,9 @@ impl NNUEState {
 
         let acc = &mut self.accumulators[self.current_acc];
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
             subtract_and_add_to_all(
@@ -366,9 +379,9 @@ impl NNUEState {
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if A::ACTIVATE {
             if update.white {
