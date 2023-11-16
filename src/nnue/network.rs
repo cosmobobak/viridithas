@@ -323,8 +323,7 @@ impl NNUEState {
         let acc = &mut self.accumulators[self.current_acc];
 
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
             subtract_and_add_to_all(
@@ -380,8 +379,7 @@ impl NNUEState {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if A::ACTIVATE {
             if update.white {

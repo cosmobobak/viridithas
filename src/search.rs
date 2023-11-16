@@ -281,9 +281,7 @@ impl Board {
                     depth = (depth - 1).max(min_depth);
                 }
 
-                if info.time_manager.solved_breaker::<T0>(0, d)
-                    == ControlFlow::Break(())
-                {
+                if info.time_manager.solved_breaker::<T0>(0, d) == ControlFlow::Break(()) {
                     info.stopped.store(true, Ordering::SeqCst);
                     return ControlFlow::Break(()); // we've been told to stop searching.
                 }
@@ -306,9 +304,7 @@ impl Board {
                 readout_info(self, Bound::Exact, t.pv(), d, info, tt, total_nodes, false);
             }
 
-            if info.time_manager.solved_breaker::<T0>(pv.score, d)
-                == ControlFlow::Break(())
-            {
+            if info.time_manager.solved_breaker::<T0>(pv.score, d) == ControlFlow::Break(()) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
@@ -721,8 +717,16 @@ impl Board {
                     + std::cmp::min((static_eval - beta) / 200, 4);
                 let nm_depth = depth - r;
                 self.make_nullmove();
-                let mut null_score =
-                    -self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
+                let mut null_score = -self.zw_search::<NNUE>(
+                    tt,
+                    l_pv,
+                    info,
+                    t,
+                    nm_depth,
+                    -beta,
+                    -beta + 1,
+                    !cut_node,
+                );
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -960,7 +964,8 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score = -self.full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
+                score = -self
+                    .full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
@@ -994,8 +999,16 @@ impl Board {
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
-                score =
-                    -self.zw_search::<NNUE>(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha, true);
+                score = -self.zw_search::<NNUE>(
+                    tt,
+                    l_pv,
+                    info,
+                    t,
+                    reduced_depth,
+                    -alpha - 1,
+                    -alpha,
+                    true,
+                );
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
@@ -1099,7 +1112,12 @@ impl Board {
                 // this heuristic is on the whole unmotivated, beyond mere empiricism.
                 // perhaps it's really important to know which quiet moves are good in "bad" positions?
                 let history_depth_boost = i32::from(static_eval <= alpha);
-                self.update_quiet_history(t, moves_to_adjust, best_move, depth + history_depth_boost);
+                self.update_quiet_history(
+                    t,
+                    moves_to_adjust,
+                    best_move,
+                    depth + history_depth_boost,
+                );
             }
 
             // we unconditionally update the tactical history table
@@ -1179,7 +1197,8 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move::<NNUE>(t, info);
         t.excluded[self.height()] = m;
-        let value = self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
+        let value =
+            self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
