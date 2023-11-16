@@ -1480,7 +1480,7 @@ impl Board {
         let mut to = m.to();
         t.nnue.push_acc();
 
-        let bucket_changed = if piece_type == PieceType::KING {
+        let bucket_changed = if network::BUCKETS != 1 && piece_type == PieceType::KING {
             let (before, after) = if colour == Colour::WHITE {
                 (BUCKET_MAP[from.index()], BUCKET_MAP[to.index()])
             } else {

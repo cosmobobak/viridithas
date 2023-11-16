@@ -23,9 +23,9 @@ const CR_MAX: i16 = 255;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 1024;
+pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
-pub const BUCKETS: usize = 4;
+pub const BUCKETS: usize = 1;
 /// The mapping from square to bucket.
 #[rustfmt::skip]
 pub const BUCKET_MAP: [usize; 64] = [
@@ -166,29 +166,29 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub fn select_feature_weights(
+    pub const fn select_feature_weights(
         &self,
-        king_sq: Square,
+        _king_sq: Square,
     ) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        {
-            let bucket = BUCKET_MAP[king_sq.index()];
-            let start = bucket * INPUT * LAYER_1_SIZE;
-            let end = start + INPUT * LAYER_1_SIZE;
-            let slice = &self.feature_weights[start..end];
-            // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-            // and we check that the slice is aligned to 64 bytes.
-            // additionally, we're generating the reference from our own data,
-            // so we know that the lifetime is valid.
-            unsafe {
-                // don't immediately cast to Align64, as we want to check the alignment first.
-                let ptr = slice.as_ptr();
-                assert_eq!(ptr.align_offset(64), 0);
-                // alignments are sensible, so we can safely cast.
-                #[allow(clippy::cast_ptr_alignment)]
-                &*ptr.cast()
-            }
-        }
-        // &self.feature_weights
+        // {
+        //     let bucket = BUCKET_MAP[king_sq.index()];
+        //     let start = bucket * INPUT * LAYER_1_SIZE;
+        //     let end = start + INPUT * LAYER_1_SIZE;
+        //     let slice = &self.feature_weights[start..end];
+        //     // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        //     // and we check that the slice is aligned to 64 bytes.
+        //     // additionally, we're generating the reference from our own data,
+        //     // so we know that the lifetime is valid.
+        //     unsafe {
+        //         // don't immediately cast to Align64, as we want to check the alignment first.
+        //         let ptr = slice.as_ptr();
+        //         assert_eq!(ptr.align_offset(64), 0);
+        //         // alignments are sensible, so we can safely cast.
+        //         #[allow(clippy::cast_ptr_alignment)]
+        //         &*ptr.cast()
+        //     }
+        // }
+        &self.feature_weights
     }
 }
 
