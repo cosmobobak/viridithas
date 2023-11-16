@@ -1481,9 +1481,12 @@ impl Board {
         t.nnue.push_acc();
 
         let bucket_changed = if piece_type == PieceType::KING {
-            let bucket_before = BUCKET_MAP[from.index()];
-            let bucket_after = BUCKET_MAP[to.index()];
-            bucket_before != bucket_after
+            let (before, after) = if colour == Colour::WHITE {
+                (BUCKET_MAP[from.index()], BUCKET_MAP[to.index()])
+            } else {
+                (BUCKET_MAP[from.flip_rank().index()], BUCKET_MAP[to.flip_rank().index()])
+            };
+            before != after
         } else {
             false
         };
