@@ -26,6 +26,18 @@ const SCALE: i32 = 400;
 pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 1;
+/// The mapping from square to bucket.
+#[rustfmt::skip]
+pub const BUCKET_MAP: [usize; 64] = [
+    0, 0, 0, 0, 1, 1, 1, 1,
+    0, 0, 0, 0, 1, 1, 1, 1,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+    2, 2, 2, 2, 3, 3, 3, 3,
+];
 
 const QA: i32 = 255;
 const QB: i32 = 64;
@@ -156,9 +168,10 @@ impl NNUEParams {
 
     pub const fn select_feature_weights(
         &self,
-        _bucket: usize,
+        _king_sq: Square,
     ) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // {
+        //     let bucket = BUCKET_MAP[king_sq.index()];
         //     let start = bucket * INPUT * LAYER_1_SIZE;
         //     let end = start + INPUT * LAYER_1_SIZE;
         //     let slice = &self.feature_weights[start..end];
@@ -309,9 +322,9 @@ impl NNUEState {
 
         let acc = &mut self.accumulators[self.current_acc];
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
             subtract_and_add_to_all(
@@ -366,9 +379,9 @@ impl NNUEState {
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
         let acc = &mut self.accumulators[self.current_acc];
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king.index());
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket =
-            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank().index());
+            NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if A::ACTIVATE {
             if update.white {

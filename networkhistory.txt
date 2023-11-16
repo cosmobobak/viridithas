@@ -388,10 +388,23 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ GAMES │ N: 1696 W: 375 L: 548 D: 773
             │                                          │ vs omega.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
-    artemis │ same arch as omega / vanguard, with 497M │ STC
+    artemis │ same arch as omega / vanguard, with 497M │ STC:
             │ additional positions generated using     │ ELO   │ 4.27 +- 3.04 (95%)
             │ omega.                                   │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
             │                                          │ LLR   │ 2.91 (-2.25, 2.89) [0.00, 3.00]
             │                                          │ GAMES │ N: 24752 W: 6288 L: 5984 D: 12480
             │                                          │ vs omega.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+     lilith │ 1024x2 net with four buckets, trained    │ fixed-nodes:
+            │ using JW's bullet trainer, with          │ ELO   │ -14.37 +- 8.14 (95%)
+            │ artemis's hyperparameters.               │ SPRT  │ N=25000 Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.29 (-2.25, 2.89) [0.00, 3.00]
+            │ STC test interrupted early, as f-nodes   │ GAMES │ N: 4208 W: 1177 L: 1351 D: 1680
+            │ looked terrible and lilith is faster,    │ vs artemis.
+            │ so will scale less well than artemis.    │ STC:
+            │                                          │ ELO   │ 1.73 +- 8.32 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 0.07 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 3408 W: 878 L: 861 D: 1669
+            │                                          │ vs artemis.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────

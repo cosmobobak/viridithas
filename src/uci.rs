@@ -633,6 +633,15 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 println!("{eval}");
                 Ok(())
             }
+            "raweval" => {
+                let eval = if pos.in_check() {
+                    0
+                } else {
+                    thread_data.first_mut().expect("the thread headers are empty.").nnue.evaluate(pos.turn())
+                };
+                println!("{eval}");
+                Ok(())
+            }
             "show" => {
                 println!("{pos}");
                 Ok(())
