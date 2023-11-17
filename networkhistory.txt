@@ -408,3 +408,10 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ GAMES │ N: 3408 W: 878 L: 861 D: 1669
             │                                          │ vs artemis.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    jupiter │ same as artemis, but starting LR was 10x │ fixed-nodes:
+            │ higher. (0.01)                           │ ELO   │ 
+            │                                          │ SPRT  │ 
+            │                                          │ LLR   │ 
+            │                                          │ GAMES │ 
+            │                                          │ vs artemis.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
