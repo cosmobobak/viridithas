@@ -423,9 +423,9 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ vs artemis.
             │                                          │
             │                                          │ fixed-nodes, epoch 15:
-            │                                          │ ELO   │ 
+            │                                          │ ELO   │ -212.01 +- 36.32 (95%)
             │                                          │ SPRT  │ N=25000 Threads=1 Hash=16MB
-            │                                          │ LLR   │ 
-            │                                          │ GAMES │ 
-            │                                          │ vs artemis.
+            │                                          │ LLR   │ -2.41 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 384 W: 45 L: 254 D: 85
+            │ what a load of garbage.                  │ vs artemis.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
