@@ -415,3 +415,17 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ GAMES │ N: 528 W: 58 L: 310 D: 160
             │                                          │ vs artemis.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    newcomb │ artemis with new lr schedule:            │ fixed-nodes, epoch 25:
+            │ initial LR : 0.01                        │ ELO   │ -170.74 +- 31.69 (95%)
+            │ lr gamma   : 0.1                         │ SPRT  │ N=25000 Threads=1 Hash=16MB
+            │ lr step    : every 9 epochs              │ LLR   │ -2.31 (-2.25, 2.89) [0.00, 3.00]
+            │ epochs     : 25                          │ GAMES │ N: 448 W: 70 L: 274 D: 104
+            │                                          │ vs artemis.
+            │                                          │
+            │                                          │ fixed-nodes, epoch 15:
+            │                                          │ ELO   │ -212.01 +- 36.32 (95%)
+            │                                          │ SPRT  │ N=25000 Threads=1 Hash=16MB
+            │                                          │ LLR   │ -2.41 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 384 W: 45 L: 254 D: 85
+            │ what a load of garbage.                  │ vs artemis.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
