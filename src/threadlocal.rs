@@ -13,7 +13,10 @@ pub struct ThreadData {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
     pub best_moves: [Move; MAX_PLY],
-    pub double_extensions: [i32; MAX_PLY],
+    // double-extension array is right-padded by one because
+    // singular verification will try to access the next ply
+    // in an edge case.
+    pub double_extensions: [i32; MAX_PLY + 1],
     pub checks: [bool; MAX_PLY],
     pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,
@@ -44,7 +47,7 @@ impl ThreadData {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
             best_moves: [Move::NULL; MAX_PLY],
-            double_extensions: [0; MAX_PLY],
+            double_extensions: [0; MAX_PLY + 1],
             checks: [false; MAX_PLY],
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
