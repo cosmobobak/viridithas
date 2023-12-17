@@ -696,7 +696,7 @@ impl Board {
             if depth <= info.search_params.rfp_depth
                 && static_eval - Self::rfp_margin(info, depth, improving) > beta
             {
-                return static_eval;
+                return (static_eval + beta) / 2;
             }
 
             let last_move_was_null = self.last_move_was_nullmove();
