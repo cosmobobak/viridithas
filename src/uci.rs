@@ -258,7 +258,6 @@ struct SetOptions {
 #[allow(clippy::too_many_lines)]
 fn parse_setoption(
     text: &str,
-    _info: &mut SearchInfo,
     pre_config: SetOptions,
 ) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
@@ -524,7 +523,7 @@ pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
     HumanTimeFormatWrapper { millis }
 }
 
-fn print_uci_response(full: bool) {
+fn print_uci_response(info: &SearchInfo, full: bool) {
     let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
     println!("id name {NAME} {VERSION}{version_extension}");
     println!("id author Cosmo");
@@ -539,7 +538,7 @@ fn print_uci_response(full: bool) {
     println!("option name UCI_Chess960 type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
-        for (id, default, min, max, _) in SearchParams::default().base_config() {
+        for (id, default, min, max, _) in info.search_params.base_config() {
             println!("option name {id} type spin default {default} min {min} max {max}");
         }
     }
@@ -567,7 +566,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
-        bench("openbench").expect("bench failed");
+        bench("openbench", &info.search_params).expect("bench failed");
         return;
     }
 
@@ -582,14 +581,14 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
             "\n" => continue,
             "uci" => {
                 #[cfg(feature = "tuning")]
-                print_uci_response(true);
+                print_uci_response(&info, true);
                 #[cfg(not(feature = "tuning"))]
-                print_uci_response(false);
+                print_uci_response(&info, false);
                 PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
             "ucifull" => {
-                print_uci_response(true);
+                print_uci_response(&info, true);
                 PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
@@ -660,7 +659,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                     hash_mb: None,
                     threads: None,
                 };
-                let res = parse_setoption(input, &mut info, pre_config);
+                let res = parse_setoption(input, pre_config);
                 match res {
                     Ok(conf) => {
                         info.search_params = conf.search_config;
@@ -727,7 +726,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
                 }
                 res
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd),
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.search_params),
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -744,11 +743,11 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
 }
 
 const BENCH_DEPTH: usize = 16;
-fn bench(benchcmd: &str) -> Result<(), UciError> {
+fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo::new(&stopped, &nodes);
+    let mut info = SearchInfo::with_search_params(&stopped, &nodes, search_params);
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
