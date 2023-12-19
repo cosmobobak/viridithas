@@ -82,6 +82,10 @@ fn main() {
         return perft::gamut();
     }
 
+    if cli.spsajson {
+        return println!("{}", SearchParams::default().emit_json_for_spsa());
+    }
+
     if let Some(path) = cli.tune {
         return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
     }

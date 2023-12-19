@@ -62,20 +62,20 @@ const FUTILITY_COEFF_0: i32 = 76;
 const FUTILITY_COEFF_1: i32 = 90;
 const RAZORING_COEFF_0: i32 = 394;
 const RAZORING_COEFF_1: i32 = 290;
-const PROBCUT_MARGIN: i32 = 200;
-const PROBCUT_IMPROVING_MARGIN: i32 = 50;
+const PROBCUT_MARGIN: i32 = 200; //
+const PROBCUT_IMPROVING_MARGIN: i32 = 50; //
 const RFP_DEPTH: Depth = Depth::new(8);
 const NMP_BASE_REDUCTION: Depth = Depth::new(3);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
-const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
+const TT_REDUCTION_DEPTH: Depth = Depth::new(4); //
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
-const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
-const PROBCUT_REDUCTION: Depth = Depth::new(4);
-const LMR_BASE: f64 = 77.0;
-const LMR_DIVISION: f64 = 236.0;
+const PROBCUT_MIN_DEPTH: Depth = Depth::new(5); //
+const PROBCUT_REDUCTION: Depth = Depth::new(4); //
+const LMR_BASE: f64 = 77.0; //
+const LMR_DIVISION: f64 = 236.0; //
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 
@@ -771,7 +771,7 @@ impl Board {
 
         // probcut:
         let pc_beta = std::cmp::min(
-            beta + PROBCUT_MARGIN - i32::from(improving) * PROBCUT_IMPROVING_MARGIN,
+            beta + info.search_params.probcut_margin - i32::from(improving) * info.search_params.probcut_improving_margin,
             MINIMUM_TB_WIN_SCORE - 1,
         );
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
@@ -780,7 +780,7 @@ impl Board {
         if !PV
             && !in_check
             && excluded.is_null()
-            && depth >= PROBCUT_MIN_DEPTH
+            && depth >= info.search_params.probcut_min_depth
             && beta.abs() < MINIMUM_TB_WIN_SCORE
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_depth: d, .. }) if v < pc_beta && d >= depth - 3)
@@ -807,7 +807,7 @@ impl Board {
                     -self.quiescence::<false, NNUE>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
-                    let pc_depth = depth - PROBCUT_REDUCTION;
+                    let pc_depth = depth - info.search_params.probcut_reduction;
                     value = -self.zw_search::<NNUE>(
                         tt,
                         l_pv,

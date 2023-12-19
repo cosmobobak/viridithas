@@ -7,7 +7,7 @@ use super::{
     LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
     NMP_VERIFICATION_DEPTH, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
     RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH,
+    TT_REDUCTION_DEPTH, PROBCUT_MARGIN, PROBCUT_IMPROVING_MARGIN, PROBCUT_MIN_DEPTH, PROBCUT_REDUCTION,
 };
 
 #[derive(Clone, Debug)]
@@ -33,6 +33,10 @@ pub struct SearchParams {
     pub see_depth: Depth,
     pub lmr_base: f64,
     pub lmr_division: f64,
+    pub probcut_margin: i32,
+    pub probcut_improving_margin: i32,
+    pub probcut_reduction: Depth,
+    pub probcut_min_depth: Depth,
 }
 
 impl SearchParams {
@@ -59,6 +63,10 @@ impl SearchParams {
             see_depth: SEE_DEPTH,
             lmr_base: LMR_BASE,
             lmr_division: LMR_DIVISION,
+            probcut_margin: PROBCUT_MARGIN,
+            probcut_improving_margin: PROBCUT_IMPROVING_MARGIN,
+            probcut_reduction: PROBCUT_REDUCTION,
+            probcut_min_depth: PROBCUT_MIN_DEPTH,
         }
     }
 }
@@ -90,9 +98,9 @@ macro_rules! id_parser_gen {
 }
 
 macro_rules! id_value_gen {
-    ($($option:ident, [$($field:tt)*]),*) => {
+    ($($option:ident = [$field:expr, $min:expr, $max:expr, $step:expr]),*) => {
         vec![$(
-            (stringify!($option), $($field)*),)
+            (stringify!($option), f64::from($field), f64::from($min), f64::from($max), f64::from($step)),)
             *
         ]
     }
@@ -123,56 +131,71 @@ impl SearchParams {
             SINGULARITY_DEPTH = [self.singularity_depth],
             SEE_DEPTH = [self.see_depth],
             LMR_BASE = [self.lmr_base],
-            LMR_DIVISION = [self.lmr_division]
+            LMR_DIVISION = [self.lmr_division],
+            PROBCUT_MARGIN = [self.probcut_margin],
+            PROBCUT_IMPROVING_MARGIN = [self.probcut_improving_margin],
+            PROBCUT_REDUCTION = [self.probcut_reduction],
+            PROBCUT_MIN_DEPTH = [self.probcut_min_depth]
         ]
     }
 
+    #[rustfmt::skip]
     pub fn ids_with_values(&self) -> Vec<(&str, f64)> {
+        self.base_config()
+            .into_iter()
+            .map(|(id, value, _, _, _)| (id, value))
+            .collect()
+    }
+
+    pub fn base_config(&self) -> Vec<(&str, f64, f64, f64, f64)> {
         #![allow(clippy::cast_precision_loss)]
         id_value_gen![
-            ASPIRATION_WINDOW,
-            [self.aspiration_window.into()],
-            RFP_MARGIN,
-            [self.rfp_margin.into()],
-            RFP_IMPROVING_MARGIN,
-            [self.rfp_improving_margin.into()],
-            NMP_IMPROVING_MARGIN,
-            [self.nmp_improving_margin.into()],
-            SEE_QUIET_MARGIN,
-            [self.see_quiet_margin.into()],
-            SEE_TACTICAL_MARGIN,
-            [self.see_tactical_margin.into()],
-            LMP_BASE_MOVES,
-            [self.lmp_base_moves.into()],
-            FUTILITY_COEFF_0,
-            [self.futility_coeff_0.into()],
-            FUTILITY_COEFF_1,
-            [self.futility_coeff_1.into()],
-            RAZORING_COEFF_0,
-            [self.razoring_coeff_0.into()],
-            RAZORING_COEFF_1,
-            [self.razoring_coeff_1.into()],
-            RFP_DEPTH,
-            [self.rfp_depth.into()],
-            NMP_BASE_REDUCTION,
-            [self.nmp_base_reduction.into()],
-            NMP_VERIFICATION_DEPTH,
-            [self.nmp_verification_depth.into()],
-            LMP_DEPTH,
-            [self.lmp_depth.into()],
-            TT_REDUCTION_DEPTH,
-            [self.tt_reduction_depth.into()],
-            FUTILITY_DEPTH,
-            [self.futility_depth.into()],
-            SINGULARITY_DEPTH,
-            [self.singularity_depth.into()],
-            SEE_DEPTH,
-            [self.see_depth.into()],
-            LMR_BASE,
-            [self.lmr_base],
-            LMR_DIVISION,
-            [self.lmr_division]
+            ASPIRATION_WINDOW = [self.aspiration_window, 1, 50, 3],
+            RFP_MARGIN = [self.rfp_margin, 40, 200, 10],
+            RFP_IMPROVING_MARGIN = [self.rfp_improving_margin, 30, 150, 10],
+            NMP_IMPROVING_MARGIN = [self.nmp_improving_margin, 30, 200, 10],
+            SEE_QUIET_MARGIN = [self.see_quiet_margin, -150, -20, 5],
+            SEE_TACTICAL_MARGIN = [self.see_tactical_margin, -100, -1, 3],
+            LMP_BASE_MOVES = [self.lmp_base_moves, 1, 5, 1],
+            FUTILITY_COEFF_0 = [self.futility_coeff_0, 40, 200, 10],
+            FUTILITY_COEFF_1 = [self.futility_coeff_1, 40, 200, 10],
+            RAZORING_COEFF_0 = [self.razoring_coeff_0, 200, 700, 30],
+            RAZORING_COEFF_1 = [self.razoring_coeff_1, 150, 600, 30],
+            RFP_DEPTH = [self.rfp_depth, 5, 12, 1],
+            NMP_BASE_REDUCTION = [self.nmp_base_reduction, 2, 5, 1],
+            NMP_VERIFICATION_DEPTH = [self.nmp_verification_depth, 8, 16, 1],
+            LMP_DEPTH = [self.lmp_depth, 5, 12, 1],
+            TT_REDUCTION_DEPTH = [self.tt_reduction_depth, 2, 8, 1],
+            FUTILITY_DEPTH = [self.futility_depth, 2, 10, 1],
+            SINGULARITY_DEPTH = [self.singularity_depth, 6, 12, 1],
+            SEE_DEPTH = [self.see_depth, 6, 14, 1],
+            LMR_BASE = [self.lmr_base, 40, 150, 7],
+            LMR_DIVISION = [self.lmr_division, 150, 500, 15],
+            PROBCUT_MARGIN = [self.probcut_margin, 100, 400, 20],
+            PROBCUT_IMPROVING_MARGIN = [self.probcut_improving_margin, 20, 150, 10],
+            PROBCUT_REDUCTION = [self.probcut_reduction, 2, 8, 1],
+            PROBCUT_MIN_DEPTH = [self.probcut_min_depth, 2, 10, 1]
         ]
+    }
+
+    pub fn emit_json_for_spsa(&self) -> String {
+        let mut json = String::new();
+        json.push_str("{\n");
+        let mut tunegroups = Vec::new();
+        for (id, value, min, max, step) in self.base_config() {
+            // formatted like
+            // "PROBCUT_MARGIN": {
+            //     "value": 200,
+            //     "min_value": 100,
+            //     "max_value": 400,
+            //     "step": 20
+            //   },
+            tunegroups.push(format!("  \"{id}\": {{\n    \"value\": {value},\n    \"min_value\": {min},\n    \"max_value\": {max},\n    \"step\": {step}\n  }}"));
+        }
+        // stupid json comma handling
+        json.push_str(&tunegroups.join(",\n"));
+        json.push_str("\n}\n");
+        json
     }
 }
 
@@ -183,5 +206,31 @@ mod tests {
         let l1 = sp.ids_with_parsers().len();
         let l2 = sp.ids_with_values().len();
         assert_eq!(l1, l2);
+    }
+
+    #[test]
+    fn parser_actually_works() {
+        use crate::search::PROBCUT_MIN_DEPTH;
+
+        let mut sp = super::SearchParams::default();
+        let probcut_min_depth = sp.ids_with_values()
+            .iter()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1;
+        assert!((probcut_min_depth - f64::from(PROBCUT_MIN_DEPTH)).abs() < f64::EPSILON);
+        // set using the parser:
+        sp.ids_with_parsers()
+            .iter_mut()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1("10").unwrap();
+        // re-extract:
+        let probcut_min_depth = sp.ids_with_values()
+            .iter()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1;
+        assert!((probcut_min_depth - 10.0).abs() < f64::EPSILON);
     }
 }

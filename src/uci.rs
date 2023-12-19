@@ -539,8 +539,8 @@ fn print_uci_response(full: bool) {
     println!("option name UCI_Chess960 type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
-        for (id, default) in SearchParams::default().ids_with_values() {
-            println!("option name {id} type spin default {default} min -999999 max 999999");
+        for (id, default, min, max, _) in SearchParams::default().base_config() {
+            println!("option name {id} type spin default {default} min {min} max {max}");
         }
     }
     println!("uciok");
