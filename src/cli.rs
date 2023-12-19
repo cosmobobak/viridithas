@@ -37,6 +37,9 @@ pub struct Cli {
     /// Visualise the Piece-Square Tables
     #[clap(long)]
     pub vispsqt: bool,
+    /// emit JSON for SPSA
+    #[clap(long)]
+    pub spsajson: bool,
     /// Time in milliseconds to search for each move when doing an epd test suite.
     #[clap(long, value_name = "MS", default_value = "3000")]
     pub epdtime: u64,
