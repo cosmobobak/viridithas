@@ -50,22 +50,22 @@ use self::parameters::SearchParams;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 7;
+const ASPIRATION_WINDOW: i32 = 6;
 const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
-const RFP_MARGIN: i32 = 70;
-const RFP_IMPROVING_MARGIN: i32 = 57;
-const NMP_IMPROVING_MARGIN: i32 = 76;
+const RFP_MARGIN: i32 = 73;
+const RFP_IMPROVING_MARGIN: i32 = 58;
+const NMP_IMPROVING_MARGIN: i32 = 73;
 const SEE_QUIET_MARGIN: i32 = -59;
-const SEE_TACTICAL_MARGIN: i32 = -19;
+const SEE_TACTICAL_MARGIN: i32 = -21;
 const LMP_BASE_MOVES: i32 = 2;
-const FUTILITY_COEFF_0: i32 = 76;
-const FUTILITY_COEFF_1: i32 = 90;
-const RAZORING_COEFF_0: i32 = 394;
-const RAZORING_COEFF_1: i32 = 290;
-const PROBCUT_MARGIN: i32 = 200;
-const PROBCUT_IMPROVING_MARGIN: i32 = 50;
+const FUTILITY_COEFF_0: i32 = 77;
+const FUTILITY_COEFF_1: i32 = 86;
+const RAZORING_COEFF_0: i32 = 392;
+const RAZORING_COEFF_1: i32 = 267;
+const PROBCUT_MARGIN: i32 = 203;
+const PROBCUT_IMPROVING_MARGIN: i32 = 53;
 const RFP_DEPTH: Depth = Depth::new(8);
-const NMP_BASE_REDUCTION: Depth = Depth::new(3);
+const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
@@ -73,9 +73,9 @@ const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const SEE_DEPTH: Depth = Depth::new(9);
 const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
-const PROBCUT_REDUCTION: Depth = Depth::new(4);
-const LMR_BASE: f64 = 77.0;
-const LMR_DIVISION: f64 = 236.0;
+const PROBCUT_REDUCTION: Depth = Depth::new(3);
+const LMR_BASE: f64 = 75.0;
+const LMR_DIVISION: f64 = 231.0;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 
