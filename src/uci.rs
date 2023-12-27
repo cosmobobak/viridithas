@@ -756,6 +756,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
+    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
     for fen in BENCH_POSITIONS {
         let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {
@@ -784,7 +785,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         }
         node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
-            println!("{fen} has {} nodes", info.nodes.get_global());
+            println!("{fen:<max_fen_len$} | {:>6} nodes", info.nodes.get_global());
         }
         assert_eq!(
             info.nodes.get_global(),
