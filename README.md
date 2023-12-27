@@ -36,8 +36,6 @@ The [VICE](https://www.youtube.com/playlist?list=PLZ1QII7yudbc-Ky058TEaOstZHVbT-
 
 Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingly clear code of which helped me realise several horrible flaws in Viridithas.
 
-[Shaheryar Sohail](https://github.com/TheBlackPlague), whose (very strong) StockNemo engine evolved alongside Viridithas, and who helped me significantly with NNUE.
-
 [weather-factory](https://github.com/dsekercioglu/weather-factory), which I used only minimally, but which is still responsible for about ~10 elo in Viridithas.
 
 [marlinflow](https://github.com/dsekercioglu/marlinflow), which is responsible for all neural network training for Viridithas.
