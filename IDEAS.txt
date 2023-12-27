@@ -10,9 +10,6 @@ MINOR:
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
 - make optimism work
 - move-ordering tricks
-- NNUE output bucketing
-- LayerStack for NNUE
-- return of PSQT subnet for complexity
 - HalfKAT?
 - extra features in the unused pawn backranks for NNUE
   - opposite coloured bishops
@@ -20,5 +17,9 @@ MINOR:
   - bishop pair
   - passed pawns by file?
 - linear history
-- do_{deeper, shallower}_search for LMR
 - superextend when one legal move
+- https://github.com/cj5716/Alexandria/compare/82e36f70..4d0f4e25
+- tune nodeTM constants
+- https://github.com/cj5716/Alexandria/compare/6a702b62..5ee11dad
+- https://github.com/PGG106/Alexandria/compare/6e43c965..c7b29b8c
+- nob NMP conditions from elsewhere
