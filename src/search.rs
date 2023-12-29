@@ -269,7 +269,7 @@ impl Board {
                 continue;
             }
             // search is either exact or fail-high, so we can update the best line.
-            t.update_best_line(&*pv);
+            t.update_best_line(pv);
             if aw.beta != INFINITY && pv.score >= aw.beta {
                 if T0 && info.print_to_stdout {
                     let nodes = info.nodes.get_global();
