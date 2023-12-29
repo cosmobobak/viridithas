@@ -16,7 +16,9 @@ MINOR:
   - locked pawns?
   - bishop pair
   - passed pawns by file?
-- linear history
+- guard NMP reduction to not be higher than depth
+- history in rfp
+- fix the use of &*, wtf is that
 - superextend when one legal move
 - https://github.com/cj5716/Alexandria/compare/82e36f70..4d0f4e25
 - tune nodeTM constants
