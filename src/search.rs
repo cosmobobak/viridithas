@@ -55,6 +55,9 @@ const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
 const RFP_MARGIN: i32 = 73;
 const RFP_IMPROVING_MARGIN: i32 = 58;
 const NMP_IMPROVING_MARGIN: i32 = 73;
+const NMP_REDUCTION_DEPTH_DIVISOR: i32 = 3;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 200;
+const MAX_NMP_EVAL_REDUCTION: i32 = 4;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -21;
 const LMP_BASE_MOVES: i32 = 2;
@@ -266,7 +269,7 @@ impl Board {
                 continue;
             }
             // search is either exact or fail-high, so we can update the best line.
-            t.update_best_line(&*pv);
+            t.update_best_line(pv);
             if aw.beta != INFINITY && pv.score >= aw.beta {
                 if T0 && info.print_to_stdout {
                     let nodes = info.nodes.get_global();
@@ -713,8 +716,8 @@ impl Board {
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: b, .. }) if b == Bound::Upper && v < beta)
             {
                 let r = info.search_params.nmp_base_reduction
-                    + depth / 3
-                    + std::cmp::min((static_eval - beta) / 200, 4);
+                    + depth / info.search_params.nmp_reduction_depth_divisor
+                    + std::cmp::min((static_eval - beta) / info.search_params.nmp_reduction_eval_divisor, info.search_params.max_nmp_eval_reduction);
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let mut null_score = -self.zw_search::<NNUE>(
