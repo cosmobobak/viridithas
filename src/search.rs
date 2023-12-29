@@ -146,7 +146,7 @@ impl Board {
         let depth_achieved = best_thread.completed;
         let pv = best_thread.pv().clone();
         let best_move =
-            pv.moves().get(0).copied().unwrap_or_else(|| self.default_move(tt, &thread_headers[0]));
+            pv.moves().first().copied().unwrap_or_else(|| self.default_move(tt, &thread_headers[0]));
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
@@ -403,11 +403,11 @@ impl Board {
             if !PV
                 && !in_check
                 && !fifty_move_rule_near
-                && (hit.tt_bound == Bound::Exact
-                    || (hit.tt_bound == Bound::Lower && hit.tt_value >= beta)
-                    || (hit.tt_bound == Bound::Upper && hit.tt_value <= alpha))
+                && (hit.bound == Bound::Exact
+                    || (hit.bound == Bound::Lower && hit.value >= beta)
+                    || (hit.bound == Bound::Upper && hit.value <= alpha))
             {
-                return hit.tt_value;
+                return hit.value;
             }
 
             Some(hit)
@@ -431,7 +431,7 @@ impl Board {
             alpha = stand_pat;
         }
 
-        let tt_move = tt_hit.map_or(Move::NULL, |e| e.tt_move);
+        let tt_move = tt_hit.map_or(Move::NULL, |e| e.mov);
 
         let mut best_move = Move::NULL;
         let mut best_score = stand_pat;
@@ -572,13 +572,13 @@ impl Board {
         let tt_hit = if excluded.is_null() {
             if let Some(hit) = tt.probe(key, height) {
                 if !PV
-                    && hit.tt_depth >= depth
+                    && hit.depth >= depth
                     && !fifty_move_rule_near
-                    && (hit.tt_bound == Bound::Exact
-                        || (hit.tt_bound == Bound::Lower && hit.tt_value >= beta)
-                        || (hit.tt_bound == Bound::Upper && hit.tt_value <= alpha))
+                    && (hit.bound == Bound::Exact
+                        || (hit.bound == Bound::Lower && hit.value >= beta)
+                        || (hit.bound == Bound::Upper && hit.value <= alpha))
                 {
-                    return hit.tt_value;
+                    return hit.value;
                 }
 
                 Some(hit)
@@ -649,7 +649,7 @@ impl Board {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if !excluded.is_null() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
-        } else if let Some(TTHit { tt_eval, .. }) = &tt_hit {
+        } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
                 self.evaluate::<NNUE>(info, t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
@@ -710,7 +710,7 @@ impl Board {
                     >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
-                && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_bound: b, .. }) if b == Bound::Upper && v < beta)
+                && !matches!(tt_hit, Some(TTHit { value: v, bound: b, .. }) if b == Bound::Upper && v < beta)
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / 3
@@ -758,7 +758,7 @@ impl Board {
             }
         }
 
-        let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.tt_move);
+        let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.mov);
 
         if cut_node && depth >= TT_REDUCTION_DEPTH * 2 && tt_move.is_null() {
             depth -= 1;
@@ -783,7 +783,7 @@ impl Board {
             && depth >= info.search_params.probcut_min_depth
             && beta.abs() < MINIMUM_TB_WIN_SCORE
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-            && !matches!(tt_hit, Some(TTHit { tt_value: v, tt_depth: d, .. }) if v < pc_beta && d >= depth - 3)
+            && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
@@ -923,13 +923,13 @@ impl Board {
 
             let maybe_singular = depth >= info.search_params.singularity_depth
                 && excluded.is_null()
-                && matches!(tt_hit, Some(TTHit { tt_move, tt_depth, tt_bound: Bound::Lower | Bound::Exact, .. }) if tt_move == m && tt_depth >= depth - 3);
+                && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == m && tt_depth >= depth - 3);
 
             let extension;
             if ROOT {
                 extension = ZERO_PLY;
             } else if maybe_singular {
-                let Some(TTHit { tt_value, .. }) = tt_hit else { unreachable!() };
+                let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
                 extension = self.singularity::<PV, NNUE>(
                     tt,
                     info,

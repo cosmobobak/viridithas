@@ -122,11 +122,11 @@ pub struct TTView<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct TTHit {
-    pub tt_move: Move,
-    pub tt_depth: Depth,
-    pub tt_bound: Bound,
-    pub tt_value: i32,
-    pub tt_eval: i32,
+    pub mov: Move,
+    pub depth: Depth,
+    pub bound: Bound,
+    pub value: i32,
+    pub eval: i32,
 }
 
 impl TT {
@@ -294,7 +294,7 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        Some(TTHit { tt_move, tt_depth, tt_bound, tt_value, tt_eval: entry.evaluation.into() })
+        Some(TTHit { mov: tt_move, depth: tt_depth, bound: tt_bound, value: tt_value, eval: entry.evaluation.into() })
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -314,7 +314,7 @@ impl<'a> TTView<'a> {
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
         let result = self.probe(key, 0);
         match result {
-            Some(TTHit { tt_move, tt_value, .. }) => Some((tt_move, tt_value)),
+            Some(TTHit { mov: tt_move, value: tt_value, .. }) => Some((tt_move, tt_value)),
             _ => None,
         }
     }
