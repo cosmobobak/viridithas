@@ -241,13 +241,6 @@ impl NNUEParams {
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
-    /// Active features from white's perspective.
-    #[cfg(debug_assertions)]
-    pub white_pov: Align64<[i16; INPUT]>,
-    /// Active features from black's perspective.
-    #[cfg(debug_assertions)]
-    pub black_pov: Align64<[i16; INPUT]>,
-
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
@@ -325,15 +318,6 @@ impl NNUEState {
     }
 
     fn refresh_accumulators(&mut self, board: &Board, update: PovUpdate) {
-        #[cfg(debug_assertions)]
-        if update.white {
-            self.white_pov.fill(0);
-        }
-        #[cfg(debug_assertions)]
-        if update.black {
-            self.black_pov.fill(0);
-        }
-
         let white_king = board.king_sq(Colour::WHITE);
         let black_king = board.king_sq(Colour::BLACK);
 
@@ -816,112 +800,4 @@ pub fn visualise_nnue() {
     for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
         crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
     }
-}
-
-mod tests {
-    #[test]
-    fn pov_preserved() {
-        let mut board = crate::board::Board::default();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    #[test]
-    fn pov_preserved_ep() {
-        let mut board = crate::board::Board::from_fen(
-            "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
-        )
-        .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    #[test]
-    fn pov_preserved_castling() {
-        let mut board = crate::board::Board::from_fen(
-            "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
-        )
-        .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    // #[test]
-    // fn pov_preserved_promo() {
-    //     use crate::nnue::network::NNUEState;
-
-    //     let mut board = crate::board::Board::from_fen(
-    //         "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
-    //     )
-    //     .unwrap();
-    //     let mut t = crate::threadlocal::ThreadData::new(0, &board);
-    //     let mut ml = crate::board::movegen::MoveList::new();
-    //     board.generate_moves(&mut ml);
-    //     let initial_white = t.nnue.white_pov;
-    //     let initial_black = t.nnue.black_pov;
-    //     for &m in ml.iter() {
-    //         println!("{m}");
-    //         if !board.make_move_nnue(m, &mut t) {
-    //             continue;
-    //         }
-    //         println!("made move");
-    //         board.unmake_move_nnue(&mut t);
-    //         println!("unmade move");
-    //         for i in 0..768 {
-    //             if initial_white[i] != t.nnue.white_pov[i] {
-    //                 let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-    //                 eprintln!(
-    //                     "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
-    //                     initial_white[i],
-    //                     t.nnue.white_pov[i],
-    //                     board.fen()
-    //                 );
-    //             }
-    //             if initial_black[i] != t.nnue.black_pov[i] {
-    //                 let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-    //                 eprintln!(
-    //                     "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
-    //                     initial_black[i],
-    //                     t.nnue.black_pov[i],
-    //                     board.fen()
-    //                 );
-    //             }
-    //         }
-    //         assert_eq!(initial_white, t.nnue.white_pov);
-    //         assert_eq!(initial_black, t.nnue.black_pov);
-    //     }
-    // }
 }
