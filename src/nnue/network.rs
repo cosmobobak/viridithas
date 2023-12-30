@@ -14,10 +14,6 @@ use super::accumulator::Accumulator;
 
 /// The size of the input layer of the network.
 const INPUT: usize = 768;
-/// The minimum value for the clipped relu activation.
-const CR_MIN: i16 = 0;
-/// The maximum value for the clipped relu activation.
-const CR_MAX: i16 = 255;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -204,7 +200,7 @@ pub struct NNUEState {
     pub black_pov: Align64<[i16; INPUT]>,
 
     /// Accumulators for the first layer.
-    pub accumulators: [Accumulator<LAYER_1_SIZE>; ACC_STACK_SIZE],
+    pub accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
     /// White king locations.
@@ -473,7 +469,7 @@ impl NNUEState {
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = flatten::<SquaredClippedRelu<CR_MIN, CR_MAX>>(us, them, &NNUE.output_weights);
+        let output = flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
@@ -575,46 +571,116 @@ fn vector_sub(
     }
 }
 
-trait ActivationFunction {
-    fn activate(x: i16) -> i32;
-    const ACCUMULATED_RENORMALISATION: i32;
+fn flatten(
+    us: &Align64<[i16; LAYER_1_SIZE]>,
+    them: &Align64<[i16; LAYER_1_SIZE]>,
+    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+) -> i32 {
+    #[cfg(target_feature="avx2")]
+    unsafe {
+        avx2::flatten(us, them, weights)
+    }
+    #[cfg(not(target_feature="avx2"))]
+    {
+        generic::flatten(us, them, weights)
+    }
 }
 
-struct ClippedRelu<const MIN: i16, const MAX: i16>;
+/// Non-SIMD implementation of the forward pass.
+#[cfg(not(target_feature="avx2"))]
+mod generic {
+use super::{Align64, LAYER_1_SIZE, QA};
 
-impl<const MIN: i16, const MAX: i16> ActivationFunction for ClippedRelu<MIN, MAX> {
-    fn activate(x: i16) -> i32 {
-        i32::from(x.clamp(MIN, MAX))
-    }
-    const ACCUMULATED_RENORMALISATION: i32 = 1;
-}
-
-struct SquaredClippedRelu<const MIN: i16, const MAX: i16>;
-
-impl<const MIN: i16, const MAX: i16> ActivationFunction for SquaredClippedRelu<MIN, MAX> {
-    fn activate(x: i16) -> i32 {
-        let x = x.clamp(MIN, MAX);
-        let x = i32::from(x);
-        x * x
-    }
-    const ACCUMULATED_RENORMALISATION: i32 = QA;
+#[allow(clippy::cast_possible_truncation)]
+fn screlu(x: i16) -> i32 {
+    let x = x.clamp(0, QA as i16);
+    let x = i32::from(x);
+    x * x
 }
 
 /// Execute an activation on the partial activations,
 /// and accumulate the result into a sum.
-fn flatten<F: ActivationFunction>(
+pub fn flatten(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
     let mut sum: i32 = 0;
     for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += F::activate(i) * i32::from(w);
+        sum += screlu(i) * i32::from(w);
     }
     for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += F::activate(i) * i32::from(w);
+        sum += screlu(i) * i32::from(w);
     }
-    sum / F::ACCUMULATED_RENORMALISATION
+    sum / QA
+}
+}
+
+/// SIMD implementation of the forward pass.
+#[cfg(target_feature="avx2")]
+mod avx2 {
+use std::arch::x86_64::{__m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_load_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64};
+use super::{Align64, LAYER_1_SIZE, QA};
+
+type Vec256 = __m256i;
+
+#[allow(clippy::cast_possible_truncation)]
+#[inline]
+unsafe fn screlu(mut v: Vec256) -> Vec256 {
+    let min = _mm256_setzero_si256();
+    let max = _mm256_set1_epi16(QA as i16);
+    v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
+    _mm256_mullo_epi16(v, v)
+}
+
+#[inline]
+unsafe fn load_i16s<const VEC_SIZE: usize>(acc: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Vec256 {
+    _mm256_load_si256(acc.0.as_ptr().add(start_idx).cast())
+}
+
+#[inline]
+unsafe fn horizontal_sum_i32(sum: Vec256) -> i32 {
+    let upper_128 = _mm256_extracti128_si256::<1>(sum);
+    let lower_128 = _mm256_castsi256_si128(sum);
+    let sum_128 = _mm_add_epi32(upper_128, lower_128);
+    let upper_64 = _mm_unpackhi_epi64(sum_128, sum_128);
+    let sum_64 = _mm_add_epi32(upper_64, sum_128);
+    let upper_32 = _mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
+    let sum_32 = _mm_add_epi32(upper_32, sum_64);
+
+    _mm_cvtsi128_si32(sum_32)
+}
+
+/// Execute an activation on the partial activations,
+/// and accumulate the result into a sum.
+pub unsafe fn flatten(
+    us: &Align64<[i16; LAYER_1_SIZE]>,
+    them: &Align64<[i16; LAYER_1_SIZE]>,
+    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+) -> i32 {
+    const CHUNK: usize = 16;
+
+    let mut sum = _mm256_setzero_si256();
+
+    // accumulate the first half of the weights
+    for i in 0..LAYER_1_SIZE / CHUNK {
+        let v = screlu(load_i16s(us, i * CHUNK));
+        let w = load_i16s(weights, i * CHUNK);
+        let product = _mm256_madd_epi16(v, w);
+        sum = _mm256_add_epi32(sum, product);
+    }
+
+    // accumulate the second half of the weights
+    for i in 0..LAYER_1_SIZE / CHUNK {
+        let v = screlu(load_i16s(them, i * CHUNK));
+        let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
+        let product = _mm256_madd_epi16(v, w);
+        sum = _mm256_add_epi32(sum, product);
+    }
+
+    horizontal_sum_i32(sum)
+}
+
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.
