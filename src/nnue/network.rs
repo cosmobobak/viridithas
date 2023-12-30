@@ -35,7 +35,7 @@ pub const BUCKET_MAP: [usize; 64] = [
     2, 2, 2, 2, 3, 3, 3, 3,
 ];
 
-const QA: i32 = 255;
+const QA: i32 = 181;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
@@ -678,7 +678,7 @@ pub unsafe fn flatten(
         sum = _mm256_add_epi32(sum, product);
     }
 
-    horizontal_sum_i32(sum)
+    horizontal_sum_i32(sum) / QA
 }
 
 }
