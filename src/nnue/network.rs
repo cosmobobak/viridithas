@@ -322,20 +322,10 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
-            vector_add_sub(
-                &mut acc.white,
-                white_bucket,
-                white_to,
-                white_from,
-            );
+            vector_add_sub(&mut acc.white, white_bucket, white_to, white_from);
         }
         if update.black {
-            vector_add_sub(
-                &mut acc.black,
-                black_bucket,
-                black_to,
-                black_from,
-            );
+            vector_add_sub(&mut acc.black, black_bucket, black_to, black_from);
         }
 
         #[cfg(debug_assertions)]
@@ -576,111 +566,118 @@ fn flatten(
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
-    #[cfg(target_feature="avx2")]
+    #[cfg(target_feature = "avx2")]
     unsafe {
         avx2::flatten(us, them, weights)
     }
-    #[cfg(not(target_feature="avx2"))]
+    #[cfg(not(target_feature = "avx2"))]
     {
         generic::flatten(us, them, weights)
     }
 }
 
 /// Non-SIMD implementation of the forward pass.
-#[cfg(not(target_feature="avx2"))]
+#[cfg(not(target_feature = "avx2"))]
 mod generic {
-use super::{Align64, LAYER_1_SIZE, QA};
+    use super::{Align64, LAYER_1_SIZE, QA};
 
-#[allow(clippy::cast_possible_truncation)]
-fn screlu(x: i16) -> i32 {
-    let x = x.clamp(0, QA as i16);
-    let x = i32::from(x);
-    x * x
-}
+    #[allow(clippy::cast_possible_truncation)]
+    fn screlu(x: i16) -> i32 {
+        let x = x.clamp(0, QA as i16);
+        let x = i32::from(x);
+        x * x
+    }
 
-/// Execute an activation on the partial activations,
-/// and accumulate the result into a sum.
-pub fn flatten(
-    us: &Align64<[i16; LAYER_1_SIZE]>,
-    them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-) -> i32 {
-    let mut sum: i32 = 0;
-    for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-        sum += screlu(i) * i32::from(w);
+    /// Execute an activation on the partial activations,
+    /// and accumulate the result into a sum.
+    pub fn flatten(
+        us: &Align64<[i16; LAYER_1_SIZE]>,
+        them: &Align64<[i16; LAYER_1_SIZE]>,
+        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+    ) -> i32 {
+        let mut sum: i32 = 0;
+        for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
+            sum += screlu(i) * i32::from(w);
+        }
+        for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
+            sum += screlu(i) * i32::from(w);
+        }
+        sum / QA
     }
-    for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-        sum += screlu(i) * i32::from(w);
-    }
-    sum / QA
-}
 }
 
 /// SIMD implementation of the forward pass.
-#[cfg(target_feature="avx2")]
+#[cfg(target_feature = "avx2")]
 mod avx2 {
-use std::arch::x86_64::{__m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_load_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64};
-use super::{Align64, LAYER_1_SIZE, QA};
+    use super::{Align64, LAYER_1_SIZE, QA};
+    use std::arch::x86_64::{
+        __m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256,
+        _mm256_load_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16,
+        _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm_add_epi32,
+        _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64,
+    };
 
-type Vec256 = __m256i;
+    type Vec256 = __m256i;
 
-#[allow(clippy::cast_possible_truncation)]
-#[inline]
-unsafe fn screlu(mut v: Vec256) -> Vec256 {
-    let min = _mm256_setzero_si256();
-    let max = _mm256_set1_epi16(QA as i16);
-    v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
-    _mm256_mullo_epi16(v, v)
-}
-
-#[inline]
-unsafe fn load_i16s<const VEC_SIZE: usize>(acc: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Vec256 {
-    _mm256_load_si256(acc.0.as_ptr().add(start_idx).cast())
-}
-
-#[inline]
-unsafe fn horizontal_sum_i32(sum: Vec256) -> i32 {
-    let upper_128 = _mm256_extracti128_si256::<1>(sum);
-    let lower_128 = _mm256_castsi256_si128(sum);
-    let sum_128 = _mm_add_epi32(upper_128, lower_128);
-    let upper_64 = _mm_unpackhi_epi64(sum_128, sum_128);
-    let sum_64 = _mm_add_epi32(upper_64, sum_128);
-    let upper_32 = _mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
-    let sum_32 = _mm_add_epi32(upper_32, sum_64);
-
-    _mm_cvtsi128_si32(sum_32)
-}
-
-/// Execute an activation on the partial activations,
-/// and accumulate the result into a sum.
-pub unsafe fn flatten(
-    us: &Align64<[i16; LAYER_1_SIZE]>,
-    them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-) -> i32 {
-    const CHUNK: usize = 16;
-
-    let mut sum = _mm256_setzero_si256();
-
-    // accumulate the first half of the weights
-    for i in 0..LAYER_1_SIZE / CHUNK {
-        let v = screlu(load_i16s(us, i * CHUNK));
-        let w = load_i16s(weights, i * CHUNK);
-        let product = _mm256_madd_epi16(v, w);
-        sum = _mm256_add_epi32(sum, product);
+    #[allow(clippy::cast_possible_truncation)]
+    #[inline]
+    unsafe fn screlu(mut v: Vec256) -> Vec256 {
+        let min = _mm256_setzero_si256();
+        let max = _mm256_set1_epi16(QA as i16);
+        v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
+        _mm256_mullo_epi16(v, v)
     }
 
-    // accumulate the second half of the weights
-    for i in 0..LAYER_1_SIZE / CHUNK {
-        let v = screlu(load_i16s(them, i * CHUNK));
-        let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
-        let product = _mm256_madd_epi16(v, w);
-        sum = _mm256_add_epi32(sum, product);
+    #[inline]
+    unsafe fn load_i16s<const VEC_SIZE: usize>(
+        acc: &Align64<[i16; VEC_SIZE]>,
+        start_idx: usize,
+    ) -> Vec256 {
+        _mm256_load_si256(acc.0.as_ptr().add(start_idx).cast())
     }
 
-    horizontal_sum_i32(sum) / QA
-}
+    #[inline]
+    unsafe fn horizontal_sum_i32(sum: Vec256) -> i32 {
+        let upper_128 = _mm256_extracti128_si256::<1>(sum);
+        let lower_128 = _mm256_castsi256_si128(sum);
+        let sum_128 = _mm_add_epi32(upper_128, lower_128);
+        let upper_64 = _mm_unpackhi_epi64(sum_128, sum_128);
+        let sum_64 = _mm_add_epi32(upper_64, sum_128);
+        let upper_32 = _mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
+        let sum_32 = _mm_add_epi32(upper_32, sum_64);
 
+        _mm_cvtsi128_si32(sum_32)
+    }
+
+    /// Execute an activation on the partial activations,
+    /// and accumulate the result into a sum.
+    pub unsafe fn flatten(
+        us: &Align64<[i16; LAYER_1_SIZE]>,
+        them: &Align64<[i16; LAYER_1_SIZE]>,
+        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+    ) -> i32 {
+        const CHUNK: usize = 16;
+
+        let mut sum = _mm256_setzero_si256();
+
+        // accumulate the first half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let v = screlu(load_i16s(us, i * CHUNK));
+            let w = load_i16s(weights, i * CHUNK);
+            let product = _mm256_madd_epi16(v, w);
+            sum = _mm256_add_epi32(sum, product);
+        }
+
+        // accumulate the second half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let v = screlu(load_i16s(them, i * CHUNK));
+            let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
+            let product = _mm256_madd_epi16(v, w);
+            sum = _mm256_add_epi32(sum, product);
+        }
+
+        horizontal_sum_i32(sum) / QA
+    }
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.

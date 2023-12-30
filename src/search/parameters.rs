@@ -4,11 +4,12 @@ use crate::util::depth::Depth;
 
 use super::{
     ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
-    LMP_DEPTH, LMR_BASE, LMR_DIVISION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
-    NMP_VERIFICATION_DEPTH, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
+    LMP_DEPTH, LMR_BASE, LMR_DIVISION, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION,
+    NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR,
+    NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
+    PROBCUT_REDUCTION, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
     RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH, PROBCUT_MARGIN, PROBCUT_IMPROVING_MARGIN, PROBCUT_MIN_DEPTH, PROBCUT_REDUCTION,
-    NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR, MAX_NMP_EVAL_REDUCTION,
+    TT_REDUCTION_DEPTH,
 };
 
 #[derive(Clone, Debug)]
@@ -226,24 +227,17 @@ mod tests {
         use crate::search::PROBCUT_MIN_DEPTH;
 
         let mut sp = super::SearchParams::default();
-        let probcut_min_depth = sp.ids_with_values()
-            .iter()
-            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
-            .unwrap()
-            .1;
+        let probcut_min_depth =
+            sp.ids_with_values().iter().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1;
         assert!((probcut_min_depth - f64::from(PROBCUT_MIN_DEPTH)).abs() < f64::EPSILON);
         // set using the parser:
-        sp.ids_with_parsers()
-            .iter_mut()
-            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
-            .unwrap()
-            .1("10").unwrap();
+        sp.ids_with_parsers().iter_mut().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1(
+            "10",
+        )
+        .unwrap();
         // re-extract:
-        let probcut_min_depth = sp.ids_with_values()
-            .iter()
-            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
-            .unwrap()
-            .1;
+        let probcut_min_depth =
+            sp.ids_with_values().iter().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1;
         assert!((probcut_min_depth - 10.0).abs() < f64::EPSILON);
     }
 }
