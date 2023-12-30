@@ -57,11 +57,11 @@ impl Activation for Deactivate {
     type Reverse = Activate;
 }
 #[derive(Debug, Copy, Clone)]
-pub struct Update {
+pub struct PovUpdate {
     pub white: bool,
     pub black: bool,
 }
-impl Update {
+impl PovUpdate {
     pub const BOTH: Self = Self { white: true, black: true };
 
     pub const fn opposite(self) -> Self {
@@ -74,6 +74,55 @@ impl Update {
             Colour::BLACK => Self { white: false, black: true },
             _ => unreachable!(),
         }
+    }
+}
+
+/// Struct representing some unmaterialised feature update made as part of a move.
+pub struct FeatureUpdate {
+    from: Square,
+    to: Square,
+    piece: Piece,
+}
+
+impl std::fmt::Debug for FeatureUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FeatureUpdate {{ from: {}, to: {}, piece: {} }}", self.from, self.to, self.piece)
+    }
+}
+
+impl FeatureUpdate {
+    const NULL: Self = Self { from: Square::A1, to: Square::A1, piece: Piece::WP };
+}
+
+pub struct UpdateBuffer {
+    buffer: [FeatureUpdate; 4],
+    count: usize,
+}
+
+impl Default for UpdateBuffer {
+    fn default() -> Self {
+        Self { buffer: [FeatureUpdate::NULL; 4], count: 0 }
+    }
+}
+
+impl UpdateBuffer {
+    pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
+        self.buffer[self.count] = FeatureUpdate { from, to, piece };
+        self.count += 1;
+    }
+
+    pub fn clear_piece(&mut self, sq: Square, piece: Piece) {
+        self.buffer[self.count] = FeatureUpdate { from: sq, to: Square::NO_SQUARE, piece };
+        self.count += 1;
+    }
+
+    pub fn add_piece(&mut self, sq: Square, piece: Piece) {
+        self.buffer[self.count] = FeatureUpdate { from: Square::NO_SQUARE, to: sq, piece };
+        self.count += 1;
+    }
+
+    pub fn updates(&self) -> &[FeatureUpdate] {
+        &self.buffer[..self.count]
     }
 }
 
@@ -192,13 +241,6 @@ impl NNUEParams {
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Debug, Clone)]
 pub struct NNUEState {
-    /// Active features from white's perspective.
-    #[cfg(debug_assertions)]
-    pub white_pov: Align64<[i16; INPUT]>,
-    /// Active features from black's perspective.
-    #[cfg(debug_assertions)]
-    pub black_pov: Align64<[i16; INPUT]>,
-
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
@@ -254,12 +296,6 @@ impl NNUEState {
         net
     }
 
-    /// Copy the current accumulator to the next accumulator, and increment the current accumulator.
-    pub fn push_acc(&mut self) {
-        self.accumulators[self.current_acc + 1] = self.accumulators[self.current_acc];
-        self.current_acc += 1;
-    }
-
     /// Decrement the current accumulator.
     pub fn pop_acc(&mut self) {
         self.current_acc -= 1;
@@ -269,19 +305,19 @@ impl NNUEState {
     pub fn reinit_from(&mut self, board: &Board) {
         self.current_acc = 0;
 
-        self.refresh_accumulators(board, Update { white: true, black: true });
+        self.refresh_accumulators(board, PovUpdate { white: true, black: true });
     }
 
-    pub fn refresh_accumulators(&mut self, board: &Board, update: Update) {
-        #[cfg(debug_assertions)]
-        if update.white {
-            self.white_pov.fill(0);
-        }
-        #[cfg(debug_assertions)]
-        if update.black {
-            self.black_pov.fill(0);
-        }
+    /// Make the next accumulator freshly generated from the board state.
+    pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
+        self.current_acc += 1;
 
+        self.refresh_accumulators(board, update);
+
+        unimplemented!("push_fresh_acc");
+    }
+
+    fn refresh_accumulators(&mut self, board: &Board, update: PovUpdate) {
         let white_king = board.king_sq(Colour::WHITE);
         let black_king = board.king_sq(Colour::BLACK);
 
@@ -293,162 +329,235 @@ impl NNUEState {
                 let piece_bb = board.pieces.piece_bb(piece);
 
                 for sq in piece_bb.iter() {
-                    self.update_feature::<Activate>(
-                        white_king, black_king, piece_type, colour, sq, update,
+                    Self::update_feature_inplace::<Activate>(
+                        white_king,
+                        black_king,
+                        piece_type,
+                        colour,
+                        sq,
+                        update,
+                        &mut self.accumulators[self.current_acc],
                     );
                 }
             }
         }
     }
 
+    pub fn materialise_new_acc_from(
+        &mut self,
+        white_king: Square,
+        black_king: Square,
+        pov_update: PovUpdate,
+        update_buffer: &UpdateBuffer,
+    ) {
+        let (front, back) = self.accumulators.split_at_mut(self.current_acc + 1);
+        let old_acc = front.last().unwrap();
+        let new_acc = back.first_mut().unwrap();
+
+        let (f_ud, t_uds) = update_buffer.updates().split_first().unwrap();
+
+        if f_ud.from == Square::NO_SQUARE {
+            Self::update_feature::<Activate>(
+                white_king,
+                black_king,
+                f_ud.piece.piece_type(),
+                f_ud.piece.colour(),
+                f_ud.to,
+                pov_update,
+                old_acc,
+                new_acc,
+            );
+        } else if f_ud.to == Square::NO_SQUARE {
+            Self::update_feature::<Deactivate>(
+                white_king,
+                black_king,
+                f_ud.piece.piece_type(),
+                f_ud.piece.colour(),
+                f_ud.from,
+                pov_update,
+                old_acc,
+                new_acc,
+            );
+        } else {
+            Self::move_feature(
+                white_king,
+                black_king,
+                f_ud.piece.piece_type(),
+                f_ud.piece.colour(),
+                f_ud.from,
+                f_ud.to,
+                pov_update,
+                old_acc,
+                new_acc,
+            );
+        }
+
+        for t_ud in t_uds {
+            if t_ud.from == Square::NO_SQUARE {
+                Self::update_feature_inplace::<Activate>(
+                    white_king,
+                    black_king,
+                    t_ud.piece.piece_type(),
+                    t_ud.piece.colour(),
+                    t_ud.to,
+                    pov_update,
+                    new_acc,
+                );
+            } else if t_ud.to == Square::NO_SQUARE {
+                Self::update_feature_inplace::<Deactivate>(
+                    white_king,
+                    black_king,
+                    t_ud.piece.piece_type(),
+                    t_ud.piece.colour(),
+                    t_ud.from,
+                    pov_update,
+                    new_acc,
+                );
+            } else {
+                Self::move_feature_inplace(
+                    white_king,
+                    black_king,
+                    t_ud.piece.piece_type(),
+                    t_ud.piece.colour(),
+                    t_ud.from,
+                    t_ud.to,
+                    pov_update,
+                    new_acc,
+                );
+            }
+        }
+
+        self.current_acc += 1;
+    }
+
     /// Update the state from a move.
     #[allow(clippy::too_many_arguments)]
     pub fn move_feature(
-        &mut self,
         white_king: Square,
         black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         from: Square,
         to: Square,
-        update: Update,
+        update: PovUpdate,
+        source_acc: &Accumulator,
+        target_acc: &mut Accumulator,
     ) {
         let (white_from, black_from) = feature_indices(from, piece_type, colour);
         let (white_to, black_to) = feature_indices(to, piece_type, colour);
-
-        let acc = &mut self.accumulators[self.current_acc];
 
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
-            vector_add_sub(&mut acc.white, white_bucket, white_to, white_from);
+            vector_add_sub(
+                &source_acc.white,
+                &mut target_acc.white,
+                white_bucket,
+                white_to,
+                white_from,
+            );
         }
         if update.black {
-            vector_add_sub(&mut acc.black, black_bucket, black_to, black_from);
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            self.assert_state::<Activate>(
-                white_from,
+            vector_add_sub(
+                &source_acc.black,
+                &mut target_acc.black,
+                black_bucket,
+                black_to,
                 black_from,
-                (colour, piece_type, from),
-                update,
             );
-            self.assert_state::<Deactivate>(white_to, black_to, (colour, piece_type, to), update);
-            if update.white {
-                self.white_pov[white_from] = 0;
-            }
-            if update.black {
-                self.black_pov[black_from] = 0;
-            }
-            if update.white {
-                self.white_pov[white_to] = 1;
-            }
-            if update.black {
-                self.black_pov[black_to] = 1;
-            }
+        }
+    }
+
+    /// Update the state from a move.
+    #[allow(clippy::too_many_arguments)]
+    pub fn move_feature_inplace(
+        white_king: Square,
+        black_king: Square,
+        piece_type: PieceType,
+        colour: Colour,
+        from: Square,
+        to: Square,
+        update: PovUpdate,
+        acc: &mut Accumulator,
+    ) {
+        let (white_from, black_from) = feature_indices(from, piece_type, colour);
+        let (white_to, black_to) = feature_indices(to, piece_type, colour);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+
+        if update.white {
+            vector_add_sub_inplace(&mut acc.white, white_bucket, white_to, white_from);
+        }
+        if update.black {
+            vector_add_sub_inplace(&mut acc.black, black_bucket, black_to, black_from);
         }
     }
 
     /// Update by activating or deactivating a piece.
+    #[allow(clippy::too_many_arguments)]
     pub fn update_feature<A: Activation>(
-        &mut self,
         white_king: Square,
         black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         sq: Square,
-        update: Update,
+        update: PovUpdate,
+        source_acc: &Accumulator,
+        target_acc: &mut Accumulator,
     ) {
         let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
-        let acc = &mut self.accumulators[self.current_acc];
+
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if A::ACTIVATE {
             if update.white {
-                vector_add(&mut acc.white, white_bucket, white_idx);
+                vector_add(&source_acc.white, &mut target_acc.white, white_bucket, white_idx);
             }
             if update.black {
-                vector_add(&mut acc.black, black_bucket, black_idx);
+                vector_add(&source_acc.black, &mut target_acc.black, black_bucket, black_idx);
             }
         } else {
             if update.white {
-                vector_sub(&mut acc.white, white_bucket, white_idx);
+                vector_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_idx);
             }
             if update.black {
-                vector_sub(&mut acc.black, black_bucket, black_idx);
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            self.assert_state::<A::Reverse>(white_idx, black_idx, (colour, piece_type, sq), update);
-            if update.white {
-                self.white_pov[white_idx] = A::ACTIVATE.into();
-            }
-            if update.black {
-                self.black_pov[black_idx] = A::ACTIVATE.into();
+                vector_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_idx);
             }
         }
     }
 
-    /// Update only the feature planes that are affected by the given move.
-    /// This is just for debugging purposes.
-    #[cfg(debug_assertions)]
-    pub fn update_pov_move(
-        &mut self,
-        piece_type: PieceType,
-        colour: Colour,
-        from: Square,
-        to: Square,
-    ) {
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
-
-        let piece_type = piece_type.index();
-        let colour = colour.index();
-
-        let white_idx_from = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + from.index();
-        let black_idx_from =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + from.flip_rank().index();
-        let white_idx_to = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.index();
-        let black_idx_to =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + to.flip_rank().index();
-
-        self.white_pov[white_idx_from] = 0;
-        self.black_pov[black_idx_from] = 0;
-        self.white_pov[white_idx_to] = 1;
-        self.black_pov[black_idx_to] = 1;
-    }
-
-    /// Update only the feature planes that are affected by the addition or removal of a piece.
-    /// This is just for debugging purposes.
-    #[cfg(debug_assertions)]
-    pub fn update_pov_manual<A: Activation>(
-        &mut self,
+    /// Update by activating or deactivating a piece.
+    pub fn update_feature_inplace<A: Activation>(
+        white_king: Square,
+        black_king: Square,
         piece_type: PieceType,
         colour: Colour,
         sq: Square,
+        update: PovUpdate,
+        acc: &mut Accumulator,
     ) {
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
+        let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
 
-        let piece_type = piece_type.index();
-        let colour = colour.index();
-
-        let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
-        let black_idx =
-            (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if A::ACTIVATE {
-            self.white_pov[white_idx] = 1;
-            self.black_pov[black_idx] = 1;
+            if update.white {
+                vector_add_inplace(&mut acc.white, white_bucket, white_idx);
+            }
+            if update.black {
+                vector_add_inplace(&mut acc.black, black_bucket, black_idx);
+            }
         } else {
-            self.white_pov[white_idx] = 0;
-            self.black_pov[black_idx] = 0;
+            if update.white {
+                vector_sub_inplace(&mut acc.white, white_bucket, white_idx);
+            }
+            if update.black {
+                vector_sub_inplace(&mut acc.black, black_bucket, black_idx);
+            }
         }
     }
 
@@ -463,64 +572,27 @@ impl NNUEState {
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
     }
-
-    /// Get the active features for the current position, from white's perspective.
-    #[cfg(debug_assertions)]
-    pub fn active_features(&self) -> impl Iterator<Item = usize> + '_ {
-        self.white_pov.iter().enumerate().filter(|(_, &x)| x == 1).map(|(i, _)| i)
-    }
-
-    /// Go from a feature index to the corresponding (colour, piece type, square) tuple.
-    ///
-    /// (from white's perspective)
-    #[cfg(debug_assertions)]
-    pub const fn feature_loc_to_parts(loc: usize) -> (Colour, PieceType, Square) {
-        #![allow(clippy::cast_possible_truncation)]
-        const COLOUR_STRIDE: usize = 64 * 6;
-        const PIECE_STRIDE: usize = 64;
-        let colour = (loc / COLOUR_STRIDE) as u8;
-        let rem = loc % COLOUR_STRIDE;
-        let piece = (rem / PIECE_STRIDE) as u8;
-        let sq = (rem % PIECE_STRIDE) as u8;
-        (Colour::new(colour), PieceType::new(piece), Square::new(sq))
-    }
-
-    /// Assert that the input feature planes (the two boards from white's and black's perspective)
-    /// are consistent with what we expect.
-    #[cfg(debug_assertions)]
-    fn assert_state<A: Activation>(
-        &self,
-        white: usize,
-        black: usize,
-        feature: (Colour, PieceType, Square),
-        update: Update,
-    ) {
-        #![allow(clippy::bool_to_int_with_if, clippy::cast_possible_truncation)]
-        let (colour, piece_type, sq) = feature;
-        let val = if A::ACTIVATE { 1 } else { 0 };
-        if update.white {
-            assert_eq!(
-                self.white_pov[white],
-                val,
-                "piece: {}, sq: {}",
-                Piece::new(colour, piece_type),
-                sq,
-            );
-        }
-        if update.black {
-            assert_eq!(
-                self.black_pov[black],
-                val,
-                "piece: {}, sq: {}",
-                Piece::new(colour, piece_type),
-                sq,
-            );
-        }
-    }
 }
 
 /// Move a feature from one square to another.
 fn vector_add_sub(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+    feature_idx_sub: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
+    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
+    for (((i, o), ds), da) in input.iter().zip(output.iter_mut()).zip(s_block).zip(a_block) {
+        *o = *i - *ds + *da;
+    }
+}
+
+/// Move a feature from one square to another
+fn vector_add_sub_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
     feature_idx_add: usize,
@@ -537,6 +609,20 @@ fn vector_add_sub(
 
 /// Add a feature to a square.
 fn vector_add(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
+    for ((i, o), da) in input.iter().zip(output.iter_mut()).zip(a_block) {
+        *o = *i + *da;
+    }
+}
+
+/// Add a feature to a square.
+fn vector_add_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
     feature_idx_add: usize,
@@ -550,6 +636,20 @@ fn vector_add(
 
 /// Subtract a feature from a square.
 fn vector_sub(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_sub: usize,
+) {
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
+    for ((i, o), ds) in input.iter().zip(output.iter_mut()).zip(s_block) {
+        *o = *i - *ds;
+    }
+}
+
+/// Subtract a feature from a square.
+fn vector_sub_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
     feature_idx_sub: usize,
@@ -699,113 +799,5 @@ pub fn visualise_nnue() {
     std::fs::create_dir_all(&path).unwrap();
     for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
         crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
-    }
-}
-
-mod tests {
-    #[test]
-    fn pov_preserved() {
-        let mut board = crate::board::Board::default();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    #[test]
-    fn pov_preserved_ep() {
-        let mut board = crate::board::Board::from_fen(
-            "rnbqkbnr/1pp1ppp1/p7/2PpP2p/8/8/PP1P1PPP/RNBQKBNR w KQkq d6 0 5",
-        )
-        .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    #[test]
-    fn pov_preserved_castling() {
-        let mut board = crate::board::Board::from_fen(
-            "rnbqkbnr/1pp1p3/p4pp1/2PpP2p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 0 7",
-        )
-        .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            board.unmake_move_nnue(&mut t);
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
-    }
-
-    #[test]
-    fn pov_preserved_promo() {
-        use crate::nnue::network::NNUEState;
-
-        let mut board = crate::board::Board::from_fen(
-            "rnbqk2r/1pp1p1P1/p4np1/2Pp3p/8/3B1N2/PP1P1PPP/RNBQK2R w KQkq - 1 9",
-        )
-        .unwrap();
-        let mut t = crate::threadlocal::ThreadData::new(0, &board);
-        let mut ml = crate::board::movegen::MoveList::new();
-        board.generate_moves(&mut ml);
-        let initial_white = t.nnue.white_pov;
-        let initial_black = t.nnue.black_pov;
-        for &m in ml.iter() {
-            println!("{m}");
-            if !board.make_move_nnue(m, &mut t) {
-                continue;
-            }
-            println!("made move");
-            board.unmake_move_nnue(&mut t);
-            println!("unmade move");
-            for i in 0..768 {
-                if initial_white[i] != t.nnue.white_pov[i] {
-                    let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-                    eprintln!(
-                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
-                        initial_white[i],
-                        t.nnue.white_pov[i],
-                        board.fen()
-                    );
-                }
-                if initial_black[i] != t.nnue.black_pov[i] {
-                    let (colour, piecetype, square) = NNUEState::feature_loc_to_parts(i);
-                    eprintln!(
-                        "{i}: {} != {} ({colour}, {piecetype}, {square}) in {}",
-                        initial_black[i],
-                        t.nnue.black_pov[i],
-                        board.fen()
-                    );
-                }
-            }
-            assert_eq!(initial_white, t.nnue.white_pov);
-            assert_eq!(initial_black, t.nnue.black_pov);
-        }
     }
 }

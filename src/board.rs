@@ -22,7 +22,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{self, Activate, Deactivate, Update, BUCKET_MAP},
+    nnue::network::{self, PovUpdate, UpdateBuffer, BUCKET_MAP},
     piece::{Colour, Piece, PieceType},
     piecesquaretable::pst_value,
     search::pv::PVariation,
@@ -1162,8 +1162,12 @@ impl Board {
         &mut self.piece_array[sq.index()]
     }
 
+    pub fn make_move_simple(&mut self, m: Move) -> bool {
+        self.make_move_base(m, &mut UpdateBuffer::default())
+    }
+
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move) -> bool {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1173,40 +1177,53 @@ impl Board {
         let piece = self.moved_piece(m);
         let captured = self.captured_piece(m);
 
+        // from, to, and piece are valid unless this is a castling move,
+        // as castling is encoded as king-captures-rook.
+        // we sort out castling in a branch later, dw about it.
+        if !m.is_castle() {
+            if m.is_promo() {
+                // just remove the source piece, as a different piece will be arriving here
+                update_buffer.clear_piece(from, piece);
+            } else {
+                update_buffer.move_piece(from, to, piece);
+            }
+        }
+
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
 
         let saved_key = self.key;
 
         if m.is_ep() {
-            if side == Colour::WHITE {
-                self.clear_piece(to.sub(8));
-            } else {
-                self.clear_piece(to.add(8));
-            }
+            let clear_at = if side == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            self.clear_piece(clear_at);
+            update_buffer.clear_piece(clear_at, Piece::new(side.flip(), PieceType::PAWN));
         } else if m.is_castle() {
             self.clear_piece(from);
-            match to {
+            let (rook_from, rook_to) = match to {
                 _ if to == self.castle_perm.wk => {
-                    self.move_piece(self.castle_perm.wk, Square::F1);
                     to = Square::G1;
+                    (self.castle_perm.wk, Square::F1)
                 }
                 _ if to == self.castle_perm.wq => {
-                    self.move_piece(self.castle_perm.wq, Square::D1);
                     to = Square::C1;
+                    (self.castle_perm.wq, Square::D1)
                 }
                 _ if to == self.castle_perm.bk => {
-                    self.move_piece(self.castle_perm.bk, Square::F8);
                     to = Square::G8;
+                    (self.castle_perm.bk, Square::F8)
                 }
                 _ if to == self.castle_perm.bq => {
-                    self.move_piece(self.castle_perm.bq, Square::D8);
                     to = Square::C8;
+                    (self.castle_perm.bq, Square::D8)
                 }
                 _ => {
                     panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
                 }
-            }
+            };
+            self.move_piece(rook_from, rook_to);
+            update_buffer.move_piece(from, to, piece);
+            update_buffer.move_piece(rook_from, rook_to, Piece::new(side, PieceType::ROOK));
         }
 
         if self.ep_sq != Square::NO_SQUARE {
@@ -1260,6 +1277,7 @@ impl Board {
         if captured != Piece::EMPTY {
             self.clear_piece(to);
             self.fifty_move_counter = 0;
+            update_buffer.clear_piece(to, captured);
         }
 
         self.ply += 1;
@@ -1284,6 +1302,7 @@ impl Board {
             debug_assert!(promo.piece_type().legal_promo());
             self.clear_piece(from);
             self.add_piece(to, promo);
+            update_buffer.add_piece(to, promo);
         } else if m.is_castle() {
             self.add_piece(to, piece); // stupid hack for piece-swapping
         } else {
@@ -1470,129 +1489,35 @@ impl Board {
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
-        let capture = self.captured_piece(m);
-        let saved_castle_perm = self.castle_perm;
-        let res = self.make_move_base(m);
+        let mut update_buffer = UpdateBuffer::default();
+        let res = self.make_move_base(m, &mut update_buffer);
         if !res {
             return false;
         }
+
         let from = m.from();
-        let mut to = m.to();
-        t.nnue.push_acc();
+        let white_king = self.king_sq(Colour::WHITE);
+        let black_king = self.king_sq(Colour::BLACK);
 
         let bucket_changed = if network::BUCKETS != 1 && piece_type == PieceType::KING {
             let (before, after) = if colour == Colour::WHITE {
-                (BUCKET_MAP[from.index()], BUCKET_MAP[to.index()])
+                (BUCKET_MAP[from.index()], BUCKET_MAP[white_king.index()])
             } else {
-                (BUCKET_MAP[from.flip_rank().index()], BUCKET_MAP[to.flip_rank().index()])
+                (BUCKET_MAP[from.flip_rank().index()], BUCKET_MAP[black_king.flip_rank().index()])
             };
             before != after
         } else {
             false
         };
         let ue = if network::BUCKETS != 1 && bucket_changed {
-            let refresh = Update::colour(colour);
-            t.nnue.refresh_accumulators(self, refresh);
+            let refresh = PovUpdate::colour(colour);
+            t.nnue.push_fresh_acc(self, refresh);
             refresh.opposite()
         } else {
-            Update::BOTH
+            PovUpdate::BOTH
         };
 
-        let white_king = self.king_sq(Colour::WHITE);
-        let black_king = self.king_sq(Colour::BLACK);
-
-        if m.is_ep() {
-            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            t.nnue.update_feature::<Deactivate>(
-                white_king,
-                black_king,
-                PieceType::PAWN,
-                colour.flip(),
-                ep_sq,
-                ue,
-            );
-        } else if m.is_castle() {
-            match () {
-                () if to == saved_castle_perm.wk => {
-                    t.nnue.move_feature(
-                        white_king,
-                        black_king,
-                        PieceType::ROOK,
-                        colour,
-                        saved_castle_perm.wk,
-                        Square::F1,
-                        ue,
-                    );
-                    to = Square::G1;
-                }
-                () if to == saved_castle_perm.wq => {
-                    t.nnue.move_feature(
-                        white_king,
-                        black_king,
-                        PieceType::ROOK,
-                        colour,
-                        saved_castle_perm.wq,
-                        Square::D1,
-                        ue,
-                    );
-                    to = Square::C1;
-                }
-                () if to == saved_castle_perm.bk => {
-                    t.nnue.move_feature(
-                        white_king,
-                        black_king,
-                        PieceType::ROOK,
-                        colour,
-                        saved_castle_perm.bk,
-                        Square::F8,
-                        ue,
-                    );
-                    to = Square::G8;
-                }
-                () if to == saved_castle_perm.bq => {
-                    t.nnue.move_feature(
-                        white_king,
-                        black_king,
-                        PieceType::ROOK,
-                        colour,
-                        saved_castle_perm.bq,
-                        Square::D8,
-                        ue,
-                    );
-                    to = Square::C8;
-                }
-                () => {
-                    panic!("Invalid castle move {m} with castle_perm {saved_castle_perm} in position {fen}", fen = self.fen());
-                }
-            }
-        }
-
-        if capture != Piece::EMPTY {
-            t.nnue.update_feature::<Deactivate>(
-                white_king,
-                black_king,
-                capture.piece_type(),
-                colour.flip(),
-                to,
-                ue,
-            );
-        }
-
-        if m.is_promo() {
-            let promo = m.promotion_type();
-            debug_assert!(promo.legal_promo());
-            t.nnue.update_feature::<Deactivate>(
-                white_king,
-                black_king,
-                PieceType::PAWN,
-                colour,
-                from,
-                ue,
-            );
-            t.nnue.update_feature::<Activate>(white_king, black_king, promo, colour, to, ue);
-        } else {
-            t.nnue.move_feature(white_king, black_king, piece_type, colour, from, to, ue);
-        }
+        t.nnue.materialise_new_acc_from(white_king, black_king, ue, &update_buffer);
 
         true
     }
@@ -1603,7 +1528,7 @@ impl Board {
         let colour = self.turn();
         let capture = self.captured_piece(m);
         let saved_castle_perm = self.castle_perm;
-        let res = self.make_move_base(m);
+        let res = self.make_move_simple(m);
         if !res {
             return false;
         }
@@ -1656,56 +1581,56 @@ impl Board {
     }
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
-        #[cfg(debug_assertions)]
-        let m = self.history.last().unwrap().m;
+        // #[cfg(debug_assertions)]
+        // let m = self.history.last().unwrap().m;
         self.unmake_move_base();
         t.nnue.pop_acc();
-        #[cfg(debug_assertions)]
-        {
-            let piece = self.moved_piece(m).piece_type();
-            let from = m.from();
-            let mut to = m.to();
-            let colour = self.turn();
-            if m.is_ep() {
-                let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-                t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
-            } else if m.is_castle() {
-                let (rook_from, rook_to) = match () {
-                    () if to == self.castle_perm.wk => {
-                        to = Square::G1;
-                        (Square::F1, self.castle_perm.wk)
-                    }
-                    () if to == self.castle_perm.wq => {
-                        to = Square::C1;
-                        (Square::D1, self.castle_perm.wq)
-                    }
-                    () if to == self.castle_perm.bk => {
-                        to = Square::G8;
-                        (Square::F8, self.castle_perm.bk)
-                    }
-                    () if to == self.castle_perm.bq => {
-                        to = Square::C8;
-                        (Square::D8, self.castle_perm.bq)
-                    }
-                    () => {
-                        panic!("Invalid castle move {m} with castle_perm {castle_perm} in position {fen}", castle_perm = self.castle_perm, fen = self.fen());
-                    }
-                };
-                t.nnue.update_pov_move(PieceType::ROOK, colour, rook_from, rook_to);
-            }
-            if m.is_promo() {
-                let promo = m.promotion_type();
-                debug_assert!(promo.legal_promo());
-                t.nnue.update_pov_manual::<Deactivate>(promo, colour, to);
-                t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour, from);
-            } else {
-                t.nnue.update_pov_move(piece, colour, to, from);
-            }
-            let capture = self.captured_piece(m);
-            if capture != Piece::EMPTY {
-                t.nnue.update_pov_manual::<Activate>(capture.piece_type(), colour.flip(), to);
-            }
-        }
+        // #[cfg(debug_assertions)]
+        // {
+        //     let piece = self.moved_piece(m).piece_type();
+        //     let from = m.from();
+        //     let mut to = m.to();
+        //     let colour = self.turn();
+        //     if m.is_ep() {
+        //         let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
+        //         t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
+        //     } else if m.is_castle() {
+        //         let (rook_from, rook_to) = match () {
+        //             () if to == self.castle_perm.wk => {
+        //                 to = Square::G1;
+        //                 (Square::F1, self.castle_perm.wk)
+        //             }
+        //             () if to == self.castle_perm.wq => {
+        //                 to = Square::C1;
+        //                 (Square::D1, self.castle_perm.wq)
+        //             }
+        //             () if to == self.castle_perm.bk => {
+        //                 to = Square::G8;
+        //                 (Square::F8, self.castle_perm.bk)
+        //             }
+        //             () if to == self.castle_perm.bq => {
+        //                 to = Square::C8;
+        //                 (Square::D8, self.castle_perm.bq)
+        //             }
+        //             () => {
+        //                 panic!("Invalid castle move {m} with castle_perm {castle_perm} in position {fen}", castle_perm = self.castle_perm, fen = self.fen());
+        //             }
+        //         };
+        //         t.nnue.update_pov_move(PieceType::ROOK, colour, rook_from, rook_to);
+        //     }
+        //     if m.is_promo() {
+        //         let promo = m.promotion_type();
+        //         debug_assert!(promo.legal_promo());
+        //         t.nnue.update_pov_manual::<Deactivate>(promo, colour, to);
+        //         t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour, from);
+        //     } else {
+        //         t.nnue.update_pov_move(piece, colour, to, from);
+        //     }
+        //     let capture = self.captured_piece(m);
+        //     if capture != Piece::EMPTY {
+        //         t.nnue.update_pov_manual::<Activate>(capture.piece_type(), colour.flip(), to);
+        //     }
+        // }
     }
 
     pub fn unmake_move_hce(&mut self, info: &SearchInfo) {
@@ -1911,7 +1836,7 @@ impl Board {
     }
 
     pub fn gives(&mut self, m: Move) -> CheckState {
-        if !self.make_move_base(m) {
+        if !self.make_move_simple(m) {
             return CheckState::None;
         }
         let gives_check = self.in_check();
@@ -1919,7 +1844,7 @@ impl Board {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
             for &m in ml.iter() {
-                if !self.make_move_base(m) {
+                if !self.make_move_simple(m) {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
@@ -1971,7 +1896,7 @@ impl Board {
         let mut moves_made = 0;
         for &m in pv.moves() {
             write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string()))?;
-            self.make_move_base(m);
+            self.make_move_simple(m);
             moves_made += 1;
         }
         for _ in 0..moves_made {
@@ -1985,7 +1910,7 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
         for &m in move_list.iter() {
-            if self.make_move_base(m) {
+            if self.make_move_simple(m) {
                 self.unmake_move_base();
                 legal_moves.push(m);
             }
@@ -2163,7 +2088,7 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
         for &m in move_list.iter() {
-            if self.make_move_base(m) {
+            if self.make_move_simple(m) {
                 self.unmake_move_base();
                 legal_moves = true;
                 break;
@@ -2287,17 +2212,17 @@ mod tests {
         assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_base(Move::new(Square::G1, Square::F3));
-        draw_repetition.make_move_base(Move::new(Square::B8, Square::C6));
+        draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_base(Move::new(Square::F3, Square::G1));
-        draw_repetition.make_move_base(Move::new(Square::C6, Square::B8));
+        draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_base(Move::new(Square::G1, Square::F3));
-        draw_repetition.make_move_base(Move::new(Square::B8, Square::C6));
+        draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
+        draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
-        draw_repetition.make_move_base(Move::new(Square::F3, Square::G1));
-        draw_repetition.make_move_base(Move::new(Square::C6, Square::B8));
+        draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
+        draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
         assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);

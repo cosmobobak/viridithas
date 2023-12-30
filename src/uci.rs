@@ -156,7 +156,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     for san in parts {
         pos.zero_height(); // stuff breaks really hard without this lmao
         let m = pos.parse_uci(san)?;
-        pos.make_move_base(m);
+        pos.make_move_simple(m);
     }
     pos.zero_height();
     Ok(())
@@ -783,7 +783,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         }
         node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
-            println!("{fen:<max_fen_len$} | {:>6} nodes", info.nodes.get_global());
+            println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());
         }
         assert_eq!(
             info.nodes.get_global(),
@@ -822,7 +822,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
     for &m in ml.iter() {
-        if !pos.make_move_base(m) {
+        if !pos.make_move_simple(m) {
             continue;
         }
         let arm_nodes = perft::perft(pos, depth - 1);
