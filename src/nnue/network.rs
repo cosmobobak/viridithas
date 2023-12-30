@@ -326,19 +326,19 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
 
         if update.white {
-            subtract_and_add_to_all(
+            vector_add_sub(
                 &mut acc.white,
                 white_bucket,
-                white_from * LAYER_1_SIZE,
-                white_to * LAYER_1_SIZE,
+                white_from,
+                white_to,
             );
         }
         if update.black {
-            subtract_and_add_to_all(
+            vector_add_sub(
                 &mut acc.black,
                 black_bucket,
-                black_from * LAYER_1_SIZE,
-                black_to * LAYER_1_SIZE,
+                black_from,
+                black_to,
             );
         }
 
@@ -383,17 +383,17 @@ impl NNUEState {
 
         if A::ACTIVATE {
             if update.white {
-                add_to_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+                vector_add(&mut acc.white, white_bucket, white_idx);
             }
             if update.black {
-                add_to_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
+                vector_add(&mut acc.black, black_bucket, black_idx);
             }
         } else {
             if update.white {
-                sub_from_all(&mut acc.white, white_bucket, white_idx * LAYER_1_SIZE);
+                vector_sub(&mut acc.white, white_bucket, white_idx);
             }
             if update.black {
-                sub_from_all(&mut acc.black, black_bucket, black_idx * LAYER_1_SIZE);
+                vector_sub(&mut acc.black, black_bucket, black_idx);
             }
         }
 
@@ -534,38 +534,42 @@ impl NNUEState {
 }
 
 /// Move a feature from one square to another.
-fn subtract_and_add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align64<[i16; SIZE]>,
-    bucket: &Align64<[i16; WEIGHTS]>,
-    offset_sub: usize,
-    offset_add: usize,
+fn vector_add_sub(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+    feature_idx_sub: usize,
 ) {
-    let s_block = &bucket[offset_sub..offset_sub + SIZE];
-    let a_block = &bucket[offset_add..offset_add + SIZE];
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
+    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
     for ((i, ds), da) in input.iter_mut().zip(s_block).zip(a_block) {
         *i = *i - *ds + *da;
     }
 }
 
 /// Add a feature to a square.
-fn add_to_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align64<[i16; SIZE]>,
-    bucket: &Align64<[i16; WEIGHTS]>,
-    offset_add: usize,
+fn vector_add(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
 ) {
-    let a_block = &bucket[offset_add..offset_add + SIZE];
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
     for (i, d) in input.iter_mut().zip(a_block) {
         *i += *d;
     }
 }
 
 /// Subtract a feature from a square.
-fn sub_from_all<const SIZE: usize, const WEIGHTS: usize>(
-    input: &mut Align64<[i16; SIZE]>,
-    bucket: &Align64<[i16; WEIGHTS]>,
-    offset_sub: usize,
+fn vector_sub(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_sub: usize,
 ) {
-    let s_block = &bucket[offset_sub..offset_sub + SIZE];
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
     for (i, d) in input.iter_mut().zip(s_block) {
         *i -= *d;
     }
