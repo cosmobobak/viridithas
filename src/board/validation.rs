@@ -224,32 +224,4 @@ impl Board {
 
         true
     }
-
-    // pub fn check_nnue_coherency(&self, nn: &NNUEState) -> bool {
-    //     #[cfg(debug_assertions)]
-    //     for (colour, piece_type, square) in
-    //         nn.active_features().map(NNUEState::feature_loc_to_parts)
-    //     {
-    //         let piece_on_board = self.piece_at(square);
-    //         let actual_colour = piece_on_board.colour();
-    //         if colour != actual_colour {
-    //             eprintln!(
-    //                 "coherency check failed: feature on sq {square} has colour {colour:?}, but piece on board is {piece_on_board:?}"
-    //             );
-    //             eprintln!("fen: {}", self.fen());
-    //             return false;
-    //         }
-    //         let actual_piece_type = piece_on_board.piece_type();
-    //         if piece_type != actual_piece_type {
-    //             eprintln!(
-    //                 "coherency check failed: feature on sq {square} has piece type {piece_type:?}, but piece on board is {piece_on_board:?}"
-    //             );
-    //             eprintln!("fen: {}", self.fen());
-    //             return false;
-    //         }
-    //     }
-    //     #[cfg(not(debug_assertions))]
-    //     let _ = (self, nn);
-    //     true
-    // }
 }
