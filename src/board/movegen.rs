@@ -604,7 +604,7 @@ mod tests {
 
             let mut count = 0;
             for &m in ml.iter() {
-                if !pos.make_move_base(m) {
+                if !pos.make_move_simple(m) {
                     continue;
                 }
                 count += synced_perft(pos, depth - 1);

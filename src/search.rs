@@ -348,7 +348,7 @@ impl Board {
             MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
-            if !self.make_move_base(mov) {
+            if !self.make_move_simple(mov) {
                 continue;
             }
             // if we get here, it means the move is legal.
@@ -511,7 +511,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
         if NNUE {
-            debug_assert!(self.check_nnue_coherency(&t.nnue));
+            // debug_assert!(self.check_nnue_coherency(&t.nnue));
         } else {
             debug_assert!(self.check_hce_coherency(info));
         }

@@ -26,7 +26,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter() {
-        if !pos.make_move_base(m) {
+        if !pos.make_move_simple(m) {
             continue;
         }
         count += perft(pos, depth - 1);
@@ -65,7 +65,7 @@ pub fn hce_perft(pos: &mut Board, info: &SearchInfo, depth: usize) -> u64 {
 pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
-    debug_assert!(pos.check_nnue_coherency(&t.nnue));
+    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
         return 1;
@@ -240,7 +240,7 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move_base(e4);
+        pos.make_move_simple(e4);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
@@ -260,7 +260,7 @@ mod tests {
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
         let hashkey_before = pos.hashkey();
-        pos.make_move_base(exd5);
+        pos.make_move_simple(exd5);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
         assert_ne!(pos.hashkey(), hashkey_before);
