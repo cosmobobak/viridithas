@@ -325,16 +325,16 @@ impl NNUEState {
             vector_add_sub(
                 &mut acc.white,
                 white_bucket,
-                white_from,
                 white_to,
+                white_from,
             );
         }
         if update.black {
             vector_add_sub(
                 &mut acc.black,
                 black_bucket,
-                black_from,
                 black_to,
+                black_from,
             );
         }
 
