@@ -17,3 +17,4 @@ MINOR:
   - passed pawns by file?
 - tune nodeTM constants
 - nob NMP conditions from elsewhere
+- https://github.com/gab8192/Obsidian/commit/20e6c5440d4a2ae38c743331ea6bd59b5428e794

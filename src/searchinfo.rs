@@ -87,7 +87,11 @@ impl<'a> SearchInfo<'a> {
         out
     }
 
-    pub fn with_search_params(stopped: &'a AtomicBool, nodes: &'a AtomicU64, search_params: &SearchParams) -> Self {
+    pub fn with_search_params(
+        stopped: &'a AtomicBool,
+        nodes: &'a AtomicU64,
+        search_params: &SearchParams,
+    ) -> Self {
         let mut out = Self::new(stopped, nodes);
         out.search_params = search_params.clone();
         out

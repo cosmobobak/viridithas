@@ -256,10 +256,7 @@ struct SetOptions {
 }
 
 #[allow(clippy::too_many_lines)]
-fn parse_setoption(
-    text: &str,
-    pre_config: SetOptions,
-) -> Result<SetOptions, UciError> {
+fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, UciError> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     let Some(_) = parts.next() else {
@@ -756,7 +753,8 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
-    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
+    let max_fen_len =
+        BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
     for fen in BENCH_POSITIONS {
         let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {

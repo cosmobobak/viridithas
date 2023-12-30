@@ -148,8 +148,11 @@ impl Board {
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let depth_achieved = best_thread.completed;
         let pv = best_thread.pv().clone();
-        let best_move =
-            pv.moves().first().copied().unwrap_or_else(|| self.default_move(tt, &thread_headers[0]));
+        let best_move = pv
+            .moves()
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.default_move(tt, &thread_headers[0]));
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
@@ -717,7 +720,10 @@ impl Board {
             {
                 let r = info.search_params.nmp_base_reduction
                     + depth / info.search_params.nmp_reduction_depth_divisor
-                    + std::cmp::min((static_eval - beta) / info.search_params.nmp_reduction_eval_divisor, info.search_params.max_nmp_eval_reduction);
+                    + std::cmp::min(
+                        (static_eval - beta) / info.search_params.nmp_reduction_eval_divisor,
+                        info.search_params.max_nmp_eval_reduction,
+                    );
                 let nm_depth = depth - r;
                 self.make_nullmove();
                 let mut null_score = -self.zw_search::<NNUE>(
@@ -774,7 +780,8 @@ impl Board {
 
         // probcut:
         let pc_beta = std::cmp::min(
-            beta + info.search_params.probcut_margin - i32::from(improving) * info.search_params.probcut_improving_margin,
+            beta + info.search_params.probcut_margin
+                - i32::from(improving) * info.search_params.probcut_improving_margin,
             MINIMUM_TB_WIN_SCORE - 1,
         );
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
