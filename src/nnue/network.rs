@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    board::Board,
+    board::{Board, movegen::bitboards::BitBoard},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
     util::{Square, MAX_DEPTH, File},
@@ -82,6 +82,134 @@ pub struct FeatureUpdate {
     from: Square,
     to: Square,
     piece: Piece,
+}
+
+impl FeatureUpdate {
+    pub const fn add_piece(sq: Square, piece: Piece) -> Self {
+        Self { from: Square::NO_SQUARE, to: sq, piece }
+    }
+
+    pub const fn clear_piece(sq: Square, piece: Piece) -> Self {
+        Self { from: sq, to: Square::NO_SQUARE, piece }
+    }
+
+    pub const fn _move_piece(from: Square, to: Square, piece: Piece) -> Self {
+        Self { from, to, piece }
+    }
+}
+
+/// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
+/// having to completely recompute the accumulator for a position, instead
+/// partially reconstructing it from the last-seen accumulator.
+#[allow(clippy::large_stack_frames)]
+#[derive(Clone)]
+pub struct BucketAccumulatorCache {
+    accs: [[Accumulator; BUCKETS * 2]; BUCKETS * 2],
+    board_states: [[BitBoard; BUCKETS * 2]; BUCKETS * 2],
+}
+
+impl BucketAccumulatorCache {
+    pub fn load_accumulator_for_position(&self, board_state: BitBoard, pov_update: PovUpdate, acc: &mut Accumulator) {
+        #[cfg(debug_assertions)]
+        {
+            // verify all the cached board states make sense
+            for white_bucket in 0..BUCKETS {
+                for black_bucket in 0..BUCKETS {
+                    let cached_board_state = self.board_states[white_bucket][black_bucket];
+                    if cached_board_state == unsafe { std::mem::zeroed() } {
+                        continue;
+                    }
+                    let white_king = cached_board_state.piece_bb(Piece::WK).first();
+                    let black_king = cached_board_state.piece_bb(Piece::BK).first();
+                    let white_bucket_from_board_position = BUCKET_MAP[white_king.index()];
+                    let black_bucket_from_board_position = BUCKET_MAP[black_king.flip_rank().index()];
+                    assert_eq!(white_bucket_from_board_position, white_bucket);
+                    assert_eq!(black_bucket_from_board_position, black_bucket);
+                }
+            }
+        }
+
+        let wk = board_state.piece_bb(Piece::WK).first();
+        let bk = board_state.piece_bb(Piece::BK).first();
+        let white_bucket = BUCKET_MAP[wk.index()];
+        let black_bucket = BUCKET_MAP[bk.flip_rank().index()];
+        let cached_accumulator = &self.accs[white_bucket][black_bucket];
+        // we use the first update to copy over the accumulator, then subsequent updates are done in place.
+        let mut first_update_seen = false;
+        self.board_states[white_bucket][black_bucket].update_iter(board_state, move |feature_update| {
+            if first_update_seen {
+                if feature_update.from == Square::NO_SQUARE {
+                    NNUEState::update_feature_inplace::<Activate>(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.to,
+                        pov_update,
+                        acc,
+                    );
+                } else if feature_update.to == Square::NO_SQUARE {
+                    NNUEState::update_feature_inplace::<Deactivate>(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.from,
+                        pov_update,
+                        acc,
+                    );
+                } else {
+                    NNUEState::move_feature_inplace(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.from,
+                        feature_update.to,
+                        pov_update,
+                        acc,
+                    );
+                }
+            } else {
+                if feature_update.from == Square::NO_SQUARE {
+                    NNUEState::update_feature::<Activate>(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.to,
+                        pov_update,
+                        cached_accumulator,
+                        acc,
+                    );
+                } else if feature_update.to == Square::NO_SQUARE {
+                    NNUEState::update_feature::<Deactivate>(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.from,
+                        pov_update,
+                        cached_accumulator,
+                        acc,
+                    );
+                } else {
+                    NNUEState::move_feature(
+                        wk,
+                        bk,
+                        feature_update.piece.piece_type(),
+                        feature_update.piece.colour(),
+                        feature_update.from,
+                        feature_update.to,
+                        pov_update,
+                        cached_accumulator,
+                        acc,
+                    );
+                }
+                first_update_seen = true;
+            }
+        });
+    }
 }
 
 impl std::fmt::Debug for FeatureUpdate {
@@ -233,16 +361,14 @@ impl NNUEParams {
 
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NNUEState {
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
-    /// White king locations.
-    pub white_king_locs: [Square; ACC_STACK_SIZE],
-    /// Black king locations.
-    pub black_king_locs: [Square; ACC_STACK_SIZE],
+    /// Cache of last-seen accumulators for each bucket.
+    pub bucket_cache: BucketAccumulatorCache,
 }
 
 const fn feature_indices(white_king: Square, black_king: Square, sq: Square, piece_type: PieceType, colour: Colour) -> (usize, usize) {
@@ -293,6 +419,15 @@ impl NNUEState {
         net
     }
 
+    /// Save the current accumulator into the bucket cache.
+    pub fn save_accumulator_for_position(&mut self, white_king: Square, black_king: Square, board_state: BitBoard) {
+        let white_bucket = BUCKET_MAP[white_king.index()];
+        let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+
+        self.bucket_cache.accs[white_bucket][black_bucket] = self.accumulators[self.current_acc];
+        self.bucket_cache.board_states[white_bucket][black_bucket] = board_state;
+    }
+
     /// Decrement the current accumulator.
     pub fn pop_acc(&mut self) {
         self.current_acc -= 1;
@@ -300,9 +435,17 @@ impl NNUEState {
 
     /// Reinitialise the state from a board.
     pub fn reinit_from(&mut self, board: &Board) {
+        // set the current accumulator to the first one
         self.current_acc = 0;
 
+        // initalise all the accumulators in the bucket cache to the bias
+        for acc in self.bucket_cache.accs.iter_mut().flatten() {
+            acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
+        }
+
+        // refresh the first accumulator
         Self::refresh_accumulators(
+            &self.bucket_cache,
             &mut self.accumulators[0],
             board,
             PovUpdate { white: true, black: true },
@@ -311,27 +454,15 @@ impl NNUEState {
 
     /// Make the next accumulator freshly generated from the board state.
     pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
-        Self::refresh_accumulators(&mut self.accumulators[self.current_acc + 1], board, update);
+        Self::refresh_accumulators(&self.bucket_cache, &mut self.accumulators[self.current_acc + 1], board, update);
     }
 
-    fn refresh_accumulators(acc: &mut Accumulator, board: &Board, update: PovUpdate) {
-        let white_king = board.king_sq(Colour::WHITE);
-        let black_king = board.king_sq(Colour::BLACK);
-
-        acc.init(&NNUE.feature_bias, update);
-
-        for colour in [Colour::WHITE, Colour::BLACK] {
-            for piece_type in PieceType::all() {
-                let piece = Piece::new(colour, piece_type);
-                let piece_bb = board.pieces.piece_bb(piece);
-
-                for sq in piece_bb.iter() {
-                    Self::update_feature_inplace::<Activate>(
-                        white_king, black_king, piece_type, colour, sq, update, acc,
-                    );
-                }
-            }
-        }
+    fn refresh_accumulators(bucket_cache: &BucketAccumulatorCache, acc: &mut Accumulator, board: &Board, update: PovUpdate) {
+        bucket_cache.load_accumulator_for_position(
+            board.pieces,
+            update,
+            acc,
+        );
     }
 
     pub fn materialise_new_acc_from(

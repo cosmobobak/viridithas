@@ -967,7 +967,7 @@ impl Board {
         if by == self.side.flip() {
             (squares & self.threats).non_empty()
         } else {
-            for sq in squares.iter() {
+            for sq in squares {
                 if self.sq_attacked(sq, by) {
                     return true;
                 }
@@ -1487,6 +1487,7 @@ impl Board {
 
     #[allow(clippy::too_many_lines)]
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
+        let pre_move_board_state = self.pieces;
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let mut update_buffer = UpdateBuffer::default();
@@ -1499,24 +1500,37 @@ impl Board {
         let white_king = self.king_sq(Colour::WHITE);
         let black_king = self.king_sq(Colour::BLACK);
 
-        let bucket_changed = if network::BUCKETS != 1 && piece_type == PieceType::KING {
+        let ue = if network::BUCKETS != 1 && piece_type == PieceType::KING {
             let (before, after) = if colour == Colour::WHITE {
                 (BUCKET_MAP[from.index()], BUCKET_MAP[white_king.index()])
             } else {
                 (BUCKET_MAP[from.flip_rank().index()], BUCKET_MAP[black_king.flip_rank().index()])
             };
-            before != after
-        } else {
-            false
-        };
-        let ue = if network::BUCKETS != 1 && bucket_changed {
-            let refresh = PovUpdate::colour(colour);
-            t.nnue.push_fresh_acc(self, refresh);
-            refresh.opposite()
+            if before == after {
+                PovUpdate::BOTH
+            } else {
+                // if the bucket changed, save the old acc to the bucket acc cache:
+                // fixup the king sqs to be before the move:
+                let old_white_king = if colour == Colour::WHITE { from } else { white_king };
+                let old_black_king = if colour == Colour::BLACK { from } else { black_king };
+                debug_assert_eq!(old_white_king.as_set(), pre_move_board_state.piece_bb(Piece::WK));
+                debug_assert_eq!(old_black_king.as_set(), pre_move_board_state.piece_bb(Piece::BK));
+                t.nnue.save_accumulator_for_position(
+                    old_white_king,
+                    old_black_king,
+                    pre_move_board_state,
+                );
+
+                // refresh the half of the nnue acc that changed bucket:
+                let refresh = PovUpdate::colour(colour);
+                t.nnue.push_fresh_acc(self, refresh);
+                refresh.opposite()
+            }
         } else {
             PovUpdate::BOTH
         };
 
+        // update the nnue acc for the move:
         t.nnue.materialise_new_acc_from(white_king, black_king, ue, &update_buffer);
 
         true

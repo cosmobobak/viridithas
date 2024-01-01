@@ -156,6 +156,15 @@ impl SquareSet {
     }
 }
 
+impl IntoIterator for SquareSet {
+    type Item = Square;
+    type IntoIter = BitLoop;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl BitOr for SquareSet {
     type Output = Self;
 

@@ -4,7 +4,7 @@ use crate::{
     lookups, magic,
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,
-    util::Square,
+    util::Square, nnue::network::FeatureUpdate,
 };
 
 pub const LIGHT_SQUARE: bool = true;
@@ -259,16 +259,36 @@ impl BitBoard {
         }
         false
     }
+
+    /// Calls `callback` for each piece that is added or removed from `self` to `target`.
+    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(FeatureUpdate)) {
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                let piece = Piece::new(colour, piece_type);
+                let source_bb = self.pieces[piece_type.index()] & self.colours[colour.index()];
+                let target_bb = target.pieces[piece_type.index()] & target.colours[colour.index()];
+                let added = target_bb & !source_bb;
+                let removed = source_bb & !target_bb;
+                // TODO: fuse movements of the same piece
+                for sq in added {
+                    callback(FeatureUpdate::add_piece(sq, piece));
+                }
+                for sq in removed {
+                    callback(FeatureUpdate::clear_piece(sq, piece));
+                }
+            }
+        }
+    }
 }
 
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_bishop_attacks(sq, blockers)
+    magic::get_diagonal_attacks(sq, blockers)
 }
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_rook_attacks(sq, blockers)
+    magic::get_orthogonal_attacks(sq, blockers)
 }
 pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
+    magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     lookups::get_knight_attacks(sq)
@@ -286,10 +306,10 @@ pub fn pawn_attacks<const IS_WHITE: bool>(bb: SquareSet) -> SquareSet {
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
-        PieceType::BISHOP => magic::get_bishop_attacks(sq, blockers),
-        PieceType::ROOK => magic::get_rook_attacks(sq, blockers),
+        PieceType::BISHOP => magic::get_diagonal_attacks(sq, blockers),
+        PieceType::ROOK => magic::get_orthogonal_attacks(sq, blockers),
         PieceType::QUEEN => {
-            magic::get_bishop_attacks(sq, blockers) | magic::get_rook_attacks(sq, blockers)
+            magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
         }
         PieceType::KNIGHT => lookups::get_knight_attacks(sq),
         PieceType::KING => lookups::get_king_attacks(sq),
