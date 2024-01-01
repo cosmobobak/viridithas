@@ -460,6 +460,10 @@ impl NNUEState {
         for acc in self.bucket_cache.accs.iter_mut().flatten() {
             acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
         }
+        // initialise all the board states in the bucket cache to the empty board
+        for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
+            *board_state = BitBoard::NULL;
+        }
 
         // refresh the first accumulator
         Self::refresh_accumulators(
