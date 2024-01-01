@@ -23,17 +23,22 @@ pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 4;
 /// The mapping from square to bucket.
-#[rustfmt::skip]
-pub const BUCKET_MAP: [usize; 64] = [
-    0, 0, 0, 0, 4, 4, 4, 4,
-    1, 1, 1, 1, 5, 5, 5, 5,
-    2, 2, 2, 2, 6, 6, 6, 6,
-    2, 2, 2, 2, 6, 6, 6, 6,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
-];
+pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
+    #[rustfmt::skip]
+    const BUCKET_MAP: [usize; 64] = [
+        0, 0, 0, 0, 4, 4, 4, 4,
+        1, 1, 1, 1, 5, 5, 5, 5,
+        2, 2, 2, 2, 6, 6, 6, 6,
+        2, 2, 2, 2, 6, 6, 6, 6,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+    ];
+    let white_bucket = BUCKET_MAP[white_king.index()];
+    let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+    (white_bucket, black_bucket)
+}
 
 const QA: i32 = 181;
 const QB: i32 = 64;
@@ -121,8 +126,8 @@ impl BucketAccumulatorCache {
                     }
                     let white_king = cached_board_state.piece_bb(Piece::WK).first();
                     let black_king = cached_board_state.piece_bb(Piece::BK).first();
-                    let white_bucket_from_board_position = BUCKET_MAP[white_king.index()];
-                    let black_bucket_from_board_position = BUCKET_MAP[black_king.flip_rank().index()];
+                    let (white_bucket_from_board_position,
+                         black_bucket_from_board_position) = get_bucket_indices(white_king, black_king);
                     assert_eq!(white_bucket_from_board_position, white_bucket);
                     assert_eq!(black_bucket_from_board_position, black_bucket);
                 }
@@ -131,8 +136,7 @@ impl BucketAccumulatorCache {
 
         let wk = board_state.piece_bb(Piece::WK).first();
         let bk = board_state.piece_bb(Piece::BK).first();
-        let white_bucket = BUCKET_MAP[wk.index()];
-        let black_bucket = BUCKET_MAP[bk.flip_rank().index()];
+        let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
         let cached_accumulator = &self.accs[white_bucket][black_bucket];
         // we use the first update to copy over the accumulator, then subsequent updates are done in place.
         let mut first_update_seen = false;
@@ -339,8 +343,9 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub fn select_feature_weights(&self, king_sq: Square) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        let bucket = BUCKET_MAP[king_sq.index()] % 4;
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        // handle mirroring
+        let bucket = bucket % 4;
         let start = bucket * INPUT * LAYER_1_SIZE;
         let end = start + INPUT * LAYER_1_SIZE;
         let slice = &self.feature_weights[start..end];
@@ -421,8 +426,7 @@ impl NNUEState {
 
     /// Save the current accumulator into the bucket cache.
     pub fn save_accumulator_for_position(&mut self, white_king: Square, black_king: Square, board_state: BitBoard) {
-        let white_bucket = BUCKET_MAP[white_king.index()];
-        let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
         self.bucket_cache.accs[white_bucket][black_bucket] = self.accumulators[self.current_acc];
         self.bucket_cache.board_states[white_bucket][black_bucket] = board_state;
@@ -568,8 +572,10 @@ impl NNUEState {
         let (white_from, black_from) = feature_indices(white_king, black_king, from, piece_type, colour);
         let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
             vector_add_sub(
@@ -606,8 +612,10 @@ impl NNUEState {
         let (white_from, black_from) = feature_indices(white_king, black_king, from, piece_type, colour);
         let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
             vector_add_sub_inplace(&mut acc.white, white_bucket, white_to, white_from);
@@ -631,8 +639,10 @@ impl NNUEState {
     ) {
         let (white_idx, black_idx) = feature_indices(white_king, black_king, sq, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if A::ACTIVATE {
             if update.white {
@@ -663,8 +673,10 @@ impl NNUEState {
     ) {
         let (white_idx, black_idx) = feature_indices(white_king, black_king, sq, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if A::ACTIVATE {
             if update.white {
