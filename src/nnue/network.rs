@@ -98,7 +98,7 @@ impl FeatureUpdate {
         Self { from: sq, to: Square::NO_SQUARE, piece }
     }
 
-    pub const fn _move_piece(from: Square, to: Square, piece: Piece) -> Self {
+    pub const fn move_piece(from: Square, to: Square, piece: Piece) -> Self {
         Self { from, to, piece }
     }
 }
