@@ -2,9 +2,10 @@ use std::fmt::Display;
 
 use crate::{
     lookups, magic,
+    nnue::network::FeatureUpdate,
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,
-    util::Square, nnue::network::FeatureUpdate,
+    util::Square,
 };
 
 pub const LIGHT_SQUARE: bool = true;

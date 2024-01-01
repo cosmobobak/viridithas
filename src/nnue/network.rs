@@ -212,11 +212,9 @@ impl BucketAccumulatorCache {
         let cache_acc = &self.accs[side_we_care_about.index()][bucket];
         // we use the first update to copy over the accumulator, then subsequent updates are done in place.
         let mut first_update_seen = false;
-        // eprintln!("recovering an accumulator from the cache.");
         self.board_states[side_we_care_about.index()][bucket].update_iter(
             board_state,
             |FeatureUpdate { from, to, piece }| {
-                // eprint!("[{feature_update}] ");
                 let pt = piece.piece_type();
                 let c = piece.colour();
                 if first_update_seen {
@@ -249,11 +247,10 @@ impl BucketAccumulatorCache {
                 }
             },
         );
+        // if we didn't see any updates, then we can just copy the accumulator from the cache.
         if !first_update_seen {
-            // eprintln!("no updates seen, copying accumulator from cache.");
             *acc = *cache_acc;
         }
-        // eprintln!();
     }
 }
 
