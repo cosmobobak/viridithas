@@ -1519,6 +1519,7 @@ impl Board {
             } else {
                 // if the bucket changed, save the old acc to the bucket acc cache:
                 t.nnue.save_accumulator_for_position(
+                    colour,
                     old_white_king,
                     old_black_king,
                     pre_move_board_state,
