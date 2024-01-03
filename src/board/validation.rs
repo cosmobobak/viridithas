@@ -125,9 +125,11 @@ impl Board {
             return Err(format!("en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})", Square::NO_SQUARE, self.ep_sq, self.ep_sq.rank()));
         }
 
-        if self.fifty_move_counter >= 100 {
+        // the fifty-move counter is allowed to be *exactly* 100, to allow a finished game to be
+        // created.
+        if self.fifty_move_counter > 100 {
             return Err(format!(
-                "fifty move counter is corrupt: expected 0-99, got {}",
+                "fifty move counter is corrupt: expected 0-100, got {}",
                 self.fifty_move_counter
             ));
         }

@@ -137,6 +137,8 @@ impl Debug for Board {
 impl Board {
     pub const STARTING_FEN: &'static str =
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    pub const STARTING_FEN_960: &'static str =
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
 
     pub fn new() -> Self {
         let mut out = Self {
@@ -558,7 +560,12 @@ impl Board {
     }
 
     pub fn set_startpos(&mut self) {
-        self.set_from_fen(Self::STARTING_FEN)
+        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
+            Self::STARTING_FEN_960
+        } else {
+            Self::STARTING_FEN
+        };
+        self.set_from_fen(starting_fen)
             .expect("for some reason, STARTING_FEN is now broken.");
         debug_assert_eq!(
             self.material[Colour::WHITE.index()].0,
@@ -875,6 +882,9 @@ impl Board {
             if m.is_ep() {
                 return to == self.ep_sq;
             } else if is_pawn_double_push {
+                if from.relative_to(self.side).rank() != Rank::RANK_2 {
+                    return false;
+                }
                 let one_forward = from.pawn_push(self.side);
                 return self.piece_at(one_forward) == Piece::EMPTY
                     && to == one_forward.pawn_push(self.side);
@@ -1081,6 +1091,9 @@ impl Board {
             self.fen(),
             self.history,
         );
+        if from == to {
+            return;
+        }
         debug_assert!(
             self.piece_at(to) == Piece::EMPTY,
             "from: {}, to: {}, board: {}, history: {:?}",
@@ -1089,9 +1102,6 @@ impl Board {
             self.fen(),
             self.history,
         );
-        if from == to {
-            return;
-        }
 
         let piece_moved = self.piece_at(from);
 
