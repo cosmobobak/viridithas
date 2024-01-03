@@ -21,3 +21,4 @@ tuning/log.txt
 Viridithas
 tb5
 *.nnue
+src/tablebases/bindings.rs
