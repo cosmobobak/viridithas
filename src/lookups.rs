@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    board, nnue,
+    nnue,
     rng::XorShiftState,
     squareset::SquareSet,
     transpositiontable,
@@ -192,10 +192,6 @@ pub fn info_dump() {
     println!("{NAME} {VERSION}{version_extension}");
     println!("Compiled with architecture: {}", std::env::consts::ARCH);
     println!("Compiled for OS: {}", std::env::consts::OS);
-    println!(
-        "Number of HCE parameters: {}",
-        board::evaluation::parameters::EvalParams::default().vectorise().len()
-    );
     println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
     println!("Size of NNUE network: {} bytes", std::mem::size_of::<nnue::network::NNUEParams>());
     println!(

@@ -475,10 +475,6 @@ pub static HORIZONTAL_RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
-pub const unsafe fn slice_into_bytes_with_lifetime<T>(slice: &[T]) -> &[u8] {
-    std::slice::from_raw_parts(slice.as_ptr().cast(), slice.len() * std::mem::size_of::<T>())
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct BatchedAtomicCounter<'a> {
     buffer: u64,

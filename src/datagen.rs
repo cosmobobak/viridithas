@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod marlinformat;
+mod dataformat;
 
 use std::{
     cmp::Reverse,
@@ -8,7 +8,7 @@ use std::{
     fmt::Display,
     fs::File,
     hash::Hash,
-    io::{BufWriter, Write},
+    io::{BufReader, BufWriter, Write},
     path::{Path, PathBuf},
     str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -22,14 +22,15 @@ use crate::{
         evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
         Board, GameOutcome,
     },
-    datagen::marlinformat::PackedBoard,
+    chessmove::Move,
+    datagen::dataformat::Game,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{self, depth::Depth, MEGABYTE},
+    util::{depth::Depth, MEGABYTE},
 };
 
 const MIN_SAVE_PLY: usize = 16;
@@ -220,7 +221,9 @@ fn generate_on_thread(
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 },
+        DataGenLimit::Nodes(nodes) => {
+            SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 }
+        }
     });
     let nodes = AtomicU64::new(0);
     let mut info =
@@ -230,8 +233,6 @@ fn generate_on_thread(
 
     let mut output_file = File::create(data_dir.join(format!("thread_{id}.bin"))).unwrap();
     let mut output_buffer = BufWriter::new(&mut output_file);
-
-    let mut single_game_buffer = Vec::new();
 
     let mut counters = [
         (GameOutcome::WhiteWinMate, 0),
@@ -335,6 +336,7 @@ fn generate_on_thread(
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
+        let mut game = Game::new(&board);
         // STEP 3: play out to the end of the game
         if options.log_level > 2 {
             eprintln!("Playing out game...");
@@ -356,25 +358,14 @@ fn generate_on_thread(
                 }
             }
             tt.increase_age();
+
             let (score, best_move) = board.search_position::<true>(
                 &mut info,
                 std::array::from_mut(&mut thread_data),
                 tt.view(),
             );
-            if board.ply() > MIN_SAVE_PLY
-                && !board.is_tactical(best_move)
-                && !is_game_theoretic_score(score)
-                && !board.in_check()
-            {
-                // we only save FENs where the best move is not tactical (promotions or captures)
-                // and the score is not game theoretic (mate or TB-win),
-                // and the side to move is not in check.
-                single_game_buffer.push(board.pack(
-                    score.try_into().unwrap(),
-                    PackedBoard::WDL_DRAW,
-                    0,
-                ));
-            }
+
+            game.add_move(best_move, score.try_into().unwrap());
 
             let abs_score = score.abs();
             if abs_score >= 2000 {
@@ -419,22 +410,14 @@ fn generate_on_thread(
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
         // STEP 4: write the game to the output file
         if options.log_level > 2 {
-            eprintln!("Writing {} moves to output file...", single_game_buffer.len());
+            eprintln!("Writing {} moves to output file...", game.len());
         }
-        let count = single_game_buffer.len();
-        // update with outcomes
-        for board in &mut single_game_buffer {
-            board.set_outcome(outcome);
-        }
-        // convert to bytes
-        // SAFETY: PackedBoards are totally chill to reinterpret as bytes,
-        // trust me bro.
-        let byte_view =
-            unsafe { util::slice_into_bytes_with_lifetime(single_game_buffer.as_slice()) };
+        let count = game.len();
+        // update with outcome
+        game.set_outcome(outcome);
+
         // write to file
-        output_buffer.write_all(byte_view).unwrap();
-        // clear the buffer
-        single_game_buffer.clear();
+        game.serialise_into(&mut output_buffer).unwrap();
 
         // increment the counter
         FENS_GENERATED.fetch_add(count as u64, Ordering::SeqCst);
@@ -706,4 +689,59 @@ impl FromStr for DataGenLimit {
             _ => Err(format!("Invalid limit type: {limit_type}")),
         }
     }
+}
+
+pub fn splat_main(input: &Path, output: &Path, filter: bool) {
+    // check that the input file exists
+    if !input.exists() {
+        eprintln!("Input file does not exist.");
+        return;
+    }
+    // check that the output does not exist
+    if output.exists() {
+        eprintln!("Output file already exists.");
+        return;
+    }
+
+    let filter_fn = |mv: Move, eval: i32, board: &Board| {
+        if !filter {
+            return true;
+        }
+        if board.ply() < MIN_SAVE_PLY {
+            return false;
+        }
+        if board.is_tactical(mv) {
+            return false;
+        }
+        if is_game_theoretic_score(eval) {
+            return false;
+        }
+        if board.in_check() {
+            return false;
+        }
+        true
+    };
+
+    // open the input file
+    let input_file = File::open(input).unwrap();
+    let mut input_buffer = BufReader::new(input_file);
+
+    // open the output file
+    let output_file = File::create(output).unwrap();
+    let mut output_buffer = BufWriter::new(output_file);
+
+    let mut move_buffer = Vec::new();
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
+        game.splat(
+            |packed_board| {
+                output_buffer.write_all(packed_board.as_bytes()).unwrap();
+            },
+            filter_fn,
+        );
+        move_buffer = game.into_move_buffer();
+    }
+
+    output_buffer.flush().unwrap();
 }

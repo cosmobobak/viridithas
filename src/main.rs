@@ -4,11 +4,7 @@
 
 //! Viridithas, a UCI chess engine written in Rust.
 
-use crate::{
-    board::evaluation::parameters::EvalParams,
-    nnue::{convert, network},
-    search::parameters::SearchParams,
-};
+use crate::{nnue::network, search::parameters::SearchParams};
 
 #[macro_use]
 mod macros;
@@ -32,7 +28,6 @@ mod search;
 mod searchinfo;
 mod squareset;
 mod tablebases;
-mod texel;
 mod threadlocal;
 mod timemgmt;
 mod transpositiontable;
@@ -52,7 +47,7 @@ fn main() {
 
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
-        return uci::main_loop(EvalParams::default(), false);
+        return uci::main_loop(false);
     }
 
     let cli = <cli::Cli as clap::Parser>::parse();
@@ -68,14 +63,12 @@ fn main() {
         }
     }
 
-    let eparams = cli.eparams.as_deref().map_or_else(EvalParams::default, |p| {
-        EvalParams::from_file(p).expect("failed to load evaluation parameters")
-    });
-
-    assert!([0, 2].contains(&cli.merge.len()), "merge requires exactly two paths");
-
-    if cli.gensource {
-        return piecesquaretable::tables::printout_pst_source(&eparams.piece_square_tables);
+    if let Some(input) = cli.splat {
+        let Some(output) = cli.output else {
+            println!("Output path required for splatting");
+            return;
+        };
+        return datagen::splat_main(&input, &output, true);
     }
 
     if cli.perfttest {
@@ -86,74 +79,13 @@ fn main() {
         return println!("{}", SearchParams::default().emit_json_for_spsa());
     }
 
-    if let Some(path) = cli.tune {
-        return texel::tune(cli.resume, cli.examples, &eparams, cli.limitparams.as_deref(), path);
-    }
-
-    if let Some(input_file) = cli.nnueconversionpath {
-        let output_file = cli.output.unwrap_or_else(|| {
-            let mut path = input_file.clone();
-            path.set_extension("nnuedata");
-            path
-        });
-        return convert::evaluate_fens(
-            input_file,
-            output_file,
-            convert::Format::OurTexel,
-            cli.nnuedepth,
-            true,
-            cli.nnuefornnue,
-        )
-        .unwrap();
-    } else if let Some(path) = cli.nnuereanalysepath {
-        let output_path = cli.output.unwrap_or_else(|| {
-            let mut path = path.clone();
-            path.set_extension("nnuedata");
-            path
-        });
-        return convert::evaluate_fens(
-            path,
-            output_path,
-            convert::Format::Marlinflow,
-            cli.nnuedepth,
-            true,
-            cli.nnuefornnue,
-        )
-        .unwrap();
-    } else if let Some(path) = cli.dedup {
-        let output_path = cli.output.unwrap_or_else(|| {
-            let mut path = path.clone();
-            path.set_extension("nnuedata");
-            path
-        });
-        return convert::dedup(path, output_path).unwrap();
-    } else if let [path_1, path_2] = cli.merge.as_slice() {
-        let output_path = cli.output.unwrap_or_else(|| {
-            // create merged.nnuedata in the current directory
-            let mut path = std::path::PathBuf::from(".");
-            path.push("merged.nnuedata");
-            path
-        });
-        return convert::merge(path_1, path_2, output_path).unwrap();
-    }
-
     if cli.info {
         return lookups::info_dump();
-    }
-
-    if cli.visparams {
-        println!("{eparams}");
-        println!("{}", SearchParams::default());
-        return;
-    }
-
-    if cli.vispsqt {
-        return piecesquaretable::render_pst_table(&eparams.piece_square_tables);
     }
 
     if cli.visnnue {
         return network::visualise_nnue();
     }
 
-    uci::main_loop(eparams, cli.bench.is_some());
+    uci::main_loop(cli.bench.is_some());
 }

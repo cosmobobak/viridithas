@@ -543,7 +543,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn main_loop(params: EvalParams, global_bench: bool) {
+pub fn main_loop(global_bench: bool) {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -554,7 +554,7 @@ pub fn main_loop(params: EvalParams, global_bench: bool) {
     let nodes = AtomicU64::new(0);
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
-    info.eval_params = params;
+    info.eval_params = EvalParams::default();
 
     let mut thread_data = vec![ThreadData::new(0, &pos)];
     pos.refresh_psqt(&info);
