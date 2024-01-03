@@ -1,9 +1,4 @@
-use crate::{
-    board::evaluation::score::S,
-    cfor,
-    piece::{Colour, Piece},
-    util::{File, Rank, Square},
-};
+use crate::{board::evaluation::score::S, cfor, piece::Colour, util::Square};
 
 use super::PieceSquareTable;
 
@@ -80,52 +75,6 @@ const P_BONUS: [[S; 8]; 8] = [
     [ S(119, 117), S(66, 146), S(27, 149), S(91, 50), S(35, 62), S(2, 117), S(-34, 193), S(-129, 150), ],
     [ S::NULL; 8 ],
 ];
-
-pub fn printout_pst_source(pst: &PieceSquareTable) {
-    println!("PSQT source code:");
-    #[rustfmt::skip]
-    println!(
-"static BONUS: [[[S; 4]; 8]; 7] = [
-    [[S::NULL; 4]; 8],"
-    );
-    let names = ["NULL", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"];
-    for piece in Piece::all().skip(1).take(5) {
-        // white knight to white king
-        println!("    [");
-        println!("        // {}", names[piece.index()]);
-        for rank in Rank::RANK_1..=Rank::RANK_8 {
-            print!("        [");
-            for file in File::FILE_A..=File::FILE_D {
-                let sq = Square::from_rank_file(rank, file);
-                let val = pst[piece.index()][sq.index()];
-                print!("{val}, ");
-            }
-            println!("],");
-        }
-        println!("    ],");
-    }
-    println!("    [ S::NULL; 8 ],");
-    println!("];");
-    println!();
-    #[rustfmt::skip]
-    println!(
-"#[rustfmt::skip]
-static P_BONUS: [[S; 8]; 8] = [
-    // Pawn (asymmetric distribution)
-    [ S::NULL; 8 ],"
-    );
-    for rank in Rank::RANK_2..=Rank::RANK_7 {
-        print!("    [ ");
-        for file in File::FILE_A..=File::FILE_H {
-            let sq = Square::from_rank_file(rank, file);
-            let val = pst[Piece::WP.index()][sq.index()];
-            print!("{val}, ");
-        }
-        println!("],");
-    }
-    println!("    [ S::NULL; 8 ],");
-    println!("];");
-}
 
 pub const fn construct_piece_square_table() -> PieceSquareTable {
     let mut pst = [[S::NULL; 64]; 13];
