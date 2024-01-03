@@ -565,8 +565,7 @@ impl Board {
         } else {
             Self::STARTING_FEN
         };
-        self.set_from_fen(starting_fen)
-            .expect("for some reason, STARTING_FEN is now broken.");
+        self.set_from_fen(starting_fen).expect("for some reason, STARTING_FEN is now broken.");
         debug_assert_eq!(
             self.material[Colour::WHITE.index()].0,
             self.material[Colour::BLACK.index()].0,

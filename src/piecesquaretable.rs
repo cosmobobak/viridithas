@@ -9,34 +9,6 @@ pub fn pst_value(piece: Piece, sq: Square, pst: &PieceSquareTable) -> S {
     pst[piece.index()][sq.index()]
 }
 
-pub fn render_pst_table(pst: &PieceSquareTable) {
-    #![allow(clippy::needless_range_loop, clippy::cast_possible_truncation)]
-    for piece in Piece::all() {
-        println!("{piece}");
-        let piece = piece.index();
-        println!("mg eval on a1 (bottom left) {}", pst[piece][Square::A1.index()].0);
-        for row in (0..8).rev() {
-            print!("RANK {}: ", row + 1);
-            for col in 0..8 {
-                let sq = row * 8 + col;
-                let pst_val = pst[piece][sq].0;
-                print!("{pst_val:>5}");
-            }
-            println!();
-        }
-        println!("eg eval on a1 (bottom left) {}", pst[piece][Square::A1.index()].1);
-        for row in (0..8).rev() {
-            print!("RANK {}: ", row + 1);
-            for col in 0..8 {
-                let sq = row * 8 + col;
-                let pst_val = pst[piece][sq].1;
-                print!("{pst_val:>5}");
-            }
-            println!();
-        }
-    }
-}
-
 mod tests {
     #[test]
     fn psts_are_mirrored_properly() {
