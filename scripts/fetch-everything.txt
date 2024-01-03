@@ -1,0 +1,4 @@
+git clone https://github.com/cosmobobak/viridithas.git
+cd viridithas
+curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue
+EVALFILE="viridithas.nnue" RUSTFLAGS="-C target-cpu=native" cargo build --release --features datagen
