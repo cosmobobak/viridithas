@@ -40,7 +40,10 @@ pub enum SearchLimit {
     Depth(Depth),
     Time(u64),
     Nodes(u64),
-    SoftNodes(u64),
+    SoftNodes {
+        soft_limit: u64,
+        hard_limit: u64,
+    },
     Mate {
         ply: usize,
     },
@@ -219,9 +222,8 @@ impl TimeManager {
                 }
                 past_limit
             }
-            SearchLimit::SoftNodes(limit) => {
+            SearchLimit::SoftNodes { hard_limit, .. } => {
                 // this should never *really* return true, but we do this in case of search explosions.
-                let hard_limit = limit * 128;
                 let past_limit = nodes_so_far >= hard_limit;
                 if past_limit {
                     stopped.store(true, Ordering::SeqCst);
@@ -235,7 +237,7 @@ impl TimeManager {
     pub fn is_past_opt_time(&self, nodes: u64) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
-            SearchLimit::SoftNodes(limit) => nodes >= limit,
+            SearchLimit::SoftNodes { soft_limit, .. } => nodes >= soft_limit,
             _ => false,
         }
     }
@@ -249,7 +251,7 @@ impl TimeManager {
     }
 
     pub const fn is_soft_nodes(&self) -> bool {
-        matches!(self.limit, SearchLimit::SoftNodes(_))
+        matches!(self.limit, SearchLimit::SoftNodes { .. })
     }
 
     pub fn solved_breaker<const MAIN_THREAD: bool>(

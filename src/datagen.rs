@@ -213,14 +213,14 @@ fn generate_on_thread(
     // (https://rust-random.github.io/book/guide-parallel.html)
     // so no worries :3
     let mut rng = rand::thread_rng();
-    let mut board = Board::new();
+    let mut board = Board::default();
     let mut thread_data = ThreadData::new(0, &board);
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes(nodes),
+        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 },
     });
     let nodes = AtomicU64::new(0);
     let mut info =
@@ -253,7 +253,7 @@ fn generate_on_thread(
     let start = Instant::now();
     'generation_main_loop: for game in 0..n_games_to_run {
         // report progress
-        if id == 0 && game % 64 == 0 && options.log_level > 0 && game > 0 {
+        if id == 0 && game % 8 == 0 && options.log_level > 0 && game > 0 {
             let percentage = game * 100_000 / n_games_to_run;
             let percentage = percentage as f64 / 1000.0;
             let time_per_game = start.elapsed().as_secs_f64() / game as f64;
