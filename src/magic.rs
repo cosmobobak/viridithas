@@ -472,7 +472,7 @@ static ROOK_MAGICS: [u64; 64] = [
 ];
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+pub fn get_diagonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let sq = sq.index();
     if sq >= 64 {
         unsafe {
@@ -493,7 +493,7 @@ pub fn get_bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 }
 
 #[allow(clippy::cast_possible_truncation)]
-pub fn get_rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+pub fn get_orthogonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let sq = sq.index();
     if sq >= 64 {
         unsafe {

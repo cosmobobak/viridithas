@@ -342,7 +342,7 @@ impl Board {
         let white_pawns = self.pieces.pawns::<true>();
         let black_pawns = self.pieces.pawns::<false>();
 
-        for white_pawn_loc in white_pawns.iter() {
+        for white_pawn_loc in white_pawns {
             if (ISOLATED_BB[white_pawn_loc.index()] & white_pawns).is_empty() {
                 w_score -= i.eval_params.isolated_pawn_malus;
             }
@@ -353,7 +353,7 @@ impl Board {
             }
         }
 
-        for black_pawn_loc in black_pawns.iter() {
+        for black_pawn_loc in black_pawns {
             if (ISOLATED_BB[black_pawn_loc.index()] & black_pawns).is_empty() {
                 b_score -= i.eval_params.isolated_pawn_malus;
             }
@@ -394,7 +394,7 @@ impl Board {
 
     fn rook_open_file_term(&self, i: &SearchInfo) -> S {
         let mut score = S(0, 0);
-        for rook_sq in self.pieces.rooks::<true>().iter() {
+        for rook_sq in self.pieces.rooks::<true>() {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score += i.eval_params.rook_open_file_bonus;
@@ -402,7 +402,7 @@ impl Board {
                 score += i.eval_params.rook_half_open_file_bonus;
             }
         }
-        for rook_sq in self.pieces.rooks::<false>().iter() {
+        for rook_sq in self.pieces.rooks::<false>() {
             let file = rook_sq.file();
             if self.is_file_open(file) {
                 score -= i.eval_params.rook_open_file_bonus;
@@ -415,7 +415,7 @@ impl Board {
 
     fn queen_open_file_term(&self, i: &SearchInfo) -> S {
         let mut score = S(0, 0);
-        for queen_sq in self.pieces.queens::<true>().iter() {
+        for queen_sq in self.pieces.queens::<true>() {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score += i.eval_params.queen_open_file_bonus;
@@ -423,7 +423,7 @@ impl Board {
                 score += i.eval_params.queen_half_open_file_bonus;
             }
         }
-        for queen_sq in self.pieces.queens::<false>().iter() {
+        for queen_sq in self.pieces.queens::<false>() {
             let file = queen_sq.file();
             if self.is_file_open(file) {
                 score -= i.eval_params.queen_open_file_bonus;
@@ -472,7 +472,7 @@ impl Board {
         let safe_white_moves = !black_pawn_attacks;
         let safe_black_moves = !white_pawn_attacks;
         let blockers = self.pieces.occupied();
-        for knight_sq in self.pieces.knights::<true>().iter() {
+        for knight_sq in self.pieces.knights::<true>() {
             let attacks = bitboards::knight_attacks(knight_sq);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
@@ -489,7 +489,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score += i.eval_params.knight_mobility_bonus[attacks];
         }
-        for knight_sq in self.pieces.knights::<false>().iter() {
+        for knight_sq in self.pieces.knights::<false>() {
             let attacks = bitboards::knight_attacks(knight_sq);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
@@ -506,7 +506,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.knight_mobility_bonus[attacks];
         }
-        for bishop_sq in self.pieces.bishops::<true>().iter() {
+        for bishop_sq in self.pieces.bishops::<true>() {
             let attacks = bitboards::bishop_attacks(bishop_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
@@ -523,7 +523,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score += i.eval_params.bishop_mobility_bonus[attacks];
         }
-        for bishop_sq in self.pieces.bishops::<false>().iter() {
+        for bishop_sq in self.pieces.bishops::<false>() {
             let attacks = bitboards::bishop_attacks(bishop_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
@@ -540,7 +540,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.bishop_mobility_bonus[attacks];
         }
-        for rook_sq in self.pieces.rooks::<true>().iter() {
+        for rook_sq in self.pieces.rooks::<true>() {
             let attacks = bitboards::rook_attacks(rook_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
@@ -554,7 +554,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score += i.eval_params.rook_mobility_bonus[attacks];
         }
-        for rook_sq in self.pieces.rooks::<false>().iter() {
+        for rook_sq in self.pieces.rooks::<false>() {
             let attacks = bitboards::rook_attacks(rook_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;
@@ -568,7 +568,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score -= i.eval_params.rook_mobility_bonus[attacks];
         }
-        for queen_sq in self.pieces.queens::<true>().iter() {
+        for queen_sq in self.pieces.queens::<true>() {
             let attacks = bitboards::queen_attacks(queen_sq, blockers);
             // kingsafety
             let attacks_on_black_king = attacks & black_king_area;
@@ -582,7 +582,7 @@ impl Board {
             let attacks = attacks.count() as usize;
             mob_score += i.eval_params.queen_mobility_bonus[attacks];
         }
-        for queen_sq in self.pieces.queens::<false>().iter() {
+        for queen_sq in self.pieces.queens::<false>() {
             let attacks = bitboards::queen_attacks(queen_sq, blockers);
             // kingsafety
             let attacks_on_white_king = attacks & white_king_area;

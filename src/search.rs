@@ -167,7 +167,7 @@ impl Board {
             #[cfg(feature = "stats")]
             println!(
                 "branching factor: {}",
-                (info.nodes as f64).powf(1.0 / thread_headers[0].completed as f64)
+                (info.nodes.get_global() as f64).powf(1.0 / thread_headers[0].completed as f64)
             );
         }
 

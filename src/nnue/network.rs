@@ -4,10 +4,10 @@ use std::{
 };
 
 use crate::{
-    board::Board,
+    board::{movegen::bitboards::BitBoard, Board},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
-    util::{Square, MAX_DEPTH},
+    util::{File, Square, MAX_DEPTH},
 };
 
 use super::accumulator::Accumulator;
@@ -21,19 +21,24 @@ const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
-pub const BUCKETS: usize = 1;
+pub const BUCKETS: usize = 4;
 /// The mapping from square to bucket.
-#[rustfmt::skip]
-pub const BUCKET_MAP: [usize; 64] = [
-    0, 0, 0, 0, 1, 1, 1, 1,
-    0, 0, 0, 0, 1, 1, 1, 1,
-    2, 2, 2, 2, 3, 3, 3, 3,
-    2, 2, 2, 2, 3, 3, 3, 3,
-    2, 2, 2, 2, 3, 3, 3, 3,
-    2, 2, 2, 2, 3, 3, 3, 3,
-    2, 2, 2, 2, 3, 3, 3, 3,
-    2, 2, 2, 2, 3, 3, 3, 3,
-];
+pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
+    #[rustfmt::skip]
+    const BUCKET_MAP: [usize; 64] = [
+        0, 0, 0, 0, 4, 4, 4, 4,
+        1, 1, 1, 1, 5, 5, 5, 5,
+        2, 2, 2, 2, 6, 6, 6, 6,
+        2, 2, 2, 2, 6, 6, 6, 6,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+        3, 3, 3, 3, 7, 7, 7, 7,
+    ];
+    let white_bucket = BUCKET_MAP[white_king.index()];
+    let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+    (white_bucket, black_bucket)
+}
 
 const QA: i32 = 181;
 const QB: i32 = 64;
@@ -84,9 +89,35 @@ pub struct FeatureUpdate {
     piece: Piece,
 }
 
+impl FeatureUpdate {
+    pub const fn add_piece(sq: Square, piece: Piece) -> Self {
+        Self { from: Square::NO_SQUARE, to: sq, piece }
+    }
+
+    pub const fn clear_piece(sq: Square, piece: Piece) -> Self {
+        Self { from: sq, to: Square::NO_SQUARE, piece }
+    }
+
+    pub const fn move_piece(from: Square, to: Square, piece: Piece) -> Self {
+        Self { from, to, piece }
+    }
+}
+
 impl std::fmt::Debug for FeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FeatureUpdate {{ from: {}, to: {}, piece: {} }}", self.from, self.to, self.piece)
+    }
+}
+
+impl std::fmt::Display for FeatureUpdate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.from == Square::NO_SQUARE {
+            write!(f, "+{}: {}", self.piece, self.to)
+        } else if self.to == Square::NO_SQUARE {
+            write!(f, "-{}: {}", self.piece, self.from)
+        } else {
+            write!(f, "{}: {} -> {}", self.piece, self.from, self.to)
+        }
     }
 }
 
@@ -123,6 +154,89 @@ impl UpdateBuffer {
 
     pub fn updates(&self) -> &[FeatureUpdate] {
         &self.buffer[..self.count]
+    }
+}
+
+/// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
+/// having to completely recompute the accumulator for a position, instead
+/// partially reconstructing it from the last-seen accumulator.
+#[allow(clippy::large_stack_frames)]
+#[derive(Clone)]
+pub struct BucketAccumulatorCache {
+    accs: [[Accumulator; BUCKETS * 2]; 2],
+    board_states: [[BitBoard; BUCKETS * 2]; 2],
+}
+
+impl BucketAccumulatorCache {
+    #[allow(clippy::too_many_lines)]
+    pub fn load_accumulator_for_position(
+        &mut self,
+        board_state: BitBoard,
+        pov_update: PovUpdate,
+        acc: &mut Accumulator,
+    ) {
+        debug_assert!(
+            matches!(
+                pov_update,
+                PovUpdate { white: true, black: false } | PovUpdate { white: false, black: true }
+            ),
+            "invalid pov update: {pov_update:?}"
+        );
+        #[cfg(debug_assertions)]
+        {
+            // verify all the cached board states make sense
+            for colour in Colour::all() {
+                for bucket in 0..BUCKETS {
+                    let cached_board_state = self.board_states[colour.index()][bucket];
+                    if cached_board_state == unsafe { std::mem::zeroed() } {
+                        continue;
+                    }
+                    let white_king = cached_board_state.piece_bb(Piece::WK).first();
+                    let black_king = cached_board_state.piece_bb(Piece::BK).first();
+                    let (white_bucket_from_board_position, black_bucket_from_board_position) =
+                        get_bucket_indices(white_king, black_king);
+                    if colour == Colour::WHITE {
+                        assert_eq!(white_bucket_from_board_position, bucket);
+                    } else {
+                        assert_eq!(black_bucket_from_board_position, bucket);
+                    }
+                }
+            }
+        }
+
+        let side_we_care_about = if pov_update.white { Colour::WHITE } else { Colour::BLACK };
+        let wk = board_state.piece_bb(Piece::WK).first();
+        let bk = board_state.piece_bb(Piece::BK).first();
+        let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
+        let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
+        let cache_acc = &mut self.accs[side_we_care_about.index()][bucket];
+
+        self.board_states[side_we_care_about.index()][bucket].update_iter(
+            board_state,
+            |FeatureUpdate { from, to, piece }| {
+                let pt = piece.piece_type();
+                let c = piece.colour();
+                if from == Square::NO_SQUARE {
+                    NNUEState::update_feature_inplace::<Activate>(
+                        wk, bk, pt, c, to, pov_update, cache_acc,
+                    );
+                } else if to == Square::NO_SQUARE {
+                    NNUEState::update_feature_inplace::<Deactivate>(
+                        wk, bk, pt, c, from, pov_update, cache_acc,
+                    );
+                } else {
+                    NNUEState::move_feature_inplace(wk, bk, pt, c, from, to, pov_update, cache_acc);
+                }
+            },
+        );
+
+        if pov_update.white {
+            acc.white = cache_acc.white;
+        } else {
+            acc.black = cache_acc.black;
+        }
+
+        self.board_states[side_we_care_about.index()][bucket] = board_state;
     }
 }
 
@@ -171,7 +285,8 @@ impl NNUEParams {
         for colour in Colour::all() {
             for piece in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices = feature_indices(square, piece, colour);
+                    let feature_indices =
+                        feature_indices(Square::H1, Square::H8, square, piece, colour);
                     let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
                     slice.push(self.feature_weights[index]);
                 }
@@ -211,56 +326,58 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
-    pub const fn select_feature_weights(
-        &self,
-        _king_sq: Square,
-    ) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        // {
-        //     let bucket = BUCKET_MAP[king_sq.index()];
-        //     let start = bucket * INPUT * LAYER_1_SIZE;
-        //     let end = start + INPUT * LAYER_1_SIZE;
-        //     let slice = &self.feature_weights[start..end];
-        //     // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-        //     // and we check that the slice is aligned to 64 bytes.
-        //     // additionally, we're generating the reference from our own data,
-        //     // so we know that the lifetime is valid.
-        //     unsafe {
-        //         // don't immediately cast to Align64, as we want to check the alignment first.
-        //         let ptr = slice.as_ptr();
-        //         assert_eq!(ptr.align_offset(64), 0);
-        //         // alignments are sensible, so we can safely cast.
-        //         #[allow(clippy::cast_ptr_alignment)]
-        //         &*ptr.cast()
-        //     }
-        // }
-        &self.feature_weights
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        // handle mirroring
+        let bucket = bucket % 4;
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
     }
 }
 
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NNUEState {
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],
     /// Index of the current accumulator.
     pub current_acc: usize,
-    /// White king locations.
-    pub white_king_locs: [Square; ACC_STACK_SIZE],
-    /// Black king locations.
-    pub black_king_locs: [Square; ACC_STACK_SIZE],
+    /// Cache of last-seen accumulators for each bucket.
+    pub bucket_cache: BucketAccumulatorCache,
 }
 
-const fn feature_indices(sq: Square, piece_type: PieceType, colour: Colour) -> (usize, usize) {
+const fn feature_indices(
+    white_king: Square,
+    black_king: Square,
+    sq: Square,
+    piece_type: PieceType,
+    colour: Colour,
+) -> (usize, usize) {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
+
+    let white_sq = if white_king.file() >= File::FILE_E { sq.flip_file() } else { sq };
+    let black_sq = if black_king.file() >= File::FILE_E { sq.flip_file() } else { sq };
 
     let piece_type = piece_type.index();
     let colour = colour.index();
 
-    let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
+    let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + white_sq.index();
     let black_idx =
-        (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.flip_rank().index();
+        (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + black_sq.flip_rank().index();
 
     (white_idx, black_idx)
 }
@@ -303,44 +420,50 @@ impl NNUEState {
 
     /// Reinitialise the state from a board.
     pub fn reinit_from(&mut self, board: &Board) {
+        // set the current accumulator to the first one
         self.current_acc = 0;
 
-        self.refresh_accumulators(board, PovUpdate { white: true, black: true });
+        // initalise all the accumulators in the bucket cache to the bias
+        for acc in self.bucket_cache.accs.iter_mut().flatten() {
+            acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
+        }
+        // initialise all the board states in the bucket cache to the empty board
+        for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
+            *board_state = BitBoard::NULL;
+        }
+
+        // refresh the first accumulator
+        Self::refresh_accumulators(
+            &mut self.bucket_cache,
+            &mut self.accumulators[0],
+            board,
+            PovUpdate { white: true, black: false },
+        );
+        Self::refresh_accumulators(
+            &mut self.bucket_cache,
+            &mut self.accumulators[0],
+            board,
+            PovUpdate { white: false, black: true },
+        );
     }
 
     /// Make the next accumulator freshly generated from the board state.
     pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
-        self.current_acc += 1;
-
-        self.refresh_accumulators(board, update);
-
-        unimplemented!("push_fresh_acc");
+        Self::refresh_accumulators(
+            &mut self.bucket_cache,
+            &mut self.accumulators[self.current_acc + 1],
+            board,
+            update,
+        );
     }
 
-    fn refresh_accumulators(&mut self, board: &Board, update: PovUpdate) {
-        let white_king = board.king_sq(Colour::WHITE);
-        let black_king = board.king_sq(Colour::BLACK);
-
-        self.accumulators[self.current_acc].init(&NNUE.feature_bias, update);
-
-        for colour in [Colour::WHITE, Colour::BLACK] {
-            for piece_type in PieceType::all() {
-                let piece = Piece::new(colour, piece_type);
-                let piece_bb = board.pieces.piece_bb(piece);
-
-                for sq in piece_bb.iter() {
-                    Self::update_feature_inplace::<Activate>(
-                        white_king,
-                        black_king,
-                        piece_type,
-                        colour,
-                        sq,
-                        update,
-                        &mut self.accumulators[self.current_acc],
-                    );
-                }
-            }
-        }
+    fn refresh_accumulators(
+        bucket_cache: &mut BucketAccumulatorCache,
+        acc: &mut Accumulator,
+        board: &Board,
+        update: PovUpdate,
+    ) {
+        bucket_cache.load_accumulator_for_position(board.pieces, update, acc);
     }
 
     pub fn materialise_new_acc_from(
@@ -443,11 +566,14 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_from, black_from) = feature_indices(from, piece_type, colour);
-        let (white_to, black_to) = feature_indices(to, piece_type, colour);
+        let (white_from, black_from) =
+            feature_indices(white_king, black_king, from, piece_type, colour);
+        let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
             vector_add_sub(
@@ -481,11 +607,14 @@ impl NNUEState {
         update: PovUpdate,
         acc: &mut Accumulator,
     ) {
-        let (white_from, black_from) = feature_indices(from, piece_type, colour);
-        let (white_to, black_to) = feature_indices(to, piece_type, colour);
+        let (white_from, black_from) =
+            feature_indices(white_king, black_king, from, piece_type, colour);
+        let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
             vector_add_sub_inplace(&mut acc.white, white_bucket, white_to, white_from);
@@ -507,10 +636,13 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
+        let (white_idx, black_idx) =
+            feature_indices(white_king, black_king, sq, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if A::ACTIVATE {
             if update.white {
@@ -539,10 +671,13 @@ impl NNUEState {
         update: PovUpdate,
         acc: &mut Accumulator,
     ) {
-        let (white_idx, black_idx) = feature_indices(sq, piece_type, colour);
+        let (white_idx, black_idx) =
+            feature_indices(white_king, black_king, sq, piece_type, colour);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_king);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_king.flip_rank());
+        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+
+        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
+        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if A::ACTIVATE {
             if update.white {

@@ -227,8 +227,8 @@ mod tests {
     fn test_all_square_combinations() {
         use super::*;
         use crate::squareset::SquareSet;
-        for from in SquareSet::FULL.iter() {
-            for to in SquareSet::FULL.iter() {
+        for from in SquareSet::FULL {
+            for to in SquareSet::FULL {
                 let m = Move::new(from, to);
                 assert_eq!(m.from(), from);
                 assert_eq!(m.to(), to);
