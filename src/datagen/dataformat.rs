@@ -243,7 +243,7 @@ impl Game {
         let mut initial_position = [0; std::mem::size_of::<PackedBoard>()];
         reader.read_exact(&mut initial_position)?;
         let initial_position = unsafe { std::mem::transmute::<_, PackedBoard>(initial_position) };
-        // we the caller to give us a pre-allocated buffer as an optimisation
+        // we allow the caller to give us a pre-allocated buffer as an optimisation
         let mut moves = buffer;
         moves.clear();
         loop {
