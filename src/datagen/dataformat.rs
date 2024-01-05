@@ -1,7 +1,10 @@
 use crate::{
     board::{Board, GameOutcome},
-    chessmove::Move, piece::{Colour, PieceType},
+    chessmove::Move,
+    piece::{Colour, PieceType},
 };
+
+use self::marlinformat::{util::I16Le, PackedBoard};
 
 mod marlinformat;
 
@@ -12,7 +15,8 @@ pub struct Game {
     moves: Vec<(Move, marlinformat::util::I16Le)>,
 }
 
-const SEQUENCE_ELEM_SIZE: usize = std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
+const SEQUENCE_ELEM_SIZE: usize =
+    std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
 const NULL_TERMINATOR: [u8; SEQUENCE_ELEM_SIZE] = [0; SEQUENCE_ELEM_SIZE];
 
 impl Game {
@@ -34,28 +38,10 @@ impl Game {
 
     /// Serialises the game into a byte stream.
     pub fn serialise_into(&self, writer: &mut impl std::io::Write) -> std::io::Result<()> {
-        let starting_position = unsafe {
-            std::slice::from_raw_parts(
-                std::ptr::addr_of!(self.initial_position).cast::<u8>(),
-                std::mem::size_of::<marlinformat::PackedBoard>(),
-            )
-        };
-        writer.write_all(starting_position)?;
+        writer.write_all(&self.initial_position.as_bytes())?;
         for (mv, eval) in &self.moves {
-            let mv = unsafe {
-                std::slice::from_raw_parts(
-                    (mv as *const Move).cast::<u8>(),
-                    std::mem::size_of::<Move>(),
-                )
-            };
-            writer.write_all(mv)?;
-            let eval = unsafe {
-                std::slice::from_raw_parts(
-                    (eval as *const marlinformat::util::I16Le).cast::<u8>(),
-                    std::mem::size_of::<marlinformat::util::I16Le>(),
-                )
-            };
-            writer.write_all(eval)?;
+            writer.write_all(&mv.inner().to_le_bytes())?;
+            writer.write_all(&eval.get().to_le_bytes())?;
         }
         writer.write_all(&NULL_TERMINATOR)?;
         Ok(())
@@ -68,7 +54,7 @@ impl Game {
     ) -> std::io::Result<Self> {
         let mut initial_position = [0; std::mem::size_of::<marlinformat::PackedBoard>()];
         reader.read_exact(&mut initial_position)?;
-        let initial_position = unsafe { std::mem::transmute::<_, marlinformat::PackedBoard>(initial_position) };
+        let initial_position = PackedBoard::from_bytes(initial_position);
         // we allow the caller to give us a pre-allocated buffer as an optimisation
         let mut moves = buffer;
         moves.clear();
@@ -80,8 +66,15 @@ impl Game {
             }
             let mv = [buf[0], buf[1]];
             let mv = unsafe { std::mem::transmute::<_, Move>(mv) };
+            if !mv.is_valid() || mv.from() == mv.to() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("invalid move: {mv:?}"),
+                ));
+            }
             let eval = [buf[2], buf[3]];
-            let eval = unsafe { std::mem::transmute::<_, marlinformat::util::I16Le>(eval) };
+            let eval = i16::from_le_bytes(eval);
+            let eval = I16Le::new(eval);
             moves.push((mv, eval));
         }
         Ok(Self { initial_position, moves })
@@ -123,7 +116,15 @@ impl Game {
                 bbs[5] = bitboard.of_type(PieceType::ROOK).inner();
                 bbs[6] = bitboard.of_type(PieceType::QUEEN).inner();
                 bbs[7] = bitboard.of_type(PieceType::KING).inner();
-                callback(bulletformat::ChessBoard::from_raw(bbs, (board.turn() != Colour::WHITE).into(), eval, f32::from(wdl) / 2.0).unwrap());
+                callback(
+                    bulletformat::ChessBoard::from_raw(
+                        bbs,
+                        (board.turn() != Colour::WHITE).into(),
+                        eval,
+                        f32::from(wdl) / 2.0,
+                    )
+                    .unwrap(),
+                );
             }
             board.make_move_simple(*mv);
         }

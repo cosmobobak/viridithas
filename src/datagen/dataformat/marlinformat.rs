@@ -114,8 +114,12 @@ impl PackedBoard {
         (builder, self.eval.get(), self.wdl, self.extra)
     }
 
-    pub const fn as_bytes(&self) -> &[u8; std::mem::size_of::<Self>()] {
-        unsafe { &*(self as *const Self).cast::<[u8; std::mem::size_of::<Self>()]>() }
+    pub const fn as_bytes(self) -> [u8; std::mem::size_of::<Self>()] {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    pub const fn from_bytes(bytes: [u8; std::mem::size_of::<Self>()]) -> Self {
+        unsafe { std::mem::transmute(bytes) }
     }
 }
 

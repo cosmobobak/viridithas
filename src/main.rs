@@ -65,10 +65,10 @@ fn main() {
 
     if let Some(input) = cli.splat {
         let Some(output) = cli.output else {
-            println!("Output path required for splatting");
+            println!("Output path required for splatting (use --output)");
             return;
         };
-        return datagen::splat_main(&input, &output, true);
+        return datagen::splat_main(&input, &output, true, cli.marlinformat);
     }
 
     if cli.perfttest {
