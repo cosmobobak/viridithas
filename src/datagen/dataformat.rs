@@ -239,7 +239,10 @@ impl Game {
     }
 
     /// Deserialises a game from a byte stream.
-    pub fn deserialise_from(reader: &mut impl std::io::BufRead, buffer: Vec<(Move, I16Le)>) -> std::io::Result<Self> {
+    pub fn deserialise_from(
+        reader: &mut impl std::io::BufRead,
+        buffer: Vec<(Move, I16Le)>,
+    ) -> std::io::Result<Self> {
         let mut initial_position = [0; std::mem::size_of::<PackedBoard>()];
         reader.read_exact(&mut initial_position)?;
         let initial_position = unsafe { std::mem::transmute::<_, PackedBoard>(initial_position) };
@@ -262,7 +265,11 @@ impl Game {
     }
 
     /// Converts the game into a sequence of `PackedBoard` objects, yielding only those positions that pass the filter.
-    pub fn splat(&self, mut callback: impl FnMut(PackedBoard), filter: impl Fn(Move, i32, &Board) -> bool) {
+    pub fn splat(
+        &self,
+        mut callback: impl FnMut(PackedBoard),
+        filter: impl Fn(Move, i32, &Board) -> bool,
+    ) {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         for (mv, eval) in &self.moves {
             let eval = eval.get();
