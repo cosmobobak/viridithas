@@ -429,3 +429,20 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ GAMES │ N: 384 W: 45 L: 254 D: 85
             │ what a load of garbage.                  │ vs artemis.
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   * qa-181 │ not a new network, but a re-quantisation │ STC:
+            │ of artemis so that more optimal SIMD     │ ELO   │ 16.76 +- 6.68 (95%)
+            │ can be used for inference.               │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.92 (-2.25, 2.89) [0.00, 3.00]
+            │                                          │ GAMES │ N: 4896 W: 1271 L: 1035 D: 2590
+            │                                          │ vs artemis-qa-255.
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   signalis │ four-buckets horizontally mirrored       │ LTC:
+            │ 1536x2 network, trained with artemis's   │ ELO   │ 5.47 +- 3.57 (95%)
+            │ hyperparameters.                         │ SPRT  │ 40.0+0.40s Threads=1 Hash=128MB
+            │                                          │ LLR   │ 2.89 (-2.25, 2.89) [0.00, 3.00]
+            │ initial run had a bug, so this is ID'd   │ GAMES │ N: 17672 W: 4452 L: 4174 D: 9046
+            │ as signalis2-epoch15 in OB.              │ vs artemis.
+            │                                          │
+            │ bucketing scheme is shown in the         │
+            │ network release.                         │ release: https://github.com/cosmobobak/viridithas-networks/releases/tag/signalis
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
