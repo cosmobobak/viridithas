@@ -734,7 +734,7 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool) {
     while let Ok(game) =
         dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
     {
-        game.splat(
+        game.splat_to_marlinformat(
             |packed_board| {
                 output_buffer.write_all(packed_board.as_bytes()).unwrap();
             },

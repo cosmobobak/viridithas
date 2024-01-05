@@ -30,6 +30,7 @@ num_cpus = "1.13.1"
 clap = { version = "4.2.7", features = ["derive"] }
 chrono = "0.4.23"
 ctrlc = "3.2.5"
+bulletformat = "0.1.0"
 
 [profile.release]
 lto = true
