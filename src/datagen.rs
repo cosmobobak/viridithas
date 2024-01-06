@@ -15,6 +15,7 @@ use std::{
     time::Instant,
 };
 
+use bulletformat::ChessBoard;
 use rand::Rng;
 
 use crate::{
@@ -691,7 +692,7 @@ impl FromStr for DataGenLimit {
     }
 }
 
-pub fn splat_main(input: &Path, output: &Path, filter: bool) {
+pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool) {
     // check that the input file exists
     if !input.exists() {
         eprintln!("Input file does not exist.");
@@ -734,12 +735,26 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool) {
     while let Ok(game) =
         dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
     {
-        game.splat(
-            |packed_board| {
-                output_buffer.write_all(packed_board.as_bytes()).unwrap();
-            },
-            filter_fn,
-        );
+        if marlinformat {
+            game.splat_to_marlinformat(
+                |packed_board| {
+                    output_buffer.write_all(&packed_board.as_bytes()).unwrap();
+                },
+                filter_fn,
+            );
+        } else {
+            game.splat_to_bulletformat(
+                |chess_board| {
+                    let bytes = unsafe {
+                        std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(
+                            chess_board,
+                        )
+                    };
+                    output_buffer.write_all(&bytes).unwrap();
+                },
+                filter_fn,
+            );
+        }
         move_buffer = game.into_move_buffer();
     }
 

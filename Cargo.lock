@@ -116,6 +116,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
+name = "bulletformat"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d1b28892a3099f32e806d51f8822b4e007d287dbd128b382562bb03e398fd0"
+
+[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -574,6 +580,7 @@ name = "viridithas"
 version = "12.0.0"
 dependencies = [
  "bindgen",
+ "bulletformat",
  "cc",
  "chrono",
  "clap",

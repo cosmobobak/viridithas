@@ -129,6 +129,10 @@ impl Move {
         }
         promotion == PieceType::NONE || promotion.legal_promo()
     }
+
+    pub const fn inner(self) -> u16 {
+        self.data
+    }
 }
 
 impl Display for Move {

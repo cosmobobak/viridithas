@@ -22,9 +22,13 @@ pub struct Cli {
     /// Generate training data for the NNUE.
     #[clap(long)]
     pub datagen: Option<Option<String>>,
-    /// Splat a binary game record into marlinformat.
+    /// Splat a binary game record into binary records.
     #[clap(long)]
     pub splat: Option<std::path::PathBuf>,
+    /// Splat into marlinformat instead of bulletformat.
+    /// Only valid with --splat.
+    #[clap(long)]
+    pub marlinformat: bool,
     /// Output node benchmark for OpenBench.
     /// Implemented as a subcommand because that's what OpenBench expects.
     #[clap(subcommand)]
