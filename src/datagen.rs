@@ -731,6 +731,9 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool)
     let output_file = File::create(output).unwrap();
     let mut output_buffer = BufWriter::new(output_file);
 
+    println!("Splatting...");
+    print!("0 games splatted");
+    let mut game_count = 0;
     let mut move_buffer = Vec::new();
     while let Ok(game) =
         dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
@@ -756,7 +759,13 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool)
             );
         }
         move_buffer = game.into_move_buffer();
+        game_count += 1;
+        if game_count % 2048 == 0 {
+            print!("\r{game_count} games splatted");
+            std::io::stdout().flush().unwrap();
+        }
     }
+    println!();
 
     output_buffer.flush().unwrap();
 }
