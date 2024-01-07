@@ -223,7 +223,9 @@ impl Board {
         let v = t.nnue.evaluate(self.side);
         let v = v * self.material_scale() / 1024;
 
-        v * (200 - i32::from(self.fifty_move_counter)) / 200
+        let v = v * (200 - i32::from(self.fifty_move_counter)) / 200;
+
+        v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
     pub fn evaluate<const USE_NNUE: bool>(
