@@ -983,7 +983,13 @@ impl Board {
                         // ordering_score is only robustly a history score
                         // if this is a quiet move. Otherwise, it would be
                         // the MVV/LVA for a capture, plus SEE.
-                        let history = t.get_history_score(self, m);
+                        let mut history = t.get_history_score(self, m);
+                        if height > 0 {
+                            history += ThreadData::get_continuation_history_score(self, m, t.conthist_indices[height - 1], &t.counter_move_history);
+                        }
+                        if height > 1 {
+                            history += ThreadData::get_continuation_history_score(self, m, t.conthist_indices[height - 2], &t.followup_history);
+                        }
                         if history > i32::from(MAX_HISTORY) / 2 {
                             r -= 1;
                         } else if history < i32::from(-MAX_HISTORY) / 2 {

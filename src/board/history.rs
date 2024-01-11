@@ -127,6 +127,18 @@ impl ThreadData {
         }
     }
 
+    /// Get the continuation history score for a single move, after the move has been made.
+    pub fn get_continuation_history_score(
+        pos: &Board,
+        m: Move,
+        conthist_index: ContHistIndex,
+        table: &DoubleHistoryTable,
+    ) -> i32 {
+        let to = m.history_to_square();
+        let piece_moved = pos.piece_at(to);
+        i32::from(table.get_index(conthist_index).get(piece_moved, to))
+    }
+
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
