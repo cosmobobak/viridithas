@@ -17,7 +17,10 @@ use crate::{
         },
         movegen::{
             bitboards,
-            movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE, COUNTER_MOVE_SCORE},
+            movepicker::{
+                CapturePicker, MainMovePicker, MovePicker, Stage, COUNTER_MOVE_SCORE,
+                WINNING_CAPTURE_SCORE,
+            },
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -985,10 +988,20 @@ impl Board {
                         // the MVV/LVA for a capture, plus SEE.
                         let mut history = t.get_history_score(self, m);
                         if height > 0 {
-                            history += ThreadData::get_continuation_history_score(self, m, t.conthist_indices[height - 1], &t.counter_move_history);
+                            history += ThreadData::get_continuation_history_score(
+                                self,
+                                m,
+                                t.conthist_indices[height - 1],
+                                &t.counter_move_history,
+                            );
                         }
                         if height > 1 {
-                            history += ThreadData::get_continuation_history_score(self, m, t.conthist_indices[height - 2], &t.followup_history);
+                            history += ThreadData::get_continuation_history_score(
+                                self,
+                                m,
+                                t.conthist_indices[height - 2],
+                                &t.followup_history,
+                            );
                         }
                         if history > i32::from(MAX_HISTORY) / 2 {
                             r -= 1;
