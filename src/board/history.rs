@@ -28,8 +28,8 @@ impl ThreadData {
             let val = self.main_history.get_mut(
                 piece_moved,
                 to,
-                pos.threats.contains_square(from),
-                pos.threats.contains_square(to),
+                pos.threats.all.contains_square(from),
+                pos.threats.all.contains_square(to),
             );
             update_history(val, depth, m == best_move);
         }
@@ -44,8 +44,8 @@ impl ThreadData {
             m.score += i32::from(self.main_history.get(
                 piece_moved,
                 to,
-                pos.threats.contains_square(from),
-                pos.threats.contains_square(to),
+                pos.threats.all.contains_square(from),
+                pos.threats.all.contains_square(to),
             ));
         }
     }

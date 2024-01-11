@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    board::evaluation::MATE_SCORE,
+    board::{evaluation::MATE_SCORE, movegen::bitboards::ThreatPackage},
     cfor,
     chessmove::Move,
     piece::{Colour, Piece},
@@ -314,7 +314,7 @@ pub struct Undo {
     pub ep_square: Square,
     pub fifty_move_counter: u8,
     pub capture: Piece,
-    pub threats: SquareSet,
+    pub threats: ThreatPackage,
 }
 
 pub enum CheckState {
