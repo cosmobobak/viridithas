@@ -1165,8 +1165,26 @@ impl Board {
         depth: Depth,
     ) {
         t.update_history(self, moves_to_adjust, best_move, depth);
-        t.update_countermove_history(self, moves_to_adjust, best_move, depth);
-        t.update_followup_history(self, moves_to_adjust, best_move, depth);
+        if self.height() > 0 {
+            ThreadData::update_continuation_history(
+                self,
+                moves_to_adjust,
+                best_move,
+                depth,
+                t.conthist_indices[self.height() - 1],
+                &mut t.counter_move_history,
+            );
+        }
+        if self.height() > 1 {
+            ThreadData::update_continuation_history(
+                self,
+                moves_to_adjust,
+                best_move,
+                depth,
+                t.conthist_indices[self.height() - 2],
+                &mut t.followup_history,
+            );
+        }
     }
 
     /// Update the tactical history table.

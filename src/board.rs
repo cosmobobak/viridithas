@@ -20,6 +20,7 @@ use crate::{
     },
     chessmove::Move,
     errors::{FenParseError, MoveParseError},
+    historytable::ContHistIndex,
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{self, get_bucket_indices, PovUpdate, UpdateBuffer},
@@ -1704,11 +1705,17 @@ impl Board {
         t: &mut ThreadData,
         info: &SearchInfo,
     ) -> bool {
-        if USE_NNUE {
-            self.make_move_nnue(m, t)
-        } else {
-            self.make_move_hce(m, info)
+        let height = self.height;
+        let moved_piece = self.moved_piece(m);
+        let successful =
+            if USE_NNUE { self.make_move_nnue(m, t) } else { self.make_move_hce(m, info) };
+        if !successful {
+            return false;
         }
+        // update the conthist indices
+        let to_sq = m.history_to_square();
+        t.conthist_indices[height] = ContHistIndex { piece: moved_piece, square: to_sq };
+        true
     }
 
     pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData, info: &SearchInfo) {

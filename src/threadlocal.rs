@@ -1,7 +1,9 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
+    historytable::{
+        CaptureHistoryTable, ContHistIndex, DoubleHistoryTable, MoveTable, ThreatsHistoryTable,
+    },
     nnue,
     piece::Colour,
     search::pv::PVariation,
@@ -28,6 +30,7 @@ pub struct ThreadData {
     pub counter_move_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [[Move; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
+    pub conthist_indices: [ContHistIndex; MAX_PLY],
 
     pub thread_id: usize,
 
@@ -58,6 +61,7 @@ impl ThreadData {
             counter_move_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
+            conthist_indices: [ContHistIndex::default(); MAX_PLY],
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,

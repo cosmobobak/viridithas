@@ -198,8 +198,22 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
 
         t.get_history_scores(pos, ms);
-        t.get_counter_move_history_scores(pos, ms);
-        t.get_followup_history_scores(pos, ms);
+        if pos.height > 0 {
+            ThreadData::get_continuation_history_scores(
+                pos,
+                ms,
+                t.conthist_indices[pos.height - 1],
+                &t.counter_move_history,
+            );
+        }
+        if pos.height > 1 {
+            ThreadData::get_continuation_history_scores(
+                pos,
+                ms,
+                t.conthist_indices[pos.height - 2],
+                &t.followup_history,
+            );
+        }
     }
 
     pub fn score_captures(
