@@ -193,7 +193,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
-        const NEAR_PROMOTION_BONUSES: [i32; 8] = [0, 0, 0, 0, 500, 2000, 8000, 0];
+        // const NEAR_PROMOTION_BONUSES: [i32; 8] = [0, 0, 0, 0, 500, 2000, 8000, 0];
         // zero-out the ordering scores
         for m in &mut *ms {
             m.score = 0;
@@ -219,63 +219,63 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
 
         // add bonuses / maluses for position-specific features
         // this stuff is pretty direct from caissa
-        let bb = &pos.pieces;
-        let th = &pos.threats;
-        for MoveListEntry { mov, score } in ms {
-            let from_sq = mov.from();
-            let to_sq = mov.to();
-            let moved_piece = pos.piece_at(from_sq);
-            match moved_piece.piece_type() {
-                PieceType::PAWN => {
-                    // add bonus for threatening promotions
-                    let relative_tgt_rank = mov.to().relative_to(pos.turn()).rank() as usize;
-                    *score += NEAR_PROMOTION_BONUSES[relative_tgt_rank];
-                    // check if pushed pawn is protected by other pawn
-                    let supporting_tgt =
-                        bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn().flip());
-                    if (supporting_tgt & bb.occupied_co(pos.turn())).non_empty() {
-                        // bonus for creating threats
-                        let pawn_attacks =
-                            bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn())
-                                & bb.occupied_co(pos.turn().flip());
-                        match () {
-                            () if (pawn_attacks & bb.all_kings()).non_empty() => *score += 10000,
-                            () if (pawn_attacks & bb.all_pawns()).non_empty() => *score += 1000,
-                            () if (pawn_attacks & bb.all_queens()).non_empty() => *score += 8000,
-                            () if (pawn_attacks & bb.all_rooks()).non_empty() => *score += 6000,
-                            () if (pawn_attacks & bb.all_bishops()).non_empty() => *score += 4000,
-                            () if (pawn_attacks & bb.all_knights()).non_empty() => *score += 4000,
-                            () => {}
-                        }
-                    }
-                }
-                PieceType::KNIGHT | PieceType::BISHOP => {
-                    if th.pawn.contains_square(from_sq) {
-                        *score += 4000;
-                    }
-                    if th.pawn.contains_square(to_sq) {
-                        *score -= 4000;
-                    }
-                }
-                PieceType::ROOK => {
-                    if (th.pawn | th.minor).contains_square(from_sq) {
-                        *score += 8000;
-                    }
-                    if (th.pawn | th.minor).contains_square(to_sq) {
-                        *score -= 8000;
-                    }
-                }
-                PieceType::QUEEN => {
-                    if (th.pawn | th.minor | th.rook).contains_square(from_sq) {
-                        *score += 12000;
-                    }
-                    if (th.pawn | th.minor | th.rook).contains_square(to_sq) {
-                        *score -= 12000;
-                    }
-                }
-                _ => {}
-            }
-        }
+        // let bb = &pos.pieces;
+        // let th = &pos.threats;
+        // for MoveListEntry { mov, score } in ms {
+        //     let from_sq = mov.from();
+        //     let to_sq = mov.to();
+        //     let moved_piece = pos.piece_at(from_sq);
+        //     match moved_piece.piece_type() {
+        //         PieceType::PAWN => {
+        //             // add bonus for threatening promotions
+        //             let relative_tgt_rank = mov.to().relative_to(pos.turn()).rank() as usize;
+        //             *score += NEAR_PROMOTION_BONUSES[relative_tgt_rank];
+        //             // check if pushed pawn is protected by other pawn
+        //             let supporting_tgt =
+        //                 bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn().flip());
+        //             if (supporting_tgt & bb.occupied_co(pos.turn())).non_empty() {
+        //                 // bonus for creating threats
+        //                 let pawn_attacks =
+        //                     bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn())
+        //                         & bb.occupied_co(pos.turn().flip());
+        //                 match () {
+        //                     () if (pawn_attacks & bb.all_kings()).non_empty() => *score += 10000,
+        //                     () if (pawn_attacks & bb.all_pawns()).non_empty() => *score += 1000,
+        //                     () if (pawn_attacks & bb.all_queens()).non_empty() => *score += 8000,
+        //                     () if (pawn_attacks & bb.all_rooks()).non_empty() => *score += 6000,
+        //                     () if (pawn_attacks & bb.all_bishops()).non_empty() => *score += 4000,
+        //                     () if (pawn_attacks & bb.all_knights()).non_empty() => *score += 4000,
+        //                     () => {}
+        //                 }
+        //             }
+        //         }
+        //         PieceType::KNIGHT | PieceType::BISHOP => {
+        //             if th.pawn.contains_square(from_sq) {
+        //                 *score += 4000;
+        //             }
+        //             if th.pawn.contains_square(to_sq) {
+        //                 *score -= 4000;
+        //             }
+        //         }
+        //         PieceType::ROOK => {
+        //             if (th.pawn | th.minor).contains_square(from_sq) {
+        //                 *score += 8000;
+        //             }
+        //             if (th.pawn | th.minor).contains_square(to_sq) {
+        //                 *score -= 8000;
+        //             }
+        //         }
+        //         PieceType::QUEEN => {
+        //             if (th.pawn | th.minor | th.rook).contains_square(from_sq) {
+        //                 *score += 12000;
+        //             }
+        //             if (th.pawn | th.minor | th.rook).contains_square(to_sq) {
+        //                 *score -= 12000;
+        //             }
+        //         }
+        //         _ => {}
+        //     }
+        // }
     }
 
     pub fn score_captures(
