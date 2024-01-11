@@ -888,6 +888,36 @@ impl Board {
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = !is_quiet && move_picker.stage <= Stage::YieldKiller1;
 
+            let mut stat_score = 0;
+
+            if is_quiet {
+                stat_score += t.get_history_score(self, m);
+                if height > 0 {
+                    stat_score += ThreadData::get_continuation_history_score(
+                        self,
+                        m,
+                        t.conthist_indices[height - 1],
+                        &t.cont_hists[0],
+                    );
+                }
+                if height > 1 {
+                    stat_score += ThreadData::get_continuation_history_score(
+                        self,
+                        m,
+                        t.conthist_indices[height - 2],
+                        &t.cont_hists[1],
+                    );
+                }
+                if height > 3 {
+                    stat_score += ThreadData::get_continuation_history_score(
+                        self,
+                        m,
+                        t.conthist_indices[height - 4],
+                        &t.cont_hists[3],
+                    );
+                }
+            }
+
             // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
@@ -983,40 +1013,8 @@ impl Board {
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
-                        // ordering_score is only robustly a history score
-                        // if this is a quiet move. Otherwise, it would be
-                        // the MVV/LVA for a capture, plus SEE.
-                        let mut history = t.get_history_score(self, m);
-                        if height > 0 {
-                            history += ThreadData::get_continuation_history_score(
-                                self,
-                                m,
-                                t.conthist_indices[height - 1],
-                                &t.cont_hists[0],
-                            );
-                        }
-                        if height > 1 {
-                            history += ThreadData::get_continuation_history_score(
-                                self,
-                                m,
-                                t.conthist_indices[height - 2],
-                                &t.cont_hists[1],
-                            );
-                        }
-                        if height > 3 {
-                            history += ThreadData::get_continuation_history_score(
-                                self,
-                                m,
-                                t.conthist_indices[height - 4],
-                                &t.cont_hists[3],
-                            );
-                        }
-                        if history > i32::from(MAX_HISTORY) / 2 {
-                            r -= 1;
-                        } else if history < i32::from(-MAX_HISTORY) / 2 {
-                            r += 1;
-                        }
-
+                        // extend/reduce using the stat_score of the move
+                        r -= i32::clamp(stat_score / 8192, -2, 2);
                         // reduce special moves one less
                         r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes

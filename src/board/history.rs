@@ -50,12 +50,11 @@ impl ThreadData {
         }
     }
 
-    /// Get the history score for a single move, after the move has been made.
+    /// Get the history score for a single move.
     pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let piece_moved = pos.moved_piece(m);
         let from = m.from();
         let to = m.history_to_square();
-        // needs to be piece_at(to) because the move has already been made:
-        let piece_moved = pos.piece_at(to);
         i32::from(self.main_history.get(
             piece_moved,
             to,
@@ -127,15 +126,15 @@ impl ThreadData {
         }
     }
 
-    /// Get the continuation history score for a single move, after the move has been made.
+    /// Get the continuation history score for a single move.
     pub fn get_continuation_history_score(
         pos: &Board,
         m: Move,
         conthist_index: ContHistIndex,
         table: &DoubleHistoryTable,
     ) -> i32 {
+        let piece_moved = pos.moved_piece(m);
         let to = m.history_to_square();
-        let piece_moved = pos.piece_at(to);
         i32::from(table.get_index(conthist_index).get(piece_moved, to))
     }
 
