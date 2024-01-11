@@ -26,8 +26,9 @@ pub struct ThreadData {
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
-    pub followup_history: Box<DoubleHistoryTable>,
-    pub counter_move_history: Box<DoubleHistoryTable>,
+    // pub followup_history: Box<DoubleHistoryTable>,
+    // pub counter_move_history: Box<DoubleHistoryTable>,
+    pub cont_hists: [Box<DoubleHistoryTable>; 4],
     pub killer_move_table: [[Move; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
     pub conthist_indices: [ContHistIndex; MAX_PLY],
@@ -57,8 +58,7 @@ impl ThreadData {
             nnue: nnue::network::NNUEState::new(board),
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
-            followup_history: DoubleHistoryTable::boxed(),
-            counter_move_history: DoubleHistoryTable::boxed(),
+            cont_hists: [0; 4].map(|_| DoubleHistoryTable::boxed()),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             conthist_indices: [ContHistIndex::default(); MAX_PLY],
@@ -93,8 +93,7 @@ impl ThreadData {
     pub fn clear_tables(&mut self) {
         self.main_history.clear();
         self.tactical_history.clear();
-        self.followup_history.clear();
-        self.counter_move_history.clear();
+        self.cont_hists.iter_mut().for_each(|h| h.clear());
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
@@ -105,8 +104,7 @@ impl ThreadData {
     pub fn set_up_for_search(&mut self, board: &Board) {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
-        self.followup_history.age_entries();
-        self.counter_move_history.age_entries();
+        self.cont_hists.iter_mut().for_each(|h| h.age_entries());
         self.killer_move_table.fill([Move::NULL; 2]);
         self.counter_move_table.clear();
         self.depth = 0;

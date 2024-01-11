@@ -992,7 +992,7 @@ impl Board {
                                 self,
                                 m,
                                 t.conthist_indices[height - 1],
-                                &t.counter_move_history,
+                                &t.cont_hists[0],
                             );
                         }
                         if height > 1 {
@@ -1000,7 +1000,15 @@ impl Board {
                                 self,
                                 m,
                                 t.conthist_indices[height - 2],
-                                &t.followup_history,
+                                &t.cont_hists[1],
+                            );
+                        }
+                        if height > 3 {
+                            history += ThreadData::get_continuation_history_score(
+                                self,
+                                m,
+                                t.conthist_indices[height - 4],
+                                &t.cont_hists[3],
                             );
                         }
                         if history > i32::from(MAX_HISTORY) / 2 {
@@ -1190,7 +1198,7 @@ impl Board {
                 best_move,
                 depth,
                 t.conthist_indices[self.height() - 1],
-                &mut t.counter_move_history,
+                &mut t.cont_hists[0],
             );
         }
         if self.height() > 1 {
@@ -1200,7 +1208,17 @@ impl Board {
                 best_move,
                 depth,
                 t.conthist_indices[self.height() - 2],
-                &mut t.followup_history,
+                &mut t.cont_hists[1],
+            );
+        }
+        if self.height() > 3 {
+            ThreadData::update_continuation_history(
+                self,
+                moves_to_adjust,
+                best_move,
+                depth,
+                t.conthist_indices[self.height() - 4],
+                &mut t.cont_hists[3],
             );
         }
     }
