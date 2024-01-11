@@ -27,7 +27,6 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -892,30 +891,9 @@ impl Board {
 
             if is_quiet {
                 stat_score += t.get_history_score(self, m);
-                if height > 0 {
-                    stat_score += ThreadData::get_continuation_history_score(
-                        self,
-                        m,
-                        t.conthist_indices[height - 1],
-                        &t.cont_hists[0],
-                    );
-                }
-                if height > 1 {
-                    stat_score += ThreadData::get_continuation_history_score(
-                        self,
-                        m,
-                        t.conthist_indices[height - 2],
-                        &t.cont_hists[1],
-                    );
-                }
-                if height > 3 {
-                    stat_score += ThreadData::get_continuation_history_score(
-                        self,
-                        m,
-                        t.conthist_indices[height - 4],
-                        &t.cont_hists[3],
-                    );
-                }
+                stat_score += t.get_continuation_history_score(self, m, 0);
+                stat_score += t.get_continuation_history_score(self, m, 1);
+                stat_score += t.get_continuation_history_score(self, m, 3);
             }
 
             // lmp & fp.
@@ -1189,36 +1167,9 @@ impl Board {
         depth: Depth,
     ) {
         t.update_history(self, moves_to_adjust, best_move, depth);
-        if self.height() > 0 {
-            ThreadData::update_continuation_history(
-                self,
-                moves_to_adjust,
-                best_move,
-                depth,
-                t.conthist_indices[self.height() - 1],
-                &mut t.cont_hists[0],
-            );
-        }
-        if self.height() > 1 {
-            ThreadData::update_continuation_history(
-                self,
-                moves_to_adjust,
-                best_move,
-                depth,
-                t.conthist_indices[self.height() - 2],
-                &mut t.cont_hists[1],
-            );
-        }
-        if self.height() > 3 {
-            ThreadData::update_continuation_history(
-                self,
-                moves_to_adjust,
-                best_move,
-                depth,
-                t.conthist_indices[self.height() - 4],
-                &mut t.cont_hists[3],
-            );
-        }
+        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
+        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
+        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
     }
 
     /// Update the tactical history table.
@@ -1263,10 +1214,10 @@ impl Board {
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
-        } else {
-            // re-make the singular move.
-            self.make_move::<NNUE>(m, t, info);
+            return ZERO_PLY;
         }
+        // re-make the singular move.
+        self.make_move::<NNUE>(m, t, info);
 
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 

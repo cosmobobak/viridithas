@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    historytable::{update_history, ContHistIndex, DoubleHistoryTable},
+    historytable::update_history,
     piece::{Piece, PieceType},
     threadlocal::ThreadData,
     util::{depth::Depth, Undo, MAX_DEPTH},
@@ -96,13 +96,18 @@ impl ThreadData {
 
     /// Update the continutation history counters of a batch of moves.
     pub fn update_continuation_history(
+        &mut self,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: Depth,
-        conthist_index: ContHistIndex,
-        table: &mut DoubleHistoryTable,
+        index: usize,
     ) {
+        if pos.height <= index {
+            return;
+        }
+        let conthist_index = self.conthist_indices[pos.height - 1 - index];
+        let table = self.cont_hists[index].as_mut();
         let cmh_block = table.get_index_mut(conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
@@ -113,11 +118,16 @@ impl ThreadData {
 
     /// Get the continuation history scores for a batch of moves.
     pub(super) fn get_continuation_history_scores(
+        &self,
         pos: &Board,
         ms: &mut [MoveListEntry],
-        conthist_index: ContHistIndex,
-        table: &DoubleHistoryTable,
+        index: usize,
     ) {
+        if pos.height <= index {
+            return;
+        }
+        let conthist_index = self.conthist_indices[pos.height - 1 - index];
+        let table = self.cont_hists[index].as_ref();
         let cmh_block = table.get_index(conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
@@ -127,12 +137,12 @@ impl ThreadData {
     }
 
     /// Get the continuation history score for a single move.
-    pub fn get_continuation_history_score(
-        pos: &Board,
-        m: Move,
-        conthist_index: ContHistIndex,
-        table: &DoubleHistoryTable,
-    ) -> i32 {
+    pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
+        if pos.height <= index {
+            return 0;
+        }
+        let conthist_index = self.conthist_indices[pos.height - 1 - index];
+        let table = self.cont_hists[index].as_ref();
         let piece_moved = pos.moved_piece(m);
         let to = m.history_to_square();
         i32::from(table.get_index(conthist_index).get(piece_moved, to))
