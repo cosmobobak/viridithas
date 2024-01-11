@@ -1,9 +1,5 @@
 use crate::{
-    board::{
-        history,
-        movegen::bitboards,
-        Board,
-    },
+    board::{history, movegen::bitboards, Board},
     chessmove::Move,
     piece::PieceType,
     threadlocal::ThreadData,
@@ -221,13 +217,10 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             );
         }
 
-        let bb = &pos.pieces;
-        let th = &pos.threats;
-        let our_pieces = bb.occupied_co(pos.turn());
-        let them = bb.occupied_co(pos.turn().flip());
-
         // add bonuses / maluses for position-specific features
         // this stuff is pretty direct from caissa
+        let bb = &pos.pieces;
+        let th = &pos.threats;
         for MoveListEntry { mov, score } in ms {
             let from_sq = mov.from();
             let to_sq = mov.to();
@@ -235,16 +228,16 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             match moved_piece.piece_type() {
                 PieceType::PAWN => {
                     // add bonus for threatening promotions
-                    let relative_tgt = mov.to().relative_to(pos.turn());
-                    *score += NEAR_PROMOTION_BONUSES[relative_tgt.rank() as usize];
+                    let relative_tgt_rank = mov.to().relative_to(pos.turn()).rank() as usize;
+                    *score += NEAR_PROMOTION_BONUSES[relative_tgt_rank];
                     // check if pushed pawn is protected by other pawn
-                    if (bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn().flip())
-                        & our_pieces)
-                        .non_empty()
-                    {
+                    let supporting_tgt =
+                        bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn().flip());
+                    if (supporting_tgt & bb.occupied_co(pos.turn())).non_empty() {
                         // bonus for creating threats
                         let pawn_attacks =
-                            bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn()) & them;
+                            bitboards::pawn_attacks_runtime(mov.to().as_set(), pos.turn())
+                                & bb.occupied_co(pos.turn().flip());
                         match () {
                             () if (pawn_attacks & bb.all_kings()).non_empty() => *score += 10000,
                             () if (pawn_attacks & bb.all_pawns()).non_empty() => *score += 1000,

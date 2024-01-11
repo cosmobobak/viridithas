@@ -17,7 +17,7 @@ use crate::{
         },
         movegen::{
             bitboards,
-            movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE, COUNTER_MOVE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -865,7 +865,7 @@ impl Board {
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
-        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
+        while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
             debug_assert!(
                 !quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m)
@@ -883,7 +883,7 @@ impl Board {
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
-            let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
+            let is_winning_capture = !is_quiet && move_picker.stage <= Stage::YieldKiller1;
 
             // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -983,16 +983,15 @@ impl Board {
                         // ordering_score is only robustly a history score
                         // if this is a quiet move. Otherwise, it would be
                         // the MVV/LVA for a capture, plus SEE.
-                        // even still, this allows killers and countermoves
-                        // which will always have their reduction reduced by one,
-                        // as the killer and cm scores are >> MAX_HISTORY.
-                        let history = ordering_score;
+                        let history = t.get_history_score(self, m);
                         if history > i32::from(MAX_HISTORY) / 2 {
                             r -= 1;
                         } else if history < i32::from(-MAX_HISTORY) / 2 {
                             r += 1;
                         }
 
+                        // reduce special moves one less
+                        r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
                         r += i32::from(!PV);
                         // reduce more if it's a cut-node
