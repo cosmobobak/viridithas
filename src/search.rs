@@ -1010,7 +1010,7 @@ impl Board {
                         }
 
                         // reduce special moves one less
-                        // r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
+                        r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
                         r += i32::from(!PV);
                         // reduce more if it's a cut-node

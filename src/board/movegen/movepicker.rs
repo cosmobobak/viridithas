@@ -1,7 +1,6 @@
 use crate::{
-    board::{history, movegen::bitboards, Board},
+    board::{history, Board},
     chessmove::Move,
-    piece::PieceType,
     threadlocal::ThreadData,
 };
 
