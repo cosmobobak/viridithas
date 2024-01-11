@@ -35,7 +35,10 @@ use crate::{
 
 use self::{
     evaluation::score::S,
-    movegen::{bitboards::{BitBoard, ThreatPackage}, MoveListEntry},
+    movegen::{
+        bitboards::{BitBoard, Threats},
+        MoveListEntry,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -59,7 +62,7 @@ pub struct Board {
     key: u64,
 
     /// Squares that the opponent attacks
-    threats: ThreatPackage,
+    threats: Threats,
 
     /* Incrementally updated features used to accelerate various queries */
     big_piece_counts: [u8; 2],
@@ -150,7 +153,7 @@ impl Board {
             height: 0,
             ply: 0,
             key: 0,
-            threats: ThreatPackage { all:SquareSet::EMPTY, pawn:SquareSet::EMPTY, minor:SquareSet::EMPTY, rook:SquareSet::EMPTY },
+            threats: Threats::default(),
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
@@ -270,7 +273,7 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
-    pub fn generate_threats(&self, side: Colour) -> ThreatPackage {
+    pub fn generate_threats(&self, side: Colour) -> Threats {
         if side == Colour::WHITE {
             self.generate_threats_from::<true>()
         } else {
@@ -278,7 +281,7 @@ impl Board {
         }
     }
 
-    pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> ThreatPackage {
+    pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
         let mut minor_threats = SquareSet::EMPTY;
         let mut rook_threats = SquareSet::EMPTY;
@@ -307,12 +310,7 @@ impl Board {
 
         threats |= king_attacks(their_king);
 
-        ThreatPackage {
-            all: threats,
-            pawn: pawn_threats,
-            minor: minor_threats,
-            rook: rook_threats,
-        }
+        Threats { all: threats, pawn: pawn_threats, minor: minor_threats, rook: rook_threats }
     }
 
     pub fn reset(&mut self) {
@@ -329,7 +327,7 @@ impl Board {
         self.ply = 0;
         self.castle_perm = CastlingRights::NONE;
         self.key = 0;
-        self.threats = ThreatPackage { all:SquareSet::EMPTY, pawn:SquareSet::EMPTY, minor:SquareSet::EMPTY, rook:SquareSet::EMPTY };
+        self.threats = Threats::default();
         self.pst_vals = S(0, 0);
         self.history.clear();
         self.repetition_cache.clear();

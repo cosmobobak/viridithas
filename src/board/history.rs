@@ -50,6 +50,20 @@ impl ThreadData {
         }
     }
 
+    /// Get the history score for a single move, after the move has been made.
+    pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let from = m.from();
+        let to = m.history_to_square();
+        // needs to be piece_at(to) because the move has already been made:
+        let piece_moved = pos.piece_at(to);
+        i32::from(self.main_history.get(
+            piece_moved,
+            to,
+            pos.threats.all.contains_square(from),
+            pos.threats.all.contains_square(to),
+        ))
+    }
+
     /// Update the tactical history counters of a batch of moves.
     pub fn update_tactical_history(
         &mut self,
