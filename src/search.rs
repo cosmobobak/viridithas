@@ -17,16 +17,14 @@ use crate::{
         },
         movegen::{
             bitboards,
-            movepicker::{
-                CapturePicker, MainMovePicker, MovePicker, Stage,
-                WINNING_CAPTURE_SCORE,
-            },
+            movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
     },
     cfor,
     chessmove::Move,
+    historytable::MAX_HISTORY,
     piece::{Colour, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -36,7 +34,7 @@ use crate::{
     uci,
     util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
-    }, historytable::MAX_HISTORY,
+    },
 };
 
 use self::parameters::SearchParams;

@@ -10,6 +10,7 @@ use crate::{
     board::{evaluation::MATE_SCORE, movegen::bitboards::Threats},
     cfor,
     chessmove::Move,
+    historytable::ContHistIndex,
     piece::{Colour, Piece},
     squareset::SquareSet,
     uci::CHESS960,
@@ -315,6 +316,7 @@ pub struct Undo {
     pub fifty_move_counter: u8,
     pub capture: Piece,
     pub threats: Threats,
+    pub cont_hist_index: ContHistIndex,
 }
 
 pub enum CheckState {

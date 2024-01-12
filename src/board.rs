@@ -1253,6 +1253,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             capture: captured,
             threats: self.threats,
+            cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
         });
         self.repetition_cache.push(saved_key);
 
@@ -1347,7 +1348,7 @@ impl Board {
         self.height -= 1;
         self.ply -= 1;
 
-        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture, threats } =
+        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
             self.history.pop().expect("No move to unmake!");
 
         let from = m.from();
@@ -1445,6 +1446,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             capture: Piece::EMPTY,
             threats: self.threats,
+            cont_hist_index: ContHistIndex { piece: Piece::EMPTY, square: Square::NO_SQUARE },
         });
 
         if self.ep_sq != Square::NO_SQUARE {
@@ -1477,7 +1479,7 @@ impl Board {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture, threats } =
+        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
             self.history.pop().expect("No move to unmake!");
 
         debug_assert_eq!(capture, Piece::EMPTY);
@@ -1709,17 +1711,11 @@ impl Board {
         t: &mut ThreadData,
         info: &SearchInfo,
     ) -> bool {
-        let height = self.height;
-        let moved_piece = self.moved_piece(m);
-        let successful =
-            if USE_NNUE { self.make_move_nnue(m, t) } else { self.make_move_hce(m, info) };
-        if !successful {
-            return false;
+        if USE_NNUE {
+            self.make_move_nnue(m, t)
+        } else {
+            self.make_move_hce(m, info)
         }
-        // update the conthist indices
-        let to_sq = m.history_to_square();
-        t.conthist_indices[height] = ContHistIndex { piece: moved_piece, square: to_sq };
-        true
     }
 
     pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData, info: &SearchInfo) {

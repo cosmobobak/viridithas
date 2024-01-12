@@ -134,7 +134,7 @@ impl CaptureHistoryTable {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ContHistIndex {
     pub piece: Piece,
     pub square: Square,

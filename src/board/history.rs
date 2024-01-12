@@ -1,9 +1,9 @@
 use crate::{
     chessmove::Move,
-    historytable::update_history,
+    historytable::{update_history, ContHistIndex},
     piece::{Piece, PieceType},
     threadlocal::ThreadData,
-    util::{depth::Depth, Undo, MAX_DEPTH},
+    util::{depth::Depth, Square, Undo, MAX_DEPTH},
 };
 
 use super::{movegen::MoveListEntry, Board};
@@ -103,10 +103,16 @@ impl ThreadData {
         depth: Depth,
         index: usize,
     ) {
-        if pos.height <= index {
-            return;
-        }
-        let conthist_index = self.conthist_indices[pos.height - 1 - index];
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        let conthist_index =
+            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+                None
+                | Some(Undo {
+                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
+                    ..
+                }) => return,
+                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+            };
         let table = self.cont_hists[index].as_mut();
         let cmh_block = table.get_index_mut(conthist_index);
         for &m in moves_to_adjust {
@@ -123,10 +129,16 @@ impl ThreadData {
         ms: &mut [MoveListEntry],
         index: usize,
     ) {
-        if pos.height <= index {
-            return;
-        }
-        let conthist_index = self.conthist_indices[pos.height - 1 - index];
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        let conthist_index =
+            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+                None
+                | Some(Undo {
+                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
+                    ..
+                }) => return,
+                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+            };
         let table = self.cont_hists[index].as_ref();
         let cmh_block = table.get_index(conthist_index);
         for m in ms {
