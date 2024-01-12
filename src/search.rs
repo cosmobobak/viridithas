@@ -893,7 +893,7 @@ impl Board {
                 stat_score += t.get_history_score(self, m);
                 stat_score += t.get_continuation_history_score(self, m, 0);
                 stat_score += t.get_continuation_history_score(self, m, 1);
-                stat_score += t.get_continuation_history_score(self, m, 3);
+                // stat_score += t.get_continuation_history_score(self, m, 3);
             }
 
             // lmp & fp.
@@ -1169,7 +1169,7 @@ impl Board {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
-        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
+        // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
     }
 
     /// Update the tactical history table.
