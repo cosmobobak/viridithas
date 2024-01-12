@@ -1336,6 +1336,7 @@ impl Board {
         self.side = self.side.flip();
         hash_side(&mut self.key);
 
+        // TODO: do this after legality check?
         self.threats = self.generate_threats(self.side.flip());
 
         #[cfg(debug_assertions)]
