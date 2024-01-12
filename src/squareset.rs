@@ -4,7 +4,7 @@ use std::ops::{
 
 use crate::{board::movegen::BitLoop, util::Square};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
 pub struct SquareSet {
     inner: u64,

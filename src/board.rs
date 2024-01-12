@@ -20,6 +20,7 @@ use crate::{
     },
     chessmove::Move,
     errors::{FenParseError, MoveParseError},
+    historytable::ContHistIndex,
     lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{self, get_bucket_indices, PovUpdate, UpdateBuffer},
@@ -35,7 +36,10 @@ use crate::{
 
 use self::{
     evaluation::score::S,
-    movegen::{bitboards::BitBoard, MoveListEntry},
+    movegen::{
+        bitboards::{BitBoard, Threats},
+        MoveListEntry,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -58,8 +62,8 @@ pub struct Board {
     /// The Zobrist hash of the board.
     key: u64,
 
-    /// All squares that the opponent attacks
-    threats: SquareSet,
+    /// Squares that the opponent attacks
+    threats: Threats,
 
     /* Incrementally updated features used to accelerate various queries */
     big_piece_counts: [u8; 2],
@@ -150,7 +154,7 @@ impl Board {
             height: 0,
             ply: 0,
             key: 0,
-            threats: SquareSet::EMPTY,
+            threats: Threats::default(),
             big_piece_counts: [0; 2],
             major_piece_counts: [0; 2],
             minor_piece_counts: [0; 2],
@@ -213,7 +217,7 @@ impl Board {
     }
 
     pub fn in_check(&self) -> bool {
-        self.threats.contains_square(self.king_sq(self.side))
+        self.threats.all.contains_square(self.king_sq(self.side))
     }
 
     pub fn zero_height(&mut self) {
@@ -270,7 +274,7 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
-    pub fn generate_threats(&self, side: Colour) -> SquareSet {
+    pub fn generate_threats(&self, side: Colour) -> Threats {
         if side == Colour::WHITE {
             self.generate_threats_from::<true>()
         } else {
@@ -278,7 +282,7 @@ impl Board {
         }
     }
 
-    pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> SquareSet {
+    pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
 
         let their_pawns = self.pieces.pawns::<IS_WHITE>();
@@ -296,7 +300,7 @@ impl Board {
 
         threats |= king_attacks(their_king);
 
-        threats
+        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats */ }
     }
 
     pub fn reset(&mut self) {
@@ -313,7 +317,7 @@ impl Board {
         self.ply = 0;
         self.castle_perm = CastlingRights::NONE;
         self.key = 0;
-        self.threats = SquareSet::EMPTY;
+        self.threats = Threats::default();
         self.pst_vals = S(0, 0);
         self.history.clear();
         self.repetition_cache.clear();
@@ -784,7 +788,7 @@ impl Board {
         self.check_validity().unwrap();
 
         if IS_WHITE == (self.side == Colour::BLACK) {
-            return self.threats.contains_square(sq);
+            return self.threats.all.contains_square(sq);
         }
 
         let sq_bb = sq.as_set();
@@ -974,7 +978,7 @@ impl Board {
 
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
         if by == self.side.flip() {
-            (squares & self.threats).non_empty()
+            (squares & self.threats.all).non_empty()
         } else {
             for sq in squares {
                 if self.sq_attacked(sq, by) {
@@ -1249,6 +1253,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             capture: captured,
             threats: self.threats,
+            cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
         });
         self.repetition_cache.push(saved_key);
 
@@ -1321,6 +1326,7 @@ impl Board {
         self.side = self.side.flip();
         hash_side(&mut self.key);
 
+        // TODO: do this after legality check?
         self.threats = self.generate_threats(self.side.flip());
 
         #[cfg(debug_assertions)]
@@ -1342,7 +1348,7 @@ impl Board {
         self.height -= 1;
         self.ply -= 1;
 
-        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture, threats } =
+        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
             self.history.pop().expect("No move to unmake!");
 
         let from = m.from();
@@ -1440,6 +1446,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             capture: Piece::EMPTY,
             threats: self.threats,
+            cont_hist_index: ContHistIndex { piece: Piece::EMPTY, square: Square::NO_SQUARE },
         });
 
         if self.ep_sq != Square::NO_SQUARE {
@@ -1472,7 +1479,7 @@ impl Board {
             hash_ep(&mut self.key, self.ep_sq);
         }
 
-        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture, threats } =
+        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
             self.history.pop().expect("No move to unmake!");
 
         debug_assert_eq!(capture, Piece::EMPTY);
@@ -2342,7 +2349,7 @@ mod tests {
         use crate::squareset::SquareSet;
 
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
-        assert_eq!(board.threats, SquareSet::from_inner(0x1454_9d56_bddd_5f3f));
+        assert_eq!(board.threats.all, SquareSet::from_inner(0x1454_9d56_bddd_5f3f));
     }
 
     #[test]
@@ -2351,6 +2358,6 @@ mod tests {
         use crate::squareset::SquareSet;
 
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
-        assert_eq!(board.threats, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
+        assert_eq!(board.threats.all, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
     }
 }

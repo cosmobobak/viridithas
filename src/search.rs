@@ -865,7 +865,7 @@ impl Board {
 
         let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
         let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
-        while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t)
+        while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
             debug_assert!(
                 !quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m)
@@ -883,7 +883,16 @@ impl Board {
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
-            let is_winning_capture = ordering_score > WINNING_CAPTURE_SCORE;
+            let is_winning_capture = movepick_score > WINNING_CAPTURE_SCORE;
+
+            // let mut stat_score = 0;
+
+            // if is_quiet {
+            //     stat_score += t.get_history_score(self, m);
+            //     stat_score += t.get_continuation_history_score(self, m, 0);
+            //     stat_score += t.get_continuation_history_score(self, m, 1);
+            //     // stat_score += t.get_continuation_history_score(self, m, 3);
+            // }
 
             // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -980,23 +989,16 @@ impl Board {
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
-                        // ordering_score is only robustly a history score
-                        // if this is a quiet move. Otherwise, it would be
-                        // the MVV/LVA for a capture, plus SEE.
-                        // even still, this allows killers and countermoves
-                        // which will always have their reduction reduced by one,
-                        // as the killer and cm scores are >> MAX_HISTORY.
-                        let history = ordering_score;
-                        if history > i32::from(MAX_HISTORY) / 2 {
-                            r -= 1;
-                        } else if history < i32::from(-MAX_HISTORY) / 2 {
-                            r += 1;
-                        }
-
+                        // extend/reduce using the stat_score of the move
+                        r -= i32::clamp(movepick_score / (i32::from(MAX_HISTORY) / 2), -1, 1);
+                        // reduce special moves one less
+                        // r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
                         r += i32::from(!PV);
                         // reduce more if it's a cut-node
                         r += i32::from(cut_node);
+                        // reduce more if not improving
+                        // r += i32::from(!improving);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
@@ -1165,8 +1167,9 @@ impl Board {
         depth: Depth,
     ) {
         t.update_history(self, moves_to_adjust, best_move, depth);
-        t.update_countermove_history(self, moves_to_adjust, best_move, depth);
-        t.update_followup_history(self, moves_to_adjust, best_move, depth);
+        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
+        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
+        // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
     }
 
     /// Update the tactical history table.
@@ -1211,10 +1214,10 @@ impl Board {
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
-        } else {
-            // re-make the singular move.
-            self.make_move::<NNUE>(m, t, info);
+            return ZERO_PLY;
         }
+        // re-make the singular move.
+        self.make_move::<NNUE>(m, t, info);
 
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
