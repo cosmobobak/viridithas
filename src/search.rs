@@ -36,7 +36,7 @@ use crate::{
     uci,
     util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
-    },
+    }, historytable::MAX_HISTORY,
 };
 
 use self::parameters::SearchParams;
@@ -992,7 +992,7 @@ impl Board {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= i32::clamp(stat_score / 8192, -2, 2);
+                        r -= i32::clamp(stat_score / (i32::from(MAX_HISTORY) / 2), -1, 1);
                         // reduce special moves one less
                         r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
