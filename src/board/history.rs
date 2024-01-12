@@ -94,7 +94,7 @@ impl ThreadData {
         }
     }
 
-    /// Update the continutation history counters of a batch of moves.
+    /// Update the continuation history counters of a batch of moves.
     pub fn update_continuation_history(
         &mut self,
         pos: &Board,
