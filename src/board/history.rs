@@ -130,6 +130,13 @@ impl ThreadData {
         index: usize,
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        if let Some(Undo {
+            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
+            ..
+        }) = pos.history.last()
+        {
+            return;
+        }
         let conthist_index =
             match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
                 None
