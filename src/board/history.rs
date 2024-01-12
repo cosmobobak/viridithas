@@ -105,8 +105,7 @@ impl ThreadData {
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
         if let Some(Undo {
-            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
-            ..
+            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
         }) = pos.history.last()
         {
             return;
@@ -138,8 +137,7 @@ impl ThreadData {
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
         if let Some(Undo {
-            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
-            ..
+            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
         }) = pos.history.last()
         {
             return;
