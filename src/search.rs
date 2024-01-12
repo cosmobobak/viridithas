@@ -988,17 +988,19 @@ impl Board {
                     .full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
+                let r = if depth >= Depth::new(3) && moves_made >= (1 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= i32::clamp(stat_score / (i32::from(MAX_HISTORY) / 2), -1, 1);
+                        r -= i32::clamp(stat_score / 8192, -1, 1);
                         // reduce special moves one less
                         r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
                         r += i32::from(!PV);
                         // reduce more if it's a cut-node
                         r += i32::from(cut_node);
+                        // reduce more if not improving
+                        r += i32::from(!improving);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
