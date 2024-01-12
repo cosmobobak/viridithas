@@ -18,7 +18,7 @@ use crate::{
         movegen::{
             bitboards,
             movepicker::{
-                CapturePicker, MainMovePicker, MovePicker, Stage, COUNTER_MOVE_SCORE,
+                CapturePicker, MainMovePicker, MovePicker, Stage,
                 WINNING_CAPTURE_SCORE,
             },
             MoveListEntry, MAX_POSITION_MOVES,
@@ -36,7 +36,7 @@ use crate::{
     uci,
     util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
-    },
+    }, historytable::MAX_HISTORY,
 };
 
 use self::parameters::SearchParams;
@@ -887,14 +887,14 @@ impl Board {
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = !is_quiet && move_picker.stage <= Stage::YieldKiller1;
 
-            let mut stat_score = 0;
+            // let mut stat_score = 0;
 
-            if is_quiet {
-                stat_score += t.get_history_score(self, m);
-                stat_score += t.get_continuation_history_score(self, m, 0);
-                stat_score += t.get_continuation_history_score(self, m, 1);
-                // stat_score += t.get_continuation_history_score(self, m, 3);
-            }
+            // if is_quiet {
+            //     stat_score += t.get_history_score(self, m);
+            //     stat_score += t.get_continuation_history_score(self, m, 0);
+            //     stat_score += t.get_continuation_history_score(self, m, 1);
+            //     // stat_score += t.get_continuation_history_score(self, m, 3);
+            // }
 
             // lmp & fp.
             if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -992,15 +992,15 @@ impl Board {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= i32::clamp(stat_score / 8192, -1, 1);
+                        r -= i32::clamp(movepick_score / (i32::from(MAX_HISTORY) / 2), -1, 1);
                         // reduce special moves one less
-                        r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
+                        // r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
                         r += i32::from(!PV);
                         // reduce more if it's a cut-node
                         r += i32::from(cut_node);
                         // reduce more if not improving
-                        r += i32::from(!improving);
+                        // r += i32::from(!improving);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;

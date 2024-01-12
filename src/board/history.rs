@@ -51,17 +51,17 @@ impl ThreadData {
     }
 
     /// Get the history score for a single move.
-    pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let piece_moved = pos.moved_piece(m);
-        let from = m.from();
-        let to = m.history_to_square();
-        i32::from(self.main_history.get(
-            piece_moved,
-            to,
-            pos.threats.all.contains_square(from),
-            pos.threats.all.contains_square(to),
-        ))
-    }
+    // pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
+    //     let piece_moved = pos.moved_piece(m);
+    //     let from = m.from();
+    //     let to = m.history_to_square();
+    //     i32::from(self.main_history.get(
+    //         piece_moved,
+    //         to,
+    //         pos.threats.all.contains_square(from),
+    //         pos.threats.all.contains_square(to),
+    //     ))
+    // }
 
     /// Update the tactical history counters of a batch of moves.
     pub fn update_tactical_history(
@@ -137,16 +137,16 @@ impl ThreadData {
     }
 
     /// Get the continuation history score for a single move.
-    pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
-        if pos.height <= index {
-            return 0;
-        }
-        let conthist_index = self.conthist_indices[pos.height - 1 - index];
-        let table = self.cont_hists[index].as_ref();
-        let piece_moved = pos.moved_piece(m);
-        let to = m.history_to_square();
-        i32::from(table.get_index(conthist_index).get(piece_moved, to))
-    }
+    // pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
+    //     if pos.height <= index {
+    //         return 0;
+    //     }
+    //     let conthist_index = self.conthist_indices[pos.height - 1 - index];
+    //     let table = self.cont_hists[index].as_ref();
+    //     let piece_moved = pos.moved_piece(m);
+    //     let to = m.history_to_square();
+    //     i32::from(table.get_index(conthist_index).get(piece_moved, to))
+    // }
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
