@@ -36,7 +36,7 @@ use crate::{
     uci,
     util::{
         depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
-    }, historytable::MAX_HISTORY,
+    },
 };
 
 use self::parameters::SearchParams;
