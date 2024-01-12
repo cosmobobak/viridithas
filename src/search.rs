@@ -986,7 +986,7 @@ impl Board {
                     .full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3) && moves_made >= (1 + usize::from(PV)) {
+                let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move

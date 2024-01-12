@@ -55,7 +55,7 @@ impl ThreadData {
             nnue: nnue::network::NNUEState::new(board),
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
-            cont_hists: [0; 2].map(|_| DoubleHistoryTable::boxed()),
+            cont_hists: [(); 2].map(|()| DoubleHistoryTable::boxed()),
             killer_move_table: [[Move::NULL; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             thread_id,
