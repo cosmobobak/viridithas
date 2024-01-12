@@ -284,34 +284,23 @@ impl Board {
 
     pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
-        let mut minor_threats = SquareSet::EMPTY;
-        let mut rook_threats = SquareSet::EMPTY;
 
         let their_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_knights = self.pieces.knights::<IS_WHITE>();
-        let their_bishops = self.pieces.bishops::<IS_WHITE>();
-        let their_rooks = self.pieces.rooks::<IS_WHITE>();
-        let their_queens = self.pieces.queens::<IS_WHITE>();
+        let their_diags = self.pieces.bishopqueen::<IS_WHITE>();
+        let their_orthos = self.pieces.rookqueen::<IS_WHITE>();
         let their_king = self.king_sq(if IS_WHITE { Colour::WHITE } else { Colour::BLACK });
         let blockers = self.pieces.occupied();
 
-        let pawn_threats = pawn_attacks::<IS_WHITE>(their_pawns);
+        threats |= pawn_attacks::<IS_WHITE>(their_pawns);
 
-        their_knights.iter().for_each(|sq| minor_threats |= knight_attacks(sq));
-        their_bishops.iter().for_each(|sq| minor_threats |= bishop_attacks(sq, blockers));
-        their_rooks.iter().for_each(|sq| rook_threats |= rook_attacks(sq, blockers));
-        their_queens.iter().for_each(|sq| {
-            threats |= bishop_attacks(sq, blockers);
-            threats |= rook_attacks(sq, blockers);
-        });
-
-        threats |= pawn_threats;
-        threats |= minor_threats;
-        threats |= rook_threats;
+        their_knights.iter().for_each(|sq| threats |= knight_attacks(sq));
+        their_diags.iter().for_each(|sq| threats |= bishop_attacks(sq, blockers));
+        their_orthos.iter().for_each(|sq| threats |= rook_attacks(sq, blockers));
 
         threats |= king_attacks(their_king);
 
-        Threats { all: threats, pawn: pawn_threats, minor: minor_threats, rook: rook_threats }
+        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats */ }
     }
 
     pub fn reset(&mut self) {

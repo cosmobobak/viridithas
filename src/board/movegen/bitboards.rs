@@ -337,9 +337,9 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Threats {
     pub all: SquareSet,
-    pub pawn: SquareSet,
-    pub minor: SquareSet,
-    pub rook: SquareSet,
+    // pub pawn: SquareSet,
+    // pub minor: SquareSet,
+    // pub rook: SquareSet,
 }
 
 impl Display for BitBoard {
