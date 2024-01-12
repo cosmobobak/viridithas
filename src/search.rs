@@ -883,7 +883,7 @@ impl Board {
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
             let is_quiet = !self.is_tactical(m);
-            let is_winning_capture = !is_quiet && move_picker.stage <= Stage::YieldKiller1;
+            let is_winning_capture = movepick_score > WINNING_CAPTURE_SCORE;
 
             // let mut stat_score = 0;
 
