@@ -1321,8 +1321,6 @@ impl Board {
         self.side = self.side.flip();
         hash_side(&mut self.key);
 
-        self.threats = self.generate_threats(self.side.flip());
-
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1331,6 +1329,8 @@ impl Board {
             self.unmake_move_base();
             return false;
         }
+
+        self.threats = self.generate_threats(self.side.flip());
 
         true
     }
