@@ -1,9 +1,9 @@
 use crate::{
     chessmove::Move,
-    historytable::update_history,
+    historytable::{update_history, ContHistIndex},
     piece::{Piece, PieceType},
     threadlocal::ThreadData,
-    util::{depth::Depth, Rank, Undo, MAX_DEPTH},
+    util::{depth::Depth, Square, Undo, MAX_DEPTH},
 };
 
 use super::{movegen::MoveListEntry, Board};
@@ -28,8 +28,8 @@ impl ThreadData {
             let val = self.main_history.get_mut(
                 piece_moved,
                 to,
-                pos.threats.contains_square(from),
-                pos.threats.contains_square(to),
+                pos.threats.all.contains_square(from),
+                pos.threats.all.contains_square(to),
             );
             update_history(val, depth, m == best_move);
         }
@@ -44,11 +44,24 @@ impl ThreadData {
             m.score += i32::from(self.main_history.get(
                 piece_moved,
                 to,
-                pos.threats.contains_square(from),
-                pos.threats.contains_square(to),
+                pos.threats.all.contains_square(from),
+                pos.threats.all.contains_square(to),
             ));
         }
     }
+
+    /// Get the history score for a single move.
+    // pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
+    //     let piece_moved = pos.moved_piece(m);
+    //     let from = m.from();
+    //     let to = m.history_to_square();
+    //     i32::from(self.main_history.get(
+    //         piece_moved,
+    //         to,
+    //         pos.threats.all.contains_square(from),
+    //         pos.threats.all.contains_square(to),
+    //     ))
+    // }
 
     /// Update the tactical history counters of a batch of moves.
     pub fn update_tactical_history(
@@ -81,40 +94,33 @@ impl ThreadData {
         }
     }
 
-    /// Update the countermove history counters of a batch of moves.
-    pub fn update_countermove_history(
+    /// Update the continuation history counters of a batch of moves.
+    pub fn update_continuation_history(
         &mut self,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: Depth,
+        index: usize,
     ) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return;
-        };
-        if prev_move.is_null() {
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        if let Some(Undo {
+            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
+        }) = pos.history.last()
+        {
             return;
         }
-        let prev_to = prev_move.history_to_square();
-        let prev_piece = if prev_move.is_castle() {
-            Piece::new(pos.turn().flip(), PieceType::KING)
-        } else {
-            pos.piece_at(prev_to)
-        };
-
-        debug_assert_ne!(
-            prev_piece,
-            Piece::EMPTY,
-            "Piece on target square of move to counter has to exist!"
-        );
-        debug_assert_eq!(
-            prev_piece.colour(),
-            pos.turn().flip(),
-            "Piece on target square of move to counter has to be the opposite colour to us!"
-        );
-
-        let cmh_block = self.counter_move_history.get_mut(prev_piece, prev_to);
+        let conthist_index =
+            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+                None
+                | Some(Undo {
+                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
+                    ..
+                }) => return,
+                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+            };
+        let table = self.cont_hists[index].as_mut();
+        let cmh_block = table.get_index_mut(conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m);
@@ -122,33 +128,31 @@ impl ThreadData {
         }
     }
 
-    /// Get the countermove history scores for a batch of moves.
-    pub(super) fn get_counter_move_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
-            return;
-        };
-        if prev_move.is_null() {
+    /// Get the continuation history scores for a batch of moves.
+    pub(super) fn get_continuation_history_scores(
+        &self,
+        pos: &Board,
+        ms: &mut [MoveListEntry],
+        index: usize,
+    ) {
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        if let Some(Undo {
+            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
+        }) = pos.history.last()
+        {
             return;
         }
-        let prev_to = prev_move.history_to_square();
-        let prev_piece = if prev_move.is_castle() {
-            Piece::new(pos.turn().flip(), PieceType::KING)
-        } else {
-            pos.piece_at(prev_to)
-        };
-
-        debug_assert_ne!(
-            prev_piece,
-            Piece::EMPTY,
-            "Piece on target square of move to counter has to exist!"
-        );
-        debug_assert_eq!(
-            prev_piece.colour(),
-            pos.turn().flip(),
-            "Piece on target square of move to counter has to be the opposite colour to us!"
-        );
-
-        let cmh_block = self.counter_move_history.get(prev_piece, prev_to);
+        let conthist_index =
+            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+                None
+                | Some(Undo {
+                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
+                    ..
+                }) => return,
+                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+            };
+        let table = self.cont_hists[index].as_ref();
+        let cmh_block = table.get_index(conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov);
@@ -156,140 +160,17 @@ impl ThreadData {
         }
     }
 
-    /// Update the follow-up history counters of a batch of moves.
-    pub fn update_followup_history(
-        &mut self,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
-        let move_to_follow_up = pos.history[two_ply_ago].m;
-        let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() {
-            return;
-        }
-        let tpa_to = move_to_follow_up.history_to_square();
-        // getting the previous piece type is a little awkward,
-        // because follow-up history looks two ply into the past,
-        // meaning that the piece on the target square of the move
-        // two ply ago may have been captured.
-        let tpa_piece = {
-            let at_target_square = pos.piece_at(tpa_to);
-            debug_assert!(
-                at_target_square != Piece::EMPTY
-                    || prev_move.is_ep()
-                    || move_to_follow_up.is_castle(),
-                "Piece on target square of move to follow up on has to exist!"
-            );
-            if prev_move.is_ep() {
-                // if the previous move was an en-passant capture, then the
-                // move we're following up must have been a double pawn push.
-                // as such, we can just construct a pawn of our colour.
-                debug_assert!(
-                    move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
-                );
-                Piece::new(pos.turn(), PieceType::PAWN)
-            } else if at_target_square.colour() == pos.turn() {
-                // if the piece on the target square is the same colour as us
-                // then nothing happened to our piece, so we can use it directly.
-                at_target_square
-            } else {
-                // otherwise, the most recent move captured our piece, so we
-                // look in the undo history to find out what our piece was.
-                debug_assert_ne!(
-                    pos.history[two_ply_ago + 1].capture,
-                    Piece::EMPTY,
-                    "Opponent's move has to capture a piece!"
-                );
-                debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
-                pos.history[two_ply_ago + 1].capture
-            }
-        };
-        debug_assert_ne!(
-            tpa_piece,
-            Piece::EMPTY,
-            "Piece on target square of move to follow up on has to exist!"
-        );
-        debug_assert_eq!(
-            tpa_piece.colour(),
-            pos.turn(),
-            "Piece on target square of move to follow up on has to be the same colour as us!"
-        );
-
-        let fuh_block = self.followup_history.get_mut(tpa_piece, tpa_to);
-        for &m in moves_to_adjust {
-            let to = m.history_to_square();
-            let piece = pos.moved_piece(m);
-            update_history(fuh_block.get_mut(piece, to), depth, m == best_move);
-        }
-    }
-
-    /// Get the follow-up history scores for a batch of moves.
-    pub(super) fn get_followup_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        let Some(two_ply_ago) = pos.history.len().checked_sub(2) else { return };
-        let move_to_follow_up = pos.history[two_ply_ago].m;
-        let prev_move = pos.history[two_ply_ago + 1].m;
-        if move_to_follow_up.is_null() || prev_move.is_null() {
-            return;
-        }
-        let tpa_to = move_to_follow_up.history_to_square();
-        // getting the previous piece type is a little awkward,
-        // because follow-up history looks two ply into the past,
-        // meaning that the piece on the target square of the move
-        // two ply ago may have been captured.
-        let tpa_piece = {
-            let at_target_square = pos.piece_at(tpa_to);
-            debug_assert!(
-                at_target_square != Piece::EMPTY
-                    || prev_move.is_ep()
-                    || move_to_follow_up.is_castle(),
-                "Piece on target square of move to follow up on has to exist!"
-            );
-            if prev_move.is_ep() {
-                // if the previous move was an en-passant capture, then the
-                // move we're following up must have been a double pawn push.
-                // as such, we can just construct a pawn of our colour.
-                debug_assert!(
-                    move_to_follow_up.to().rank() == Rank::double_pawn_push_rank(pos.turn())
-                );
-                Piece::new(pos.turn(), PieceType::PAWN)
-            } else if at_target_square.colour() == pos.turn() {
-                // if the piece on the target square is the same colour as us
-                // then nothing happened to our piece, so we can use it directly.
-                at_target_square
-            } else {
-                // otherwise, the most recent move captured our piece, so we
-                // look in the undo history to find out what our piece was.
-                debug_assert_ne!(
-                    pos.history[two_ply_ago + 1].capture,
-                    Piece::EMPTY,
-                    "Opponent's move has to capture a piece!"
-                );
-                debug_assert_eq!(prev_move.to(), tpa_to, "Opponent's move has to go to the same square as the move we're following up on!");
-                pos.history[two_ply_ago + 1].capture
-            }
-        };
-        debug_assert_ne!(
-            tpa_piece,
-            Piece::EMPTY,
-            "Piece on target square of move to follow up on has to exist!"
-        );
-        debug_assert_eq!(
-            tpa_piece.colour(),
-            pos.turn(),
-            "Piece on target square of move to follow up on has to be the same colour as us!"
-        );
-
-        let fuh_block = self.followup_history.get(tpa_piece, tpa_to);
-        for m in ms {
-            let to = m.mov.history_to_square();
-            let piece = pos.moved_piece(m.mov);
-            m.score += i32::from(fuh_block.get(piece, to));
-        }
-    }
+    /// Get the continuation history score for a single move.
+    // pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
+    //     if pos.height <= index {
+    //         return 0;
+    //     }
+    //     let conthist_index = self.conthist_indices[pos.height - 1 - index];
+    //     let table = self.cont_hists[index].as_ref();
+    //     let piece_moved = pos.moved_piece(m);
+    //     let to = m.history_to_square();
+    //     i32::from(table.get_index(conthist_index).get(piece_moved, to))
+    // }
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {

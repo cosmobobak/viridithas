@@ -134,6 +134,18 @@ impl CaptureHistoryTable {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ContHistIndex {
+    pub piece: Piece,
+    pub square: Square,
+}
+
+impl Default for ContHistIndex {
+    fn default() -> Self {
+        Self { piece: Piece::EMPTY, square: Square::NO_SQUARE }
+    }
+}
+
 #[allow(clippy::large_stack_frames)]
 #[derive(Clone)]
 pub struct DoubleHistoryTable {
@@ -165,14 +177,14 @@ impl DoubleHistoryTable {
         self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
     }
 
-    pub const fn get(&self, piece: Piece, sq: Square) -> &HistoryTable {
-        let pt = piece.hist_table_offset();
-        &self.table[pt][sq.index()]
+    pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
+        let pt = index.piece.hist_table_offset();
+        &mut self.table[pt][index.square.index()]
     }
 
-    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut HistoryTable {
-        let pt = piece.hist_table_offset();
-        &mut self.table[pt][sq.index()]
+    pub const fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
+        let pt = index.piece.hist_table_offset();
+        &self.table[pt][index.square.index()]
     }
 }
 
