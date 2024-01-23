@@ -262,7 +262,7 @@ impl BitBoard {
     }
 
     /// Calls `callback` for each piece that is added or removed from `self` to `target`.
-    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(FeatureUpdate)) {
+    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(FeatureUpdate, bool)) {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 let piece = Piece::new(colour, piece_type);
@@ -270,21 +270,11 @@ impl BitBoard {
                 let target_bb = target.pieces[piece_type.index()] & target.colours[colour.index()];
                 let added = target_bb & !source_bb;
                 let removed = source_bb & !target_bb;
-                let mut added_iter = added.into_iter();
-                let mut removed_iter = removed.into_iter();
-                loop {
-                    match (added_iter.next(), removed_iter.next()) {
-                        (Some(added_sq), Some(removed_sq)) => {
-                            callback(FeatureUpdate::move_piece(removed_sq, added_sq, piece));
-                        }
-                        (Some(added_sq), None) => {
-                            callback(FeatureUpdate::add_piece(added_sq, piece));
-                        }
-                        (None, Some(removed_sq)) => {
-                            callback(FeatureUpdate::clear_piece(removed_sq, piece));
-                        }
-                        (None, None) => break,
-                    }
+                for sq in added {
+                    callback(FeatureUpdate { sq, piece }, true);
+                }
+                for sq in removed {
+                    callback(FeatureUpdate { sq, piece }, false);
                 }
             }
         }

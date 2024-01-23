@@ -1,5 +1,7 @@
 use std::{
-    env, mem,
+    env,
+    fmt::{Debug, Display},
+    mem,
     ops::{Deref, DerefMut},
 };
 
@@ -83,77 +85,70 @@ impl PovUpdate {
 }
 
 /// Struct representing some unmaterialised feature update made as part of a move.
+#[derive(Debug, Copy, Clone)]
 pub struct FeatureUpdate {
-    from: Square,
-    to: Square,
-    piece: Piece,
+    pub sq: Square,
+    pub piece: Piece,
 }
 
 impl FeatureUpdate {
-    pub const fn add_piece(sq: Square, piece: Piece) -> Self {
-        Self { from: Square::NO_SQUARE, to: sq, piece }
-    }
-
-    pub const fn clear_piece(sq: Square, piece: Piece) -> Self {
-        Self { from: sq, to: Square::NO_SQUARE, piece }
-    }
-
-    pub const fn move_piece(from: Square, to: Square, piece: Piece) -> Self {
-        Self { from, to, piece }
-    }
+    const NULL: Self = Self { sq: Square::NO_SQUARE, piece: Piece::EMPTY };
 }
 
-impl std::fmt::Debug for FeatureUpdate {
+impl Display for FeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FeatureUpdate {{ from: {}, to: {}, piece: {} }}", self.from, self.to, self.piece)
+        write!(f, "{piece} on {sq}", piece = self.piece, sq = self.sq)
     }
-}
-
-impl std::fmt::Display for FeatureUpdate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.from == Square::NO_SQUARE {
-            write!(f, "+{}: {}", self.piece, self.to)
-        } else if self.to == Square::NO_SQUARE {
-            write!(f, "-{}: {}", self.piece, self.from)
-        } else {
-            write!(f, "{}: {} -> {}", self.piece, self.from, self.to)
-        }
-    }
-}
-
-impl FeatureUpdate {
-    const NULL: Self = Self { from: Square::A1, to: Square::A1, piece: Piece::WP };
 }
 
 pub struct UpdateBuffer {
-    buffer: [FeatureUpdate; 4],
-    count: usize,
+    add: [FeatureUpdate; 2],
+    add_count: u8,
+    sub: [FeatureUpdate; 2],
+    sub_count: u8,
+}
+
+impl Debug for UpdateBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UpdateBuffer {{ adds: [")?;
+        for i in 0..self.add_count {
+            write!(f, "{}, ", self.add[i as usize])?;
+        }
+        write!(f, "], subs: [")?;
+        for i in 0..self.sub_count {
+            write!(f, "{}, ", self.sub[i as usize])?;
+        }
+        write!(f, "] }}")
+    }
 }
 
 impl Default for UpdateBuffer {
     fn default() -> Self {
-        Self { buffer: [FeatureUpdate::NULL; 4], count: 0 }
+        Self {
+            add: [FeatureUpdate::NULL; 2],
+            add_count: 0,
+            sub: [FeatureUpdate::NULL; 2],
+            sub_count: 0,
+        }
     }
 }
 
 impl UpdateBuffer {
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
-        self.buffer[self.count] = FeatureUpdate { from, to, piece };
-        self.count += 1;
+        self.add[self.add_count as usize] = FeatureUpdate { sq: to, piece };
+        self.add_count += 1;
+        self.sub[self.sub_count as usize] = FeatureUpdate { sq: from, piece };
+        self.sub_count += 1;
     }
 
     pub fn clear_piece(&mut self, sq: Square, piece: Piece) {
-        self.buffer[self.count] = FeatureUpdate { from: sq, to: Square::NO_SQUARE, piece };
-        self.count += 1;
+        self.sub[self.sub_count as usize] = FeatureUpdate { sq, piece };
+        self.sub_count += 1;
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        self.buffer[self.count] = FeatureUpdate { from: Square::NO_SQUARE, to: sq, piece };
-        self.count += 1;
-    }
-
-    pub fn updates(&self) -> &[FeatureUpdate] {
-        &self.buffer[..self.count]
+        self.add[self.add_count as usize] = FeatureUpdate { sq, piece };
+        self.add_count += 1;
     }
 }
 
@@ -211,24 +206,30 @@ impl BucketAccumulatorCache {
         let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
         let cache_acc = &mut self.accs[side_we_care_about.index()][bucket];
 
+        let mut adds = [FeatureUpdate::NULL; 32];
+        let mut subs = [FeatureUpdate::NULL; 32];
+        let mut add_count = 0;
+        let mut sub_count = 0;
         self.board_states[side_we_care_about.index()][bucket].update_iter(
             board_state,
-            |FeatureUpdate { from, to, piece }| {
-                let pt = piece.piece_type();
-                let c = piece.colour();
-                if from == Square::NO_SQUARE {
-                    NNUEState::update_feature_inplace::<Activate>(
-                        wk, bk, pt, c, to, pov_update, cache_acc,
-                    );
-                } else if to == Square::NO_SQUARE {
-                    NNUEState::update_feature_inplace::<Deactivate>(
-                        wk, bk, pt, c, from, pov_update, cache_acc,
-                    );
+            |f, is_add| {
+                if is_add {
+                    adds[add_count] = f;
+                    add_count += 1;
                 } else {
-                    NNUEState::move_feature_inplace(wk, bk, pt, c, from, to, pov_update, cache_acc);
+                    subs[sub_count] = f;
+                    sub_count += 1;
                 }
             },
         );
+
+        for &sub in &subs[..sub_count] {
+            NNUEState::update_feature_inplace::<Deactivate>(wk, bk, sub, pov_update, cache_acc);
+        }
+
+        for &add in &adds[..add_count] {
+            NNUEState::update_feature_inplace::<Activate>(wk, bk, add, pov_update, cache_acc);
+        }
 
         if pov_update.white {
             acc.white = cache_acc.white;
@@ -283,10 +284,13 @@ impl NNUEParams {
         let starting_idx = neuron;
         let mut slice = Vec::with_capacity(768);
         for colour in Colour::all() {
-            for piece in PieceType::all() {
+            for piece_type in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices =
-                        feature_indices(Square::H1, Square::H8, square, piece, colour);
+                    let feature_indices = feature_indices(
+                        Square::H1,
+                        Square::H8,
+                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
+                    );
                     let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
                     slice.push(self.feature_weights[index]);
                 }
@@ -362,18 +366,16 @@ pub struct NNUEState {
 const fn feature_indices(
     white_king: Square,
     black_king: Square,
-    sq: Square,
-    piece_type: PieceType,
-    colour: Colour,
+    f: FeatureUpdate,
 ) -> (usize, usize) {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
-    let white_sq = if white_king.file() >= File::FILE_E { sq.flip_file() } else { sq };
-    let black_sq = if black_king.file() >= File::FILE_E { sq.flip_file() } else { sq };
+    let white_sq = if white_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
+    let black_sq = if black_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
 
-    let piece_type = piece_type.index();
-    let colour = colour.index();
+    let piece_type = f.piece.piece_type().index();
+    let colour = f.piece.colour().index();
 
     let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + white_sq.index();
     let black_idx =
@@ -433,37 +435,25 @@ impl NNUEState {
         }
 
         // refresh the first accumulator
-        Self::refresh_accumulators(
-            &mut self.bucket_cache,
-            &mut self.accumulators[0],
-            board,
+        self.bucket_cache.load_accumulator_for_position(
+            board.pieces,
             PovUpdate { white: true, black: false },
-        );
-        Self::refresh_accumulators(
-            &mut self.bucket_cache,
             &mut self.accumulators[0],
-            board,
+        );
+        self.bucket_cache.load_accumulator_for_position(
+            board.pieces,
             PovUpdate { white: false, black: true },
+            &mut self.accumulators[0],
         );
     }
 
     /// Make the next accumulator freshly generated from the board state.
     pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
-        Self::refresh_accumulators(
-            &mut self.bucket_cache,
-            &mut self.accumulators[self.current_acc + 1],
-            board,
+        self.bucket_cache.load_accumulator_for_position(
+            board.pieces,
             update,
+            &mut self.accumulators[self.current_acc + 1],
         );
-    }
-
-    fn refresh_accumulators(
-        bucket_cache: &mut BucketAccumulatorCache,
-        acc: &mut Accumulator,
-        board: &Board,
-        update: PovUpdate,
-    ) {
-        bucket_cache.load_accumulator_for_position(board.pieces, update, acc);
     }
 
     pub fn materialise_new_acc_from(
@@ -477,98 +467,51 @@ impl NNUEState {
         let old_acc = front.last().unwrap();
         let new_acc = back.first_mut().unwrap();
 
-        let (f_ud, t_uds) = update_buffer.updates().split_first().unwrap();
-
-        if f_ud.from == Square::NO_SQUARE {
-            Self::update_feature::<Activate>(
-                white_king,
-                black_king,
-                f_ud.piece.piece_type(),
-                f_ud.piece.colour(),
-                f_ud.to,
-                pov_update,
-                old_acc,
-                new_acc,
-            );
-        } else if f_ud.to == Square::NO_SQUARE {
-            Self::update_feature::<Deactivate>(
-                white_king,
-                black_king,
-                f_ud.piece.piece_type(),
-                f_ud.piece.colour(),
-                f_ud.from,
-                pov_update,
-                old_acc,
-                new_acc,
-            );
-        } else {
-            Self::move_feature(
-                white_king,
-                black_king,
-                f_ud.piece.piece_type(),
-                f_ud.piece.colour(),
-                f_ud.from,
-                f_ud.to,
-                pov_update,
-                old_acc,
-                new_acc,
-            );
-        }
-
-        for t_ud in t_uds {
-            if t_ud.from == Square::NO_SQUARE {
-                Self::update_feature_inplace::<Activate>(
-                    white_king,
-                    black_king,
-                    t_ud.piece.piece_type(),
-                    t_ud.piece.colour(),
-                    t_ud.to,
-                    pov_update,
-                    new_acc,
-                );
-            } else if t_ud.to == Square::NO_SQUARE {
-                Self::update_feature_inplace::<Deactivate>(
-                    white_king,
-                    black_king,
-                    t_ud.piece.piece_type(),
-                    t_ud.piece.colour(),
-                    t_ud.from,
-                    pov_update,
-                    new_acc,
-                );
-            } else {
-                Self::move_feature_inplace(
-                    white_king,
-                    black_king,
-                    t_ud.piece.piece_type(),
-                    t_ud.piece.colour(),
-                    t_ud.from,
-                    t_ud.to,
-                    pov_update,
-                    new_acc,
+        match (update_buffer.add_count, update_buffer.sub_count) {
+            (1, 1) => {
+                // quiet move
+                let add = update_buffer.add[0];
+                let sub = update_buffer.sub[0];
+                Self::apply_quiet(white_king, black_king, add, sub, pov_update, old_acc, new_acc);
+            }
+            (1, 2) => {
+                // capture
+                let add = update_buffer.add[0];
+                let sub1 = update_buffer.sub[0];
+                let sub2 = update_buffer.sub[1];
+                Self::apply_capture(
+                    white_king, black_king, add, sub1, sub2, pov_update, old_acc, new_acc,
                 );
             }
+            (2, 2) => {
+                // castling
+                let add1 = update_buffer.add[0];
+                let add2 = update_buffer.add[1];
+                let sub1 = update_buffer.sub[0];
+                let sub2 = update_buffer.sub[1];
+                Self::apply_castling(
+                    white_king, black_king, add1, add2, sub1, sub2, pov_update, old_acc, new_acc,
+                );
+            }
+            (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
         }
 
         self.current_acc += 1;
     }
 
-    /// Update the state from a move.
+    /// Move a single piece on the board.
     #[allow(clippy::too_many_arguments)]
-    pub fn move_feature(
+    pub fn apply_quiet(
         white_king: Square,
         black_king: Square,
-        piece_type: PieceType,
-        colour: Colour,
-        from: Square,
-        to: Square,
+        add: FeatureUpdate,
+        sub: FeatureUpdate,
         update: PovUpdate,
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_from, black_from) =
-            feature_indices(white_king, black_king, from, piece_type, colour);
-        let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
+        let (white_add, black_add) = feature_indices(white_king, black_king, add);
+        let (white_sub, black_sub) = feature_indices(white_king, black_king, sub);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
@@ -580,8 +523,8 @@ impl NNUEState {
                 &source_acc.white,
                 &mut target_acc.white,
                 white_bucket,
-                white_to,
-                white_from,
+                white_add,
+                white_sub,
             );
         }
         if update.black {
@@ -589,27 +532,27 @@ impl NNUEState {
                 &source_acc.black,
                 &mut target_acc.black,
                 black_bucket,
-                black_to,
-                black_from,
+                black_add,
+                black_sub,
             );
         }
     }
 
-    /// Update the state from a move.
+    /// Make a capture on the board.
     #[allow(clippy::too_many_arguments)]
-    pub fn move_feature_inplace(
+    pub fn apply_capture(
         white_king: Square,
         black_king: Square,
-        piece_type: PieceType,
-        colour: Colour,
-        from: Square,
-        to: Square,
+        add: FeatureUpdate,
+        sub1: FeatureUpdate,
+        sub2: FeatureUpdate,
         update: PovUpdate,
-        acc: &mut Accumulator,
+        source_acc: &Accumulator,
+        target_acc: &mut Accumulator,
     ) {
-        let (white_from, black_from) =
-            feature_indices(white_king, black_king, from, piece_type, colour);
-        let (white_to, black_to) = feature_indices(white_king, black_king, to, piece_type, colour);
+        let (white_add, black_add) = feature_indices(white_king, black_king, add);
+        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
@@ -617,47 +560,70 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add_sub_inplace(&mut acc.white, white_bucket, white_to, white_from);
+            vector_add_sub2(
+                &source_acc.white,
+                &mut target_acc.white,
+                white_bucket,
+                white_add,
+                white_sub1,
+                white_sub2,
+            );
         }
         if update.black {
-            vector_add_sub_inplace(&mut acc.black, black_bucket, black_to, black_from);
+            vector_add_sub2(
+                &source_acc.black,
+                &mut target_acc.black,
+                black_bucket,
+                black_add,
+                black_sub1,
+                black_sub2,
+            );
         }
     }
 
-    /// Update by activating or deactivating a piece.
+    /// Make a castling move on the board.
     #[allow(clippy::too_many_arguments)]
-    pub fn update_feature<A: Activation>(
+    pub fn apply_castling(
         white_king: Square,
         black_king: Square,
-        piece_type: PieceType,
-        colour: Colour,
-        sq: Square,
+        add1: FeatureUpdate,
+        add2: FeatureUpdate,
+        sub1: FeatureUpdate,
+        sub2: FeatureUpdate,
         update: PovUpdate,
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_idx, black_idx) =
-            feature_indices(white_king, black_king, sq, piece_type, colour);
+        let (white_add1, black_add1) = feature_indices(white_king, black_king, add1);
+        let (white_add2, black_add2) = feature_indices(white_king, black_king, add2);
+        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
         let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
-        if A::ACTIVATE {
-            if update.white {
-                vector_add(&source_acc.white, &mut target_acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                vector_add(&source_acc.black, &mut target_acc.black, black_bucket, black_idx);
-            }
+        if update.white {
+            vector_add2_sub2(
+                &source_acc.white,
+                &mut target_acc.white,
+                white_bucket,
+                white_add1,
+                white_add2,
+                white_sub1,
+                white_sub2,
+            );
         } else {
-            if update.white {
-                vector_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                vector_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_idx);
-            }
+            vector_add2_sub2(
+                &source_acc.black,
+                &mut target_acc.black,
+                black_bucket,
+                black_add1,
+                black_add2,
+                black_sub1,
+                black_sub2,
+            );
         }
     }
 
@@ -665,14 +631,11 @@ impl NNUEState {
     pub fn update_feature_inplace<A: Activation>(
         white_king: Square,
         black_king: Square,
-        piece_type: PieceType,
-        colour: Colour,
-        sq: Square,
+        f: FeatureUpdate,
         update: PovUpdate,
         acc: &mut Accumulator,
     ) {
-        let (white_idx, black_idx) =
-            feature_indices(white_king, black_king, sq, piece_type, colour);
+        let (white_idx, black_idx) = feature_indices(white_king, black_king, f);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
@@ -709,6 +672,32 @@ impl NNUEState {
     }
 }
 
+/// Add a feature to a square.
+fn vector_add_inplace(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
+    for (i, d) in input.iter_mut().zip(a_block) {
+        *i += *d;
+    }
+}
+
+/// Subtract a feature from a square.
+fn vector_sub_inplace(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_sub: usize,
+) {
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
+    for (i, d) in input.iter_mut().zip(s_block) {
+        *i -= *d;
+    }
+}
+
 /// Move a feature from one square to another.
 fn vector_add_sub(
     input: &Align64<[i16; LAYER_1_SIZE]>,
@@ -726,73 +715,46 @@ fn vector_add_sub(
     }
 }
 
-/// Move a feature from one square to another
-fn vector_add_sub_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+/// Add two features and subtract two features all at once.
+fn vector_add2_sub2(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub: usize,
+    feature_idx_add1: usize,
+    feature_idx_add2: usize,
+    feature_idx_sub1: usize,
+    feature_idx_sub2: usize,
 ) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for ((i, ds), da) in input.iter_mut().zip(s_block).zip(a_block) {
-        *i = *i - *ds + *da;
+    let offset_add1 = feature_idx_add1 * LAYER_1_SIZE;
+    let offset_add2 = feature_idx_add2 * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
+    let a_block1 = &bucket[offset_add1..offset_add1 + LAYER_1_SIZE];
+    let a_block2 = &bucket[offset_add2..offset_add2 + LAYER_1_SIZE];
+    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
+    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
+    for i in 0..LAYER_1_SIZE {
+        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block1[i] + a_block2[i];
     }
 }
 
-/// Add a feature to a square.
-fn vector_add(
+/// Subtract two features and add one feature all at once.
+fn vector_add_sub2(
     input: &Align64<[i16; LAYER_1_SIZE]>,
     output: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
     feature_idx_add: usize,
+    feature_idx_sub1: usize,
+    feature_idx_sub2: usize,
 ) {
     let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
     let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for ((i, o), da) in input.iter().zip(output.iter_mut()).zip(a_block) {
-        *o = *i + *da;
-    }
-}
-
-/// Add a feature to a square.
-fn vector_add_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(a_block) {
-        *i += *d;
-    }
-}
-
-/// Subtract a feature from a square.
-fn vector_sub(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_sub: usize,
-) {
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    for ((i, o), ds) in input.iter().zip(output.iter_mut()).zip(s_block) {
-        *o = *i - *ds;
-    }
-}
-
-/// Subtract a feature from a square.
-fn vector_sub_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_sub: usize,
-) {
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(s_block) {
-        *i -= *d;
+    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
+    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
+    for i in 0..LAYER_1_SIZE {
+        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block[i];
     }
 }
 
