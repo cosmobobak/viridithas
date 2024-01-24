@@ -150,6 +150,14 @@ impl UpdateBuffer {
         self.add[self.add_count as usize] = FeatureUpdate { sq, piece };
         self.add_count += 1;
     }
+
+    pub fn adds(&self) -> &[FeatureUpdate] {
+        &self.add[..self.add_count as usize]
+    }
+
+    pub fn subs(&self) -> &[FeatureUpdate] {
+        &self.sub[..self.sub_count as usize]
+    }
 }
 
 /// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
@@ -467,10 +475,7 @@ impl NNUEState {
         let old_acc = front.last().unwrap();
         let new_acc = back.first_mut().unwrap();
 
-        match (
-            &update_buffer.add[..update_buffer.add_count as usize],
-            &update_buffer.sub[..update_buffer.sub_count as usize],
-        ) {
+        match (update_buffer.adds(), update_buffer.subs()) {
             (&[add], &[sub]) => {
                 // quiet move
                 Self::apply_quiet(white_king, black_king, add, sub, pov_update, old_acc, new_acc);
