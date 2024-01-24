@@ -467,28 +467,22 @@ impl NNUEState {
         let old_acc = front.last().unwrap();
         let new_acc = back.first_mut().unwrap();
 
-        match (update_buffer.add_count, update_buffer.sub_count) {
-            (1, 1) => {
+        match (
+            &update_buffer.add[..update_buffer.add_count as usize],
+            &update_buffer.sub[..update_buffer.sub_count as usize],
+        ) {
+            (&[add], &[sub]) => {
                 // quiet move
-                let add = update_buffer.add[0];
-                let sub = update_buffer.sub[0];
                 Self::apply_quiet(white_king, black_king, add, sub, pov_update, old_acc, new_acc);
             }
-            (1, 2) => {
+            (&[add], &[sub1, sub2]) => {
                 // capture
-                let add = update_buffer.add[0];
-                let sub1 = update_buffer.sub[0];
-                let sub2 = update_buffer.sub[1];
                 Self::apply_capture(
                     white_king, black_king, add, sub1, sub2, pov_update, old_acc, new_acc,
                 );
             }
-            (2, 2) => {
+            (&[add1, add2], &[sub1, sub2]) => {
                 // castling
-                let add1 = update_buffer.add[0];
-                let add2 = update_buffer.add[1];
-                let sub1 = update_buffer.sub[0];
-                let sub2 = update_buffer.sub[1];
                 Self::apply_castling(
                     white_king, black_king, add1, add2, sub1, sub2, pov_update, old_acc, new_acc,
                 );
@@ -614,7 +608,8 @@ impl NNUEState {
                 white_sub1,
                 white_sub2,
             );
-        } else {
+        }
+        if update.black {
             vector_add2_sub2(
                 &source_acc.black,
                 &mut target_acc.black,
