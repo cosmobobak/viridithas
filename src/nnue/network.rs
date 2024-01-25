@@ -472,24 +472,22 @@ impl NNUEState {
         update_buffer: &UpdateBuffer,
     ) {
         let (front, back) = self.accumulators.split_at_mut(self.current_acc + 1);
-        let old_acc = front.last().unwrap();
-        let new_acc = back.first_mut().unwrap();
+        let src = front.last().unwrap();
+        let tgt = back.first_mut().unwrap();
 
         match (update_buffer.adds(), update_buffer.subs()) {
+            // quiet or promotion
             (&[add], &[sub]) => {
-                // quiet move
-                Self::apply_quiet(white_king, black_king, add, sub, pov_update, old_acc, new_acc);
+                Self::apply_quiet(white_king, black_king, add, sub, pov_update, src, tgt);
             }
+            // capture
             (&[add], &[sub1, sub2]) => {
-                // capture
-                Self::apply_capture(
-                    white_king, black_king, add, sub1, sub2, pov_update, old_acc, new_acc,
-                );
+                Self::apply_capture(white_king, black_king, add, sub1, sub2, pov_update, src, tgt);
             }
+            // castling
             (&[add1, add2], &[sub1, sub2]) => {
-                // castling
                 Self::apply_castling(
-                    white_king, black_king, add1, add2, sub1, sub2, pov_update, old_acc, new_acc,
+                    white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt,
                 );
             }
             (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
