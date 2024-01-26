@@ -711,10 +711,13 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool)
         if board.ply() < MIN_SAVE_PLY {
             return false;
         }
-        if board.is_tactical(mv) {
+        if is_game_theoretic_score(eval) {
             return false;
         }
-        if is_game_theoretic_score(eval) {
+        if board.pieces.occupied().count() < 4 {
+            return false;
+        }
+        if board.is_tactical(mv) {
             return false;
         }
         if board.in_check() {
