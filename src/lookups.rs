@@ -1,10 +1,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    nnue,
     rng::XorShiftState,
     squareset::SquareSet,
-    transpositiontable,
     util::{File, Rank, Square},
 };
 
@@ -184,20 +182,6 @@ pub fn get_king_attacks(sq: Square) -> SquareSet {
     static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
     debug_assert!(sq.on_board());
     KING_ATTACKS[sq.index()]
-}
-
-pub fn info_dump() {
-    use crate::{NAME, VERSION};
-    let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
-    println!("{NAME} {VERSION}{version_extension}");
-    println!("Compiled with architecture: {}", std::env::consts::ARCH);
-    println!("Compiled for OS: {}", std::env::consts::OS);
-    println!("Number of NNUE parameters: {}", nnue::network::NNUEParams::num_params());
-    println!("Size of NNUE network: {} bytes", std::mem::size_of::<nnue::network::NNUEParams>());
-    println!(
-        "Size of a transposition table entry: {} bytes",
-        std::mem::size_of::<transpositiontable::TTEntry>()
-    );
 }
 
 mod tests {

@@ -7,9 +7,9 @@ pub struct Cli {
     /// Run the perft test suite
     #[clap(long)]
     pub perfttest: bool,
-    /// Display misc. information about the engine
+    /// Scan a packed data record and report statistics
     #[clap(short, long)]
-    pub info: bool,
+    pub dataset_stats: Option<std::path::PathBuf>,
     /// emit JSON for SPSA
     #[clap(long)]
     pub spsajson: bool,

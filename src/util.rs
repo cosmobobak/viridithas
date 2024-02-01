@@ -59,7 +59,7 @@ impl Rank {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Hash)]
 pub struct Square(u8);
 
 static SQUARE_NAMES: [&str; 64] = [

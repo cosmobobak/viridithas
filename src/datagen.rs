@@ -5,10 +5,10 @@ mod dataformat;
 use std::{
     cmp::Reverse,
     collections::HashMap,
-    fmt::Display,
+    fmt::{Display, Formatter},
     fs::File,
     hash::Hash,
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Seek, Write},
     path::{Path, PathBuf},
     str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -25,13 +25,14 @@ use crate::{
     },
     chessmove::Move,
     datagen::dataformat::Game,
+    piece::{Colour, PieceType},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{depth::Depth, MEGABYTE},
+    util::{depth::Depth, Square, MEGABYTE},
 };
 
 const MIN_SAVE_PLY: usize = 16;
@@ -692,7 +693,9 @@ impl FromStr for DataGenLimit {
     }
 }
 
-pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool) {
+/// Unpacks the variable-length game format into either bulletformat or marlinformat records,
+/// filtering as it goes.
+pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool) {
     // check that the input file exists
     if !input.exists() {
         eprintln!("Input file does not exist.");
@@ -771,4 +774,177 @@ pub fn splat_main(input: &Path, output: &Path, filter: bool, marlinformat: bool)
     println!();
 
     output_buffer.flush().unwrap();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+struct MaterialConfiguration {
+    counts: [u8; 10],
+}
+
+impl MaterialConfiguration {
+    fn men(&self) -> u8 {
+        self.counts.iter().sum::<u8>() + 2 // add 2 for the kings
+    }
+}
+
+impl Display for MaterialConfiguration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        static CHARS: [char; 5] = ['P', 'N', 'B', 'R', 'Q'];
+        // output strings like KRPPvKRP or KQvKRP
+        write!(f, "K")?;
+        for (i, pc) in self.counts[..5].iter().enumerate().rev() {
+            for _ in 0..*pc {
+                write!(f, "{}", CHARS[i])?;
+            }
+        }
+        write!(f, "vK")?;
+        for (i, pc) in self.counts[5..].iter().enumerate().rev() {
+            for _ in 0..*pc {
+                write!(f, "{}", CHARS[i])?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<&Board> for MaterialConfiguration {
+    fn from(board: &Board) -> Self {
+        let mut mc = Self::default();
+        let white = board.pieces.occupied_co(Colour::WHITE);
+        let black = board.pieces.occupied_co(Colour::BLACK);
+        for piece in PieceType::all().take(5) {
+            let pieces = board.pieces.of_type(piece);
+            let white_pieces = pieces & white;
+            let black_pieces = pieces & black;
+            mc.counts[piece.index()] = u8::try_from(white_pieces.count()).unwrap();
+            mc.counts[piece.index() + 5] = u8::try_from(black_pieces.count()).unwrap();
+        }
+        // normalize the counts so that the white side has more material than the black side
+        let ordering_key = |subslice: &[u8]| -> u64 {
+            let count = u64::from(subslice.iter().sum::<u8>());
+            let highest_piece =
+                subslice.iter().enumerate().filter(|(_, v)| **v > 0).last().unwrap_or((0, &0)).0;
+            count * 10 + highest_piece as u64
+        };
+        let (white, black) = mc.counts.split_at_mut(5);
+        let white_key = ordering_key(white);
+        let black_key = ordering_key(black);
+        if black_key > white_key {
+            // swap the counts
+            white.swap_with_slice(black);
+        }
+        mc
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct DataSetStats {
+    games: usize,
+    length_counts: HashMap<usize, usize>,
+    eval_counts: HashMap<i32, usize>,
+    piece_counts: HashMap<u8, usize>,
+    material_counts: HashMap<MaterialConfiguration, usize>,
+    pov_king_positions: HashMap<Square, usize>,
+}
+
+/// Scans a variable-length game format file and prints statistics about it.
+pub fn dataset_stats(dataset_path: &Path) {
+    let mut move_buffer = Vec::new();
+    let mut stats = DataSetStats::default();
+
+    println!("Scanning dataset at {}", dataset_path.display());
+
+    // because the format is variable-length, we can't know exactly our progress in terms of game-count.
+    // we *can*, however, know how far we are through the file, so we use that as a progress indicator:
+    print!("Progress: 0%");
+    std::io::stdout().flush().unwrap();
+    // get the file size
+    let file_size = dataset_path.metadata().unwrap().len();
+
+    let mut reader = BufReader::new(File::open(dataset_path).unwrap());
+
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer))
+    {
+        stats.games += 1;
+        *stats.length_counts.entry(game.len()).or_default() += 1;
+        game.visit_positions(|position, evaluation| {
+            *stats.eval_counts.entry(evaluation).or_default() += 1;
+            *stats
+                .piece_counts
+                .entry(u8::try_from(position.pieces.occupied().count()).unwrap())
+                .or_default() += 1;
+            *stats.material_counts.entry(MaterialConfiguration::from(position)).or_default() += 1;
+            *stats.pov_king_positions.entry(position.king_sq(Colour::WHITE)).or_default() += 1;
+            *stats
+                .pov_king_positions
+                .entry(position.king_sq(Colour::BLACK).flip_rank())
+                .or_default() += 1;
+        });
+        move_buffer = game.into_move_buffer();
+
+        // print progress
+        if stats.games % 1024 == 0 {
+            let progress = reader.stream_position().unwrap();
+            let percentage = progress * 100 / file_size;
+            print!("\rProgress: {percentage}%");
+            std::io::stdout().flush().unwrap();
+        }
+    }
+    println!();
+
+    println!("Statistics for dataset at {}", dataset_path.display());
+    println!("Number of games: {}", stats.games);
+    println!("Writing length counts to length_counts.csv");
+    let mut length_counts = stats.length_counts.iter().collect::<Vec<_>>();
+    length_counts.sort_unstable_by_key(|(length, _)| *length);
+    let mut length_counts_file = BufWriter::new(File::create("length_counts.csv").unwrap());
+    writeln!(length_counts_file, "length,count").unwrap();
+    for (length, count) in length_counts {
+        writeln!(length_counts_file, "{length},{count}").unwrap();
+    }
+    length_counts_file.flush().unwrap();
+    println!("Writing eval counts to eval_counts.csv");
+    let mut eval_counts = stats.eval_counts.into_iter().collect::<Vec<_>>();
+    eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
+    let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv").unwrap());
+    writeln!(eval_counts_file, "eval,count").unwrap();
+    for (eval, count) in eval_counts {
+        writeln!(eval_counts_file, "{eval},{count}").unwrap();
+    }
+    eval_counts_file.flush().unwrap();
+    println!("Writing piece counts to piece_counts.csv");
+    let mut piece_counts = stats.piece_counts.into_iter().collect::<Vec<_>>();
+    piece_counts.sort_unstable_by_key(|(count, _)| *count);
+    let mut piece_counts_file = BufWriter::new(File::create("piece_counts.csv").unwrap());
+    writeln!(piece_counts_file, "men,count").unwrap();
+    for (men, count) in piece_counts {
+        writeln!(piece_counts_file, "{men},{count}").unwrap();
+    }
+    piece_counts_file.flush().unwrap();
+    println!("Writing material counts to material_counts.csv");
+    let material_counts = stats.material_counts.into_iter().collect::<Vec<_>>();
+    let mut material_counts_file = BufWriter::new(File::create("material_counts.csv").unwrap());
+    writeln!(material_counts_file, "material,count").unwrap();
+    for (mc, count) in material_counts {
+        writeln!(material_counts_file, "{mc},{count}").unwrap();
+    }
+    material_counts_file.flush().unwrap();
+    println!("Writing PoV king positions to pov_king_positions.csv");
+    let pov_king_positions = stats.pov_king_positions.into_iter().collect::<Vec<_>>();
+    let mut pov_king_positions_file =
+        BufWriter::new(File::create("pov_king_positions.csv").unwrap());
+    writeln!(pov_king_positions_file, "square,count").unwrap();
+    for (sq, count) in pov_king_positions {
+        writeln!(pov_king_positions_file, "{sq},{count}", sq = sq.index()).unwrap();
+    }
+    pov_king_positions_file.flush().unwrap();
+
+    #[allow(clippy::cast_precision_loss)]
+    let mean_game_len = ((stats.length_counts.iter().map(|(k, v)| k * v).sum::<usize>() as u128
+        * 1000)
+        / stats.games as u128) as f64
+        / 1000.0;
+    println!("Mean game length: {mean_game_len}");
 }
