@@ -519,7 +519,6 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
     println!("option name Threads type spin default 1 min 1 max 512");
     println!("option name PrettyPrint type check default false");
-    println!("option name UseNNUE type check default true");
     println!("option name SyzygyPath type string default <empty>");
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
