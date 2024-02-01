@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use crate::{
-    board::evaluation::parameters::EvalParams,
     search::{parameters::SearchParams, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
@@ -32,8 +31,6 @@ pub struct SearchInfo<'a> {
     pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
-    /// Evaluation parameters for HCE.
-    pub eval_params: EvalParams,
     /// Search parameters.
     pub search_params: SearchParams,
     /// LMR + LMP lookup table.
@@ -68,7 +65,6 @@ impl<'a> SearchInfo<'a> {
             seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
-            eval_params: EvalParams::default(),
             search_params: SearchParams::default(),
             lm_table: LMTable::default(),
             time_manager: TimeManager::default(),

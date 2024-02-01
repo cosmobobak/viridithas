@@ -22,7 +22,6 @@ mod makemove;
 mod nnue;
 mod perft;
 mod piece;
-mod piecesquaretable;
 mod rng;
 mod search;
 mod searchinfo;

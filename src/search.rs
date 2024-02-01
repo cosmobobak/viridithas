@@ -12,7 +12,7 @@ use std::{
 use crate::{
     board::{
         evaluation::{
-            self, is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
             MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
@@ -399,7 +399,7 @@ impl Board {
             return if in_check {
                 0
             } else {
-                self.evaluate::<NNUE>(info, t, info.nodes.get_local())
+                self.evaluate::<NNUE>(t, info.nodes.get_local())
             };
         }
 
@@ -424,7 +424,7 @@ impl Board {
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
         } else {
-            self.evaluate::<NNUE>(info, t, info.nodes.get_local())
+            self.evaluate::<NNUE>(t, info.nodes.get_local())
         };
 
         if stand_pat >= beta {
@@ -448,14 +448,14 @@ impl Board {
             move_picker.skip_quiets = true;
         }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-            if !self.make_move::<NNUE>(m, t, info) {
+            if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
             info.nodes.increment();
             moves_made += 1;
 
             let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
-            self.unmake_move::<NNUE>(t, info);
+            self.unmake_move::<NNUE>(t);
 
             if score > best_score {
                 best_score = score;
@@ -510,11 +510,6 @@ impl Board {
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-        if NNUE {
-            // debug_assert!(self.check_nnue_coherency(&t.nnue));
-        } else {
-            debug_assert!(self.check_hce_coherency(info));
-        }
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -559,7 +554,7 @@ impl Board {
                 return if in_check {
                     0
                 } else {
-                    self.evaluate::<NNUE>(info, t, info.nodes.get_local())
+                    self.evaluate::<NNUE>(t, info.nodes.get_local())
                 };
             }
 
@@ -658,12 +653,12 @@ impl Board {
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
-                self.evaluate::<NNUE>(info, t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+                self.evaluate::<NNUE>(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
             } else {
                 v // if the TT eval is not VALUE_NONE, use it.
             }
         } else {
-            self.evaluate::<NNUE>(info, t, info.nodes.get_local()) // otherwise, use the static evaluation.
+            self.evaluate::<NNUE>(t, info.nodes.get_local()) // otherwise, use the static evaluation.
         };
 
         t.evals[height] = static_eval;
@@ -808,7 +803,7 @@ impl Board {
                     continue;
                 }
 
-                if !self.make_move::<NNUE>(m, t, info) {
+                if !self.make_move::<NNUE>(m, t) {
                     // illegal move
                     continue;
                 }
@@ -830,7 +825,7 @@ impl Board {
                     );
                 }
 
-                self.unmake_move::<NNUE>(t, info);
+                self.unmake_move::<NNUE>(t);
 
                 if value >= pc_beta {
                     tt.store::<false>(key, height, m, value, static_eval, Bound::Lower, depth - 3);
@@ -926,7 +921,7 @@ impl Board {
                 continue;
             }
 
-            if !self.make_move::<NNUE>(m, t, info) {
+            if !self.make_move::<NNUE>(m, t) {
                 continue;
             }
 
@@ -1058,7 +1053,7 @@ impl Board {
                     );
                 }
             }
-            self.unmake_move::<NNUE>(t, info);
+            self.unmake_move::<NNUE>(t);
 
             // record subtree size for TimeManager
             if ROOT && t.thread_id == 0 {
@@ -1207,7 +1202,7 @@ impl Board {
         let r_beta = Self::singularity_margin(tt_value, depth);
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
-        self.unmake_move::<NNUE>(t, info);
+        self.unmake_move::<NNUE>(t);
         t.excluded[self.height()] = m;
         let value =
             self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
@@ -1217,7 +1212,7 @@ impl Board {
             return ZERO_PLY;
         }
         // re-make the singular move.
-        self.make_move::<NNUE>(m, t, info);
+        self.make_move::<NNUE>(m, t);
 
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
@@ -1602,7 +1597,7 @@ impl AspirationWindow {
     pub fn widen_down(&mut self, value: i32, depth: Depth) {
         self.midpoint = value;
         let margin = asp_window(depth) << (self.alpha_fails + 1);
-        if margin > evaluation::QUEEN_VALUE.0 {
+        if margin > 1369 {
             self.alpha = -INFINITY;
             return;
         }
@@ -1614,7 +1609,7 @@ impl AspirationWindow {
     pub fn widen_up(&mut self, value: i32, depth: Depth) {
         self.midpoint = value;
         let margin = asp_window(depth) << (self.beta_fails + 1);
-        if margin > evaluation::QUEEN_VALUE.0 {
+        if margin > 1369 {
             self.beta = INFINITY;
             return;
         }

@@ -8,9 +8,6 @@ use crate::{
     util::Square,
 };
 
-pub const LIGHT_SQUARE: bool = true;
-pub const DARK_SQUARE: bool = false;
-
 /// Iterator over the squares of a bitboard.
 /// The squares are returned in increasing order.
 pub struct BitLoop {
@@ -164,14 +161,6 @@ impl BitBoard {
         self.pieces[PieceType::KING.index()]
     }
 
-    pub fn bishops_sqco<const IS_WHITE: bool, const IS_LSB: bool>(&self) -> SquareSet {
-        if IS_LSB {
-            self.bishops::<IS_WHITE>() & SquareSet::LIGHT_SQUARES
-        } else {
-            self.bishops::<IS_WHITE>() & SquareSet::DARK_SQUARES
-        }
-    }
-
     pub fn reset(&mut self) {
         *self = Self::NULL;
     }
@@ -203,14 +192,6 @@ impl BitBoard {
 
     pub const fn of_type(&self, piece_type: PieceType) -> SquareSet {
         self.pieces[piece_type.index()]
-    }
-
-    pub fn pawn_attacks<const IS_WHITE: bool>(&self) -> SquareSet {
-        if IS_WHITE {
-            self.pawns::<true>().north_east_one() | self.pawns::<true>().north_west_one()
-        } else {
-            self.pawns::<false>().south_east_one() | self.pawns::<false>().south_west_one()
-        }
     }
 
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
@@ -287,9 +268,9 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     magic::get_orthogonal_attacks(sq, blockers)
 }
-pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-}
+// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
+// }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     lookups::get_knight_attacks(sq)
 }

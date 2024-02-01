@@ -16,7 +16,7 @@ use crate::{
     bench::BENCH_POSITIONS,
     board::{
         evaluation::{
-            is_game_theoretic_score, is_mate_score, parameters::EvalParams, MATE_SCORE,
+            is_game_theoretic_score, is_mate_score, MATE_SCORE,
             TB_WIN_SCORE,
         },
         movegen::MoveList,
@@ -554,10 +554,8 @@ pub fn main_loop(global_bench: bool) {
     let nodes = AtomicU64::new(0);
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
-    info.eval_params = EvalParams::default();
 
     let mut thread_data = vec![ThreadData::new(0, &pos)];
-    pos.refresh_psqt(&info);
 
     let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
@@ -621,7 +619,6 @@ pub fn main_loop(global_bench: bool) {
                     0
                 } else {
                     pos.evaluate::<true>(
-                        &info,
                         thread_data.first_mut().expect("the thread headers are empty."),
                         0,
                     )
@@ -682,7 +679,6 @@ pub fn main_loop(global_bench: bool) {
                     for t in &mut thread_data {
                         t.nnue.reinit_from(&pos);
                     }
-                    pos.refresh_psqt(&info);
                 }
                 res
             }
@@ -769,7 +765,6 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         for t in &mut thread_data {
             t.nnue.reinit_from(&pos);
         }
-        pos.refresh_psqt(&info);
         let res = parse_go(&bench_string, &mut info, &pos);
         if let Err(e) = res {
             info.print_to_stdout = true;

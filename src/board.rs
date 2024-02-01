@@ -21,26 +21,20 @@ use crate::{
     chessmove::Move,
     errors::{FenParseError, MoveParseError},
     historytable::ContHistIndex,
-    lookups::{PIECE_BIG, PIECE_MAJ},
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{self, get_bucket_indices, PovUpdate, UpdateBuffer},
     piece::{Colour, Piece, PieceType},
-    piecesquaretable::pst_value,
     search::pv::PVariation,
-    searchinfo::SearchInfo,
     squareset::{self, SquareSet},
     threadlocal::ThreadData,
     uci::CHESS960,
     util::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
 };
 
-use self::{
-    evaluation::score::S,
-    movegen::{
+use self::movegen::{
         bitboards::{BitBoard, Threats},
         MoveListEntry,
-    },
-};
+    };
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
@@ -64,13 +58,6 @@ pub struct Board {
 
     /// Squares that the opponent attacks
     threats: Threats,
-
-    /* Incrementally updated features used to accelerate various queries */
-    big_piece_counts: [u8; 2],
-    major_piece_counts: [u8; 2],
-    minor_piece_counts: [u8; 2],
-    material: [S; 2],
-    pst_vals: S,
 
     height: usize,
     history: Vec<Undo>,
@@ -107,11 +94,6 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.ply, rhs.ply, "ply {msg}");
     assert_eq!(lhs.key, rhs.key, "key {msg}");
     assert_eq!(lhs.threats, rhs.threats, "threats {msg}");
-    assert_eq!(lhs.big_piece_counts, rhs.big_piece_counts, "big_piece_counts {msg}");
-    assert_eq!(lhs.major_piece_counts, rhs.major_piece_counts, "major_piece_counts {msg}");
-    assert_eq!(lhs.minor_piece_counts, rhs.minor_piece_counts, "minor_piece_counts {msg}");
-    assert_eq!(lhs.material, rhs.material, "material {msg}");
-    assert_eq!(lhs.pst_vals, rhs.pst_vals, "pst_vals {msg}");
     assert_eq!(lhs.height, rhs.height, "height {msg}");
     assert_eq!(lhs.history, rhs.history, "history {msg}");
     assert_eq!(lhs.repetition_cache, rhs.repetition_cache, "repetition_cache {msg}");
@@ -128,12 +110,7 @@ impl Debug for Board {
             .field("ply", &self.ply)
             .field("key", &self.key)
             .field("threats", &self.threats)
-            .field("big_piece_counts", &self.big_piece_counts)
-            .field("major_piece_counts", &self.major_piece_counts)
-            .field("minor_piece_counts", &self.minor_piece_counts)
-            .field("material", &self.material)
             .field("castle_perm", &self.castle_perm)
-            .field("pst_vals", &self.pst_vals)
             .finish_non_exhaustive()
     }
 }
@@ -155,14 +132,9 @@ impl Board {
             ply: 0,
             key: 0,
             threats: Threats::default(),
-            big_piece_counts: [0; 2],
-            major_piece_counts: [0; 2],
-            minor_piece_counts: [0; 2],
-            material: [S(0, 0); 2],
             castle_perm: CastlingRights::NONE,
             history: Vec::new(),
             repetition_cache: Vec::new(),
-            pst_vals: S(0, 0),
         };
         out.reset();
         out
@@ -306,10 +278,6 @@ impl Board {
     pub fn reset(&mut self) {
         self.pieces.reset();
         self.piece_array = [Piece::EMPTY; 64];
-        self.big_piece_counts.fill(0);
-        self.major_piece_counts.fill(0);
-        self.minor_piece_counts.fill(0);
-        self.material.fill(S(0, 0));
         self.side = Colour::WHITE;
         self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
@@ -318,7 +286,6 @@ impl Board {
         self.castle_perm = CastlingRights::NONE;
         self.key = 0;
         self.threats = Threats::default();
-        self.pst_vals = S(0, 0);
         self.history.clear();
         self.repetition_cache.clear();
     }
@@ -570,30 +537,6 @@ impl Board {
             Self::STARTING_FEN
         };
         self.set_from_fen(starting_fen).expect("for some reason, STARTING_FEN is now broken.");
-        debug_assert_eq!(
-            self.material[Colour::WHITE.index()].0,
-            self.material[Colour::BLACK.index()].0,
-            "mg_material is not equal, white: {}, black: {}",
-            self.material[Colour::WHITE.index()].0,
-            self.material[Colour::BLACK.index()].0
-        );
-        debug_assert_eq!(
-            self.material[Colour::WHITE.index()].1,
-            self.material[Colour::BLACK.index()].1,
-            "eg_material is not equal, white: {}, black: {}",
-            self.material[Colour::WHITE.index()].1,
-            self.material[Colour::BLACK.index()].1
-        );
-        debug_assert_eq!(
-            self.pst_vals.0, 0,
-            "midgame pst value is not 0, it is: {}",
-            self.pst_vals.0
-        );
-        debug_assert_eq!(
-            self.pst_vals.1, 0,
-            "endgame pst value is not 0, it is: {}",
-            self.pst_vals.1
-        );
     }
 
     #[allow(dead_code)]
@@ -1003,63 +946,9 @@ impl Board {
 
         self.pieces.clear_piece_at(sq, piece);
 
-        let colour = piece.colour();
-
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = Piece::EMPTY;
-
-        if PIECE_BIG[piece.index()] {
-            self.big_piece_counts[colour.index()] -= 1;
-            if PIECE_MAJ[piece.index()] {
-                self.major_piece_counts[colour.index()] -= 1;
-            } else {
-                self.minor_piece_counts[colour.index()] -= 1;
-            }
-        }
-    }
-
-    pub fn activate_psqt(&mut self, info: &SearchInfo, pt: PieceType, colour: Colour, sq: Square) {
-        let piece = Piece::new(colour, pt);
-        self.material[colour.index()] += info.eval_params.piece_values[piece.index()];
-        self.pst_vals += pst_value(piece, sq, &info.eval_params.piece_square_tables);
-    }
-
-    pub fn deactivate_psqt(
-        &mut self,
-        info: &SearchInfo,
-        pt: PieceType,
-        colour: Colour,
-        sq: Square,
-    ) {
-        let piece = Piece::new(colour, pt);
-        self.material[colour.index()] -= info.eval_params.piece_values[piece.index()];
-        self.pst_vals -= pst_value(piece, sq, &info.eval_params.piece_square_tables);
-    }
-
-    pub fn move_psqt(
-        &mut self,
-        info: &SearchInfo,
-        pt: PieceType,
-        colour: Colour,
-        from: Square,
-        to: Square,
-    ) {
-        let piece = Piece::new(colour, pt);
-        self.pst_vals -= pst_value(piece, from, &info.eval_params.piece_square_tables);
-        self.pst_vals += pst_value(piece, to, &info.eval_params.piece_square_tables);
-    }
-
-    pub fn refresh_psqt(&mut self, info: &SearchInfo) {
-        for sq in Square::all() {
-            let piece = self.piece_at(sq);
-            if piece == Piece::EMPTY {
-                continue;
-            }
-            let colour = piece.colour();
-            self.material[colour.index()] += info.eval_params.piece_values[piece.index()];
-            self.pst_vals += pst_value(piece, sq, &info.eval_params.piece_square_tables);
-        }
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
@@ -1067,20 +956,9 @@ impl Board {
 
         self.pieces.set_piece_at(sq, piece);
 
-        let colour = piece.colour();
-
         hash_piece(&mut self.key, piece, sq);
 
         *self.piece_at_mut(sq) = piece;
-
-        if PIECE_BIG[piece.index()] {
-            self.big_piece_counts[colour.index()] += 1;
-            if PIECE_MAJ[piece.index()] {
-                self.major_piece_counts[colour.index()] += 1;
-            } else {
-                self.minor_piece_counts[colour.index()] += 1;
-            }
-        }
     }
 
     fn move_piece(&mut self, from: Square, to: Square) {
@@ -1547,181 +1425,28 @@ impl Board {
         true
     }
 
-    pub fn make_move_hce(&mut self, m: Move, info: &SearchInfo) -> bool {
-        debug_assert!(self.check_hce_coherency(info));
-        let piece_type = self.moved_piece(m).piece_type();
-        let colour = self.turn();
-        let capture = self.captured_piece(m);
-        let saved_castle_perm = self.castle_perm;
-        let res = self.make_move_simple(m);
-        if !res {
-            return false;
-        }
-        let from = m.from();
-        let mut to = m.to();
-        if m.is_ep() {
-            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            // deactivate pawn on ep_sq
-            self.deactivate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
-        } else if m.is_castle() {
-            match to {
-                _ if to == saved_castle_perm.wk => {
-                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.wk, Square::F1);
-                    to = Square::G1;
-                }
-                _ if to == saved_castle_perm.wq => {
-                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.wq, Square::D1);
-                    to = Square::C1;
-                }
-                _ if to == saved_castle_perm.bk => {
-                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.bk, Square::F8);
-                    to = Square::G8;
-                }
-                _ if to == saved_castle_perm.bq => {
-                    self.move_psqt(info, PieceType::ROOK, colour, saved_castle_perm.bq, Square::D8);
-                    to = Square::C8;
-                }
-                _ => {
-                    panic!("Invalid castle move");
-                }
-            }
-        }
-
-        if capture != Piece::EMPTY {
-            self.deactivate_psqt(info, capture.piece_type(), colour.flip(), to);
-        }
-
-        if m.is_promo() {
-            let promo = m.promotion_type();
-            debug_assert!(promo.legal_promo());
-            self.deactivate_psqt(info, PieceType::PAWN, colour, from);
-            self.activate_psqt(info, promo, colour, to);
-        } else {
-            self.move_psqt(info, piece_type, colour, from, to);
-        }
-
-        debug_assert!(self.check_hce_coherency(info));
-
-        true
-    }
-
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
-        // #[cfg(debug_assertions)]
-        // let m = self.history.last().unwrap().m;
         self.unmake_move_base();
         t.nnue.pop_acc();
-        // #[cfg(debug_assertions)]
-        // {
-        //     let piece = self.moved_piece(m).piece_type();
-        //     let from = m.from();
-        //     let mut to = m.to();
-        //     let colour = self.turn();
-        //     if m.is_ep() {
-        //         let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-        //         t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour.flip(), ep_sq);
-        //     } else if m.is_castle() {
-        //         let (rook_from, rook_to) = match () {
-        //             () if to == self.castle_perm.wk => {
-        //                 to = Square::G1;
-        //                 (Square::F1, self.castle_perm.wk)
-        //             }
-        //             () if to == self.castle_perm.wq => {
-        //                 to = Square::C1;
-        //                 (Square::D1, self.castle_perm.wq)
-        //             }
-        //             () if to == self.castle_perm.bk => {
-        //                 to = Square::G8;
-        //                 (Square::F8, self.castle_perm.bk)
-        //             }
-        //             () if to == self.castle_perm.bq => {
-        //                 to = Square::C8;
-        //                 (Square::D8, self.castle_perm.bq)
-        //             }
-        //             () => {
-        //                 panic!("Invalid castle move {m} with castle_perm {castle_perm} in position {fen}", castle_perm = self.castle_perm, fen = self.fen());
-        //             }
-        //         };
-        //         t.nnue.update_pov_move(PieceType::ROOK, colour, rook_from, rook_to);
-        //     }
-        //     if m.is_promo() {
-        //         let promo = m.promotion_type();
-        //         debug_assert!(promo.legal_promo());
-        //         t.nnue.update_pov_manual::<Deactivate>(promo, colour, to);
-        //         t.nnue.update_pov_manual::<Activate>(PieceType::PAWN, colour, from);
-        //     } else {
-        //         t.nnue.update_pov_move(piece, colour, to, from);
-        //     }
-        //     let capture = self.captured_piece(m);
-        //     if capture != Piece::EMPTY {
-        //         t.nnue.update_pov_manual::<Activate>(capture.piece_type(), colour.flip(), to);
-        //     }
-        // }
-    }
-
-    pub fn unmake_move_hce(&mut self, info: &SearchInfo) {
-        debug_assert!(self.check_hce_coherency(info));
-        let m = self.history.last().unwrap().m;
-        self.unmake_move_base();
-        let piece = self.moved_piece(m).piece_type();
-        let from = m.from();
-        let to = m.to();
-        let colour = self.turn();
-        if m.is_ep() {
-            let ep_sq = if colour == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            self.activate_psqt(info, PieceType::PAWN, colour.flip(), ep_sq);
-        } else if m.is_castle() {
-            match to {
-                _ if to == self.castle_perm.wk => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::F1, self.castle_perm.wk);
-                }
-                _ if to == self.castle_perm.wq => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::D1, self.castle_perm.wq);
-                }
-                _ if to == self.castle_perm.bk => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::F8, self.castle_perm.bk);
-                }
-                _ if to == self.castle_perm.bq => {
-                    self.move_psqt(info, PieceType::ROOK, colour, Square::D8, self.castle_perm.bq);
-                }
-                _ => panic!("Invalid castle move"),
-            };
-        }
-        if m.is_promo() {
-            let promo = m.promotion_type();
-            debug_assert!(promo.legal_promo());
-            self.deactivate_psqt(info, promo, colour, to);
-            self.activate_psqt(info, PieceType::PAWN, colour, from);
-        } else if m.is_castle() {
-            let king_to_sq = m.history_to_square();
-            self.move_psqt(info, PieceType::KING, colour, king_to_sq, from);
-        } else {
-            self.move_psqt(info, piece, colour, to, from);
-        }
-        let capture = self.captured_piece(m);
-        if capture != Piece::EMPTY {
-            self.activate_psqt(info, capture.piece_type(), colour.flip(), to);
-        }
-        debug_assert!(self.check_hce_coherency(info));
     }
 
     pub fn make_move<const USE_NNUE: bool>(
         &mut self,
         m: Move,
         t: &mut ThreadData,
-        info: &SearchInfo,
     ) -> bool {
         if USE_NNUE {
             self.make_move_nnue(m, t)
         } else {
-            self.make_move_hce(m, info)
+            panic!("Hand-crafted evaluation is no longer supported!");
         }
     }
 
-    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData, info: &SearchInfo) {
+    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData) {
         if USE_NNUE {
             self.unmake_move_nnue(t);
         } else {
-            self.unmake_move_hce(info);
+            panic!("Hand-crafted evaluation is no longer supported!");
         }
     }
 
@@ -2070,14 +1795,13 @@ impl Board {
         &mut self,
         rng: &mut ThreadRng,
         t: &mut ThreadData,
-        info: &SearchInfo,
     ) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
         let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
             return None;
         };
-        self.make_move::<NNUE>(*mov, t, info);
+        self.make_move::<NNUE>(*mov, t);
         Some(*mov)
     }
 

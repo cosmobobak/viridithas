@@ -11,7 +11,7 @@ use crate::{
     uci::CHESS960,
 };
 #[cfg(test)]
-use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
+use crate::threadlocal::ThreadData;
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -31,31 +31,6 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
         }
         count += perft(pos, depth - 1);
         pos.unmake_move_base();
-    }
-
-    count
-}
-
-#[cfg(test)]
-pub fn hce_perft(pos: &mut Board, info: &SearchInfo, depth: usize) -> u64 {
-    #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-    debug_assert!(pos.check_hce_coherency(info), "{pos}");
-
-    if depth == 0 {
-        return 1;
-    }
-
-    let mut ml = MoveList::new();
-    pos.generate_moves(&mut ml);
-
-    let mut count = 0;
-    for &m in ml.iter() {
-        if !pos.make_move_hce(m, info) {
-            continue;
-        }
-        count += hce_perft(pos, info, depth - 1);
-        pos.unmake_move_hce(info);
     }
 
     count
@@ -185,24 +160,6 @@ mod tests {
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
         // assert_eq!(perft(&mut pos, 4), 197_281);
-    }
-
-    #[test]
-    fn perft_hce_start_position() {
-        use super::*;
-
-        let mut pos = Board::new();
-        let stopped = AtomicBool::new(false);
-        let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        pos.set_startpos();
-        pos.refresh_psqt(&info);
-        assert_eq!(hce_perft(&mut pos, &info, 1), 20, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
-        });
-        assert_eq!(hce_perft(&mut pos, &info, 2), 400);
-        assert_eq!(hce_perft(&mut pos, &info, 3), 8_902);
-        // assert_eq!(hce_perft(&mut pos, &info, 4), 197_281);
     }
 
     #[test]

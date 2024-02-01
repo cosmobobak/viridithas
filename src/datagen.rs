@@ -304,7 +304,7 @@ fn generate_on_thread(
         // pick either 8 or 9 random moves (to balance out the win/loss/draw ratio)
         let max = if rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
+            let res = board.make_random_move::<true>(&mut rng, &mut thread_data);
             if res.is_none() {
                 if options.log_level > 2 {
                     eprintln!("Reached a position with no legal moves, skipping...");
@@ -404,7 +404,7 @@ fn generate_on_thread(
                 };
             }
 
-            board.make_move::<true>(best_move, &mut thread_data, &info);
+            board.make_move::<true>(best_move, &mut thread_data);
         };
         if options.log_level > 2 {
             eprintln!("Game is over, outcome: {outcome:?}");
