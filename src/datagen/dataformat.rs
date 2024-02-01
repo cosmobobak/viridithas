@@ -80,6 +80,17 @@ impl Game {
         Ok(Self { initial_position, moves })
     }
 
+    /// Exposes a reference to each position in the game sequentially, via a callback.
+    pub fn visit_positions(&self, mut callback: impl FnMut(&Board, i32)) {
+        let (mut board, _, wdl, _) = self.initial_position.unpack();
+        callback(&board, i32::from(wdl));
+        for (mv, eval) in &self.moves {
+            let eval = eval.get();
+            board.make_move_simple(*mv);
+            callback(&board, i32::from(eval));
+        }
+    }
+
     /// Converts the game into a sequence of marlinformat `PackedBoard` objects, yielding only those positions that pass the filter.
     pub fn splat_to_marlinformat(
         &self,

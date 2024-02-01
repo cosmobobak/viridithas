@@ -68,7 +68,11 @@ fn main() {
             println!("Output path required for splatting (use --output)");
             return;
         };
-        return datagen::splat_main(&input, &output, true, cli.marlinformat);
+        return datagen::run_splat(&input, &output, true, cli.marlinformat);
+    }
+
+    if let Some(data_path) = cli.dataset_stats {
+        return datagen::dataset_stats(&data_path);
     }
 
     if cli.perfttest {
@@ -77,10 +81,6 @@ fn main() {
 
     if cli.spsajson {
         return println!("{}", SearchParams::default().emit_json_for_spsa());
-    }
-
-    if cli.info {
-        return lookups::info_dump();
     }
 
     if cli.visnnue {
