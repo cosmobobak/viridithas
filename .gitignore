@@ -22,3 +22,5 @@ Viridithas
 tb5
 *.nnue
 src/tablebases/bindings.rs
+perf.data*
+flamegraph.svg
