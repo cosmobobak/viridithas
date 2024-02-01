@@ -39,7 +39,7 @@ mod datagen;
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
 /// The version of the engine.
-pub static VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static VERSION: &str = "final HCE";
 
 fn main() {
     #[cfg(debug_assertions)]
