@@ -22,7 +22,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{self, get_bucket_indices, PovUpdate, UpdateBuffer},
+    nnue::network::{self, get_bucket_indices, FeatureUpdate, PovUpdate, UpdateBuffer},
     piece::{Colour, Piece, PieceType},
     search::pv::PVariation,
     squareset::{self, SquareSet},
@@ -61,7 +61,6 @@ pub struct Board {
 
     height: usize,
     history: Vec<Undo>,
-    repetition_cache: Vec<u64>,
 }
 
 /// Check that two boards are equal.
@@ -96,7 +95,6 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.threats, rhs.threats, "threats {msg}");
     assert_eq!(lhs.height, rhs.height, "height {msg}");
     assert_eq!(lhs.history, rhs.history, "history {msg}");
-    assert_eq!(lhs.repetition_cache, rhs.repetition_cache, "repetition_cache {msg}");
 }
 
 impl Debug for Board {
@@ -134,7 +132,6 @@ impl Board {
             threats: Threats::default(),
             castle_perm: CastlingRights::NONE,
             history: Vec::new(),
-            repetition_cache: Vec::new(),
         };
         out.reset();
         out
@@ -215,12 +212,11 @@ impl Board {
     pub fn generate_pos_key(&self) -> u64 {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
-        for (sq, &piece) in self.piece_array.iter().enumerate() {
-            let sq = Square::new(sq.try_into().unwrap());
+        self.pieces.visit_pieces(|sq, piece| {
             if !piece.is_empty() {
                 hash_piece(&mut key, piece, sq);
             }
-        }
+        });
 
         if self.side == Colour::WHITE {
             hash_side(&mut key);
@@ -287,7 +283,6 @@ impl Board {
         self.key = 0;
         self.threats = Threats::default();
         self.history.clear();
-        self.repetition_cache.clear();
     }
 
     pub fn set_frc_idx(&mut self, scharnagl: usize) {
@@ -727,8 +722,13 @@ impl Board {
 
     pub fn sq_attacked_by<const IS_WHITE: bool>(&self, sq: Square) -> bool {
         debug_assert!(sq.on_board());
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        // we remove this check because the board actually *can*
+        // be in an inconsistent state when we call this, as it's
+        // used to determine if a move is legal, and we'd like to
+        // only do a lot of the make_move work *after* we've
+        // determined that the move is legal.
+        // #[cfg(debug_assertions)]
+        // self.check_validity().unwrap();
 
         if IS_WHITE == (self.side == Colour::BLACK) {
             return self.threats.all.contains_square(sq);
@@ -945,9 +945,6 @@ impl Board {
         );
 
         self.pieces.clear_piece_at(sq, piece);
-
-        hash_piece(&mut self.key, piece, sq);
-
         *self.piece_at_mut(sq) = Piece::EMPTY;
     }
 
@@ -955,9 +952,6 @@ impl Board {
         debug_assert!(sq.on_board());
 
         self.pieces.set_piece_at(sq, piece);
-
-        hash_piece(&mut self.key, piece, sq);
-
         *self.piece_at_mut(sq) = piece;
     }
 
@@ -988,9 +982,6 @@ impl Board {
 
         let from_to_bb = from.as_set() | to.as_set();
         self.pieces.move_piece(from_to_bb, piece_moved);
-
-        hash_piece(&mut self.key, piece_moved, from);
-        hash_piece(&mut self.key, piece_moved, to);
 
         *self.piece_at_mut(from) = Piece::EMPTY;
         *self.piece_at_mut(to) = piece_moved;
@@ -1068,6 +1059,19 @@ impl Board {
         let piece = self.moved_piece(m);
         let captured = self.captured_piece(m);
 
+        self.history.push(Undo {
+            m,
+            castle_perm: self.castle_perm,
+            ep_square: self.ep_sq,
+            fifty_move_counter: self.fifty_move_counter,
+            capture: captured,
+            threats: self.threats,
+            cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
+            bitboard: self.pieces,
+            piece_array: self.piece_array,
+            key: self.key,
+        });
+
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
         // we sort out castling in a branch later, dw about it.
@@ -1082,8 +1086,6 @@ impl Board {
 
         debug_assert!(from.on_board());
         debug_assert!(to.on_board());
-
-        let saved_key = self.key;
 
         if m.is_ep() {
             let clear_at = if side == Colour::WHITE { to.sub(8) } else { to.add(8) };
@@ -1123,17 +1125,6 @@ impl Board {
 
         // hash out the castling to insert it again after updating rights.
         hash_castling(&mut self.key, self.castle_perm);
-
-        self.history.push(Undo {
-            m,
-            castle_perm: self.castle_perm,
-            ep_square: self.ep_sq,
-            fifty_move_counter: self.fifty_move_counter,
-            capture: captured,
-            threats: self.threats,
-            cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
-        });
-        self.repetition_cache.push(saved_key);
 
         // update castling rights
         let mut new_rights = self.castle_perm;
@@ -1185,7 +1176,6 @@ impl Board {
                     self.ep_sq = from.sub(8);
                     debug_assert!(self.ep_sq.rank() == Rank::RANK_6);
                 }
-                hash_ep(&mut self.key, self.ep_sq);
             }
         }
 
@@ -1202,10 +1192,6 @@ impl Board {
         }
 
         self.side = self.side.flip();
-        hash_side(&mut self.key);
-
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
 
         // reversed in_check fn, as we have now swapped sides
         if self.sq_attacked(self.king_sq(self.side.flip()), self.side) {
@@ -1213,99 +1199,51 @@ impl Board {
             return false;
         }
 
+        // apply all the updates to the zobrist hash
+        let mut key = self.key;
+        if self.ep_sq != Square::NO_SQUARE {
+            hash_ep(&mut key, self.ep_sq);
+        }
+        hash_side(&mut key);
+        for &FeatureUpdate { sq, piece } in update_buffer.adds() {
+            hash_piece(&mut key, piece, sq);
+        }
+        for &FeatureUpdate { sq, piece } in update_buffer.subs() {
+            hash_piece(&mut key, piece, sq);
+        }
+        self.key = key;
+
         self.threats = self.generate_threats(self.side.flip());
+
+        #[cfg(debug_assertions)]
+        self.check_validity().unwrap();
 
         true
     }
 
     pub fn unmake_move_base(&mut self) {
-        #[cfg(debug_assertions)]
-        self.check_validity().unwrap();
+        // we remove this check because the board actually *can*
+        // be in an inconsistent state when we call this, as we
+        // may be unmaking a move that was determined to be
+        // illegal, and as such the full make_move hasn't been
+        // run yet.
+        // #[cfg(debug_assertions)]
+        // self.check_validity().unwrap();
 
         self.height -= 1;
         self.ply -= 1;
+        self.side = self.side.flip();
 
-        let Undo { m, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
+        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, .. } =
             self.history.pop().expect("No move to unmake!");
 
-        let from = m.from();
-        let mut to = m.to();
-
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
-        }
-
-        // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut self.key, self.castle_perm);
-
+        self.key = key;
         self.castle_perm = castle_perm;
         self.ep_sq = ep_square;
         self.fifty_move_counter = fifty_move_counter;
-
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
-        }
-
-        // reinsert the castling rights
-        hash_castling(&mut self.key, self.castle_perm);
-
-        self.side = self.side.flip();
-        hash_side(&mut self.key);
-
         self.threats = threats;
-
-        if m.is_ep() {
-            if self.side == Colour::WHITE {
-                self.add_piece(to.sub(8), Piece::BP);
-            } else {
-                self.add_piece(to.add(8), Piece::WP);
-            }
-        } else if m.is_castle() {
-            match to {
-                _ if to == self.castle_perm.wk => {
-                    to = Square::G1;
-                    self.clear_piece(to);
-                    self.move_piece(Square::F1, self.castle_perm.wk);
-                }
-                _ if to == self.castle_perm.wq => {
-                    to = Square::C1;
-                    self.clear_piece(to);
-                    self.move_piece(Square::D1, self.castle_perm.wq);
-                }
-                _ if to == self.castle_perm.bk => {
-                    to = Square::G8;
-                    self.clear_piece(to);
-                    self.move_piece(Square::F8, self.castle_perm.bk);
-                }
-                _ if to == self.castle_perm.bq => {
-                    to = Square::C8;
-                    self.clear_piece(to);
-                    self.move_piece(Square::D8, self.castle_perm.bq);
-                }
-                _ => {
-                    panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
-                }
-            }
-        }
-
-        if m.is_promo() {
-            let promotion = Piece::new(self.side, m.promotion_type());
-            debug_assert!(promotion.piece_type().legal_promo());
-            debug_assert_eq!(promotion.colour(), self.piece_at(to).colour());
-            self.clear_piece(to);
-            self.add_piece(from, if self.side == Colour::WHITE { Piece::WP } else { Piece::BP });
-        } else if m.is_castle() {
-            self.add_piece(from, Piece::new(self.side, PieceType::KING));
-        } else {
-            self.move_piece(to, from);
-        }
-
-        if capture != Piece::EMPTY {
-            self.add_piece(to, capture);
-        }
-
-        let key = self.repetition_cache.pop().expect("No key to unmake!");
-        debug_assert_eq!(key, self.key);
+        self.pieces = bitboard;
+        self.piece_array = piece_array;
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1324,18 +1262,22 @@ impl Board {
             capture: Piece::EMPTY,
             threats: self.threats,
             cont_hist_index: ContHistIndex { piece: Piece::EMPTY, square: Square::NO_SQUARE },
+            bitboard: self.pieces,
+            piece_array: self.piece_array,
+            key: self.key,
         });
 
+        let mut key = self.key;
         if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
+            hash_ep(&mut key, self.ep_sq);
         }
+        hash_side(&mut key);
+        self.key = key;
 
         self.ep_sq = Square::NO_SQUARE;
-
         self.side = self.side.flip();
         self.ply += 1;
         self.height += 1;
-        hash_side(&mut self.key);
 
         self.threats = self.generate_threats(self.side.flip());
 
@@ -1349,30 +1291,14 @@ impl Board {
 
         self.height -= 1;
         self.ply -= 1;
+        self.side = self.side.flip();
 
-        if self.ep_sq != Square::NO_SQUARE {
-            // this might be unreachable, but that's ok.
-            // the branch predictor will hopefully figure it out.
-            hash_ep(&mut self.key, self.ep_sq);
-        }
-
-        let Undo { m: _, castle_perm, ep_square, fifty_move_counter, capture, threats, .. } =
+        let Undo { ep_square, threats, key, .. } =
             self.history.pop().expect("No move to unmake!");
 
-        debug_assert_eq!(capture, Piece::EMPTY);
-
-        self.castle_perm = castle_perm;
         self.ep_sq = ep_square;
-        self.fifty_move_counter = fifty_move_counter;
-
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
-        }
-
-        self.side = self.side.flip();
-        hash_side(&mut self.key);
-
         self.threats = threats;
+        self.key = key;
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1601,10 +1527,10 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        for (key, undo) in
-            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
+        for undo in
+            self.history.iter().rev().skip(1).step_by(2)
         {
-            if *key == self.key {
+            if undo.key == self.key {
                 return true;
             }
             // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
@@ -1800,10 +1726,10 @@ impl Board {
             return GameOutcome::DrawFiftyMoves;
         }
         let mut reps = 1;
-        for (key, undo) in
-            self.repetition_cache.iter().rev().zip(self.history.iter().rev()).skip(1).step_by(2)
+        for undo in
+            self.history.iter().rev().skip(1).step_by(2)
         {
-            if *key == self.key {
+            if undo.key == self.key {
                 reps += 1;
                 if reps == 3 {
                     return GameOutcome::DrawRepetition;

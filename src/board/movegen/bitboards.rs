@@ -260,6 +260,18 @@ impl BitBoard {
             }
         }
     }
+
+    pub fn visit_pieces(&self, mut callback: impl FnMut(Square, Piece)) {
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                let piece = Piece::new(colour, piece_type);
+                let bb = self.pieces[piece_type.index()] & self.colours[colour.index()];
+                for sq in bb {
+                    callback(sq, piece);
+                }
+            }
+        }
+    }
 }
 
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
