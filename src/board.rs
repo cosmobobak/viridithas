@@ -32,9 +32,9 @@ use crate::{
 };
 
 use self::movegen::{
-        bitboards::{BitBoard, Threats},
-        MoveListEntry,
-    };
+    bitboards::{BitBoard, Threats},
+    MoveListEntry,
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
@@ -1430,24 +1430,12 @@ impl Board {
         t.nnue.pop_acc();
     }
 
-    pub fn make_move<const USE_NNUE: bool>(
-        &mut self,
-        m: Move,
-        t: &mut ThreadData,
-    ) -> bool {
-        if USE_NNUE {
-            self.make_move_nnue(m, t)
-        } else {
-            panic!("Hand-crafted evaluation is no longer supported!");
-        }
+    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) -> bool {
+        self.make_move_nnue(m, t)
     }
 
-    pub fn unmake_move<const USE_NNUE: bool>(&mut self, t: &mut ThreadData) {
-        if USE_NNUE {
-            self.unmake_move_nnue(t);
-        } else {
-            panic!("Hand-crafted evaluation is no longer supported!");
-        }
+    pub fn unmake_move(&mut self, t: &mut ThreadData) {
+        self.unmake_move_nnue(t);
     }
 
     pub fn last_move_was_nullmove(&self) -> bool {
@@ -1791,17 +1779,13 @@ impl Board {
     }
 
     #[allow(dead_code /* for datagen */)]
-    pub fn make_random_move<const NNUE: bool>(
-        &mut self,
-        rng: &mut ThreadRng,
-        t: &mut ThreadData,
-    ) -> Option<Move> {
+    pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
         let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
             return None;
         };
-        self.make_move::<NNUE>(*mov, t);
+        self.make_move(*mov, t);
         Some(*mov)
     }
 

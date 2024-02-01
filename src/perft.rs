@@ -6,12 +6,12 @@ use std::{
     sync::atomic::Ordering,
 };
 
+#[cfg(test)]
+use crate::threadlocal::ThreadData;
 use crate::{
     board::{movegen::MoveList, Board},
     uci::CHESS960,
 };
-#[cfg(test)]
-use crate::threadlocal::ThreadData;
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]

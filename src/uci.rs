@@ -15,10 +15,7 @@ use std::{
 use crate::{
     bench::BENCH_POSITIONS,
     board::{
-        evaluation::{
-            is_game_theoretic_score, is_mate_score, MATE_SCORE,
-            TB_WIN_SCORE,
-        },
+        evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
         movegen::MoveList,
         Board,
     },
@@ -44,7 +41,6 @@ static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
 pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
-pub static USE_NNUE: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
@@ -339,10 +335,6 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: bool = opt_value.parse()?;
             PRETTY_PRINT.store(value, Ordering::SeqCst);
         }
-        "UseNNUE" => {
-            let value: bool = opt_value.parse()?;
-            USE_NNUE.store(value, Ordering::SeqCst);
-        }
         "SyzygyPath" => {
             let path = opt_value.to_string();
             tablebases::probe::init(&path);
@@ -592,7 +584,6 @@ pub fn main_loop(global_bench: bool) {
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!("UseNNUE: {}", USE_NNUE.load(Ordering::SeqCst));
                 println!("SyzygyPath: {}", SYZYGY_PATH.lock().expect("failed to lock syzygy path"));
                 println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
                 println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
@@ -618,10 +609,7 @@ pub fn main_loop(global_bench: bool) {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    pos.evaluate::<true>(
-                        thread_data.first_mut().expect("the thread headers are empty."),
-                        0,
-                    )
+                    pos.evaluate(thread_data.first_mut().expect("the thread headers are empty."), 0)
                 };
                 println!("{eval}");
                 Ok(())
@@ -711,11 +699,7 @@ pub fn main_loop(global_bench: bool) {
                 let res = parse_go(input, &mut info, &pos);
                 if res.is_ok() {
                     tt.increase_age();
-                    if USE_NNUE.load(Ordering::SeqCst) {
-                        pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
-                    } else {
-                        pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
-                    }
+                    pos.search_position(&mut info, &mut thread_data, tt.view());
                 }
                 res
             }
@@ -771,11 +755,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
             return Err(e);
         }
         tt.increase_age();
-        if USE_NNUE.load(Ordering::SeqCst) {
-            pos.search_position::<true>(&mut info, &mut thread_data, tt.view());
-        } else {
-            pos.search_position::<false>(&mut info, &mut thread_data, tt.view());
-        }
+        pos.search_position(&mut info, &mut thread_data, tt.view());
         node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());

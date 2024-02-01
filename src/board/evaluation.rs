@@ -78,16 +78,8 @@ impl Board {
         v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
-    pub fn evaluate<const USE_NNUE: bool>(
-        &self,
-        t: &ThreadData,
-        nodes: u64,
-    ) -> i32 {
-        if USE_NNUE {
-            self.evaluate_nnue(t, nodes)
-        } else {
-            panic!("Hand-crafted evaluation is no longer supported!");
-        }
+    pub fn evaluate(&self, t: &ThreadData, nodes: u64) -> i32 {
+        self.evaluate_nnue(t, nodes)
     }
 
     fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
@@ -97,7 +89,9 @@ impl Board {
         if self.pieces.minors::<IS_WHITE>().count() > 1 {
             return false;
         }
-        if self.pieces.pawns::<IS_WHITE>() & self.pieces.our_pieces::<IS_WHITE>() != SquareSet::EMPTY {
+        if self.pieces.pawns::<IS_WHITE>() & self.pieces.our_pieces::<IS_WHITE>()
+            != SquareSet::EMPTY
+        {
             return false;
         }
 

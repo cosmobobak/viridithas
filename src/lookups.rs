@@ -1,10 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::{
-    rng::XorShiftState,
-    squareset::SquareSet,
-    util::Square,
-};
+use crate::{rng::XorShiftState, squareset::SquareSet, util::Square};
 
 /// Implements a C-style for loop, for use in const fn.
 #[macro_export]

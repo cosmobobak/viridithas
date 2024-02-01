@@ -87,7 +87,7 @@ static TB_HITS: AtomicU64 = AtomicU64::new(0);
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
-    pub fn search_position<const USE_NNUE: bool>(
+    pub fn search_position(
         &mut self,
         info: &mut SearchInfo,
         thread_headers: &mut [ThreadData],
@@ -135,12 +135,12 @@ impl Board {
 
         thread::scope(|s| {
             s.spawn(|| {
-                self.iterative_deepening::<USE_NNUE, true>(info, tt, t1);
+                self.iterative_deepening::<true>(info, tt, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             for (t, (board, info)) in rest.iter_mut().zip(&mut board_info_copies) {
                 s.spawn(|| {
-                    board.iterative_deepening::<USE_NNUE, false>(info, tt, t);
+                    board.iterative_deepening::<false>(info, tt, t);
                 });
             }
         });
@@ -179,7 +179,7 @@ impl Board {
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `T0 = true`, and the helper threads with `T0 = false`.
     #[allow(clippy::too_many_lines)]
-    fn iterative_deepening<const NNUE: bool, const T0: bool>(
+    fn iterative_deepening<const T0: bool>(
         &mut self,
         info: &mut SearchInfo,
         tt: TTView,
@@ -206,7 +206,7 @@ impl Board {
             // (depth can be dynamically modified in the aspiration loop,
             // so we return out the value of depth to the caller)
             let ControlFlow::Continue(depth) =
-                self.aspiration::<NNUE, T0>(&mut pv, tt, info, t, &mut aw, d, &mut average_value)
+                self.aspiration::<T0>(&mut pv, tt, info, t, &mut aw, d, &mut average_value)
             else {
                 break 'deepening;
             };
@@ -237,7 +237,7 @@ impl Board {
         }
     }
 
-    fn aspiration<const NNUE: bool, const T0: bool>(
+    fn aspiration<const T0: bool>(
         &mut self,
         pv: &mut PVariation,
         tt: TTView<'_>,
@@ -250,7 +250,7 @@ impl Board {
         let mut depth = Depth::new(d.try_into().unwrap());
         let min_depth = (depth / 2).max(ONE_PLY);
         loop {
-            pv.score = self.root_search::<NNUE>(tt, pv, info, t, depth, aw.alpha, aw.beta);
+            pv.score = self.root_search(tt, pv, info, t, depth, aw.alpha, aw.beta);
             if info.check_up() {
                 return ControlFlow::Break(()); // we've been told to stop searching.
             }
@@ -360,7 +360,7 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    pub fn quiescence<const PV: bool, const NNUE: bool>(
+    pub fn quiescence<const PV: bool>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -396,11 +396,7 @@ impl Board {
 
         // are we too deep?
         if height > (MAX_DEPTH - 1).ply_to_horizon() {
-            return if in_check {
-                0
-            } else {
-                self.evaluate::<NNUE>(t, info.nodes.get_local())
-            };
+            return if in_check { 0 } else { self.evaluate(t, info.nodes.get_local()) };
         }
 
         // probe the TT and see if we get a cutoff.
@@ -424,7 +420,7 @@ impl Board {
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
         } else {
-            self.evaluate::<NNUE>(t, info.nodes.get_local())
+            self.evaluate(t, info.nodes.get_local())
         };
 
         if stand_pat >= beta {
@@ -448,14 +444,14 @@ impl Board {
             move_picker.skip_quiets = true;
         }
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-            if !self.make_move::<NNUE>(m, t) {
+            if !self.make_move(m, t) {
                 continue;
             }
             info.nodes.increment();
             moves_made += 1;
 
-            let score = -self.quiescence::<PV, NNUE>(tt, &mut lpv, info, t, -beta, -alpha);
-            self.unmake_move::<NNUE>(t);
+            let score = -self.quiescence::<PV>(tt, &mut lpv, info, t, -beta, -alpha);
+            self.unmake_move(t);
 
             if score > best_score {
                 best_score = score;
@@ -497,7 +493,7 @@ impl Board {
 
     /// Perform alpha-beta minimax search.
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn alpha_beta<const PV: bool, const ROOT: bool, const NNUE: bool>(
+    pub fn alpha_beta<const PV: bool, const ROOT: bool>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -520,7 +516,7 @@ impl Board {
 
         let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<PV, NNUE>(tt, pv, info, t, alpha, beta);
+            return self.quiescence::<PV>(tt, pv, info, t, alpha, beta);
         }
 
         depth = depth.max(ZERO_PLY);
@@ -551,11 +547,7 @@ impl Board {
             let max_height =
                 MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
-                return if in_check {
-                    0
-                } else {
-                    self.evaluate::<NNUE>(t, info.nodes.get_local())
-                };
+                return if in_check { 0 } else { self.evaluate(t, info.nodes.get_local()) };
             }
 
             // mate-distance pruning.
@@ -653,12 +645,12 @@ impl Board {
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
-                self.evaluate::<NNUE>(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+                self.evaluate(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
             } else {
                 v // if the TT eval is not VALUE_NONE, use it.
             }
         } else {
-            self.evaluate::<NNUE>(t, info.nodes.get_local()) // otherwise, use the static evaluation.
+            self.evaluate(t, info.nodes.get_local()) // otherwise, use the static evaluation.
         };
 
         t.evals[height] = static_eval;
@@ -685,7 +677,7 @@ impl Board {
                     - info.search_params.razoring_coeff_0
                     - info.search_params.razoring_coeff_1 * depth * depth
             {
-                let v = self.quiescence::<false, NNUE>(tt, pv, info, t, alpha - 1, alpha);
+                let v = self.quiescence::<false>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
                 }
@@ -721,16 +713,8 @@ impl Board {
                     );
                 let nm_depth = depth - r;
                 self.make_nullmove();
-                let mut null_score = -self.zw_search::<NNUE>(
-                    tt,
-                    l_pv,
-                    info,
-                    t,
-                    nm_depth,
-                    -beta,
-                    -beta + 1,
-                    !cut_node,
-                );
+                let mut null_score =
+                    -self.zw_search(tt, l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -753,7 +737,7 @@ impl Board {
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
                     let veri_score =
-                        self.zw_search::<NNUE>(tt, l_pv, info, t, nm_depth, beta - 1, beta, false);
+                        self.zw_search(tt, l_pv, info, t, nm_depth, beta - 1, beta, false);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -803,17 +787,17 @@ impl Board {
                     continue;
                 }
 
-                if !self.make_move::<NNUE>(m, t) {
+                if !self.make_move(m, t) {
                     // illegal move
                     continue;
                 }
 
                 let mut value =
-                    -self.quiescence::<false, NNUE>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
+                    -self.quiescence::<false>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
                     let pc_depth = depth - info.search_params.probcut_reduction;
-                    value = -self.zw_search::<NNUE>(
+                    value = -self.zw_search(
                         tt,
                         l_pv,
                         info,
@@ -825,7 +809,7 @@ impl Board {
                     );
                 }
 
-                self.unmake_move::<NNUE>(t);
+                self.unmake_move(t);
 
                 if value >= pc_beta {
                     tt.store::<false>(key, height, m, value, static_eval, Bound::Lower, depth - 3);
@@ -847,7 +831,7 @@ impl Board {
         // and help along the history tables.
         if PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
-            self.alpha_beta::<PV, ROOT, NNUE>(tt, l_pv, info, t, iid_depth, alpha, beta, cut_node);
+            self.alpha_beta::<PV, ROOT>(tt, l_pv, info, t, iid_depth, alpha, beta, cut_node);
             tt_move = t.best_moves[height];
         }
 
@@ -921,7 +905,7 @@ impl Board {
                 continue;
             }
 
-            if !self.make_move::<NNUE>(m, t) {
+            if !self.make_move(m, t) {
                 continue;
             }
 
@@ -944,7 +928,7 @@ impl Board {
                 extension = ZERO_PLY;
             } else if maybe_singular {
                 let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
-                extension = self.singularity::<PV, NNUE>(
+                extension = self.singularity::<PV>(
                     tt,
                     info,
                     t,
@@ -977,8 +961,7 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score = -self
-                    .full_search::<PV, NNUE>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
+                score = -self.full_search::<PV>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
@@ -1005,16 +988,7 @@ impl Board {
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
-                score = -self.zw_search::<NNUE>(
-                    tt,
-                    l_pv,
-                    info,
-                    t,
-                    reduced_depth,
-                    -alpha - 1,
-                    -alpha,
-                    true,
-                );
+                score = -self.zw_search(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha, true);
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
@@ -1026,7 +1000,7 @@ impl Board {
                     // check if we're actually going to do a deeper search than before
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
-                        score = -self.zw_search::<NNUE>(
+                        score = -self.zw_search(
                             tt,
                             l_pv,
                             info,
@@ -1041,7 +1015,7 @@ impl Board {
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.full_search::<PV, NNUE>(
+                    score = -self.full_search::<PV>(
                         tt,
                         l_pv,
                         info,
@@ -1053,7 +1027,7 @@ impl Board {
                     );
                 }
             }
-            self.unmake_move::<NNUE>(t);
+            self.unmake_move(t);
 
             // record subtree size for TimeManager
             if ROOT && t.thread_id == 0 {
@@ -1185,7 +1159,7 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn singularity<const PV: bool, const NNUE: bool>(
+    pub fn singularity<const PV: bool>(
         &mut self,
         tt: TTView,
         info: &mut SearchInfo,
@@ -1202,17 +1176,16 @@ impl Board {
         let r_beta = Self::singularity_margin(tt_value, depth);
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
-        self.unmake_move::<NNUE>(t);
+        self.unmake_move(t);
         t.excluded[self.height()] = m;
-        let value =
-            self.zw_search::<NNUE>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
+        let value = self.zw_search(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
             return ZERO_PLY;
         }
         // re-make the singular move.
-        self.make_move::<NNUE>(m, t);
+        self.make_move(m, t);
 
         let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
@@ -1243,7 +1216,7 @@ impl Board {
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value = self.alpha_beta::<false, true, true>(
+        let value = self.alpha_beta::<false, true>(
             tt,
             &mut PVariation::default(),
             info,
@@ -1353,7 +1326,7 @@ impl Board {
     }
 
     /// root alpha-beta search.
-    pub fn root_search<const NNUE: bool>(
+    pub fn root_search(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -1363,11 +1336,11 @@ impl Board {
         alpha: i32,
         beta: i32,
     ) -> i32 {
-        self.alpha_beta::<true, true, NNUE>(tt, pv, info, t, depth, alpha, beta, false)
+        self.alpha_beta::<true, true>(tt, pv, info, t, depth, alpha, beta, false)
     }
 
     /// zero-window alpha-beta search.
-    pub fn zw_search<const NNUE: bool>(
+    pub fn zw_search(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -1378,11 +1351,11 @@ impl Board {
         beta: i32,
         cut_node: bool,
     ) -> i32 {
-        self.alpha_beta::<false, false, NNUE>(tt, pv, info, t, depth, alpha, beta, cut_node)
+        self.alpha_beta::<false, false>(tt, pv, info, t, depth, alpha, beta, cut_node)
     }
 
     /// full-window alpha-beta search.
-    pub fn full_search<const PV: bool, const NNUE: bool>(
+    pub fn full_search<const PV: bool>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -1393,7 +1366,7 @@ impl Board {
         beta: i32,
         cut_node: bool,
     ) -> i32 {
-        self.alpha_beta::<PV, false, NNUE>(tt, pv, info, t, depth, alpha, beta, cut_node)
+        self.alpha_beta::<PV, false>(tt, pv, info, t, depth, alpha, beta, cut_node)
     }
 }
 
