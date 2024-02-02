@@ -8,7 +8,7 @@ use crate::{
 
 use super::{movegen::MoveListEntry, Board};
 
-impl ThreadData {
+impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(
         &mut self,

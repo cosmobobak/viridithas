@@ -1002,11 +1002,11 @@ impl Board {
     }
 
     pub fn make_move_simple(&mut self, m: Move) -> bool {
-        self.make_move_base(m, &mut UpdateBuffer::default())
+        self.make_move_base(m, &mut UpdateBuffer::default(), |_| {})
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer, maybe_prefetch: impl FnOnce(u64)) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1174,6 +1174,8 @@ impl Board {
         hash_castling(&mut key, self.castle_perm);
         self.key = key;
 
+        maybe_prefetch(key);
+
         self.threats = self.generate_threats(self.side.flip());
 
         #[cfg(debug_assertions)]
@@ -1275,7 +1277,8 @@ impl Board {
         let piece_type = self.moved_piece(m).piece_type();
         let colour = self.turn();
         let mut update_buffer = UpdateBuffer::default();
-        let res = self.make_move_base(m, &mut update_buffer);
+        let prefetch = |key| t.tt.prefetch(key);
+        let res = self.make_move_base(m, &mut update_buffer, prefetch);
         if !res {
             return false;
         }

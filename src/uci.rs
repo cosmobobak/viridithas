@@ -546,7 +546,7 @@ pub fn main_loop(global_bench: bool) {
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
 
-    let mut thread_data = vec![ThreadData::new(0, &pos)];
+    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view())];
 
     let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
@@ -647,12 +647,19 @@ pub fn main_loop(global_bench: bool) {
                         info.lm_table = LMTable::new(&info.search_params);
                         if let Some(hash_mb) = conf.hash_mb {
                             let new_size = hash_mb * MEGABYTE;
+                            // drop all the thread_data, as they are borrowing the old tt
+                            std::mem::drop(thread_data);
                             tt.resize(new_size);
+                            // recreate the thread_data with the new tt
+                            thread_data = (0..conf.threads.unwrap_or(1))
+                                .zip(std::iter::repeat(&pos))
+                                .map(|(i, p)| ThreadData::new(i, p, tt.view()))
+                                .collect();
                         }
                         if let Some(threads) = conf.threads {
                             thread_data = (0..threads)
                                 .zip(std::iter::repeat(&pos))
-                                .map(|(i, p)| ThreadData::new(i, p))
+                                .map(|(i, p)| ThreadData::new(i, p, tt.view()))
                                 .collect();
                         }
                         Ok(())
@@ -729,7 +736,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
     let mut thread_data =
-        (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p)).collect::<Vec<_>>();
+        (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p, tt.view())).collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
     let max_fen_len =
