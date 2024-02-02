@@ -8,9 +8,6 @@ use crate::{
     util::Square,
 };
 
-pub const LIGHT_SQUARE: bool = true;
-pub const DARK_SQUARE: bool = false;
-
 /// Iterator over the squares of a bitboard.
 /// The squares are returned in increasing order.
 pub struct BitLoop {
@@ -164,19 +161,12 @@ impl BitBoard {
         self.pieces[PieceType::KING.index()]
     }
 
-    pub fn bishops_sqco<const IS_WHITE: bool, const IS_LSB: bool>(&self) -> SquareSet {
-        if IS_LSB {
-            self.bishops::<IS_WHITE>() & SquareSet::LIGHT_SQUARES
-        } else {
-            self.bishops::<IS_WHITE>() & SquareSet::DARK_SQUARES
-        }
-    }
-
     pub fn reset(&mut self) {
         *self = Self::NULL;
     }
 
-    pub fn move_piece(&mut self, from_to_bb: SquareSet, piece: Piece) {
+    pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
+        let from_to_bb = from.as_set() | to.as_set();
         self.pieces[piece.piece_type().index()] ^= from_to_bb;
         self.colours[piece.colour().index()] ^= from_to_bb;
     }
@@ -205,14 +195,6 @@ impl BitBoard {
         self.pieces[piece_type.index()]
     }
 
-    pub fn pawn_attacks<const IS_WHITE: bool>(&self) -> SquareSet {
-        if IS_WHITE {
-            self.pawns::<true>().north_east_one() | self.pawns::<true>().north_west_one()
-        } else {
-            self.pawns::<false>().south_east_one() | self.pawns::<false>().south_west_one()
-        }
-    }
-
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
         let sq_bb = sq.as_set();
         let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.pawns::<false>();
@@ -230,7 +212,7 @@ impl BitBoard {
             | king_attackers
     }
 
-    fn piece_at(&self, sq: Square) -> Piece {
+    pub fn piece_at(&self, sq: Square) -> Piece {
         let sq_bb = sq.as_set();
         let colour = if (self.our_pieces::<true>() & sq_bb).non_empty() {
             Colour::WHITE
@@ -244,7 +226,7 @@ impl BitBoard {
                 return Piece::new(colour, piece);
             }
         }
-        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards");
+        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}");
     }
 
     fn any_bbs_overlapping(&self) -> bool {
@@ -279,6 +261,18 @@ impl BitBoard {
             }
         }
     }
+
+    pub fn visit_pieces(&self, mut callback: impl FnMut(Square, Piece)) {
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                let piece = Piece::new(colour, piece_type);
+                let bb = self.pieces[piece_type.index()] & self.colours[colour.index()];
+                for sq in bb {
+                    callback(sq, piece);
+                }
+            }
+        }
+    }
 }
 
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
@@ -287,9 +281,9 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     magic::get_orthogonal_attacks(sq, blockers)
 }
-pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-}
+// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
+// }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     lookups::get_knight_attacks(sq)
 }

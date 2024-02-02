@@ -304,7 +304,7 @@ fn generate_on_thread(
         // pick either 8 or 9 random moves (to balance out the win/loss/draw ratio)
         let max = if rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = board.make_random_move::<true>(&mut rng, &mut thread_data, &info);
+            let res = board.make_random_move(&mut rng, &mut thread_data);
             if res.is_none() {
                 if options.log_level > 2 {
                     eprintln!("Reached a position with no legal moves, skipping...");
@@ -325,11 +325,8 @@ fn generate_on_thread(
         }
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager.set_limit(SearchLimit::Depth(Depth::new(10)));
-        let (eval, _) = board.search_position::<true>(
-            &mut info,
-            std::array::from_mut(&mut thread_data),
-            tt.view(),
-        );
+        let (eval, _) =
+            board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             if options.log_level > 2 {
@@ -361,11 +358,8 @@ fn generate_on_thread(
             }
             tt.increase_age();
 
-            let (score, best_move) = board.search_position::<true>(
-                &mut info,
-                std::array::from_mut(&mut thread_data),
-                tt.view(),
-            );
+            let (score, best_move) =
+                board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
 
             game.add_move(best_move, score.try_into().unwrap());
 
@@ -404,7 +398,7 @@ fn generate_on_thread(
                 };
             }
 
-            board.make_move::<true>(best_move, &mut thread_data, &info);
+            board.make_move(best_move, &mut thread_data);
         };
         if options.log_level > 2 {
             eprintln!("Game is over, outcome: {outcome:?}");

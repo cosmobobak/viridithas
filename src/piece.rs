@@ -1,7 +1,5 @@
 use std::fmt::{Debug, Display};
 
-use crate::board::evaluation::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
     v: u8,
@@ -174,15 +172,7 @@ impl PieceType {
     }
 
     pub const fn see_value(self) -> i32 {
-        const SEE_PIECE_VALUES: [i32; 7] = [
-            PAWN_VALUE.value(128),
-            KNIGHT_VALUE.value(128),
-            BISHOP_VALUE.value(128),
-            ROOK_VALUE.value(128),
-            QUEEN_VALUE.value(128),
-            0,
-            0,
-        ];
+        const SEE_PIECE_VALUES: [i32; 7] = [161, 445, 463, 704, 1321, 0, 0];
         SEE_PIECE_VALUES[self.index()]
     }
 }

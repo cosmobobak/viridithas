@@ -186,30 +186,30 @@ impl ThreadData {
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+        let Some(&Undo { cont_hist_index, .. }) = pos.history.last() else {
             return;
         };
-        if prev_move.is_null() {
+        if cont_hist_index.square == Square::NO_SQUARE {
             return;
         }
 
-        let prev_to = prev_move.history_to_square();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_to = cont_hist_index.square;
+        let prev_piece = cont_hist_index.piece;
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
     /// Returns the counter move for this position.
     pub fn get_counter_move(&self, pos: &Board) -> Move {
-        let Some(&Undo { m: prev_move, .. }) = pos.history.last() else {
+        let Some(&Undo { cont_hist_index, .. }) = pos.history.last() else {
             return Move::NULL;
         };
-        if prev_move == Move::NULL {
+        if cont_hist_index.square == Square::NO_SQUARE {
             return Move::NULL;
         }
 
-        let prev_to = prev_move.history_to_square();
-        let prev_piece = pos.piece_at(prev_to);
+        let prev_to = cont_hist_index.square;
+        let prev_piece = cont_hist_index.piece;
 
         self.counter_move_table.get(prev_piece, prev_to)
     }

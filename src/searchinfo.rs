@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use crate::{
-    board::evaluation::parameters::EvalParams,
     search::{parameters::SearchParams, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
@@ -32,8 +31,6 @@ pub struct SearchInfo<'a> {
     pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
-    /// Evaluation parameters for HCE.
-    pub eval_params: EvalParams,
     /// Search parameters.
     pub search_params: SearchParams,
     /// LMR + LMP lookup table.
@@ -68,7 +65,6 @@ impl<'a> SearchInfo<'a> {
             seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
-            eval_params: EvalParams::default(),
             search_params: SearchParams::default(),
             lm_table: LMTable::default(),
             time_manager: TimeManager::default(),
@@ -259,8 +255,7 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) =
-            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -281,8 +276,7 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) =
-            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
@@ -303,8 +297,7 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) =
-            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
@@ -325,8 +318,7 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
         let mut t = ThreadData::new(0, &position);
-        let (value, mov) =
-            position.search_position::<true>(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.

@@ -197,7 +197,7 @@ impl<'a> TTView<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn store<const ROOT: bool>(
+    pub fn store(
         &self,
         key: u64,
         ply: usize,
@@ -250,8 +250,7 @@ impl<'a> TTView<'a> {
         // 2. if the entry is for a different position
         // 3. if it's an exact entry, and the old entry is not exact
         // 4. if the new entry is of higher priority than the old entry
-        if ROOT
-            || entry.key != key
+        if entry.key != key
             || flag == Bound::Exact && entry.age_and_flag.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
