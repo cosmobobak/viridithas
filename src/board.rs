@@ -180,8 +180,8 @@ impl Board {
             _ => unreachable!(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
-        debug_assert_eq!(self.piece_at(sq).colour(), side);
-        debug_assert_eq!(self.piece_at(sq).piece_type(), PieceType::KING);
+        debug_assert_eq!(self.pieces.piece_at(sq).colour(), side);
+        debug_assert_eq!(self.pieces.piece_at(sq).piece_type(), PieceType::KING);
         sq
     }
 
@@ -932,59 +932,11 @@ impl Board {
         }
     }
 
-    fn clear_piece(&mut self, sq: Square) {
-        debug_assert!(sq.on_board());
-        let piece = self.piece_at(sq);
-        debug_assert!(
-            !piece.is_empty(),
-            "Invalid piece at {}: {:?}, board {}, last move was {}",
-            sq,
-            piece,
-            self.fen(),
-            self.history.last().map_or("None".to_string(), |h| h.m.to_string())
-        );
-
-        self.pieces.clear_piece_at(sq, piece);
-        *self.piece_at_mut(sq) = Piece::EMPTY;
-    }
-
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
         debug_assert!(sq.on_board());
 
         self.pieces.set_piece_at(sq, piece);
         *self.piece_at_mut(sq) = piece;
-    }
-
-    fn move_piece(&mut self, from: Square, to: Square) {
-        debug_assert!(from.on_board());
-        debug_assert!(to.on_board());
-        debug_assert!(
-            self.piece_at(from) != Piece::EMPTY,
-            "from: {}, to: {}, board: {}, history: {:?}",
-            from,
-            to,
-            self.fen(),
-            self.history,
-        );
-        if from == to {
-            return;
-        }
-        debug_assert!(
-            self.piece_at(to) == Piece::EMPTY,
-            "from: {}, to: {}, board: {}, history: {:?}",
-            from,
-            to,
-            self.fen(),
-            self.history,
-        );
-
-        let piece_moved = self.piece_at(from);
-
-        let from_to_bb = from.as_set() | to.as_set();
-        self.pieces.move_piece(from_to_bb, piece_moved);
-
-        *self.piece_at_mut(from) = Piece::EMPTY;
-        *self.piece_at_mut(to) = piece_moved;
     }
 
     /// Gets the piece that will be moved by the given move.
@@ -1059,17 +1011,16 @@ impl Board {
         let piece = self.moved_piece(m);
         let captured = self.captured_piece(m);
 
+        let mut key = self.key;
         self.history.push(Undo {
-            m,
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
-            capture: captured,
             threats: self.threats,
             cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
             bitboard: self.pieces,
             piece_array: self.piece_array,
-            key: self.key,
+            key,
         });
 
         // from, to, and piece are valid unless this is a castling move,
@@ -1089,10 +1040,11 @@ impl Board {
 
         if m.is_ep() {
             let clear_at = if side == Colour::WHITE { to.sub(8) } else { to.add(8) };
-            self.clear_piece(clear_at);
-            update_buffer.clear_piece(clear_at, Piece::new(side.flip(), PieceType::PAWN));
+            let to_clear = Piece::new(side.flip(), PieceType::PAWN);
+            self.pieces.clear_piece_at(clear_at, to_clear);
+            update_buffer.clear_piece(clear_at, to_clear);
         } else if m.is_castle() {
-            self.clear_piece(from);
+            self.pieces.clear_piece_at(from, piece);
             let (rook_from, rook_to) = match to {
                 _ if to == self.castle_perm.wk => {
                     to = Square::G1;
@@ -1114,17 +1066,21 @@ impl Board {
                     panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
                 }
             };
-            self.move_piece(rook_from, rook_to);
-            update_buffer.move_piece(from, to, piece);
-            update_buffer.move_piece(rook_from, rook_to, Piece::new(side, PieceType::ROOK));
+            if from != to {
+                update_buffer.move_piece(from, to, piece);
+            }
+            let rook = Piece::new(side, PieceType::ROOK);
+            self.pieces.move_piece(rook_from, rook_to, rook);
+            update_buffer.move_piece(rook_from, rook_to, rook);
         }
 
+        // remove a previous en passant square from the hash
         if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut self.key, self.ep_sq);
+            hash_ep(&mut key, self.ep_sq);
         }
 
         // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut self.key, self.castle_perm);
+        hash_castling(&mut key, self.castle_perm);
 
         // update castling rights
         let mut new_rights = self.castle_perm;
@@ -1152,14 +1108,11 @@ impl Board {
 
         self.ep_sq = Square::NO_SQUARE;
 
-        // reinsert the castling rights
-        hash_castling(&mut self.key, self.castle_perm);
-
         self.fifty_move_counter += 1;
 
         if captured != Piece::EMPTY {
-            self.clear_piece(to);
             self.fifty_move_counter = 0;
+            self.pieces.clear_piece_at(to, captured);
             update_buffer.clear_piece(to, captured);
         }
 
@@ -1182,13 +1135,13 @@ impl Board {
         if m.is_promo() {
             let promo = Piece::new(side, m.promotion_type());
             debug_assert!(promo.piece_type().legal_promo());
-            self.clear_piece(from);
-            self.add_piece(to, promo);
+            self.pieces.clear_piece_at(from, piece);
+            self.pieces.set_piece_at(to, promo);
             update_buffer.add_piece(to, promo);
         } else if m.is_castle() {
-            self.add_piece(to, piece); // stupid hack for piece-swapping
+            self.pieces.set_piece_at(to, piece); // stupid hack for piece-swapping
         } else {
-            self.move_piece(from, to);
+            self.pieces.move_piece(from, to, piece);
         }
 
         self.side = self.side.flip();
@@ -1200,17 +1153,20 @@ impl Board {
         }
 
         // apply all the updates to the zobrist hash
-        let mut key = self.key;
         if self.ep_sq != Square::NO_SQUARE {
             hash_ep(&mut key, self.ep_sq);
         }
         hash_side(&mut key);
-        for &FeatureUpdate { sq, piece } in update_buffer.adds() {
-            hash_piece(&mut key, piece, sq);
-        }
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
+            self.piece_array[sq.index()] = Piece::EMPTY;
             hash_piece(&mut key, piece, sq);
         }
+        for &FeatureUpdate { sq, piece } in update_buffer.adds() {
+            self.piece_array[sq.index()] = piece;
+            hash_piece(&mut key, piece, sq);
+        }
+        // reinsert the castling rights
+        hash_castling(&mut key, self.castle_perm);
         self.key = key;
 
         self.threats = self.generate_threats(self.side.flip());
@@ -1235,15 +1191,17 @@ impl Board {
         self.side = self.side.flip();
 
         let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, .. } =
-            self.history.pop().expect("No move to unmake!");
+            self.history.last().expect("No move to unmake!");
 
-        self.key = key;
-        self.castle_perm = castle_perm;
-        self.ep_sq = ep_square;
-        self.fifty_move_counter = fifty_move_counter;
-        self.threats = threats;
-        self.pieces = bitboard;
-        self.piece_array = piece_array;
+        self.key = *key;
+        self.castle_perm = *castle_perm;
+        self.ep_sq = *ep_square;
+        self.fifty_move_counter = *fifty_move_counter;
+        self.threats = *threats;
+        self.pieces = *bitboard;
+        self.piece_array = *piece_array;
+
+        self.history.pop();
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1255,16 +1213,10 @@ impl Board {
         debug_assert!(!self.in_check());
 
         self.history.push(Undo {
-            m: Move::NULL,
-            castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
-            fifty_move_counter: self.fifty_move_counter,
-            capture: Piece::EMPTY,
             threats: self.threats,
-            cont_hist_index: ContHistIndex { piece: Piece::EMPTY, square: Square::NO_SQUARE },
-            bitboard: self.pieces,
-            piece_array: self.piece_array,
             key: self.key,
+            ..Default::default()
         });
 
         let mut key = self.key;
@@ -1294,11 +1246,13 @@ impl Board {
         self.side = self.side.flip();
 
         let Undo { ep_square, threats, key, .. } =
-            self.history.pop().expect("No move to unmake!");
+            self.history.last().expect("No move to unmake!");
 
-        self.ep_sq = ep_square;
-        self.threats = threats;
-        self.key = key;
+        self.ep_sq = *ep_square;
+        self.threats = *threats;
+        self.key = *key;
+
+        self.history.pop();
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1365,8 +1319,8 @@ impl Board {
     }
 
     pub fn last_move_was_nullmove(&self) -> bool {
-        if let Some(Undo { m, .. }) = self.history.last() {
-            m.is_null()
+        if let Some(Undo { bitboard, .. }) = self.history.last() {
+            bitboard.all_kings().is_empty()
         } else {
             false
         }

@@ -24,17 +24,15 @@ impl Board {
         }
 
         // check bitboard / piece array coherency
-        for piece in Piece::all() {
-            let bb = self.pieces.piece_bb(piece);
-            for sq in bb {
-                if self.piece_at(sq) != piece {
-                    return Err(format!(
-                        "bitboard / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
-                        sq,
-                        piece,
-                        self.piece_at(sq)
-                    ));
-                }
+        for sq in Square::all() {
+            let piece = self.piece_array[sq.index()];
+            if self.pieces.piece_at(sq) != piece {
+                return Err(format!(
+                    "bitboard / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
+                    sq,
+                    piece,
+                    self.piece_at(sq)
+                ));
             }
         }
 

@@ -9,7 +9,6 @@ use std::{
 use crate::{
     board::{evaluation::MATE_SCORE, movegen::bitboards::{BitBoard, Threats}},
     cfor,
-    chessmove::Move,
     historytable::ContHistIndex,
     piece::{Colour, Piece},
     squareset::SquareSet,
@@ -310,16 +309,29 @@ pub const BQCA: u8 = 0b1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
-    pub m: Move,
     pub castle_perm: CastlingRights,
     pub ep_square: Square,
     pub fifty_move_counter: u8,
-    pub capture: Piece,
     pub threats: Threats,
     pub cont_hist_index: ContHistIndex,
     pub bitboard: BitBoard,
     pub piece_array: [Piece; 64],
     pub key: u64,
+}
+
+impl Default for Undo {
+    fn default() -> Self {
+        Self {
+            castle_perm: CastlingRights::NONE,
+            ep_square: Square::NO_SQUARE,
+            fifty_move_counter: 0,
+            threats: Threats { all: SquareSet::EMPTY },
+            cont_hist_index: ContHistIndex::default(),
+            bitboard: BitBoard::NULL,
+            piece_array: [Piece::EMPTY; 64],
+            key: 0,
+        }
+    }
 }
 
 pub enum CheckState {

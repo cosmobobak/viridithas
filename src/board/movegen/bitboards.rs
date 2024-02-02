@@ -165,7 +165,8 @@ impl BitBoard {
         *self = Self::NULL;
     }
 
-    pub fn move_piece(&mut self, from_to_bb: SquareSet, piece: Piece) {
+    pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
+        let from_to_bb = from.as_set() | to.as_set();
         self.pieces[piece.piece_type().index()] ^= from_to_bb;
         self.colours[piece.colour().index()] ^= from_to_bb;
     }
@@ -211,7 +212,7 @@ impl BitBoard {
             | king_attackers
     }
 
-    fn piece_at(&self, sq: Square) -> Piece {
+    pub fn piece_at(&self, sq: Square) -> Piece {
         let sq_bb = sq.as_set();
         let colour = if (self.our_pieces::<true>() & sq_bb).non_empty() {
             Colour::WHITE
@@ -225,7 +226,7 @@ impl BitBoard {
                 return Piece::new(colour, piece);
             }
         }
-        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards");
+        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}");
     }
 
     fn any_bbs_overlapping(&self) -> bool {
