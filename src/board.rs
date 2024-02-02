@@ -1191,8 +1191,16 @@ impl Board {
         self.ply -= 1;
         self.side = self.side.flip();
 
-        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, .. } =
-            self.history.last().expect("No move to unmake!");
+        let Undo {
+            castle_perm,
+            ep_square,
+            fifty_move_counter,
+            threats,
+            bitboard,
+            piece_array,
+            key,
+            ..
+        } = self.history.last().expect("No move to unmake!");
 
         self.key = *key;
         self.castle_perm = *castle_perm;
@@ -1246,8 +1254,7 @@ impl Board {
         self.ply -= 1;
         self.side = self.side.flip();
 
-        let Undo { ep_square, threats, key, .. } =
-            self.history.last().expect("No move to unmake!");
+        let Undo { ep_square, threats, key, .. } = self.history.last().expect("No move to unmake!");
 
         self.ep_sq = *ep_square;
         self.threats = *threats;
@@ -1482,9 +1489,7 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        for undo in
-            self.history.iter().rev().skip(1).step_by(2)
-        {
+        for undo in self.history.iter().rev().skip(1).step_by(2) {
             if undo.key == self.key {
                 return true;
             }
@@ -1681,9 +1686,7 @@ impl Board {
             return GameOutcome::DrawFiftyMoves;
         }
         let mut reps = 1;
-        for undo in
-            self.history.iter().rev().skip(1).step_by(2)
-        {
+        for undo in self.history.iter().rev().skip(1).step_by(2) {
             if undo.key == self.key {
                 reps += 1;
                 if reps == 3 {

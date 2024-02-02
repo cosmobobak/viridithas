@@ -226,7 +226,9 @@ impl BitBoard {
                 return Piece::new(colour, piece);
             }
         }
-        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}");
+        panic!(
+            "Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}"
+        );
     }
 
     fn any_bbs_overlapping(&self) -> bool {

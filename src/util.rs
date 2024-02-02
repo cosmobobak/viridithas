@@ -7,7 +7,10 @@ use std::{
 };
 
 use crate::{
-    board::{evaluation::MATE_SCORE, movegen::bitboards::{BitBoard, Threats}},
+    board::{
+        evaluation::MATE_SCORE,
+        movegen::bitboards::{BitBoard, Threats},
+    },
     cfor,
     historytable::ContHistIndex,
     piece::{Colour, Piece},
