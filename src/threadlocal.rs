@@ -1,15 +1,9 @@
 use crate::{
-    board::Board,
-    chessmove::Move,
-    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
-    nnue,
-    piece::Colour,
-    search::pv::PVariation,
-    util::MAX_PLY,
+    board::Board, chessmove::Move, historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable}, nnue, piece::Colour, search::pv::PVariation, transpositiontable::TTView, util::MAX_PLY
 };
 
 #[derive(Clone)]
-pub struct ThreadData {
+pub struct ThreadData<'a> {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
     pub best_moves: [Move; MAX_PLY],
@@ -37,13 +31,15 @@ pub struct ThreadData {
     pub depth: usize,
 
     pub stm_at_root: Colour,
+
+    pub tt: TTView<'a>,
 }
 
-impl ThreadData {
+impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
 
-    pub fn new(thread_id: usize, board: &Board) -> Self {
+    pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>) -> Self {
         let mut td = Self {
             evals: [0; MAX_PLY],
             excluded: [Move::NULL; MAX_PLY],
@@ -63,6 +59,7 @@ impl ThreadData {
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
+            tt,
         };
 
         td.clear_tables();

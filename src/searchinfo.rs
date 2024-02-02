@@ -254,7 +254,7 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position);
+        let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
@@ -275,7 +275,7 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position);
+        let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
@@ -296,7 +296,7 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position);
+        let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
@@ -317,7 +317,7 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position);
+        let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));

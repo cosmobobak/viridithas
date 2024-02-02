@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
@@ -111,7 +111,7 @@ const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
 #[derive(Debug)]
 pub struct TT {
     table: Vec<[AtomicU64; 2]>,
-    age: u8,
+    age: AtomicU8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -133,7 +133,7 @@ impl TT {
     const NULL_VALUE: u64 = 0;
 
     pub const fn new() -> Self {
-        Self { table: Vec::new(), age: 0 }
+        Self { table: Vec::new(), age: AtomicU8::new(0) }
     }
 
     pub fn resize(&mut self, bytes: usize) {
@@ -175,11 +175,12 @@ impl TT {
     }
 
     pub fn view(&self) -> TTView {
-        TTView { table: &self.table, age: self.age }
+        TTView { table: &self.table, age: self.age.load(Ordering::Relaxed) }
     }
 
-    pub fn increase_age(&mut self) {
-        self.age = (self.age + 1) & 0b11_1111; // keep age in range [0, 63]
+    pub fn increase_age(&self) {
+        let new_age = (self.age.load(Ordering::Relaxed) + 1) & 0b11_1111; // keep age in range [0, 63]
+        self.age.store(new_age, Ordering::Relaxed);
     }
 
     pub fn size(&self) -> usize {
