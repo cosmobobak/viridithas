@@ -77,11 +77,11 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(
-                self.movelist.count, 0,
+                self.movelist.len(), 0,
                 "movelist not empty before capture generation"
             );
             position.generate_captures::<QSEARCH>(&mut self.movelist);
-            Self::score_captures(t, position, self.movelist.as_slice_mut(), self.see_threshold);
+            Self::score_captures(t, position, &mut self.movelist, self.see_threshold);
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once() {
@@ -127,9 +127,9 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         if self.stage == Stage::GenerateQuiets {
             self.stage = Stage::YieldRemaining;
             if !self.skip_quiets {
-                let start = self.movelist.count;
+                let start = self.movelist.len();
                 position.generate_quiets(&mut self.movelist);
-                let quiets = &mut self.movelist.moves[start..self.movelist.count];
+                let quiets = &mut self.movelist[start..];
                 Self::score_quiets(t, position, quiets);
             }
         }
@@ -151,26 +151,26 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self) -> Option<MoveListEntry> {
         // If we have already tried all moves, return None.
-        if self.index == self.movelist.count {
+        if self.index == self.movelist.len() {
             return None;
         }
 
-        let mut best_score = self.movelist.moves[self.index].score;
+        let mut best_score = self.movelist[self.index].score;
         let mut best_num = self.index;
 
         // find the best move in the unsorted portion of the movelist.
-        for index in self.index + 1..self.movelist.count {
-            let score = self.movelist.moves[index].score;
+        for index in self.index + 1..self.movelist.len() {
+            let score = self.movelist[index].score;
             if score > best_score {
                 best_score = score;
                 best_num = index;
             }
         }
 
-        let m = self.movelist.moves[best_num];
+        let m = self.movelist[best_num];
 
         // swap the best move with the first unsorted move.
-        self.movelist.moves.swap(best_num, self.index);
+        self.movelist.swap(best_num, self.index);
 
         self.index += 1;
 

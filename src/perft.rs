@@ -25,7 +25,7 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
-    for &m in ml.iter() {
+    for &m in ml.iter_moves() {
         if !pos.make_move_simple(m) {
             continue;
         }
@@ -50,7 +50,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
-    for &m in ml.iter() {
+    for &m in ml.iter_moves() {
         if !pos.make_move_nnue(m, t) {
             continue;
         }

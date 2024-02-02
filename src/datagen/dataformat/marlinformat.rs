@@ -64,13 +64,13 @@ impl PackedBoard {
 
             debug_assert_eq!(piece_code & 0b0111, piece_code);
             debug_assert_ne!(piece_code, 0b0111, "we are not using the 0b0111 piece code");
-            pieces.set(i, piece_code | (colour.inner()) << 3);
+            pieces.set(i, piece_code | u8::from(colour.inner()) << 3);
         }
 
         Self {
             occupancy: util::U64Le::new(occupancy.inner()),
             pieces,
-            stm_ep_square: (board.turn().inner()) << 7 | board.ep_sq().inner(),
+            stm_ep_square: u8::from(board.turn().inner()) << 7 | board.ep_sq().inner(),
             halfmove_clock: board.fifty_move_counter(),
             fullmove_number: util::U16Le::new(board.full_move_number().try_into().unwrap()),
             wdl,
@@ -84,7 +84,7 @@ impl PackedBoard {
 
         let mut seen_king = [false; 2];
         for (i, sq) in SquareSet::from_inner(self.occupancy.get()).iter().enumerate() {
-            let colour = Colour::new(self.pieces.get(i) >> 3);
+            let colour = Colour::new(self.pieces.get(i) >> 3 != 0);
             let piece_code = self.pieces.get(i) & 0b0111;
             let piece_type = match piece_code {
                 UNMOVED_ROOK => {
@@ -104,7 +104,7 @@ impl PackedBoard {
         }
 
         *builder.ep_sq_mut() = Square::new(self.stm_ep_square & 0b0111_1111);
-        *builder.turn_mut() = Colour::new(self.stm_ep_square >> 7);
+        *builder.turn_mut() = Colour::new(self.stm_ep_square >> 7 != 0);
         *builder.halfmove_clock_mut() = self.halfmove_clock;
         builder.set_fullmove_clock(self.fullmove_number.get());
 

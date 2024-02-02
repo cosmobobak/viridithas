@@ -795,7 +795,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     let mut nodes = 0;
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
-    for &m in ml.iter() {
+    for &m in ml.iter_moves() {
         if !pos.make_move_simple(m) {
             continue;
         }

@@ -75,11 +75,10 @@ impl PovUpdate {
         Self { white: self.black, black: self.white }
     }
 
-    pub fn colour(colour: Colour) -> Self {
+    pub const fn colour(colour: Colour) -> Self {
         match colour {
             Colour::WHITE => Self { white: true, black: false },
             Colour::BLACK => Self { white: false, black: true },
-            _ => unreachable!(),
         }
     }
 }

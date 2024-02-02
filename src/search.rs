@@ -9,6 +9,8 @@ use std::{
     thread,
 };
 
+use arrayvec::ArrayVec;
+
 use crate::{
     board::{
         evaluation::{
@@ -33,7 +35,7 @@ use crate::{
     transpositiontable::{Bound, TTHit, TTView},
     uci,
     util::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, StackVec, INFINITY, MAX_DEPTH, VALUE_NONE,
+        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE,
     },
 };
 
@@ -882,8 +884,8 @@ impl Board {
         let counter_move = t.get_counter_move(self);
         let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, 0);
 
-        let mut quiets_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
-        let mut tacticals_tried = StackVec::<_, MAX_POSITION_MOVES>::from_default(Move::NULL);
+        let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
+        let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
             debug_assert!(
