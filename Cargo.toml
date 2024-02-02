@@ -35,4 +35,5 @@ bulletformat = "0.1.0"
 [profile.release]
 lto = true
 panic = "abort"
-strip = true
+# strip = true
+debug = true

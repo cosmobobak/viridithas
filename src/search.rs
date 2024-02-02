@@ -84,6 +84,38 @@ const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
+pub trait NodeType {
+    const PV: bool;
+    const ROOT: bool;
+    type Next: NodeType;
+}
+
+struct Root;
+struct OnPV;
+struct OffPV;
+struct CheckForced;
+
+impl NodeType for Root {
+    const PV: bool = true;
+    const ROOT: bool = true;
+    type Next = OnPV;
+}
+impl NodeType for OnPV {
+    const PV: bool = true;
+    const ROOT: bool = false;
+    type Next = Self;
+}
+impl NodeType for OffPV {
+    const PV: bool = false;
+    const ROOT: bool = false;
+    type Next = Self;
+}
+impl NodeType for CheckForced {
+    const PV: bool = false;
+    const ROOT: bool = true;
+    type Next = OffPV;
+}
+
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
@@ -250,7 +282,7 @@ impl Board {
         let mut depth = Depth::new(d.try_into().unwrap());
         let min_depth = (depth / 2).max(ONE_PLY);
         loop {
-            pv.score = self.root_search(tt, pv, info, t, depth, aw.alpha, aw.beta);
+            pv.score = self.alpha_beta::<Root>(tt, pv, info, t, depth, aw.alpha, aw.beta, false);
             if info.check_up() {
                 return ControlFlow::Break(()); // we've been told to stop searching.
             }
@@ -360,7 +392,7 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    pub fn quiescence<const PV: bool>(
+    pub fn quiescence<NT: NodeType>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -402,7 +434,7 @@ impl Board {
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if let Some(hit) = tt.probe(key, height) {
-            if !PV
+            if !NT::PV
                 && !in_check
                 && !fifty_move_rule_near
                 && (hit.bound == Bound::Exact
@@ -450,7 +482,7 @@ impl Board {
             info.nodes.increment();
             moves_made += 1;
 
-            let score = -self.quiescence::<PV>(tt, &mut lpv, info, t, -beta, -alpha);
+            let score = -self.quiescence::<NT::Next>(tt, &mut lpv, info, t, -beta, -alpha);
             self.unmake_move(t);
 
             if score > best_score {
@@ -480,7 +512,7 @@ impl Board {
             Bound::Upper
         };
 
-        tt.store::<false>(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY);
+        tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY);
 
         best_score
     }
@@ -493,7 +525,7 @@ impl Board {
 
     /// Perform alpha-beta minimax search.
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    pub fn alpha_beta<const PV: bool, const ROOT: bool>(
+    pub fn alpha_beta<NT: NodeType>(
         &mut self,
         tt: TTView,
         pv: &mut PVariation,
@@ -516,7 +548,7 @@ impl Board {
 
         let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
-            return self.quiescence::<PV>(tt, pv, info, t, alpha, beta);
+            return self.quiescence::<NT::Next>(tt, pv, info, t, alpha, beta);
         }
 
         depth = depth.max(ZERO_PLY);
@@ -529,15 +561,15 @@ impl Board {
 
         let height = self.height();
 
-        debug_assert_eq!(height == 0, ROOT);
+        debug_assert_eq!(height == 0, NT::ROOT);
 
-        info.seldepth = if ROOT {
+        info.seldepth = if NT::ROOT {
             ZERO_PLY
         } else {
             info.seldepth.max(Depth::from(i32::try_from(height).unwrap()))
         };
 
-        if !ROOT {
+        if !NT::ROOT {
             // check draw
             if self.is_draw() {
                 return draw_score(t, info.nodes.get_local(), self.turn());
@@ -558,13 +590,13 @@ impl Board {
             }
         }
 
-        debug_assert_eq!(PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}");
+        debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
 
         let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_null() {
             if let Some(hit) = tt.probe(key, height) {
-                if !PV
+                if !NT::PV
                     && hit.depth >= depth
                     && !fifty_move_rule_near
                     && (hit.bound == Bound::Exact
@@ -577,7 +609,7 @@ impl Board {
                 Some(hit)
             } else {
                 // TT-reduction (IIR).
-                if PV && depth >= info.search_params.tt_reduction_depth {
+                if NT::PV && depth >= info.search_params.tt_reduction_depth {
                     depth -= 1;
                 }
                 None
@@ -589,7 +621,7 @@ impl Board {
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
-        if !ROOT
+        if !NT::ROOT
             && excluded.is_null() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
@@ -615,24 +647,16 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    tt.store::<false>(
-                        key,
-                        height,
-                        Move::NULL,
-                        tb_value,
-                        VALUE_NONE,
-                        tb_bound,
-                        depth,
-                    );
+                    tt.store(key, height, Move::NULL, tb_value, VALUE_NONE, tb_bound, depth);
                     return tb_value;
                 }
 
-                if PV && tb_bound == Bound::Lower {
+                if NT::PV && tb_bound == Bound::Lower {
                     alpha = alpha.max(tb_value);
                     syzygy_min = tb_value;
                 }
 
-                if PV && tb_bound == Bound::Upper {
+                if NT::PV && tb_bound == Bound::Upper {
                     syzygy_max = tb_value;
                 }
             }
@@ -662,13 +686,13 @@ impl Board {
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
 
-        t.double_extensions[height] = if ROOT { 0 } else { t.double_extensions[height - 1] };
+        t.double_extensions[height] = if NT::ROOT { 0 } else { t.double_extensions[height - 1] };
 
         // clear out the next set of killer moves.
         t.killer_move_table[height + 1] = [Move::NULL; 2];
 
         // whole-node pruning techniques:
-        if !ROOT && !PV && !in_check && excluded.is_null() {
+        if !NT::ROOT && !NT::PV && !in_check && excluded.is_null() {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -677,7 +701,7 @@ impl Board {
                     - info.search_params.razoring_coeff_0
                     - info.search_params.razoring_coeff_1 * depth * depth
             {
-                let v = self.quiescence::<false>(tt, pv, info, t, alpha - 1, alpha);
+                let v = self.quiescence::<OffPV>(tt, pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
                 }
@@ -713,8 +737,16 @@ impl Board {
                     );
                 let nm_depth = depth - r;
                 self.make_nullmove();
-                let mut null_score =
-                    -self.zw_search(tt, l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
+                let mut null_score = -self.alpha_beta::<OffPV>(
+                    tt,
+                    l_pv,
+                    info,
+                    t,
+                    nm_depth,
+                    -beta,
+                    -beta + 1,
+                    !cut_node,
+                );
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -736,8 +768,16 @@ impl Board {
                     // and if we hit the other side deeper in the tree
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
-                    let veri_score =
-                        self.zw_search(tt, l_pv, info, t, nm_depth, beta - 1, beta, false);
+                    let veri_score = self.alpha_beta::<OffPV>(
+                        tt,
+                        l_pv,
+                        info,
+                        t,
+                        nm_depth,
+                        beta - 1,
+                        beta,
+                        false,
+                    );
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -766,7 +806,7 @@ impl Board {
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
         // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
         // that it's not going to be helpful.
-        if !PV
+        if !NT::PV
             && !in_check
             && excluded.is_null()
             && depth >= info.search_params.probcut_min_depth
@@ -793,11 +833,11 @@ impl Board {
                 }
 
                 let mut value =
-                    -self.quiescence::<false>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
+                    -self.quiescence::<OffPV>(tt, l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
                     let pc_depth = depth - info.search_params.probcut_reduction;
-                    value = -self.zw_search(
+                    value = -self.alpha_beta::<OffPV>(
                         tt,
                         l_pv,
                         info,
@@ -812,7 +852,7 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    tt.store::<false>(key, height, m, value, static_eval, Bound::Lower, depth - 3);
+                    tt.store(key, height, m, value, static_eval, Bound::Lower, depth - 3);
                     return value;
                 }
             }
@@ -829,9 +869,9 @@ impl Board {
         // move ordering will be terrible. To rectify this,
         // we do a shallower search first, to get a bestmove
         // and help along the history tables.
-        if PV && depth > Depth::new(3) && tt_hit.is_none() {
+        if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
-            self.alpha_beta::<PV, ROOT>(tt, l_pv, info, t, iid_depth, alpha, beta, cut_node);
+            self.alpha_beta::<NT>(tt, l_pv, info, t, iid_depth, alpha, beta, cut_node);
             tt_move = t.best_moves[height];
         }
 
@@ -849,7 +889,7 @@ impl Board {
             debug_assert!(
                 !quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m)
             );
-            if ROOT && uci::is_multipv() {
+            if NT::ROOT && uci::is_multipv() {
                 // handle multi-pv
                 if t.multi_pv_excluded.contains(&m) {
                     continue;
@@ -874,7 +914,7 @@ impl Board {
             // }
 
             // lmp & fp.
-            if !ROOT && !PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
+            if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= info.search_params.lmp_depth && moves_made >= lmp_threshold {
@@ -895,8 +935,8 @@ impl Board {
 
             // static exchange evaluation pruning
             // simulate all captures flowing onto the target square, and if we come out badly, we skip the move.
-            if !ROOT
-                && (!PV || !cfg!(feature = "datagen"))
+            if !NT::ROOT
+                && (!NT::PV || !cfg!(feature = "datagen"))
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.search_params.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
@@ -924,11 +964,11 @@ impl Board {
                 && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == m && tt_depth >= depth - 3);
 
             let extension;
-            if ROOT {
+            if NT::ROOT {
                 extension = ZERO_PLY;
             } else if maybe_singular {
                 let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
-                extension = self.singularity::<PV>(
+                extension = self.singularity::<NT::Next>(
                     tt,
                     info,
                     t,
@@ -961,10 +1001,11 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score = -self.full_search::<PV>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
+                score = -self
+                    .alpha_beta::<NT::Next>(tt, l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(PV)) {
+                let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(NT::PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
@@ -972,7 +1013,7 @@ impl Board {
                         // reduce special moves one less
                         // r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
                         // reduce more on non-PV nodes
-                        r += i32::from(!PV);
+                        r += i32::from(!NT::PV);
                         // reduce more if it's a cut-node
                         r += i32::from(cut_node);
                         // reduce more if not improving
@@ -988,7 +1029,16 @@ impl Board {
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
-                score = -self.zw_search(tt, l_pv, info, t, reduced_depth, -alpha - 1, -alpha, true);
+                score = -self.alpha_beta::<OffPV>(
+                    tt,
+                    l_pv,
+                    info,
+                    t,
+                    reduced_depth,
+                    -alpha - 1,
+                    -alpha,
+                    true,
+                );
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
@@ -1000,7 +1050,7 @@ impl Board {
                     // check if we're actually going to do a deeper search than before
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
-                        score = -self.zw_search(
+                        score = -self.alpha_beta::<OffPV>(
                             tt,
                             l_pv,
                             info,
@@ -1015,7 +1065,7 @@ impl Board {
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.full_search::<PV>(
+                    score = -self.alpha_beta::<NT::Next>(
                         tt,
                         l_pv,
                         info,
@@ -1030,7 +1080,7 @@ impl Board {
             self.unmake_move(t);
 
             // record subtree size for TimeManager
-            if ROOT && t.thread_id == 0 {
+            if NT::ROOT && t.thread_id == 0 {
                 let subtree_size = info.nodes.get_local() - nodes_before_search;
                 info.root_move_nodes[m.from().index()][m.to().index()] += subtree_size;
             }
@@ -1113,7 +1163,7 @@ impl Board {
                 alpha != original_alpha || best_move.is_null(),
                 "alpha was not raised, but best_move was not null!"
             );
-            tt.store::<ROOT>(key, height, best_move, best_score, static_eval, flag, depth);
+            tt.store(key, height, best_move, best_score, static_eval, flag, depth);
         }
 
         t.best_moves[height] = best_move;
@@ -1159,7 +1209,7 @@ impl Board {
 
     /// Produce extensions when a move is singular - that is, if it is a move that is
     /// significantly better than the rest of the moves in a position.
-    pub fn singularity<const PV: bool>(
+    pub fn singularity<NT: NodeType>(
         &mut self,
         tt: TTView,
         info: &mut SearchInfo,
@@ -1178,7 +1228,8 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move(t);
         t.excluded[self.height()] = m;
-        let value = self.zw_search(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
+        let value =
+            self.alpha_beta::<OffPV>(tt, &mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
@@ -1187,7 +1238,8 @@ impl Board {
         // re-make the singular move.
         self.make_move(m, t);
 
-        let double_extend = !PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
+        let double_extend =
+            !NT::PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
 
         match () {
             () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
@@ -1216,7 +1268,7 @@ impl Board {
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value = self.alpha_beta::<false, true>(
+        let value = self.alpha_beta::<CheckForced>(
             tt,
             &mut PVariation::default(),
             info,
@@ -1323,50 +1375,6 @@ impl Board {
 
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
-    }
-
-    /// root alpha-beta search.
-    pub fn root_search(
-        &mut self,
-        tt: TTView,
-        pv: &mut PVariation,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-        depth: Depth,
-        alpha: i32,
-        beta: i32,
-    ) -> i32 {
-        self.alpha_beta::<true, true>(tt, pv, info, t, depth, alpha, beta, false)
-    }
-
-    /// zero-window alpha-beta search.
-    pub fn zw_search(
-        &mut self,
-        tt: TTView,
-        pv: &mut PVariation,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-        depth: Depth,
-        alpha: i32,
-        beta: i32,
-        cut_node: bool,
-    ) -> i32 {
-        self.alpha_beta::<false, false>(tt, pv, info, t, depth, alpha, beta, cut_node)
-    }
-
-    /// full-window alpha-beta search.
-    pub fn full_search<const PV: bool>(
-        &mut self,
-        tt: TTView,
-        pv: &mut PVariation,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-        depth: Depth,
-        alpha: i32,
-        beta: i32,
-        cut_node: bool,
-    ) -> i32 {
-        self.alpha_beta::<PV, false>(tt, pv, info, t, depth, alpha, beta, cut_node)
     }
 }
 

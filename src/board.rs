@@ -1001,6 +1001,7 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+    #[inline(never)]
     pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
