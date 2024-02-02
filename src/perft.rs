@@ -128,7 +128,7 @@ mod tests {
     #![allow(unused_imports)]
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
-    use crate::{chessmove::Move, piece::PieceType, transpositiontable::TT, util::Square};
+    use crate::{chessmove::Move, piece::PieceType, transpositiontable::TT, util::{Square, MEGABYTE}};
 
     #[test]
     fn perft_hard_position() {
@@ -167,7 +167,8 @@ mod tests {
         use super::*;
 
         let mut pos = Board::default();
-        let tt = TT::new();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16);
         let mut t = ThreadData::new(0, &pos, tt.view());
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
