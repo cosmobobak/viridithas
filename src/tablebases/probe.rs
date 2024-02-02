@@ -140,7 +140,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             _ => PieceType::NONE,
         };
 
-        for &m in moves.iter() {
+        for &m in moves.iter_moves() {
             if m.from() == from
                 && m.to() == to
                 && (promotion == 0 || m.safe_promotion_type() == promo_piece_type)
