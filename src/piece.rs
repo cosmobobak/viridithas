@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
-    v: u8,
+    v: bool,
 }
 
 impl Debug for Colour {
@@ -10,7 +10,6 @@ impl Debug for Colour {
         match *self {
             Self::WHITE => write!(f, "Colour::WHITE"),
             Self::BLACK => write!(f, "Colour::BLACK"),
-            _ => write!(f, "Colour::INVALID({})", self.v),
         }
     }
 }
@@ -20,7 +19,6 @@ impl Display for Colour {
         match *self {
             Self::WHITE => write!(f, "White"),
             Self::BLACK => write!(f, "Black"),
-            _ => write!(f, "?"),
         }
     }
 }
@@ -98,23 +96,22 @@ impl Display for Piece {
 }
 
 impl Colour {
-    pub const WHITE: Self = Self { v: 0 };
-    pub const BLACK: Self = Self { v: 1 };
+    pub const WHITE: Self = Self { v: false };
+    pub const BLACK: Self = Self { v: true };
 
-    pub const fn new(v: u8) -> Self {
-        debug_assert!(v < 2);
+    pub const fn new(v: bool) -> Self {
         Self { v }
     }
 
     pub const fn flip(self) -> Self {
-        Self::new(self.v ^ 1)
+        Self::new(!self.v)
     }
 
     pub const fn index(self) -> usize {
         self.v as usize
     }
 
-    pub const fn inner(self) -> u8 {
+    pub const fn inner(self) -> bool {
         self.v
     }
 
@@ -219,15 +216,15 @@ impl Piece {
     pub const EMPTY: Self = Self { v: 12 };
 
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
-        debug_assert!(colour.v < 2);
         debug_assert!(piece_type.v < 7);
-        Self { v: colour.v * 6 + piece_type.v }
+        Self { v: colour.v as u8 * 6 + piece_type.v }
     }
 
     pub const fn colour(self) -> Colour {
-        match self {
-            Self::WP | Self::WN | Self::WB | Self::WR | Self::WQ | Self::WK => Colour::WHITE,
-            _ => Colour::BLACK,
+        if self.v < 6 {
+            Colour::WHITE
+        } else {
+            Colour::BLACK
         }
     }
 

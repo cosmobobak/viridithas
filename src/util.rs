@@ -343,26 +343,6 @@ pub enum CheckState {
     Checkmate,
 }
 
-pub struct StackVec<T: Copy, const CAPACITY: usize> {
-    data: [T; CAPACITY],
-    len: usize,
-}
-
-impl<T: Copy, const CAPACITY: usize> StackVec<T, CAPACITY> {
-    pub const fn from_default(default: T) -> Self {
-        Self { data: [default; CAPACITY], len: 0 }
-    }
-
-    pub fn push(&mut self, item: T) {
-        self.data[self.len] = item;
-        self.len += 1;
-    }
-
-    pub fn as_slice(&self) -> &[T] {
-        &self.data[..self.len]
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CastlingRights {
     pub wk: Square,

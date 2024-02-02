@@ -1,13 +1,15 @@
 pub mod bitboards;
 pub mod movepicker;
 
+use arrayvec::ArrayVec;
+
 pub use self::bitboards::BitLoop;
 
 use super::Board;
 
 use std::{
     fmt::{Display, Formatter},
-    ops::Index,
+    ops::{Deref, DerefMut},
     sync::atomic::Ordering,
 };
 
@@ -34,56 +36,59 @@ impl MoveListEntry {
 
 #[derive(Clone)]
 pub struct MoveList {
-    moves: [MoveListEntry; MAX_POSITION_MOVES],
-    count: usize,
+    // moves: [MoveListEntry; MAX_POSITION_MOVES],
+    // count: usize,
+    inner: ArrayVec<MoveListEntry, MAX_POSITION_MOVES>,
 }
 
 impl MoveList {
-    pub const fn new() -> Self {
-        const DEFAULT: MoveListEntry = MoveListEntry { mov: Move::NULL, score: 0 };
-        Self { moves: [DEFAULT; MAX_POSITION_MOVES], count: 0 }
+    pub fn new() -> Self {
+        Self {
+            inner: ArrayVec::new(),
+        }
     }
 
     fn push<const TACTICAL: bool>(&mut self, m: Move) {
-        debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
+        // debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
         let score =
             if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
 
-        self.moves[self.count] = MoveListEntry { mov: m, score };
-        self.count += 1;
+        self.inner.push(MoveListEntry { mov: m, score });
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Move> {
-        self.moves[..self.count].iter().map(|e| &e.mov)
+    pub fn iter_moves(&self) -> impl Iterator<Item = &Move> {
+        self.inner.iter().map(|e| &e.mov)
     }
 
-    pub fn as_slice(&self) -> &[MoveListEntry] {
-        &self.moves[..self.count]
-    }
-
-    pub fn as_slice_mut(&mut self) -> &mut [MoveListEntry] {
-        &mut self.moves[..self.count]
+    pub fn clear(&mut self) {
+        self.inner.clear();
     }
 }
 
-impl Index<usize> for MoveList {
-    type Output = Move;
+impl Deref for MoveList {
+    type Target = [MoveListEntry];
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.moves[..self.count][index].mov
+    fn deref(&self) -> &[MoveListEntry] {
+        &self.inner
+    }
+}
+
+impl DerefMut for MoveList {
+    fn deref_mut(&mut self) -> &mut [MoveListEntry] {
+        &mut self.inner
     }
 }
 
 impl Display for MoveList {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        if self.count == 0 {
+        if self.inner.is_empty() {
             return write!(f, "MoveList: (0) []");
         }
-        writeln!(f, "MoveList: ({}) [", self.count)?;
-        for m in &self.moves[0..self.count - 1] {
+        writeln!(f, "MoveList: ({}) [", self.inner.len())?;
+        for m in &self.inner[0..self.inner.len() - 1] {
             writeln!(f, "  {} ${}, ", m.mov, m.score)?;
         }
-        writeln!(f, "  {} ${}", self.moves[self.count - 1].mov, self.moves[self.count - 1].score)?;
+        writeln!(f, "  {} ${}", self.inner[self.inner.len() - 1].mov, self.inner[self.inner.len() - 1].score)?;
         write!(f, "]")
     }
 }
@@ -222,13 +227,13 @@ impl Board {
     }
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
-        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
+        move_list.clear();
         if self.side == Colour::WHITE {
             self.generate_moves_for::<true>(move_list);
         } else {
             self.generate_moves_for::<false>(move_list);
         }
-        debug_assert!(move_list.iter().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
     fn generate_moves_for<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
@@ -294,13 +299,13 @@ impl Board {
     }
 
     pub fn generate_captures<const QS: bool>(&self, move_list: &mut MoveList) {
-        move_list.count = 0; // VERY IMPORTANT FOR UPHOLDING INVARIANTS.
+        move_list.clear();
         if self.side == Colour::WHITE {
             self.generate_captures_for::<true, QS>(move_list);
         } else {
             self.generate_captures_for::<false, QS>(move_list);
         }
-        debug_assert!(move_list.iter().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
     fn generate_captures_for<const IS_WHITE: bool, const QS: bool>(
@@ -492,7 +497,7 @@ impl Board {
         } else {
             self.generate_quiets_for::<false>(move_list);
         }
-        debug_assert!(move_list.iter().all(|m| m.is_valid()));
+        debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
     fn generate_pawn_quiet<const IS_WHITE: bool>(&self, move_list: &mut MoveList) {
@@ -583,8 +588,8 @@ mod tests {
             pos.generate_captures::<false>(&mut ml_staged);
             pos.generate_quiets(&mut ml_staged);
 
-            let mut full_moves_vec = ml.as_slice().to_vec();
-            let mut staged_moves_vec = ml_staged.as_slice().to_vec();
+            let mut full_moves_vec = ml.to_vec();
+            let mut staged_moves_vec = ml_staged.to_vec();
             full_moves_vec.sort_unstable_by_key(|m| m.mov);
             staged_moves_vec.sort_unstable_by_key(|m| m.mov);
             let eq = full_moves_vec == staged_moves_vec;
@@ -603,7 +608,7 @@ mod tests {
             });
 
             let mut count = 0;
-            for &m in ml.iter() {
+            for &m in ml.iter_moves() {
                 if !pos.make_move_simple(m) {
                     continue;
                 }

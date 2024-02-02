@@ -177,7 +177,6 @@ impl Board {
         let sq = match side {
             Colour::WHITE => self.pieces.king::<true>().first(),
             Colour::BLACK => self.pieces.king::<false>().first(),
-            _ => unreachable!(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(self.pieces.piece_at(sq).colour(), side);
@@ -262,9 +261,15 @@ impl Board {
 
         threats |= pawn_attacks::<IS_WHITE>(their_pawns);
 
-        their_knights.iter().for_each(|sq| threats |= knight_attacks(sq));
-        their_diags.iter().for_each(|sq| threats |= bishop_attacks(sq, blockers));
-        their_orthos.iter().for_each(|sq| threats |= rook_attacks(sq, blockers));
+        for sq in their_knights {
+            threats |= knight_attacks(sq);
+        }
+        for sq in their_diags {
+            threats |= bishop_attacks(sq, blockers);
+        }
+        for sq in their_orthos {
+            threats |= rook_attacks(sq, blockers);
+        }
 
         threats |= king_attacks(their_king);
 
@@ -1001,7 +1006,6 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    #[inline(never)]
     pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1368,7 +1372,7 @@ impl Board {
 
         let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
         let res = list
-            .iter()
+            .iter_moves()
             .copied()
             .find(|&m| {
                 let m_to = if frc_cleanup && m.is_castle() {
@@ -1469,7 +1473,7 @@ impl Board {
         if gives_check {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
-            for &m in ml.iter() {
+            for &m in ml.iter_moves() {
                 if !self.make_move_simple(m) {
                     continue;
                 }
@@ -1533,7 +1537,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut legal_moves = Vec::new();
-        for &m in move_list.iter() {
+        for &m in move_list.iter_moves() {
             if self.make_move_simple(m) {
                 self.unmake_move_base();
                 legal_moves.push(m);
@@ -1668,7 +1672,7 @@ impl Board {
     pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
-        let Some(MoveListEntry { mov, .. }) = ml.as_slice().choose(rng) else {
+        let Some(MoveListEntry { mov, .. }) = ml.choose(rng) else {
             return None;
         };
         self.make_move(*mov, t);
@@ -1704,7 +1708,7 @@ impl Board {
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
-        for &m in move_list.iter() {
+        for &m in move_list.iter_moves() {
             if self.make_move_simple(m) {
                 self.unmake_move_base();
                 legal_moves = true;
@@ -1717,7 +1721,6 @@ impl Board {
             match self.side {
                 Colour::WHITE => GameOutcome::BlackWinMate,
                 Colour::BLACK => GameOutcome::WhiteWinMate,
-                _ => unreachable!(),
             }
         } else {
             GameOutcome::DrawStalemate
