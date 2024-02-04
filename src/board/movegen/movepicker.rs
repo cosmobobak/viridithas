@@ -152,43 +152,43 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self) -> Option<MoveListEntry> {
         loop {
-        // If we have already tried all moves, return None.
-        if self.index == self.movelist.len() {
-            return None;
-        }
-
-        let mut best_score = self.movelist[self.index].score;
-        let mut best_num = self.index;
-
-        // find the best move in the unsorted portion of the movelist.
-        for index in self.index + 1..self.movelist.len() {
-            let score = self.movelist[index].score;
-            if score > best_score {
-                best_score = score;
-                best_num = index;
+            // If we have already tried all moves, return None.
+            if self.index == self.movelist.len() {
+                return None;
             }
-        }
 
-        let m = self.movelist[best_num];
+            let mut best_score = self.movelist[self.index].score;
+            let mut best_num = self.index;
 
-        // swap the best move with the first unsorted move.
-        self.movelist.swap(best_num, self.index);
+            // find the best move in the unsorted portion of the movelist.
+            for index in self.index + 1..self.movelist.len() {
+                let score = self.movelist[index].score;
+                if score > best_score {
+                    best_score = score;
+                    best_num = index;
+                }
+            }
 
-        self.index += 1;
+            let m = self.movelist[best_num];
 
-        // as the scores of positive-SEE moves can be pushed below
-        // WINNING_CAPTURE_SCORE if their capture history is particularly
-        // bad, this implicitly filters out moves with bad history scores.
-        let not_winning = m.score < WINNING_CAPTURE_SCORE;
+            // swap the best move with the first unsorted move.
+            self.movelist.swap(best_num, self.index);
 
-        if self.skip_quiets && not_winning {
-            // the best we could find wasn't winning,
-            // and we're skipping quiet moves, so we're done.
-            return None;
-        }
-        if !self.was_tried_lazily(m.mov) {
-            return Some(m);
-        }
+            self.index += 1;
+
+            // as the scores of positive-SEE moves can be pushed below
+            // WINNING_CAPTURE_SCORE if their capture history is particularly
+            // bad, this implicitly filters out moves with bad history scores.
+            let not_winning = m.score < WINNING_CAPTURE_SCORE;
+
+            if self.skip_quiets && not_winning {
+                // the best we could find wasn't winning,
+                // and we're skipping quiet moves, so we're done.
+                return None;
+            }
+            if !self.was_tried_lazily(m.mov) {
+                return Some(m);
+            }
         }
     }
 
