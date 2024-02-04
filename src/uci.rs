@@ -726,6 +726,7 @@ pub fn main_loop(global_bench: bool) {
 }
 
 const BENCH_DEPTH: usize = 16;
+const BENCH_THREADS: usize = 1;
 fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
@@ -735,7 +736,7 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut thread_data = (0..1)
+    let mut thread_data = (0..BENCH_THREADS)
         .zip(std::iter::repeat(&pos))
         .map(|(i, p)| ThreadData::new(i, p, tt.view()))
         .collect::<Vec<_>>();
@@ -768,11 +769,6 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());
         }
-        assert_eq!(
-            info.nodes.get_global(),
-            info.nodes.get_local(),
-            "running bench with multiple threads is not supported"
-        );
     }
     let time = start.elapsed();
     #[allow(clippy::cast_precision_loss)]

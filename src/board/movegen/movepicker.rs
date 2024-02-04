@@ -151,6 +151,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self) -> Option<MoveListEntry> {
+        loop {
         // If we have already tried all moves, return None.
         if self.index == self.movelist.len() {
             return None;
@@ -185,10 +186,9 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             // and we're skipping quiet moves, so we're done.
             return None;
         }
-        if self.was_tried_lazily(m.mov) {
-            self.yield_once()
-        } else {
-            Some(m)
+        if !self.was_tried_lazily(m.mov) {
+            return Some(m);
+        }
         }
     }
 

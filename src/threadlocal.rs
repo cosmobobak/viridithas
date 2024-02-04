@@ -10,6 +10,7 @@ use crate::{
 };
 
 #[derive(Clone)]
+#[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
     pub evals: [i32; MAX_PLY],
     pub excluded: [Move; MAX_PLY],
