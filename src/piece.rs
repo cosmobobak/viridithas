@@ -305,7 +305,6 @@ pub struct PiecesIterator {
 }
 
 impl PiecesIterator {
-    #[allow(dead_code)]
     const fn new() -> Self {
         Self { v: 0 }
     }

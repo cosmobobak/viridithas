@@ -254,8 +254,8 @@ impl Board {
 
         let their_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_knights = self.pieces.knights::<IS_WHITE>();
-        let their_diags = self.pieces.bishopqueen::<IS_WHITE>();
-        let their_orthos = self.pieces.rookqueen::<IS_WHITE>();
+        let their_diags = self.pieces.diags::<IS_WHITE>();
+        let their_orthos = self.pieces.orthos::<IS_WHITE>();
         let their_king = self.king_sq(if IS_WHITE { Colour::WHITE } else { Colour::BLACK });
         let blockers = self.pieces.occupied();
 
@@ -290,6 +290,7 @@ impl Board {
         self.history.clear();
     }
 
+    #[cfg(test)]
     pub fn set_frc_idx(&mut self, scharnagl: usize) {
         assert!(scharnagl < 960, "scharnagl index out of range");
         let backrank = Self::get_scharnagl_backrank(scharnagl);
@@ -539,21 +540,21 @@ impl Board {
         self.set_from_fen(starting_fen).expect("for some reason, STARTING_FEN is now broken.");
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn from_fen(fen: &str) -> Result<Self, FenParseError> {
         let mut out = Self::new();
         out.set_from_fen(fen)?;
         Ok(out)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn from_frc_idx(scharnagl: usize) -> Self {
         let mut out = Self::new();
         out.set_frc_idx(scharnagl);
         out
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn from_dfrc_idx(scharnagl: usize) -> Self {
         let mut out = Self::new();
         out.set_dfrc_idx(scharnagl);
@@ -742,8 +743,8 @@ impl Board {
         let sq_bb = sq.as_set();
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let our_knights = self.pieces.knights::<IS_WHITE>();
-        let our_diags = self.pieces.bishopqueen::<IS_WHITE>();
-        let our_orthos = self.pieces.rookqueen::<IS_WHITE>();
+        let our_diags = self.pieces.diags::<IS_WHITE>();
+        let our_orthos = self.pieces.orthos::<IS_WHITE>();
         let our_king = self.pieces.king::<IS_WHITE>();
         let blockers = self.pieces.occupied();
 
@@ -1006,7 +1007,12 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer, maybe_prefetch: impl FnOnce(u64)) -> bool {
+    pub fn make_move_base(
+        &mut self,
+        m: Move,
+        update_buffer: &mut UpdateBuffer,
+        maybe_prefetch: impl FnOnce(u64),
+    ) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 

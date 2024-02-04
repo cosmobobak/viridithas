@@ -97,20 +97,12 @@ impl BitBoard {
         }
     }
 
-    pub fn rookqueen<const IS_WHITE: bool>(&self) -> SquareSet {
+    pub fn orthos<const IS_WHITE: bool>(&self) -> SquareSet {
         (self.all_rooks() | self.all_queens()) & self.our_pieces::<IS_WHITE>()
     }
 
-    pub fn bishopqueen<const IS_WHITE: bool>(&self) -> SquareSet {
+    pub fn diags<const IS_WHITE: bool>(&self) -> SquareSet {
         (self.all_bishops() | self.all_queens()) & self.our_pieces::<IS_WHITE>()
-    }
-
-    pub fn minors<const IS_WHITE: bool>(&self) -> SquareSet {
-        (self.all_bishops() | self.all_knights()) & self.our_pieces::<IS_WHITE>()
-    }
-
-    pub fn majors<const IS_WHITE: bool>(&self) -> SquareSet {
-        (self.all_rooks() | self.all_queens()) & self.our_pieces::<IS_WHITE>()
     }
 
     pub fn empty(&self) -> SquareSet {

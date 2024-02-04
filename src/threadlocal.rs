@@ -1,5 +1,12 @@
 use crate::{
-    board::Board, chessmove::Move, historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable}, nnue, piece::Colour, search::pv::PVariation, transpositiontable::TTView, util::MAX_PLY
+    board::Board,
+    chessmove::Move,
+    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
+    nnue,
+    piece::Colour,
+    search::pv::PVariation,
+    transpositiontable::TTView,
+    util::MAX_PLY,
 };
 
 #[derive(Clone)]

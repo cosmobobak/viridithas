@@ -27,7 +27,6 @@ pub const MEGABYTE: usize = 1024 * 1024;
 
 pub struct File;
 
-#[allow(dead_code)]
 impl File {
     pub const FILE_A: u8 = 0;
     pub const FILE_B: u8 = 1;
@@ -51,14 +50,6 @@ impl Rank {
     pub const RANK_6: u8 = 5;
     pub const RANK_7: u8 = 6;
     pub const RANK_8: u8 = 7;
-
-    pub fn double_pawn_push_rank(colour: Colour) -> u8 {
-        if colour == Colour::WHITE {
-            Self::RANK_4
-        } else {
-            Self::RANK_5
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Hash)]

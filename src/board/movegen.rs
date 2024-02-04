@@ -43,9 +43,7 @@ pub struct MoveList {
 
 impl MoveList {
     pub fn new() -> Self {
-        Self {
-            inner: ArrayVec::new(),
-        }
+        Self { inner: ArrayVec::new() }
     }
 
     fn push<const TACTICAL: bool>(&mut self, m: Move) {
@@ -88,7 +86,12 @@ impl Display for MoveList {
         for m in &self.inner[0..self.inner.len() - 1] {
             writeln!(f, "  {} ${}, ", m.mov, m.score)?;
         }
-        writeln!(f, "  {} ${}", self.inner[self.inner.len() - 1].mov, self.inner[self.inner.len() - 1].score)?;
+        writeln!(
+            f,
+            "  {} ${}",
+            self.inner[self.inner.len() - 1].mov,
+            self.inner[self.inner.len() - 1].score
+        )?;
         write!(f, "]")
     }
 }
@@ -271,7 +274,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
+        let our_diagonal_sliders = self.pieces.diags::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
             let moves = bitboards::bishop_attacks(sq, blockers);
@@ -284,7 +287,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
+        let our_orthogonal_sliders = self.pieces.orthos::<IS_WHITE>();
         for sq in our_orthogonal_sliders {
             let moves = bitboards::rook_attacks(sq, blockers);
             for to in moves & their_pieces {
@@ -342,7 +345,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
+        let our_diagonal_sliders = self.pieces.diags::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
             let moves = bitboards::bishop_attacks(sq, blockers);
@@ -352,7 +355,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
+        let our_orthogonal_sliders = self.pieces.orthos::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_orthogonal_sliders {
             let moves = bitboards::rook_attacks(sq, blockers);
@@ -546,7 +549,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.pieces.bishopqueen::<IS_WHITE>();
+        let our_diagonal_sliders = self.pieces.diags::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
             let moves = bitboards::bishop_attacks(sq, blockers);
@@ -556,7 +559,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.pieces.rookqueen::<IS_WHITE>();
+        let our_orthogonal_sliders = self.pieces.orthos::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_orthogonal_sliders {
             let moves = bitboards::rook_attacks(sq, blockers);

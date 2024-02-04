@@ -128,7 +128,12 @@ mod tests {
     #![allow(unused_imports)]
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
-    use crate::{chessmove::Move, piece::PieceType, transpositiontable::TT, util::{Square, MEGABYTE}};
+    use crate::{
+        chessmove::Move,
+        piece::PieceType,
+        transpositiontable::TT,
+        util::{Square, MEGABYTE},
+    };
 
     #[test]
     fn perft_hard_position() {

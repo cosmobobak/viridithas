@@ -735,8 +735,10 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut thread_data =
-        (0..1).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p, tt.view())).collect::<Vec<_>>();
+    let mut thread_data = (0..1)
+        .zip(std::iter::repeat(&pos))
+        .map(|(i, p)| ThreadData::new(i, p, tt.view()))
+        .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
     let max_fen_len =

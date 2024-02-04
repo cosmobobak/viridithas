@@ -5,7 +5,6 @@ use crate::{
     chessmove::Move,
     piece::{Colour, Piece, PieceType},
     search::draw_score,
-    squareset::SquareSet,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
 };
@@ -82,22 +81,6 @@ impl Board {
         self.evaluate_nnue(t, nodes)
     }
 
-    fn unwinnable_for<const IS_WHITE: bool>(&self) -> bool {
-        if self.pieces.majors::<IS_WHITE>() != SquareSet::EMPTY {
-            return false;
-        }
-        if self.pieces.minors::<IS_WHITE>().count() > 1 {
-            return false;
-        }
-        if self.pieces.pawns::<IS_WHITE>() & self.pieces.our_pieces::<IS_WHITE>()
-            != SquareSet::EMPTY
-        {
-            return false;
-        }
-
-        true
-    }
-
     fn is_material_draw(&self) -> bool {
         if self.num_pt(PieceType::ROOK) == 0 && self.num_pt(PieceType::QUEEN) == 0 {
             if self.num_pt(PieceType::BISHOP) == 0 {
@@ -135,19 +118,6 @@ impl Board {
             }
         }
         false
-    }
-
-    #[allow(dead_code)]
-    fn preprocess_drawish_scores(&self, t: &ThreadData, score: i32, nodes: u64) -> i32 {
-        // if we can't win with our material, we clamp the eval to zero.
-        let drawscore = draw_score(t, nodes, self.turn());
-        if score > drawscore && self.unwinnable_for::<true>()
-            || score < drawscore && self.unwinnable_for::<false>()
-        {
-            drawscore
-        } else {
-            score
-        }
     }
 
     pub fn zugzwang_unlikely(&self) -> bool {

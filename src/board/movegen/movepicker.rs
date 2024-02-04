@@ -77,7 +77,8 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(
-                self.movelist.len(), 0,
+                self.movelist.len(),
+                0,
                 "movelist not empty before capture generation"
             );
             position.generate_captures::<QSEARCH>(&mut self.movelist);

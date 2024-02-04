@@ -34,9 +34,7 @@ use crate::{
     threadlocal::ThreadData,
     transpositiontable::{Bound, TTHit, TTView},
     uci,
-    util::{
-        depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE,
-    },
+    util::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE},
 };
 
 use self::parameters::SearchParams;
@@ -182,11 +180,8 @@ impl Board {
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let depth_achieved = best_thread.completed;
         let pv = best_thread.pv().clone();
-        let best_move = pv
-            .moves()
-            .first()
-            .copied()
-            .unwrap_or_else(|| self.default_move(&thread_headers[0]));
+        let best_move =
+            pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
@@ -213,11 +208,7 @@ impl Board {
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `T0 = true`, and the helper threads with `T0 = false`.
     #[allow(clippy::too_many_lines)]
-    fn iterative_deepening<const T0: bool>(
-        &mut self,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-    ) {
+    fn iterative_deepening<const T0: bool>(&mut self, info: &mut SearchInfo, t: &mut ThreadData) {
         assert!(!T0 || t.thread_id == 0, "main thread must have thread_id 0");
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
@@ -329,11 +320,8 @@ impl Board {
 
             // if we've made it here, it means we got an exact score.
             let score = pv.score;
-            let bestmove = t.pvs[t.completed]
-                .moves()
-                .first()
-                .copied()
-                .unwrap_or_else(|| self.default_move(t));
+            let bestmove =
+                t.pvs[t.completed].moves().first().copied().unwrap_or_else(|| self.default_move(t));
             *average_value =
                 if *average_value == VALUE_NONE { score } else { (2 * score + *average_value) / 3 };
 
@@ -355,8 +343,7 @@ impl Board {
             if T0 {
                 if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
                     let saved_seldepth = info.seldepth;
-                    let forced =
-                        self.is_forced(margin, info, t, bestmove, score, (depth - 1) / 2);
+                    let forced = self.is_forced(margin, info, t, bestmove, score, (depth - 1) / 2);
                     info.seldepth = saved_seldepth;
 
                     if forced {
@@ -735,15 +722,8 @@ impl Board {
                     );
                 let nm_depth = depth - r;
                 self.make_nullmove();
-                let mut null_score = -self.alpha_beta::<OffPV>(
-                    l_pv,
-                    info,
-                    t,
-                    nm_depth,
-                    -beta,
-                    -beta + 1,
-                    !cut_node,
-                );
+                let mut null_score =
+                    -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -765,15 +745,8 @@ impl Board {
                     // and if we hit the other side deeper in the tree
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
-                    let veri_score = self.alpha_beta::<OffPV>(
-                        l_pv,
-                        info,
-                        t,
-                        nm_depth,
-                        beta - 1,
-                        beta,
-                        false,
-                    );
+                    let veri_score =
+                        self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, beta - 1, beta, false);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -828,8 +801,7 @@ impl Board {
                     continue;
                 }
 
-                let mut value =
-                    -self.quiescence::<OffPV>(l_pv, info, t, -pc_beta, -pc_beta + 1);
+                let mut value = -self.quiescence::<OffPV>(l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
                     let pc_depth = depth - info.search_params.probcut_reduction;
@@ -995,8 +967,8 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score = -self
-                    .alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
+                score =
+                    -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3) && moves_made >= (2 + usize::from(NT::PV)) {
