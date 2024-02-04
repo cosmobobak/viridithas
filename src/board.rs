@@ -1022,8 +1022,7 @@ impl Board {
         let piece = self.moved_piece(m);
         let captured = self.captured_piece(m);
 
-        let mut key = self.key;
-        self.history.push(Undo {
+        let saved_state = Undo {
             castle_perm: self.castle_perm,
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
@@ -1031,8 +1030,8 @@ impl Board {
             cont_hist_index: ContHistIndex { piece, square: m.history_to_square() },
             bitboard: self.pieces,
             piece_array: self.piece_array,
-            key,
-        });
+            key: self.key,
+        };
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1085,38 +1084,6 @@ impl Board {
             update_buffer.move_piece(rook_from, rook_to, rook);
         }
 
-        // remove a previous en passant square from the hash
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut key, self.ep_sq);
-        }
-
-        // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut key, self.castle_perm);
-
-        // update castling rights
-        let mut new_rights = self.castle_perm;
-        if piece == Piece::WR {
-            if from == self.castle_perm.wk {
-                new_rights.wk = Square::NO_SQUARE;
-            } else if from == self.castle_perm.wq {
-                new_rights.wq = Square::NO_SQUARE;
-            }
-        } else if piece == Piece::BR {
-            if from == self.castle_perm.bk {
-                new_rights.bk = Square::NO_SQUARE;
-            } else if from == self.castle_perm.bq {
-                new_rights.bq = Square::NO_SQUARE;
-            }
-        } else if piece == Piece::WK {
-            new_rights.wk = Square::NO_SQUARE;
-            new_rights.wq = Square::NO_SQUARE;
-        } else if piece == Piece::BK {
-            new_rights.bk = Square::NO_SQUARE;
-            new_rights.bq = Square::NO_SQUARE;
-        }
-        new_rights.remove(to);
-        self.castle_perm = new_rights;
-
         self.ep_sq = Square::NO_SQUARE;
 
         self.fifty_move_counter += 1;
@@ -1126,9 +1093,6 @@ impl Board {
             self.pieces.clear_piece_at(to, captured);
             update_buffer.clear_piece(to, captured);
         }
-
-        self.ply += 1;
-        self.height += 1;
 
         if piece.piece_type() == PieceType::PAWN {
             self.fifty_move_counter = 0;
@@ -1159,9 +1123,57 @@ impl Board {
 
         // reversed in_check fn, as we have now swapped sides
         if self.sq_attacked(self.king_sq(self.side.flip()), self.side) {
-            self.unmake_move_base();
+            // this would be a function but we run into borrow checker issues
+            // because it's currently not smart enough to realize that we're
+            // borrowing disjoint parts of the board.
+            let Undo { ep_square, fifty_move_counter, bitboard, .. } = saved_state;
+
+            // self.height -= 1;
+            // self.ply -= 1;
+            self.side = self.side.flip();
+            // self.key = key;
+            // self.castle_perm = castle_perm;
+            self.ep_sq = ep_square;
+            self.fifty_move_counter = fifty_move_counter;
+            // self.threats = threats;
+            self.pieces = bitboard;
+            // self.piece_array = piece_array;
             return false;
         }
+
+        let mut key = self.key;
+
+        // remove a previous en passant square from the hash
+        if saved_state.ep_square != Square::NO_SQUARE {
+            hash_ep(&mut key, saved_state.ep_square);
+        }
+
+        // hash out the castling to insert it again after updating rights.
+        hash_castling(&mut key, self.castle_perm);
+
+        // update castling rights
+        let mut new_rights = self.castle_perm;
+        if piece == Piece::WR {
+            if from == self.castle_perm.wk {
+                new_rights.wk = Square::NO_SQUARE;
+            } else if from == self.castle_perm.wq {
+                new_rights.wq = Square::NO_SQUARE;
+            }
+        } else if piece == Piece::BR {
+            if from == self.castle_perm.bk {
+                new_rights.bk = Square::NO_SQUARE;
+            } else if from == self.castle_perm.bq {
+                new_rights.bq = Square::NO_SQUARE;
+            }
+        } else if piece == Piece::WK {
+            new_rights.wk = Square::NO_SQUARE;
+            new_rights.wq = Square::NO_SQUARE;
+        } else if piece == Piece::BK {
+            new_rights.bk = Square::NO_SQUARE;
+            new_rights.bq = Square::NO_SQUARE;
+        }
+        new_rights.remove(to);
+        self.castle_perm = new_rights;
 
         // apply all the updates to the zobrist hash
         if self.ep_sq != Square::NO_SQUARE {
@@ -1182,7 +1194,12 @@ impl Board {
 
         maybe_prefetch(key);
 
+        self.ply += 1;
+        self.height += 1;
+
         self.threats = self.generate_threats(self.side.flip());
+
+        self.history.push(saved_state);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1199,9 +1216,7 @@ impl Board {
         // #[cfg(debug_assertions)]
         // self.check_validity().unwrap();
 
-        self.height -= 1;
-        self.ply -= 1;
-        self.side = self.side.flip();
+        let undo = self.history.last().expect("No move to unmake!");
 
         let Undo {
             castle_perm,
@@ -1212,8 +1227,11 @@ impl Board {
             piece_array,
             key,
             ..
-        } = self.history.last().expect("No move to unmake!");
+        } = undo;
 
+        self.height -= 1;
+        self.ply -= 1;
+        self.side = self.side.flip();
         self.key = *key;
         self.castle_perm = *castle_perm;
         self.ep_sq = *ep_square;
