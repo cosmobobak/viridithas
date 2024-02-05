@@ -479,6 +479,8 @@ impl NNUEState {
     #[allow(clippy::similar_names)]
     pub fn bring_up_to_date(&mut self, board: &Board) {
         if self.update_to_apply.white_king_before == Square::NO_SQUARE {
+            assert!(self.update_to_apply.update_buffer.adds().is_empty());
+            assert!(self.update_to_apply.update_buffer.subs().is_empty());
             return;
         }
         let colour = board.turn().flip();
@@ -708,6 +710,8 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     pub fn evaluate(&self, stm: Colour) -> i32 {
+        assert_eq!(self.update_to_apply.white_king_before, Square::NO_SQUARE, "update_to_apply not cleared before evaluation");
+
         let acc = &self.accumulators[self.current_acc];
 
         let (us, them) =

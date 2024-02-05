@@ -1203,6 +1203,7 @@ impl Board {
             return ZERO_PLY;
         }
         // re-make the singular move.
+        t.nnue.bring_up_to_date(self);
         self.make_move(m, t);
 
         let double_extend =

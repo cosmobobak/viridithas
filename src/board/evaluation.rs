@@ -60,15 +60,7 @@ impl Board {
             / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData, nodes: u64) -> i32 {
-        if !self.pieces.any_pawns() && self.is_material_draw() {
-            return if self.side == Colour::WHITE {
-                draw_score(t, nodes, self.turn())
-            } else {
-                -draw_score(t, nodes, self.turn())
-            };
-        }
-
+    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         let v = t.nnue.evaluate(self.side);
         let v = v * self.material_scale() / 1024;
 
@@ -78,8 +70,15 @@ impl Board {
     }
 
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        if !self.pieces.any_pawns() && self.is_material_draw() {
+            return if self.side == Colour::WHITE {
+                draw_score(t, nodes, self.turn())
+            } else {
+                -draw_score(t, nodes, self.turn())
+            };
+        }
         t.nnue.bring_up_to_date(self);
-        self.evaluate_nnue(t, nodes)
+        self.evaluate_nnue(t)
     }
 
     fn is_material_draw(&self) -> bool {
