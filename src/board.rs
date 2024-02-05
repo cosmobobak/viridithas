@@ -1339,6 +1339,26 @@ impl Board {
         }
     }
 
+    /// Makes a guess about the new position key after a move.
+    /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
+    pub fn key_after(&self, m: Move) -> u64 {
+        let src = m.from();
+        let tgt = m.to();
+        let piece = self.moved_piece(m);
+        let captured = self.piece_at(tgt);
+
+        let mut new_key = self.key;
+        hash_side(&mut new_key);
+        hash_piece(&mut new_key, piece, src);
+        hash_piece(&mut new_key, piece, tgt);
+
+        if captured != Piece::EMPTY {
+            hash_piece(&mut new_key, captured, tgt);
+        }
+
+        new_key
+    }
+
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
     pub fn parse_uci(&self, uci: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{

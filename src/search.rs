@@ -454,6 +454,7 @@ impl Board {
         t.nnue.bring_up_to_date(self);
 
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+            t.tt.prefetch(self.key_after(m));
             if !self.make_move(m, t) {
                 continue;
             }
@@ -911,6 +912,7 @@ impl Board {
                 continue;
             }
 
+            t.tt.prefetch(self.key_after(m));
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1198,9 +1200,6 @@ impl Board {
         }
         // re-make the singular move.
         self.make_move(m, t);
-        // you might think that we don't need to rematerialise the accumulator,
-        // but searching the other moves in this position *will* trample it.
-        t.nnue.bring_up_to_date(self);
 
         let double_extend =
             !NT::PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
