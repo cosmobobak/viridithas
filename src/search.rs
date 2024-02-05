@@ -713,6 +713,7 @@ impl Board {
                         info.search_params.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
+                t.nnue.bring_up_to_date(self);
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -913,7 +914,6 @@ impl Board {
             if !self.make_move(m, t) {
                 continue;
             }
-            t.nnue.bring_up_to_date(self);
 
             if is_quiet {
                 quiets_tried.push(m);
