@@ -77,7 +77,7 @@ impl Board {
                 -draw_score(t, nodes, self.turn())
             };
         }
-        t.nnue.bring_up_to_date(self);
+        t.nnue.force(self);
         self.evaluate_nnue(t)
     }
 

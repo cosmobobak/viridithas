@@ -385,8 +385,6 @@ impl Board {
 
         let key = self.hashkey();
 
-        t.tt.prefetch(key);
-
         let mut lpv = PVariation::default();
 
         pv.length = 0;
@@ -451,10 +449,9 @@ impl Board {
             move_picker.skip_quiets = true;
         }
 
-        t.nnue.bring_up_to_date(self);
-
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             t.tt.prefetch(self.key_after(m));
+            t.nnue.force(self);
             if !self.make_move(m, t) {
                 continue;
             }
@@ -521,8 +518,6 @@ impl Board {
         let l_pv = &mut local_pv;
 
         let key = self.hashkey();
-
-        t.tt.prefetch(key);
 
         let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
@@ -714,8 +709,8 @@ impl Board {
                         info.search_params.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
-                t.nnue.bring_up_to_date(self);
                 self.make_nullmove();
+                t.tt.prefetch(self.hashkey());
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
@@ -778,9 +773,6 @@ impl Board {
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
-
-            t.nnue.bring_up_to_date(self);
-
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
             {
@@ -793,6 +785,8 @@ impl Board {
                     continue;
                 }
 
+                t.tt.prefetch(self.key_after(m));
+                t.nnue.force(self);
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -848,8 +842,6 @@ impl Board {
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
-
-        t.nnue.bring_up_to_date(self);
 
         while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
@@ -913,6 +905,7 @@ impl Board {
             }
 
             t.tt.prefetch(self.key_after(m));
+            t.nnue.force(self);
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1071,8 +1064,6 @@ impl Board {
                 }
             }
         }
-
-        t.tt.prefetch(key);
 
         if moves_made == 0 {
             if !excluded.is_null() {

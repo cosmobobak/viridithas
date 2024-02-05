@@ -360,6 +360,7 @@ pub struct LazyUpdate {
     pub update_buffer: UpdateBuffer,
     pub white_king_before: Square,
     pub black_king_before: Square,
+    pub side: Colour,
 }
 
 impl Default for LazyUpdate {
@@ -368,6 +369,7 @@ impl Default for LazyUpdate {
             update_buffer: UpdateBuffer::default(),
             white_king_before: Square::NO_SQUARE,
             black_king_before: Square::NO_SQUARE,
+            side: Colour::WHITE,
         }
     }
 }
@@ -477,14 +479,14 @@ impl NNUEState {
 
     /// Apply an in-flight update to generate a new accumulator.
     #[allow(clippy::similar_names)]
-    pub fn bring_up_to_date(&mut self, board: &Board) {
+    pub fn force(&mut self, board: &Board) {
         // idempotence!
         if self.update_to_apply.white_king_before == Square::NO_SQUARE {
             assert!(self.update_to_apply.update_buffer.adds().is_empty());
             assert!(self.update_to_apply.update_buffer.subs().is_empty());
             return;
         }
-        let colour = board.turn().flip();
+        let colour = self.update_to_apply.side;
         let wk_loc = board.king_sq(Colour::WHITE);
         let bk_loc = board.king_sq(Colour::BLACK);
         let (white_bucket, black_bucket) = get_bucket_indices(wk_loc, bk_loc);

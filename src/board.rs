@@ -1003,7 +1003,7 @@ impl Board {
     }
 
     pub fn make_move_simple(&mut self, m: Move) -> bool {
-        self.make_move_base(m, &mut UpdateBuffer::default(), |_| {})
+        self.make_move_base(m, &mut UpdateBuffer::default())
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
@@ -1011,7 +1011,6 @@ impl Board {
         &mut self,
         m: Move,
         update_buffer: &mut UpdateBuffer,
-        maybe_prefetch: impl FnOnce(u64),
     ) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1192,8 +1191,6 @@ impl Board {
         hash_castling(&mut key, self.castle_perm);
         self.key = key;
 
-        maybe_prefetch(key);
-
         self.ply += 1;
         self.height += 1;
 
@@ -1298,10 +1295,9 @@ impl Board {
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let mut update_buffer = UpdateBuffer::default();
-        let prefetch = |key| t.tt.prefetch(key);
         let white_king_before = self.king_sq(Colour::WHITE);
         let black_king_before = self.king_sq(Colour::BLACK);
-        let res = self.make_move_base(m, &mut update_buffer, prefetch);
+        let res = self.make_move_base(m, &mut update_buffer);
         if !res {
             return false;
         }
@@ -1311,6 +1307,7 @@ impl Board {
             update_buffer,
             white_king_before,
             black_king_before,
+            side: self.side.flip(),
         };
 
         t.nnue.current_acc += 1;

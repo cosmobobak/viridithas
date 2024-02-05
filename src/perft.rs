@@ -50,7 +50,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
-    t.nnue.bring_up_to_date(pos);
+    t.nnue.force(pos);
     for &m in ml.iter_moves() {
         if !pos.make_move_nnue(m, t) {
             continue;
