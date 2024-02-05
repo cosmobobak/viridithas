@@ -23,18 +23,7 @@ use crate::{
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
-    },
-    cfor,
-    chessmove::Move,
-    historytable::MAX_HISTORY,
-    piece::{Colour, PieceType},
-    search::pv::PVariation,
-    searchinfo::SearchInfo,
-    tablebases::{self, probe::WDL},
-    threadlocal::ThreadData,
-    transpositiontable::{Bound, TTHit, TTView},
-    uci,
-    util::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE},
+    }, cfor, chessmove::Move, historytable::MAX_HISTORY, piece::{Colour, PieceType}, search::pv::PVariation, searchinfo::SearchInfo, tablebases::{self, probe::WDL}, threadlocal::ThreadData, transpositiontable::{Bound, TTHit, TTView}, uci, util::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE}
 };
 
 use self::parameters::SearchParams;
@@ -461,7 +450,9 @@ impl Board {
         if !in_check {
             move_picker.skip_quiets = true;
         }
+
         t.nnue.bring_up_to_date(self);
+
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             if !self.make_move(m, t) {
                 continue;
@@ -784,8 +775,10 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            t.nnue.bring_up_to_date(self);
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
+
+            t.nnue.bring_up_to_date(self);
+
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
             {
@@ -920,6 +913,7 @@ impl Board {
             if !self.make_move(m, t) {
                 continue;
             }
+            t.nnue.bring_up_to_date(self);
 
             if is_quiet {
                 quiets_tried.push(m);
@@ -1203,8 +1197,10 @@ impl Board {
             return ZERO_PLY;
         }
         // re-make the singular move.
-        t.nnue.bring_up_to_date(self);
         self.make_move(m, t);
+        // you might think that we don't need to rematerialise the accumulator,
+        // but searching the other moves in this position *will* trample it.
+        t.nnue.bring_up_to_date(self);
 
         let double_extend =
             !NT::PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;

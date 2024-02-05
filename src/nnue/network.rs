@@ -478,6 +478,7 @@ impl NNUEState {
     /// Apply an in-flight update to generate a new accumulator.
     #[allow(clippy::similar_names)]
     pub fn bring_up_to_date(&mut self, board: &Board) {
+        // idempotence!
         if self.update_to_apply.white_king_before == Square::NO_SQUARE {
             assert!(self.update_to_apply.update_buffer.adds().is_empty());
             assert!(self.update_to_apply.update_buffer.subs().is_empty());
