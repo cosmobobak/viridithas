@@ -461,6 +461,7 @@ impl Board {
         if !in_check {
             move_picker.skip_quiets = true;
         }
+        t.nnue.bring_up_to_date(self);
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             if !self.make_move(m, t) {
                 continue;
@@ -783,6 +784,7 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
+            t.nnue.bring_up_to_date(self);
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) =
                 move_picker.next(self, t)
@@ -851,6 +853,9 @@ impl Board {
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
+
+        t.nnue.bring_up_to_date(self);
+
         while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
             debug_assert!(

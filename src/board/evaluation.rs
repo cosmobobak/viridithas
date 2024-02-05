@@ -77,7 +77,8 @@ impl Board {
         v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
-    pub fn evaluate(&self, t: &ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+        t.nnue.bring_up_to_date(self);
         self.evaluate_nnue(t, nodes)
     }
 

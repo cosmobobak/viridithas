@@ -22,7 +22,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{self, get_bucket_indices, FeatureUpdate, PovUpdate, UpdateBuffer},
+    nnue::network::{FeatureUpdate, LazyUpdate, UpdateBuffer},
     piece::{Colour, Piece, PieceType},
     search::pv::PVariation,
     squareset::{self, SquareSet},
@@ -1297,49 +1297,23 @@ impl Board {
     }
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
-        let pre_move_board_state = self.pieces;
-        let piece_type = self.moved_piece(m).piece_type();
-        let colour = self.turn();
         let mut update_buffer = UpdateBuffer::default();
         let prefetch = |key| t.tt.prefetch(key);
+        let white_king_before = self.king_sq(Colour::WHITE);
+        let black_king_before = self.king_sq(Colour::BLACK);
         let res = self.make_move_base(m, &mut update_buffer, prefetch);
         if !res {
             return false;
         }
 
-        let from = m.from();
-        let white_king = self.king_sq(Colour::WHITE);
-        let black_king = self.king_sq(Colour::BLACK);
-
-        let ue = if network::BUCKETS != 1 && piece_type == PieceType::KING {
-            // fixup the king sqs to be before the move:
-            let old_white_king = if colour == Colour::WHITE { from } else { white_king };
-            let old_black_king = if colour == Colour::BLACK { from } else { black_king };
-            debug_assert_eq!(old_white_king.as_set(), pre_move_board_state.piece_bb(Piece::WK));
-            debug_assert_eq!(old_black_king.as_set(), pre_move_board_state.piece_bb(Piece::BK));
-            let (white_bucket_before, black_bucket_before) =
-                get_bucket_indices(old_white_king, old_black_king);
-            let (white_bucket_after, black_bucket_after) =
-                get_bucket_indices(white_king, black_king);
-            let (before, after) = if colour == Colour::WHITE {
-                (white_bucket_before, white_bucket_after)
-            } else {
-                (black_bucket_before, black_bucket_after)
-            };
-            if before == after {
-                PovUpdate::BOTH
-            } else {
-                // refresh the half of the nnue acc that changed bucket:
-                let refresh = PovUpdate::colour(colour);
-                t.nnue.push_fresh_acc(self, refresh);
-                refresh.opposite()
-            }
-        } else {
-            PovUpdate::BOTH
+        assert_eq!(t.nnue.update_to_apply.white_king_before, Square::NO_SQUARE);
+        t.nnue.update_to_apply = LazyUpdate {
+            update_buffer,
+            white_king_before,
+            black_king_before,
         };
 
-        // update the nnue acc for the move:
-        t.nnue.materialise_new_acc_from(white_king, black_king, ue, &update_buffer);
+        t.nnue.current_acc += 1;
 
         true
     }

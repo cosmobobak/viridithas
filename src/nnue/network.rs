@@ -84,7 +84,7 @@ impl PovUpdate {
 }
 
 /// Struct representing some unmaterialised feature update made as part of a move.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct FeatureUpdate {
     pub sq: Square,
     pub piece: Piece,
@@ -100,6 +100,7 @@ impl Display for FeatureUpdate {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct UpdateBuffer {
     add: [FeatureUpdate; 2],
     add_count: u8,
@@ -354,6 +355,23 @@ impl NNUEParams {
     }
 }
 
+#[derive(Clone)]
+pub struct LazyUpdate {
+    pub update_buffer: UpdateBuffer,
+    pub white_king_before: Square,
+    pub black_king_before: Square,
+}
+
+impl Default for LazyUpdate {
+    fn default() -> Self {
+        Self {
+            update_buffer: UpdateBuffer::default(),
+            white_king_before: Square::NO_SQUARE,
+            black_king_before: Square::NO_SQUARE,
+        }
+    }
+}
+
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Clone)]
@@ -364,6 +382,9 @@ pub struct NNUEState {
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
     pub bucket_cache: BucketAccumulatorCache,
+    /// An update that must be applied to the accumulator in order
+    /// to bring it up to date with the current position.
+    pub update_to_apply: LazyUpdate,
 }
 
 const fn feature_indices(
@@ -421,6 +442,7 @@ impl NNUEState {
     /// Decrement the current accumulator.
     pub fn pop_acc(&mut self) {
         self.current_acc -= 1;
+        self.update_to_apply = LazyUpdate::default();
     }
 
     /// Reinitialise the state from a board.
@@ -448,15 +470,49 @@ impl NNUEState {
             PovUpdate { white: false, black: true },
             &mut self.accumulators[0],
         );
+
+        // clear the update buffer
+        self.update_to_apply = LazyUpdate::default();
     }
 
-    /// Make the next accumulator freshly generated from the board state.
-    pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
-        self.bucket_cache.load_accumulator_for_position(
-            board.pieces,
-            update,
-            &mut self.accumulators[self.current_acc + 1],
-        );
+    /// Apply an in-flight update to generate a new accumulator.
+    #[allow(clippy::similar_names)]
+    pub fn bring_up_to_date(&mut self, board: &Board) {
+        if self.update_to_apply.white_king_before == Square::NO_SQUARE {
+            return;
+        }
+        let colour = board.turn().flip();
+        let wk_loc = board.king_sq(Colour::WHITE);
+        let bk_loc = board.king_sq(Colour::BLACK);
+        let (white_bucket, black_bucket) = get_bucket_indices(wk_loc, bk_loc);
+        let (white_bucket_before, black_bucket_before) = get_bucket_indices(self.update_to_apply.white_king_before, self.update_to_apply.black_king_before);
+        let white_changed_bucket = white_bucket != white_bucket_before;
+        let black_changed_bucket = black_bucket != black_bucket_before;
+        let (bucket_before, bucket_after) = if colour == Colour::WHITE {
+            (white_bucket_before, white_bucket)
+        } else {
+            (black_bucket_before, black_bucket)
+        };
+        assert!(!(white_changed_bucket && black_changed_bucket), "both buckets changed from a single move??");
+
+        let ue = if BUCKETS == 1 || bucket_before == bucket_after {
+            PovUpdate::BOTH
+        } else {
+            // refresh the half of the nnue acc that changed bucket:
+            let refresh = PovUpdate::colour(colour);
+            self.bucket_cache.load_accumulator_for_position(
+                board.pieces,
+                refresh,
+                &mut self.accumulators[self.current_acc],
+            );
+            refresh.opposite()
+        };
+
+        // update the nnue acc for the move:
+        self.materialise_new_acc_from(wk_loc, bk_loc, ue, self.update_to_apply.update_buffer);
+
+        // clear the update buffer
+        self.update_to_apply = LazyUpdate::default();
     }
 
     pub fn materialise_new_acc_from(
@@ -464,9 +520,9 @@ impl NNUEState {
         white_king: Square,
         black_king: Square,
         pov_update: PovUpdate,
-        update_buffer: &UpdateBuffer,
+        update_buffer: UpdateBuffer,
     ) {
-        let (front, back) = self.accumulators.split_at_mut(self.current_acc + 1);
+        let (front, back) = self.accumulators.split_at_mut(self.current_acc);
         let src = front.last().unwrap();
         let tgt = back.first_mut().unwrap();
 
@@ -487,8 +543,6 @@ impl NNUEState {
             }
             (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
         }
-
-        self.current_acc += 1;
     }
 
     /// Move a single piece on the board.
