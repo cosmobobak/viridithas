@@ -387,7 +387,7 @@ impl Board {
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq);// & !self.threats.all;
+        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
         for to in moves & their_pieces {
             move_list.push::<true>(Move::new(our_king_sq, to));
         }
@@ -608,7 +608,7 @@ impl Board {
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq);// & !self.threats.all;
+        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
         for to in moves & !blockers {
             move_list.push::<false>(Move::new(our_king_sq, to));
         }
