@@ -114,26 +114,26 @@ impl Board {
         let valid_west = if IS_WHITE { valid_target_squares.south_east_one() } else { valid_target_squares.north_east_one() };
         let valid_east = if IS_WHITE { valid_target_squares.south_west_one() } else { valid_target_squares.north_west_one() };
         let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
-        for from in attacking_west & !promo_rank & valid_west {
+        for from in attacking_west & !promo_rank & SquareSet::FULL {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
             move_list.push::<true>(Move::new(from, to));
         }
-        for from in attacking_east & !promo_rank & valid_east {
+        for from in attacking_east & !promo_rank & SquareSet::FULL {
             let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to));
         }
         if QS {
             // in quiescence search, we only generate promotions to queen.
-            for from in attacking_west & promo_rank & valid_west {
+            for from in attacking_west & promo_rank & SquareSet::FULL {
                 let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             }
-            for from in attacking_east & promo_rank & valid_east {
+            for from in attacking_east & promo_rank & SquareSet::FULL {
                 let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
             }
         } else {
-            for from in attacking_west & promo_rank & valid_west {
+            for from in attacking_west & promo_rank & SquareSet::FULL {
                 let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
                 for promo in
                     [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
@@ -141,7 +141,7 @@ impl Board {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
-            for from in attacking_east & promo_rank & valid_east {
+            for from in attacking_east & promo_rank & SquareSet::FULL {
                 let to = if IS_WHITE { from.add(9) } else { from.sub(7) };
                 for promo in
                     [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
@@ -194,15 +194,15 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in pushable_pawns & !promoting_pawns & shifted_valid_squares {
+        for sq in pushable_pawns & !promoting_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in double_pushable_pawns & double_shifted_valid_squares {
+        for sq in double_pushable_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in promoting_pawns & shifted_valid_squares {
+        for sq in promoting_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                 move_list.push::<true>(Move::new_with_promo(sq, to, promo));
@@ -223,7 +223,7 @@ impl Board {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in promoting_pawns & shifted_valid_squares {
+        for sq in promoting_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             if QS {
                 // in quiescence search, we only generate promotions to queen.
@@ -370,24 +370,24 @@ impl Board {
         };
 
         // promotions
-        self.generate_forward_promos::<IS_WHITE, QS>(move_list, valid_target_squares);
+        self.generate_forward_promos::<IS_WHITE, QS>(move_list, SquareSet::FULL);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<IS_WHITE, QS>(move_list, valid_target_squares);
+        self.generate_pawn_caps::<IS_WHITE, QS>(move_list, SquareSet::FULL);
         self.generate_ep::<IS_WHITE>(move_list);
 
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         for sq in our_knights {
-            let moves = bitboards::knight_attacks(sq) & valid_target_squares;
+            let moves = bitboards::knight_attacks(sq) & SquareSet::FULL;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+        let moves = bitboards::king_attacks(our_king_sq);// & !self.threats.all;
         for to in moves & their_pieces {
             move_list.push::<true>(Move::new(our_king_sq, to));
         }
@@ -396,7 +396,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.diags::<IS_WHITE>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
-            let moves = bitboards::bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = bitboards::bishop_attacks(sq, blockers) & SquareSet::FULL;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -405,7 +405,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.orthos::<IS_WHITE>();
         for sq in our_orthogonal_sliders {
-            let moves = bitboards::rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = bitboards::rook_attacks(sq, blockers) & SquareSet::FULL;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -565,11 +565,11 @@ impl Board {
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
-        for sq in pushable_pawns & !promoting_pawns & shifted_valid_squares {
+        for sq in pushable_pawns & !promoting_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(8) } else { sq.sub(8) };
             move_list.push::<false>(Move::new(sq, to));
         }
-        for sq in double_pushable_pawns & double_shifted_valid_squares {
+        for sq in double_pushable_pawns & SquareSet::FULL {
             let to = if IS_WHITE { sq.add(16) } else { sq.sub(16) };
             move_list.push::<false>(Move::new(sq, to));
         }
@@ -596,19 +596,19 @@ impl Board {
         };
 
         // pawns
-        self.generate_pawn_quiet::<IS_WHITE>(move_list, valid_target_squares);
+        self.generate_pawn_quiet::<IS_WHITE>(move_list, SquareSet::FULL);
 
         // knights
         let our_knights = self.pieces.knights::<IS_WHITE>();
         for sq in our_knights {
-            let moves = bitboards::knight_attacks(sq) & valid_target_squares;
+            let moves = bitboards::knight_attacks(sq) & SquareSet::FULL;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+        let moves = bitboards::king_attacks(our_king_sq);// & !self.threats.all;
         for to in moves & !blockers {
             move_list.push::<false>(Move::new(our_king_sq, to));
         }
@@ -616,7 +616,7 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = self.pieces.diags::<IS_WHITE>();
         for sq in our_diagonal_sliders {
-            let moves = bitboards::bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = bitboards::bishop_attacks(sq, blockers) & SquareSet::FULL;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }
@@ -625,7 +625,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.orthos::<IS_WHITE>();
         for sq in our_orthogonal_sliders {
-            let moves = bitboards::rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = bitboards::rook_attacks(sq, blockers) & SquareSet::FULL;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }
