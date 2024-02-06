@@ -438,8 +438,20 @@ impl Board {
 
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
+        } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
+            let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+            if v == VALUE_NONE {
+                self.evaluate(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+            } else {
+                v // if the TT eval is not VALUE_NONE, use it.
+            }
         } else {
-            self.evaluate(t, info.nodes.get_local())
+            let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
+            // store the eval into the TT if we won't overwrite anything:
+            if tt_hit.is_none() {
+                t.tt.store(key, height, Move::NULL, VALUE_NONE, v, Bound::None, ZERO_PLY);
+            }
+            v
         };
 
         if stand_pat >= beta {
@@ -767,6 +779,11 @@ impl Board {
             info.search_params.see_tactical_margin * depth.squared(),
             info.search_params.see_quiet_margin * depth.round(),
         ];
+
+        // store the eval into the TT if we won't overwrite anything:
+        if tt_hit.is_none() && !in_check && excluded.is_null() {
+            t.tt.store(key, height, Move::NULL, VALUE_NONE, static_eval, Bound::None, ZERO_PLY);
+        }
 
         // probcut:
         let pc_beta = std::cmp::min(
