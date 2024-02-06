@@ -795,7 +795,7 @@ fn block_perft(depth: usize, pos: &mut Board) {
 }
 
 fn divide_perft(depth: usize, pos: &mut Board) {
-    #![allow(clippy::cast_possible_truncation)]
+    #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     let start_time = Instant::now();
     let mut nodes = 0;
     let mut ml = MoveList::new();
@@ -811,9 +811,9 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     }
     let elapsed = start_time.elapsed();
     println!(
-        "info depth {depth} nodes {nodes} time {elapsed} nps {nps}",
+        "info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}",
         elapsed = elapsed.as_millis(),
-        nps = nodes * 1000 / elapsed.as_millis() as u64
+        nps = nodes as f64 / elapsed.as_secs_f64()
     );
 }
 
