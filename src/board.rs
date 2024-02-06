@@ -22,7 +22,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{FeatureUpdate, LazyUpdate, UpdateBuffer},
+    nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     piece::{Colour, Piece, PieceType},
     search::pv::PVariation,
     squareset::{self, SquareSet},
@@ -1007,11 +1007,7 @@ impl Board {
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(
-        &mut self,
-        m: Move,
-        update_buffer: &mut UpdateBuffer,
-    ) -> bool {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1295,29 +1291,26 @@ impl Board {
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let mut update_buffer = UpdateBuffer::default();
-        let white_king_before = self.king_sq(Colour::WHITE);
-        let black_king_before = self.king_sq(Colour::BLACK);
+        let piece = self.moved_piece(m);
         let res = self.make_move_base(m, &mut update_buffer);
         if !res {
             return false;
         }
 
-        assert_eq!(t.nnue.update_to_apply.white_king_before, Square::NO_SQUARE);
-        t.nnue.update_to_apply = LazyUpdate {
-            update_buffer,
-            white_king_before,
-            black_king_before,
-            side: self.side.flip(),
-        };
+        t.nnue.accumulators[t.nnue.current_acc].mv =
+            MovedPiece { from: m.from(), to: m.to(), piece };
+        t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
 
         t.nnue.current_acc += 1;
+
+        t.nnue.accumulators[t.nnue.current_acc].correct = [false; 2];
 
         true
     }
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
         self.unmake_move_base();
-        t.nnue.pop_acc();
+        t.nnue.current_acc -= 1;
     }
 
     pub fn make_move(&mut self, m: Move, t: &mut ThreadData) -> bool {
@@ -1339,6 +1332,15 @@ impl Board {
     /// Makes a guess about the new position key after a move.
     /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
     pub fn key_after(&self, m: Move) -> u64 {
+        if m.is_null() {
+            let mut new_key = self.key;
+            if self.ep_sq != Square::NO_SQUARE {
+                hash_ep(&mut new_key, self.ep_sq);
+            }
+            hash_side(&mut new_key);
+            return new_key;
+        }
+
         let src = m.from();
         let tgt = m.to();
         let piece = self.moved_piece(m);

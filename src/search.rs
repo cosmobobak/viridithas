@@ -23,7 +23,21 @@ use crate::{
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
-    }, cfor, chessmove::Move, historytable::MAX_HISTORY, piece::{Colour, PieceType}, search::pv::PVariation, searchinfo::SearchInfo, tablebases::{self, probe::WDL}, threadlocal::ThreadData, transpositiontable::{Bound, TTHit, TTView}, uci, util::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE}
+    },
+    cfor,
+    chessmove::Move,
+    historytable::MAX_HISTORY,
+    piece::{Colour, PieceType},
+    search::pv::PVariation,
+    searchinfo::SearchInfo,
+    tablebases::{self, probe::WDL},
+    threadlocal::ThreadData,
+    transpositiontable::{Bound, TTHit, TTView},
+    uci,
+    util::{
+        depth::{Depth, ONE_PLY, ZERO_PLY},
+        INFINITY, MAX_DEPTH, VALUE_NONE,
+    },
 };
 
 use self::parameters::SearchParams;
@@ -451,7 +465,6 @@ impl Board {
 
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             t.tt.prefetch(self.key_after(m));
-            t.nnue.force(self);
             if !self.make_move(m, t) {
                 continue;
             }
@@ -709,8 +722,8 @@ impl Board {
                         info.search_params.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
+                t.tt.prefetch(self.key_after(Move::NULL));
                 self.make_nullmove();
-                t.tt.prefetch(self.hashkey());
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
@@ -786,7 +799,6 @@ impl Board {
                 }
 
                 t.tt.prefetch(self.key_after(m));
-                t.nnue.force(self);
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -905,7 +917,6 @@ impl Board {
             }
 
             t.tt.prefetch(self.key_after(m));
-            t.nnue.force(self);
             if !self.make_move(m, t) {
                 continue;
             }

@@ -25,18 +25,18 @@ pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 4;
 /// The mapping from square to bucket.
+#[rustfmt::skip]
+const BUCKET_MAP: [usize; 64] = [
+    0, 0, 0, 0, 4, 4, 4, 4,
+    1, 1, 1, 1, 5, 5, 5, 5,
+    2, 2, 2, 2, 6, 6, 6, 6,
+    2, 2, 2, 2, 6, 6, 6, 6,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+];
 pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
-    #[rustfmt::skip]
-    const BUCKET_MAP: [usize; 64] = [
-        0, 0, 0, 0, 4, 4, 4, 4,
-        1, 1, 1, 1, 5, 5, 5, 5,
-        2, 2, 2, 2, 6, 6, 6, 6,
-        2, 2, 2, 2, 6, 6, 6, 6,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-    ];
     let white_bucket = BUCKET_MAP[white_king.index()];
     let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
     (white_bucket, black_bucket)
@@ -71,9 +71,9 @@ pub struct PovUpdate {
 impl PovUpdate {
     pub const BOTH: Self = Self { white: true, black: true };
 
-    pub const fn opposite(self) -> Self {
-        Self { white: self.black, black: self.white }
-    }
+    // pub const fn opposite(self) -> Self {
+    //     Self { white: self.black, black: self.white }
+    // }
 
     pub const fn colour(colour: Colour) -> Self {
         match colour {
@@ -241,8 +241,10 @@ impl BucketAccumulatorCache {
 
         if pov_update.white {
             acc.white = cache_acc.white;
+            acc.correct[Colour::WHITE.index()] = true;
         } else {
             acc.black = cache_acc.black;
+            acc.correct[Colour::BLACK.index()] = true;
         }
 
         self.board_states[side_we_care_about.index()][bucket] = board_state;
@@ -374,6 +376,19 @@ impl Default for LazyUpdate {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MovedPiece {
+    pub from: Square,
+    pub to: Square,
+    pub piece: Piece,
+}
+
+#[derive(Clone)]
+pub struct LazyUpdate2 {
+    pub mv: MovedPiece,
+    pub update_buffer: UpdateBuffer,
+}
+
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Clone)]
@@ -384,9 +399,6 @@ pub struct NNUEState {
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
     pub bucket_cache: BucketAccumulatorCache,
-    /// An update that must be applied to the accumulator in order
-    /// to bring it up to date with the current position.
-    pub update_to_apply: LazyUpdate,
 }
 
 const fn feature_indices(
@@ -441,12 +453,6 @@ impl NNUEState {
         net
     }
 
-    /// Decrement the current accumulator.
-    pub fn pop_acc(&mut self) {
-        self.current_acc -= 1;
-        self.update_to_apply = LazyUpdate::default();
-    }
-
     /// Reinitialise the state from a board.
     pub fn reinit_from(&mut self, board: &Board) {
         // set the current accumulator to the first one
@@ -472,52 +478,83 @@ impl NNUEState {
             PovUpdate { white: false, black: true },
             &mut self.accumulators[0],
         );
-
-        // clear the update buffer
-        self.update_to_apply = LazyUpdate::default();
     }
 
-    /// Apply an in-flight update to generate a new accumulator.
-    #[allow(clippy::similar_names)]
-    pub fn force(&mut self, board: &Board) {
-        // idempotence!
-        if self.update_to_apply.white_king_before == Square::NO_SQUARE {
-            assert!(self.update_to_apply.update_buffer.adds().is_empty());
-            assert!(self.update_to_apply.update_buffer.subs().is_empty());
-            return;
+    fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
+        if piece.piece_type() != PieceType::KING {
+            return false;
         }
-        let colour = self.update_to_apply.side;
-        let wk_loc = board.king_sq(Colour::WHITE);
-        let bk_loc = board.king_sq(Colour::BLACK);
-        let (white_bucket, black_bucket) = get_bucket_indices(wk_loc, bk_loc);
-        let (white_bucket_before, black_bucket_before) = get_bucket_indices(self.update_to_apply.white_king_before, self.update_to_apply.black_king_before);
-        let white_changed_bucket = white_bucket != white_bucket_before;
-        let black_changed_bucket = black_bucket != black_bucket_before;
-        let (bucket_before, bucket_after) = if colour == Colour::WHITE {
-            (white_bucket_before, white_bucket)
-        } else {
-            (black_bucket_before, black_bucket)
-        };
-        assert!(!(white_changed_bucket && black_changed_bucket), "both buckets changed from a single move??");
 
-        let ue = if BUCKETS == 1 || bucket_before == bucket_after {
-            PovUpdate::BOTH
-        } else {
-            // refresh the half of the nnue acc that changed bucket:
-            let refresh = PovUpdate::colour(colour);
-            self.bucket_cache.load_accumulator_for_position(
-                board.pieces,
-                refresh,
-                &mut self.accumulators[self.current_acc],
+        BUCKET_MAP[from.index()] != BUCKET_MAP[to.index()]
+    }
+
+    fn can_efficiently_update(&self, view: Colour) -> bool {
+        let mut curr_idx = self.current_acc;
+        loop {
+            curr_idx -= 1;
+            let curr = &self.accumulators[curr_idx];
+
+            let mv = curr.mv;
+            let from = mv.from.relative_to(view);
+            let to = mv.to.relative_to(view);
+            let piece = mv.piece;
+
+            if piece.colour() == view && Self::requires_refresh(piece, from, to) {
+                return false;
+            }
+            if curr.correct[view.index()] {
+                return true;
+            }
+        }
+    }
+
+    fn apply_lazy_updates(&mut self, board: &Board, view: Colour) {
+        let mut curr_index = self.current_acc;
+        loop {
+            curr_index -= 1;
+
+            if self.accumulators[curr_index].correct[view.index()] {
+                break;
+            }
+        }
+
+        let pov_update = PovUpdate::colour(view);
+        let white_king = board.king_sq(Colour::WHITE);
+        let black_king = board.king_sq(Colour::BLACK);
+
+        loop {
+            self.materialise_new_acc_from(
+                white_king,
+                black_king,
+                pov_update,
+                self.accumulators[curr_index].update_buffer,
+                curr_index + 1,
             );
-            refresh.opposite()
-        };
 
-        // update the nnue acc for the move:
-        self.materialise_new_acc_from(wk_loc, bk_loc, ue, self.update_to_apply.update_buffer);
+            self.accumulators[curr_index + 1].correct[view.index()] = true;
 
-        // clear the update buffer
-        self.update_to_apply = LazyUpdate::default();
+            curr_index += 1;
+            if curr_index == self.current_acc {
+                break;
+            }
+        }
+    }
+
+    /// Apply all in-flight updates, generating all the accumulators up to the current one.
+    pub fn force(&mut self, board: &Board) {
+        for colour in Colour::all() {
+            if !self.accumulators[self.current_acc].correct[colour.index()] {
+                if self.can_efficiently_update(colour) {
+                    self.apply_lazy_updates(board, colour);
+                } else {
+                    self.bucket_cache.load_accumulator_for_position(
+                        board.pieces,
+                        PovUpdate::colour(colour),
+                        &mut self.accumulators[self.current_acc],
+                    );
+                }
+            }
+        }
     }
 
     pub fn materialise_new_acc_from(
@@ -526,8 +563,9 @@ impl NNUEState {
         black_king: Square,
         pov_update: PovUpdate,
         update_buffer: UpdateBuffer,
+        create_at_idx: usize,
     ) {
-        let (front, back) = self.accumulators.split_at_mut(self.current_acc);
+        let (front, back) = self.accumulators.split_at_mut(create_at_idx);
         let src = front.last().unwrap();
         let tgt = back.first_mut().unwrap();
 
@@ -713,9 +751,9 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     pub fn evaluate(&self, stm: Colour) -> i32 {
-        assert_eq!(self.update_to_apply.white_king_before, Square::NO_SQUARE, "update_to_apply not cleared before evaluation");
-
         let acc = &self.accumulators[self.current_acc];
+
+        assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
