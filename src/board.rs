@@ -28,7 +28,7 @@ use crate::{
     squareset::{self, SquareSet},
     threadlocal::ThreadData,
     uci::CHESS960,
-    util::{CastlingRights, CheckState, File, Rank, Square, Undo, HORIZONTAL_RAY_BETWEEN},
+    util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
 };
 
 use self::movegen::{
@@ -184,8 +184,8 @@ impl Board {
         sq
     }
 
-    pub fn in_check(&self) -> bool {
-        self.threats.all.contains_square(self.king_sq(self.side))
+    pub const fn in_check(&self) -> bool {
+        self.threats.checkers.non_empty()
     }
 
     pub fn zero_height(&mut self) {
@@ -251,6 +251,7 @@ impl Board {
 
     pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
+        let mut checkers = SquareSet::EMPTY;
 
         let their_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_knights = self.pieces.knights::<IS_WHITE>();
@@ -259,6 +260,7 @@ impl Board {
         let their_king = self.king_sq(if IS_WHITE { Colour::WHITE } else { Colour::BLACK });
         let blockers = self.pieces.occupied();
 
+        // compute threats
         threats |= pawn_attacks::<IS_WHITE>(their_pawns);
 
         for sq in their_knights {
@@ -273,7 +275,29 @@ impl Board {
 
         threats |= king_attacks(their_king);
 
-        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats */ }
+        // compute checkers
+        let our_king = self.king_sq(if IS_WHITE { Colour::BLACK } else { Colour::WHITE });
+        let king_bb = our_king.as_set();
+        let backwards_from_king = if IS_WHITE {
+            king_bb.south_east_one() | king_bb.south_west_one()
+        } else {
+            king_bb.north_east_one() | king_bb.north_west_one()
+        };
+        checkers |= backwards_from_king & their_pawns;
+
+        let knight_attacks = knight_attacks(our_king);
+
+        checkers |= knight_attacks & their_knights;
+
+        let diag_attacks = bishop_attacks(our_king, blockers);
+
+        checkers |= diag_attacks & their_diags;
+
+        let ortho_attacks = rook_attacks(our_king, blockers);
+
+        checkers |= ortho_attacks & their_orthos;
+
+        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers }
     }
 
     pub fn reset(&mut self) {
@@ -915,9 +939,9 @@ impl Board {
         };
 
         // king_path is the path the king takes to get to its destination.
-        let king_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][king_dst.index()];
+        let king_path = RAY_BETWEEN[m.from().index()][king_dst.index()];
         // rook_path is the path the rook takes to get to its destination.
-        let rook_path = HORIZONTAL_RAY_BETWEEN[m.from().index()][m.to().index()];
+        let rook_path = RAY_BETWEEN[m.from().index()][m.to().index()];
         // castle_occ is the occupancy that "counts" for castling.
         let castle_occ = self.pieces.occupied() ^ m.from().as_set() ^ m.to().as_set();
 

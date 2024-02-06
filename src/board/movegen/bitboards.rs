@@ -311,6 +311,7 @@ pub struct Threats {
     // pub pawn: SquareSet,
     // pub minor: SquareSet,
     // pub rook: SquareSet,
+    pub checkers: SquareSet,
 }
 
 impl Display for BitBoard {

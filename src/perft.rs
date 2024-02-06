@@ -6,7 +6,7 @@ use std::{
     sync::atomic::Ordering,
 };
 
-#[cfg(test)]
+// #[cfg(test)]
 use crate::threadlocal::ThreadData;
 use crate::{
     board::{movegen::MoveList, Board},
@@ -56,6 +56,32 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
         }
         count += nnue_perft(pos, t, depth - 1);
         pos.unmake_move_nnue(t);
+    }
+
+    count
+}
+
+// #[cfg(test)]
+pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+    use crate::{board::movegen::movepicker::MainMovePicker, chessmove::Move};
+
+    #[cfg(debug_assertions)]
+    pos.check_validity().unwrap();
+    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
+
+    if depth == 0 {
+        return 1;
+    }
+
+    let mut ml = MainMovePicker::new(Move::NULL, [Move::NULL, Move::NULL], Move::NULL, 0);
+
+    let mut count = 0;
+    while let Some(m) = ml.next(pos, t) {
+        if !pos.make_move(m.mov, t) {
+            continue;
+        }
+        count += movepicker_perft(pos, t, depth - 1);
+        pos.unmake_move(t);
     }
 
     count
@@ -181,6 +207,42 @@ mod tests {
         assert_eq!(nnue_perft(&mut pos, &mut t, 2), 400);
         assert_eq!(nnue_perft(&mut pos, &mut t, 3), 8_902);
         // assert_eq!(nnue_perft(&mut pos, &mut t, 4), 197_281);
+    }
+
+    #[test]
+    fn perft_movepicker_start_position() {
+        use super::*;
+
+        let mut pos = Board::default();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16);
+        let mut t = ThreadData::new(0, &pos, tt.view());
+        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 400);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 8_902);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 197_281);
+    }
+
+    #[test]
+    fn perft_movepicker_hard_position() {
+        use super::*;
+        const TEST_FEN: &str =
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+
+        std::env::set_var("RUST_BACKTRACE", "1");
+        let mut pos = Board::new();
+        pos.set_from_fen(TEST_FEN).unwrap();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16);
+        let mut t = ThreadData::new(0, &pos, tt.view());
+        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
+            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 2_039);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 97_862);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 4_085_603);
     }
 
     #[test]

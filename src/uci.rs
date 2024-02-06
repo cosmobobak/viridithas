@@ -16,7 +16,7 @@ use crate::{
     bench::BENCH_POSITIONS,
     board::{
         evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
-        movegen::MoveList,
+        movegen::{self, MoveList},
         Board,
     },
     errors::{FenParseError, MoveParseError},
@@ -785,7 +785,9 @@ fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
 fn block_perft(depth: usize, pos: &mut Board) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     let start_time = Instant::now();
-    let nodes = perft::perft(pos, depth);
+    let mut tt = TT::new();
+    tt.resize(16 * MEGABYTE);
+    let nodes = perft::movepicker_perft(pos, &mut ThreadData::new(0, pos, tt.view()), depth);
     let elapsed = start_time.elapsed();
     let nps = nodes as f64 / elapsed.as_secs_f64();
     println!(
@@ -804,16 +806,16 @@ fn divide_perft(depth: usize, pos: &mut Board) {
         if !pos.make_move_simple(m) {
             continue;
         }
-        let arm_nodes = perft::perft(pos, depth - 1);
+        let arm_nodes = movegen::synced_perft(pos, depth - 1);
         nodes += arm_nodes;
         println!("{m}: {arm_nodes}");
         pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();
     println!(
-        "info depth {depth} nodes {nodes} time {elapsed} nps {nps}",
+        "info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}",
         elapsed = elapsed.as_millis(),
-        nps = nodes * 1000 / elapsed.as_millis() as u64
+        nps = nodes as f64 / elapsed.as_secs_f64()
     );
 }
 
