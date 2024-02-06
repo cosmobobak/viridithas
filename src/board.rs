@@ -297,7 +297,10 @@ impl Board {
 
         checkers |= ortho_attacks & their_orthos;
 
-        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers }
+        Threats {
+            all: threats,
+            /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers,
+        }
     }
 
     pub fn reset(&mut self) {

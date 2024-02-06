@@ -97,7 +97,11 @@ impl Display for MoveList {
 }
 
 impl Board {
-    fn generate_pawn_caps<const IS_WHITE: bool, const QS: bool>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
+    fn generate_pawn_caps<const IS_WHITE: bool, const QS: bool>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let their_pieces = self.pieces.their_pieces::<IS_WHITE>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -111,8 +115,16 @@ impl Board {
         } else {
             their_pieces.north_west_one() & our_pawns
         };
-        let valid_west = if IS_WHITE { valid_target_squares.south_east_one() } else { valid_target_squares.north_east_one() };
-        let valid_east = if IS_WHITE { valid_target_squares.south_west_one() } else { valid_target_squares.north_west_one() };
+        let valid_west = if IS_WHITE {
+            valid_target_squares.south_east_one()
+        } else {
+            valid_target_squares.north_east_one()
+        };
+        let valid_east = if IS_WHITE {
+            valid_target_squares.south_west_one()
+        } else {
+            valid_target_squares.north_west_one()
+        };
         let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         for from in attacking_west & !promo_rank & valid_west {
             let to = if IS_WHITE { from.add(7) } else { from.sub(9) };
@@ -179,16 +191,20 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<const IS_WHITE: bool>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
+    fn generate_pawn_forward<const IS_WHITE: bool>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
         let start_rank = if IS_WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
         let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let double_shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
-        let shifted_valid_squares = 
+        let shifted_valid_squares =
             if IS_WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
-        let double_shifted_valid_squares = 
+        let double_shifted_valid_squares =
             if IS_WHITE { valid_target_squares >> 16 } else { valid_target_squares << 16 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
@@ -218,7 +234,7 @@ impl Board {
         let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
-        let shifted_valid_squares = 
+        let shifted_valid_squares =
             if IS_WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
@@ -269,7 +285,8 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
+                | self.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -355,14 +372,12 @@ impl Board {
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(our_king_sq, to));
             }
-            // for to in moves & freespace {
-            //     move_list.push::<false>(Move::new(our_king_sq, to));
-            // }
             return;
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
+                | self.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -548,16 +563,20 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_pawn_quiet<const IS_WHITE: bool>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
+    fn generate_pawn_quiet<const IS_WHITE: bool>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
         let start_rank = if IS_WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
         let promo_rank = if IS_WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         let shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
         let double_shifted_empty_squares =
             if IS_WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
-        let shifted_valid_squares = 
+        let shifted_valid_squares =
             if IS_WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
-        let double_shifted_valid_squares = 
+        let double_shifted_valid_squares =
             if IS_WHITE { valid_target_squares >> 16 } else { valid_target_squares << 16 };
         let our_pawns = self.pieces.pawns::<IS_WHITE>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
@@ -588,7 +607,8 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
+                | self.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -636,6 +656,7 @@ impl Board {
     }
 }
 
+#[cfg(test)]
 pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -655,19 +676,33 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     full_moves_vec.sort_unstable_by_key(|m| m.mov);
     staged_moves_vec.sort_unstable_by_key(|m| m.mov);
     let eq = full_moves_vec == staged_moves_vec;
-    assert!(eq, "full and staged move lists differ in {}, \nfull list: \n[{}], \nstaged list: \n[{}]", pos.fen(), {
-        let mut mvs = Vec::new();
-        for m in full_moves_vec {
-            mvs.push(format!("{}{}", pos.san(m.mov).unwrap(), if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }));
+    assert!(
+        eq,
+        "full and staged move lists differ in {}, \nfull list: \n[{}], \nstaged list: \n[{}]",
+        pos.fen(),
+        {
+            let mut mvs = Vec::new();
+            for m in full_moves_vec {
+                mvs.push(format!(
+                    "{}{}",
+                    pos.san(m.mov).unwrap(),
+                    if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }
+                ));
+            }
+            mvs.join(", ")
+        },
+        {
+            let mut mvs = Vec::new();
+            for m in staged_moves_vec {
+                mvs.push(format!(
+                    "{}{}",
+                    pos.san(m.mov).unwrap(),
+                    if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }
+                ));
+            }
+            mvs.join(", ")
         }
-        mvs.join(", ")
-    }, {
-        let mut mvs = Vec::new();
-        for m in staged_moves_vec {
-            mvs.push(format!("{}{}", pos.san(m.mov).unwrap(), if m.score == MoveListEntry::TACTICAL_SENTINEL { "T" } else { "Q" }));
-        }
-        mvs.join(", ")
-    });
+    );
 
     let mut count = 0;
     for &m in ml.iter_moves() {

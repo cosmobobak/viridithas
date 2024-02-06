@@ -521,8 +521,6 @@ impl<'a> BatchedAtomicCounter<'a> {
 }
 
 mod tests {
-    use super::{Square, RAY_BETWEEN};
-
     #[test]
     fn square_flipping() {
         use super::Square;
@@ -542,30 +540,15 @@ mod tests {
     fn ray_test() {
         use super::{Square, RAY_BETWEEN};
         use crate::squareset::SquareSet;
-        assert_eq!(
-            RAY_BETWEEN[Square::A1.index()][Square::A1.index()],
-            SquareSet::EMPTY
-        );
-        assert_eq!(
-            RAY_BETWEEN[Square::A1.index()][Square::B1.index()],
-            SquareSet::EMPTY
-        );
-        assert_eq!(
-            RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
-            Square::B1.as_set()
-        );
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.as_set());
         assert_eq!(
             RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
             Square::B1.as_set() | Square::C1.as_set()
         );
-        assert_eq!(
-            RAY_BETWEEN[Square::B1.index()][Square::D1.index()],
-            Square::C1.as_set()
-        );
-        assert_eq!(
-            RAY_BETWEEN[Square::D1.index()][Square::B1.index()],
-            Square::C1.as_set()
-        );
+        assert_eq!(RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.as_set());
 
         for from in Square::all() {
             for to in Square::all() {
@@ -579,6 +562,7 @@ mod tests {
 
     #[test]
     fn ray_diag_test() {
+        use super::{Square, RAY_BETWEEN};
         let ray = RAY_BETWEEN[Square::B5.index()][Square::E8.index()];
         assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }

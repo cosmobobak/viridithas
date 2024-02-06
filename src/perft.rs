@@ -6,7 +6,7 @@ use std::{
     sync::atomic::Ordering,
 };
 
-// #[cfg(test)]
+#[cfg(test)]
 use crate::threadlocal::ThreadData;
 use crate::{
     board::{movegen::MoveList, Board},
@@ -61,7 +61,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     count
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     use crate::{board::movegen::movepicker::MainMovePicker, chessmove::Move};
 
