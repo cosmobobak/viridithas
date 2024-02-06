@@ -1334,9 +1334,6 @@ impl Board {
     pub fn key_after(&self, m: Move) -> u64 {
         if m.is_null() {
             let mut new_key = self.key;
-            if self.ep_sq != Square::NO_SQUARE {
-                hash_ep(&mut new_key, self.ep_sq);
-            }
             hash_side(&mut new_key);
             return new_key;
         }
@@ -1973,5 +1970,40 @@ mod tests {
 
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
         assert_eq!(board.threats.all, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
+    }
+
+    #[test]
+    fn key_after_works_for_simple_moves() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::util::Square;
+        let mut board = Board::default();
+        let mv = Move::new(Square::E2, Square::E3);
+        let key = board.key_after(mv);
+        board.make_move_simple(mv);
+        assert_eq!(board.key, key);
+    }
+
+    #[test]
+    fn key_after_works_for_captures() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::util::Square;
+        let mut board = Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6").unwrap();
+        // Nxf7!!
+        let mv = Move::new(Square::G5, Square::F7);
+        let key = board.key_after(mv);
+        board.make_move_simple(mv);
+        assert_eq!(board.key, key);
+    }
+
+    #[test]
+    fn key_after_works_for_nullmove() {
+        use super::Board;
+        use crate::chessmove::Move;
+        let mut board = Board::default();
+        let key = board.key_after(Move::NULL);
+        board.make_nullmove();
+        assert_eq!(board.key, key);
     }
 }
