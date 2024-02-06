@@ -357,36 +357,11 @@ impl NNUEParams {
     }
 }
 
-#[derive(Clone)]
-pub struct LazyUpdate {
-    pub update_buffer: UpdateBuffer,
-    pub white_king_before: Square,
-    pub black_king_before: Square,
-    pub side: Colour,
-}
-
-impl Default for LazyUpdate {
-    fn default() -> Self {
-        Self {
-            update_buffer: UpdateBuffer::default(),
-            white_king_before: Square::NO_SQUARE,
-            black_king_before: Square::NO_SQUARE,
-            side: Colour::WHITE,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct MovedPiece {
     pub from: Square,
     pub to: Square,
     pub piece: Piece,
-}
-
-#[derive(Clone)]
-pub struct LazyUpdate2 {
-    pub mv: MovedPiece,
-    pub update_buffer: UpdateBuffer,
 }
 
 /// State of the partial activations of the NNUE network.
