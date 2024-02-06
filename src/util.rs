@@ -319,7 +319,7 @@ impl Default for Undo {
             castle_perm: CastlingRights::NONE,
             ep_square: Square::NO_SQUARE,
             fifty_move_counter: 0,
-            threats: Threats { all: SquareSet::EMPTY },
+            threats: Threats { all: SquareSet::EMPTY, checkers: SquareSet::EMPTY },
             cont_hist_index: ContHistIndex::default(),
             bitboard: BitBoard::NULL,
             piece_array: [Piece::EMPTY; 64],
@@ -446,21 +446,29 @@ impl Display for CastlingRights {
     }
 }
 
-pub static HORIZONTAL_RAY_BETWEEN: [[SquareSet; 64]; 64] = {
+const fn in_between(sq1: Square, sq2: Square) -> SquareSet {
+    const M1: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+    const A2A7: u64 = 0x0001_0101_0101_0100;
+    const B2G7: u64 = 0x0040_2010_0804_0200;
+    const H1B7: u64 = 0x0002_0408_1020_4080;
+    let sq1 = sq1.index();
+    let sq2 = sq2.index();
+    let btwn = (M1 << sq1) ^ (M1 << sq2);
+    let file = ((sq2 & 7).wrapping_add((sq1 & 7).wrapping_neg())) as u64;
+    let rank = (((sq2 | 7).wrapping_sub(sq1)) >> 3) as u64;
+    let mut line = ((file & 7).wrapping_sub(1)) & A2A7;
+    line += 2 * ((rank & 7).wrapping_sub(1) >> 58);
+    line += ((rank.wrapping_sub(file) & 15).wrapping_sub(1)) & B2G7;
+    line += ((rank.wrapping_add(file) & 15).wrapping_sub(1)) & H1B7;
+    line = line.wrapping_mul(btwn & btwn.wrapping_neg());
+    SquareSet::from_inner(line & btwn)
+}
+
+pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     let mut res = [[SquareSet::EMPTY; 64]; 64];
     cfor!(let mut from = Square::A1; from.0 < Square::NO_SQUARE.0; from = from.add_beyond_board(1); {
         cfor!(let mut to = Square::A1; to.0 < Square::NO_SQUARE.0; to = to.add_beyond_board(1); {
-            if from.rank() == to.rank() {
-                let low_square = min!(from.0, to.0);
-                let high_square = max!(from.0, to.0);
-                let mut bb = 0;
-                let mut between = low_square + 1;
-                while between < high_square {
-                    bb |= 1 << between;
-                    between += 1;
-                }
-                res[from.index()][to.index()] = SquareSet::from_inner(bb);
-            }
+            res[from.index()][to.index()] = in_between(from, to);
         });
     });
     res
@@ -530,40 +538,32 @@ mod tests {
 
     #[test]
     fn ray_test() {
-        use super::{Square, HORIZONTAL_RAY_BETWEEN};
+        use super::{Square, RAY_BETWEEN};
         use crate::squareset::SquareSet;
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.as_set());
         assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::A1.index()],
-            SquareSet::EMPTY
-        );
-        assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::B1.index()],
-            SquareSet::EMPTY
-        );
-        assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::C1.index()],
-            Square::B1.as_set()
-        );
-        assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
+            RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
             Square::B1.as_set() | Square::C1.as_set()
         );
-        assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::B1.index()][Square::D1.index()],
-            Square::C1.as_set()
-        );
-        assert_eq!(
-            HORIZONTAL_RAY_BETWEEN[Square::D1.index()][Square::B1.index()],
-            Square::C1.as_set()
-        );
+        assert_eq!(RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.as_set());
 
         for from in Square::all() {
             for to in Square::all() {
                 assert_eq!(
-                    HORIZONTAL_RAY_BETWEEN[from.index()][to.index()],
-                    HORIZONTAL_RAY_BETWEEN[to.index()][from.index()]
+                    RAY_BETWEEN[from.index()][to.index()],
+                    RAY_BETWEEN[to.index()][from.index()]
                 );
             }
         }
+    }
+
+    #[test]
+    fn ray_diag_test() {
+        use super::{Square, RAY_BETWEEN};
+        let ray = RAY_BETWEEN[Square::B5.index()][Square::E8.index()];
+        assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }
 }
