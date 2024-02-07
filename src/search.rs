@@ -1426,7 +1426,7 @@ fn readout_info(
     };
     if normal_uci_output {
         println!(
-            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} pv {pv}",
+            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} {pv}",
             info.seldepth.ply_to_horizon(),
             info.time_manager.elapsed().as_millis(),
             hashfull = tt.hashfull(),

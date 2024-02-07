@@ -35,6 +35,9 @@ impl PVariation {
 
 impl Display for PVariation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.length != 0 {
+            write!(f, "pv ")?;
+        }
         for &m in self.moves() {
             write!(f, "{m} ")?;
         }
