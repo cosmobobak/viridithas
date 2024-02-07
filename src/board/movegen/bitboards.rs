@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     lookups, magic,
     nnue::network::FeatureUpdate,
-    piece::{Colour, Piece, PieceType},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
     util::Square,
 };
@@ -69,40 +69,32 @@ impl BitBoard {
         Self { pieces: [p, n, b, r, q, k], colours: [white, black] }
     }
 
-    pub fn king<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_kings() & self.our_pieces::<IS_WHITE>()
+    pub fn king<C: Col>(&self) -> SquareSet {
+        self.all_kings() & self.our_pieces::<C>()
     }
 
-    pub fn pawns<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_pawns() & self.our_pieces::<IS_WHITE>()
+    pub fn pawns<C: Col>(&self) -> SquareSet {
+        self.all_pawns() & self.our_pieces::<C>()
     }
 
     pub const fn occupied_co(&self, colour: Colour) -> SquareSet {
         self.colours[colour.index()]
     }
 
-    pub const fn their_pieces<const IS_WHITE: bool>(&self) -> SquareSet {
-        if IS_WHITE {
-            self.colours[Colour::BLACK.index()]
-        } else {
-            self.colours[Colour::WHITE.index()]
-        }
+    pub const fn their_pieces<C: Col>(&self) -> SquareSet {
+        self.colours[C::Opposite::COLOUR.index()]
     }
 
-    pub const fn our_pieces<const IS_WHITE: bool>(&self) -> SquareSet {
-        if IS_WHITE {
-            self.colours[Colour::WHITE.index()]
-        } else {
-            self.colours[Colour::BLACK.index()]
-        }
+    pub const fn our_pieces<C: Col>(&self) -> SquareSet {
+        self.colours[C::COLOUR.index()]
     }
 
-    pub fn orthos<const IS_WHITE: bool>(&self) -> SquareSet {
-        (self.all_rooks() | self.all_queens()) & self.our_pieces::<IS_WHITE>()
+    pub fn orthos<C: Col>(&self) -> SquareSet {
+        (self.all_rooks() | self.all_queens()) & self.our_pieces::<C>()
     }
 
-    pub fn diags<const IS_WHITE: bool>(&self) -> SquareSet {
-        (self.all_bishops() | self.all_queens()) & self.our_pieces::<IS_WHITE>()
+    pub fn diags<C: Col>(&self) -> SquareSet {
+        (self.all_bishops() | self.all_queens()) & self.our_pieces::<C>()
     }
 
     pub fn empty(&self) -> SquareSet {
@@ -113,20 +105,20 @@ impl BitBoard {
         self.colours[Colour::WHITE.index()] | self.colours[Colour::BLACK.index()]
     }
 
-    pub fn knights<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_knights() & self.our_pieces::<IS_WHITE>()
+    pub fn knights<C: Col>(&self) -> SquareSet {
+        self.all_knights() & self.our_pieces::<C>()
     }
 
-    pub fn rooks<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_rooks() & self.our_pieces::<IS_WHITE>()
+    pub fn rooks<C: Col>(&self) -> SquareSet {
+        self.all_rooks() & self.our_pieces::<C>()
     }
 
-    pub fn bishops<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_bishops() & self.our_pieces::<IS_WHITE>()
+    pub fn bishops<C: Col>(&self) -> SquareSet {
+        self.all_bishops() & self.our_pieces::<C>()
     }
 
-    pub fn queens<const IS_WHITE: bool>(&self) -> SquareSet {
-        self.all_queens() & self.our_pieces::<IS_WHITE>()
+    pub fn queens<C: Col>(&self) -> SquareSet {
+        self.all_queens() & self.our_pieces::<C>()
     }
 
     pub const fn all_pawns(&self) -> SquareSet {
@@ -189,8 +181,8 @@ impl BitBoard {
 
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
         let sq_bb = sq.as_set();
-        let black_pawn_attackers = pawn_attacks::<true>(sq_bb) & self.pawns::<false>();
-        let white_pawn_attackers = pawn_attacks::<false>(sq_bb) & self.pawns::<true>();
+        let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();
+        let white_pawn_attackers = pawn_attacks::<Black>(sq_bb) & self.pawns::<White>();
         let knight_attackers = knight_attacks(sq) & (self.all_knights());
         let diag_attackers =
             bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
@@ -206,9 +198,9 @@ impl BitBoard {
 
     pub fn piece_at(&self, sq: Square) -> Piece {
         let sq_bb = sq.as_set();
-        let colour = if (self.our_pieces::<true>() & sq_bb).non_empty() {
+        let colour = if (self.our_pieces::<White>() & sq_bb).non_empty() {
             Colour::WHITE
-        } else if (self.our_pieces::<false>() & sq_bb).non_empty() {
+        } else if (self.our_pieces::<Black>() & sq_bb).non_empty() {
             Colour::BLACK
         } else {
             return Piece::EMPTY;
@@ -284,8 +276,8 @@ pub fn knight_attacks(sq: Square) -> SquareSet {
 pub fn king_attacks(sq: Square) -> SquareSet {
     lookups::get_king_attacks(sq)
 }
-pub fn pawn_attacks<const IS_WHITE: bool>(bb: SquareSet) -> SquareSet {
-    if IS_WHITE {
+pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
+    if C::WHITE {
         bb.north_east_one() | bb.north_west_one()
     } else {
         bb.south_east_one() | bb.south_west_one()

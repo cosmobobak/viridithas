@@ -23,7 +23,7 @@ use crate::{
     historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
-    piece::{Colour, Piece, PieceType},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
     search::pv::PVariation,
     squareset::{self, SquareSet},
     threadlocal::ThreadData,
@@ -172,11 +172,11 @@ impl Board {
 
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::WHITE || side == Colour::BLACK);
-        debug_assert_eq!(self.pieces.king::<true>().count(), 1);
-        debug_assert_eq!(self.pieces.king::<false>().count(), 1);
+        debug_assert_eq!(self.pieces.king::<White>().count(), 1);
+        debug_assert_eq!(self.pieces.king::<Black>().count(), 1);
         let sq = match side {
-            Colour::WHITE => self.pieces.king::<true>().first(),
-            Colour::BLACK => self.pieces.king::<false>().first(),
+            Colour::WHITE => self.pieces.king::<White>().first(),
+            Colour::BLACK => self.pieces.king::<Black>().first(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(self.pieces.piece_at(sq).colour(), side);
@@ -243,25 +243,25 @@ impl Board {
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
         if side == Colour::WHITE {
-            self.generate_threats_from::<true>()
+            self.generate_threats_from::<White>()
         } else {
-            self.generate_threats_from::<false>()
+            self.generate_threats_from::<Black>()
         }
     }
 
-    pub fn generate_threats_from<const IS_WHITE: bool>(&self) -> Threats {
+    pub fn generate_threats_from<C: Col>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
 
-        let their_pawns = self.pieces.pawns::<IS_WHITE>();
-        let their_knights = self.pieces.knights::<IS_WHITE>();
-        let their_diags = self.pieces.diags::<IS_WHITE>();
-        let their_orthos = self.pieces.orthos::<IS_WHITE>();
-        let their_king = self.king_sq(if IS_WHITE { Colour::WHITE } else { Colour::BLACK });
+        let their_pawns = self.pieces.pawns::<C>();
+        let their_knights = self.pieces.knights::<C>();
+        let their_diags = self.pieces.diags::<C>();
+        let their_orthos = self.pieces.orthos::<C>();
+        let their_king = self.king_sq(C::COLOUR);
         let blockers = self.pieces.occupied();
 
         // compute threats
-        threats |= pawn_attacks::<IS_WHITE>(their_pawns);
+        threats |= pawn_attacks::<C>(their_pawns);
 
         for sq in their_knights {
             threats |= knight_attacks(sq);
@@ -276,13 +276,9 @@ impl Board {
         threats |= king_attacks(their_king);
 
         // compute checkers
-        let our_king = self.king_sq(if IS_WHITE { Colour::BLACK } else { Colour::WHITE });
+        let our_king = self.king_sq(C::Opposite::COLOUR);
         let king_bb = our_king.as_set();
-        let backwards_from_king = if IS_WHITE {
-            king_bb.south_east_one() | king_bb.south_west_one()
-        } else {
-            king_bb.north_east_one() | king_bb.north_west_one()
-        };
+        let backwards_from_king = pawn_attacks::<C::Opposite>(king_bb);
         checkers |= backwards_from_king & their_pawns;
 
         let knight_attacks = knight_attacks(our_king);
@@ -747,13 +743,13 @@ impl Board {
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
         if side == Colour::WHITE {
-            self.sq_attacked_by::<true>(sq)
+            self.sq_attacked_by::<White>(sq)
         } else {
-            self.sq_attacked_by::<false>(sq)
+            self.sq_attacked_by::<Black>(sq)
         }
     }
 
-    pub fn sq_attacked_by<const IS_WHITE: bool>(&self, sq: Square) -> bool {
+    pub fn sq_attacked_by<C: Col>(&self, sq: Square) -> bool {
         debug_assert!(sq.on_board());
         // we remove this check because the board actually *can*
         // be in an inconsistent state when we call this, as it's
@@ -763,20 +759,20 @@ impl Board {
         // #[cfg(debug_assertions)]
         // self.check_validity().unwrap();
 
-        if IS_WHITE == (self.side == Colour::BLACK) {
+        if C::WHITE == (self.side == Colour::BLACK) {
             return self.threats.all.contains_square(sq);
         }
 
         let sq_bb = sq.as_set();
-        let our_pawns = self.pieces.pawns::<IS_WHITE>();
-        let our_knights = self.pieces.knights::<IS_WHITE>();
-        let our_diags = self.pieces.diags::<IS_WHITE>();
-        let our_orthos = self.pieces.orthos::<IS_WHITE>();
-        let our_king = self.pieces.king::<IS_WHITE>();
+        let our_pawns = self.pieces.pawns::<C>();
+        let our_knights = self.pieces.knights::<C>();
+        let our_diags = self.pieces.diags::<C>();
+        let our_orthos = self.pieces.orthos::<C>();
+        let our_king = self.pieces.king::<C>();
         let blockers = self.pieces.occupied();
 
         // pawns
-        let attacks = pawn_attacks::<IS_WHITE>(our_pawns);
+        let attacks = pawn_attacks::<C>(our_pawns);
         if (attacks & sq_bb).non_empty() {
             return true;
         }
@@ -872,9 +868,9 @@ impl Board {
             }
             // pawn capture
             if self.side == Colour::WHITE {
-                return (pawn_attacks::<true>(from.as_set()) & to.as_set()).non_empty();
+                return (pawn_attacks::<White>(from.as_set()) & to.as_set()).non_empty();
             }
-            return (pawn_attacks::<false>(from.as_set()) & to.as_set()).non_empty();
+            return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
         }
 
         (to.as_set()
@@ -1594,26 +1590,24 @@ impl Board {
         self.fifty_move_counter
     }
 
-    pub fn has_insufficient_material<const IS_WHITE: bool>(&self) -> bool {
-        if (self.pieces.pawns::<IS_WHITE>()
-            | self.pieces.rooks::<IS_WHITE>()
-            | self.pieces.queens::<IS_WHITE>())
-        .non_empty()
+    pub fn has_insufficient_material<C: Col>(&self) -> bool {
+        if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>())
+            .non_empty()
         {
             return false;
         }
 
-        if self.pieces.knights::<IS_WHITE>().non_empty() {
+        if self.pieces.knights::<C>().non_empty() {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
             let kings = self.pieces.all_kings();
             let queens = self.pieces.all_queens();
-            return self.pieces.our_pieces::<IS_WHITE>().count() <= 2
-                && (self.pieces.their_pieces::<IS_WHITE>() & !kings & !queens).is_empty();
+            return self.pieces.our_pieces::<C>().count() <= 2
+                && (self.pieces.their_pieces::<C>() & !kings & !queens).is_empty();
         }
 
-        if self.pieces.bishops::<IS_WHITE>().non_empty() {
+        if self.pieces.bishops::<C>().non_empty() {
             let bishops = self.pieces.all_bishops();
             let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty()
                 || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
@@ -1725,7 +1719,7 @@ impl Board {
 
     #[allow(dead_code /* for datagen */)]
     pub fn is_insufficient_material(&self) -> bool {
-        self.has_insufficient_material::<true>() && self.has_insufficient_material::<false>()
+        self.has_insufficient_material::<White>() && self.has_insufficient_material::<Black>()
     }
 
     #[allow(dead_code /* for datagen */)]
@@ -2016,7 +2010,9 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board = Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6").unwrap();
+        let mut board =
+            Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6")
+                .unwrap();
         // Nxf7!!
         let mv = Move::new(Square::G5, Square::F7);
         let key = board.key_after(mv);

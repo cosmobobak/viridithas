@@ -1,5 +1,26 @@
 use std::fmt::{Debug, Display};
 
+pub trait Col {
+    type Opposite: Col;
+    const WHITE: bool;
+    const COLOUR: Colour;
+}
+
+pub struct White;
+pub struct Black;
+
+impl Col for White {
+    type Opposite = Black;
+    const WHITE: bool = true;
+    const COLOUR: Colour = Colour::WHITE;
+}
+
+impl Col for Black {
+    type Opposite = White;
+    const WHITE: bool = false;
+    const COLOUR: Colour = Colour::BLACK;
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Colour {
     v: bool,
