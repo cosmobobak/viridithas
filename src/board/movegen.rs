@@ -488,11 +488,7 @@ impl Board {
                 }
                 && !self.sq_attacked_by::<C::Opposite>(k_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(
-                    from,
-                    k_to,
-                    Move::CASTLE_FLAG,
-                ));
+                move_list.push::<false>(Move::new_with_flags(from, k_to, Move::CASTLE_FLAG));
             }
 
             if q_perm != Square::NO_SQUARE
@@ -500,11 +496,7 @@ impl Board {
                 && !cache.unwrap_or_else(|| self.sq_attacked_by::<C::Opposite>(from))
                 && !self.sq_attacked_by::<C::Opposite>(q_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(
-                    from,
-                    q_to,
-                    Move::CASTLE_FLAG,
-                ));
+                move_list.push::<false>(Move::new_with_flags(from, q_to, Move::CASTLE_FLAG));
             }
         }
     }
