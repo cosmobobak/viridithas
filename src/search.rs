@@ -447,7 +447,7 @@ impl Board {
             }
         } else {
             let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
-            // store the eval into the TT if we won't overwrite anything:
+                                                              // store the eval into the TT if we won't overwrite anything:
             if tt_hit.is_none() {
                 t.tt.store(key, height, Move::NULL, VALUE_NONE, v, Bound::None, ZERO_PLY);
             }
