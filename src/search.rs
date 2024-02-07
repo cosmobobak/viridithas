@@ -1087,7 +1087,7 @@ impl Board {
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
-                    info.log_fail_high::<false>(moves_made - 1, ordering_score);
+                    info.log_fail_high::<false>(moves_made - 1, movepick_score);
                     break;
                 }
             }
