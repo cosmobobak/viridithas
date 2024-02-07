@@ -34,7 +34,10 @@ use crate::{
     threadlocal::ThreadData,
     transpositiontable::{Bound, TTHit, TTView},
     uci,
-    util::{depth::Depth, depth::ONE_PLY, depth::ZERO_PLY, INFINITY, MAX_DEPTH, VALUE_NONE},
+    util::{
+        depth::{Depth, ONE_PLY, ZERO_PLY},
+        INFINITY, MAX_DEPTH, VALUE_NONE,
+    },
 };
 
 use self::parameters::SearchParams;
@@ -396,8 +399,6 @@ impl Board {
 
         let key = self.hashkey();
 
-        t.tt.prefetch(key);
-
         let mut lpv = PVariation::default();
 
         pv.length = 0;
@@ -437,8 +438,20 @@ impl Board {
 
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
+        } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
+            let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+            if v == VALUE_NONE {
+                self.evaluate(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+            } else {
+                v // if the TT eval is not VALUE_NONE, use it.
+            }
         } else {
-            self.evaluate(t, info.nodes.get_local())
+            let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
+            // store the eval into the TT if we won't overwrite anything:
+            if tt_hit.is_none() {
+                t.tt.store(key, height, Move::NULL, VALUE_NONE, v, Bound::None, ZERO_PLY);
+            }
+            v
         };
 
         if stand_pat >= beta {
@@ -461,7 +474,9 @@ impl Board {
         if !in_check {
             move_picker.skip_quiets = true;
         }
+
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+            t.tt.prefetch(self.key_after(m));
             if !self.make_move(m, t) {
                 continue;
             }
@@ -528,8 +543,6 @@ impl Board {
         let l_pv = &mut local_pv;
 
         let key = self.hashkey();
-
-        t.tt.prefetch(key);
 
         let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
@@ -721,6 +734,7 @@ impl Board {
                         info.search_params.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
+                t.tt.prefetch(self.key_after(Move::NULL));
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -766,6 +780,11 @@ impl Board {
             info.search_params.see_quiet_margin * depth.round(),
         ];
 
+        // store the eval into the TT if we won't overwrite anything:
+        if tt_hit.is_none() && !in_check && excluded.is_null() {
+            t.tt.store(key, height, Move::NULL, VALUE_NONE, static_eval, Bound::None, ZERO_PLY);
+        }
+
         // probcut:
         let pc_beta = std::cmp::min(
             beta + info.search_params.probcut_margin
@@ -796,6 +815,7 @@ impl Board {
                     continue;
                 }
 
+                t.tt.prefetch(self.key_after(m));
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -851,6 +871,7 @@ impl Board {
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
+
         while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
         {
             debug_assert!(
@@ -912,6 +933,7 @@ impl Board {
                 continue;
             }
 
+            t.tt.prefetch(self.key_after(m));
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1070,8 +1092,6 @@ impl Board {
                 }
             }
         }
-
-        t.tt.prefetch(key);
 
         if moves_made == 0 {
             if !excluded.is_null() {

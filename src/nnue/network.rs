@@ -25,18 +25,18 @@ pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 4;
 /// The mapping from square to bucket.
+#[rustfmt::skip]
+const BUCKET_MAP: [usize; 64] = [
+    0, 0, 0, 0, 4, 4, 4, 4,
+    1, 1, 1, 1, 5, 5, 5, 5,
+    2, 2, 2, 2, 6, 6, 6, 6,
+    2, 2, 2, 2, 6, 6, 6, 6,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+    3, 3, 3, 3, 7, 7, 7, 7,
+];
 pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
-    #[rustfmt::skip]
-    const BUCKET_MAP: [usize; 64] = [
-        0, 0, 0, 0, 4, 4, 4, 4,
-        1, 1, 1, 1, 5, 5, 5, 5,
-        2, 2, 2, 2, 6, 6, 6, 6,
-        2, 2, 2, 2, 6, 6, 6, 6,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-        3, 3, 3, 3, 7, 7, 7, 7,
-    ];
     let white_bucket = BUCKET_MAP[white_king.index()];
     let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
     (white_bucket, black_bucket)
@@ -71,9 +71,9 @@ pub struct PovUpdate {
 impl PovUpdate {
     pub const BOTH: Self = Self { white: true, black: true };
 
-    pub const fn opposite(self) -> Self {
-        Self { white: self.black, black: self.white }
-    }
+    // pub const fn opposite(self) -> Self {
+    //     Self { white: self.black, black: self.white }
+    // }
 
     pub const fn colour(colour: Colour) -> Self {
         match colour {
@@ -84,7 +84,7 @@ impl PovUpdate {
 }
 
 /// Struct representing some unmaterialised feature update made as part of a move.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct FeatureUpdate {
     pub sq: Square,
     pub piece: Piece,
@@ -100,6 +100,7 @@ impl Display for FeatureUpdate {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct UpdateBuffer {
     add: [FeatureUpdate; 2],
     add_count: u8,
@@ -240,8 +241,10 @@ impl BucketAccumulatorCache {
 
         if pov_update.white {
             acc.white = cache_acc.white;
+            acc.correct[Colour::WHITE.index()] = true;
         } else {
             acc.black = cache_acc.black;
+            acc.correct[Colour::BLACK.index()] = true;
         }
 
         self.board_states[side_we_care_about.index()][bucket] = board_state;
@@ -354,6 +357,13 @@ impl NNUEParams {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MovedPiece {
+    pub from: Square,
+    pub to: Square,
+    pub piece: Piece,
+}
+
 /// State of the partial activations of the NNUE network.
 #[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
 #[derive(Clone)]
@@ -418,11 +428,6 @@ impl NNUEState {
         net
     }
 
-    /// Decrement the current accumulator.
-    pub fn pop_acc(&mut self) {
-        self.current_acc -= 1;
-    }
-
     /// Reinitialise the state from a board.
     pub fn reinit_from(&mut self, board: &Board) {
         // set the current accumulator to the first one
@@ -450,13 +455,81 @@ impl NNUEState {
         );
     }
 
-    /// Make the next accumulator freshly generated from the board state.
-    pub fn push_fresh_acc(&mut self, board: &Board, update: PovUpdate) {
-        self.bucket_cache.load_accumulator_for_position(
-            board.pieces,
-            update,
-            &mut self.accumulators[self.current_acc + 1],
-        );
+    fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
+        if piece.piece_type() != PieceType::KING {
+            return false;
+        }
+
+        BUCKET_MAP[from.index()] != BUCKET_MAP[to.index()]
+    }
+
+    fn can_efficiently_update(&self, view: Colour) -> bool {
+        let mut curr_idx = self.current_acc;
+        loop {
+            curr_idx -= 1;
+            let curr = &self.accumulators[curr_idx];
+
+            let mv = curr.mv;
+            let from = mv.from.relative_to(view);
+            let to = mv.to.relative_to(view);
+            let piece = mv.piece;
+
+            if piece.colour() == view && Self::requires_refresh(piece, from, to) {
+                return false;
+            }
+            if curr.correct[view.index()] {
+                return true;
+            }
+        }
+    }
+
+    fn apply_lazy_updates(&mut self, board: &Board, view: Colour) {
+        let mut curr_index = self.current_acc;
+        loop {
+            curr_index -= 1;
+
+            if self.accumulators[curr_index].correct[view.index()] {
+                break;
+            }
+        }
+
+        let pov_update = PovUpdate::colour(view);
+        let white_king = board.king_sq(Colour::WHITE);
+        let black_king = board.king_sq(Colour::BLACK);
+
+        loop {
+            self.materialise_new_acc_from(
+                white_king,
+                black_king,
+                pov_update,
+                self.accumulators[curr_index].update_buffer,
+                curr_index + 1,
+            );
+
+            self.accumulators[curr_index + 1].correct[view.index()] = true;
+
+            curr_index += 1;
+            if curr_index == self.current_acc {
+                break;
+            }
+        }
+    }
+
+    /// Apply all in-flight updates, generating all the accumulators up to the current one.
+    pub fn force(&mut self, board: &Board) {
+        for colour in Colour::all() {
+            if !self.accumulators[self.current_acc].correct[colour.index()] {
+                if self.can_efficiently_update(colour) {
+                    self.apply_lazy_updates(board, colour);
+                } else {
+                    self.bucket_cache.load_accumulator_for_position(
+                        board.pieces,
+                        PovUpdate::colour(colour),
+                        &mut self.accumulators[self.current_acc],
+                    );
+                }
+            }
+        }
     }
 
     pub fn materialise_new_acc_from(
@@ -464,9 +537,10 @@ impl NNUEState {
         white_king: Square,
         black_king: Square,
         pov_update: PovUpdate,
-        update_buffer: &UpdateBuffer,
+        update_buffer: UpdateBuffer,
+        create_at_idx: usize,
     ) {
-        let (front, back) = self.accumulators.split_at_mut(self.current_acc + 1);
+        let (front, back) = self.accumulators.split_at_mut(create_at_idx);
         let src = front.last().unwrap();
         let tgt = back.first_mut().unwrap();
 
@@ -487,8 +561,6 @@ impl NNUEState {
             }
             (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
         }
-
-        self.current_acc += 1;
     }
 
     /// Move a single piece on the board.
@@ -655,6 +727,8 @@ impl NNUEState {
     /// Evaluate the final layer on the partial activations.
     pub fn evaluate(&self, stm: Colour) -> i32 {
         let acc = &self.accumulators[self.current_acc];
+
+        assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
