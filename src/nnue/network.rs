@@ -728,7 +728,7 @@ impl NNUEState {
     pub fn evaluate(&self, stm: Colour) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
-        assert!(acc.correct[0] && acc.correct[1]);
+        debug_assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) =
             if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };

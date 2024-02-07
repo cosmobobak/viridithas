@@ -43,7 +43,7 @@ impl HistoryTable {
     }
 
     pub fn age_entries(&mut self) {
-        assert!(!self.table.is_empty());
+        debug_assert!(!self.table.is_empty());
         self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
@@ -76,7 +76,7 @@ impl ThreatsHistoryTable {
     }
 
     pub fn age_entries(&mut self) {
-        assert!(!self.table.is_empty());
+        debug_assert!(!self.table.is_empty());
         self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
     }
 
@@ -121,7 +121,7 @@ impl CaptureHistoryTable {
     }
 
     pub fn age_entries(&mut self) {
-        assert!(!self.table.is_empty());
+        debug_assert!(!self.table.is_empty());
         self.table.iter_mut().for_each(HistoryTable::age_entries);
     }
 
@@ -173,7 +173,7 @@ impl DoubleHistoryTable {
     }
 
     pub fn age_entries(&mut self) {
-        assert!(!self.table.is_empty());
+        debug_assert!(!self.table.is_empty());
         self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
     }
 
