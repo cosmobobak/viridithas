@@ -1097,9 +1097,11 @@ impl Board {
             if from != to {
                 update_buffer.move_piece(from, to, piece);
             }
-            let rook = Piece::new(side, PieceType::ROOK);
-            self.pieces.move_piece(rook_from, rook_to, rook);
-            update_buffer.move_piece(rook_from, rook_to, rook);
+            if rook_from != rook_to {
+                let rook = Piece::new(side, PieceType::ROOK);
+                self.pieces.move_piece(rook_from, rook_to, rook);
+                update_buffer.move_piece(rook_from, rook_to, rook);
+            }
         }
 
         self.ep_sq = Square::NO_SQUARE;
@@ -1114,7 +1116,12 @@ impl Board {
 
         if piece.piece_type() == PieceType::PAWN {
             self.fifty_move_counter = 0;
-            if self.is_double_pawn_push(m) {
+            if self.is_double_pawn_push(m)
+                && (m.to().as_set().west_one() | m.to().as_set().east_one())
+                    & self.pieces.all_pawns()
+                    & self.pieces.occupied_co(side.flip())
+                    != SquareSet::EMPTY
+            {
                 if side == Colour::WHITE {
                     self.ep_sq = from.add(8);
                     debug_assert!(self.ep_sq.rank() == Rank::RANK_3);
@@ -2028,5 +2035,49 @@ mod tests {
         let key = board.key_after(Move::NULL);
         board.make_nullmove();
         assert_eq!(board.key, key);
+    }
+
+    #[test]
+    fn ep_square_edge_case() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::makemove::{hash_ep, hash_piece, hash_side};
+        use crate::piece::Piece;
+        use crate::util::Square;
+        let mut not_ep_capturable =
+            Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
+                .unwrap();
+        let mut ep_capturable =
+            Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
+        let d5 = Move::new(Square::D7, Square::D5);
+        let mut not_ep_capturable_key = not_ep_capturable.key;
+        let mut ep_capturable_key = ep_capturable.key;
+        hash_side(&mut not_ep_capturable_key);
+        hash_side(&mut ep_capturable_key);
+        hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D7);
+        hash_piece(&mut ep_capturable_key, Piece::BP, Square::D7);
+        hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D5);
+        hash_piece(&mut ep_capturable_key, Piece::BP, Square::D5);
+
+        hash_ep(&mut ep_capturable_key, Square::D6);
+
+        assert!(not_ep_capturable.make_move_simple(d5));
+        assert!(ep_capturable.make_move_simple(d5));
+
+        assert_eq!(not_ep_capturable.ep_sq, Square::NO_SQUARE);
+        assert_eq!(ep_capturable.ep_sq, Square::D6);
+
+        assert_eq!(not_ep_capturable.key, not_ep_capturable_key);
+        assert_eq!(ep_capturable.key, ep_capturable_key);
+    }
+
+    #[test]
+    fn other_ep_edge_case() {
+        use super::Board;
+        use crate::chessmove::Move;
+        use crate::util::Square;
+        let mut board = Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
+        assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
+        assert_eq!(board.ep_sq, Square::B6);
     }
 }

@@ -52,7 +52,7 @@ impl Rank {
     pub const RANK_8: u8 = 7;
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
 pub struct Square(u8);
 
 static SQUARE_NAMES: [&str; 64] = [
@@ -278,6 +278,20 @@ impl Display for Square {
         }
     }
 }
+
+impl std::fmt::Debug for Square {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = SQUARE_NAMES.get(self.index()).copied();
+        if let Some(name) = name {
+            write!(f, "{name}")
+        } else if self.0 == 64 {
+            write!(f, "NO_SQUARE")
+        } else {
+            write!(f, "ILLEGAL: Square({})", self.0)
+        }
+    }
+}
+
 impl FromStr for Square {
     type Err = &'static str;
 
