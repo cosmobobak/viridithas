@@ -491,9 +491,7 @@ impl Board {
                 if score > alpha {
                     best_move = m;
                     alpha = score;
-                    if NT::PV {
-                        pv.load_from(m, &lpv);
-                    }
+                    pv.load_from(m, &lpv);
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
@@ -1085,9 +1083,7 @@ impl Board {
                 if score > alpha {
                     best_move = m;
                     alpha = score;
-                    if NT::PV {
-                        pv.load_from(m, l_pv);
-                    }
+                    pv.load_from(m, l_pv);
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
