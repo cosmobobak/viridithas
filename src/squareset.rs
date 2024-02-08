@@ -143,10 +143,10 @@ impl SquareSet {
         (self >> 9) & !Self::FILE_H
     }
     pub fn east_one(self) -> Self {
-        (self >> 1) & !Self::FILE_A
+        (self << 1) & !Self::FILE_A
     }
     pub fn west_one(self) -> Self {
-        (self << 1) & !Self::FILE_H
+        (self >> 1) & !Self::FILE_H
     }
     pub fn north_one(self) -> Self {
         self << 8
