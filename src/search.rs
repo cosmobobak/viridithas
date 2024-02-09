@@ -246,7 +246,7 @@ impl Board {
 
             if T0 && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
-                    let best_move = pv.line[0];
+                    let best_move = pv.moves[0];
                     let best_move_subtree_size =
                         info.root_move_nodes[best_move.from().index()][best_move.to().index()];
                     let tree_size = info.nodes.get_local();
@@ -255,7 +255,7 @@ impl Board {
                 } else {
                     None
                 };
-                info.time_manager.report_completed_depth(depth, pv.score, pv.line[0], bm_frac);
+                info.time_manager.report_completed_depth(depth, pv.score, pv.moves[0], bm_frac);
             }
 
             if info.check_up() {
@@ -401,7 +401,7 @@ impl Board {
 
         let mut lpv = PVariation::default();
 
-        pv.length = 0;
+        pv.moves.clear();
 
         let height = self.height();
         info.seldepth = info.seldepth.max(Depth::from(i32::try_from(height).unwrap()));
@@ -551,7 +551,7 @@ impl Board {
 
         depth = depth.max(ZERO_PLY);
 
-        pv.length = 0;
+        pv.moves.clear();
 
         if info.nodes.just_ticked_over() && info.check_up() {
             return 0;
