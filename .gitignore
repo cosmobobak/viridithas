@@ -24,3 +24,4 @@ tb5
 src/tablebases/bindings.rs
 perf.data*
 flamegraph.svg
+profdir/*
