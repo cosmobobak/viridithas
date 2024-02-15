@@ -260,21 +260,17 @@ fn generate_on_thread(
             let percentage = game * 100_000 / n_games_to_run;
             let percentage = percentage as f64 / 1000.0;
             let time_per_game = start.elapsed().as_secs_f64() / game as f64;
+            let games_to_go = n_games_to_run as f64 - game as f64;
+            let time_remaining = games_to_go * time_per_game;
             eprintln!("[+] Main thread: Generated {game} games ({percentage:.1}%). Time per game: {time_per_game:.2} seconds.");
             eprintln!(
                 " |> FENs generated: {fens} (FENs/sec = {fps:.2})",
                 fens = FENS_GENERATED.load(Ordering::Relaxed),
                 fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
             );
-            eprintln!(
-                " |> Estimated time remaining: {time_remaining:.2} seconds.",
-                time_remaining = (n_games_to_run - game) as f64 * time_per_game
-            );
+            eprintln!(" |> Estimated time remaining: {time_remaining:.2} seconds.");
             let est_completion_date = chrono::Local::now()
-                .checked_add_signed(chrono::Duration::seconds(
-                    <usize as std::convert::TryInto<i64>>::try_into(n_games_to_run - game).unwrap()
-                        * time_per_game as i64,
-                ))
+                .checked_add_signed(chrono::Duration::seconds(time_remaining as i64))
                 .unwrap();
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
