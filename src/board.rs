@@ -2076,7 +2076,8 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board = Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
+        let mut board =
+            Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
         assert_eq!(board.ep_sq, Square::B6);
     }

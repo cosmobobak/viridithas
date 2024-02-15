@@ -2,6 +2,7 @@ use crate::{
     board::{Board, GameOutcome},
     chessmove::Move,
     piece::{Colour, PieceType},
+    tablebases::probe::WDL,
 };
 
 use self::marlinformat::{util::I16Le, PackedBoard};
@@ -24,8 +25,26 @@ impl Game {
         Self { initial_position: initial_position.pack(0, 0, 0), moves: Vec::new() }
     }
 
+    pub fn initial_position(&self) -> Board {
+        self.initial_position.unpack().0
+    }
+
+    pub fn moves(&self) -> impl Iterator<Item = Move> + '_ {
+        self.moves.iter().map(|(mv, _)| *mv)
+    }
+
     pub fn set_outcome(&mut self, outcome: GameOutcome) {
         self.initial_position.set_outcome(outcome);
+    }
+
+    pub fn outcome(&self) -> WDL {
+        let (_, _, wdl, _) = self.initial_position.unpack();
+        match wdl {
+            2 => WDL::Win,
+            1 => WDL::Draw,
+            0 => WDL::Loss,
+            _ => panic!("invalid WDL: {wdl}"),
+        }
     }
 
     pub fn add_move(&mut self, mv: Move, eval: i16) {

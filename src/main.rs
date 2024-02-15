@@ -67,7 +67,15 @@ fn main() {
             println!("Output path required for splatting (use --output)");
             return;
         };
-        return datagen::run_splat(&input, &output, true, cli.marlinformat);
+        return datagen::run_splat(&input, &output, true, cli.marlinformat, cli.limit);
+    }
+
+    if let Some(input) = cli.topgn {
+        let Some(output) = cli.output else {
+            println!("Output path required for PGN conversion (use --output)");
+            return;
+        };
+        return datagen::run_topgn(&input, &output, cli.limit);
     }
 
     if let Some(data_path) = cli.dataset_stats {

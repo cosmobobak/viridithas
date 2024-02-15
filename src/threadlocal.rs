@@ -26,8 +26,6 @@ pub struct ThreadData<'a> {
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
-    // pub followup_history: Box<DoubleHistoryTable>,
-    // pub counter_move_history: Box<DoubleHistoryTable>,
     pub cont_hists: [Box<DoubleHistoryTable>; 2],
     pub killer_move_table: [[Move; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,

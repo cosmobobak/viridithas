@@ -689,7 +689,13 @@ impl FromStr for DataGenLimit {
 
 /// Unpacks the variable-length game format into either bulletformat or marlinformat records,
 /// filtering as it goes.
-pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool) {
+pub fn run_splat(
+    input: &Path,
+    output: &Path,
+    filter: bool,
+    marlinformat: bool,
+    limit: Option<usize>,
+) {
     // check that the input file exists
     if !input.exists() {
         eprintln!("Input file does not exist.");
@@ -764,8 +770,101 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool) 
             print!("\r{game_count} games splatted");
             std::io::stdout().flush().unwrap();
         }
+        if let Some(limit) = limit {
+            if game_count >= limit {
+                break;
+            }
+        }
     }
     println!();
+
+    output_buffer.flush().unwrap();
+}
+
+/// Unpacks the variable-length game format into a PGN file.
+pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
+    // check that the input file exists
+    if !input.exists() {
+        eprintln!("Input file does not exist.");
+        return;
+    }
+    // check that the output does not exist
+    if output.exists() {
+        eprintln!("Output file already exists.");
+        return;
+    }
+
+    // open the input file
+    let input_file = File::open(input).unwrap();
+    let mut input_buffer = BufReader::new(input_file);
+
+    // open the output file
+    let output_file = File::create(output).unwrap();
+    let mut output_buffer = BufWriter::new(output_file);
+
+    let make_header = |outcome: WDL, fen: String| {
+        format!(
+            r#"[Event "datagen id {}"]
+[Site "NA"]
+[Date "NA"]
+[White "Viridithas"]
+[Black "Viridithas"]
+[Result "{}"]
+[FEN "{}"]"#,
+            input.file_name().unwrap().to_string_lossy(),
+            match outcome {
+                WDL::Win => "1-0",
+                WDL::Loss => "0-1",
+                WDL::Draw => "1/2-1/2",
+            },
+            fen
+        )
+    };
+
+    println!("Converting to PGN...");
+    let mut move_buffer = Vec::new();
+    let mut game_count = 0;
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
+        let outcome = game.outcome();
+        let mut board = game.initial_position();
+        let header = make_header(outcome, board.fen());
+        writeln!(output_buffer, "{header}\n").unwrap();
+        let mut fullmoves = 0;
+        for mv in game.moves() {
+            if fullmoves % 12 == 0 && board.turn() == Colour::WHITE {
+                writeln!(output_buffer).unwrap();
+            }
+            let san = board.san(mv).unwrap();
+            if board.turn() == Colour::WHITE {
+                write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
+            } else {
+                fullmoves += 1;
+            }
+            write!(output_buffer, "{san} ").unwrap();
+            board.make_move_simple(mv);
+        }
+
+        write!(
+            output_buffer,
+            "{}\n\n",
+            match outcome {
+                WDL::Win => "1-0",
+                WDL::Loss => "0-1",
+                WDL::Draw => "1/2-1/2",
+            }
+        )
+        .unwrap();
+
+        move_buffer = game.into_move_buffer();
+        game_count += 1;
+        if let Some(limit) = limit {
+            if game_count >= limit {
+                break;
+            }
+        }
+    }
 
     output_buffer.flush().unwrap();
 }
