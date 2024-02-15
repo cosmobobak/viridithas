@@ -17,6 +17,7 @@ use crate::{
 use std::ffi::CString;
 use std::ptr;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum WDL {
     Win,

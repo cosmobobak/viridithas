@@ -29,6 +29,12 @@ pub struct Cli {
     /// Only valid with --splat.
     #[clap(long)]
     pub marlinformat: bool,
+    /// Convert a binary game record into PGN.
+    #[clap(long)]
+    pub topgn: Option<std::path::PathBuf>,
+    /// Limit the number of games to convert.
+    #[clap(long, value_name = "N")]
+    pub limit: Option<usize>,
     /// Output node benchmark for OpenBench.
     /// Implemented as a subcommand because that's what OpenBench expects.
     #[clap(subcommand)]

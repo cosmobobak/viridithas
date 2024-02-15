@@ -1,7 +1,6 @@
 ideas for viri
 MAJOR:
 - docs
-- lazy NNUE updates
 -- Crazyhouse
 
 MINOR:
