@@ -473,9 +473,10 @@ impl Board {
             }
         }
 
-        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
-        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::KING;
-        *out.iter_mut().find(|piece| **piece == PieceType::NONE).unwrap() = PieceType::ROOK;
+        out.iter_mut()
+            .filter(|piece| **piece == PieceType::NONE)
+            .zip([PieceType::ROOK, PieceType::KING, PieceType::ROOK])
+            .for_each(|(slot, piece)| *slot = piece);
 
         out
     }
