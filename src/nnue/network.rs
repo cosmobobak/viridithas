@@ -42,7 +42,7 @@ pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usiz
     (white_bucket, black_bucket)
 }
 
-const QA: i32 = 181;
+const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
@@ -883,15 +883,6 @@ mod avx2 {
 
     type Vec256 = __m256i;
 
-    #[allow(clippy::cast_possible_truncation)]
-    #[inline]
-    unsafe fn screlu(mut v: Vec256) -> Vec256 {
-        let min = _mm256_setzero_si256();
-        let max = _mm256_set1_epi16(QA as i16);
-        v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
-        _mm256_mullo_epi16(v, v)
-    }
-
     #[inline]
     unsafe fn load_i16s<const VEC_SIZE: usize>(
         acc: &Align64<[i16; VEC_SIZE]>,
@@ -923,20 +914,24 @@ mod avx2 {
         const CHUNK: usize = 16;
 
         let mut sum = _mm256_setzero_si256();
+        let min = _mm256_setzero_si256();
+        let max = _mm256_set1_epi16(QA as i16);
 
         // accumulate the first half of the weights
         for i in 0..LAYER_1_SIZE / CHUNK {
-            let v = screlu(load_i16s(us, i * CHUNK));
+            let mut v = load_i16s(us, i * CHUNK);
+            v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
             let w = load_i16s(weights, i * CHUNK);
-            let product = _mm256_madd_epi16(v, w);
+            let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
             sum = _mm256_add_epi32(sum, product);
         }
 
         // accumulate the second half of the weights
         for i in 0..LAYER_1_SIZE / CHUNK {
-            let v = screlu(load_i16s(them, i * CHUNK));
+            let mut v = load_i16s(them, i * CHUNK);
+            v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
             let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
-            let product = _mm256_madd_epi16(v, w);
+            let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
             sum = _mm256_add_epi32(sum, product);
         }
 
