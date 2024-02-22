@@ -247,8 +247,8 @@ where
 
 struct SetOptions {
     pub search_config: SearchParams,
-    pub hash_mb: Option<usize>,
-    pub threads: Option<usize>,
+    pub hash_mb: usize,
+    pub threads: usize,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -309,7 +309,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
                     "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
                 )));
             }
-            out.hash_mb = Some(value);
+            out.hash_mb = value;
         }
         "Threads" => {
             let value: usize = opt_value.parse()?;
@@ -319,7 +319,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
                     "Threads value must be between 1 and {UCI_MAX_THREADS}"
                 )));
             }
-            out.threads = Some(value);
+            out.threads = value;
         }
         "MultiPV" => {
             let value: usize = opt_value.parse()?;
@@ -637,31 +637,23 @@ pub fn main_loop(global_bench: bool) {
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
                     search_config: info.search_params.clone(),
-                    hash_mb: None,
-                    threads: None,
+                    hash_mb: tt.size() / MEGABYTE,
+                    threads: thread_data.len(),
                 };
                 let res = parse_setoption(input, pre_config);
                 match res {
                     Ok(conf) => {
                         info.search_params = conf.search_config;
                         info.lm_table = LMTable::new(&info.search_params);
-                        if let Some(hash_mb) = conf.hash_mb {
-                            let new_size = hash_mb * MEGABYTE;
-                            // drop all the thread_data, as they are borrowing the old tt
-                            std::mem::drop(thread_data);
-                            tt.resize(new_size);
-                            // recreate the thread_data with the new tt
-                            thread_data = (0..conf.threads.unwrap_or(1))
-                                .zip(std::iter::repeat(&pos))
-                                .map(|(i, p)| ThreadData::new(i, p, tt.view()))
-                                .collect();
-                        }
-                        if let Some(threads) = conf.threads {
-                            thread_data = (0..threads)
-                                .zip(std::iter::repeat(&pos))
-                                .map(|(i, p)| ThreadData::new(i, p, tt.view()))
-                                .collect();
-                        }
+                        let new_size = conf.hash_mb * MEGABYTE;
+                        // drop all the thread_data, as they are borrowing the old tt
+                        std::mem::drop(thread_data);
+                        tt.resize(new_size);
+                        // recreate the thread_data with the new tt
+                        thread_data = (0..conf.threads)
+                            .zip(std::iter::repeat(&pos))
+                            .map(|(i, p)| ThreadData::new(i, p, tt.view()))
+                            .collect();
                         Ok(())
                     }
                     Err(err) => Err(err),
