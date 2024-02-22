@@ -57,7 +57,7 @@ fn main() {
         #[cfg(not(feature = "datagen"))]
         {
             std::mem::drop(config);
-            println!("datagen feature not enabled");
+            println!("datagen feature not enabled (compile with --features datagen)");
             return;
         }
     }
