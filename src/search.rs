@@ -1222,7 +1222,7 @@ impl Board {
         self.make_move(m, t);
 
         let double_extend =
-            !NT::PV && value < r_beta - info.search_params.dext_margin && t.double_extensions[self.height()] <= 6;
+            !NT::PV && value < r_beta - info.search_params.dext_margin && t.double_extensions[self.height()] <= 12;
 
         match () {
             () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
