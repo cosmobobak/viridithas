@@ -9,7 +9,7 @@ use super::{
     NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
     PROBCUT_REDUCTION, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
     RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH,
+    TT_REDUCTION_DEPTH, DOUBLE_EXTENSION_MARGIN,
 };
 
 #[derive(Clone, Debug)]
@@ -35,6 +35,7 @@ pub struct SearchParams {
     pub tt_reduction_depth: Depth,
     pub futility_depth: Depth,
     pub singularity_depth: Depth,
+    pub dext_margin: i32,
     pub see_depth: Depth,
     pub lmr_base: f64,
     pub lmr_division: f64,
@@ -68,6 +69,7 @@ impl SearchParams {
             tt_reduction_depth: TT_REDUCTION_DEPTH,
             futility_depth: FUTILITY_DEPTH,
             singularity_depth: SINGULARITY_DEPTH,
+            dext_margin: DOUBLE_EXTENSION_MARGIN,
             see_depth: SEE_DEPTH,
             lmr_base: LMR_BASE,
             lmr_division: LMR_DIVISION,
@@ -140,6 +142,7 @@ impl SearchParams {
             TT_REDUCTION_DEPTH = [self.tt_reduction_depth],
             FUTILITY_DEPTH = [self.futility_depth],
             SINGULARITY_DEPTH = [self.singularity_depth],
+            DOUBLE_EXTENSION_MARGIN = [self.dext_margin],
             SEE_DEPTH = [self.see_depth],
             LMR_BASE = [self.lmr_base],
             LMR_DIVISION = [self.lmr_division],
@@ -182,6 +185,7 @@ impl SearchParams {
             TT_REDUCTION_DEPTH = [self.tt_reduction_depth, 2, 8, 1],
             FUTILITY_DEPTH = [self.futility_depth, 2, 10, 1],
             SINGULARITY_DEPTH = [self.singularity_depth, 6, 12, 1],
+            DOUBLE_EXTENSION_MARGIN = [self.dext_margin, 5, 100, 1],
             SEE_DEPTH = [self.see_depth, 6, 14, 1],
             LMR_BASE = [self.lmr_base, 40, 150, 7],
             LMR_DIVISION = [self.lmr_division, 150, 500, 15],

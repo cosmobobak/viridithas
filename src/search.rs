@@ -77,6 +77,7 @@ const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
+const DOUBLE_EXTENSION_MARGIN: i32 = 15;
 const SEE_DEPTH: Depth = Depth::new(9);
 const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
 const PROBCUT_REDUCTION: Depth = Depth::new(3);
@@ -1221,7 +1222,7 @@ impl Board {
         self.make_move(m, t);
 
         let double_extend =
-            !NT::PV && value < r_beta - 15 && t.double_extensions[self.height()] <= 6;
+            !NT::PV && value < r_beta - info.search_params.dext_margin && t.double_extensions[self.height()] <= 6;
 
         match () {
             () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
