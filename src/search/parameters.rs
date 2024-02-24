@@ -1,19 +1,25 @@
 use std::fmt::Display;
 
-use crate::util::depth::Depth;
+use crate::{
+    timemgmt::{
+        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, INCREMENT_FRAC, NODE_TM_SUBTREE_MULTIPLIER,
+        OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
+    },
+    util::depth::Depth,
+};
 
 use super::{
-    ASPIRATION_WINDOW, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, LMP_BASE_MOVES,
-    LMP_DEPTH, LMR_BASE, LMR_DIVISION, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION,
+    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH,
+    LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION,
     NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR,
     NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
     PROBCUT_REDUCTION, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
     RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH, DOUBLE_EXTENSION_MARGIN,
+    TT_REDUCTION_DEPTH,
 };
 
 #[derive(Clone, Debug)]
-pub struct SearchParams {
+pub struct Config {
     pub aspiration_window: i32,
     pub rfp_margin: i32,
     pub rfp_improving_margin: i32,
@@ -43,9 +49,16 @@ pub struct SearchParams {
     pub probcut_improving_margin: i32,
     pub probcut_reduction: Depth,
     pub probcut_min_depth: Depth,
+    pub strong_forced_tm_frac: u32,
+    pub weak_forced_tm_frac: u32,
+    pub default_moves_to_go: u32,
+    pub optimal_window_frac: u32,
+    pub increment_frac: u32,
+    pub node_tm_subtree_multiplier: u32,
+    pub fail_low_tm_bonus: u32,
 }
 
-impl SearchParams {
+impl Config {
     pub const fn default() -> Self {
         Self {
             aspiration_window: ASPIRATION_WINDOW,
@@ -77,11 +90,18 @@ impl SearchParams {
             probcut_improving_margin: PROBCUT_IMPROVING_MARGIN,
             probcut_reduction: PROBCUT_REDUCTION,
             probcut_min_depth: PROBCUT_MIN_DEPTH,
+            strong_forced_tm_frac: STRONG_FORCED_TM_FRAC,
+            weak_forced_tm_frac: WEAK_FORCED_TM_FRAC,
+            default_moves_to_go: DEFAULT_MOVES_TO_GO,
+            optimal_window_frac: OPTIMAL_WINDOW_FRAC,
+            increment_frac: INCREMENT_FRAC,
+            node_tm_subtree_multiplier: NODE_TM_SUBTREE_MULTIPLIER,
+            fail_low_tm_bonus: FAIL_LOW_TM_BONUS,
         }
     }
 }
 
-impl Display for SearchParams {
+impl Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Search parameters:")?;
         for (id, value) in self.ids_with_values() {
@@ -118,7 +138,7 @@ macro_rules! id_value_gen {
 
 type LazyFieldParser<'a> = Box<dyn FnMut(&str) -> Result<(), Box<dyn std::error::Error>> + 'a>;
 
-impl SearchParams {
+impl Config {
     pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser)> {
         id_parser_gen![
             ASPIRATION_WINDOW = [self.aspiration_window],
@@ -149,7 +169,14 @@ impl SearchParams {
             PROBCUT_MARGIN = [self.probcut_margin],
             PROBCUT_IMPROVING_MARGIN = [self.probcut_improving_margin],
             PROBCUT_REDUCTION = [self.probcut_reduction],
-            PROBCUT_MIN_DEPTH = [self.probcut_min_depth]
+            PROBCUT_MIN_DEPTH = [self.probcut_min_depth],
+            STRONG_FORCED_TM_FRAC = [self.strong_forced_tm_frac],
+            WEAK_FORCED_TM_FRAC = [self.weak_forced_tm_frac],
+            DEFAULT_MOVES_TO_GO = [self.default_moves_to_go],
+            OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac],
+            INCREMENT_FRAC = [self.increment_frac],
+            NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier],
+            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus]
         ]
     }
 
@@ -192,7 +219,14 @@ impl SearchParams {
             PROBCUT_MARGIN = [self.probcut_margin, 100, 400, 20],
             PROBCUT_IMPROVING_MARGIN = [self.probcut_improving_margin, 20, 150, 10],
             PROBCUT_REDUCTION = [self.probcut_reduction, 2, 8, 1],
-            PROBCUT_MIN_DEPTH = [self.probcut_min_depth, 2, 10, 1]
+            PROBCUT_MIN_DEPTH = [self.probcut_min_depth, 2, 10, 1],
+            STRONG_FORCED_TM_FRAC = [self.strong_forced_tm_frac, 1, 1000, 30],
+            WEAK_FORCED_TM_FRAC = [self.weak_forced_tm_frac, 1, 1000, 30],
+            DEFAULT_MOVES_TO_GO = [self.default_moves_to_go, 1, 100, 3],
+            OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac, 1, 100, 5],
+            INCREMENT_FRAC = [self.increment_frac, 1, 100, 10],
+            NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier, 1, 1000, 15],
+            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus, 1, 1000, 30]
         ]
     }
 
@@ -220,7 +254,7 @@ impl SearchParams {
 mod tests {
     #[test]
     fn macro_hackery_same_length() {
-        let mut sp = super::SearchParams::default();
+        let mut sp = super::Config::default();
         let l1 = sp.ids_with_parsers().len();
         let l2 = sp.ids_with_values().len();
         assert_eq!(l1, l2);
@@ -230,7 +264,7 @@ mod tests {
     fn parser_actually_works() {
         use crate::search::PROBCUT_MIN_DEPTH;
 
-        let mut sp = super::SearchParams::default();
+        let mut sp = super::Config::default();
         let probcut_min_depth =
             sp.ids_with_values().iter().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1;
         assert!((probcut_min_depth - f64::from(PROBCUT_MIN_DEPTH)).abs() < f64::EPSILON);

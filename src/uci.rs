@@ -22,7 +22,7 @@ use crate::{
     errors::{FenParseError, MoveParseError},
     nnue, perft,
     piece::Colour,
-    search::{parameters::SearchParams, LMTable},
+    search::{parameters::Config, LMTable},
     searchinfo::SearchInfo,
     tablebases,
     threadlocal::ThreadData,
@@ -246,7 +246,7 @@ where
 }
 
 struct SetOptions {
-    pub search_config: SearchParams,
+    pub search_config: Config,
     pub hash_mb: usize,
     pub threads: usize,
 }
@@ -526,7 +526,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name UCI_Chess960 type check default false");
     // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
-        for (id, default, min, max, _) in info.search_params.base_config() {
+        for (id, default, min, max, _) in info.conf.base_config() {
             println!("option name {id} type spin default {default} min {min} max {max}");
         }
     }
@@ -552,7 +552,7 @@ pub fn main_loop(global_bench: bool) {
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
-        bench("openbench", &info.search_params).expect("bench failed");
+        bench("openbench", &info.conf).expect("bench failed");
         return;
     }
 
@@ -589,7 +589,7 @@ pub fn main_loop(global_bench: bool) {
                 println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
                 // println!("MultiPV: {}", MULTI_PV.load(Ordering::SeqCst));
                 if arg == "ucidumpfull" {
-                    for (id, default) in SearchParams::default().ids_with_values() {
+                    for (id, default) in Config::default().ids_with_values() {
                         println!("{id}: {default}");
                     }
                 }
@@ -636,15 +636,15 @@ pub fn main_loop(global_bench: bool) {
             }
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
-                    search_config: info.search_params.clone(),
+                    search_config: info.conf.clone(),
                     hash_mb: tt.size() / MEGABYTE,
                     threads: thread_data.len(),
                 };
                 let res = parse_setoption(input, pre_config);
                 match res {
                     Ok(conf) => {
-                        info.search_params = conf.search_config;
-                        info.lm_table = LMTable::new(&info.search_params);
+                        info.conf = conf.search_config;
+                        info.lm_table = LMTable::new(&info.conf);
                         let new_size = conf.hash_mb * MEGABYTE;
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
@@ -701,7 +701,7 @@ pub fn main_loop(global_bench: bool) {
                 }
                 res
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.search_params),
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf),
             _ => Err(UciError::UnknownCommand(input.to_string())),
         };
 
@@ -719,7 +719,7 @@ pub fn main_loop(global_bench: bool) {
 
 const BENCH_DEPTH: usize = 16;
 const BENCH_THREADS: usize = 1;
-fn bench(benchcmd: &str, search_params: &SearchParams) -> Result<(), UciError> {
+fn bench(benchcmd: &str, search_params: &Config) -> Result<(), UciError> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);

@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use crate::{
-    search::{parameters::SearchParams, LMTable},
+    search::{parameters::Config, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
     util::{
@@ -33,7 +33,7 @@ pub struct SearchInfo<'a> {
     /// Whether to print the search info to stdout.
     pub print_to_stdout: bool,
     /// Search parameters.
-    pub search_params: SearchParams,
+    pub conf: Config,
     /// LMR + LMP lookup table.
     pub lm_table: LMTable,
     /// The time manager.
@@ -66,7 +66,7 @@ impl<'a> SearchInfo<'a> {
             seldepth: ZERO_PLY,
             stdin_rx: None,
             print_to_stdout: true,
-            search_params: SearchParams::default(),
+            conf: Config::default(),
             lm_table: LMTable::default(),
             time_manager: TimeManager::default(),
             #[cfg(feature = "stats")]
@@ -87,10 +87,10 @@ impl<'a> SearchInfo<'a> {
     pub fn with_search_params(
         stopped: &'a AtomicBool,
         nodes: &'a AtomicU64,
-        search_params: &SearchParams,
+        search_params: &Config,
     ) -> Self {
         let mut out = Self::new(stopped, nodes);
-        out.search_params = search_params.clone();
+        out.conf = search_params.clone();
         out
     }
 
@@ -98,7 +98,7 @@ impl<'a> SearchInfo<'a> {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
         self.root_move_nodes = [[0; 64]; 64];
-        self.time_manager.reset_for_id();
+        self.time_manager.reset_for_id(&self.conf);
         #[cfg(feature = "stats")]
         {
             self.failhigh = 0;

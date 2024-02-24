@@ -1558,15 +1558,6 @@ impl Board {
         (self.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub fn num(&self, piece: Piece) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.pieces.piece_bb(piece).count() as u8
-    }
-
-    pub fn num_pt(&self, pt: PieceType) -> u8 {
-        self.num(Piece::new(Colour::WHITE, pt)) + self.num(Piece::new(Colour::BLACK, pt))
-    }
-
     pub fn pv_san(&mut self, pv: &PVariation) -> Result<String, fmt::Error> {
         let mut out = String::new();
         let mut moves_made = 0;
@@ -1921,22 +1912,6 @@ mod tests {
             board.set_from_fen(&fen).expect("setfen failed.");
             let fen_2 = board.fen();
             assert_eq!(fen, fen_2);
-        }
-    }
-
-    #[test]
-    fn test_num_pt() {
-        use super::Board;
-        use crate::piece::Piece;
-        use crate::piece::PieceType;
-        let board =
-            Board::from_fen("rnbqkbnr/pppppppp/1n1q2n1/8/8/RR3B1R/PPPPPPP1/RNBQKBNR w KQkq - 0 1")
-                .unwrap();
-
-        for ((p1, p2), pt) in
-            Piece::all().take(6).zip(Piece::all().skip(6).take(6)).zip(PieceType::all())
-        {
-            assert_eq!(board.num_pt(pt), board.num(p1) + board.num(p2));
         }
     }
 

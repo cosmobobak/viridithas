@@ -40,7 +40,7 @@ use crate::{
     },
 };
 
-use self::parameters::SearchParams;
+use self::parameters::Config;
 
 // In alpha-beta search, there are three classes of node to be aware of:
 // 1. PV-nodes: nodes that end up being within the alpha-beta window,
@@ -256,7 +256,13 @@ impl Board {
                 } else {
                     None
                 };
-                info.time_manager.report_completed_depth(depth, pv.score, pv.moves[0], bm_frac);
+                info.time_manager.report_completed_depth(
+                    depth,
+                    pv.score,
+                    pv.moves[0],
+                    bm_frac,
+                    &info.conf,
+                );
             }
 
             if info.check_up() {
@@ -291,7 +297,7 @@ impl Board {
                 }
                 aw.widen_down(pv.score, depth);
                 if T0 {
-                    info.time_manager.report_aspiration_fail(depth, Bound::Upper);
+                    info.time_manager.report_aspiration_fail(depth, Bound::Upper, &info.conf);
                 }
                 // search failed low, so we might have to
                 // revert a fail-high pv update
@@ -307,7 +313,7 @@ impl Board {
                 }
                 aw.widen_up(pv.score, depth);
                 if T0 {
-                    info.time_manager.report_aspiration_fail(depth, Bound::Lower);
+                    info.time_manager.report_aspiration_fail(depth, Bound::Lower, &info.conf);
                 }
                 // decrement depth:
                 if pv.score.abs() < MINIMUM_TB_WIN_SCORE {
@@ -351,7 +357,7 @@ impl Board {
                     info.seldepth = saved_seldepth;
 
                     if forced {
-                        info.time_manager.report_forced_move(depth);
+                        info.time_manager.report_forced_move(depth, &info.conf);
                     }
                 }
             }
@@ -608,7 +614,7 @@ impl Board {
                 Some(hit)
             } else {
                 // TT-reduction (IIR).
-                if NT::PV && depth >= info.search_params.tt_reduction_depth {
+                if NT::PV && depth >= info.conf.tt_reduction_depth {
                     depth -= 1;
                 }
                 None
@@ -696,9 +702,7 @@ impl Board {
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
             if static_eval
-                < alpha
-                    - info.search_params.razoring_coeff_0
-                    - info.search_params.razoring_coeff_1 * depth * depth
+                < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth * depth
             {
                 let v = self.quiescence::<OffPV>(pv, info, t, alpha - 1, alpha);
                 if v < alpha {
@@ -709,7 +713,7 @@ impl Board {
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
-            if depth <= info.search_params.rfp_depth
+            if depth <= info.conf.rfp_depth
                 && static_eval - Self::rfp_margin(info, depth, improving) > beta
             {
                 return (static_eval + beta) / 2;
@@ -722,17 +726,16 @@ impl Board {
             // a score above beta, we can prune the node.
             if !last_move_was_null
                 && depth >= Depth::new(3)
-                && static_eval + i32::from(improving) * info.search_params.nmp_improving_margin
-                    >= beta
+                && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: b, .. }) if b == Bound::Upper && v < beta)
             {
-                let r = info.search_params.nmp_base_reduction
-                    + depth / info.search_params.nmp_reduction_depth_divisor
+                let r = info.conf.nmp_base_reduction
+                    + depth / info.conf.nmp_reduction_depth_divisor
                     + std::cmp::min(
-                        (static_eval - beta) / info.search_params.nmp_reduction_eval_divisor,
-                        info.search_params.max_nmp_eval_reduction,
+                        (static_eval - beta) / info.conf.nmp_reduction_eval_divisor,
+                        info.conf.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
                 t.tt.prefetch(self.key_after(Move::NULL));
@@ -749,9 +752,7 @@ impl Board {
                         null_score = beta;
                     }
                     // unconditionally cutoff if we're just too shallow.
-                    if depth < info.search_params.nmp_verification_depth
-                        && !is_game_theoretic_score(beta)
-                    {
+                    if depth < info.conf.nmp_verification_depth && !is_game_theoretic_score(beta) {
                         return null_score;
                     }
                     // verify that it's *actually* fine to prune,
@@ -777,8 +778,8 @@ impl Board {
         }
 
         let see_table = [
-            info.search_params.see_tactical_margin * depth.squared(),
-            info.search_params.see_quiet_margin * depth.round(),
+            info.conf.see_tactical_margin * depth.squared(),
+            info.conf.see_quiet_margin * depth.round(),
         ];
 
         // store the eval into the TT if we won't overwrite anything:
@@ -788,8 +789,8 @@ impl Board {
 
         // probcut:
         let pc_beta = std::cmp::min(
-            beta + info.search_params.probcut_margin
-                - i32::from(improving) * info.search_params.probcut_improving_margin,
+            beta + info.conf.probcut_margin
+                - i32::from(improving) * info.conf.probcut_improving_margin,
             MINIMUM_TB_WIN_SCORE - 1,
         );
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
@@ -798,7 +799,7 @@ impl Board {
         if !NT::PV
             && !in_check
             && excluded.is_null()
-            && depth >= info.search_params.probcut_min_depth
+            && depth >= info.conf.probcut_min_depth
             && beta.abs() < MINIMUM_TB_WIN_SCORE
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
@@ -825,7 +826,7 @@ impl Board {
                 let mut value = -self.quiescence::<OffPV>(l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
-                    let pc_depth = depth - info.search_params.probcut_reduction;
+                    let pc_depth = depth - info.conf.probcut_reduction;
                     value = -self.alpha_beta::<OffPV>(
                         l_pv,
                         info,
@@ -906,16 +907,16 @@ impl Board {
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= info.search_params.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= info.conf.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth.round() * info.search_params.futility_coeff_1
-                    + info.search_params.futility_coeff_0;
+                let fp_margin =
+                    lmr_depth.round() * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
                 if is_quiet
-                    && lmr_depth < info.search_params.futility_depth
+                    && lmr_depth < info.conf.futility_depth
                     && static_eval + fp_margin <= alpha
                 {
                     move_picker.skip_quiets = true;
@@ -927,7 +928,7 @@ impl Board {
             if !NT::ROOT
                 && (!NT::PV || !cfg!(feature = "datagen"))
                 && best_score > -MINIMUM_TB_WIN_SCORE
-                && depth <= info.search_params.see_depth
+                && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
@@ -949,7 +950,7 @@ impl Board {
             info.nodes.increment();
             moves_made += 1;
 
-            let maybe_singular = depth >= info.search_params.singularity_depth
+            let maybe_singular = depth >= info.conf.singularity_depth
                 && excluded.is_null()
                 && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == m && tt_depth >= depth - 3);
 
@@ -1157,8 +1158,7 @@ impl Board {
 
     /// The margin for Reverse Futility Pruning.
     fn rfp_margin(info: &SearchInfo, depth: Depth, improving: bool) -> i32 {
-        info.search_params.rfp_margin * depth
-            - i32::from(improving) * info.search_params.rfp_improving_margin
+        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
     }
 
     /// Update the main, counter-move, and followup history tables.
@@ -1221,8 +1221,9 @@ impl Board {
         // re-make the singular move.
         self.make_move(m, t);
 
-        let double_extend =
-            !NT::PV && value < r_beta - info.search_params.dext_margin && t.double_extensions[self.height()] <= 12;
+        let double_extend = !NT::PV
+            && value < r_beta - info.conf.dext_margin
+            && t.double_extensions[self.height()] <= 12;
 
         match () {
             () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
@@ -1477,7 +1478,7 @@ impl LMTable {
     pub const NULL: Self =
         Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
 
-    pub fn new(config: &SearchParams) -> Self {
+    pub fn new(config: &Config) -> Self {
         #![allow(
             clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
@@ -1513,7 +1514,7 @@ impl LMTable {
 
 impl Default for LMTable {
     fn default() -> Self {
-        Self::new(&SearchParams::default())
+        Self::new(&Config::default())
     }
 }
 

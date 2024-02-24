@@ -3,7 +3,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    piece::{Colour, Piece, PieceType},
+    piece::{Colour, PieceType},
     search::draw_score,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -61,63 +61,41 @@ impl Board {
     }
 
     pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
+        // get the raw network output
         let v = t.nnue.evaluate(self.side);
+
+        // scale down the value estimate when there's not much
+        // material left - this will incentivize keeping material
+        // on the board if we have winning chances, and trading
+        // material off if the position is worse for us.
         let v = v * self.material_scale() / 1024;
 
+        // scale down the value when the fifty-move counter is high.
+        // this goes some way toward making viri realise when he's not
+        // making progress in a position.
         let v = v * (200 - i32::from(self.fifty_move_counter)) / 200;
 
+        // clamp the value into the valid range.
+        // this basically never comes up, but the network will
+        // occasionally output OOB values in crazy positions with
+        // massive material imbalances.
         v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
-        if !self.pieces.any_pawns() && self.is_material_draw() {
+        // detect draw by insufficient material
+        if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
             return if self.side == Colour::WHITE {
                 draw_score(t, nodes, self.turn())
             } else {
                 -draw_score(t, nodes, self.turn())
             };
         }
+        // apply all in-waiting updates to generate a valid
+        // neural network accumulator state.
         t.nnue.force(self);
+        // run the neural network evaluation
         self.evaluate_nnue(t)
-    }
-
-    fn is_material_draw(&self) -> bool {
-        if self.num_pt(PieceType::ROOK) == 0 && self.num_pt(PieceType::QUEEN) == 0 {
-            if self.num_pt(PieceType::BISHOP) == 0 {
-                if self.num(Piece::WN) < 3 && self.num(Piece::BN) < 3 {
-                    return true;
-                }
-            } else if (self.num_pt(PieceType::KNIGHT) == 0
-                && self.num(Piece::WB).abs_diff(self.num(Piece::BB)) < 2)
-                || (self.num(Piece::WB) + self.num(Piece::WN) == 1
-                    && self.num(Piece::BB) + self.num(Piece::BN) == 1)
-            {
-                return true;
-            }
-        } else if self.num_pt(PieceType::QUEEN) == 0 {
-            if self.num(Piece::WR) == 1 && self.num(Piece::BR) == 1 {
-                if (self.num(Piece::WN) + self.num(Piece::WB)) < 2
-                    && (self.num(Piece::BN) + self.num(Piece::BB)) < 2
-                {
-                    return true;
-                }
-            } else if self.num(Piece::WR) == 1 && self.num(Piece::BR) == 0 {
-                if (self.num(Piece::WN) + self.num(Piece::WB)) == 0
-                    && ((self.num(Piece::BN) + self.num(Piece::BB)) == 1
-                        || (self.num(Piece::BN) + self.num(Piece::BB)) == 2)
-                {
-                    return true;
-                }
-            } else if self.num(Piece::WR) == 0
-                && self.num(Piece::BR) == 1
-                && (self.num(Piece::BN) + self.num(Piece::BB)) == 0
-                && ((self.num(Piece::WN) + self.num(Piece::WB)) == 1
-                    || (self.num(Piece::WN) + self.num(Piece::WB)) == 2)
-            {
-                return true;
-            }
-        }
-        false
     }
 
     pub fn zugzwang_unlikely(&self) -> bool {
