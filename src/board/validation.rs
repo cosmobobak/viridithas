@@ -64,16 +64,16 @@ impl Board {
         }
 
         // check there are the correct number of kings for each side
-        if self.num(Piece::WK) != 1 {
+        if self.pieces.piece_bb(Piece::WK).count() != 1 {
             return Err(format!(
                 "white king count is corrupt: expected 1, got {}",
-                self.num(Piece::WK)
+                self.pieces.piece_bb(Piece::WK).count()
             ));
         }
-        if self.num(Piece::BK) != 1 {
+        if self.pieces.piece_bb(Piece::BK).count() != 1 {
             return Err(format!(
                 "black king count is corrupt: expected 1, got {}",
-                self.num(Piece::BK)
+                self.pieces.piece_bb(Piece::BK).count()
             ));
         }
 

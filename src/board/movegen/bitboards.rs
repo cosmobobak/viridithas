@@ -171,8 +171,11 @@ impl BitBoard {
         self.all_pawns().non_empty()
     }
 
-    pub fn piece_bb(&self, piece: Piece) -> SquareSet {
-        self.pieces[piece.piece_type().index()] & self.colours[piece.colour().index()]
+    pub const fn piece_bb(&self, piece: Piece) -> SquareSet {
+        SquareSet::intersection(
+            self.pieces[piece.piece_type().index()],
+            self.colours[piece.colour().index()],
+        )
     }
 
     pub const fn of_type(&self, piece_type: PieceType) -> SquareSet {
@@ -258,6 +261,55 @@ impl BitBoard {
                 }
             }
         }
+    }
+
+    /// Returns true if the current position *would* be a draw by insufficient material,
+    /// if there were no pawns on the board.
+    pub const fn is_material_draw(&self) -> bool {
+        if self.of_type(PieceType::ROOK).is_empty() && self.of_type(PieceType::QUEEN).is_empty() {
+            if self.of_type(PieceType::BISHOP).is_empty() {
+                if self.piece_bb(Piece::WN).count() < 3 && self.piece_bb(Piece::BN).count() < 3 {
+                    return true;
+                }
+            } else if (self.of_type(PieceType::KNIGHT).is_empty()
+                && self.piece_bb(Piece::WB).count().abs_diff(self.piece_bb(Piece::BB).count()) < 2)
+                || SquareSet::union(self.piece_bb(Piece::WB), self.piece_bb(Piece::WN)).count() == 1
+                    && SquareSet::union(self.piece_bb(Piece::BB), self.piece_bb(Piece::BN)).count()
+                        == 1
+            {
+                return true;
+            }
+        } else if self.of_type(PieceType::QUEEN).is_empty() {
+            if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).count() == 1 {
+                if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() < 2
+                    && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count()
+                        < 2
+                {
+                    return true;
+                }
+            } else if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).is_empty() {
+                if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).is_empty()
+                    && (SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
+                        .count()
+                        == 1
+                        || SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
+                            .count()
+                            == 2)
+                {
+                    return true;
+                }
+            } else if self.piece_bb(Piece::WR).is_empty()
+                && self.piece_bb(Piece::BR).count() == 1
+                && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).is_empty()
+                && (SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
+                    == 1
+                    || SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
+                        == 2)
+            {
+                return true;
+            }
+        }
+        false
     }
 }
 
