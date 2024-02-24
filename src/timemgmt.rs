@@ -355,7 +355,7 @@ impl TimeManager {
     }
 
     fn best_move_subtree_size_multiplier(nodes_fraction: f64, conf: &Config) -> f64 {
-        (1.5 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 1000.0
+        (1.5 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 100.0
     }
 
     pub fn report_completed_depth(
