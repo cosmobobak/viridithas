@@ -4,7 +4,7 @@
 
 //! Viridithas, a UCI chess engine written in Rust.
 
-use crate::{nnue::network, search::parameters::SearchParams};
+use crate::{nnue::network, search::parameters::Config};
 
 #[macro_use]
 mod macros;
@@ -87,7 +87,7 @@ fn main() {
     }
 
     if cli.spsajson {
-        return println!("{}", SearchParams::default().emit_json_for_spsa());
+        return println!("{}", Config::default().emit_json_for_spsa());
     }
 
     if cli.visnnue {
