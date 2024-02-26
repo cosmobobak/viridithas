@@ -4,18 +4,11 @@ use crate::{
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, INCREMENT_FRAC, NODE_TM_SUBTREE_MULTIPLIER,
         OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
-    },
-    util::depth::Depth,
+    }, util::depth::Depth
 };
 
 use super::{
-    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH,
-    LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_DIVISION, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION,
-    NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR,
-    NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
-    PROBCUT_REDUCTION, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN,
-    RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH,
+    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN, FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, HISTORY_LMR_BOUND, HISTORY_LMR_DIVISOR, LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_BASE_MOVES, LMR_DIVISION, MAIN_SEE_BOUND, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR, NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH, PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH
 };
 
 #[derive(Clone, Debug)]
@@ -56,6 +49,13 @@ pub struct Config {
     pub increment_frac: u32,
     pub node_tm_subtree_multiplier: u32,
     pub fail_low_tm_bonus: u32,
+    pub lmr_base_moves: u32,
+    pub history_lmr_divisor: i32,
+    pub history_lmr_bound: i32,
+    pub qs_see_bound: i32,
+    pub main_see_bound: i32,
+    pub do_deeper_base_margin: i32,
+    pub do_deeper_depth_margin: i32,
 }
 
 impl Config {
@@ -97,6 +97,13 @@ impl Config {
             increment_frac: INCREMENT_FRAC,
             node_tm_subtree_multiplier: NODE_TM_SUBTREE_MULTIPLIER,
             fail_low_tm_bonus: FAIL_LOW_TM_BONUS,
+            lmr_base_moves: LMR_BASE_MOVES,
+            history_lmr_divisor: HISTORY_LMR_DIVISOR,
+            history_lmr_bound: HISTORY_LMR_BOUND,
+            qs_see_bound: QS_SEE_BOUND,
+            main_see_bound: MAIN_SEE_BOUND,
+            do_deeper_base_margin: DO_DEEPER_BASE_MARGIN,
+            do_deeper_depth_margin: DO_DEEPER_DEPTH_MARGIN,
         }
     }
 }
@@ -176,7 +183,14 @@ impl Config {
             OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac],
             INCREMENT_FRAC = [self.increment_frac],
             NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier],
-            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus]
+            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus],
+            LMR_BASE_MOVES = [self.lmr_base_moves],
+            HISTORY_LMR_DIVISOR = [self.history_lmr_divisor],
+            HISTORY_LMR_BOUND = [self.history_lmr_bound],
+            QS_SEE_BOUND = [self.qs_see_bound],
+            MAIN_SEE_BOUND = [self.main_see_bound],
+            DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin],
+            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin]
         ]
     }
 
@@ -226,7 +240,14 @@ impl Config {
             OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac, 1, 100, 5],
             INCREMENT_FRAC = [self.increment_frac, 1, 100, 10],
             NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier, 1, 1000, 15],
-            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus, 1, 1000, 30]
+            FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus, 1, 1000, 30],
+            LMR_BASE_MOVES = [self.lmr_base_moves, 1, 5, 1],
+            HISTORY_LMR_DIVISOR = [self.history_lmr_divisor, 1, 16383, 100],
+            HISTORY_LMR_BOUND = [self.history_lmr_bound, 1, 8, 1],
+            QS_SEE_BOUND = [self.qs_see_bound, -500, 500, 50],
+            MAIN_SEE_BOUND = [self.main_see_bound, -500, 500, 50],
+            DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin, 1, 200, 20],
+            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin, 1, 50, 2]
         ]
     }
 
