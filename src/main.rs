@@ -90,6 +90,10 @@ fn main() {
         return println!("{}", Config::default().emit_json_for_spsa());
     }
 
+    if cli.spsaob {
+        return println!("{}", Config::default().emit_csv_for_spsa());
+    }
+
     if cli.visnnue {
         return network::visualise_nnue();
     }

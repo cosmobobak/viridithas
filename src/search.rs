@@ -483,7 +483,8 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, info.conf.qs_see_bound);
+        let mut move_picker =
+            CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, info.conf.qs_see_bound);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -875,7 +876,8 @@ impl Board {
 
         let killers = self.get_killer_set(t);
         let counter_move = t.get_counter_move(self);
-        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
+        let mut move_picker =
+            MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1001,7 +1003,9 @@ impl Board {
                     -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3) && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV)) {
+                let r = if depth >= Depth::new(3)
+                    && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV))
+                {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
@@ -1041,7 +1045,10 @@ impl Board {
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
-                    let do_deeper_search = score > (best_score + info.conf.do_deeper_base_margin + info.conf.do_deeper_depth_margin * r);
+                    let do_deeper_search = score
+                        > (best_score
+                            + info.conf.do_deeper_base_margin
+                            + info.conf.do_deeper_depth_margin * r);
                     let do_shallower_search = score < best_score + new_depth.round();
                     // depending on the value that the reduced search kicked out,
                     // we might want to do a deeper search, or a shallower search.

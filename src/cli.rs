@@ -13,6 +13,9 @@ pub struct Cli {
     /// emit JSON for SPSA
     #[clap(long)]
     pub spsajson: bool,
+    /// emit OB-format for SPSA
+    #[clap(long)]
+    pub spsaob: bool,
     /// Output path.
     #[clap(short, long, value_name = "PATH")]
     pub output: Option<std::path::PathBuf>,
