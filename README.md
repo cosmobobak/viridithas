@@ -11,9 +11,10 @@
   
 </div>
 
-Viridithas is a free and open source chess engine and the successor to the original [Viridithas](https://github.com/cosmobobak/viridithas-chess).
+Viridithas is a free and open source chess engine, that as of 2024-03-11 is the strongest chess program written in Rust, and the strongest chess program by a UK author.
+These claims are based on my own personal tests and aggregate results from multiple public rating lists. If these claims are no longer true, it's likely due to the hard work of some of my friends in the chess-programming community, most likely the authors of [Stormphrax](https://github.com/Ciekce/Stormphrax) & [Black Marlin](https://github.com/jnlt3/blackmarlin).
 
-Viridithas is not a complete chess program and requires a UCI-compatible graphical user interface in order to be used comfortably. Read the documentation for your GUI of choice for information about how to use Viridithas with it.
+Viridithas is a command-line program that can be used from the terminal or can communicate with a graphical user interface over the UCI protocol.
 
 For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 
@@ -26,7 +27,7 @@ For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 - Subsequent networks were trained on additional self-play games by subsequent versions of Viridithas. The 13th-generation network, and many since, include positions from the Lichess Elite dataset rescored by Viridithas.
 - Between versions 7.0.0 and 8.0.0, original datagen code was written that allows Viridithas to generate data without need for an opening book to ensure game variety, resulting in even greater strength of play.
 
-In summary, the originality of the data for training Viridithas's NNUE is strong - it is about ~80% games played by Viridithas against himself, 20% positions from human games, and a small handful of positions from games played in a Viridithas 2.7.0 vs. StockNemo 5.0.0.0 test match I ran on my own hardware, all reanalysed with Viridithas. Most importantly, I have never trained on the evaluation output of any engine other than Viridithas.
+All neural networks currently used in the development of Viridithas are trained exclusively on its own self-play games, and no network has ever been trained on the output of an engine other than Viridithas.
 
 ## Thanks and Acknowledgements
 
@@ -38,7 +39,11 @@ Andrew Grant's [Ethereal](https://github.com/AndyGrant/Ethereal), the exceedingl
 
 [weather-factory](https://github.com/dsekercioglu/weather-factory), which I used only minimally, but which is still responsible for about ~10 elo in Viridithas.
 
-[marlinflow](https://github.com/dsekercioglu/marlinflow), which is responsible for all neural network training for Viridithas.
+[marlinflow](https://github.com/dsekercioglu/marlinflow), was responsible for neural network training for Viridithas up until version 11.0.0.
+
+[bullet](https://github.com/jw1912/bullet), which I have used for neural network training in the development of Viridithas since version 11.0.0.
+
+[The SweHosting OpenBench Instance](https://chess.swehosting.se/), which is invaluable in testing new patches and features.
 
 [build-badge]:https://img.shields.io/github/actions/workflow/status/cosmobobak/virtue/rust.yml?branch=master&logo=github&style=for-the-badge
 [build-link]:https://github.com/cosmobobak/virtue/actions/workflows/rust.yml
