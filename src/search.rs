@@ -1457,7 +1457,8 @@ fn readout_info(
         let mut pv_string = board.pv_san(pv).unwrap();
         // truncate the pv string if it's too long
         if pv_string.len() > 130 {
-            let final_space = pv_string.match_indices(' ').filter(|(i, _)| *i < 130).last().map_or(0, |(i, _)| i);
+            let final_space =
+                pv_string.match_indices(' ').filter(|(i, _)| *i < 130).last().map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
             pv_string.push_str("...         ");
         }
