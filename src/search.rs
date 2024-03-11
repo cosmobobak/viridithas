@@ -779,6 +779,7 @@ impl Board {
         }
 
         let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.mov);
+        let tt_capture = !tt_move.is_null() && self.is_capture(tt_move);
 
         if cut_node && depth >= TT_REDUCTION_DEPTH * 2 && tt_move.is_null() {
             depth -= 1;
@@ -1022,6 +1023,8 @@ impl Board {
                         r += i32::from(cut_node);
                         // reduce more if not improving
                         // r += i32::from(!improving);
+                        // reduce more if the move from the transposition table is tactical
+                        r += i32::from(tt_capture);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
