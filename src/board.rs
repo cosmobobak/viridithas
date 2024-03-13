@@ -13,9 +13,7 @@ use rand::rngs::ThreadRng;
 
 use crate::{
     board::movegen::{
-        bitboards::{
-            self, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
-        },
+        bitboards::{self, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
         MoveList,
     },
     chessmove::Move,
@@ -73,16 +71,8 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook bitboards {msg}");
     assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen bitboards {msg}");
     assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king bitboards {msg}");
-    assert_eq!(
-        lhs.pieces.occupied_co(Colour::WHITE),
-        rhs.pieces.occupied_co(Colour::WHITE),
-        "white bitboards {msg}"
-    );
-    assert_eq!(
-        lhs.pieces.occupied_co(Colour::BLACK),
-        rhs.pieces.occupied_co(Colour::BLACK),
-        "black bitboards {msg}"
-    );
+    assert_eq!(lhs.pieces.occupied_co(Colour::WHITE), rhs.pieces.occupied_co(Colour::WHITE), "white bitboards {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::BLACK), rhs.pieces.occupied_co(Colour::BLACK), "black bitboards {msg}");
     for sq in Square::all() {
         assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
     }
@@ -114,10 +104,8 @@ impl Debug for Board {
 }
 
 impl Board {
-    pub const STARTING_FEN: &'static str =
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    pub const STARTING_FEN_960: &'static str =
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
+    pub const STARTING_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    pub const STARTING_FEN_960: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
 
     pub fn new() -> Self {
         let mut out = Self {
@@ -293,10 +281,7 @@ impl Board {
 
         checkers |= ortho_attacks & their_orthos;
 
-        Threats {
-            all: threats,
-            /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers,
-        }
+        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers }
     }
 
     pub fn reset(&mut self) {
@@ -336,13 +321,8 @@ impl Board {
             let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
         }
-        let mut rook_indices = backrank.iter().enumerate().filter_map(|(i, &piece)| {
-            if piece == PieceType::ROOK {
-                Some(i)
-            } else {
-                None
-            }
-        });
+        let mut rook_indices =
+            backrank.iter().enumerate().filter_map(|(i, &piece)| if piece == PieceType::ROOK { Some(i) } else { None });
         let queenside_file = rook_indices.next().unwrap();
         let kingside_file = rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
@@ -378,22 +358,28 @@ impl Board {
             let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
             self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::PAWN));
         }
-        let mut white_rook_indices = white_backrank.iter().enumerate().filter_map(|(i, &piece)| {
-            if piece == PieceType::ROOK {
-                Some(i)
-            } else {
-                None
-            }
-        });
+        let mut white_rook_indices =
+            white_backrank.iter().enumerate().filter_map(
+                |(i, &piece)| {
+                    if piece == PieceType::ROOK {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                },
+            );
         let white_queenside_file = white_rook_indices.next().unwrap();
         let white_kingside_file = white_rook_indices.next().unwrap();
-        let mut black_rook_indices = black_backrank.iter().enumerate().filter_map(|(i, &piece)| {
-            if piece == PieceType::ROOK {
-                Some(i)
-            } else {
-                None
-            }
-        });
+        let mut black_rook_indices =
+            black_backrank.iter().enumerate().filter_map(
+                |(i, &piece)| {
+                    if piece == PieceType::ROOK {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                },
+            );
         let black_queenside_file = black_rook_indices.next().unwrap();
         let black_kingside_file = black_rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
@@ -492,10 +478,8 @@ impl Board {
         self.reset();
 
         let fen_chars = fen.as_bytes();
-        let split_idx = fen_chars
-            .iter()
-            .position(|&c| c == b' ')
-            .ok_or_else(|| format!("FEN string is missing space: {fen}"))?;
+        let split_idx =
+            fen_chars.iter().position(|&c| c == b' ').ok_or_else(|| format!("FEN string is missing space: {fen}"))?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -524,10 +508,7 @@ impl Board {
                     continue;
                 }
                 c => {
-                    return Err(format!(
-                        "FEN string is invalid, got unexpected character: \"{}\"",
-                        c as char
-                    ));
+                    return Err(format!("FEN string is invalid, got unexpected character: \"{}\"", c as char));
                 }
             }
 
@@ -556,11 +537,7 @@ impl Board {
     }
 
     pub fn set_startpos(&mut self) {
-        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
-            Self::STARTING_FEN_960
-        } else {
-            Self::STARTING_FEN
-        };
+        let starting_fen = if CHESS960.load(Ordering::SeqCst) { Self::STARTING_FEN_960 } else { Self::STARTING_FEN };
         self.set_from_fen(starting_fen).expect("for some reason, STARTING_FEN is now broken.");
     }
 
@@ -618,7 +595,12 @@ impl Board {
                         b'Q' => self.castle_perm.wq = Square::A1,
                         b'k' => self.castle_perm.bk = Square::H8,
                         b'q' => self.castle_perm.bq = Square::A8,
-                        _ => return Err(format!("FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"", std::str::from_utf8(castling).unwrap_or("<invalid utf8>"))),
+                        _ => {
+                            return Err(format!(
+                                "FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"",
+                                std::str::from_utf8(castling).unwrap_or("<invalid utf8>")
+                            ))
+                        }
                     }
                 }
             }
@@ -626,14 +608,10 @@ impl Board {
                 // valid shredder castling strings are of the form "AHah", "Bd"
                 let white_king = self.king_sq(Colour::WHITE);
                 let black_king = self.king_sq(Colour::BLACK);
-                if white_king.rank() != Rank::RANK_1
-                    && shredder_castling.iter().any(u8::is_ascii_uppercase)
-                {
+                if white_king.rank() != Rank::RANK_1 && shredder_castling.iter().any(u8::is_ascii_uppercase) {
                     return Err(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
-                if black_king.rank() != Rank::RANK_8
-                    && shredder_castling.iter().any(u8::is_ascii_lowercase)
-                {
+                if black_king.rank() != Rank::RANK_8 && shredder_castling.iter().any(u8::is_ascii_lowercase) {
                     return Err(format!("FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
                 for &c in shredder_castling {
@@ -685,14 +663,18 @@ impl Board {
             Some([b'-']) => self.ep_sq = Square::NO_SQUARE,
             Some(ep_sq) => {
                 if ep_sq.len() != 2 {
-                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
+                    return Err(format!(
+                        "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"",
+                        std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")
+                    ));
                 }
                 let file = ep_sq[0] - b'a';
                 let rank = ep_sq[1] - b'1';
-                if !((File::FILE_A..=File::FILE_H).contains(&file)
-                    && (Rank::RANK_1..=Rank::RANK_8).contains(&rank))
-                {
-                    return Err(format!("FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"", std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")));
+                if !((File::FILE_A..=File::FILE_H).contains(&file) && (Rank::RANK_1..=Rank::RANK_8).contains(&rank)) {
+                    return Err(format!(
+                        "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"",
+                        std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")
+                    ));
                 }
                 self.ep_sq = Square::from_rank_file(rank, file);
             }
@@ -706,12 +688,13 @@ impl Board {
             None => return Err("FEN string is invalid, expected halfmove clock part.".to_string()),
             Some(halfmove_clock) => {
                 self.fifty_move_counter = std::str::from_utf8(halfmove_clock)
-                    .map_err(|_| {
-                        "FEN string is invalid, expected halfmove clock part to be valid UTF-8"
-                    })?
+                    .map_err(|_| "FEN string is invalid, expected halfmove clock part to be valid UTF-8")?
                     .parse::<u8>()
                     .map_err(|err| {
-                        format!("FEN string is invalid, expected halfmove clock part to be a number, got \"{}\", {err}", std::str::from_utf8(halfmove_clock).unwrap_or("<invalid utf8>"))
+                        format!(
+                            "FEN string is invalid, expected halfmove clock part to be a number, got \"{}\", {err}",
+                            std::str::from_utf8(halfmove_clock).unwrap_or("<invalid utf8>")
+                        )
                     })?;
             }
         }
@@ -724,13 +707,9 @@ impl Board {
             None => return Err("FEN string is invalid, expected fullmove number part.".to_string()),
             Some(fullmove_number) => {
                 let fullmove_number = std::str::from_utf8(fullmove_number)
-                    .map_err(|_| {
-                        "FEN string is invalid, expected fullmove number part to be valid UTF-8"
-                    })?
+                    .map_err(|_| "FEN string is invalid, expected fullmove number part to be valid UTF-8")?
                     .parse::<usize>()
-                    .map_err(|_| {
-                        "FEN string is invalid, expected fullmove number part to be a number"
-                    })?;
+                    .map_err(|_| "FEN string is invalid, expected fullmove number part to be a number")?;
                 self.ply = (fullmove_number - 1) * 2;
                 if self.side == Colour::BLACK {
                     self.ply += 1;
@@ -832,9 +811,7 @@ impl Board {
             return false;
         }
 
-        if moved_piece.piece_type() != PieceType::PAWN
-            && (is_pawn_double_push || m.is_ep() || m.is_promo())
-        {
+        if moved_piece.piece_type() != PieceType::PAWN && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
             return false;
         }
 
@@ -862,8 +839,7 @@ impl Board {
                     return false;
                 }
                 let one_forward = from.pawn_push(self.side);
-                return self.piece_at(one_forward) == Piece::EMPTY
-                    && to == one_forward.pawn_push(self.side);
+                return self.piece_at(one_forward) == Piece::EMPTY && to == one_forward.pawn_push(self.side);
             } else if !is_capture {
                 return to == from.pawn_push(self.side) && captured_piece == Piece::EMPTY;
             }
@@ -874,9 +850,7 @@ impl Board {
             return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
         }
 
-        (to.as_set()
-            & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied()))
-        .non_empty()
+        (to.as_set() & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())).non_empty()
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -892,8 +866,7 @@ impl Board {
         if moved.piece_type() != PieceType::KING {
             return false;
         }
-        let home_rank =
-            if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
+        let home_rank = if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
         if (m.to().as_set() & home_rank).is_empty() {
             return false;
         }
@@ -902,13 +875,7 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if m.to()
-                != (if self.side == Colour::BLACK {
-                    self.castle_perm.bk
-                } else {
-                    self.castle_perm.wk
-                })
-            {
+            if m.to() != (if self.side == Colour::BLACK { self.castle_perm.bk } else { self.castle_perm.wk }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -920,13 +887,7 @@ impl Board {
             }
         } else {
             // queenside castling.
-            if m.to()
-                != (if self.side == Colour::BLACK {
-                    self.castle_perm.bq
-                } else {
-                    self.castle_perm.wq
-                })
-            {
+            if m.to() != (if self.side == Colour::BLACK { self.castle_perm.bq } else { self.castle_perm.wq }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -1242,16 +1203,7 @@ impl Board {
 
         let undo = self.history.last().expect("No move to unmake!");
 
-        let Undo {
-            castle_perm,
-            ep_square,
-            fifty_move_counter,
-            threats,
-            bitboard,
-            piece_array,
-            key,
-            ..
-        } = undo;
+        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, .. } = undo;
 
         self.height -= 1;
         self.ply -= 1;
@@ -1275,12 +1227,7 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        self.history.push(Undo {
-            ep_square: self.ep_sq,
-            threats: self.threats,
-            key: self.key,
-            ..Default::default()
-        });
+        self.history.push(Undo { ep_square: self.ep_sq, threats: self.threats, key: self.key, ..Default::default() });
 
         let mut key = self.key;
         if self.ep_sq != Square::NO_SQUARE {
@@ -1328,8 +1275,7 @@ impl Board {
             return false;
         }
 
-        t.nnue.accumulators[t.nnue.current_acc].mv =
-            MovedPiece { from: m.from(), to: m.to(), piece };
+        t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece { from: m.from(), to: m.to(), piece };
         t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
 
         t.nnue.current_acc += 1;
@@ -1389,8 +1335,8 @@ impl Board {
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
     pub fn parse_uci(&self, uci: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{
-            IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
-            InvalidPromotionPiece, InvalidToSquareFile, InvalidToSquareRank,
+            IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength, InvalidPromotionPiece,
+            InvalidToSquareFile, InvalidToSquareRank,
         };
         let san_bytes = uci.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
@@ -1438,8 +1384,7 @@ impl Board {
                 };
                 m.from() == from
                     && m_to == to
-                    && (san_bytes.len() == 4
-                        || m.safe_promotion_type().promo_char().unwrap() == san_bytes[4] as char)
+                    && (san_bytes.len() == 4 || m.safe_promotion_type().promo_char().unwrap() == san_bytes[4] as char)
             })
             .ok_or_else(|| IllegalMove(uci.to_string()));
 
@@ -1461,8 +1406,7 @@ impl Board {
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from());
-        let is_capture = self.is_capture(m)
-            || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
+        let is_capture = self.is_capture(m) || (moved_piece.piece_type() == PieceType::PAWN && to_sq == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::PAWN if !is_capture => "",
             PieceType::PAWN => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
@@ -1509,7 +1453,8 @@ impl Board {
             PieceType::NONE => "",
             _ => unreachable!(),
         };
-        let san = format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
+        let san =
+            format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
         Some(san)
     }
 
@@ -1590,9 +1535,7 @@ impl Board {
     }
 
     pub fn has_insufficient_material<C: Col>(&self) -> bool {
-        if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>())
-            .non_empty()
-        {
+        if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>()).non_empty() {
             return false;
         }
 
@@ -1608,8 +1551,8 @@ impl Board {
 
         if self.pieces.bishops::<C>().non_empty() {
             let bishops = self.pieces.all_bishops();
-            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty()
-                || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
+            let same_color =
+                (bishops & SquareSet::DARK_SQUARES).is_empty() || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
             let pawns = self.pieces.all_pawns();
             let knights = self.pieces.all_knights();
             return same_color && pawns.is_empty() && knights.is_empty();
@@ -1656,16 +1599,11 @@ impl Board {
         if self.castle_perm == CastlingRights::NONE {
             bytes_written += f.write(b"-")?;
         } else {
-            bytes_written += [
-                self.castle_perm.wk,
-                self.castle_perm.wq,
-                self.castle_perm.bk,
-                self.castle_perm.bq,
-            ]
-            .into_iter()
-            .zip(b"KQkq")
-            .filter(|(m, _)| *m != Square::NO_SQUARE)
-            .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
+            bytes_written += [self.castle_perm.wk, self.castle_perm.wq, self.castle_perm.bk, self.castle_perm.bq]
+                .into_iter()
+                .zip(b"KQkq")
+                .filter(|(m, _)| *m != Square::NO_SQUARE)
+                .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
         }
         bytes_written += f.write(b" ")?;
         if self.ep_sq == Square::NO_SQUARE {
@@ -1864,8 +1802,7 @@ mod tests {
         use crate::{chessmove::Move, util::Square};
 
         let mut fiftymove_draw =
-            Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
-                .unwrap();
+            Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2").unwrap();
         assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
@@ -1883,14 +1820,9 @@ mod tests {
         assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);
-        let mut insufficient_material_bare_kings =
-            Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
-        assert_eq!(
-            insufficient_material_bare_kings.outcome(),
-            GameOutcome::DrawInsufficientMaterial
-        );
-        let mut insufficient_material_knights =
-            Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
+        let mut insufficient_material_bare_kings = Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
+        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::DrawInsufficientMaterial);
+        let mut insufficient_material_knights = Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
         assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing);
         // using FIDE rules.
     }
@@ -1951,9 +1883,7 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let board =
-            Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
-                .unwrap();
+        let board = Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20").unwrap();
         let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
         assert!(!board.is_pseudo_legal(kingside_castle));
     }
@@ -1993,9 +1923,7 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board =
-            Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6")
-                .unwrap();
+        let mut board = Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6").unwrap();
         // Nxf7!!
         let mv = Move::new(Square::G5, Square::F7);
         let key = board.key_after(mv);
@@ -2021,10 +1949,8 @@ mod tests {
         use crate::piece::Piece;
         use crate::util::Square;
         let mut not_ep_capturable =
-            Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
-                .unwrap();
-        let mut ep_capturable =
-            Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
+            Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2").unwrap();
+        let mut ep_capturable = Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
         let d5 = Move::new(Square::D7, Square::D5);
         let mut not_ep_capturable_key = not_ep_capturable.key;
         let mut ep_capturable_key = ep_capturable.key;
@@ -2052,8 +1978,7 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board =
-            Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
+        let mut board = Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
         assert_eq!(board.ep_sq, Square::B6);
     }

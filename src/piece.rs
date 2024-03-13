@@ -160,10 +160,7 @@ impl PieceType {
     }
 
     pub const fn legal_promo(self) -> bool {
-        self.v == Self::QUEEN.v
-            || self.v == Self::KNIGHT.v
-            || self.v == Self::BISHOP.v
-            || self.v == Self::ROOK.v
+        self.v == Self::QUEEN.v || self.v == Self::KNIGHT.v || self.v == Self::BISHOP.v || self.v == Self::ROOK.v
     }
 
     pub const fn promo_char(self) -> Option<char> {

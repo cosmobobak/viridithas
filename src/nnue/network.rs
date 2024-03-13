@@ -124,12 +124,7 @@ impl Debug for UpdateBuffer {
 
 impl Default for UpdateBuffer {
     fn default() -> Self {
-        Self {
-            add: [FeatureUpdate::NULL; 2],
-            add_count: 0,
-            sub: [FeatureUpdate::NULL; 2],
-            sub_count: 0,
-        }
+        Self { add: [FeatureUpdate::NULL; 2], add_count: 0, sub: [FeatureUpdate::NULL; 2], sub_count: 0 }
     }
 }
 
@@ -179,10 +174,7 @@ impl BucketAccumulatorCache {
         acc: &mut Accumulator,
     ) {
         debug_assert!(
-            matches!(
-                pov_update,
-                PovUpdate { white: true, black: false } | PovUpdate { white: false, black: true }
-            ),
+            matches!(pov_update, PovUpdate { white: true, black: false } | PovUpdate { white: false, black: true }),
             "invalid pov update: {pov_update:?}"
         );
         #[cfg(debug_assertions)]
@@ -218,18 +210,15 @@ impl BucketAccumulatorCache {
         let mut subs = [FeatureUpdate::NULL; 32];
         let mut add_count = 0;
         let mut sub_count = 0;
-        self.board_states[side_we_care_about.index()][bucket].update_iter(
-            board_state,
-            |f, is_add| {
-                if is_add {
-                    adds[add_count] = f;
-                    add_count += 1;
-                } else {
-                    subs[sub_count] = f;
-                    sub_count += 1;
-                }
-            },
-        );
+        self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
+            if is_add {
+                adds[add_count] = f;
+                add_count += 1;
+            } else {
+                subs[sub_count] = f;
+                sub_count += 1;
+            }
+        });
 
         for &sub in &subs[..sub_count] {
             NNUEState::update_feature_inplace::<Deactivate>(wk, bk, sub, pov_update, cache_acc);
@@ -270,8 +259,7 @@ impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams =
-    unsafe { mem::transmute(*include_bytes!(concat!("../../", env!("EVALFILE"),))) };
+pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!(concat!("../../", env!("EVALFILE"),))) };
 
 #[repr(C)]
 pub struct NNUEParams {
@@ -376,11 +364,7 @@ pub struct NNUEState {
     pub bucket_cache: BucketAccumulatorCache,
 }
 
-const fn feature_indices(
-    white_king: Square,
-    black_king: Square,
-    f: FeatureUpdate,
-) -> (usize, usize) {
+const fn feature_indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (usize, usize) {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
@@ -391,8 +375,7 @@ const fn feature_indices(
     let colour = f.piece.colour().index();
 
     let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + white_sq.index();
-    let black_idx =
-        (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + black_sq.flip_rank().index();
+    let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + black_sq.flip_rank().index();
 
     (white_idx, black_idx)
 }
@@ -555,9 +538,7 @@ impl NNUEState {
             }
             // castling
             (&[add1, add2], &[sub1, sub2]) => {
-                Self::apply_castling(
-                    white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt,
-                );
+                Self::apply_castling(white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt);
             }
             (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
         }
@@ -583,22 +564,10 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add_sub(
-                &source_acc.white,
-                &mut target_acc.white,
-                white_bucket,
-                white_add,
-                white_sub,
-            );
+            vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
         }
         if update.black {
-            vector_add_sub(
-                &source_acc.black,
-                &mut target_acc.black,
-                black_bucket,
-                black_add,
-                black_sub,
-            );
+            vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
         }
     }
 
@@ -624,24 +593,10 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add_sub2(
-                &source_acc.white,
-                &mut target_acc.white,
-                white_bucket,
-                white_add,
-                white_sub1,
-                white_sub2,
-            );
+            vector_add_sub2(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub1, white_sub2);
         }
         if update.black {
-            vector_add_sub2(
-                &source_acc.black,
-                &mut target_acc.black,
-                black_bucket,
-                black_add,
-                black_sub1,
-                black_sub2,
-            );
+            vector_add_sub2(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub1, black_sub2);
         }
     }
 
@@ -730,8 +685,7 @@ impl NNUEState {
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) =
-            if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
+        let (us, them) = if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
         let output = flatten(us, them, &NNUE.output_weights);
 
@@ -875,19 +829,15 @@ mod generic {
 mod avx2 {
     use super::{Align64, LAYER_1_SIZE, QA};
     use std::arch::x86_64::{
-        __m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256,
-        _mm256_load_si256, _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16,
-        _mm256_mullo_epi16, _mm256_set1_epi16, _mm256_setzero_si256, _mm_add_epi32,
-        _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64,
+        __m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_load_si256,
+        _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16,
+        _mm256_setzero_si256, _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64,
     };
 
     type Vec256 = __m256i;
 
     #[inline]
-    unsafe fn load_i16s<const VEC_SIZE: usize>(
-        acc: &Align64<[i16; VEC_SIZE]>,
-        start_idx: usize,
-    ) -> Vec256 {
+    unsafe fn load_i16s<const VEC_SIZE: usize>(acc: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Vec256 {
         _mm256_load_si256(acc.0.as_ptr().add(start_idx).cast())
     }
 

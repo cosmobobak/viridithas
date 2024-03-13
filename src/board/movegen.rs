@@ -48,8 +48,7 @@ impl MoveList {
 
     fn push<const TACTICAL: bool>(&mut self, m: Move) {
         // debug_assert!(self.count < MAX_POSITION_MOVES, "overflowed {self}");
-        let score =
-            if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
+        let score = if TACTICAL { MoveListEntry::TACTICAL_SENTINEL } else { MoveListEntry::QUIET_SENTINEL };
 
         self.inner.push(MoveListEntry { mov: m, score });
     }
@@ -86,22 +85,13 @@ impl Display for MoveList {
         for m in &self.inner[0..self.inner.len() - 1] {
             writeln!(f, "  {} ${}, ", m.mov, m.score)?;
         }
-        writeln!(
-            f,
-            "  {} ${}",
-            self.inner[self.inner.len() - 1].mov,
-            self.inner[self.inner.len() - 1].score
-        )?;
+        writeln!(f, "  {} ${}", self.inner[self.inner.len() - 1].mov, self.inner[self.inner.len() - 1].score)?;
         write!(f, "]")
     }
 }
 
 impl Board {
-    fn generate_pawn_caps<C: Col, const QS: bool>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
+    fn generate_pawn_caps<C: Col, const QS: bool>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
         let our_pawns = self.pieces.pawns::<C>();
         let their_pieces = self.pieces.their_pieces::<C>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -115,16 +105,10 @@ impl Board {
         } else {
             their_pieces.north_west_one() & our_pawns
         };
-        let valid_west = if C::WHITE {
-            valid_target_squares.south_east_one()
-        } else {
-            valid_target_squares.north_east_one()
-        };
-        let valid_east = if C::WHITE {
-            valid_target_squares.south_west_one()
-        } else {
-            valid_target_squares.north_west_one()
-        };
+        let valid_west =
+            if C::WHITE { valid_target_squares.south_east_one() } else { valid_target_squares.north_east_one() };
+        let valid_east =
+            if C::WHITE { valid_target_squares.south_west_one() } else { valid_target_squares.north_west_one() };
         let promo_rank = if C::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
         for from in attacking_west & !promo_rank & valid_west {
             let to = if C::WHITE { from.add(7) } else { from.sub(9) };
@@ -147,17 +131,13 @@ impl Board {
         } else {
             for from in attacking_west & promo_rank & valid_west {
                 let to = if C::WHITE { from.add(7) } else { from.sub(9) };
-                for promo in
-                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
-                {
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
             for from in attacking_east & promo_rank & valid_east {
                 let to = if C::WHITE { from.add(9) } else { from.sub(7) };
-                for promo in
-                    [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT]
-                {
+                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -170,16 +150,10 @@ impl Board {
         }
         let ep_bb = self.ep_sq.as_set();
         let our_pawns = self.pieces.pawns::<C>();
-        let attacks_west = if C::WHITE {
-            ep_bb.south_east_one() & our_pawns
-        } else {
-            ep_bb.north_east_one() & our_pawns
-        };
-        let attacks_east = if C::WHITE {
-            ep_bb.south_west_one() & our_pawns
-        } else {
-            ep_bb.north_west_one() & our_pawns
-        };
+        let attacks_west =
+            if C::WHITE { ep_bb.south_east_one() & our_pawns } else { ep_bb.north_east_one() & our_pawns };
+        let attacks_east =
+            if C::WHITE { ep_bb.south_west_one() & our_pawns } else { ep_bb.north_west_one() & our_pawns };
 
         if attacks_west.non_empty() {
             let from_sq = attacks_west.first();
@@ -191,19 +165,12 @@ impl Board {
         }
     }
 
-    fn generate_pawn_forward<C: Col>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
+    fn generate_pawn_forward<C: Col>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
         let start_rank = if C::WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
         let promo_rank = if C::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
-        let shifted_empty_squares =
-            if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
-        let double_shifted_empty_squares =
-            if C::WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
-        let shifted_valid_squares =
-            if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
+        let shifted_empty_squares = if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
+        let double_shifted_empty_squares = if C::WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
+        let shifted_valid_squares = if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
         let double_shifted_valid_squares =
             if C::WHITE { valid_target_squares >> 16 } else { valid_target_squares << 16 };
         let our_pawns = self.pieces.pawns::<C>();
@@ -232,10 +199,8 @@ impl Board {
         valid_target_squares: SquareSet,
     ) {
         let promo_rank = if C::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
-        let shifted_empty_squares =
-            if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
-        let shifted_valid_squares =
-            if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
+        let shifted_empty_squares = if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
+        let shifted_valid_squares = if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
         let our_pawns = self.pieces.pawns::<C>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -245,9 +210,7 @@ impl Board {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
             } else {
-                for promo in
-                    [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP]
-                {
+                for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
                     move_list.push::<true>(Move::new_with_promo(sq, to, promo));
                 }
             }
@@ -285,8 +248,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
-                | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -373,8 +335,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
-                | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -460,11 +421,9 @@ impl Board {
             }
         } else {
             const WK_FREESPACE: SquareSet = Square::F1.as_set().add_square(Square::G1);
-            const WQ_FREESPACE: SquareSet =
-                Square::B1.as_set().add_square(Square::C1).add_square(Square::D1);
+            const WQ_FREESPACE: SquareSet = Square::B1.as_set().add_square(Square::C1).add_square(Square::D1);
             const BK_FREESPACE: SquareSet = Square::F8.as_set().add_square(Square::G8);
-            const BQ_FREESPACE: SquareSet =
-                Square::B8.as_set().add_square(Square::C8).add_square(Square::D8);
+            const BQ_FREESPACE: SquareSet = Square::B8.as_set().add_square(Square::C8).add_square(Square::D8);
 
             let k_freespace = if C::WHITE { WK_FREESPACE } else { BK_FREESPACE };
             let q_freespace = if C::WHITE { WQ_FREESPACE } else { BQ_FREESPACE };
@@ -513,8 +472,7 @@ impl Board {
         let king_path = RAY_BETWEEN[king_sq.index()][king_dst.index()];
         let rook_path = RAY_BETWEEN[king_sq.index()][castling_sq.index()];
         let relevant_occupied = occupied ^ king_sq.as_set() ^ castling_sq.as_set();
-        if (relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set()))
-            .is_empty()
+        if (relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())).is_empty()
             && !self.any_attacked(king_path, C::Opposite::COLOUR)
         {
             move_list.push::<false>(Move::new_with_flags(king_sq, castling_sq, Move::CASTLE_FLAG));
@@ -531,19 +489,12 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_pawn_quiet<C: Col>(
-        &self,
-        move_list: &mut MoveList,
-        valid_target_squares: SquareSet,
-    ) {
+    fn generate_pawn_quiet<C: Col>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
         let start_rank = if C::WHITE { SquareSet::RANK_2 } else { SquareSet::RANK_7 };
         let promo_rank = if C::WHITE { SquareSet::RANK_7 } else { SquareSet::RANK_2 };
-        let shifted_empty_squares =
-            if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
-        let double_shifted_empty_squares =
-            if C::WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
-        let shifted_valid_squares =
-            if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
+        let shifted_empty_squares = if C::WHITE { self.pieces.empty() >> 8 } else { self.pieces.empty() << 8 };
+        let double_shifted_empty_squares = if C::WHITE { self.pieces.empty() >> 16 } else { self.pieces.empty() << 16 };
+        let shifted_valid_squares = if C::WHITE { valid_target_squares >> 8 } else { valid_target_squares << 8 };
         let double_shifted_valid_squares =
             if C::WHITE { valid_target_squares >> 16 } else { valid_target_squares << 16 };
         let our_pawns = self.pieces.pawns::<C>();
@@ -575,8 +526,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()]
-                | self.threats.checkers
+            RAY_BETWEEN[our_king_sq.index()][self.threats.checkers.first().index()] | self.threats.checkers
         } else {
             SquareSet::FULL
         };

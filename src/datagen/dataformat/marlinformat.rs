@@ -55,8 +55,7 @@ impl PackedBoard {
                 } else {
                     board.castling_rights().queenside(colour)
                 };
-                let castling_file =
-                    if castling_sq == Square::NO_SQUARE { None } else { Some(castling_sq.file()) };
+                let castling_file = if castling_sq == Square::NO_SQUARE { None } else { Some(castling_sq.file()) };
                 if Some(sq.file()) == castling_file {
                     piece_code = UNMOVED_ROOK;
                 }

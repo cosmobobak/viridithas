@@ -5,11 +5,11 @@ use crate::{
     chessmove::Move,
     piece::{Colour, PieceType},
     tablebases::bindings::{
-        tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST,
-        TB_LOSS, TB_PROMOTES_BISHOP, TB_PROMOTES_KNIGHT, TB_PROMOTES_QUEEN, TB_PROMOTES_ROOK,
-        TB_RESULT_DTZ_MASK, TB_RESULT_DTZ_SHIFT, TB_RESULT_FAILED, TB_RESULT_FROM_MASK,
-        TB_RESULT_FROM_SHIFT, TB_RESULT_PROMOTES_MASK, TB_RESULT_PROMOTES_SHIFT, TB_RESULT_TO_MASK,
-        TB_RESULT_TO_SHIFT, TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT, TB_WIN,
+        tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST, TB_LOSS,
+        TB_PROMOTES_BISHOP, TB_PROMOTES_KNIGHT, TB_PROMOTES_QUEEN, TB_PROMOTES_ROOK, TB_RESULT_DTZ_MASK,
+        TB_RESULT_DTZ_SHIFT, TB_RESULT_FAILED, TB_RESULT_FROM_MASK, TB_RESULT_FROM_SHIFT, TB_RESULT_PROMOTES_MASK,
+        TB_RESULT_PROMOTES_SHIFT, TB_RESULT_TO_MASK, TB_RESULT_TO_SHIFT, TB_RESULT_WDL_MASK, TB_RESULT_WDL_SHIFT,
+        TB_WIN,
     },
     uci,
     util::{CastlingRights, Square},
@@ -142,10 +142,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
         };
 
         for &m in moves.iter_moves() {
-            if m.from() == from
-                && m.to() == to
-                && (promotion == 0 || m.safe_promotion_type() == promo_piece_type)
-            {
+            if m.from() == from && m.to() == to && (promotion == 0 || m.safe_promotion_type() == promo_piece_type) {
                 return Some(WdlDtzResult { wdl, dtz, best_move: m });
             }
         }

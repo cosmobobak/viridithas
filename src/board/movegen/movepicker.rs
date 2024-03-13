@@ -41,11 +41,7 @@ pub type CapturePicker = MovePicker<true>;
 
 impl<const QSEARCH: bool> MovePicker<QSEARCH> {
     pub fn new(tt_move: Move, killers: [Move; 2], counter_move: Move, see_threshold: i32) -> Self {
-        debug_assert!(
-            killers[0].is_null() || killers[0] != killers[1],
-            "Killers are both {}",
-            killers[0]
-        );
+        debug_assert!(killers[0].is_null() || killers[0] != killers[1], "Killers are both {}", killers[0]);
         Self {
             movelist: MoveList::new(),
             index: 0,
@@ -76,11 +72,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
-            debug_assert_eq!(
-                self.movelist.len(),
-                0,
-                "movelist not empty before capture generation"
-            );
+            debug_assert_eq!(self.movelist.len(), 0, "movelist not empty before capture generation");
             position.generate_captures::<QSEARCH>(&mut self.movelist);
             Self::score_captures(t, position, &mut self.movelist, self.see_threshold);
         }
@@ -98,19 +90,13 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
-            if !self.skip_quiets
-                && self.killers[0] != self.tt_move
-                && position.is_pseudo_legal(self.killers[0])
-            {
+            if !self.skip_quiets && self.killers[0] != self.tt_move && position.is_pseudo_legal(self.killers[0]) {
                 return Some(MoveListEntry { mov: self.killers[0], score: FIRST_KILLER_SCORE });
             }
         }
         if self.stage == Stage::YieldKiller2 {
             self.stage = Stage::YieldCounterMove;
-            if !self.skip_quiets
-                && self.killers[1] != self.tt_move
-                && position.is_pseudo_legal(self.killers[1])
-            {
+            if !self.skip_quiets && self.killers[1] != self.tt_move && position.is_pseudo_legal(self.killers[1]) {
                 return Some(MoveListEntry { mov: self.killers[1], score: SECOND_KILLER_SCORE });
             }
         }
@@ -204,12 +190,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         // t.get_continuation_history_scores(pos, ms, 3);
     }
 
-    pub fn score_captures(
-        t: &ThreadData,
-        pos: &Board,
-        moves: &mut [MoveListEntry],
-        see_threshold: i32,
-    ) {
+    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
         const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
         // zero-out the ordering scores
         for m in &mut *moves {

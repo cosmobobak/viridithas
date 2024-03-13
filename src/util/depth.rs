@@ -205,13 +205,7 @@ impl Display for Depth {
             -1 => "-",
             _ => unreachable!(),
         };
-        write!(
-            f,
-            "{}{}.{}",
-            sign,
-            self.0.abs() / Self::INNER_INCR_BY_PLY,
-            self.0.abs() % Self::INNER_INCR_BY_PLY
-        )
+        write!(f, "{}{}.{}", sign, self.0.abs() / Self::INNER_INCR_BY_PLY, self.0.abs() % Self::INNER_INCR_BY_PLY)
     }
 }
 

@@ -56,10 +56,10 @@ impl Rank {
 pub struct Square(u8);
 
 static SQUARE_NAMES: [&str; 64] = [
-    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
-    "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
-    "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
-    "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
+    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a3", "b3", "c3",
+    "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a5", "b5", "c5", "d5", "e5", "f5",
+    "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8",
+    "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
 
 #[allow(clippy::unusual_byte_groupings)]
@@ -184,33 +184,21 @@ impl Square {
     }
 
     pub const fn add(self, offset: u8) -> Self {
-        #![allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_possible_wrap,
-            clippy::cast_sign_loss
-        )]
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self.0 + offset;
         debug_assert!(res < 64, "Square::add overflowed");
         Self(res)
     }
 
     pub const fn add_beyond_board(self, offset: u8) -> Self {
-        #![allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_possible_wrap,
-            clippy::cast_sign_loss
-        )]
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self.0 + offset;
         debug_assert!(res < 65, "Square::add_beyond_board overflowed");
         Self(res)
     }
 
     pub const fn sub(self, offset: u8) -> Self {
-        #![allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_possible_wrap,
-            clippy::cast_sign_loss
-        )]
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self.0 - offset;
         debug_assert!(res < 64, "Square::sub overflowed");
         Self(res)
@@ -357,12 +345,8 @@ pub struct CastlingRights {
 }
 
 impl CastlingRights {
-    pub const NONE: Self = Self {
-        wk: Square::NO_SQUARE,
-        wq: Square::NO_SQUARE,
-        bk: Square::NO_SQUARE,
-        bq: Square::NO_SQUARE,
-    };
+    pub const NONE: Self =
+        Self { wk: Square::NO_SQUARE, wq: Square::NO_SQUARE, bk: Square::NO_SQUARE, bq: Square::NO_SQUARE };
 
     pub fn hashkey_index(self) -> usize {
         let mut index = 0;
@@ -557,19 +541,13 @@ mod tests {
         assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.as_set());
-        assert_eq!(
-            RAY_BETWEEN[Square::A1.index()][Square::D1.index()],
-            Square::B1.as_set() | Square::C1.as_set()
-        );
+        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::D1.index()], Square::B1.as_set() | Square::C1.as_set());
         assert_eq!(RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.as_set());
         assert_eq!(RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.as_set());
 
         for from in Square::all() {
             for to in Square::all() {
-                assert_eq!(
-                    RAY_BETWEEN[from.index()][to.index()],
-                    RAY_BETWEEN[to.index()][from.index()]
-                );
+                assert_eq!(RAY_BETWEEN[from.index()][to.index()], RAY_BETWEEN[to.index()][from.index()]);
             }
         }
     }

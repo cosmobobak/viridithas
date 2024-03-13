@@ -47,20 +47,9 @@ pub enum SearchLimit {
     Depth(Depth),
     Time(u64),
     Nodes(u64),
-    SoftNodes {
-        soft_limit: u64,
-        hard_limit: u64,
-    },
-    Mate {
-        ply: usize,
-    },
-    Dynamic {
-        our_clock: u64,
-        their_clock: u64,
-        our_inc: u64,
-        their_inc: u64,
-        moves_to_go: Option<u64>,
-    },
+    SoftNodes { soft_limit: u64, hard_limit: u64 },
+    Mate { ply: usize },
+    Dynamic { our_clock: u64, their_clock: u64, our_inc: u64, their_inc: u64, moves_to_go: Option<u64> },
 }
 
 impl Default for SearchLimit {
@@ -203,9 +192,7 @@ impl TimeManager {
 
     pub fn check_up(&mut self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
         match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
-                stopped.load(Ordering::SeqCst)
-            }
+            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => stopped.load(Ordering::SeqCst),
             SearchLimit::Nodes(nodes) => {
                 let past_limit = nodes_so_far >= nodes;
                 if past_limit {
@@ -263,11 +250,7 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::SoftNodes { .. })
     }
 
-    pub fn solved_breaker<const MAIN_THREAD: bool>(
-        &mut self,
-        value: i32,
-        depth: usize,
-    ) -> ControlFlow<()> {
+    pub fn solved_breaker<const MAIN_THREAD: bool>(&mut self, value: i32, depth: usize) -> ControlFlow<()> {
         if !MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
@@ -285,17 +268,9 @@ impl TimeManager {
         }
     }
 
-    pub fn mate_found_breaker<const MAIN_THREAD: bool>(
-        &mut self,
-        pv: &PVariation,
-        depth: Depth,
-    ) -> ControlFlow<()> {
+    pub fn mate_found_breaker<const MAIN_THREAD: bool>(&mut self, pv: &PVariation, depth: Depth) -> ControlFlow<()> {
         const MINIMUM_MATE_BREAK_DEPTH: Depth = Depth::new(10);
-        if MAIN_THREAD
-            && self.is_dynamic()
-            && is_mate_score(pv.score())
-            && depth > MINIMUM_MATE_BREAK_DEPTH
-        {
+        if MAIN_THREAD && self.is_dynamic() && is_mate_score(pv.score()) && depth > MINIMUM_MATE_BREAK_DEPTH {
             self.mate_counter += 1;
             if self.mate_counter >= 3 {
                 return ControlFlow::Break(());
@@ -385,14 +360,11 @@ impl TimeManager {
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
-            let subtree_size_multiplier = self
-                .best_move_nodes_fraction
-                .map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
+            let subtree_size_multiplier =
+                self.best_move_nodes_fraction.map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
 
-            let multiplier = stability_multiplier
-                * failed_low_multiplier
-                * forced_move_multiplier
-                * subtree_size_multiplier;
+            let multiplier =
+                stability_multiplier * failed_low_multiplier * forced_move_multiplier * subtree_size_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
@@ -426,14 +398,11 @@ impl TimeManager {
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
-            let subtree_size_multiplier = self
-                .best_move_nodes_fraction
-                .map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
+            let subtree_size_multiplier =
+                self.best_move_nodes_fraction.map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
 
-            let multiplier = stability_multiplier
-                * failed_low_multiplier
-                * forced_move_multiplier
-                * subtree_size_multiplier;
+            let multiplier =
+                stability_multiplier * failed_low_multiplier * forced_move_multiplier * subtree_size_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);

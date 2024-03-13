@@ -164,8 +164,7 @@ mod tests {
     #[test]
     fn perft_hard_position() {
         use super::*;
-        const TEST_FEN: &str =
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
@@ -228,8 +227,7 @@ mod tests {
     #[test]
     fn perft_movepicker_hard_position() {
         use super::*;
-        const TEST_FEN: &str =
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();

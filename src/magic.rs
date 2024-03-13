@@ -220,8 +220,7 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
     let mut used_indices = [SquareSet::EMPTY; 4096];
 
     // mask piece attack
-    let mask_attack =
-        if is_bishop { mask_bishop_attacks(square) } else { mask_rook_attacks(square) };
+    let mask_attack = if is_bishop { mask_bishop_attacks(square) } else { mask_rook_attacks(square) };
 
     // occupancy variations
     let occupancy_variations = 1 << relevant_bits;
@@ -291,11 +290,8 @@ pub fn init_magics() {
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
-        let magic_str = magic_str
-            .chunks(4)
-            .map(|chunk| chunk.iter().collect::<String>())
-            .collect::<Vec<String>>()
-            .join("_");
+        let magic_str =
+            magic_str.chunks(4).map(|chunk| chunk.iter().collect::<String>()).collect::<Vec<String>>().join("_");
         println!("    0x{magic_str},");
     }
     println!("];");
@@ -307,11 +303,8 @@ pub fn init_magics() {
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
-        let magic_str = magic_str
-            .chunks(4)
-            .map(|chunk| chunk.iter().collect::<String>())
-            .collect::<Vec<String>>()
-            .join("_");
+        let magic_str =
+            magic_str.chunks(4).map(|chunk| chunk.iter().collect::<String>()).collect::<Vec<String>>().join("_");
         println!("    0x{magic_str},");
     }
     println!("];");

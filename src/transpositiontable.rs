@@ -76,8 +76,7 @@ pub struct TTEntry {
     pub dummy: [u8; 6],             // 48 bits
 }
 
-const _TT_ENTRIES_ARE_ONE_WORD: () =
-    assert!(std::mem::size_of::<TTEntry>() == 16, "TT entry is not one word");
+const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 16, "TT entry is not one word");
 
 impl TTEntry {
     pub const NULL: Self = Self {
@@ -198,16 +197,7 @@ impl<'a> TTView<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn store(
-        &self,
-        key: u64,
-        ply: usize,
-        mut best_move: Move,
-        score: i32,
-        eval: i32,
-        flag: Bound,
-        depth: Depth,
-    ) {
+    pub fn store(&self, key: u64, ply: usize, mut best_move: Move, score: i32, eval: i32, flag: Bound, depth: Depth) {
         debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
@@ -217,10 +207,7 @@ impl<'a> TTView<'a> {
         // create a small key from the full key:
         let key = TT::pack_key(key);
         // load the entry:
-        let parts = [
-            self.table[index][0].load(Ordering::Relaxed),
-            self.table[index][1].load(Ordering::Relaxed),
-        ];
+        let parts = [self.table[index][0].load(Ordering::Relaxed), self.table[index][1].load(Ordering::Relaxed)];
         let entry: TTEntry = parts.into();
 
         if best_move.is_null() && entry.key == key {
@@ -238,8 +225,7 @@ impl<'a> TTView<'a> {
         let record_flag_bonus = i32::from(entry.age_and_flag.flag());
 
         // preferentially overwrite entries that are from searches on previous positions in the game.
-        let age_differential =
-            (i32::from(self.age) + 64 - i32::from(entry.age_and_flag.age())) & 0b11_1111;
+        let age_differential = (i32::from(self.age) + 64 - i32::from(entry.age_and_flag.age())) & 0b11_1111;
 
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
@@ -258,12 +244,17 @@ impl<'a> TTView<'a> {
             let write: [u64; 2] = TTEntry {
                 key,
                 m: best_move,
-                score: score.try_into().expect("attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table"),
+                score: score.try_into().expect(
+                    "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
+                ),
                 depth: depth.try_into().unwrap(),
                 age_and_flag: AgeAndFlag::new(self.age, flag),
-                evaluation: eval.try_into().expect("attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table"),
+                evaluation: eval.try_into().expect(
+                    "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
+                ),
                 dummy: Default::default(),
-            }.into();
+            }
+            .into();
             self.table[index][0].store(write[0], Ordering::Relaxed);
             self.table[index][1].store(write[1], Ordering::Relaxed);
         }
@@ -274,10 +265,7 @@ impl<'a> TTView<'a> {
         let key = TT::pack_key(key);
 
         // load the entry:
-        let parts = [
-            self.table[index][0].load(Ordering::Relaxed),
-            self.table[index][1].load(Ordering::Relaxed),
-        ];
+        let parts = [self.table[index][0].load(Ordering::Relaxed), self.table[index][1].load(Ordering::Relaxed)];
         let entry: TTEntry = parts.into();
 
         if entry.key != key {
@@ -294,13 +282,7 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        Some(TTHit {
-            mov: tt_move,
-            depth: tt_depth,
-            bound: tt_bound,
-            value: tt_value,
-            eval: entry.evaluation.into(),
-        })
+        Some(TTHit { mov: tt_move, depth: tt_depth, bound: tt_bound, value: tt_value, eval: entry.evaluation.into() })
     }
 
     pub fn prefetch(&self, key: u64) {

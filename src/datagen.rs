@@ -90,10 +90,9 @@ impl DataGenOptions {
             "{}g-{}t-{}-{}-{}-{}",
             self.num_games,
             self.num_threads,
-            self.tablebases_path.as_ref().map_or_else(
-                || "no_tb".into(),
-                |tablebases_path| tablebases_path.to_string_lossy()
-            ),
+            self.tablebases_path
+                .as_ref()
+                .map_or_else(|| "no_tb".into(), |tablebases_path| tablebases_path.to_string_lossy()),
             if self.use_nnue { "nnue" } else { "hce" },
             if self.generate_dfrc { "dfrc" } else { "classical" },
             match self.limit {
@@ -105,7 +104,10 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: Option<&str>) {
-    assert!(!cfg!(not(feature = "datagen")), "Data generation is not enabled, please enable the 'datagen' feature to use this functionality.");
+    assert!(
+        !cfg!(not(feature = "datagen")),
+        "Data generation is not enabled, please enable the 'datagen' feature to use this functionality."
+    );
 
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
@@ -113,11 +115,14 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     })
     .expect("Failed to set Ctrl-C handler");
 
-    let options: DataGenOptions = cli_config.map_or_else(|| {
+    let options: DataGenOptions = cli_config.map_or_else(
+        || {
             let options = DataGenOptions::new();
             show_boot_info(&options);
             config_loop(options)
-        }, |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"));
+        },
+        |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"),
+    );
 
     CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
     FENS_GENERATED.store(0, Ordering::SeqCst);
@@ -126,13 +131,8 @@ pub fn gen_data_main(cli_config: Option<&str>) {
         println!("Starting data generation with the following configuration:");
         println!("{options}");
         if options.num_games % options.num_threads != 0 {
-            println!(
-                "Warning: The number of games is not evenly divisible by the number of threads,"
-            );
-            println!(
-                "this will result in {} games being omitted.",
-                options.num_games % options.num_threads
-            );
+            println!("Warning: The number of games is not evenly divisible by the number of threads,");
+            println!("this will result in {} games being omitted.", options.num_games % options.num_threads);
         }
     }
     if let Some(tb_path) = &options.tablebases_path {
@@ -150,8 +150,7 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     // and to name the data files.
     // the ID is formed by taking the current date and time,
     // plus a compressed representation of the options struct.
-    let run_id =
-        format!("run_{}_{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"), options.summary());
+    let run_id = format!("run_{}_{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"), options.summary());
     if options.log_level > 0 {
         println!("This run will be saved to the directory \"data/{run_id}\"");
         println!("Each thread will save its data to a separate file in this directory.");
@@ -198,19 +197,12 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     let mut counters = counters.iter().collect::<Vec<_>>();
     counters.sort_unstable_by_key(|(_, &value)| Reverse(value));
     for (&key, &value) in counters {
-        eprintln!(
-            "{key:?}: {value} ({percentage}%)",
-            percentage = (value as f64 / total as f64 * 100.0).round()
-        );
+        eprintln!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
     }
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn generate_on_thread(
-    id: usize,
-    options: &DataGenOptions,
-    data_dir: &Path,
-) -> HashMap<GameOutcome, u64> {
+fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
     #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cast_possible_truncation)]
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -223,13 +215,10 @@ fn generate_on_thread(
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => {
-            SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 }
-        }
+        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 },
     });
     let nodes = AtomicU64::new(0);
-    let mut info =
-        SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped, &nodes) };
+    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped, &nodes) };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -269,9 +258,8 @@ fn generate_on_thread(
                 fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
             );
             eprintln!(" |> Estimated time remaining: {time_remaining:.2} seconds.");
-            let est_completion_date = chrono::Local::now()
-                .checked_add_signed(chrono::Duration::seconds(time_remaining as i64))
-                .unwrap();
+            let est_completion_date =
+                chrono::Local::now().checked_add_signed(chrono::Duration::seconds(time_remaining as i64)).unwrap();
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
             std::io::stderr().flush().unwrap();
@@ -321,8 +309,7 @@ fn generate_on_thread(
         }
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager.set_limit(SearchLimit::Depth(Depth::new(10)));
-        let (eval, _) =
-            board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+        let (eval, _) = board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             if options.log_level > 2 {
@@ -372,11 +359,8 @@ fn generate_on_thread(
             }
 
             if win_adj_counter >= 4 {
-                let outcome = if score > 0 {
-                    GameOutcome::WhiteWinAdjudication
-                } else {
-                    GameOutcome::BlackWinAdjudication
-                };
+                let outcome =
+                    if score > 0 { GameOutcome::WhiteWinAdjudication } else { GameOutcome::BlackWinAdjudication };
                 break outcome;
             }
             if draw_adj_counter >= 12 {
@@ -421,9 +405,7 @@ fn generate_on_thread(
         // either because the STOP_GENERATION signal was set,
         // or because we have generated enough positions.
         if STOP_GENERATION.load(Ordering::SeqCst)
-            || options
-                .position_count_limit
-                .map_or(false, |limit| FENS_GENERATED.load(Ordering::SeqCst) >= limit)
+            || options.position_count_limit.map_or(false, |limit| FENS_GENERATED.load(Ordering::SeqCst) >= limit)
         {
             break 'generation_main_loop;
         }
@@ -438,9 +420,7 @@ fn show_boot_info(options: &DataGenOptions) {
     if options.log_level > 0 {
         println!("Welcome to Viri's data generation tool!");
         println!("This tool will generate self-play data for Viridithas.");
-        println!(
-            "You can configure the data generation process by setting the following parameters:"
-        );
+        println!("You can configure the data generation process by setting the following parameters:");
         println!("{options}");
         println!("you can also set positions_limit to limit the number of positions generated.");
         println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
@@ -467,21 +447,15 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
             break;
         }
         if command != "set" {
-            eprintln!(
-                "Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\""
-            );
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\", \"start\", and \"go\"");
             continue;
         }
         let Some(param) = user_input.next() else {
-            eprintln!(
-                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
-            );
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
             continue;
         };
         let Some(value) = user_input.next() else {
-            eprintln!(
-                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
-            );
+            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
             continue;
         };
         match param {
@@ -601,12 +575,7 @@ impl FromStr for DataGenOptions {
         options.generate_dfrc = match parts.get(4).copied() {
             Some("dfrc") => true,
             Some("classical") => false,
-            _ => {
-                return Err(format!(
-                    "Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"",
-                    parts[4]
-                ))
-            }
+            _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
         };
         let limit = match parts[5].chars().next() {
             Some('d') => DataGenLimit::Depth(
@@ -639,9 +608,7 @@ impl Display for DataGenOptions {
         writeln!(
             f,
             " |> tablebases_path: {}",
-            self.tablebases_path
-                .as_ref()
-                .map_or_else(|| "None".into(), |path| path.to_string_lossy())
+            self.tablebases_path.as_ref().map_or_else(|| "None".into(), |path| path.to_string_lossy())
         )?;
         writeln!(f, " |> use_nnue: {}", self.use_nnue)?;
         writeln!(
@@ -655,7 +622,10 @@ impl Display for DataGenOptions {
         writeln!(f, " |> dfrc: {}", self.generate_dfrc)?;
         writeln!(f, " |> log_level: {}", self.log_level)?;
         if self.tablebases_path.is_none() {
-            writeln!(f, "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?")?;
+            writeln!(
+                f,
+                "    ! Tablebases path not set - this will result in weaker data - are you sure you want to continue?"
+            )?;
         }
         Ok(())
     }
@@ -666,10 +636,8 @@ impl FromStr for DataGenLimit {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         #![allow(clippy::cast_possible_truncation)]
-        let (limit_type, limit_value) =
-            s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
-        let limit_value: u64 =
-            limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
+        let (limit_type, limit_value) = s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
+        let limit_value: u64 = limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
         match limit_type {
             "depth" => {
                 if limit_value > i32::MAX as u64 {
@@ -685,13 +653,7 @@ impl FromStr for DataGenLimit {
 
 /// Unpacks the variable-length game format into either bulletformat or marlinformat records,
 /// filtering as it goes.
-pub fn run_splat(
-    input: &Path,
-    output: &Path,
-    filter: bool,
-    marlinformat: bool,
-    limit: Option<usize>,
-) {
+pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, limit: Option<usize>) {
     // check that the input file exists
     if !input.exists() {
         eprintln!("Input file does not exist.");
@@ -737,9 +699,7 @@ pub fn run_splat(
     print!("0 games splatted");
     let mut game_count = 0;
     let mut move_buffer = Vec::new();
-    while let Ok(game) =
-        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
-    {
+    while let Ok(game) = dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer)) {
         if marlinformat {
             game.splat_to_marlinformat(
                 |packed_board| {
@@ -750,11 +710,8 @@ pub fn run_splat(
         } else {
             game.splat_to_bulletformat(
                 |chess_board| {
-                    let bytes = unsafe {
-                        std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(
-                            chess_board,
-                        )
-                    };
+                    let bytes =
+                        unsafe { std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(chess_board) };
                     output_buffer.write_all(&bytes).unwrap();
                 },
                 filter_fn,
@@ -820,9 +777,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
     println!("Converting to PGN...");
     let mut move_buffer = Vec::new();
     let mut game_count = 0;
-    while let Ok(game) =
-        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
-    {
+    while let Ok(game) = dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer)) {
         let outcome = game.outcome();
         let mut board = game.initial_position();
         let header = make_header(outcome, board.fen());
@@ -912,8 +867,7 @@ impl From<&Board> for MaterialConfiguration {
         // normalize the counts so that the white side has more material than the black side
         let ordering_key = |subslice: &[u8]| -> u64 {
             let count = u64::from(subslice.iter().sum::<u8>());
-            let highest_piece =
-                subslice.iter().enumerate().filter(|(_, v)| **v > 0).last().unwrap_or((0, &0)).0;
+            let highest_piece = subslice.iter().enumerate().filter(|(_, v)| **v > 0).last().unwrap_or((0, &0)).0;
             count * 10 + highest_piece as u64
         };
         let (white, black) = mc.counts.split_at_mut(5);
@@ -953,23 +907,15 @@ pub fn dataset_stats(dataset_path: &Path) {
 
     let mut reader = BufReader::new(File::open(dataset_path).unwrap());
 
-    while let Ok(game) =
-        dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer))
-    {
+    while let Ok(game) = dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
         stats.games += 1;
         *stats.length_counts.entry(game.len()).or_default() += 1;
         game.visit_positions(|position, evaluation| {
             *stats.eval_counts.entry(evaluation).or_default() += 1;
-            *stats
-                .piece_counts
-                .entry(u8::try_from(position.pieces.occupied().count()).unwrap())
-                .or_default() += 1;
+            *stats.piece_counts.entry(u8::try_from(position.pieces.occupied().count()).unwrap()).or_default() += 1;
             *stats.material_counts.entry(MaterialConfiguration::from(position)).or_default() += 1;
             *stats.pov_king_positions.entry(position.king_sq(Colour::WHITE)).or_default() += 1;
-            *stats
-                .pov_king_positions
-                .entry(position.king_sq(Colour::BLACK).flip_rank())
-                .or_default() += 1;
+            *stats.pov_king_positions.entry(position.king_sq(Colour::BLACK).flip_rank()).or_default() += 1;
         });
         move_buffer = game.into_move_buffer();
 
@@ -1022,8 +968,7 @@ pub fn dataset_stats(dataset_path: &Path) {
     material_counts_file.flush().unwrap();
     println!("Writing PoV king positions to pov_king_positions.csv");
     let pov_king_positions = stats.pov_king_positions.into_iter().collect::<Vec<_>>();
-    let mut pov_king_positions_file =
-        BufWriter::new(File::create("pov_king_positions.csv").unwrap());
+    let mut pov_king_positions_file = BufWriter::new(File::create("pov_king_positions.csv").unwrap());
     writeln!(pov_king_positions_file, "square,count").unwrap();
     for (sq, count) in pov_king_positions {
         writeln!(pov_king_positions_file, "{sq},{count}", sq = sq.index()).unwrap();
@@ -1031,8 +976,7 @@ pub fn dataset_stats(dataset_path: &Path) {
     pov_king_positions_file.flush().unwrap();
 
     #[allow(clippy::cast_precision_loss)]
-    let mean_game_len = ((stats.length_counts.iter().map(|(k, v)| k * v).sum::<usize>() as u128
-        * 1000)
+    let mean_game_len = ((stats.length_counts.iter().map(|(k, v)| k * v).sum::<usize>() as u128 * 1000)
         / stats.games as u128) as f64
         / 1000.0;
     println!("Mean game length: {mean_game_len}");

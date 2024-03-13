@@ -116,15 +116,14 @@ impl Display for UciError {
 // ... moves e2e4 e7e5 b7b8q
 fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     let mut parts = text.split_ascii_whitespace();
-    let command = parts.next().ok_or_else(|| {
-        UciError::UnexpectedCommandTermination("No command in parse_position".into())
-    })?;
+    let command =
+        parts.next().ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_position".into()))?;
     if command != "position" {
         return Err(UciError::InvalidFormat("Expected 'position'".into()));
     }
-    let determiner = parts.next().ok_or_else(|| {
-        UciError::UnexpectedCommandTermination("No determiner after \"position\"".into())
-    })?;
+    let determiner = parts
+        .next()
+        .ok_or_else(|| UciError::UnexpectedCommandTermination("No determiner after \"position\"".into()))?;
     if determiner == "startpos" {
         pos.set_startpos();
         let moves = parts.next(); // skip "moves"
@@ -135,9 +134,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
         }
     } else {
         if determiner != "fen" {
-            return Err(UciError::InvalidFormat(format!(
-                "Unknown term after \"position\": {determiner}"
-            )));
+            return Err(UciError::InvalidFormat(format!("Unknown term after \"position\": {determiner}")));
         }
         let mut fen = String::new();
         for part in &mut parts {
@@ -169,9 +166,8 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
     let mut limit = SearchLimit::Infinite;
 
     let mut parts = text.split_ascii_whitespace();
-    let command = parts
-        .next()
-        .ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
+    let command =
+        parts.next().ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
     if command != "go" {
         return Err(UciError::InvalidFormat("Expected \"go\"".into()));
     }
@@ -235,13 +231,10 @@ where
     T: FromStr,
     <T as FromStr>::Err: Display,
 {
-    let next_part =
-        next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
+    let next_part = next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
     let value = next_part.parse();
     value.map_err(|e| {
-        UciError::InvalidFormat(format!(
-            "value for {target} is not a number: {e}, tried to parse {next_part}"
-        ))
+        UciError::InvalidFormat(format!("value for {target} is not a number: {e}, tried to parse {next_part}"))
     })
 }
 
@@ -266,13 +259,11 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             "unexpected character after \"setoption\", expected \"name\", got \"{name_part}\". Did you mean \"setoption name {name_part}\"?"
         )));
     }
-    let opt_name = parts.next().ok_or_else(|| {
-        UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
-    })?;
+    let opt_name = parts
+        .next()
+        .ok_or_else(|| UnexpectedCommandTermination("no option name given after \"setoption name\"".into()))?;
     let Some(value_part) = parts.next() else {
-        return Err(UciError::InvalidFormat(
-            "no \"value\" after \"setoption name {opt_name}\"".into(),
-        ));
+        return Err(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
     };
     if value_part != "value" {
         return Err(UciError::InvalidFormat(format!(
@@ -280,9 +271,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
         )));
     }
     let opt_value = parts.next().ok_or_else(|| {
-        UnexpectedCommandTermination(format!(
-            "no option value given after \"setoption name {opt_name} value\""
-        ))
+        UnexpectedCommandTermination(format!("no option value given after \"setoption name {opt_name} value\""))
     })?;
     let mut out = pre_config;
     let id_parser_pairs = out.search_config.ids_with_parsers();
@@ -315,9 +304,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_THREADS) {
                 // "Threads value must be between 1 and {UCI_MAX_THREADS}"
-                return Err(UciError::IllegalValue(format!(
-                    "Threads value must be between 1 and {UCI_MAX_THREADS}"
-                )));
+                return Err(UciError::IllegalValue(format!("Threads value must be between 1 and {UCI_MAX_THREADS}")));
             }
             out.threads = value;
         }
@@ -325,9 +312,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_MULTIPV) {
                 // "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
-                return Err(UciError::IllegalValue(format!(
-                    "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
-                )));
+                return Err(UciError::IllegalValue(format!("MultiPV value must be between 1 and {UCI_MAX_MULTIPV}")));
             }
             MULTI_PV.store(value, Ordering::SeqCst);
         }
@@ -348,27 +333,21 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
             if value > 6 {
-                return Err(UciError::IllegalValue(
-                    "SyzygyProbeLimit value must be between 0 and 6".to_string(),
-                ));
+                return Err(UciError::IllegalValue("SyzygyProbeLimit value must be between 0 and 6".to_string()));
             }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
             if !(1..=100).contains(&value) {
-                return Err(UciError::IllegalValue(
-                    "SyzygyProbeDepth value must be between 0 and 100".to_string(),
-                ));
+                return Err(UciError::IllegalValue("SyzygyProbeDepth value must be between 0 and 100".to_string()));
             }
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
         "Contempt" => {
             let value: i32 = opt_value.parse()?;
             if !(-10000..=10000).contains(&value) {
-                return Err(UciError::IllegalValue(
-                    "Contempt value must be between -10000 and 10000".to_string(),
-                ));
+                return Err(UciError::IllegalValue("Contempt value must be between -10000 and 10000".to_string()));
             }
             CONTEMPT.store(value, Ordering::SeqCst);
         }
@@ -443,13 +422,13 @@ pub struct PrettyScoreFormatWrapper(i32, Colour);
 impl Display for PrettyScoreFormatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            -20..=20 => write!(f, "\u{001b}[0m")?, // drawish, no colour.
-            21..=100 => write!(f, "\u{001b}[38;5;10m")?, // slightly better for us, light green.
-            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?, // slightly better for them, light red.
-            101..=500 => write!(f, "\u{001b}[38;5;2m")?, // clearly better for us, green.
+            -20..=20 => write!(f, "\u{001b}[0m")?,           // drawish, no colour.
+            21..=100 => write!(f, "\u{001b}[38;5;10m")?,     // slightly better for us, light green.
+            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?,    // slightly better for them, light red.
+            101..=500 => write!(f, "\u{001b}[38;5;2m")?,     // clearly better for us, green.
             -10000..=-101 => write!(f, "\u{001b}[38;5;1m")?, // clearly/much better for them, red.
-            501..=10000 => write!(f, "\u{001b}[38;5;4m")?, // much better for us, blue.
-            _ => write!(f, "\u{001b}[38;5;219m")?, // probably a mate score, pink.
+            501..=10000 => write!(f, "\u{001b}[38;5;4m")?,   // much better for us, blue.
+            _ => write!(f, "\u{001b}[38;5;219m")?,           // probably a mate score, pink.
         }
         let white_pov = if self.1 == Colour::WHITE { self.0 } else { -self.0 };
         if is_mate_score(white_pov) {
@@ -617,11 +596,7 @@ pub fn main_loop(global_bench: bool) {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    thread_data
-                        .first_mut()
-                        .expect("the thread headers are empty.")
-                        .nnue
-                        .evaluate(pos.turn())
+                    thread_data.first_mut().expect("the thread headers are empty.").nnue.evaluate(pos.turn())
                 };
                 println!("{eval}");
                 Ok(())
@@ -675,22 +650,14 @@ pub fn main_loop(global_bench: bool) {
                         let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
                         depth
                             .parse::<usize>()
-                            .map_err(|_| {
-                                UciError::InvalidFormat(format!(
-                                    "cannot parse \"{depth}\" as usize"
-                                ))
-                            })
+                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
                             .map(|depth| divide_perft(depth, &mut pos))
                     }
                     Some(depth) => depth
                         .parse::<usize>()
-                        .map_err(|_| {
-                            UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize"))
-                        })
+                        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
                         .map(|depth| block_perft(depth, &mut pos)),
-                    None => Err(UciError::InvalidFormat(
-                        "expected a depth after 'go perft'".to_string(),
-                    )),
+                    None => Err(UciError::InvalidFormat("expected a depth after 'go perft'".to_string())),
                 }
             }
             input if input.starts_with("go") => {
@@ -734,8 +701,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> Result<(), UciError> {
         .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
-    let max_fen_len =
-        BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
+    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
     for fen in BENCH_POSITIONS {
         let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {
@@ -780,10 +746,7 @@ fn block_perft(depth: usize, pos: &mut Board) {
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
     let nps = nodes as f64 / elapsed.as_secs_f64();
-    println!(
-        "info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}",
-        elapsed = elapsed.as_millis()
-    );
+    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}", elapsed = elapsed.as_millis());
 }
 
 fn divide_perft(depth: usize, pos: &mut Board) {

@@ -14,8 +14,8 @@ use arrayvec::ArrayVec;
 use crate::{
     board::{
         evaluation::{
-            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
-            MINIMUM_MATE_SCORE, MINIMUM_TB_WIN_SCORE,
+            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_MATE_SCORE,
+            MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
             bitboards,
@@ -172,8 +172,7 @@ impl Board {
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
         let board_copy = self.clone();
         let info_copy = info.clone();
-        let mut board_info_copies =
-            rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
+        let mut board_info_copies = rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
 
         thread::scope(|s| {
             s.spawn(|| {
@@ -190,8 +189,7 @@ impl Board {
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let depth_achieved = best_thread.completed;
         let pv = best_thread.pv().clone();
-        let best_move =
-            pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
+        let best_move = pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
 
         if info.print_to_stdout && info.skip_print() {
             // we haven't printed any ID logging yet, so give one as we leave search.
@@ -239,8 +237,7 @@ impl Board {
             // aspiration loop:
             // (depth can be dynamically modified in the aspiration loop,
             // so we return out the value of depth to the caller)
-            let ControlFlow::Continue(depth) =
-                self.aspiration::<T0>(&mut pv, info, t, &mut aw, d, &mut average_value)
+            let ControlFlow::Continue(depth) = self.aspiration::<T0>(&mut pv, info, t, &mut aw, d, &mut average_value)
             else {
                 break 'deepening;
             };
@@ -254,21 +251,14 @@ impl Board {
             if T0 && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
                     let best_move = pv.moves[0];
-                    let best_move_subtree_size =
-                        info.root_move_nodes[best_move.from().index()][best_move.to().index()];
+                    let best_move_subtree_size = info.root_move_nodes[best_move.from().index()][best_move.to().index()];
                     let tree_size = info.nodes.get_local();
                     #[allow(clippy::cast_precision_loss)]
                     Some(best_move_subtree_size as f64 / tree_size as f64)
                 } else {
                     None
                 };
-                info.time_manager.report_completed_depth(
-                    depth,
-                    pv.score,
-                    pv.moves[0],
-                    bm_frac,
-                    &info.conf,
-                );
+                info.time_manager.report_completed_depth(depth, pv.score, pv.moves[0], bm_frac, &info.conf);
             }
 
             if info.check_up() {
@@ -336,10 +326,8 @@ impl Board {
 
             // if we've made it here, it means we got an exact score.
             let score = pv.score;
-            let bestmove =
-                t.pvs[t.completed].moves().first().copied().unwrap_or_else(|| self.default_move(t));
-            *average_value =
-                if *average_value == VALUE_NONE { score } else { (2 * score + *average_value) / 3 };
+            let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or_else(|| self.default_move(t));
+            *average_value = if *average_value == VALUE_NONE { score } else { (2 * score + *average_value) / 3 };
 
             if T0 && info.print_to_stdout {
                 let total_nodes = info.nodes.get_global();
@@ -379,8 +367,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
         let tt_move = t.tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp =
-            MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
+        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_simple(mov) {
@@ -483,8 +470,7 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker =
-            CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, info.conf.qs_see_bound);
+        let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, info.conf.qs_see_bound);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -575,11 +561,8 @@ impl Board {
 
         debug_assert_eq!(height == 0, NT::ROOT);
 
-        info.seldepth = if NT::ROOT {
-            ZERO_PLY
-        } else {
-            info.seldepth.max(Depth::from(i32::try_from(height).unwrap()))
-        };
+        info.seldepth =
+            if NT::ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(i32::try_from(height).unwrap())) };
 
         if !NT::ROOT {
             // check draw
@@ -588,8 +571,7 @@ impl Board {
             }
 
             // are we too deep?
-            let max_height =
-                MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+            let max_height = MAX_DEPTH.ply_to_horizon().min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
                 return if in_check { 0 } else { self.evaluate(t, info.nodes.get_local()) };
             }
@@ -708,9 +690,7 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval
-                < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth * depth
-            {
+            if static_eval < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth * depth {
                 let v = self.quiescence::<OffPV>(pv, info, t, alpha - 1, alpha);
                 if v < alpha {
                     return v;
@@ -720,9 +700,7 @@ impl Board {
             // beta-pruning. (reverse futility pruning)
             // if the static eval is too high, we can prune the node.
             // this is a lot like stand_pat in quiescence search.
-            if depth <= info.conf.rfp_depth
-                && static_eval - Self::rfp_margin(info, depth, improving) > beta
-            {
+            if depth <= info.conf.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
                 return (static_eval + beta) / 2;
             }
 
@@ -747,8 +725,7 @@ impl Board {
                 let nm_depth = depth - r;
                 t.tt.prefetch(self.key_after(Move::NULL));
                 self.make_nullmove();
-                let mut null_score =
-                    -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
+                let mut null_score = -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
                 if info.stopped() {
                     return 0;
@@ -768,8 +745,7 @@ impl Board {
                     // and if we hit the other side deeper in the tree
                     // with sufficient depth, we'll disallow it for them too.
                     t.ban_nmp_for(self.turn());
-                    let veri_score =
-                        self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, beta - 1, beta, false);
+                    let veri_score = self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, beta - 1, beta, false);
                     t.unban_nmp_for(self.turn());
                     if veri_score >= beta {
                         return null_score;
@@ -785,10 +761,7 @@ impl Board {
             depth -= 1;
         }
 
-        let see_table = [
-            info.conf.see_tactical_margin * depth.squared(),
-            info.conf.see_quiet_margin * depth.round(),
-        ];
+        let see_table = [info.conf.see_tactical_margin * depth.squared(), info.conf.see_quiet_margin * depth.round()];
 
         // store the eval into the TT if we won't overwrite anything:
         if tt_hit.is_none() && !in_check && excluded.is_null() {
@@ -797,8 +770,7 @@ impl Board {
 
         // probcut:
         let pc_beta = std::cmp::min(
-            beta + info.conf.probcut_margin
-                - i32::from(improving) * info.conf.probcut_improving_margin,
+            beta + info.conf.probcut_margin - i32::from(improving) * info.conf.probcut_improving_margin,
             MINIMUM_TB_WIN_SCORE - 1,
         );
         // as usual, don't probcut in PV / check / singular verification / if there are GT truth scores in flight.
@@ -813,9 +785,7 @@ impl Board {
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
             let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
-            while let Some(MoveListEntry { mov: m, score: ordering_score }) =
-                move_picker.next(self, t)
-            {
+            while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
                 }
@@ -835,15 +805,7 @@ impl Board {
 
                 if value >= pc_beta {
                     let pc_depth = depth - info.conf.probcut_reduction;
-                    value = -self.alpha_beta::<OffPV>(
-                        l_pv,
-                        info,
-                        t,
-                        pc_depth,
-                        -pc_beta,
-                        -pc_beta + 1,
-                        !cut_node,
-                    );
+                    value = -self.alpha_beta::<OffPV>(l_pv, info, t, pc_depth, -pc_beta, -pc_beta + 1, !cut_node);
                 }
 
                 self.unmake_move(t);
@@ -877,17 +839,13 @@ impl Board {
 
         let killers = self.get_killer_set(t);
         let counter_move = t.get_counter_move(self);
-        let mut move_picker =
-            MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
+        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-        while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t)
-        {
-            debug_assert!(
-                !quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m)
-            );
+        while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t) {
+            debug_assert!(!quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m));
             if NT::ROOT && uci::is_multipv() {
                 // handle multi-pv
                 if t.multi_pv_excluded.contains(&m) {
@@ -922,12 +880,8 @@ impl Board {
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin =
-                    lmr_depth.round() * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
-                if is_quiet
-                    && lmr_depth < info.conf.futility_depth
-                    && static_eval + fp_margin <= alpha
-                {
+                let fp_margin = lmr_depth.round() * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
+                if is_quiet && lmr_depth < info.conf.futility_depth && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
             }
@@ -968,17 +922,8 @@ impl Board {
                 extension = ZERO_PLY;
             } else if maybe_singular {
                 let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
-                extension = self.singularity::<NT::Next>(
-                    info,
-                    t,
-                    m,
-                    tt_value,
-                    alpha,
-                    beta,
-                    depth,
-                    &mut move_picker,
-                    cut_node,
-                );
+                extension =
+                    self.singularity::<NT::Next>(info, t, m, tt_value, alpha, beta, depth, &mut move_picker, cut_node);
 
                 if move_picker.stage == Stage::Done {
                     // got a multi-cut bubbled up from the singularity search
@@ -1000,8 +945,7 @@ impl Board {
             if moves_made == 1 {
                 // first move (presumably the PV-move)
                 let new_depth = depth + extension - 1;
-                score =
-                    -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
+                score = -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= Depth::new(3)
@@ -1036,22 +980,12 @@ impl Board {
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
                 let reduced_depth = new_depth - r;
-                score = -self.alpha_beta::<OffPV>(
-                    l_pv,
-                    info,
-                    t,
-                    reduced_depth,
-                    -alpha - 1,
-                    -alpha,
-                    true,
-                );
+                score = -self.alpha_beta::<OffPV>(l_pv, info, t, reduced_depth, -alpha - 1, -alpha, true);
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > ONE_PLY {
-                    let do_deeper_search = score
-                        > (best_score
-                            + info.conf.do_deeper_base_margin
-                            + info.conf.do_deeper_depth_margin * r);
+                    let do_deeper_search =
+                        score > (best_score + info.conf.do_deeper_base_margin + info.conf.do_deeper_depth_margin * r);
                     let do_shallower_search = score < best_score + new_depth.round();
                     // depending on the value that the reduced search kicked out,
                     // we might want to do a deeper search, or a shallower search.
@@ -1059,29 +993,13 @@ impl Board {
                     // check if we're actually going to do a deeper search than before
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
-                        score = -self.alpha_beta::<OffPV>(
-                            l_pv,
-                            info,
-                            t,
-                            new_depth - 1,
-                            -alpha - 1,
-                            -alpha,
-                            !cut_node,
-                        );
+                        score = -self.alpha_beta::<OffPV>(l_pv, info, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                     }
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
                     // this is a new best move, so it *is* PV.
-                    score = -self.alpha_beta::<NT::Next>(
-                        l_pv,
-                        info,
-                        t,
-                        new_depth - 1,
-                        -beta,
-                        -alpha,
-                        false,
-                    );
+                    score = -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth - 1, -beta, -alpha, false);
                 }
             }
             self.unmake_move(t);
@@ -1147,12 +1065,7 @@ impl Board {
                 // this heuristic is on the whole unmotivated, beyond mere empiricism.
                 // perhaps it's really important to know which quiet moves are good in "bad" positions?
                 let history_depth_boost = i32::from(static_eval <= alpha);
-                self.update_quiet_history(
-                    t,
-                    moves_to_adjust,
-                    best_move,
-                    depth + history_depth_boost,
-                );
+                self.update_quiet_history(t, moves_to_adjust, best_move, depth + history_depth_boost);
             }
 
             // we unconditionally update the tactical history table
@@ -1182,13 +1095,7 @@ impl Board {
     }
 
     /// Update the main, counter-move, and followup history tables.
-    fn update_quiet_history(
-        &mut self,
-        t: &mut ThreadData,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
+    fn update_quiet_history(&mut self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
@@ -1196,13 +1103,7 @@ impl Board {
     }
 
     /// Update the tactical history table.
-    fn update_tactical_history(
-        &mut self,
-        t: &mut ThreadData,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
+    fn update_tactical_history(&mut self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         t.update_tactical_history(self, moves_to_adjust, best_move, depth);
     }
 
@@ -1231,8 +1132,7 @@ impl Board {
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move(t);
         t.excluded[self.height()] = m;
-        let value =
-            self.alpha_beta::<OffPV>(&mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
+        let value = self.alpha_beta::<OffPV>(&mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
         t.excluded[self.height()] = Move::NULL;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
@@ -1241,9 +1141,8 @@ impl Board {
         // re-make the singular move.
         self.make_move(m, t);
 
-        let double_extend = !NT::PV
-            && value < r_beta - info.conf.dext_margin
-            && t.double_extensions[self.height()] <= 12;
+        let double_extend =
+            !NT::PV && value < r_beta - info.conf.dext_margin && t.double_extensions[self.height()] <= 12;
 
         match () {
             () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
@@ -1271,15 +1170,8 @@ impl Board {
         t.excluded[self.height()] = m;
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
-        let value = self.alpha_beta::<CheckForced>(
-            &mut PVariation::default(),
-            info,
-            t,
-            r_depth,
-            r_beta - 1,
-            r_beta,
-            false,
-        );
+        let value =
+            self.alpha_beta::<CheckForced>(&mut PVariation::default(), info, t, r_depth, r_beta - 1, r_beta, false);
         info.print_to_stdout = pts_prev;
         t.excluded[self.height()] = Move::NULL;
         value < r_beta
@@ -1294,8 +1186,7 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        let mut next_victim =
-            if m.is_promo() { m.promotion_type() } else { self.piece_at(from).piece_type() };
+        let mut next_victim = if m.is_promo() { m.promotion_type() } else { self.piece_at(from).piece_type() };
 
         let mut balance = self.estimated_see(m) - threshold;
 
@@ -1343,10 +1234,7 @@ impl Board {
             occupied ^= (my_attackers & self.pieces.of_type(next_victim)).first().as_set();
 
             // diagonal moves reveal bishops and queens:
-            if next_victim == PieceType::PAWN
-                || next_victim == PieceType::BISHOP
-                || next_victim == PieceType::QUEEN
-            {
+            if next_victim == PieceType::PAWN || next_victim == PieceType::BISHOP || next_victim == PieceType::QUEEN {
                 attackers |= bitboards::bishop_attacks(to, occupied) & diag_sliders;
             }
 
@@ -1366,9 +1254,7 @@ impl Board {
                 // As a slight optimisation for move legality checking, if our last attacking
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
-                if next_victim == PieceType::KING
-                    && (attackers & self.pieces.occupied_co(colour)).non_empty()
-                {
+                if next_victim == PieceType::KING && (attackers & self.pieces.occupied_co(colour)).non_empty() {
                     colour = colour.flip();
                 }
                 break;
@@ -1394,8 +1280,7 @@ pub fn select_best<'a>(
         let best_score = best_thread.pvs[best_depth].score();
         let this_depth = thread.completed;
         let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE) && this_score > best_score
-        {
+        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE) && this_score > best_score {
             best_thread = thread;
         }
         if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_MATE_SCORE) {
@@ -1460,8 +1345,7 @@ fn readout_info(
         let mut pv_string = board.pv_san(pv).unwrap();
         // truncate the pv string if it's too long
         if pv_string.len() > 130 {
-            let final_space =
-                pv_string.match_indices(' ').filter(|(i, _)| *i < 130).last().map_or(0, |(i, _)| i);
+            let final_space = pv_string.match_indices(' ').filter(|(i, _)| *i < 130).last().map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
             pv_string.push_str("...         ");
         }
@@ -1502,15 +1386,10 @@ pub struct LMTable {
 }
 
 impl LMTable {
-    pub const NULL: Self =
-        Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
+    pub const NULL: Self = Self { lm_reduction_table: [[0; 64]; 64], lmp_movecount_table: [[0; 12]; 2] };
 
     pub fn new(config: &Config) -> Self {
-        #![allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_precision_loss,
-            clippy::cast_sign_loss
-        )]
+        #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
         let mut out = Self::NULL;
         let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
@@ -1566,13 +1445,7 @@ impl AspirationWindow {
         if is_game_theoretic_score(value) {
             // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
-            Self {
-                midpoint: value,
-                alpha: -INFINITY,
-                beta: INFINITY,
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
+            Self { midpoint: value, alpha: -INFINITY, beta: INFINITY, alpha_fails: 0, beta_fails: 0 }
         } else {
             Self {
                 midpoint: value,

@@ -132,8 +132,7 @@ impl Image {
 
         for row in self.rows() {
             for &loc in row {
-                let pixel: [u8; 3] =
-                    [(loc & 0xFF) as u8, (loc >> 8 & 0xFF) as u8, (loc >> 16 & 0xFF) as u8];
+                let pixel: [u8; 3] = [(loc & 0xFF) as u8, (loc >> 8 & 0xFF) as u8, (loc >> 16 & 0xFF) as u8];
                 writer.write_all(&pixel).unwrap();
             }
         }

@@ -84,11 +84,7 @@ impl<'a> SearchInfo<'a> {
         out
     }
 
-    pub fn with_search_params(
-        stopped: &'a AtomicBool,
-        nodes: &'a AtomicU64,
-        search_params: &Config,
-    ) -> Self {
+    pub fn with_search_params(stopped: &'a AtomicBool, nodes: &'a AtomicU64, search_params: &Config) -> Self {
         let mut out = Self::new(stopped, nodes);
         out.conf = search_params.clone();
         out
@@ -142,8 +138,7 @@ impl<'a> SearchInfo<'a> {
     #[cfg(feature = "stats")]
     pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize, ordering_score: i32) {
         use crate::board::movegen::movepicker::{
-            COUNTER_MOVE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, TT_MOVE_SCORE,
-            WINNING_CAPTURE_SCORE,
+            COUNTER_MOVE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, TT_MOVE_SCORE, WINNING_CAPTURE_SCORE,
         };
 
         if QSEARCH {
@@ -174,12 +169,8 @@ impl<'a> SearchInfo<'a> {
     #[cfg(feature = "stats")]
     pub fn print_stats(&self) {
         #[allow(clippy::cast_precision_loss)]
-        let fail_high_percentages = self
-            .failhigh_index
-            .iter()
-            .map(|&x| (x as f64 * 100.0) / self.failhigh as f64)
-            .take(10)
-            .collect::<Vec<_>>();
+        let fail_high_percentages =
+            self.failhigh_index.iter().map(|&x| (x as f64 * 100.0) / self.failhigh as f64).take(10).collect::<Vec<_>>();
         #[allow(clippy::cast_precision_loss)]
         let qs_fail_high_percentages = self
             .qfailhigh_index
@@ -187,18 +178,13 @@ impl<'a> SearchInfo<'a> {
             .map(|&x| (x as f64 * 100.0) / self.qfailhigh as f64)
             .take(10)
             .collect::<Vec<_>>();
-        for ((i1, &x1), (i2, &x2)) in fail_high_percentages
-            .iter()
-            .enumerate()
-            .zip(qs_fail_high_percentages.iter().enumerate())
+        for ((i1, &x1), (i2, &x2)) in
+            fail_high_percentages.iter().enumerate().zip(qs_fail_high_percentages.iter().enumerate())
         {
             println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
         }
-        let type_percentages = self
-            .failhigh_types
-            .iter()
-            .map(|&x| (x as f64 * 100.0) / self.failhigh as f64)
-            .collect::<Vec<_>>();
+        let type_percentages =
+            self.failhigh_types.iter().map(|&x| (x as f64 * 100.0) / self.failhigh as f64).collect::<Vec<_>>();
         println!("failhigh ttmove        {:5.2}%", type_percentages[0]);
         println!("failhigh good tactical {:5.2}%", type_percentages[1]);
         println!("failhigh killer1       {:5.2}%", type_percentages[2]);
@@ -247,8 +233,7 @@ mod tests {
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
-            Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
+        let mut position = Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
@@ -268,8 +253,7 @@ mod tests {
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
-            Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
+        let mut position = Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
@@ -289,8 +273,7 @@ mod tests {
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
-            Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
+        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
@@ -310,8 +293,7 @@ mod tests {
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
-            Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
+        let mut position = Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
         let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);

@@ -40,27 +40,25 @@ impl Board {
             return Err(format!("side is corrupt: expected WHITE or BLACK, got {:?}", self.side));
         }
         if self.generate_pos_key() != self.key {
-            return Err(format!(
-                "key is corrupt: expected {:?}, got {:?}",
-                self.generate_pos_key(),
-                self.key
-            ));
+            return Err(format!("key is corrupt: expected {:?}, got {:?}", self.generate_pos_key(), self.key));
         }
 
         if !(self.ep_sq == Square::NO_SQUARE
             || (self.ep_sq.rank() == Rank::RANK_6 && self.side == Colour::WHITE)
             || (self.ep_sq.rank() == Rank::RANK_3 && self.side == Colour::BLACK))
         {
-            return Err(format!("en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})", Square::NO_SQUARE, self.ep_sq, self.ep_sq.rank()));
+            return Err(format!(
+                "en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})",
+                Square::NO_SQUARE,
+                self.ep_sq,
+                self.ep_sq.rank()
+            ));
         }
 
         // the fifty-move counter is allowed to be *exactly* 100, to allow a finished game to be
         // created.
         if self.fifty_move_counter > 100 {
-            return Err(format!(
-                "fifty move counter is corrupt: expected 0-100, got {}",
-                self.fifty_move_counter
-            ));
+            return Err(format!("fifty move counter is corrupt: expected 0-100, got {}", self.fifty_move_counter));
         }
 
         // check there are the correct number of kings for each side

@@ -40,11 +40,7 @@ impl Move {
     }
 
     pub fn new_with_flags(from: Square, to: Square, flags: u16) -> Self {
-        debug_assert_ne!(
-            flags & Self::PROMO_FLAG,
-            Self::PROMO_FLAG,
-            "promotion flag set without piece type"
-        );
+        debug_assert_ne!(flags & Self::PROMO_FLAG, Self::PROMO_FLAG, "promotion flag set without piece type");
         debug_assert_ne!(flags, 0, "attempted to construct move with no flags");
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
@@ -67,8 +63,7 @@ impl Move {
 
     pub fn promotion_type(self) -> PieceType {
         debug_assert!(self.is_promo());
-        let output =
-            PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1);
+        let output = PieceType::new(((self.data >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1);
         debug_assert!(output.legal_promo());
         output
     }

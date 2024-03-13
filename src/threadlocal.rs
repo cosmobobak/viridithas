@@ -74,19 +74,15 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn ban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp |=
-            if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP };
+        self.banned_nmp |= if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP };
     }
 
     pub fn unban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp &=
-            if colour == Colour::WHITE { !Self::WHITE_BANNED_NMP } else { !Self::BLACK_BANNED_NMP };
+        self.banned_nmp &= if colour == Colour::WHITE { !Self::WHITE_BANNED_NMP } else { !Self::BLACK_BANNED_NMP };
     }
 
     pub fn nmp_banned_for(&self, colour: Colour) -> bool {
-        self.banned_nmp
-            & if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP }
-            != 0
+        self.banned_nmp & if colour == Colour::WHITE { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP } != 0
     }
 
     pub fn clear_tables(&mut self) {

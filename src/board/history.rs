@@ -10,19 +10,10 @@ use super::{movegen::MoveListEntry, Board};
 
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
-    pub fn update_history(
-        &mut self,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
+    pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
-            debug_assert!(
-                piece_moved != Piece::EMPTY,
-                "Invalid piece moved by move {m} in position \n{pos}"
-            );
+            debug_assert!(piece_moved != Piece::EMPTY, "Invalid piece moved by move {m} in position \n{pos}");
             let from = m.from();
             let to = m.history_to_square();
             let val = self.main_history.get_mut(
@@ -64,20 +55,11 @@ impl ThreadData<'_> {
     // }
 
     /// Update the tactical history counters of a batch of moves.
-    pub fn update_tactical_history(
-        &mut self,
-        pos: &Board,
-        moves_to_adjust: &[Move],
-        best_move: Move,
-        depth: Depth,
-    ) {
+    pub fn update_tactical_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
             let capture = caphist_piece_type(pos, m);
-            debug_assert!(
-                piece_moved != Piece::EMPTY,
-                "Invalid piece moved by move {m} in position \n{pos}"
-            );
+            debug_assert!(piece_moved != Piece::EMPTY, "Invalid piece moved by move {m} in position \n{pos}");
             let to = m.to();
             let val = self.tactical_history.get_mut(piece_moved, to, capture);
             update_history(val, depth, m == best_move);
@@ -104,21 +86,14 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
-        }) = pos.history.last()
+        if let Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) = pos.history.last()
         {
             return;
         }
-        let conthist_index =
-            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-                None
-                | Some(Undo {
-                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
-                    ..
-                }) => return,
-                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
-            };
+        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+            None | Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) => return,
+            Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+        };
         let table = self.cont_hists[index].as_mut();
         let cmh_block = table.get_index_mut(conthist_index);
         for &m in moves_to_adjust {
@@ -129,28 +104,16 @@ impl ThreadData<'_> {
     }
 
     /// Get the continuation history scores for a batch of moves.
-    pub(super) fn get_continuation_history_scores(
-        &self,
-        pos: &Board,
-        ms: &mut [MoveListEntry],
-        index: usize,
-    ) {
+    pub(super) fn get_continuation_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry], index: usize) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, ..
-        }) = pos.history.last()
+        if let Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) = pos.history.last()
         {
             return;
         }
-        let conthist_index =
-            match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-                None
-                | Some(Undo {
-                    cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. },
-                    ..
-                }) => return,
-                Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
-            };
+        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+            None | Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) => return,
+            Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+        };
         let table = self.cont_hists[index].as_ref();
         let cmh_block = table.get_index(conthist_index);
         for m in ms {

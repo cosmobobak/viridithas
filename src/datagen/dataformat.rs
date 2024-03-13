@@ -16,8 +16,7 @@ pub struct Game {
     moves: Vec<(Move, marlinformat::util::I16Le)>,
 }
 
-const SEQUENCE_ELEM_SIZE: usize =
-    std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
+const SEQUENCE_ELEM_SIZE: usize = std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
 const NULL_TERMINATOR: [u8; SEQUENCE_ELEM_SIZE] = [0; SEQUENCE_ELEM_SIZE];
 
 impl Game {
@@ -86,10 +85,7 @@ impl Game {
             let mv = [buf[0], buf[1]];
             let mv = unsafe { std::mem::transmute::<_, Move>(mv) };
             if !mv.is_valid() || mv.from() == mv.to() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("invalid move: {mv:?}"),
-                ));
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("invalid move: {mv:?}")));
             }
             let eval = [buf[2], buf[3]];
             let eval = i16::from_le_bytes(eval);
