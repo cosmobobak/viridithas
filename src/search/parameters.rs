@@ -10,12 +10,12 @@ use crate::{
 
 use super::{
     ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN, FUTILITY_COEFF_0,
-    FUTILITY_COEFF_1, FUTILITY_DEPTH, HISTORY_LMR_BOUND, HISTORY_LMR_DIVISOR, LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE,
-    LMR_BASE_MOVES, LMR_DIVISION, MAIN_SEE_BOUND, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN,
-    NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR, NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN,
-    PROBCUT_MARGIN, PROBCUT_MIN_DEPTH, PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH,
-    RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH,
-    TT_REDUCTION_DEPTH,
+    FUTILITY_COEFF_1, FUTILITY_DEPTH, HISTORY_LMR_BOUND, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_DEPTH,
+    HISTORY_PRUNING_MARGIN, LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_BASE_MOVES, LMR_DIVISION, MAIN_SEE_BOUND,
+    MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR,
+    NMP_REDUCTION_EVAL_DIVISOR, NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
+    PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN,
+    SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
 };
 
 #[derive(Clone, Debug)]
@@ -63,6 +63,8 @@ pub struct Config {
     pub main_see_bound: i32,
     pub do_deeper_base_margin: i32,
     pub do_deeper_depth_margin: i32,
+    pub history_pruning_depth: Depth,
+    pub history_pruning_margin: i32,
 }
 
 impl Config {
@@ -111,6 +113,8 @@ impl Config {
             main_see_bound: MAIN_SEE_BOUND,
             do_deeper_base_margin: DO_DEEPER_BASE_MARGIN,
             do_deeper_depth_margin: DO_DEEPER_DEPTH_MARGIN,
+            history_pruning_depth: HISTORY_PRUNING_DEPTH,
+            history_pruning_margin: HISTORY_PRUNING_MARGIN,
         }
     }
 }
@@ -197,7 +201,9 @@ impl Config {
             QS_SEE_BOUND = [self.qs_see_bound],
             MAIN_SEE_BOUND = [self.main_see_bound],
             DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin],
-            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin]
+            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin],
+            HISTORY_PRUNING_DEPTH = [self.history_pruning_depth],
+            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin]
         ]
     }
 
@@ -254,7 +260,9 @@ impl Config {
             QS_SEE_BOUND = [self.qs_see_bound, -500, 500, 50],
             MAIN_SEE_BOUND = [self.main_see_bound, -500, 500, 50],
             DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin, 1, 200, 20],
-            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin, 1, 50, 2]
+            DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin, 1, 50, 2],
+            HISTORY_PRUNING_DEPTH = [self.history_pruning_depth, 2, 14, 1],
+            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin, -5000, 1000, 500]
         ]
     }
 

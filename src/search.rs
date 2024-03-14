@@ -89,6 +89,8 @@ const QS_SEE_BOUND: i32 = -108;
 const MAIN_SEE_BOUND: i32 = 0;
 const DO_DEEPER_BASE_MARGIN: i32 = 64;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
+const HISTORY_PRUNING_DEPTH: Depth = Depth::new(7);
+const HISTORY_PRUNING_MARGIN: i32 = -2500;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 
@@ -861,14 +863,14 @@ impl Board {
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = movepick_score > WINNING_CAPTURE_SCORE;
 
-            // let mut stat_score = 0;
+            let mut stat_score = 0;
 
-            // if is_quiet {
-            //     stat_score += t.get_history_score(self, m);
-            //     stat_score += t.get_continuation_history_score(self, m, 0);
-            //     stat_score += t.get_continuation_history_score(self, m, 1);
-            //     // stat_score += t.get_continuation_history_score(self, m, 3);
-            // }
+            if is_quiet {
+                stat_score += t.get_history_score(self, m);
+                stat_score += t.get_continuation_history_score(self, m, 0);
+                stat_score += t.get_continuation_history_score(self, m, 1);
+                // stat_score += t.get_continuation_history_score(self, m, 3);
+            }
 
             // lmp & fp.
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
@@ -876,6 +878,18 @@ impl Board {
                 // if we have made too many moves, we start skipping moves.
                 if lmr_depth <= info.conf.lmp_depth && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
+                }
+
+                // history pruning
+                // if this move's history score is too low, we start skipping moves.
+                let killer_or_counter = m == killers[0] || m == killers[1] || m == counter_move;
+                if is_quiet
+                    && !killer_or_counter
+                    && lmr_depth < info.conf.history_pruning_depth
+                    && stat_score < info.conf.history_pruning_margin * (depth - 1)
+                {
+                    move_picker.skip_quiets = true;
+                    continue;
                 }
 
                 // futility pruning
