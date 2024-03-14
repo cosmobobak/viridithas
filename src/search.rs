@@ -969,7 +969,7 @@ impl Board {
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
                         r -= i32::clamp(
-                            movepick_score / info.conf.history_lmr_divisor,
+                            stat_score / info.conf.history_lmr_divisor,
                             -info.conf.history_lmr_bound,
                             info.conf.history_lmr_bound,
                         );
