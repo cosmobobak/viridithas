@@ -873,6 +873,7 @@ impl Board {
             }
 
             // lmp & fp.
+            let killer_or_counter = m == killers[0] || m == killers[1] || m == counter_move;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -882,7 +883,6 @@ impl Board {
 
                 // history pruning
                 // if this move's history score is too low, we start skipping moves.
-                let killer_or_counter = m == killers[0] || m == killers[1] || m == counter_move;
                 if is_quiet
                     && !killer_or_counter
                     && lmr_depth < info.conf.history_pruning_depth
@@ -969,12 +969,12 @@ impl Board {
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
                         r -= i32::clamp(
-                            movepick_score / info.conf.history_lmr_divisor,
+                            stat_score / info.conf.history_lmr_divisor,
                             -info.conf.history_lmr_bound,
                             info.conf.history_lmr_bound,
                         );
                         // reduce special moves one less
-                        // r -= i32::from(movepick_score >= COUNTER_MOVE_SCORE);
+                        r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
                         r += i32::from(!NT::PV);
                         // reduce more if it's a cut-node
