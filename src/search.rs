@@ -384,7 +384,6 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    #[allow(clippy::too_many_lines)]
     pub fn quiescence<NT: NodeType>(
         &mut self,
         pv: &mut PVariation,
@@ -478,15 +477,7 @@ impl Board {
             move_picker.skip_quiets = true;
         }
 
-        let futility = stand_pat + 150;
-
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-            if !in_check && futility <= alpha && !self.static_exchange_eval(m, 1) {
-                if best_score < futility {
-                    best_score = futility;
-                }
-                continue;
-            }
             t.tt.prefetch(self.key_after(m));
             if !self.make_move(m, t) {
                 continue;
