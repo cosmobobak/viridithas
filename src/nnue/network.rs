@@ -23,18 +23,18 @@ const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
-pub const BUCKETS: usize = 4;
+pub const BUCKETS: usize = 9;
 /// The mapping from square to bucket.
 #[rustfmt::skip]
 const BUCKET_MAP: [usize; 64] = [
-    0, 0, 0, 0, 4, 4, 4, 4,
-    1, 1, 1, 1, 5, 5, 5, 5,
-    2, 2, 2, 2, 6, 6, 6, 6,
-    2, 2, 2, 2, 6, 6, 6, 6,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
-    3, 3, 3, 3, 7, 7, 7, 7,
+    0, 1, 2, 3, 12, 11, 10, 9, 
+    4, 4, 5, 5, 14, 14, 13, 13,
+    6, 6, 6, 6, 15, 15, 15, 15,
+    7, 7, 7, 7, 16, 16, 16, 16,
+    8, 8, 8, 8, 17, 17, 17, 17,
+    8, 8, 8, 8, 17, 17, 17, 17,
+    8, 8, 8, 8, 17, 17, 17, 17,
+    8, 8, 8, 8, 17, 17, 17, 17,
 ];
 pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
     let white_bucket = BUCKET_MAP[white_king.index()];
@@ -326,7 +326,7 @@ impl NNUEParams {
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // handle mirroring
-        let bucket = bucket % 4;
+        let bucket = bucket % 9;
         let start = bucket * INPUT * LAYER_1_SIZE;
         let end = start + INPUT * LAYER_1_SIZE;
         let slice = &self.feature_weights[start..end];
