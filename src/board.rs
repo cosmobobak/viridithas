@@ -1647,9 +1647,7 @@ impl Board {
     pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
-        let Some(MoveListEntry { mov, .. }) = ml.choose(rng) else {
-            return None;
-        };
+        let MoveListEntry { mov, .. } = ml.choose(rng)?;
         self.make_move(*mov, t);
         Some(*mov)
     }

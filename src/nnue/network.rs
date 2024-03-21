@@ -25,17 +25,6 @@ pub const LAYER_1_SIZE: usize = 1536;
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = 9;
 /// The mapping from square to bucket.
-// #[rustfmt::skip]
-// const BUCKET_MAP: [usize; 64] = [
-//     0, 0, 0, 0, 4, 4, 4, 4,
-//     1, 1, 1, 1, 5, 5, 5, 5,
-//     2, 2, 2, 2, 6, 6, 6, 6,
-//     2, 2, 2, 2, 6, 6, 6, 6,
-//     3, 3, 3, 3, 7, 7, 7, 7,
-//     3, 3, 3, 3, 7, 7, 7, 7,
-//     3, 3, 3, 3, 7, 7, 7, 7,
-//     3, 3, 3, 3, 7, 7, 7, 7,
-// ];
 #[rustfmt::skip]
 const BUCKET_MAP: [usize; 64] = [
     0, 1, 2, 3, 12, 11, 10, 9, 
