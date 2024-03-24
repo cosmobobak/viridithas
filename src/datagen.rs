@@ -258,8 +258,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
                 fps = FENS_GENERATED.load(Ordering::Relaxed) as f64 / start.elapsed().as_secs_f64()
             );
             eprintln!(" |> Estimated time remaining: {time_remaining:.2} seconds.");
-            let est_completion_date =
-                chrono::Local::now().checked_add_signed(chrono::Duration::seconds(time_remaining as i64)).unwrap();
+            let est_completion_date = chrono::Local::now()
+                .checked_add_signed(
+                    chrono::Duration::try_seconds(time_remaining as i64)
+                        .expect("failed to convert remaining time to seconds"),
+                )
+                .expect("failed to add remaining time to current time");
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
             std::io::stderr().flush().unwrap();

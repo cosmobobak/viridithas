@@ -21,16 +21,16 @@ datagen = []
 final-release = []
 
 [build-dependencies]
-cc = { version = "1.0.73", optional = true }
-bindgen = { version = "0.65.1", optional = true }
+cc = { version = "1.0.90", optional = true }
+bindgen = { version = "0.69.4", optional = true }
 
 [dependencies]
 rand = "0.8.5"
-num_cpus = "1.13.1"
-clap = { version = "4.2.7", features = ["derive"] }
-chrono = "0.4.23"
-ctrlc = "3.2.5"
-bulletformat = "0.1.0"
+num_cpus = "1.16.0"
+clap = { version = "4.5.3", features = ["derive"] }
+chrono = "0.4.35"
+ctrlc = "3.4.4"
+bulletformat = "1.2.0"
 arrayvec = "0.7.4"
 
 [profile.release]
