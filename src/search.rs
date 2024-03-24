@@ -19,7 +19,7 @@ use crate::{
         },
         movegen::{
             bitboards,
-            movepicker::{CapturePicker, MainMovePicker, MovePicker, Stage, WINNING_CAPTURE_SCORE},
+            movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -128,6 +128,18 @@ impl NodeType for CheckForced {
     type Next = OffPV;
 }
 
+pub trait SmpThreadType {
+    const MAIN_THREAD: bool;
+}
+pub struct MainThread;
+pub struct HelperThread;
+impl SmpThreadType for MainThread {
+    const MAIN_THREAD: bool = true;
+}
+impl SmpThreadType for HelperThread {
+    const MAIN_THREAD: bool = false;
+}
+
 impl Board {
     /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
     #[allow(clippy::too_many_lines)]
@@ -178,12 +190,12 @@ impl Board {
 
         thread::scope(|s| {
             s.spawn(|| {
-                self.iterative_deepening::<true>(info, t1);
+                self.iterative_deepening::<MainThread>(info, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             for (t, (board, info)) in rest.iter_mut().zip(&mut board_info_copies) {
                 s.spawn(|| {
-                    board.iterative_deepening::<false>(info, t);
+                    board.iterative_deepening::<HelperThread>(info, t);
                 });
             }
         });
@@ -218,8 +230,8 @@ impl Board {
     /// Returns the score of the position, from the side to move's perspective, and the best move.
     /// For Lazy SMP, the main thread calls this function with `T0 = true`, and the helper threads with `T0 = false`.
     #[allow(clippy::too_many_lines)]
-    fn iterative_deepening<const T0: bool>(&mut self, info: &mut SearchInfo, t: &mut ThreadData) {
-        assert!(!T0 || t.thread_id == 0, "main thread must have thread_id 0");
+    fn iterative_deepening<ThTy: SmpThreadType>(&mut self, info: &mut SearchInfo, t: &mut ThreadData) {
+        assert!(!ThTy::MAIN_THREAD || t.thread_id == 0, "main thread must have thread_id 0");
         let mut aw = AspirationWindow::infinite();
         let mut pv = PVariation::default();
         let max_depth = info.time_manager.limit().depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon();
@@ -227,7 +239,7 @@ impl Board {
         let mut average_value = VALUE_NONE;
         'deepening: for d in starting_depth..=max_depth {
             t.depth = d;
-            if T0 {
+            if ThTy::MAIN_THREAD {
                 // consider stopping early if we've neatly completed a depth:
                 if (info.time_manager.is_dynamic() || info.time_manager.is_soft_nodes())
                     && info.time_manager.is_past_opt_time(info.nodes.get_global())
@@ -239,7 +251,8 @@ impl Board {
             // aspiration loop:
             // (depth can be dynamically modified in the aspiration loop,
             // so we return out the value of depth to the caller)
-            let ControlFlow::Continue(depth) = self.aspiration::<T0>(&mut pv, info, t, &mut aw, d, &mut average_value)
+            let ControlFlow::Continue(depth) =
+                self.aspiration::<ThTy>(&mut pv, info, t, &mut aw, d, &mut average_value)
             else {
                 break 'deepening;
             };
@@ -250,7 +263,7 @@ impl Board {
                 aw = AspirationWindow::infinite();
             }
 
-            if T0 && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+            if ThTy::MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
                     let best_move = pv.moves[0];
                     let best_move_subtree_size = info.root_move_nodes[best_move.from().index()][best_move.to().index()];
@@ -269,7 +282,7 @@ impl Board {
         }
     }
 
-    fn aspiration<const T0: bool>(
+    fn aspiration<ThTy: SmpThreadType>(
         &mut self,
         pv: &mut PVariation,
         info: &mut SearchInfo<'_>,
@@ -287,14 +300,14 @@ impl Board {
             }
 
             if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-                if T0 && info.print_to_stdout {
+                if ThTy::MAIN_THREAD && info.print_to_stdout {
                     let nodes = info.nodes.get_global();
                     let mut apv = t.pv().clone();
                     apv.score = pv.score;
                     readout_info(self, Bound::Upper, &apv, d, info, t.tt, nodes, false);
                 }
                 aw.widen_down(pv.score, depth);
-                if T0 {
+                if ThTy::MAIN_THREAD {
                     info.time_manager.report_aspiration_fail(depth, Bound::Upper, &info.conf);
                 }
                 // search failed low, so we might have to
@@ -305,12 +318,12 @@ impl Board {
             // search is either exact or fail-high, so we can update the best line.
             t.update_best_line(pv);
             if aw.beta != INFINITY && pv.score >= aw.beta {
-                if T0 && info.print_to_stdout {
+                if ThTy::MAIN_THREAD && info.print_to_stdout {
                     let nodes = info.nodes.get_global();
                     readout_info(self, Bound::Lower, t.pv(), d, info, t.tt, nodes, false);
                 }
                 aw.widen_up(pv.score, depth);
-                if T0 {
+                if ThTy::MAIN_THREAD {
                     info.time_manager.report_aspiration_fail(depth, Bound::Lower, &info.conf);
                 }
                 // decrement depth:
@@ -318,7 +331,7 @@ impl Board {
                     depth = (depth - 1).max(min_depth);
                 }
 
-                if info.time_manager.solved_breaker::<T0>(0, d) == ControlFlow::Break(()) {
+                if info.time_manager.solved_breaker::<ThTy>(0, d) == ControlFlow::Break(()) {
                     info.stopped.store(true, Ordering::SeqCst);
                     return ControlFlow::Break(()); // we've been told to stop searching.
                 }
@@ -331,22 +344,22 @@ impl Board {
             let bestmove = t.pvs[t.completed].moves().first().copied().unwrap_or_else(|| self.default_move(t));
             *average_value = if *average_value == VALUE_NONE { score } else { (2 * score + *average_value) / 3 };
 
-            if T0 && info.print_to_stdout {
+            if ThTy::MAIN_THREAD && info.print_to_stdout {
                 let total_nodes = info.nodes.get_global();
                 readout_info(self, Bound::Exact, t.pv(), d, info, t.tt, total_nodes, false);
             }
 
-            if info.time_manager.solved_breaker::<T0>(pv.score, d) == ControlFlow::Break(()) {
+            if info.time_manager.solved_breaker::<ThTy>(pv.score, d) == ControlFlow::Break(()) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
 
-            if info.time_manager.mate_found_breaker::<T0>(pv, depth) == ControlFlow::Break(()) {
+            if info.time_manager.mate_found_breaker::<ThTy>(pv, depth) == ControlFlow::Break(()) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
             }
 
-            if T0 {
+            if ThTy::MAIN_THREAD {
                 if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
                     let saved_seldepth = info.seldepth;
                     let forced = self.is_forced(margin, info, t, bestmove, score, (depth - 1) / 2);
@@ -369,7 +382,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
         let tt_move = t.tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
-        let mut mp = MovePicker::<false>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
+        let mut mp = MovePicker::<MainSearch>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = Move::NULL;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_simple(mov) {

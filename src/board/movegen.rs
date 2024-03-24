@@ -4,6 +4,7 @@ pub mod movepicker;
 use arrayvec::ArrayVec;
 
 pub use self::bitboards::BitLoop;
+use self::movepicker::{MainSearch, MovePickerMode};
 
 use super::Board;
 
@@ -91,7 +92,11 @@ impl Display for MoveList {
 }
 
 impl Board {
-    fn generate_pawn_caps<C: Col, const QS: bool>(&self, move_list: &mut MoveList, valid_target_squares: SquareSet) {
+    fn generate_pawn_caps<C: Col, Mode: MovePickerMode>(
+        &self,
+        move_list: &mut MoveList,
+        valid_target_squares: SquareSet,
+    ) {
         let our_pawns = self.pieces.pawns::<C>();
         let their_pieces = self.pieces.their_pieces::<C>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
@@ -118,7 +123,7 @@ impl Board {
             let to = if C::WHITE { from.add(9) } else { from.sub(7) };
             move_list.push::<true>(Move::new(from, to));
         }
-        if QS {
+        if Mode::CAPTURES_ONLY {
             // in quiescence search, we only generate promotions to queen.
             for from in attacking_west & promo_rank & valid_west {
                 let to = if C::WHITE { from.add(7) } else { from.sub(9) };
@@ -193,7 +198,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<C: Col, const QS: bool>(
+    fn generate_forward_promos<C: Col, Mode: MovePickerMode>(
         &self,
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
@@ -206,7 +211,7 @@ impl Board {
         let promoting_pawns = pushable_pawns & promo_rank;
         for sq in promoting_pawns & shifted_valid_squares {
             let to = if C::WHITE { sq.add(8) } else { sq.sub(8) };
-            if QS {
+            if Mode::CAPTURES_ONLY {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
             } else {
@@ -254,7 +259,7 @@ impl Board {
         };
 
         self.generate_pawn_forward::<C>(move_list, valid_target_squares);
-        self.generate_pawn_caps::<C, false>(move_list, valid_target_squares);
+        self.generate_pawn_caps::<C, MainSearch>(move_list, valid_target_squares);
         self.generate_ep::<C>(move_list);
 
         // knights
@@ -308,17 +313,17 @@ impl Board {
         }
     }
 
-    pub fn generate_captures<const QS: bool>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
         move_list.clear();
         if self.side == Colour::WHITE {
-            self.generate_captures_for::<White, QS>(move_list);
+            self.generate_captures_for::<White, Mode>(move_list);
         } else {
-            self.generate_captures_for::<Black, QS>(move_list);
+            self.generate_captures_for::<Black, Mode>(move_list);
         }
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_captures_for<C: Col, const QS: bool>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<C: Col, Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -341,10 +346,10 @@ impl Board {
         };
 
         // promotions
-        self.generate_forward_promos::<C, QS>(move_list, valid_target_squares);
+        self.generate_forward_promos::<C, Mode>(move_list, valid_target_squares);
 
         // pawn captures and capture promos
-        self.generate_pawn_caps::<C, QS>(move_list, valid_target_squares);
+        self.generate_pawn_caps::<C, Mode>(move_list, valid_target_squares);
         self.generate_ep::<C>(move_list);
 
         // knights
@@ -586,7 +591,7 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
     let mut ml_staged = MoveList::new();
-    pos.generate_captures::<false>(&mut ml_staged);
+    pos.generate_captures::<MainSearch>(&mut ml_staged);
     pos.generate_quiets(&mut ml_staged);
 
     let mut full_moves_vec = ml.to_vec();

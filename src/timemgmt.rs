@@ -7,7 +7,7 @@ use std::{
 use crate::{
     board::evaluation::{is_mate_score, mate_in},
     chessmove::Move,
-    search::{parameters::Config, pv::PVariation},
+    search::{parameters::Config, pv::PVariation, SmpThreadType},
     transpositiontable::Bound,
     util::depth::Depth,
 };
@@ -250,8 +250,8 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::SoftNodes { .. })
     }
 
-    pub fn solved_breaker<const MAIN_THREAD: bool>(&mut self, value: i32, depth: usize) -> ControlFlow<()> {
-        if !MAIN_THREAD || depth < 8 {
+    pub fn solved_breaker<ThTy: SmpThreadType>(&mut self, value: i32, depth: usize) -> ControlFlow<()> {
+        if !ThTy::MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
         if let &SearchLimit::Mate { ply } = &self.limit {
@@ -268,14 +268,14 @@ impl TimeManager {
         }
     }
 
-    pub fn mate_found_breaker<const MAIN_THREAD: bool>(&mut self, pv: &PVariation, depth: Depth) -> ControlFlow<()> {
+    pub fn mate_found_breaker<ThTy: SmpThreadType>(&mut self, pv: &PVariation, depth: Depth) -> ControlFlow<()> {
         const MINIMUM_MATE_BREAK_DEPTH: Depth = Depth::new(10);
-        if MAIN_THREAD && self.is_dynamic() && is_mate_score(pv.score()) && depth > MINIMUM_MATE_BREAK_DEPTH {
+        if ThTy::MAIN_THREAD && self.is_dynamic() && is_mate_score(pv.score()) && depth > MINIMUM_MATE_BREAK_DEPTH {
             self.mate_counter += 1;
             if self.mate_counter >= 3 {
                 return ControlFlow::Break(());
             }
-        } else if MAIN_THREAD {
+        } else if ThTy::MAIN_THREAD {
             self.mate_counter = 0;
         }
         ControlFlow::Continue(())

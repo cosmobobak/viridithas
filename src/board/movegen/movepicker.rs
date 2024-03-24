@@ -12,6 +12,19 @@ pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
 pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
+pub trait MovePickerMode {
+    const CAPTURES_ONLY: bool;
+}
+
+pub struct Qsearch;
+impl MovePickerMode for Qsearch {
+    const CAPTURES_ONLY: bool = true;
+}
+pub struct MainSearch;
+impl MovePickerMode for MainSearch {
+    const CAPTURES_ONLY: bool = false;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
     TTMove,
@@ -25,7 +38,7 @@ pub enum Stage {
     Done,
 }
 
-pub struct MovePicker<const CAPTURES_ONLY: bool> {
+pub struct MovePicker<MovePickerMode> {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
@@ -34,12 +47,13 @@ pub struct MovePicker<const CAPTURES_ONLY: bool> {
     counter_move: Move,
     pub skip_quiets: bool,
     see_threshold: i32,
+    _mode: std::marker::PhantomData<MovePickerMode>,
 }
 
-pub type MainMovePicker = MovePicker<false>;
-pub type CapturePicker = MovePicker<true>;
+pub type MainMovePicker = MovePicker<MainSearch>;
+pub type CapturePicker = MovePicker<Qsearch>;
 
-impl<const QSEARCH: bool> MovePicker<QSEARCH> {
+impl<Mode: MovePickerMode> MovePicker<Mode> {
     pub fn new(tt_move: Move, killers: [Move; 2], counter_move: Move, see_threshold: i32) -> Self {
         debug_assert!(killers[0].is_null() || killers[0] != killers[1], "Killers are both {}", killers[0]);
         Self {
@@ -51,6 +65,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
             counter_move,
             skip_quiets: false,
             see_threshold,
+            _mode: std::marker::PhantomData,
         }
     }
 
@@ -73,7 +88,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(self.movelist.len(), 0, "movelist not empty before capture generation");
-            position.generate_captures::<QSEARCH>(&mut self.movelist);
+            position.generate_captures::<Mode>(&mut self.movelist);
             Self::score_captures(t, position, &mut self.movelist, self.see_threshold);
         }
         if self.stage == Stage::YieldGoodCaptures {
@@ -86,7 +101,7 @@ impl<const QSEARCH: bool> MovePicker<QSEARCH> {
                 // the index so we can try this move again.
                 self.index -= 1;
             }
-            self.stage = if QSEARCH { Stage::Done } else { Stage::YieldKiller1 };
+            self.stage = if Mode::CAPTURES_ONLY { Stage::Done } else { Stage::YieldKiller1 };
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
