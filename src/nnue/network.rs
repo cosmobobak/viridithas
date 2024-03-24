@@ -162,7 +162,7 @@ impl UpdateBuffer {
 #[derive(Clone)]
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
-    // because we use a horizontally-mirrored architecture.s
+    // because we use a horizontally-mirrored architecture.
     accs: [[Accumulator; BUCKETS * 2]; 2],
     board_states: [[BitBoard; BUCKETS * 2]; 2],
 }
