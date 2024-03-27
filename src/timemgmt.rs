@@ -18,9 +18,9 @@ pub const STRONG_FORCED_TM_FRAC: u32 = 250;
 pub const WEAK_FORCED_TM_FRAC: u32 = 500;
 pub const DEFAULT_MOVES_TO_GO: u32 = 20;
 pub const HARD_WINDOW_FRAC: u32 = 50;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 60;
-pub const INCREMENT_FRAC: u32 = 75;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 135;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 65;
+pub const INCREMENT_FRAC: u32 = 80;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
 pub const FAIL_LOW_TM_BONUS: u32 = 250;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -335,7 +335,7 @@ impl TimeManager {
     }
 
     fn best_move_subtree_size_multiplier(nodes_fraction: f64, conf: &Config) -> f64 {
-        (1.5 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 100.0
+        (1.62 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 100.0
     }
 
     pub fn report_completed_depth(
