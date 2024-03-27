@@ -89,8 +89,10 @@ impl SearchLimit {
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-        let hard_time_window = computed_time_window.min(absolute_maximum);
-        let optimal_time_window = hard_time_window * u64::from(conf.optimal_window_frac) / 100;
+        let hard_time_window = (our_clock / 2).min(absolute_maximum);
+        let optimal_time_window = (computed_time_window.min(absolute_maximum) * u64::from(conf.optimal_window_frac)
+            / 100)
+            .min(hard_time_window);
         (optimal_time_window, hard_time_window, absolute_maximum)
     }
 
