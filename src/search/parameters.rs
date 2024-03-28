@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use crate::{
     timemgmt::{
-        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, INCREMENT_FRAC, NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC,
-        STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
+        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC, NODE_TM_SUBTREE_MULTIPLIER,
+        OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
     },
     util::depth::Depth,
 };
@@ -52,6 +52,7 @@ pub struct Config {
     pub strong_forced_tm_frac: u32,
     pub weak_forced_tm_frac: u32,
     pub default_moves_to_go: u32,
+    pub hard_window_frac: u32,
     pub optimal_window_frac: u32,
     pub increment_frac: u32,
     pub node_tm_subtree_multiplier: u32,
@@ -102,6 +103,7 @@ impl Config {
             strong_forced_tm_frac: STRONG_FORCED_TM_FRAC,
             weak_forced_tm_frac: WEAK_FORCED_TM_FRAC,
             default_moves_to_go: DEFAULT_MOVES_TO_GO,
+            hard_window_frac: HARD_WINDOW_FRAC,
             optimal_window_frac: OPTIMAL_WINDOW_FRAC,
             increment_frac: INCREMENT_FRAC,
             node_tm_subtree_multiplier: NODE_TM_SUBTREE_MULTIPLIER,
@@ -191,6 +193,7 @@ impl Config {
             STRONG_FORCED_TM_FRAC = [self.strong_forced_tm_frac],
             WEAK_FORCED_TM_FRAC = [self.weak_forced_tm_frac],
             DEFAULT_MOVES_TO_GO = [self.default_moves_to_go],
+            HARD_WINDOW_FRAC = [self.hard_window_frac],
             OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac],
             INCREMENT_FRAC = [self.increment_frac],
             NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier],
@@ -250,6 +253,7 @@ impl Config {
             STRONG_FORCED_TM_FRAC = [self.strong_forced_tm_frac, 1, 1000, 30],
             WEAK_FORCED_TM_FRAC = [self.weak_forced_tm_frac, 1, 1000, 30],
             DEFAULT_MOVES_TO_GO = [self.default_moves_to_go, 1, 100, 3],
+            HARD_WINDOW_FRAC = [self.hard_window_frac, 1, 100, 5],
             OPTIMAL_WINDOW_FRAC = [self.optimal_window_frac, 1, 100, 5],
             INCREMENT_FRAC = [self.increment_frac, 1, 100, 10],
             NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier, 1, 1000, 15],

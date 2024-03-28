@@ -17,9 +17,10 @@ const MOVE_OVERHEAD: u64 = 30;
 pub const STRONG_FORCED_TM_FRAC: u32 = 250;
 pub const WEAK_FORCED_TM_FRAC: u32 = 500;
 pub const DEFAULT_MOVES_TO_GO: u32 = 20;
-pub const OPTIMAL_WINDOW_FRAC: u32 = 60;
-pub const INCREMENT_FRAC: u32 = 75;
-pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 135;
+pub const HARD_WINDOW_FRAC: u32 = 50;
+pub const OPTIMAL_WINDOW_FRAC: u32 = 65;
+pub const INCREMENT_FRAC: u32 = 80;
+pub const NODE_TM_SUBTREE_MULTIPLIER: u32 = 148;
 pub const FAIL_LOW_TM_BONUS: u32 = 250;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -75,13 +76,16 @@ impl SearchLimit {
         // The absolute maximum time we could spend without losing on the clock:
         let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
 
+        // The maximum time we can spend searching before forcibly stopping:
+        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
+
         // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
             // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
             let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
             let computed_time_window = our_clock / divisor;
-            let hard_time_window = computed_time_window.min(absolute_maximum);
-            let optimal_time_window = hard_time_window * u64::from(conf.optimal_window_frac) / 100;
+            let optimal_time_window =
+                computed_time_window.min(absolute_maximum) * u64::from(conf.optimal_window_frac) / 100;
             return (optimal_time_window, hard_time_window, absolute_maximum);
         }
 
@@ -89,8 +93,9 @@ impl SearchLimit {
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-        let hard_time_window = computed_time_window.min(absolute_maximum);
-        let optimal_time_window = hard_time_window * u64::from(conf.optimal_window_frac) / 100;
+        let optimal_time_window = (computed_time_window.min(absolute_maximum) * u64::from(conf.optimal_window_frac)
+            / 100)
+            .min(hard_time_window);
         (optimal_time_window, hard_time_window, absolute_maximum)
     }
 
@@ -330,7 +335,7 @@ impl TimeManager {
     }
 
     fn best_move_subtree_size_multiplier(nodes_fraction: f64, conf: &Config) -> f64 {
-        (1.5 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 100.0
+        (1.62 - nodes_fraction) * f64::from(conf.node_tm_subtree_multiplier) / 100.0
     }
 
     pub fn report_completed_depth(
