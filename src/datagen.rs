@@ -558,7 +558,7 @@ impl FromStr for DataGenOptions {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut options = Self::new();
-        let parts = s.split('-').collect::<Vec<_>>();
+        let parts = s.split('|').collect::<Vec<_>>();
         if parts.len() != 6 {
             return Err(format!("Invalid options string: {s}"));
         }
