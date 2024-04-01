@@ -15,3 +15,5 @@ MINOR:
   - bishop pair
   - passed pawns by file?
 - tune nodeTM constants
+- better errors for Fathom.
+- finish the datagen - -> | transition
