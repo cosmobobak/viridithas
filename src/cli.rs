@@ -1,51 +1,71 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
 #[allow(clippy::struct_excessive_bools, clippy::option_option)]
 pub struct Cli {
-    /// Run the perft test suite
-    #[clap(long)]
-    pub perfttest: bool,
-    /// Scan a packed data record and report statistics
-    #[clap(short, long)]
-    pub dataset_stats: Option<std::path::PathBuf>,
-    /// emit JSON for SPSA
-    #[clap(long)]
-    pub spsajson: bool,
-    /// emit OB-format for SPSA
-    #[clap(long)]
-    pub spsaob: bool,
-    /// Output path.
-    #[clap(short, long, value_name = "PATH")]
-    pub output: Option<std::path::PathBuf>,
-    /// Visualise the NNUE.
-    #[clap(long)]
-    pub visnnue: bool,
-    /// Generate training data for the NNUE.
-    #[clap(long)]
-    pub datagen: Option<Option<String>>,
-    /// Splat a binary game record into binary records.
-    #[clap(long)]
-    pub splat: Option<std::path::PathBuf>,
-    /// Splat into marlinformat instead of bulletformat.
-    /// Only valid with --splat.
-    #[clap(long)]
-    pub marlinformat: bool,
-    /// Convert a binary game record into PGN.
-    #[clap(long)]
-    pub topgn: Option<std::path::PathBuf>,
-    /// Limit the number of games to convert.
-    #[clap(long, value_name = "N")]
-    pub limit: Option<usize>,
-    /// Output node benchmark for OpenBench.
-    /// Implemented as a subcommand because that's what OpenBench expects.
+    /// All sub-commands that viri supports.
     #[clap(subcommand)]
-    pub bench: Option<Bench>,
+    pub subcommand: Option<Subcommands>,
 }
 
 #[derive(Parser)]
-pub enum Bench {
-    /// Output node benchmark for OpenBench.
+pub enum Subcommands {
+    /// Output node benchmark for OpenBench
     Bench,
+    /// Run the perft suite.
+    Perft,
+    /// Generate graphical visualisations of the NNUE weights.
+    VisNNUE,
+    /// Count the number of positions contained within one or more packed game records.
+    CountPositions {
+        /// Path to input packed game record, or directory containing only packed game records.
+        input: PathBuf
+    },
+    /// Analyse a packed game record
+    Analyse {
+        /// Path to input packed game record.
+        input: PathBuf
+    },
+    /// Emit configuration for SPSA
+    Spsa {
+        /// Emit configuration in JSON format instead of OpenBench format
+        json: bool,
+    },
+    /// Splat a packed game record into bulletformat records (or other format)
+    Splat {
+        /// Path to input packed game record.
+        input: PathBuf,
+        /// Output path.
+        output: PathBuf,
+        /// Splat into marlinformat instead of bulletformat.
+        #[clap(long)]
+        marlinformat: bool,
+        /// Splat into PGN instead of bulletformat.
+        #[clap(long)]
+        pgn: bool,
+        /// Limit the number of games to convert.
+        #[clap(long, value_name = "N")]
+        limit: Option<usize>,
+    },
+    /// Generate self-play data
+    Datagen {
+        /// Number of games to play
+        #[clap(long, value_name = "N")]
+        games: usize,
+        /// Number of threads to parallelise datagen across
+        #[clap(long, value_name = "N")]
+        threads: usize,
+        /// Path to a tablebases folder
+        #[clap(long, value_name = "PATH")]
+        tbs: Option<PathBuf>,
+        /// Limit by depth instead of nodes
+        #[clap(long)]
+        depth_limit: bool,
+        // Whether to generate DFRC data.
+        #[clap(long)]
+        dfrc: bool,
+    }
 }

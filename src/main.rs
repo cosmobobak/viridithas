@@ -51,52 +51,38 @@ fn main() {
 
     let cli = <cli::Cli as clap::Parser>::parse();
 
-    if let Some(config) = cli.datagen {
-        #[cfg(feature = "datagen")]
-        return datagen::gen_data_main(config.as_deref());
-        #[cfg(not(feature = "datagen"))]
-        {
-            std::mem::drop(config);
-            println!("datagen feature not enabled (compile with --features datagen)");
-            return;
+    match cli.subcommand {
+        Some(cli::Subcommands::Perft) => perft::gamut(),
+        Some(cli::Subcommands::VisNNUE) => network::visualise_nnue(),
+        Some(cli::Subcommands::Analyse { input }) => datagen::dataset_stats(&input),
+        Some(cli::Subcommands::CountPositions { input }) => datagen::dataset_count(&input),
+        Some(cli::Subcommands::Spsa { json }) => {
+            if json {
+                println!("{}", Config::default().emit_json_for_spsa());
+            } else {
+                println!("{}", Config::default().emit_csv_for_spsa());
+            }
         }
+        Some(cli::Subcommands::Splat { input, marlinformat, pgn, output, limit }) => {
+            if pgn {
+                datagen::run_topgn(&input, &output, limit);
+            } else {
+                datagen::run_splat(&input, &output, true, marlinformat, limit);
+            };
+        }
+        Some(cli::Subcommands::Datagen { games, threads, tbs, depth_limit, dfrc }) => {
+            #[cfg(not(feature = "datagen"))]
+            println!("datagen feature not enabled (compile with --features datagen)");
+            // #[cfg(feature = "datagen")]
+            datagen::gen_data_main(datagen::DataGenOptionsBuilder {
+                num_games: games,
+                num_threads: threads,
+                tablebases_path: tbs,
+                use_depth: depth_limit,
+                generate_dfrc: dfrc,
+            });
+        }
+        Some(cli::Subcommands::Bench) => uci::main_loop(true),
+        None => uci::main_loop(false),
     }
-
-    if let Some(input) = cli.splat {
-        let Some(output) = cli.output else {
-            println!("Output path required for splatting (use --output)");
-            return;
-        };
-        return datagen::run_splat(&input, &output, true, cli.marlinformat, cli.limit);
-    }
-
-    if let Some(input) = cli.topgn {
-        let Some(output) = cli.output else {
-            println!("Output path required for PGN conversion (use --output)");
-            return;
-        };
-        return datagen::run_topgn(&input, &output, cli.limit);
-    }
-
-    if let Some(data_path) = cli.dataset_stats {
-        return datagen::dataset_stats(&data_path);
-    }
-
-    if cli.perfttest {
-        return perft::gamut();
-    }
-
-    if cli.spsajson {
-        return println!("{}", Config::default().emit_json_for_spsa());
-    }
-
-    if cli.spsaob {
-        return println!("{}", Config::default().emit_csv_for_spsa());
-    }
-
-    if cli.visnnue {
-        return network::visualise_nnue();
-    }
-
-    uci::main_loop(cli.bench.is_some());
 }

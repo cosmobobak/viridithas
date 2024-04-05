@@ -17,3 +17,4 @@ MINOR:
 - tune nodeTM constants
 - better errors for Fathom.
 - finish the datagen - -> | transition
+- add filtering for counts
