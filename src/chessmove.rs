@@ -128,6 +128,12 @@ impl Move {
     pub const fn inner(self) -> u16 {
         self.data
     }
+
+    pub const fn from_raw(data: u16) -> Self {
+        Self {
+            data
+        }
+    }
 }
 
 impl Display for Move {

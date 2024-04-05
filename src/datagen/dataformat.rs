@@ -9,6 +9,7 @@ use self::marlinformat::{util::I16Le, PackedBoard};
 
 mod marlinformat;
 
+/// A game annotated with evaluations starting from a potentially custom position, with support for efficent binary serialisation and deserialisation.
 pub struct Game {
     /// The initial position of the self-play game.
     initial_position: marlinformat::PackedBoard,
@@ -82,27 +83,23 @@ impl Game {
             if buf == NULL_TERMINATOR {
                 break;
             }
-            let mv = [buf[0], buf[1]];
-            let mv = unsafe { std::mem::transmute::<_, Move>(mv) };
+            let mv = Move::from_raw(u16::from_le_bytes([buf[0], buf[1]]));
             if !mv.is_valid() || mv.from() == mv.to() {
                 return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("invalid move: {mv:?}")));
             }
-            let eval = [buf[2], buf[3]];
-            let eval = i16::from_le_bytes(eval);
-            let eval = I16Le::new(eval);
+            let eval = I16Le::new(i16::from_le_bytes([buf[2], buf[3]]));
             moves.push((mv, eval));
         }
         Ok(Self { initial_position, moves })
     }
 
-    /// Exposes a reference to each position in the game sequentially, via a callback.
+    /// Exposes a reference to each position and associated evaluation in the game sequentially, via a callback.
     pub fn visit_positions(&self, mut callback: impl FnMut(&Board, i32)) {
-        let (mut board, _, wdl, _) = self.initial_position.unpack();
-        callback(&board, i32::from(wdl));
+        let (mut board, _, _, _) = self.initial_position.unpack();
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            board.make_move_simple(*mv);
             callback(&board, i32::from(eval));
+            board.make_move_simple(*mv);
         }
     }
 

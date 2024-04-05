@@ -6,7 +6,7 @@ use std::{
     cmp::Reverse,
     collections::HashMap,
     fmt::{Display, Formatter},
-    fs::File,
+    fs::{self, File},
     hash::Hash,
     io::{BufReader, BufWriter, Seek, Write},
     path::{Path, PathBuf},
@@ -57,16 +57,43 @@ struct DataGenOptions {
     num_threads: usize,
     // The (optional) path to the directory containing syzygy endgame tablebases.
     tablebases_path: Option<PathBuf>,
-    // Whether to use NNUE evaluation during self-play.
-    use_nnue: bool,
     // The depth or node limit for searches.
     limit: DataGenLimit,
     // Whether to generate DFRC data.
     generate_dfrc: bool,
     // log level
     log_level: u8,
-    // position count limit
-    position_count_limit: Option<u64>,
+}
+
+/// Builder for datagen options.
+pub struct DataGenOptionsBuilder {
+    // The number of games to generate.
+    pub num_games: usize,
+    // The number of threads to use.
+    pub num_threads: usize,
+    // The (optional) path to the directory containing syzygy endgame tablebases.
+    pub tablebases_path: Option<PathBuf>,
+    // The depth or node limit for searches.
+    pub use_depth: bool,
+    // Whether to generate DFRC data.
+    pub generate_dfrc: bool,
+}
+
+impl DataGenOptionsBuilder {
+    fn build(self) -> DataGenOptions {
+        DataGenOptions {
+            num_games: self.num_games,
+            num_threads: self.num_threads,
+            tablebases_path: self.tablebases_path,
+            limit: if self.use_depth {
+                DataGenLimit::Depth(8)
+            } else {
+                DataGenLimit::Nodes(5000)
+            },
+            generate_dfrc: self.generate_dfrc,
+            log_level: 1,
+        }
+    }
 }
 
 impl DataGenOptions {
@@ -76,24 +103,23 @@ impl DataGenOptions {
             num_games: 100,
             num_threads: 1,
             tablebases_path: None,
-            use_nnue: true,
             limit: DataGenLimit::Depth(8),
             generate_dfrc: true,
             log_level: 1,
-            position_count_limit: None,
         }
     }
 
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}t-{}-{}-{}-{}",
+            "{}g-{}t-{}-{}-{}",
             self.num_games,
             self.num_threads,
-            self.tablebases_path
-                .as_ref()
-                .map_or_else(|| "no_tb".into(), |tablebases_path| tablebases_path.to_string_lossy()),
-            if self.use_nnue { "nnue" } else { "hce" },
+            if self.tablebases_path.is_some() {
+                format!("tb{}", tablebases::probe::get_max_pieces_count())
+            } else {
+                "no_tb".into()
+            },
             if self.generate_dfrc { "dfrc" } else { "classical" },
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
@@ -103,7 +129,7 @@ impl DataGenOptions {
     }
 }
 
-pub fn gen_data_main(cli_config: Option<&str>) {
+pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
     assert!(
         !cfg!(not(feature = "datagen")),
         "Data generation is not enabled, please enable the 'datagen' feature to use this functionality."
@@ -115,14 +141,7 @@ pub fn gen_data_main(cli_config: Option<&str>) {
     })
     .expect("Failed to set Ctrl-C handler");
 
-    let options: DataGenOptions = cli_config.map_or_else(
-        || {
-            let options = DataGenOptions::new();
-            show_boot_info(&options);
-            config_loop(options)
-        },
-        |s| s.parse().expect("Failed to parse CLI config, expected short def string (e.g. '100g-2t-<TBPATH>-nnue-d8')"),
-    );
+    let options: DataGenOptions = cli_config.build();
 
     CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
     FENS_GENERATED.store(0, Ordering::SeqCst);
@@ -405,12 +424,8 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         // STEP 5: update the game outcome statistics
         *counters.get_mut(&outcome).unwrap() += 1;
 
-        // STEP 6: check if we should stop
-        // either because the STOP_GENERATION signal was set,
-        // or because we have generated enough positions.
-        if STOP_GENERATION.load(Ordering::SeqCst)
-            || options.position_count_limit.map_or(false, |limit| FENS_GENERATED.load(Ordering::SeqCst) >= limit)
-        {
+        // STEP 6: check if we should stop because the STOP_GENERATION signal was set.
+        if STOP_GENERATION.load(Ordering::SeqCst) {
             break 'generation_main_loop;
         }
     }
@@ -494,13 +509,6 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                     eprintln!("Invalid value for tablebases_path, must be a valid path");
                 }
             }
-            "use_nnue" => {
-                if let Ok(use_nnue) = value.parse::<bool>() {
-                    options.use_nnue = use_nnue;
-                } else {
-                    eprintln!("Invalid value for use_nnue, must be a boolean");
-                }
-            }
             "limit" => {
                 let Some(limit_size) = user_input.next() else {
                     eprintln!("Trying to set limit, but only one token was provided");
@@ -535,73 +543,12 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
                 };
                 options.log_level = log_level;
             }
-            "positions_limit" => {
-                let positions_limit = match value.parse::<u64>() {
-                    Ok(positions_limit) => positions_limit,
-                    Err(e) => {
-                        eprintln!("{e}");
-                        continue;
-                    }
-                };
-                options.position_count_limit = Some(positions_limit);
-            }
             other => {
                 eprintln!("Invalid parameter (\"{other}\"), supported parameters are \"num_games\", \"num_threads\", \"tablebases_path\", \"use_nnue\", \"limit\", and \"log_level\"");
             }
         }
     }
     options
-}
-
-impl FromStr for DataGenOptions {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut options = Self::new();
-        let parts = s.split("--").collect::<Vec<_>>();
-        if parts.len() != 6 {
-            return Err(format!("Invalid options string: {s}"));
-        }
-        options.num_games = parts[0]
-            .strip_suffix('g')
-            .ok_or_else(|| format!("Invalid number of games: {}", parts[0]))?
-            .parse()
-            .map_err(|_| format!("Invalid number of games: {}", parts[0]))?;
-        options.num_threads = parts[1]
-            .strip_suffix('t')
-            .ok_or_else(|| format!("Invalid number of threads: {}", parts[1]))?
-            .parse()
-            .map_err(|_| format!("Invalid number of threads: {}", parts[1]))?;
-        if parts[2] != "no_tb" {
-            options.tablebases_path = Some(PathBuf::from(parts[2]));
-        }
-        options.use_nnue = parts[3] == "nnue";
-        options.generate_dfrc = match parts.get(4).copied() {
-            Some("dfrc") => true,
-            Some("classical") => false,
-            _ => return Err(format!("Invalid game type specifier: {}, must be \"dfrc\" or \"classical\"", parts[4])),
-        };
-        let limit = match parts[5].chars().next() {
-            Some('d') => DataGenLimit::Depth(
-                parts[5]
-                    .strip_prefix('d')
-                    .ok_or_else(|| format!("Invalid depth limit: {}", parts[5]))?
-                    .parse()
-                    .map_err(|_| format!("Invalid depth limit: {}", parts[5]))?,
-            ),
-            Some('n') => DataGenLimit::Nodes(
-                parts[5]
-                    .strip_prefix('n')
-                    .ok_or_else(|| format!("Invalid node limit: {}", parts[5]))?
-                    .parse()
-                    .map_err(|_| format!("Invalid node limit: {}", parts[5]))?,
-            ),
-            _ => return Err(format!("Invalid limit: {}", parts[5])),
-        };
-        options.limit = limit;
-        options.log_level = 1;
-        Ok(options)
-    }
 }
 
 impl Display for DataGenOptions {
@@ -614,7 +561,6 @@ impl Display for DataGenOptions {
             " |> tablebases_path: {}",
             self.tablebases_path.as_ref().map_or_else(|| "None".into(), |path| path.to_string_lossy())
         )?;
-        writeln!(f, " |> use_nnue: {}", self.use_nnue)?;
         writeln!(
             f,
             " |> limit: {}",
@@ -655,6 +601,25 @@ impl FromStr for DataGenLimit {
     }
 }
 
+fn should_filter(mv: Move, eval: i32, board: &Board) -> bool {
+    if board.ply() < MIN_SAVE_PLY {
+        return true;
+    }
+    if is_game_theoretic_score(eval) {
+        return true;
+    }
+    if board.pieces.occupied().count() < 4 {
+        return true;
+    }
+    if board.is_tactical(mv) {
+        return true;
+    }
+    if board.in_check() {
+        return true;
+    }
+    false
+}
+
 /// Unpacks the variable-length game format into either bulletformat or marlinformat records,
 /// filtering as it goes.
 pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, limit: Option<usize>) {
@@ -673,22 +638,7 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, 
         if !filter {
             return true;
         }
-        if board.ply() < MIN_SAVE_PLY {
-            return false;
-        }
-        if is_game_theoretic_score(eval) {
-            return false;
-        }
-        if board.pieces.occupied().count() < 4 {
-            return false;
-        }
-        if board.is_tactical(mv) {
-            return false;
-        }
-        if board.in_check() {
-            return false;
-        }
-        true
+        !should_filter(mv, eval, board)
     };
 
     // open the input file
@@ -984,4 +934,50 @@ pub fn dataset_stats(dataset_path: &Path) {
         / stats.games as u128) as f64
         / 1000.0;
     println!("Mean game length: {mean_game_len}");
+}
+
+/// Scans one or more variable-length game format files and prints the position counts.
+pub fn dataset_count(path: &Path) {
+    let mut move_buffer = Vec::new();
+
+    let mut total_count = 0u64;
+
+    let paths = if path.is_dir() {
+        fs::read_dir(path).map_or_else(
+            |_| Vec::new(),
+            |dir| {
+                dir.filter_map(|entry| {
+                    entry.ok().and_then(|entry| {
+                        let path = entry.path();
+                        if path.is_file() {
+                            Some(path)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect()
+            },
+        )
+    } else {
+        vec![path.to_owned()]
+    };
+
+    if paths.is_empty() {
+        eprintln!("No files found at {}", path.display());
+        return;
+    }
+
+    for path in paths {
+        let mut reader = BufReader::new(File::open(&path).unwrap());
+        let mut count = 0u64;
+        while let Ok(game) = dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
+            count += game.len() as u64;
+            move_buffer = game.into_move_buffer();
+        }
+        total_count += count;
+        println!("{}: {}", path.display(), count);
+    }
+
+    println!("Total: {total_count}");
 }
