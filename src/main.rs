@@ -71,9 +71,6 @@ fn main() {
             };
         }
         Some(cli::Subcommands::Datagen { games, threads, tbs, depth_limit, dfrc }) => {
-            #[cfg(not(feature = "datagen"))]
-            println!("datagen feature not enabled (compile with --features datagen)");
-            // #[cfg(feature = "datagen")]
             datagen::gen_data_main(datagen::DataGenOptionsBuilder {
                 num_games: games,
                 num_threads: threads,

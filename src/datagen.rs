@@ -130,10 +130,10 @@ impl DataGenOptions {
 }
 
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
-    assert!(
-        !cfg!(not(feature = "datagen")),
-        "Data generation is not enabled, please enable the 'datagen' feature to use this functionality."
-    );
+    if !cfg!(feature = "datagen") {
+        println!("datagen feature not enabled (compile with --features datagen)");
+        return; 
+    }
 
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
