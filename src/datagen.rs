@@ -85,11 +85,7 @@ impl DataGenOptionsBuilder {
             num_games: self.num_games,
             num_threads: self.num_threads,
             tablebases_path: self.tablebases_path,
-            limit: if self.use_depth {
-                DataGenLimit::Depth(8)
-            } else {
-                DataGenLimit::Nodes(5000)
-            },
+            limit: if self.use_depth { DataGenLimit::Depth(8) } else { DataGenLimit::Nodes(5000) },
             generate_dfrc: self.generate_dfrc,
             log_level: 1,
         }
@@ -132,7 +128,7 @@ impl DataGenOptions {
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
     if !cfg!(feature = "datagen") {
         println!("datagen feature not enabled (compile with --features datagen)");
-        return; 
+        return;
     }
 
     ctrlc::set_handler(move || {

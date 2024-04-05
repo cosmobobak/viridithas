@@ -22,12 +22,12 @@ pub enum Subcommands {
     /// Count the number of positions contained within one or more packed game records.
     CountPositions {
         /// Path to input packed game record, or directory containing only packed game records.
-        input: PathBuf
+        input: PathBuf,
     },
     /// Analyse a packed game record
     Analyse {
         /// Path to input packed game record.
-        input: PathBuf
+        input: PathBuf,
     },
     /// Emit configuration for SPSA
     Spsa {
@@ -67,5 +67,5 @@ pub enum Subcommands {
         // Whether to generate DFRC data.
         #[clap(long)]
         dfrc: bool,
-    }
+    },
 }

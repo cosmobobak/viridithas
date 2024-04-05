@@ -4,8 +4,6 @@
 
 //! Viridithas, a UCI chess engine written in Rust.
 
-use crate::{nnue::network, search::parameters::Config};
-
 #[macro_use]
 mod macros;
 
@@ -53,14 +51,14 @@ fn main() {
 
     match cli.subcommand {
         Some(cli::Subcommands::Perft) => perft::gamut(),
-        Some(cli::Subcommands::VisNNUE) => network::visualise_nnue(),
+        Some(cli::Subcommands::VisNNUE) => nnue::network::visualise_nnue(),
         Some(cli::Subcommands::Analyse { input }) => datagen::dataset_stats(&input),
         Some(cli::Subcommands::CountPositions { input }) => datagen::dataset_count(&input),
         Some(cli::Subcommands::Spsa { json }) => {
             if json {
-                println!("{}", Config::default().emit_json_for_spsa());
+                println!("{}", search::parameters::Config::default().emit_json_for_spsa());
             } else {
-                println!("{}", Config::default().emit_csv_for_spsa());
+                println!("{}", search::parameters::Config::default().emit_csv_for_spsa());
             }
         }
         Some(cli::Subcommands::Splat { input, marlinformat, pgn, output, limit }) => {

@@ -130,9 +130,7 @@ impl Move {
     }
 
     pub const fn from_raw(data: u16) -> Self {
-        Self {
-            data
-        }
+        Self { data }
     }
 }
 
