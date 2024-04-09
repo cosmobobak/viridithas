@@ -20,7 +20,7 @@ use rand::Rng;
 
 use crate::{
     board::{
-        evaluation::{is_game_theoretic_score, MINIMUM_MATE_SCORE},
+        evaluation::{is_game_theoretic_score, is_mate_score},
         Board, GameOutcome,
     },
     chessmove::Move,
@@ -387,7 +387,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
             }
             if is_game_theoretic_score(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
-                let is_mate = score.abs() > MINIMUM_MATE_SCORE;
+                let is_mate = is_mate_score(score);
                 break match (score.signum(), is_mate) {
                     (1, false) => GameOutcome::WhiteWinTB,
                     (-1, false) => GameOutcome::BlackWinTB,

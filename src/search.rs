@@ -14,8 +14,7 @@ use arrayvec::ArrayVec;
 use crate::{
     board::{
         evaluation::{
-            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_MATE_SCORE,
-            MINIMUM_TB_WIN_SCORE,
+            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
             bitboards,
@@ -327,7 +326,7 @@ impl Board {
                     info.time_manager.report_aspiration_fail(depth, Bound::Lower, &info.conf);
                 }
                 // decrement depth:
-                if pv.score.abs() < MINIMUM_TB_WIN_SCORE {
+                if !is_game_theoretic_score(pv.score) {
                     depth = (depth - 1).max(min_depth);
                 }
 
@@ -756,7 +755,7 @@ impl Board {
                 }
                 if null_score >= beta {
                     // don't return game-theoretic scores:
-                    if null_score >= MINIMUM_TB_WIN_SCORE {
+                    if is_game_theoretic_score(null_score) {
                         null_score = beta;
                     }
                     // unconditionally cutoff if we're just too shallow.
@@ -804,7 +803,7 @@ impl Board {
             && !in_check
             && excluded.is_null()
             && depth >= info.conf.probcut_min_depth
-            && beta.abs() < MINIMUM_TB_WIN_SCORE
+            && !is_game_theoretic_score(beta)
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
@@ -1316,10 +1315,10 @@ pub fn select_best<'a>(
         let best_score = best_thread.pvs[best_depth].score();
         let this_depth = thread.completed;
         let this_score = thread.pvs[this_depth].score();
-        if (this_depth == best_depth || this_score > MINIMUM_MATE_SCORE) && this_score > best_score {
+        if (this_depth == best_depth || this_score >= MINIMUM_TB_WIN_SCORE) && this_score > best_score {
             best_thread = thread;
         }
-        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_MATE_SCORE) {
+        if this_depth > best_depth && (this_score > best_score || best_score < MINIMUM_TB_WIN_SCORE) {
             best_thread = thread;
         }
     }
