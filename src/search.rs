@@ -733,7 +733,7 @@ impl Board {
                 && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
-                && !matches!(tt_hit, Some(TTHit { value: v, bound: b, .. }) if b == Bound::Upper && v < beta)
+                && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
             {
                 let r = info.conf.nmp_base_reduction
                     + depth / info.conf.nmp_reduction_depth_divisor
