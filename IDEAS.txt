@@ -18,3 +18,7 @@ MINOR:
 - better errors for Fathom.
 - finish the datagen - -> | transition
 - add filtering for counts
+- probcut tinkering
+- futility tinkering
+- use history for more things
+- iir tinkering
