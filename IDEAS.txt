@@ -18,7 +18,7 @@ MINOR:
 - better errors for Fathom.
 - finish the datagen - -> | transition
 - add filtering for counts
-- probcut tinkering
+- probcut tinkering (SF in-check trick)
 - futility tinkering
 - use history for more things
-- iir tinkering
+- iir tinkering (excluded move, non-PV nodes, other fiddling)
