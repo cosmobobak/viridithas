@@ -625,10 +625,6 @@ impl Board {
 
                 Some(hit)
             } else {
-                // TT-reduction (IIR).
-                if NT::PV && depth >= info.conf.tt_reduction_depth {
-                    depth -= 1;
-                }
                 None
             }
         } else {
@@ -780,8 +776,13 @@ impl Board {
         let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.mov);
         let tt_capture = !tt_move.is_null() && self.is_capture(tt_move);
 
-        if cut_node && depth >= TT_REDUCTION_DEPTH * 2 && tt_move.is_null() {
-            depth -= 1;
+        // TT-reduction (IIR).
+        if NT::PV && tt_hit.is_none() {
+            depth -= i32::from(depth >= info.conf.tt_reduction_depth);
+        }
+
+        if cut_node && tt_move.is_null() {
+            depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
         let see_table = [info.conf.see_tactical_margin * depth.squared(), info.conf.see_quiet_margin * depth.round()];
