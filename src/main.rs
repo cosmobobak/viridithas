@@ -33,6 +33,8 @@ mod util;
 
 mod datagen;
 
+use cli::Subcommands::{Analyse, Bench, CountPositions, Datagen, Perft, Splat, Spsa, VisNNUE};
+
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
 /// The version of the engine.
@@ -50,25 +52,25 @@ fn main() {
     let cli = <cli::Cli as clap::Parser>::parse();
 
     match cli.subcommand {
-        Some(cli::Subcommands::Perft) => perft::gamut(),
-        Some(cli::Subcommands::VisNNUE) => nnue::network::visualise_nnue(),
-        Some(cli::Subcommands::Analyse { input }) => datagen::dataset_stats(&input),
-        Some(cli::Subcommands::CountPositions { input }) => datagen::dataset_count(&input),
-        Some(cli::Subcommands::Spsa { json }) => {
+        Some(Perft) => perft::gamut(),
+        Some(VisNNUE) => nnue::network::visualise_nnue(),
+        Some(Analyse { input }) => datagen::dataset_stats(&input),
+        Some(CountPositions { input }) => datagen::dataset_count(&input),
+        Some(Spsa { json }) => {
             if json {
                 println!("{}", search::parameters::Config::default().emit_json_for_spsa());
             } else {
                 println!("{}", search::parameters::Config::default().emit_csv_for_spsa());
             }
         }
-        Some(cli::Subcommands::Splat { input, marlinformat, pgn, output, limit }) => {
+        Some(Splat { input, marlinformat, pgn, output, limit }) => {
             if pgn {
                 datagen::run_topgn(&input, &output, limit);
             } else {
                 datagen::run_splat(&input, &output, true, marlinformat, limit);
             };
         }
-        Some(cli::Subcommands::Datagen { games, threads, tbs, depth_limit, dfrc }) => {
+        Some(Datagen { games, threads, tbs, depth_limit, dfrc }) => {
             datagen::gen_data_main(datagen::DataGenOptionsBuilder {
                 num_games: games,
                 num_threads: threads,
@@ -77,7 +79,7 @@ fn main() {
                 generate_dfrc: dfrc,
             });
         }
-        Some(cli::Subcommands::Bench) => uci::main_loop(true),
+        Some(Bench) => uci::main_loop(true),
         None => uci::main_loop(false),
     }
 }
