@@ -781,10 +781,12 @@ impl Board {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth);
         }
 
+        // cutnode-based TT reduction.
         if cut_node && tt_move.is_null() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
+        // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
         let see_table = [info.conf.see_tactical_margin * depth.squared(), info.conf.see_quiet_margin * depth.round()];
 
         // store the eval into the TT if we won't overwrite anything:

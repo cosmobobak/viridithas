@@ -21,4 +21,5 @@ MINOR:
 - probcut tinkering (SF in-check trick)
 - futility tinkering
 - use history for more things
-- iir tinkering (excluded move, non-PV nodes, other fiddling)
+- iir tinkering (ttmove, excluded move, non-PV nodes, other fiddling)
+- iid tinkering (ttmove, excluded move)
