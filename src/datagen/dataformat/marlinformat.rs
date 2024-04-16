@@ -102,7 +102,7 @@ impl PackedBoard {
             builder.add_piece(sq, Piece::new(colour, piece_type));
         }
 
-        *builder.ep_sq_mut() = Square::new(self.stm_ep_square & 0b0111_1111);
+        *builder.ep_sq_mut() = Square::new_checked(self.stm_ep_square & 0b0111_1111).unwrap_or(Square::A1);
         *builder.turn_mut() = Colour::new(self.stm_ep_square >> 7 != 0);
         *builder.halfmove_clock_mut() = self.halfmove_clock;
         builder.set_fullmove_clock(self.fullmove_number.get());

@@ -3,6 +3,7 @@
 mod dataformat;
 
 use std::{
+    borrow::Cow,
     cmp::Reverse,
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -965,11 +966,24 @@ pub fn dataset_count(path: &Path) {
     }
 
     for path in paths {
-        let mut reader = BufReader::new(File::open(&path).unwrap());
+        let file = File::open(&path).unwrap();
+        let len = file.metadata().expect("Failed to get file metadata!").len();
+        let mut reader = BufReader::new(file);
         let mut count = 0u64;
-        while let Ok(game) = dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
-            count += game.len() as u64;
-            move_buffer = game.into_move_buffer();
+        loop {
+            match dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
+                Ok(game) => {
+                    count += game.len() as u64;
+                    move_buffer = game.into_move_buffer();
+                }
+                Err(error) => {
+                    match error.kind() {
+                        std::io::ErrorKind::UnexpectedEof => {}
+                        _ => eprintln!("[WARN] dataset_count encountered an unexpected error wile reading {file}: {error}\n[WARN] this occured at an offset of {:?} into the file (but probably earlier than this, as we use buffered IO)\n[WARN] for reference, {file} is {} bytes long.", reader.into_inner().stream_position(), len, file = path.file_name().map_or(Cow::Borrowed("<???>"), |oss| oss.to_string_lossy()))
+                    }
+                    break;
+                }
+            }
         }
         total_count += count;
         println!("{}: {}", path.display(), count);

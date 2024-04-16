@@ -141,6 +141,14 @@ impl Square {
         Self(inner)
     }
 
+    pub const fn new_checked(inner: u8) -> Option<Self> {
+        if inner <= 64 {
+            Some(Self(inner))
+        } else {
+            None
+        }
+    }
+
     pub const fn flip_rank(self) -> Self {
         Self(self.0 ^ 0b111_000)
     }
