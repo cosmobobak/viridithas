@@ -23,3 +23,4 @@ MINOR:
 - use history for more things
 - iir tinkering (ttmove, excluded move, non-PV nodes, other fiddling)
 - iid tinkering (ttmove, excluded move)
+- screlu output is guaranteed to be positive. can we fit bigger quantisation results in our registers?

@@ -326,6 +326,34 @@ impl NNUEParams {
         image.save_as_tga(path);
     }
 
+    pub fn min_max_feature_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.feature_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
+    pub fn min_max_output_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.output_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // handle mirroring
         let bucket = bucket % 9;
@@ -869,10 +897,25 @@ mod avx2 {
         let min = _mm256_setzero_si256();
         let max = _mm256_set1_epi16(QA as i16);
 
+        // the following code uses a trick devised by the author of the Lizard chess engine.
+        // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
+        // and we do this in the following manner:
+        // 1. load the input, x
+        // 2. compute v := clamp(x, 0, QA)
+        // 3. load the weight, w
+        // 4. compute t := v * w via truncating 16-bit multiply.
+        //    this step relies on our invariant that v * w fits in i16.
+        // 5. compute product := v * t via horizontally accumulating
+        //    expand-to-i32 multiply.
+        // 6. add product to the running sum.
+        // at this point we've computed clamp(x, 0, QA)^2 * w
+        // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
+        // the clever part is step #4, which the compiler cannot know to do.
+
         // accumulate the first half of the weights
         for i in 0..LAYER_1_SIZE / CHUNK {
-            let mut v = load_i16s(us, i * CHUNK);
-            v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
+            let x = load_i16s(us, i * CHUNK);
+            let v = _mm256_min_epi16(_mm256_max_epi16(x, min), max);
             let w = load_i16s(weights, i * CHUNK);
             let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
             sum = _mm256_add_epi32(sum, product);
@@ -880,8 +923,8 @@ mod avx2 {
 
         // accumulate the second half of the weights
         for i in 0..LAYER_1_SIZE / CHUNK {
-            let mut v = load_i16s(them, i * CHUNK);
-            v = _mm256_min_epi16(_mm256_max_epi16(v, min), max);
+            let x = load_i16s(them, i * CHUNK);
+            let v = _mm256_min_epi16(_mm256_max_epi16(x, min), max);
             let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
             let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
             sum = _mm256_add_epi32(sum, product);
@@ -911,4 +954,8 @@ pub fn visualise_nnue() {
     for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
         crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
     }
+    let (min, max) = crate::nnue::network::NNUE.min_max_feature_weight();
+    println!("Min / Max L1 values: {min} / {max}");
+    let (min, max) = crate::nnue::network::NNUE.min_max_output_weight();
+    println!("Min / Max L2 values: {min} / {max}");
 }
