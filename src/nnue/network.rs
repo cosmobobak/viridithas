@@ -325,27 +325,31 @@ impl BucketAccumulatorCache {
         let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
         let cache_acc = &mut self.accs[side_we_care_about.index()][bucket];
 
-        let mut adds = [FeatureUpdate::NULL; 32];
-        let mut subs = [FeatureUpdate::NULL; 32];
+        let mut adds = [0; 32];
+        let mut subs = [0; 32];
         let mut add_count = 0;
         let mut sub_count = 0;
         self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
+            let (white_idx, black_idx) = feature_indices(wk, bk, f);
+            let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
             if is_add {
-                adds[add_count] = f;
+                adds[add_count] = index;
                 add_count += 1;
             } else {
-                subs[sub_count] = f;
+                subs[sub_count] = index;
                 sub_count += 1;
             }
         });
 
-        for &sub in &subs[..sub_count] {
-            NNUEState::update_feature_inplace::<Deactivate>(wk, bk, sub, pov_update, cache_acc);
-        }
+        let entry = if pov_update.white {
+            &mut cache_acc.white
+        } else {
+            &mut cache_acc.black
+        };
 
-        for &add in &adds[..add_count] {
-            NNUEState::update_feature_inplace::<Activate>(wk, bk, add, pov_update, cache_acc);
-        }
+        let weights = NNUEParams::select_feature_weights(&NNUE, bucket);
+
+        simd::vector_update_inplace(entry, weights, &adds[..add_count], &subs[..sub_count]);
 
         if pov_update.white {
             simd::copy(&cache_acc.white, &mut acc.white);
@@ -688,38 +692,6 @@ impl NNUEState {
                 black_sub1,
                 black_sub2,
             );
-        }
-    }
-
-    /// Update by activating or deactivating a piece.
-    pub fn update_feature_inplace<A: Activation>(
-        white_king: Square,
-        black_king: Square,
-        f: FeatureUpdate,
-        update: PovUpdate,
-        acc: &mut Accumulator,
-    ) {
-        let (white_idx, black_idx) = feature_indices(white_king, black_king, f);
-
-        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
-
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
-
-        if A::ACTIVATE {
-            if update.white {
-                simd::vector_add_inplace(&mut acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                simd::vector_add_inplace(&mut acc.black, black_bucket, black_idx);
-            }
-        } else {
-            if update.white {
-                simd::vector_sub_inplace(&mut acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                simd::vector_sub_inplace(&mut acc.black, black_bucket, black_idx);
-            }
         }
     }
 

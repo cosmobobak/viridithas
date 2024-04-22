@@ -282,38 +282,29 @@ pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, tgt: &mut Align64<[i16; LAYER_1_
     }
 }
 
-/// Add a feature to a square.
-pub fn vector_add_inplace(
+/// Apply add/subtract updates in place.
+pub fn vector_update_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
+    adds: &[usize],
+    subs: &[usize],
 ) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
         unsafe {
-            let x = Vector16::load_at(input, i * Vector16::COUNT);
-            let w = Vector16::load_at(a_block, i * Vector16::COUNT);
-            let s = Vector16::add(x, w);
-            Vector16::store_at(input, s, i * Vector16::COUNT);
-        }
-    }
-}
-
-/// Subtract a feature from a square.
-pub fn vector_sub_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_sub: usize,
-) {
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = unsafe { slice_to_aligned(&bucket[offset_sub..offset_sub + LAYER_1_SIZE]) };
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            let x = Vector16::load_at(input, i * Vector16::COUNT);
-            let w = Vector16::load_at(s_block, i * Vector16::COUNT);
-            let s = Vector16::sub(x, w);
-            Vector16::store_at(input, s, i * Vector16::COUNT);
+            let mut accumulator = Vector16::load_at(input, i * Vector16::COUNT);
+            for &sub_index in subs {
+                let sub_index = sub_index * LAYER_1_SIZE;
+                let sub_block = slice_to_aligned(&bucket[sub_index..sub_index + LAYER_1_SIZE]);
+                let sub = Vector16::load_at(sub_block, i * Vector16::COUNT);
+                accumulator = Vector16::sub(accumulator, sub);
+            }
+            for &add_index in adds {
+                let add_index = add_index * LAYER_1_SIZE;
+                let add_block = slice_to_aligned(&bucket[add_index..add_index + LAYER_1_SIZE]);
+                let add = Vector16::load_at(add_block, i * Vector16::COUNT);
+                accumulator = Vector16::add(accumulator, add);
+            }
+            Vector16::store_at(input, accumulator, i * Vector16::COUNT);
         }
     }
 }
