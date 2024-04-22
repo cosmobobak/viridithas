@@ -46,6 +46,125 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
+
+
+// read in the binary file containing the network parameters
+// have to do some path manipulation to get relative paths to work
+// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
+pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!(concat!("../../", "viridithas.nnue",))) };
+
+#[repr(C)]
+pub struct NNUEParams {
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
+    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
+    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
+    pub output_bias: i16,
+}
+
+impl NNUEParams {
+    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // remap pieces to keep opposite colours together
+        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
+        assert!(neuron < LAYER_1_SIZE);
+        let starting_idx = neuron;
+        let mut slice = Vec::with_capacity(768);
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                for square in Square::all() {
+                    let feature_indices = feature_indices(
+                        Square::H1,
+                        Square::H8,
+                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
+                    );
+                    let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
+                    slice.push(self.feature_weights[index]);
+                }
+            }
+        }
+
+        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+
+        for (piece, chunk) in slice.chunks(64).enumerate() {
+            let piece = PIECE_REMAPPING[piece];
+            let piece_colour = piece % 2;
+            let piece_type = piece / 2;
+            let (max, min) = if piece_type == 0 {
+                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            } else {
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            };
+            let weight_to_colour = |weight: i16| -> u32 {
+                let intensity = f32::from(weight - min) / f32::from(max - min);
+                let idx = (intensity * 255.0).round() as u8;
+                image::inferno_colour_map(idx)
+            };
+            for (square, &weight) in chunk.iter().enumerate() {
+                let row = square / 8;
+                let col = square % 8;
+                let colour = if (row == 0 || row == 7) && piece_type == 0 {
+                    0 // pawns on first and last rank are always 0
+                } else {
+                    weight_to_colour(weight)
+                };
+                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
+            }
+        }
+
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
+    pub fn min_max_feature_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.feature_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
+    pub fn min_max_output_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.output_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        // handle mirroring
+        let bucket = bucket % 9;
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
+    }
+}
+
 /// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
 
@@ -255,123 +374,6 @@ impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
 impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-// read in the binary file containing the network parameters
-// have to do some path manipulation to get relative paths to work
-// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!(concat!("../../", env!("EVALFILE"),))) };
-
-#[repr(C)]
-pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
-    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
-    pub output_bias: i16,
-}
-
-impl NNUEParams {
-    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
-        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        // remap pieces to keep opposite colours together
-        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
-        assert!(neuron < LAYER_1_SIZE);
-        let starting_idx = neuron;
-        let mut slice = Vec::with_capacity(768);
-        for colour in Colour::all() {
-            for piece_type in PieceType::all() {
-                for square in Square::all() {
-                    let feature_indices = feature_indices(
-                        Square::H1,
-                        Square::H8,
-                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
-                    );
-                    let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
-                    slice.push(self.feature_weights[index]);
-                }
-            }
-        }
-
-        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
-
-        for (piece, chunk) in slice.chunks(64).enumerate() {
-            let piece = PIECE_REMAPPING[piece];
-            let piece_colour = piece % 2;
-            let piece_type = piece / 2;
-            let (max, min) = if piece_type == 0 {
-                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            } else {
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            };
-            let weight_to_colour = |weight: i16| -> u32 {
-                let intensity = f32::from(weight - min) / f32::from(max - min);
-                let idx = (intensity * 255.0).round() as u8;
-                image::inferno_colour_map(idx)
-            };
-            for (square, &weight) in chunk.iter().enumerate() {
-                let row = square / 8;
-                let col = square % 8;
-                let colour = if (row == 0 || row == 7) && piece_type == 0 {
-                    0 // pawns on first and last rank are always 0
-                } else {
-                    weight_to_colour(weight)
-                };
-                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
-            }
-        }
-
-        let path = path.join(format!("neuron_{neuron}.tga"));
-        image.save_as_tga(path);
-    }
-
-    pub fn min_max_feature_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for &f in &self.feature_weights.0 {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
-    }
-
-    pub fn min_max_output_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for &f in &self.output_weights.0 {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
-    }
-
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        // handle mirroring
-        let bucket = bucket % 9;
-        let start = bucket * INPUT * LAYER_1_SIZE;
-        let end = start + INPUT * LAYER_1_SIZE;
-        let slice = &self.feature_weights[start..end];
-        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-        // and we check that the slice is aligned to 64 bytes.
-        // additionally, we're generating the reference from our own data,
-        // so we know that the lifetime is valid.
-        unsafe {
-            // don't immediately cast to Align64, as we want to check the alignment first.
-            let ptr = slice.as_ptr();
-            assert_eq!(ptr.align_offset(64), 0);
-            // alignments are sensible, so we can safely cast.
-            #[allow(clippy::cast_ptr_alignment)]
-            &*ptr.cast()
-        }
     }
 }
 
@@ -814,18 +816,24 @@ fn flatten(
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
-    #[cfg(target_feature = "avx2")]
+    #[cfg(target_feature = "avx512")]
+    unsafe {
+        avx512::flatten(us, them, weights)
+    }
+    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
     unsafe {
         avx2::flatten(us, them, weights)
     }
-    #[cfg(not(target_feature = "avx2"))]
-    {
-        generic::flatten(us, them, weights)
+    #[cfg(target_feature = "neon")]
+    unsafe {
+        neon::flatten(us, them, weights)
     }
+    #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+    generic::flatten(us, them, weights)
 }
 
 /// Non-SIMD implementation of the forward pass.
-#[cfg(not(target_feature = "avx2"))]
+#[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
 mod generic {
     use super::{Align64, LAYER_1_SIZE, QA};
 
@@ -928,6 +936,171 @@ mod avx2 {
             let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
             let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
             sum = _mm256_add_epi32(sum, product);
+        }
+
+        horizontal_sum_i32(sum) / QA
+    }
+}
+
+#[cfg(target_feature = "avx512")]
+mod avx512 {
+    use super::{Align64, LAYER_1_SIZE, QA};
+    // use std::arch::x86_64::{
+    //     __m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_load_si256,
+    //     _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16,
+    //     _mm256_setzero_si256, _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64,
+    // };
+    use std::arch::x86_64::*;
+
+    type Vec512 = __m512i;
+
+    #[inline]
+    unsafe fn load_i16s<const VEC_SIZE: usize>(acc: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Vec512 {
+        _mm512_load_si512(acc.0.as_ptr().add(start_idx).cast())
+    }
+
+    #[inline]
+    unsafe fn horizontal_sum_i32(sum: Vec512) -> i32 {
+        let high_256 = _mm512_extracti64x4_epi64(sum);
+        let low_256 = _mm512_castsi512_si256(sum);
+        let sum_256 = _mm256_add_epi32(low_256, high_256);
+        let upper_128 = _mm256_extracti128_si256::<1>(sum_256);
+        let lower_128 = _mm256_castsi256_si128(sum_256);
+        let sum_128 = _mm_add_epi32(upper_128, lower_128);
+        let upper_64 = _mm_unpackhi_epi64(sum_128, sum_128);
+        let sum_64 = _mm_add_epi32(upper_64, sum_128);
+        let upper_32 = _mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
+        let sum_32 = _mm_add_epi32(upper_32, sum_64);
+
+        _mm_cvtsi128_si32(sum_32)
+    }
+
+    /// Execute an activation on the partial activations,
+    /// and accumulate the result into a sum.
+    pub unsafe fn flatten(
+        us: &Align64<[i16; LAYER_1_SIZE]>,
+        them: &Align64<[i16; LAYER_1_SIZE]>,
+        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+    ) -> i32 {
+        const CHUNK: usize = 32;
+
+        let mut sum = _mm512_setzero_si512();
+        let min = _mm512_setzero_si512();
+        let max = _mm512_set1_epi16(QA as i16);
+
+        // the following code uses a trick devised by the author of the Lizard chess engine.
+        // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
+        // and we do this in the following manner:
+        // 1. load the input, x
+        // 2. compute v := clamp(x, 0, QA)
+        // 3. load the weight, w
+        // 4. compute t := v * w via truncating 16-bit multiply.
+        //    this step relies on our invariant that v * w fits in i16.
+        // 5. compute product := v * t via horizontally accumulating
+        //    expand-to-i32 multiply.
+        // 6. add product to the running sum.
+        // at this point we've computed clamp(x, 0, QA)^2 * w
+        // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
+        // the clever part is step #4, which the compiler cannot know to do.
+
+        // accumulate the first half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = load_i16s(us, i * CHUNK);
+            let v = _mm512_min_epi16(_mm512_max_epi16(x, min), max);
+            let w = load_i16s(weights, i * CHUNK);
+            let product = _mm512_madd_epi16(v, _mm512_mullo_epi16(v, w));
+            sum = _mm512_add_epi32(sum, product);
+        }
+
+        // accumulate the second half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = load_i16s(them, i * CHUNK);
+            let v = _mm512_min_epi16(_mm512_max_epi16(x, min), max);
+            let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
+            let product = _mm512_madd_epi16(v, _mm512_mullo_epi16(v, w));
+            sum = _mm512_add_epi32(sum, product);
+        }
+
+        horizontal_sum_i32(sum) / QA
+    }
+}
+
+#[cfg(target_feature = "neon")]
+mod neon {
+    use super::{Align64, LAYER_1_SIZE, QA};
+    use std::arch::aarch64::*;
+
+    #[inline]
+    unsafe fn load_i16s<const VEC_SIZE: usize>(
+        acc: &Align64<[i16; VEC_SIZE]>,
+        start_idx: usize,
+    ) -> int16x8_t {
+        vld1q_s16(acc.0.as_ptr().add(start_idx).cast())
+    }
+
+    #[inline]
+    unsafe fn horizontal_sum_i32(sum: int32x4_t) -> i32 {
+        vaddlvq_s32(sum) as i32
+    }
+
+    #[inline]
+    unsafe fn madd(a: int16x8_t, b: int16x8_t) -> int32x4_t {
+        let a_lo = vget_low_s16(a);
+        let b_lo = vget_low_s16(b);
+        let a_hi = vget_high_s16(a);
+        let b_hi = vget_high_s16(b);
+        let product_lo = vmull_s16(a_lo, b_lo);
+        let product_hi = vmull_s16(a_hi, b_hi);
+        vaddq_s32(product_lo, product_hi)
+    }
+
+    /// Execute an activation on the partial activations,
+    /// and accumulate the result into a sum.
+    pub unsafe fn flatten(
+        us: &Align64<[i16; LAYER_1_SIZE]>,
+        them: &Align64<[i16; LAYER_1_SIZE]>,
+        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+    ) -> i32 {
+        const CHUNK: usize = 8;
+        const QA_I16: i16 = QA as i16;
+
+        let mut sum = vld1q_dup_s32(&0);
+        let min = vld1q_dup_s16(&0);
+        let max = vld1q_dup_s16(&QA_I16);
+
+        // the following code uses a trick devised by the author of the Lizard chess engine.
+        // we're implementing the function f(x) = clamp(x, 0, MAX)^2 * w,
+        // and we do this in the following manner:
+        // 1. load the input, x
+        // 2. compute v := clamp(x, 0, MAX)
+        // 3. load the weight, w
+        // 4. compute t := v * w via truncating 16-bit multiply.
+        //    this step relies on our invariant that v * w fits in i16.
+        // 5. compute product := v * t via horizontally accumulating
+        //    expand-to-i32 multiply.
+        // 6. add product to the running sum.
+        // at this point we've computed clamp(x, 0, MAX)^2 * w
+        // by doing (clamp(x, 0, MAX) * w) * clamp(x, 0, MAX).
+        // the clever part is step #4, which the compiler cannot know to do.
+
+        // accumulate the first half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = load_i16s(us, i * CHUNK);
+            let v = vminq_s16(vmaxq_s16(x, min), max);
+            let w = load_i16s(weights, i * CHUNK);
+            let t = vmulq_s16(v, w);
+            let product = madd(v, t);
+            sum = vaddq_s32(sum, product);
+        }
+
+        // accumulate the second half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = load_i16s(them, i * CHUNK);
+            let v = vminq_s16(vmaxq_s16(x, min), max);
+            let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
+            let t = vmulq_s16(v, w);
+            let product = madd(v, t);
+            sum = vaddq_s32(sum, product);
         }
 
         horizontal_sum_i32(sum) / QA
