@@ -9,10 +9,10 @@ use crate::{
     board::{movegen::bitboards::BitBoard, Board}, image::{self, Image}, nnue::simd::{Vector16, Vector32}, piece::{Colour, Piece, PieceType}, util::{File, Square, MAX_DEPTH}
 };
 
-use super::accumulator::Accumulator;
+use super::{accumulator::Accumulator, simd};
 
 /// The size of the input layer of the network.
-const INPUT: usize = 768;
+pub const INPUT: usize = 768;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -693,17 +693,17 @@ impl NNUEState {
 
         if A::ACTIVATE {
             if update.white {
-                vector_add_inplace(&mut acc.white, white_bucket, white_idx);
+                simd::vector_add_inplace(&mut acc.white, white_bucket, white_idx);
             }
             if update.black {
-                vector_add_inplace(&mut acc.black, black_bucket, black_idx);
+                simd::vector_add_inplace(&mut acc.black, black_bucket, black_idx);
             }
         } else {
             if update.white {
-                vector_sub_inplace(&mut acc.white, white_bucket, white_idx);
+                simd::vector_sub_inplace(&mut acc.white, white_bucket, white_idx);
             }
             if update.black {
-                vector_sub_inplace(&mut acc.black, black_bucket, black_idx);
+                simd::vector_sub_inplace(&mut acc.black, black_bucket, black_idx);
             }
         }
     }
@@ -719,32 +719,6 @@ impl NNUEState {
         let output = flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
-    }
-}
-
-/// Add a feature to a square.
-fn vector_add_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(a_block) {
-        *i += *d;
-    }
-}
-
-/// Subtract a feature from a square.
-fn vector_sub_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_sub: usize,
-) {
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(s_block) {
-        *i -= *d;
     }
 }
 

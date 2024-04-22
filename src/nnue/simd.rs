@@ -1,6 +1,6 @@
 #![allow(clippy::all, clippy::nursery, clippy::pedantic, dead_code)]
 
-use super::network::Align64;
+use super::network::{Align64, INPUT, LAYER_1_SIZE};
 
 #[derive(Clone, Copy)]
 pub struct Vector16 {
@@ -56,6 +56,18 @@ impl Vector16 {
     }
 
     #[inline]
+    pub unsafe fn store_at<const VEC_SIZE: usize>(memory: &mut Align64<[i16; VEC_SIZE]>, value: Self, start_idx: usize) {
+        #[cfg(target_feature = "avx512")]
+        { std::arch::x86_64::_mm512_store_si512(memory.0.as_mut_ptr().add(start_idx).cast(), value.data) }
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        { std::arch::x86_64::_mm256_store_si256(memory.0.as_mut_ptr().add(start_idx).cast(), value.data) }
+        #[cfg(target_feature = "neon")]
+        { std::arch::aarch64::vst1q_s16(memory.0.as_mut_ptr().add(start_idx).cast(), value.data) }
+        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        { *memory.get_unchecked_mut(start_idx) = value.data }
+    }
+
+    #[inline]
     pub unsafe fn min(a: Self, b: Self) -> Self {
         #[cfg(target_feature = "avx512")]
         { Self { data: std::arch::x86_64::_mm512_min_epi16(a.data, b.data) } }
@@ -77,6 +89,30 @@ impl Vector16 {
         { Self { data: std::arch::aarch64::vmaxq_s16(a.data, b.data) } }
         #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
         { Self { data: std::cmp::max(a.data, b.data) } }
+    }
+
+    #[inline]
+    pub unsafe fn add(a: Self, b: Self) -> Self {
+        #[cfg(target_feature = "avx512")]
+        { Self { data: std::arch::x86_64::_mm512_add_epi16(a.data, b.data) } }
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        { Self { data: std::arch::x86_64::_mm256_add_epi16(a.data, b.data) } }
+        #[cfg(target_feature = "neon")]
+        { Self { data: std::arch::aarch64::vaddq_s16(a.data, b.data) } }
+        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        { Self { data: a.data + b.data } }
+    }
+
+    #[inline]
+    pub unsafe fn sub(a: Self, b: Self) -> Self {
+        #[cfg(target_feature = "avx512")]
+        { Self { data: std::arch::x86_64::_mm512_sub_epi16(a.data, b.data) } }
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        { Self { data: std::arch::x86_64::_mm256_sub_epi16(a.data, b.data) } }
+        #[cfg(target_feature = "neon")]
+        { Self { data: std::arch::aarch64::vsubq_s16(a.data, b.data) } }
+        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        { Self { data: a.data - b.data } }
     }
 
     #[inline]
@@ -197,5 +233,52 @@ impl Vector32 {
         { Self { data: std::arch::aarch64::vld1q_dup_s32(&0) } }
         #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
         { Self { data: 0 } }
+    }
+}
+
+unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
+    unsafe {
+        // don't immediately cast to Align64, as we want to check the alignment first.
+        let ptr = slice.as_ptr();
+        assert_eq!(ptr.align_offset(64), 0);
+        // alignments are sensible, so we can safely cast.
+        #[allow(clippy::cast_ptr_alignment)]
+        &*ptr.cast()
+    }
+}
+
+/// Add a feature to a square.
+pub fn vector_add_inplace(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            let x = Vector16::load_at(input, i * Vector16::COUNT);
+            let w = Vector16::load_at(a_block, i * Vector16::COUNT);
+            let s = Vector16::add(x, w);
+            Vector16::store_at(input, s, i * Vector16::COUNT);
+        }
+    }
+}
+
+/// Subtract a feature from a square.
+pub fn vector_sub_inplace(
+    input: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_sub: usize,
+) {
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = unsafe { slice_to_aligned(&bucket[offset_sub..offset_sub + LAYER_1_SIZE]) };
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            let x = Vector16::load_at(input, i * Vector16::COUNT);
+            let w = Vector16::load_at(s_block, i * Vector16::COUNT);
+            let s = Vector16::sub(x, w);
+            Vector16::store_at(input, s, i * Vector16::COUNT);
+        }
     }
 }
