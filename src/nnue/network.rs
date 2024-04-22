@@ -1,5 +1,4 @@
 use std::{
-    env,
     fmt::{Debug, Display},
     mem,
     ops::{Deref, DerefMut},
@@ -50,7 +49,7 @@ const QAB: i32 = QA * QB;
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
 // SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!(concat!("../../", "viridithas.nnue",))) };
+pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!("../../viridithas.nnue")) };
 
 #[repr(C)]
 pub struct NNUEParams {
