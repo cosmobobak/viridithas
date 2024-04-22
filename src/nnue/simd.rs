@@ -273,6 +273,15 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
     }
 }
 
+/// Vector-accelerated memcopy.
+pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, tgt: &mut Align64<[i16; LAYER_1_SIZE]>) {
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            Vector16::store_at(tgt, Vector16::load_at(src, i * Vector16::COUNT), i * Vector16::COUNT);
+        }
+    }
+}
+
 /// Add a feature to a square.
 pub fn vector_add_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,

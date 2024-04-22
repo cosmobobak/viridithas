@@ -348,10 +348,10 @@ impl BucketAccumulatorCache {
         }
 
         if pov_update.white {
-            acc.white = cache_acc.white;
+            simd::copy(&cache_acc.white, &mut acc.white);
             acc.correct[Colour::WHITE.index()] = true;
         } else {
-            acc.black = cache_acc.black;
+            simd::copy(&cache_acc.black, &mut acc.black);
             acc.correct[Colour::BLACK.index()] = true;
         }
 
@@ -359,7 +359,7 @@ impl BucketAccumulatorCache {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(C, align(64))]
 pub struct Align64<T>(pub T);
 
