@@ -6,7 +6,11 @@ use std::{
 };
 
 use crate::{
-    board::{movegen::bitboards::BitBoard, Board}, image::{self, Image}, nnue::simd::{Vector16, Vector32}, piece::{Colour, Piece, PieceType}, util::{File, Square, MAX_DEPTH}
+    board::{movegen::bitboards::BitBoard, Board},
+    image::{self, Image},
+    nnue::simd::{Vector16, Vector32},
+    piece::{Colour, Piece, PieceType},
+    util::{File, Square, MAX_DEPTH},
 };
 
 use super::{accumulator::Accumulator, simd};
@@ -42,8 +46,6 @@ pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usiz
 const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
-
-
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -593,10 +595,10 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
+            simd::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
         }
         if update.black {
-            vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
+            simd::vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
         }
     }
 
@@ -622,10 +624,24 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add_sub2(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub1, white_sub2);
+            simd::vector_add_sub2(
+                &source_acc.white,
+                &mut target_acc.white,
+                white_bucket,
+                white_add,
+                white_sub1,
+                white_sub2,
+            );
         }
         if update.black {
-            vector_add_sub2(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub1, black_sub2);
+            simd::vector_add_sub2(
+                &source_acc.black,
+                &mut target_acc.black,
+                black_bucket,
+                black_add,
+                black_sub1,
+                black_sub2,
+            );
         }
     }
 
@@ -653,7 +669,7 @@ impl NNUEState {
         let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
 
         if update.white {
-            vector_add2_sub2(
+            simd::vector_add2_sub2(
                 &source_acc.white,
                 &mut target_acc.white,
                 white_bucket,
@@ -664,7 +680,7 @@ impl NNUEState {
             );
         }
         if update.black {
-            vector_add2_sub2(
+            simd::vector_add2_sub2(
                 &source_acc.black,
                 &mut target_acc.black,
                 black_bucket,
@@ -719,66 +735,6 @@ impl NNUEState {
         let output = flatten(us, them, &NNUE.output_weights);
 
         (output + i32::from(NNUE.output_bias)) * SCALE / QAB
-    }
-}
-
-/// Move a feature from one square to another.
-fn vector_add_sub(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for (((i, o), ds), da) in input.iter().zip(output.iter_mut()).zip(s_block).zip(a_block) {
-        *o = *i - *ds + *da;
-    }
-}
-
-/// Add two features and subtract two features all at once.
-fn vector_add2_sub2(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add1: usize,
-    feature_idx_add2: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
-) {
-    let offset_add1 = feature_idx_add1 * LAYER_1_SIZE;
-    let offset_add2 = feature_idx_add2 * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block1 = &bucket[offset_add1..offset_add1 + LAYER_1_SIZE];
-    let a_block2 = &bucket[offset_add2..offset_add2 + LAYER_1_SIZE];
-    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
-    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
-    for i in 0..LAYER_1_SIZE {
-        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block1[i] + a_block2[i];
-    }
-}
-
-/// Subtract two features and add one feature all at once.
-fn vector_add_sub2(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
-    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
-    for i in 0..LAYER_1_SIZE {
-        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block[i];
     }
 }
 

@@ -1,5 +1,31 @@
 #![allow(clippy::all, clippy::nursery, clippy::pedantic, dead_code)]
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+///                                                                                                   ///
+///    This place is a message... and part of a system of messages... pay attention to it!            ///
+///                                                                                                   ///
+///    Sending this message was important to us. We considered ourselves to be a powerful culture.    ///
+///                                                                                                   ///
+///    This place is not a place of honor...                                                          ///
+///    no highly esteemed deed is commemorated here...                                                ///
+///    nothing valued is here.                                                                        ///
+///                                                                                                   ///
+///    What is here was dangerous and repulsive to us. This message is a warning about danger.        ///
+///                                                                                                   ///
+///    The danger is in a particular location... it increases towards a center...                     ///
+///    the center of danger is here... of a particular size and shape, and below us.                  ///
+///                                                                                                   ///
+///    The danger is still present, in your time, as it was in ours.                                  ///
+///                                                                                                   ///
+///    The danger is to your memory, and it can kill.                                                 ///
+///                                                                                                   ///
+///    The form of the danger is an emanation of SIMD.                                                ///
+///                                                                                                   ///
+///    The danger is unleashed only if you substantially disturb this place physically.               ///
+///    This place is best shunned and left uninhabited.                                               ///
+///                                                                                                   ///
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 use super::network::{Align64, INPUT, LAYER_1_SIZE};
 
 #[derive(Clone, Copy)]
@@ -279,6 +305,93 @@ pub fn vector_sub_inplace(
             let w = Vector16::load_at(s_block, i * Vector16::COUNT);
             let s = Vector16::sub(x, w);
             Vector16::store_at(input, s, i * Vector16::COUNT);
+        }
+    }
+}
+
+/// Move a feature from one square to another.
+pub fn vector_add_sub(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+    feature_idx_sub: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
+    let s_block = unsafe { slice_to_aligned(&bucket[offset_sub..offset_sub + LAYER_1_SIZE]) };
+    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            let x = Vector16::load_at(input, i * Vector16::COUNT);
+            let w_sub = Vector16::load_at(s_block, i * Vector16::COUNT);
+            let w_add = Vector16::load_at(a_block, i * Vector16::COUNT);
+            let t = Vector16::sub(x, w_sub);
+            let t = Vector16::add(t, w_add);
+            Vector16::store_at(output, t, i * Vector16::COUNT);
+        }
+    }
+}
+
+/// Subtract two features and add one feature all at once.
+pub fn vector_add_sub2(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add: usize,
+    feature_idx_sub1: usize,
+    feature_idx_sub2: usize,
+) {
+    let offset_add = feature_idx_add * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
+    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
+    let s_block1 = unsafe { slice_to_aligned(&bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE]) };
+    let s_block2 = unsafe { slice_to_aligned(&bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE]) };
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            let x = Vector16::load_at(input, i * Vector16::COUNT);
+            let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);
+            let w_sub2 = Vector16::load_at(s_block2, i * Vector16::COUNT);
+            let w_add = Vector16::load_at(a_block, i * Vector16::COUNT);
+            let t = Vector16::sub(x, w_sub1);
+            let t = Vector16::sub(t, w_sub2);
+            let t = Vector16::add(t, w_add);
+            Vector16::store_at(output, t, i * Vector16::COUNT);
+        }
+    }
+}
+
+/// Add two features and subtract two features all at once.
+pub fn vector_add2_sub2(
+    input: &Align64<[i16; LAYER_1_SIZE]>,
+    output: &mut Align64<[i16; LAYER_1_SIZE]>,
+    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
+    feature_idx_add1: usize,
+    feature_idx_add2: usize,
+    feature_idx_sub1: usize,
+    feature_idx_sub2: usize,
+) {
+    let offset_add1 = feature_idx_add1 * LAYER_1_SIZE;
+    let offset_add2 = feature_idx_add2 * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
+    let a_block1 = unsafe { slice_to_aligned(&bucket[offset_add1..offset_add1 + LAYER_1_SIZE]) };
+    let a_block2 = unsafe { slice_to_aligned(&bucket[offset_add2..offset_add2 + LAYER_1_SIZE]) };
+    let s_block1 = unsafe { slice_to_aligned(&bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE]) };
+    let s_block2 = unsafe { slice_to_aligned(&bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE]) };
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        unsafe {
+            let x = Vector16::load_at(input, i * Vector16::COUNT);
+            let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);
+            let w_sub2 = Vector16::load_at(s_block2, i * Vector16::COUNT);
+            let w_add1 = Vector16::load_at(a_block1, i * Vector16::COUNT);
+            let w_add2 = Vector16::load_at(a_block2, i * Vector16::COUNT);
+            let t = Vector16::sub(x, w_sub1);
+            let t = Vector16::sub(t, w_sub2);
+            let t = Vector16::add(t, w_add1);
+            let t = Vector16::add(t, w_add2);
+            Vector16::store_at(output, t, i * Vector16::COUNT);
         }
     }
 }
