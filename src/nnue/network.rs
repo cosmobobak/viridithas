@@ -4,6 +4,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use arrayvec::ArrayVec;
+
 use crate::{
     board::{movegen::bitboards::BitBoard, Board},
     image::{self, Image},
@@ -188,10 +190,6 @@ pub struct PovUpdate {
 impl PovUpdate {
     pub const BOTH: Self = Self { white: true, black: true };
 
-    // pub const fn opposite(self) -> Self {
-    //     Self { white: self.black, black: self.white }
-    // }
-
     pub const fn colour(colour: Colour) -> Self {
         match colour {
             Colour::WHITE => Self { white: true, black: false },
@@ -280,7 +278,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [[Accumulator; BUCKETS * 2]; 2],
+    accs: [Accumulator; BUCKETS * 2],
     board_states: [[BitBoard; BUCKETS * 2]; 2],
 }
 
@@ -323,41 +321,26 @@ impl BucketAccumulatorCache {
         let bk = board_state.piece_bb(Piece::BK).first();
         let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
         let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
-        let cache_acc = &mut self.accs[side_we_care_about.index()][bucket];
+        let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
 
-        let mut adds = [0; 32];
-        let mut subs = [0; 32];
-        let mut add_count = 0;
-        let mut sub_count = 0;
+        let mut adds = ArrayVec::<_, 32>::new();
+        let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
             let (white_idx, black_idx) = feature_indices(wk, bk, f);
             let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
             if is_add {
-                adds[add_count] = index;
-                add_count += 1;
+                adds.push(index);
             } else {
-                subs[sub_count] = index;
-                sub_count += 1;
+                subs.push(index);
             }
         });
 
-        let entry = if pov_update.white {
-            &mut cache_acc.white
-        } else {
-            &mut cache_acc.black
-        };
+        let weights = NNUE.select_feature_weights(bucket);
 
-        let weights = NNUEParams::select_feature_weights(&NNUE, bucket);
+        simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        simd::vector_update_inplace(entry, weights, &adds[..add_count], &subs[..sub_count]);
-
-        if pov_update.white {
-            simd::copy(&cache_acc.white, &mut acc.white);
-            acc.correct[Colour::WHITE.index()] = true;
-        } else {
-            simd::copy(&cache_acc.black, &mut acc.black);
-            acc.correct[Colour::BLACK.index()] = true;
-        }
+        simd::copy(cache_acc, acc.select_mut(side_we_care_about));
+        acc.correct[side_we_care_about.index()] = true;
 
         self.board_states[side_we_care_about.index()][bucket] = board_state;
     }
@@ -451,7 +434,7 @@ impl NNUEState {
         self.current_acc = 0;
 
         // initalise all the accumulators in the bucket cache to the bias
-        for acc in self.bucket_cache.accs.iter_mut().flatten() {
+        for acc in &mut self.bucket_cache.accs {
             acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
         }
         // initialise all the board states in the bucket cache to the empty board
@@ -594,8 +577,8 @@ impl NNUEState {
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
@@ -623,8 +606,8 @@ impl NNUEState {
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add_sub2(
@@ -668,8 +651,8 @@ impl NNUEState {
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add2_sub2(

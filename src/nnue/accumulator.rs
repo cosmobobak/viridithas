@@ -1,5 +1,7 @@
 // use crate::{board::Board, piece::PieceType};
 
+use crate::piece::Colour;
+
 use super::{network::{Align64, MovedPiece, PovUpdate, UpdateBuffer, LAYER_1_SIZE}, simd};
 
 /// Activations of the hidden layer.
@@ -21,6 +23,14 @@ impl Accumulator {
         }
         if update.black {
             simd::copy(bias, &mut self.black);
+        }
+    }
+
+    /// Select the buffer by colour.
+    pub fn select_mut(&mut self, colour: Colour) -> &mut Align64<[i16; LAYER_1_SIZE]> {
+        match colour {
+            Colour::WHITE => &mut self.white,
+            Colour::BLACK => &mut self.black,
         }
     }
 }

@@ -266,7 +266,7 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
     unsafe {
         // don't immediately cast to Align64, as we want to check the alignment first.
         let ptr = slice.as_ptr();
-        assert_eq!(ptr.align_offset(64), 0);
+        debug_assert_eq!(ptr.align_offset(64), 0);
         // alignments are sensible, so we can safely cast.
         #[allow(clippy::cast_ptr_alignment)]
         &*ptr.cast()
@@ -274,12 +274,10 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
 }
 
 /// Vector-accelerated memcopy.
-pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, tgt: &mut Align64<[i16; LAYER_1_SIZE]>) {
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            Vector16::store_at(tgt, Vector16::load_at(src, i * Vector16::COUNT), i * Vector16::COUNT);
-        }
-    }
+#[inline]
+pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, dst: &mut Align64<[i16; LAYER_1_SIZE]>) {
+    // hard to beat memcpy, isn't it.
+    unsafe { std::ptr::copy_nonoverlapping(src, dst, 1) };
 }
 
 /// Apply add/subtract updates in place.
@@ -289,34 +287,22 @@ pub fn vector_update_inplace(
     adds: &[usize],
     subs: &[usize],
 ) {
-    const REGISTERS: usize = 16;
-    const UNROLL: usize = Vector16::COUNT * REGISTERS;
-    let mut registers = [unsafe { Vector16::zero() }; 16];
-    for i in 0..LAYER_1_SIZE / UNROLL {
-        let unroll_offset = i * UNROLL;
+    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
         unsafe {
-            for r in 0..REGISTERS {
-                registers[r] = Vector16::load_at(input, unroll_offset + r * Vector16::COUNT);
+            let mut acc = Vector16::load_at(input, i * Vector16::COUNT);
+            for &sub_index in subs {
+                let sub_index = sub_index * LAYER_1_SIZE;
+                let sub_block = slice_to_aligned(&bucket[sub_index..sub_index + LAYER_1_SIZE]);
+                let sub = Vector16::load_at(sub_block, i * Vector16::COUNT);
+                acc = Vector16::sub(acc, sub);
             }
-            for r in 0..REGISTERS {
-                for &sub_index in subs {
-                    let sub_index = sub_index * LAYER_1_SIZE;
-                    let sub_block = slice_to_aligned(&bucket[sub_index..sub_index + LAYER_1_SIZE]);
-                    let sub = Vector16::load_at(sub_block, unroll_offset + r * Vector16::COUNT);
-                    registers[r] = Vector16::sub(registers[r], sub);
-                }
+            for &add_index in adds {
+                let add_index = add_index * LAYER_1_SIZE;
+                let add_block = slice_to_aligned(&bucket[add_index..add_index + LAYER_1_SIZE]);
+                let add = Vector16::load_at(add_block, i * Vector16::COUNT);
+                acc = Vector16::add(acc, add);
             }
-            for r in 0..REGISTERS {
-                for &add_index in adds {
-                    let add_index = add_index * LAYER_1_SIZE;
-                    let add_block = slice_to_aligned(&bucket[add_index..add_index + LAYER_1_SIZE]);
-                    let add = Vector16::load_at(add_block, unroll_offset + r * Vector16::COUNT);
-                    registers[r] = Vector16::add(registers[r], add);
-                }
-            }
-            for r in 0..REGISTERS {
-                Vector16::store_at(input, registers[r], unroll_offset + r * Vector16::COUNT);
-            }
+            Vector16::store_at(input, acc, i * Vector16::COUNT);
         }
     }
 }
