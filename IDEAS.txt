@@ -14,13 +14,12 @@ MINOR:
   - locked pawns?
   - bishop pair
   - passed pawns by file?
-- tune nodeTM constants
 - better errors for Fathom.
-- finish the datagen - -> | transition
 - add filtering for counts
 - probcut tinkering (SF in-check trick)
 - futility tinkering
 - use history for more things
 - iir tinkering (ttmove, excluded move, non-PV nodes, other fiddling)
 - iid tinkering (ttmove, excluded move)
-- screlu output is guaranteed to be positive. can we fit bigger quantisation results in our registers?
+- look for bad zero-init of arrays.
+- skip tt entry reload in the store() function.
