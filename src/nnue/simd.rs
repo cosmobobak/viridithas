@@ -218,33 +218,22 @@ impl Vector16 {
         {
             Vector32 { data: std::arch::x86_64::_mm256_madd_epi16(a.data, b.data) }
         }
-        #[cfg(target_feature = "neon")]
+        // #[cfg(target_feature = "neon")]
         {
-            // an attempt to interpret the following GCC-emitted SIMD:
-            // ldp     d0, d1, [x0]        // load a.data into d0 and d1
-            // ldp     d2, d3, [x1]        // load b.data into d2 and d3
-            // uzp2    v4.4h, v0.4h, v1.4h // run vuzp2_s16 against d0 and d1, into d4
-            // uzp1    v1.4h, v0.4h, v1.4h // run vuzp1_s16 against d0 and d1, into d1
-            // uzp2    v0.4h, v2.4h, v3.4h // run vuzp2_s16 against d2 and d3, into d0
-            // uzp1    v2.4h, v2.4h, v3.4h // run vuzp1_s16 against d2 and d3, into d2
-            // smull   v0.4s, v0.4h, v4.4h // multiply d0 and d4 into d0
-            // smlal   v0.4s, v2.4h, v1.4h // multiply-accumulate d2 and d1 into d0
-            // str     q0, [x8]            // store.
-
             // load bits
-            let d0 = std::arch::aarch64::vget_low_s16(a.data);
-            let d1 = std::arch::aarch64::vget_high_s16(a.data);
-            let d2 = std::arch::aarch64::vget_low_s16(b.data);
-            let d3 = std::arch::aarch64::vget_high_s16(b.data);
+            let a_lo = std::arch::aarch64::vget_low_s16(a.data);
+            let a_hi = std::arch::aarch64::vget_high_s16(a.data);
+            let b_lo = std::arch::aarch64::vget_low_s16(b.data);
+            let b_hi = std::arch::aarch64::vget_high_s16(b.data);
             // unzipping
-            let d4 = std::arch::aarch64::vuzp2_s16(d0, d1);
-            let d1 = std::arch::aarch64::vuzp1_s16(d0, d1);
-            let d0 = std::arch::aarch64::vuzp2_s16(d2, d3);
-            let d2 = std::arch::aarch64::vuzp1_s16(d2, d3);
+            let a_z2 = std::arch::aarch64::vuzp2_s16(a_lo, a_hi);
+            let a_z1 = std::arch::aarch64::vuzp1_s16(a_lo, a_hi);
+            let b_z2 = std::arch::aarch64::vuzp2_s16(b_lo, b_hi);
+            let b_z1 = std::arch::aarch64::vuzp1_s16(b_lo, b_hi);
             // multiplication
-            let d0 = std::arch::aarch64::vmull_s16(d0, d4);
-            let d0 = std::arch::aarch64::vmlal_s16(d0, d2, d1);
-            Vector32 { data: d0 }
+            let acc = std::arch::aarch64::vmull_s16(b_z2, a_z2);
+            let acc = std::arch::aarch64::vmlal_s16(acc, b_z1, a_z1);
+            Vector32 { data: acc }
         }
         #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
         {
