@@ -218,21 +218,16 @@ impl Vector16 {
         {
             Vector32 { data: std::arch::x86_64::_mm256_madd_epi16(a.data, b.data) }
         }
-        // #[cfg(target_feature = "neon")]
+        #[cfg(target_feature = "neon")]
         {
             // load bits
             let a_lo = std::arch::aarch64::vget_low_s16(a.data);
             let a_hi = std::arch::aarch64::vget_high_s16(a.data);
             let b_lo = std::arch::aarch64::vget_low_s16(b.data);
             let b_hi = std::arch::aarch64::vget_high_s16(b.data);
-            // unzipping
-            let a_z2 = std::arch::aarch64::vuzp2_s16(a_lo, a_hi);
-            let a_z1 = std::arch::aarch64::vuzp1_s16(a_lo, a_hi);
-            let b_z2 = std::arch::aarch64::vuzp2_s16(b_lo, b_hi);
-            let b_z1 = std::arch::aarch64::vuzp1_s16(b_lo, b_hi);
             // multiplication
-            let acc = std::arch::aarch64::vmull_s16(b_z2, a_z2);
-            let acc = std::arch::aarch64::vmlal_s16(acc, b_z1, a_z1);
+            let acc = std::arch::aarch64::vmull_s16(b_lo, a_lo);
+            let acc = std::arch::aarch64::vmlal_s16(acc, b_hi, a_hi);
             Vector32 { data: acc }
         }
         #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
