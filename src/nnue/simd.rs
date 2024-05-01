@@ -287,22 +287,26 @@ pub fn vector_update_inplace(
     adds: &[usize],
     subs: &[usize],
 ) {
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            let mut acc = Vector16::load_at(input, i * Vector16::COUNT);
-            for &sub_index in subs {
-                let sub_index = sub_index * LAYER_1_SIZE;
-                let sub_block = slice_to_aligned(&bucket[sub_index..sub_index + LAYER_1_SIZE]);
-                let sub = Vector16::load_at(sub_block, i * Vector16::COUNT);
-                acc = Vector16::sub(acc, sub);
+    unsafe {
+        for &sub_index in subs {
+            let sub_index = sub_index * LAYER_1_SIZE;
+            let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + LAYER_1_SIZE));
+            for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+                let x = Vector16::load_at(input, i * Vector16::COUNT);
+                let w = Vector16::load_at(sub_block, i * Vector16::COUNT);
+                let r = Vector16::sub(x, w);
+                Vector16::store_at(input, r, i * Vector16::COUNT);
             }
-            for &add_index in adds {
-                let add_index = add_index * LAYER_1_SIZE;
-                let add_block = slice_to_aligned(&bucket[add_index..add_index + LAYER_1_SIZE]);
-                let add = Vector16::load_at(add_block, i * Vector16::COUNT);
-                acc = Vector16::add(acc, add);
+        }
+        for &add_index in adds {
+            let add_index = add_index * LAYER_1_SIZE;
+            let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + LAYER_1_SIZE));
+            for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+                let x = Vector16::load_at(input, i * Vector16::COUNT);
+                let w = Vector16::load_at(add_block, i * Vector16::COUNT);
+                let r = Vector16::add(x, w);
+                Vector16::store_at(input, r, i * Vector16::COUNT);
             }
-            Vector16::store_at(input, acc, i * Vector16::COUNT);
         }
     }
 }
