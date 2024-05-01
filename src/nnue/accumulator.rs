@@ -2,7 +2,10 @@
 
 use crate::piece::Colour;
 
-use super::{network::{Align64, MovedPiece, PovUpdate, UpdateBuffer, LAYER_1_SIZE}, simd};
+use super::{
+    network::{Align64, MovedPiece, PovUpdate, UpdateBuffer, LAYER_1_SIZE},
+    simd,
+};
 
 /// Activations of the hidden layer.
 #[derive(Debug, Clone)]
