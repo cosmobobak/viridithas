@@ -122,9 +122,3 @@ impl Board {
         value
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct KingDangerInfo {
-    attack_units_on_white: i32,
-    attack_units_on_black: i32,
-}
