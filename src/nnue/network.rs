@@ -1,21 +1,25 @@
 use std::{
-    env,
     fmt::{Debug, Display},
     mem,
     ops::{Deref, DerefMut},
 };
 
+use arrayvec::ArrayVec;
+
 use crate::{
     board::{movegen::bitboards::BitBoard, Board},
     image::{self, Image},
+    nnue::simd::{Vector16, Vector32},
     piece::{Colour, Piece, PieceType},
-    util::{File, Square, MAX_DEPTH},
+    util::{Square, MAX_DEPTH},
 };
 
-use super::accumulator::Accumulator;
+use super::{accumulator::Accumulator, simd};
+
+pub mod feature;
 
 /// The size of the input layer of the network.
-const INPUT: usize = 768;
+pub const INPUT: usize = 768;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -46,6 +50,123 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
 
+// read in the binary file containing the network parameters
+// have to do some path manipulation to get relative paths to work
+// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
+pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!("../../viridithas.nnue")) };
+
+#[repr(C)]
+pub struct NNUEParams {
+    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
+    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
+    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
+    pub output_bias: i16,
+}
+
+impl NNUEParams {
+    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // remap pieces to keep opposite colours together
+        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
+        assert!(neuron < LAYER_1_SIZE);
+        let starting_idx = neuron;
+        let mut slice = Vec::with_capacity(768);
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                for square in Square::all() {
+                    let feature_indices = feature::indices(
+                        Square::H1,
+                        Square::H8,
+                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
+                    );
+                    let index = feature_indices.0.index() * LAYER_1_SIZE + starting_idx;
+                    slice.push(self.feature_weights[index]);
+                }
+            }
+        }
+
+        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+
+        for (piece, chunk) in slice.chunks(64).enumerate() {
+            let piece = PIECE_REMAPPING[piece];
+            let piece_colour = piece % 2;
+            let piece_type = piece / 2;
+            let (max, min) = if piece_type == 0 {
+                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            } else {
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            };
+            let weight_to_colour = |weight: i16| -> u32 {
+                let intensity = f32::from(weight - min) / f32::from(max - min);
+                let idx = (intensity * 255.0).round() as u8;
+                image::inferno_colour_map(idx)
+            };
+            for (square, &weight) in chunk.iter().enumerate() {
+                let row = square / 8;
+                let col = square % 8;
+                let colour = if (row == 0 || row == 7) && piece_type == 0 {
+                    0 // pawns on first and last rank are always 0
+                } else {
+                    weight_to_colour(weight)
+                };
+                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
+            }
+        }
+
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
+    pub fn min_max_feature_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.feature_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
+    pub fn min_max_output_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.output_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
+
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+        // handle mirroring
+        let bucket = bucket % 9;
+        let start = bucket * INPUT * LAYER_1_SIZE;
+        let end = start + INPUT * LAYER_1_SIZE;
+        let slice = &self.feature_weights[start..end];
+        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
+        // and we check that the slice is aligned to 64 bytes.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            // don't immediately cast to Align64, as we want to check the alignment first.
+            let ptr = slice.as_ptr();
+            assert_eq!(ptr.align_offset(64), 0);
+            // alignments are sensible, so we can safely cast.
+            #[allow(clippy::cast_ptr_alignment)]
+            &*ptr.cast()
+        }
+    }
+}
+
 /// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
 
@@ -70,10 +191,6 @@ pub struct PovUpdate {
 }
 impl PovUpdate {
     pub const BOTH: Self = Self { white: true, black: true };
-
-    // pub const fn opposite(self) -> Self {
-    //     Self { white: self.black, black: self.white }
-    // }
 
     pub const fn colour(colour: Colour) -> Self {
         match colour {
@@ -163,7 +280,7 @@ impl UpdateBuffer {
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
-    accs: [[Accumulator; BUCKETS * 2]; 2],
+    accs: [Accumulator; BUCKETS * 2],
     board_states: [[BitBoard; BUCKETS * 2]; 2],
 }
 
@@ -206,43 +323,32 @@ impl BucketAccumulatorCache {
         let bk = board_state.piece_bb(Piece::BK).first();
         let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
         let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
-        let cache_acc = &mut self.accs[side_we_care_about.index()][bucket];
+        let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
 
-        let mut adds = [FeatureUpdate::NULL; 32];
-        let mut subs = [FeatureUpdate::NULL; 32];
-        let mut add_count = 0;
-        let mut sub_count = 0;
+        let mut adds = ArrayVec::<_, 32>::new();
+        let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
+            let (white_idx, black_idx) = feature::indices(wk, bk, f);
+            let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
             if is_add {
-                adds[add_count] = f;
-                add_count += 1;
+                adds.push(index);
             } else {
-                subs[sub_count] = f;
-                sub_count += 1;
+                subs.push(index);
             }
         });
 
-        for &sub in &subs[..sub_count] {
-            NNUEState::update_feature_inplace::<Deactivate>(wk, bk, sub, pov_update, cache_acc);
-        }
+        let weights = NNUE.select_feature_weights(bucket);
 
-        for &add in &adds[..add_count] {
-            NNUEState::update_feature_inplace::<Activate>(wk, bk, add, pov_update, cache_acc);
-        }
+        simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        if pov_update.white {
-            acc.white = cache_acc.white;
-            acc.correct[Colour::WHITE.index()] = true;
-        } else {
-            acc.black = cache_acc.black;
-            acc.correct[Colour::BLACK.index()] = true;
-        }
+        simd::copy(cache_acc, acc.select_mut(side_we_care_about));
+        acc.correct[side_we_care_about.index()] = true;
 
         self.board_states[side_we_care_about.index()][bucket] = board_state;
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(C, align(64))]
 pub struct Align64<T>(pub T);
 
@@ -255,123 +361,6 @@ impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
 impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-// read in the binary file containing the network parameters
-// have to do some path manipulation to get relative paths to work
-// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!(concat!("../../", env!("EVALFILE"),))) };
-
-#[repr(C)]
-pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
-    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
-    pub output_bias: i16,
-}
-
-impl NNUEParams {
-    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
-        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        // remap pieces to keep opposite colours together
-        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
-        assert!(neuron < LAYER_1_SIZE);
-        let starting_idx = neuron;
-        let mut slice = Vec::with_capacity(768);
-        for colour in Colour::all() {
-            for piece_type in PieceType::all() {
-                for square in Square::all() {
-                    let feature_indices = feature_indices(
-                        Square::H1,
-                        Square::H8,
-                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
-                    );
-                    let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
-                    slice.push(self.feature_weights[index]);
-                }
-            }
-        }
-
-        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
-
-        for (piece, chunk) in slice.chunks(64).enumerate() {
-            let piece = PIECE_REMAPPING[piece];
-            let piece_colour = piece % 2;
-            let piece_type = piece / 2;
-            let (max, min) = if piece_type == 0 {
-                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            } else {
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            };
-            let weight_to_colour = |weight: i16| -> u32 {
-                let intensity = f32::from(weight - min) / f32::from(max - min);
-                let idx = (intensity * 255.0).round() as u8;
-                image::inferno_colour_map(idx)
-            };
-            for (square, &weight) in chunk.iter().enumerate() {
-                let row = square / 8;
-                let col = square % 8;
-                let colour = if (row == 0 || row == 7) && piece_type == 0 {
-                    0 // pawns on first and last rank are always 0
-                } else {
-                    weight_to_colour(weight)
-                };
-                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
-            }
-        }
-
-        let path = path.join(format!("neuron_{neuron}.tga"));
-        image.save_as_tga(path);
-    }
-
-    pub fn min_max_feature_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for &f in &self.feature_weights.0 {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
-    }
-
-    pub fn min_max_output_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for &f in &self.output_weights.0 {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
-    }
-
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
-        // handle mirroring
-        let bucket = bucket % 9;
-        let start = bucket * INPUT * LAYER_1_SIZE;
-        let end = start + INPUT * LAYER_1_SIZE;
-        let slice = &self.feature_weights[start..end];
-        // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
-        // and we check that the slice is aligned to 64 bytes.
-        // additionally, we're generating the reference from our own data,
-        // so we know that the lifetime is valid.
-        unsafe {
-            // don't immediately cast to Align64, as we want to check the alignment first.
-            let ptr = slice.as_ptr();
-            assert_eq!(ptr.align_offset(64), 0);
-            // alignments are sensible, so we can safely cast.
-            #[allow(clippy::cast_ptr_alignment)]
-            &*ptr.cast()
-        }
     }
 }
 
@@ -392,22 +381,6 @@ pub struct NNUEState {
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
     pub bucket_cache: BucketAccumulatorCache,
-}
-
-const fn feature_indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (usize, usize) {
-    const COLOUR_STRIDE: usize = 64 * 6;
-    const PIECE_STRIDE: usize = 64;
-
-    let white_sq = if white_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
-    let black_sq = if black_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
-
-    let piece_type = f.piece.piece_type().index();
-    let colour = f.piece.colour().index();
-
-    let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + white_sq.index();
-    let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + black_sq.flip_rank().index();
-
-    (white_idx, black_idx)
 }
 
 impl NNUEState {
@@ -447,7 +420,7 @@ impl NNUEState {
         self.current_acc = 0;
 
         // initalise all the accumulators in the bucket cache to the bias
-        for acc in self.bucket_cache.accs.iter_mut().flatten() {
+        for acc in &mut self.bucket_cache.accs {
             acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
         }
         // initialise all the board states in the bucket cache to the empty board
@@ -585,19 +558,19 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add, black_add) = feature_indices(white_king, black_king, add);
-        let (white_sub, black_sub) = feature_indices(white_king, black_king, sub);
+        let (white_add, black_add) = feature::indices(white_king, black_king, add);
+        let (white_sub, black_sub) = feature::indices(white_king, black_king, sub);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
-            vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
+            simd::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
         }
         if update.black {
-            vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
+            simd::vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
         }
     }
 
@@ -613,20 +586,34 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add, black_add) = feature_indices(white_king, black_king, add);
-        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
+        let (white_add, black_add) = feature::indices(white_king, black_king, add);
+        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
-            vector_add_sub2(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub1, white_sub2);
+            simd::vector_add_sub2(
+                &source_acc.white,
+                &mut target_acc.white,
+                white_bucket,
+                white_add,
+                white_sub1,
+                white_sub2,
+            );
         }
         if update.black {
-            vector_add_sub2(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub1, black_sub2);
+            simd::vector_add_sub2(
+                &source_acc.black,
+                &mut target_acc.black,
+                black_bucket,
+                black_add,
+                black_sub1,
+                black_sub2,
+            );
         }
     }
 
@@ -643,18 +630,18 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add1, black_add1) = feature_indices(white_king, black_king, add1);
-        let (white_add2, black_add2) = feature_indices(white_king, black_king, add2);
-        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
+        let (white_add1, black_add1) = feature::indices(white_king, black_king, add1);
+        let (white_add2, black_add2) = feature::indices(white_king, black_king, add2);
+        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
+        let white_bucket = NNUE.select_feature_weights(white_bucket);
+        let black_bucket = NNUE.select_feature_weights(black_bucket);
 
         if update.white {
-            vector_add2_sub2(
+            simd::vector_add2_sub2(
                 &source_acc.white,
                 &mut target_acc.white,
                 white_bucket,
@@ -665,7 +652,7 @@ impl NNUEState {
             );
         }
         if update.black {
-            vector_add2_sub2(
+            simd::vector_add2_sub2(
                 &source_acc.black,
                 &mut target_acc.black,
                 black_bucket,
@@ -674,38 +661,6 @@ impl NNUEState {
                 black_sub1,
                 black_sub2,
             );
-        }
-    }
-
-    /// Update by activating or deactivating a piece.
-    pub fn update_feature_inplace<A: Activation>(
-        white_king: Square,
-        black_king: Square,
-        f: FeatureUpdate,
-        update: PovUpdate,
-        acc: &mut Accumulator,
-    ) {
-        let (white_idx, black_idx) = feature_indices(white_king, black_king, f);
-
-        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
-
-        let white_bucket = NNUEParams::select_feature_weights(&NNUE, white_bucket);
-        let black_bucket = NNUEParams::select_feature_weights(&NNUE, black_bucket);
-
-        if A::ACTIVATE {
-            if update.white {
-                vector_add_inplace(&mut acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                vector_add_inplace(&mut acc.black, black_bucket, black_idx);
-            }
-        } else {
-            if update.white {
-                vector_sub_inplace(&mut acc.white, white_bucket, white_idx);
-            }
-            if update.black {
-                vector_sub_inplace(&mut acc.black, black_bucket, black_idx);
-            }
         }
     }
 
@@ -723,215 +678,63 @@ impl NNUEState {
     }
 }
 
-/// Add a feature to a square.
-fn vector_add_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(a_block) {
-        *i += *d;
-    }
-}
-
-/// Subtract a feature from a square.
-fn vector_sub_inplace(
-    input: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_sub: usize,
-) {
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    for (i, d) in input.iter_mut().zip(s_block) {
-        *i -= *d;
-    }
-}
-
-/// Move a feature from one square to another.
-fn vector_add_sub(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = &bucket[offset_sub..offset_sub + LAYER_1_SIZE];
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    for (((i, o), ds), da) in input.iter().zip(output.iter_mut()).zip(s_block).zip(a_block) {
-        *o = *i - *ds + *da;
-    }
-}
-
-/// Add two features and subtract two features all at once.
-fn vector_add2_sub2(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add1: usize,
-    feature_idx_add2: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
-) {
-    let offset_add1 = feature_idx_add1 * LAYER_1_SIZE;
-    let offset_add2 = feature_idx_add2 * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block1 = &bucket[offset_add1..offset_add1 + LAYER_1_SIZE];
-    let a_block2 = &bucket[offset_add2..offset_add2 + LAYER_1_SIZE];
-    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
-    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
-    for i in 0..LAYER_1_SIZE {
-        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block1[i] + a_block2[i];
-    }
-}
-
-/// Subtract two features and add one feature all at once.
-fn vector_add_sub2(
-    input: &Align64<[i16; LAYER_1_SIZE]>,
-    output: &mut Align64<[i16; LAYER_1_SIZE]>,
-    bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
-) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block = &bucket[offset_add..offset_add + LAYER_1_SIZE];
-    let s_block1 = &bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE];
-    let s_block2 = &bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE];
-    for i in 0..LAYER_1_SIZE {
-        output[i] = input[i] - s_block1[i] - s_block2[i] + a_block[i];
-    }
-}
-
+/// Implementation of the forward pass.
 fn flatten(
     us: &Align64<[i16; LAYER_1_SIZE]>,
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
-    #[cfg(target_feature = "avx2")]
-    unsafe {
-        avx2::flatten(us, them, weights)
-    }
-    #[cfg(not(target_feature = "avx2"))]
-    {
-        generic::flatten(us, them, weights)
-    }
+    unsafe { flatten_inner(us, them, weights) }
 }
 
-/// Non-SIMD implementation of the forward pass.
-#[cfg(not(target_feature = "avx2"))]
-mod generic {
-    use super::{Align64, LAYER_1_SIZE, QA};
+/// Execute an activation on the partial activations,
+/// and accumulate the result into a sum.
+pub unsafe fn flatten_inner(
+    us: &Align64<[i16; LAYER_1_SIZE]>,
+    them: &Align64<[i16; LAYER_1_SIZE]>,
+    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
+) -> i32 {
+    const CHUNK: usize = Vector16::COUNT;
 
+    let mut sum = Vector32::zero();
+    let min = Vector16::zero();
     #[allow(clippy::cast_possible_truncation)]
-    fn screlu(x: i16) -> i32 {
-        let x = x.clamp(0, QA as i16);
-        let x = i32::from(x);
-        x * x
+    let max = Vector16::splat(QA as i16);
+
+    // the following code uses a trick devised by the author of the Lizard chess engine.
+    // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
+    // and we do this in the following manner:
+    // 1. load the input, x
+    // 2. compute v := clamp(x, 0, QA)
+    // 3. load the weight, w
+    // 4. compute t := v * w via truncating 16-bit multiply.
+    //    this step relies on our invariant that v * w fits in i16.
+    // 5. compute product := v * t via horizontally accumulating
+    //    expand-to-i32 multiply.
+    // 6. add product to the running sum.
+    // at this point we've computed clamp(x, 0, QA)^2 * w
+    // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
+    // the clever part is step #4, which the compiler cannot know to do.
+
+    // accumulate the first half of the weights
+    for i in 0..LAYER_1_SIZE / CHUNK {
+        let x = Vector16::load_at(us, i * CHUNK);
+        let v = Vector16::min(Vector16::max(x, min), max);
+        let w = Vector16::load_at(weights, i * CHUNK);
+        let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
+        sum = Vector32::add(sum, product);
     }
 
-    /// Execute an activation on the partial activations,
-    /// and accumulate the result into a sum.
-    pub fn flatten(
-        us: &Align64<[i16; LAYER_1_SIZE]>,
-        them: &Align64<[i16; LAYER_1_SIZE]>,
-        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-    ) -> i32 {
-        let mut sum: i32 = 0;
-        for (&i, &w) in us.iter().zip(&weights[..LAYER_1_SIZE]) {
-            sum += screlu(i) * i32::from(w);
-        }
-        for (&i, &w) in them.iter().zip(&weights[LAYER_1_SIZE..]) {
-            sum += screlu(i) * i32::from(w);
-        }
-        sum / QA
-    }
-}
-
-/// SIMD implementation of the forward pass.
-#[cfg(target_feature = "avx2")]
-mod avx2 {
-    use super::{Align64, LAYER_1_SIZE, QA};
-    use std::arch::x86_64::{
-        __m256i, _mm256_add_epi32, _mm256_castsi256_si128, _mm256_extracti128_si256, _mm256_load_si256,
-        _mm256_madd_epi16, _mm256_max_epi16, _mm256_min_epi16, _mm256_mullo_epi16, _mm256_set1_epi16,
-        _mm256_setzero_si256, _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_unpackhi_epi64,
-    };
-
-    type Vec256 = __m256i;
-
-    #[inline]
-    unsafe fn load_i16s<const VEC_SIZE: usize>(acc: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Vec256 {
-        _mm256_load_si256(acc.0.as_ptr().add(start_idx).cast())
+    // accumulate the second half of the weights
+    for i in 0..LAYER_1_SIZE / CHUNK {
+        let x = Vector16::load_at(them, i * CHUNK);
+        let v = Vector16::min(Vector16::max(x, min), max);
+        let w = Vector16::load_at(weights, LAYER_1_SIZE + i * CHUNK);
+        let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
+        sum = Vector32::add(sum, product);
     }
 
-    #[inline]
-    unsafe fn horizontal_sum_i32(sum: Vec256) -> i32 {
-        let upper_128 = _mm256_extracti128_si256::<1>(sum);
-        let lower_128 = _mm256_castsi256_si128(sum);
-        let sum_128 = _mm_add_epi32(upper_128, lower_128);
-        let upper_64 = _mm_unpackhi_epi64(sum_128, sum_128);
-        let sum_64 = _mm_add_epi32(upper_64, sum_128);
-        let upper_32 = _mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
-        let sum_32 = _mm_add_epi32(upper_32, sum_64);
-
-        _mm_cvtsi128_si32(sum_32)
-    }
-
-    /// Execute an activation on the partial activations,
-    /// and accumulate the result into a sum.
-    pub unsafe fn flatten(
-        us: &Align64<[i16; LAYER_1_SIZE]>,
-        them: &Align64<[i16; LAYER_1_SIZE]>,
-        weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-    ) -> i32 {
-        const CHUNK: usize = 16;
-
-        let mut sum = _mm256_setzero_si256();
-        let min = _mm256_setzero_si256();
-        let max = _mm256_set1_epi16(QA as i16);
-
-        // the following code uses a trick devised by the author of the Lizard chess engine.
-        // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
-        // and we do this in the following manner:
-        // 1. load the input, x
-        // 2. compute v := clamp(x, 0, QA)
-        // 3. load the weight, w
-        // 4. compute t := v * w via truncating 16-bit multiply.
-        //    this step relies on our invariant that v * w fits in i16.
-        // 5. compute product := v * t via horizontally accumulating
-        //    expand-to-i32 multiply.
-        // 6. add product to the running sum.
-        // at this point we've computed clamp(x, 0, QA)^2 * w
-        // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
-        // the clever part is step #4, which the compiler cannot know to do.
-
-        // accumulate the first half of the weights
-        for i in 0..LAYER_1_SIZE / CHUNK {
-            let x = load_i16s(us, i * CHUNK);
-            let v = _mm256_min_epi16(_mm256_max_epi16(x, min), max);
-            let w = load_i16s(weights, i * CHUNK);
-            let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
-            sum = _mm256_add_epi32(sum, product);
-        }
-
-        // accumulate the second half of the weights
-        for i in 0..LAYER_1_SIZE / CHUNK {
-            let x = load_i16s(them, i * CHUNK);
-            let v = _mm256_min_epi16(_mm256_max_epi16(x, min), max);
-            let w = load_i16s(weights, LAYER_1_SIZE + i * CHUNK);
-            let product = _mm256_madd_epi16(v, _mm256_mullo_epi16(v, w));
-            sum = _mm256_add_epi32(sum, product);
-        }
-
-        horizontal_sum_i32(sum) / QA
-    }
+    Vector32::sum(sum) / QA
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.

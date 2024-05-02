@@ -94,11 +94,17 @@ impl Game {
             }
             let mv = Move::from_raw(u16::from_le_bytes([buf[0], buf[1]]));
             if !mv.is_valid() || mv.from() == mv.to() {
-                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("parsed invalid move: {mv:?}")));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("parsed invalid move: {mv:?}"),
+                ));
             }
             #[cfg(debug_assertions)]
             if !real_board.legal_moves().contains(&mv) {
-                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("parsed illegal move: {mv:?}")));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("parsed illegal move: {mv:?}"),
+                ));
             }
             let eval = I16Le::new(i16::from_le_bytes([buf[2], buf[3]]));
             moves.push((mv, eval));
