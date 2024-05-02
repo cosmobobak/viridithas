@@ -25,7 +25,7 @@
 ///    This place is best shunned and left uninhabited.                                               ///
 ///                                                                                                   ///
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
-use super::network::{Align64, INPUT, LAYER_1_SIZE};
+use super::network::{feature::FeatureIndex, Align64, INPUT, LAYER_1_SIZE};
 
 #[derive(Clone, Copy)]
 pub struct Vector16 {
@@ -383,12 +383,12 @@ pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, dst: &mut Align64<[i16; LAYER_1_
 pub fn vector_update_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    adds: &[usize],
-    subs: &[usize],
+    adds: &[FeatureIndex],
+    subs: &[FeatureIndex],
 ) {
     unsafe {
         for &sub_index in subs {
-            let sub_index = sub_index * LAYER_1_SIZE;
+            let sub_index = sub_index.index() * LAYER_1_SIZE;
             let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + LAYER_1_SIZE));
             for i in 0..LAYER_1_SIZE / Vector16::COUNT {
                 let x = Vector16::load_at(input, i * Vector16::COUNT);
@@ -398,7 +398,7 @@ pub fn vector_update_inplace(
             }
         }
         for &add_index in adds {
-            let add_index = add_index * LAYER_1_SIZE;
+            let add_index = add_index.index() * LAYER_1_SIZE;
             let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + LAYER_1_SIZE));
             for i in 0..LAYER_1_SIZE / Vector16::COUNT {
                 let x = Vector16::load_at(input, i * Vector16::COUNT);
@@ -415,13 +415,13 @@ pub fn vector_add_sub(
     input: &Align64<[i16; LAYER_1_SIZE]>,
     output: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub: usize,
+    feature_idx_add: FeatureIndex,
+    feature_idx_sub: FeatureIndex,
 ) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub = feature_idx_sub * LAYER_1_SIZE;
-    let s_block = unsafe { slice_to_aligned(&bucket[offset_sub..offset_sub + LAYER_1_SIZE]) };
-    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
+    let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
+    let offset_sub = feature_idx_sub.index() * LAYER_1_SIZE;
+    let s_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + LAYER_1_SIZE)) };
+    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);
@@ -439,16 +439,16 @@ pub fn vector_add_sub2(
     input: &Align64<[i16; LAYER_1_SIZE]>,
     output: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
+    feature_idx_add: FeatureIndex,
+    feature_idx_sub1: FeatureIndex,
+    feature_idx_sub2: FeatureIndex,
 ) {
-    let offset_add = feature_idx_add * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block = unsafe { slice_to_aligned(&bucket[offset_add..offset_add + LAYER_1_SIZE]) };
-    let s_block1 = unsafe { slice_to_aligned(&bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE]) };
-    let s_block2 = unsafe { slice_to_aligned(&bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE]) };
+    let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
+    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
+    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
+    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);
@@ -468,19 +468,19 @@ pub fn vector_add2_sub2(
     input: &Align64<[i16; LAYER_1_SIZE]>,
     output: &mut Align64<[i16; LAYER_1_SIZE]>,
     bucket: &Align64<[i16; INPUT * LAYER_1_SIZE]>,
-    feature_idx_add1: usize,
-    feature_idx_add2: usize,
-    feature_idx_sub1: usize,
-    feature_idx_sub2: usize,
+    feature_idx_add1: FeatureIndex,
+    feature_idx_add2: FeatureIndex,
+    feature_idx_sub1: FeatureIndex,
+    feature_idx_sub2: FeatureIndex,
 ) {
-    let offset_add1 = feature_idx_add1 * LAYER_1_SIZE;
-    let offset_add2 = feature_idx_add2 * LAYER_1_SIZE;
-    let offset_sub1 = feature_idx_sub1 * LAYER_1_SIZE;
-    let offset_sub2 = feature_idx_sub2 * LAYER_1_SIZE;
-    let a_block1 = unsafe { slice_to_aligned(&bucket[offset_add1..offset_add1 + LAYER_1_SIZE]) };
-    let a_block2 = unsafe { slice_to_aligned(&bucket[offset_add2..offset_add2 + LAYER_1_SIZE]) };
-    let s_block1 = unsafe { slice_to_aligned(&bucket[offset_sub1..offset_sub1 + LAYER_1_SIZE]) };
-    let s_block2 = unsafe { slice_to_aligned(&bucket[offset_sub2..offset_sub2 + LAYER_1_SIZE]) };
+    let offset_add1 = feature_idx_add1.index() * LAYER_1_SIZE;
+    let offset_add2 = feature_idx_add2.index() * LAYER_1_SIZE;
+    let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
+    let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
+    let a_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + LAYER_1_SIZE)) };
+    let a_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + LAYER_1_SIZE)) };
+    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
+    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);

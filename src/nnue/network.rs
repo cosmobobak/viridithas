@@ -11,10 +11,12 @@ use crate::{
     image::{self, Image},
     nnue::simd::{Vector16, Vector32},
     piece::{Colour, Piece, PieceType},
-    util::{File, Square, MAX_DEPTH},
+    util::{Square, MAX_DEPTH},
 };
 
 use super::{accumulator::Accumulator, simd};
+
+pub mod feature;
 
 /// The size of the input layer of the network.
 pub const INPUT: usize = 768;
@@ -72,12 +74,12 @@ impl NNUEParams {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices = feature_indices(
+                    let feature_indices = feature::indices(
                         Square::H1,
                         Square::H8,
                         FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
                     );
-                    let index = feature_indices.0 * LAYER_1_SIZE + starting_idx;
+                    let index = feature_indices.0.index() * LAYER_1_SIZE + starting_idx;
                     slice.push(self.feature_weights[index]);
                 }
             }
@@ -326,7 +328,7 @@ impl BucketAccumulatorCache {
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
-            let (white_idx, black_idx) = feature_indices(wk, bk, f);
+            let (white_idx, black_idx) = feature::indices(wk, bk, f);
             let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
             if is_add {
                 adds.push(index);
@@ -379,22 +381,6 @@ pub struct NNUEState {
     pub current_acc: usize,
     /// Cache of last-seen accumulators for each bucket.
     pub bucket_cache: BucketAccumulatorCache,
-}
-
-const fn feature_indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (usize, usize) {
-    const COLOUR_STRIDE: usize = 64 * 6;
-    const PIECE_STRIDE: usize = 64;
-
-    let white_sq = if white_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
-    let black_sq = if black_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
-
-    let piece_type = f.piece.piece_type().index();
-    let colour = f.piece.colour().index();
-
-    let white_idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + white_sq.index();
-    let black_idx = (1 ^ colour) * COLOUR_STRIDE + piece_type * PIECE_STRIDE + black_sq.flip_rank().index();
-
-    (white_idx, black_idx)
 }
 
 impl NNUEState {
@@ -572,8 +558,8 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add, black_add) = feature_indices(white_king, black_king, add);
-        let (white_sub, black_sub) = feature_indices(white_king, black_king, sub);
+        let (white_add, black_add) = feature::indices(white_king, black_king, add);
+        let (white_sub, black_sub) = feature::indices(white_king, black_king, sub);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
@@ -600,9 +586,9 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add, black_add) = feature_indices(white_king, black_king, add);
-        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
+        let (white_add, black_add) = feature::indices(white_king, black_king, add);
+        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
@@ -644,10 +630,10 @@ impl NNUEState {
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
     ) {
-        let (white_add1, black_add1) = feature_indices(white_king, black_king, add1);
-        let (white_add2, black_add2) = feature_indices(white_king, black_king, add2);
-        let (white_sub1, black_sub1) = feature_indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature_indices(white_king, black_king, sub2);
+        let (white_add1, black_add1) = feature::indices(white_king, black_king, add1);
+        let (white_add2, black_add2) = feature::indices(white_king, black_king, add2);
+        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
+        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
