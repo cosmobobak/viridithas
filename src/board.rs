@@ -38,7 +38,7 @@ use self::movegen::{
 pub struct Board {
     /// The bitboards of all the pieces on the board.
     pub(crate) pieces: BitBoard,
-    /// An array to accelerate piece_at().
+    /// An array to accelerate `Board::piece_at()`.
     piece_array: [Piece; 64],
     /// The side to move.
     side: Colour,

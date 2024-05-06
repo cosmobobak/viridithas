@@ -295,7 +295,7 @@ impl<'a> TTView<'a> {
             let entry = &self.table[index];
 
             // prefetch the entry:
-            _mm_prefetch((entry as *const AtomicU64).cast::<i8>(), _MM_HINT_T0);
+            _mm_prefetch(std::ptr::from_ref::<[AtomicU64; 2]>(entry).cast::<i8>(), _MM_HINT_T0);
         }
     }
 

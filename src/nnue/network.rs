@@ -170,20 +170,6 @@ impl NNUEParams {
 /// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
 
-pub trait Activation {
-    const ACTIVATE: bool;
-    type Reverse: Activation;
-}
-pub struct Activate;
-impl Activation for Activate {
-    const ACTIVATE: bool = true;
-    type Reverse = Deactivate;
-}
-pub struct Deactivate;
-impl Activation for Deactivate {
-    const ACTIVATE: bool = false;
-    type Reverse = Activate;
-}
 #[derive(Debug, Copy, Clone)]
 pub struct PovUpdate {
     pub white: bool,

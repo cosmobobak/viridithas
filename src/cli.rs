@@ -13,7 +13,7 @@ pub struct Cli {
 
 #[derive(Parser)]
 pub enum Subcommands {
-    /// Output node benchmark for OpenBench
+    /// Output node benchmark for openbench
     Bench,
     /// Run the perft suite.
     Perft,
@@ -31,7 +31,7 @@ pub enum Subcommands {
     },
     /// Emit configuration for SPSA
     Spsa {
-        /// Emit configuration in JSON format instead of OpenBench format
+        /// Emit configuration in JSON format instead of openbench format
         json: bool,
     },
     /// Splat a packed game record into bulletformat records (or other format)

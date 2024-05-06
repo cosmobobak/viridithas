@@ -217,9 +217,13 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     }
 }
 
-#[allow(clippy::cognitive_complexity)]
+#[allow(
+    clippy::cognitive_complexity,
+    clippy::cast_precision_loss,
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation
+)]
 fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
-    #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cast_possible_truncation)]
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
     // so no worries :3
