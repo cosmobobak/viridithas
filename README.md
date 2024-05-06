@@ -18,6 +18,31 @@ Viridithas is a command-line program that can be used from the terminal or can c
 
 For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
 
+## Building Viridithas
+
+If you just want one of the official releases of Viridithas, check out the **Releases** tab on the right. If you want to build a specific version of Viridithas from source (say, the latest and greatest master commit) then follow these instructions:
+
+0. Before following any of these instructions, make sure you have [Rust](https://www.rust-lang.org/tools/install) installed. You may also need to install the `clang` C compiler for tablebase probing support.
+1. Clone this repository to your machine via `git clone https://github.com/cosmobobak/viridithas`.
+2. Enter the source directory via `cd viridithas`.
+3. (optional, likely unnecessary) select the branch you'd like to compile via `git checkout <BRANCH_NAME>`.
+4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
+
+    **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue`.
+
+5. Build Viridithas.
+   
+   **On Windows**, run 
+   ```
+   > $env:RUSTFLAGS="-C target-cpu=native"
+   > cargo b -r --features syzygy,bindgen
+   ``` 
+   **On Linux**, run
+   ```
+   > RUSTFLAGS="-C target-cpu=native" cargo b -r --features syzygy,bindgen
+   ```
+   You now have a fully-functional version of Viridithas at the path `target/release/viridithas`.
+
 ## Evaluation Development History/Originality (HCE/NNUE)
 
 - First evaluation was a simple piece value / psqt table approach, using values from PeSTO. (as far as I remember)
