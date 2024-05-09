@@ -281,7 +281,20 @@ for a in adds {
 ```
 The first implementation does "a load and a store" for every loop iteration, whereas the second implementation does **one** load and **one** store. Strictly, Rust's mutable-reference-uniqueness-guarantee should allow the first snippet to be optimised into the second[^2], but in NNUE inference we're typically working with `unsafe` calls directly to SIMD intrinsics where the compiler may perhaps be less able to slice through to see our intent.
 
-As an attempt to make use of this optimisation, I made [this](https://github.com/cosmobobak/viridithas/commit/25026ed5c820bdebe6afd731110059547d5002bb) modification to my in-place vector modification function, at the suggestion of Engine Programming user fireandice, author of [Titan](https://github.com/jeff-pow/Titan). Note that this version does a sort of hot-potato dance with multiple local variables all arranged in a vector, which has a number of elements that should fit entirely in SIMD registers. Unfortunately, comparing against master results in a 4% slowdown (on my avx2 laptop), which worsens to 5.5% if I increase REGISTERS to 16, as is done in the Berserk chess engine's implementation of similar code.
+As an attempt to make use of this optimisation, I made [this](https://github.com/cosmobobak/viridithas/pull/144) modification to my in-place vector modification function, at the suggestion of Engine Programming user fireandice, author of [Titan](https://github.com/jeff-pow/Titan). Note that this version does a sort of hot-potato dance with multiple local variables all arranged in a vector, which has a number of elements that should fit entirely in SIMD registers. Making this work in a robust, architecture-generic fashion took a while, as shown in my results table:
+
+| Configuration                                                                | Speed (% of `master`) |
+|------------------------------------------------------------------------------|-----------------------|
+| `master`                                                                     | 100.00%               |
+| single-intermediate variable                                                 | 95.70%                |
+| 8-register array                                                             | 94.84%                |
+| 16-register array                                                            | 94.57%                |
+| fireandice's verbatim code (not avx512-compatible)                           | 101.92%               |
+| 16-register array v2 (transposed)                                            | 100.91%               |
+| 16-register array v3 (transposed, iteratorised, hoisted)                     | 100.74%               |
+| 16-register array v4 (transposed, iteratorised x2, hoisted, no-bounds-check) | 103.33% 🎉🎉         |
+
+This approach of explicitly forcing the use of N registers works in other areas of NNUE inference, but my experiments with applying it to the fused update code resulted in a small (~0.6%) slowdown.
 
 [^2]: As proof of this, see https://godbolt.org/z/8qzrqGf6n.
 
