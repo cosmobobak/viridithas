@@ -386,25 +386,33 @@ pub fn vector_update_inplace(
     adds: &[FeatureIndex],
     subs: &[FeatureIndex],
 ) {
-    unsafe {
-        for &sub_index in subs {
-            let sub_index = sub_index.index() * LAYER_1_SIZE;
-            let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + LAYER_1_SIZE));
-            for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-                let x = Vector16::load_at(input, i * Vector16::COUNT);
-                let w = Vector16::load_at(sub_block, i * Vector16::COUNT);
-                let r = Vector16::sub(x, w);
-                Vector16::store_at(input, r, i * Vector16::COUNT);
+    const REGISTERS: usize = 8;
+    const UNROLL: usize = Vector16::COUNT * REGISTERS;
+    let mut registers = [unsafe { Vector16::zero() }; 16];
+    for i in 0..LAYER_1_SIZE / UNROLL {
+        let unroll_offset = i * UNROLL;
+        unsafe {
+            for r in 0..REGISTERS {
+                registers[r] = Vector16::load_at(input, unroll_offset + r * Vector16::COUNT);
             }
-        }
-        for &add_index in adds {
-            let add_index = add_index.index() * LAYER_1_SIZE;
-            let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + LAYER_1_SIZE));
-            for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-                let x = Vector16::load_at(input, i * Vector16::COUNT);
-                let w = Vector16::load_at(add_block, i * Vector16::COUNT);
-                let r = Vector16::add(x, w);
-                Vector16::store_at(input, r, i * Vector16::COUNT);
+            for r in 0..REGISTERS {
+                for &sub_index in subs {
+                    let sub_index = sub_index.index() * LAYER_1_SIZE;
+                    let sub_block = slice_to_aligned(&bucket[sub_index..sub_index + LAYER_1_SIZE]);
+                    let sub = Vector16::load_at(sub_block, unroll_offset + r * Vector16::COUNT);
+                    registers[r] = Vector16::sub(registers[r], sub);
+                }
+            }
+            for r in 0..REGISTERS {
+                for &add_index in adds {
+                    let add_index = add_index.index() * LAYER_1_SIZE;
+                    let add_block = slice_to_aligned(&bucket[add_index..add_index + LAYER_1_SIZE]);
+                    let add = Vector16::load_at(add_block, unroll_offset + r * Vector16::COUNT);
+                    registers[r] = Vector16::add(registers[r], add);
+                }
+            }
+            for r in 0..REGISTERS {
+                Vector16::store_at(input, registers[r], unroll_offset + r * Vector16::COUNT);
             }
         }
     }
