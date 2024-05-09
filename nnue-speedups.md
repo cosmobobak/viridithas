@@ -245,4 +245,44 @@ We inject the weight-multiply after the clipped ReLU and before squaring, so we 
 
 Important point: the output weight $w$ in this code is guaranteed to be in $[-126, 126]$ as a result of weight clipping to $[-1.98, 1.98]$ of $Q_B$. The [Motor](https://github.com/martinnovaak/motor) chess engine [had success](https://github.com/martinnovaak/motor/pull/71) with narrowing the weight clipping bounds to $[-1.27, 1.27]$ and correspondingly increasing $Q_A$ to $403$.
 
+## Register Juggling
+
+When constructing an accumulator from the bucket-accumulator cache, we must do a reasonably large number of updates to an accumulator. The naive approach leads to needless loads/stores to the accumulator, when all subtractions and additions can be done piece-wise, only storing the full-updated values.
+
+Consider the difference between
+```rust
+let subs = [4, 5, 1, -4, 8];
+let adds = [-2, 3, 7, 9, 4];
+
+let val = &mut some_memory_location;
+
+for s in subs {
+    *val -= *s;
+}
+for a in adds {
+    *val += *a;
+}
+```
+and
+```rust
+let subs = [4, 5, 1, -4, 8];
+let adds = [-2, 3, 7, 9, 4];
+
+let val = &mut some_memory_location;
+
+let mut reg = *val;
+for s in subs {
+    reg -= *s;
+}
+for a in adds {
+    reg += *a;
+}
+*val = reg;
+```
+The first implementation does "a load and a store" for every loop iteration, whereas the second implementation does **one** load and **one** store. Strictly, Rust's mutable-reference-uniqueness-guarantee should allow the first snippet to be optimised into the second[^2], but in NNUE inference we're typically working with `unsafe` calls directly to SIMD intrinsics where the compiler may perhaps be less able to slice through to see our intent.
+
+As an attempt to make use of this optimisation, I made [this](https://github.com/cosmobobak/viridithas/commit/25026ed5c820bdebe6afd731110059547d5002bb) modification to my in-place vector modification function, at the suggestion of Engine Programming user fireandice, author of [Titan](https://github.com/jeff-pow/Titan). Note that this version does a sort of hot-potato dance with multiple local variables all arranged in a vector, which has a number of elements that should fit entirely in SIMD registers. Unfortunately, comparing against master results in a 4% slowdown (on my avx2 laptop), which worsens to 5.5% if I increase REGISTERS to 16, as is done in the Berserk chess engine's implementation of similar code.
+
+[^2]: As proof of this, see https://godbolt.org/z/8qzrqGf6n.
+
 ## TT Static Evaluation Caching
