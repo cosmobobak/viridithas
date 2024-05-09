@@ -305,7 +305,7 @@ impl Vector32 {
     pub unsafe fn sum(a: Self) -> i32 {
         #[cfg(target_feature = "avx512f")]
         {
-            let high_256 = std::arch::x86_64::_mm512_extracti64x4_epi64(a.data);
+            let high_256 = std::arch::x86_64::_mm512_extracti64x4_epi64::<1>(a.data);
             let low_256 = std::arch::x86_64::_mm512_castsi512_si256(a.data);
             let sum_256 = std::arch::x86_64::_mm256_add_epi32(low_256, high_256);
             let upper_128 = std::arch::x86_64::_mm256_extracti128_si256::<1>(sum_256);
