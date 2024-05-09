@@ -379,6 +379,9 @@ pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, dst: &mut Align64<[i16; LAYER_1_
     unsafe { std::ptr::copy_nonoverlapping(src, dst, 1) };
 }
 
+const REGISTERS: usize = 16;
+const UNROLL: usize = Vector16::COUNT * REGISTERS;
+
 /// Apply add/subtract updates in place.
 pub fn vector_update_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,
@@ -386,8 +389,6 @@ pub fn vector_update_inplace(
     adds: &[FeatureIndex],
     subs: &[FeatureIndex],
 ) {
-    const REGISTERS: usize = 16;
-    const UNROLL: usize = Vector16::COUNT * REGISTERS;
     let mut registers = [unsafe { Vector16::zero() }; 16];
     for i in 0..LAYER_1_SIZE / UNROLL {
         let unroll_offset = i * UNROLL;
@@ -428,16 +429,31 @@ pub fn vector_add_sub(
 ) {
     let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
     let offset_sub = feature_idx_sub.index() * LAYER_1_SIZE;
-    let s_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + LAYER_1_SIZE)) };
-    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            let x = Vector16::load_at(input, i * Vector16::COUNT);
-            let w_sub = Vector16::load_at(s_block, i * Vector16::COUNT);
-            let w_add = Vector16::load_at(a_block, i * Vector16::COUNT);
-            let t = Vector16::sub(x, w_sub);
-            let t = Vector16::add(t, w_add);
-            Vector16::store_at(output, t, i * Vector16::COUNT);
+    unsafe {
+        let s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + LAYER_1_SIZE));
+        let a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
+
+        let mut registers: [Vector16; 16] = [Vector16::zero(); 16];
+        for i in 0..LAYER_1_SIZE / UNROLL {
+            let unroll_offset = i * UNROLL;
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                *reg = Vector16::load_at(input, unroll_offset + r_idx * Vector16::COUNT);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_sub = Vector16::load_at(s_block, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::sub(*reg, w_sub);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_add = Vector16::load_at(a_block, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::add(*reg, w_add);
+            }
+
+            for (r_idx, reg) in registers.iter().enumerate() {
+                Vector16::store_at(output, *reg, unroll_offset + r_idx * Vector16::COUNT);
+            }
         }
     }
 }
@@ -454,19 +470,37 @@ pub fn vector_add_sub2(
     let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
     let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
     let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
-    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
-    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
-    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            let x = Vector16::load_at(input, i * Vector16::COUNT);
-            let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);
-            let w_sub2 = Vector16::load_at(s_block2, i * Vector16::COUNT);
-            let w_add = Vector16::load_at(a_block, i * Vector16::COUNT);
-            let t = Vector16::sub(x, w_sub1);
-            let t = Vector16::sub(t, w_sub2);
-            let t = Vector16::add(t, w_add);
-            Vector16::store_at(output, t, i * Vector16::COUNT);
+    unsafe {
+        let a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
+        let s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE));
+        let s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE));
+
+        let mut registers: [Vector16; 16] = [Vector16::zero(); 16];
+        for i in 0..LAYER_1_SIZE / UNROLL {
+            let unroll_offset = i * UNROLL;
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                *reg = Vector16::load_at(input, unroll_offset + r_idx * Vector16::COUNT);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_sub = Vector16::load_at(s_block1, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::sub(*reg, w_sub);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_sub = Vector16::load_at(s_block2, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::sub(*reg, w_sub);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_add = Vector16::load_at(a_block, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::add(*reg, w_add);
+            }
+
+            for (r_idx, reg) in registers.iter().enumerate() {
+                Vector16::store_at(output, *reg, unroll_offset + r_idx * Vector16::COUNT);
+            }
         }
     }
 }
@@ -485,22 +519,43 @@ pub fn vector_add2_sub2(
     let offset_add2 = feature_idx_add2.index() * LAYER_1_SIZE;
     let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
     let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
-    let a_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + LAYER_1_SIZE)) };
-    let a_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + LAYER_1_SIZE)) };
-    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
-    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
-    for i in 0..LAYER_1_SIZE / Vector16::COUNT {
-        unsafe {
-            let x = Vector16::load_at(input, i * Vector16::COUNT);
-            let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);
-            let w_sub2 = Vector16::load_at(s_block2, i * Vector16::COUNT);
-            let w_add1 = Vector16::load_at(a_block1, i * Vector16::COUNT);
-            let w_add2 = Vector16::load_at(a_block2, i * Vector16::COUNT);
-            let t = Vector16::sub(x, w_sub1);
-            let t = Vector16::sub(t, w_sub2);
-            let t = Vector16::add(t, w_add1);
-            let t = Vector16::add(t, w_add2);
-            Vector16::store_at(output, t, i * Vector16::COUNT);
+    unsafe {
+        let a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + LAYER_1_SIZE));
+        let a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + LAYER_1_SIZE));
+        let s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE));
+        let s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE));
+
+        let mut registers: [Vector16; 16] = [Vector16::zero(); 16];
+        for i in 0..LAYER_1_SIZE / UNROLL {
+            let unroll_offset = i * UNROLL;
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                *reg = Vector16::load_at(input, unroll_offset + r_idx * Vector16::COUNT);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_sub = Vector16::load_at(s_block1, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::sub(*reg, w_sub);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_sub = Vector16::load_at(s_block2, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::sub(*reg, w_sub);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_add = Vector16::load_at(a_block1, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::add(*reg, w_add);
+            }
+
+            for (r_idx, reg) in registers.iter_mut().enumerate() {
+                let w_add = Vector16::load_at(a_block2, unroll_offset + r_idx * Vector16::COUNT);
+                *reg = Vector16::add(*reg, w_add);
+            }
+
+            for (r_idx, reg) in registers.iter().enumerate() {
+                Vector16::store_at(output, *reg, unroll_offset + r_idx * Vector16::COUNT);
+            }
         }
     }
 }
