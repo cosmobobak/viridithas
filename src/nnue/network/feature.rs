@@ -12,6 +12,8 @@ use super::INPUT;
 pub struct FeatureIndex(usize);
 
 impl FeatureIndex {
+    /// Invariant: the result of this function is less than the number of NNUE input features (768),
+    /// so it can be used to index a row of the feature-transformer matrix without bounds checking.
     pub const fn index(self) -> usize {
         self.0
     }
