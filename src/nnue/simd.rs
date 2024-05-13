@@ -29,25 +29,25 @@ use super::network::{feature::FeatureIndex, Align64, INPUT, LAYER_1_SIZE};
 
 #[derive(Clone, Copy)]
 pub struct Vector16 {
-    #[cfg(target_feature = "avx512")]
+    #[cfg(target_feature = "avx512f")]
     data: std::arch::x86_64::__m512i,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
     data: std::arch::x86_64::__m256i,
     #[cfg(target_feature = "neon")]
     data: std::arch::aarch64::int16x8_t,
-    #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
     data: i16,
 }
 
 #[derive(Clone, Copy)]
 pub struct Vector32 {
-    #[cfg(target_feature = "avx512")]
+    #[cfg(target_feature = "avx512f")]
     data: std::arch::x86_64::__m512i,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
     data: std::arch::x86_64::__m256i,
     #[cfg(target_feature = "neon")]
     data: std::arch::aarch64::int32x4_t,
-    #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
     data: i32,
 }
 
@@ -56,21 +56,21 @@ impl Vector16 {
     pub const COUNT: usize = Self::SIZE / std::mem::size_of::<i16>();
 
     pub fn new(
-        #[cfg(target_feature = "avx512")] data: std::arch::x86_64::__m512i,
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))] data: std::arch::x86_64::__m256i,
+        #[cfg(target_feature = "avx512f")] data: std::arch::x86_64::__m512i,
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))] data: std::arch::x86_64::__m256i,
         #[cfg(target_feature = "neon")] data: std::arch::aarch64::int16x8_t,
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))] data: i16,
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))] data: i16,
     ) -> Self {
         Self { data }
     }
 
     #[inline]
     pub unsafe fn load_at<const VEC_SIZE: usize>(memory: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_load_si512(memory.0.as_ptr().add(start_idx).cast()) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_load_si256(memory.0.as_ptr().add(start_idx).cast()) }
         }
@@ -78,7 +78,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vld1q_s16(memory.0.as_ptr().add(start_idx).cast()) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: *memory.get_unchecked(start_idx) }
         }
@@ -90,11 +90,11 @@ impl Vector16 {
         value: Self,
         start_idx: usize,
     ) {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             std::arch::x86_64::_mm512_store_si512(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             std::arch::x86_64::_mm256_store_si256(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
         }
@@ -102,7 +102,7 @@ impl Vector16 {
         {
             std::arch::aarch64::vst1q_s16(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             *memory.get_unchecked_mut(start_idx) = value.data
         }
@@ -110,11 +110,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn min(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_min_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_min_epi16(a.data, b.data) }
         }
@@ -122,7 +122,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vminq_s16(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: std::cmp::min(a.data, b.data) }
         }
@@ -130,11 +130,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn max(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_max_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_max_epi16(a.data, b.data) }
         }
@@ -142,7 +142,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vmaxq_s16(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: std::cmp::max(a.data, b.data) }
         }
@@ -150,11 +150,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn add(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_add_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_add_epi16(a.data, b.data) }
         }
@@ -162,7 +162,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vaddq_s16(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: a.data + b.data }
         }
@@ -170,11 +170,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn sub(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_sub_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_sub_epi16(a.data, b.data) }
         }
@@ -182,7 +182,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vsubq_s16(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: a.data - b.data }
         }
@@ -190,11 +190,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn mul_truncating(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_mullo_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_mullo_epi16(a.data, b.data) }
         }
@@ -202,7 +202,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vmulq_s16(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: a.data * b.data }
         }
@@ -210,11 +210,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn mul_widening(a: Self, b: Self) -> Vector32 {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Vector32 { data: std::arch::x86_64::_mm512_madd_epi16(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Vector32 { data: std::arch::x86_64::_mm256_madd_epi16(a.data, b.data) }
         }
@@ -230,7 +230,7 @@ impl Vector16 {
             let acc = std::arch::aarch64::vmlal_s16(acc, b_hi, a_hi);
             Vector32 { data: acc }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Vector32 { data: i32::from(a.data) * i32::from(b.data) }
         }
@@ -238,11 +238,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn splat(value: i16) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_set1_epi16(value) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_set1_epi16(value) }
         }
@@ -250,7 +250,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vld1q_dup_s16(&value) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: value }
         }
@@ -258,11 +258,11 @@ impl Vector16 {
 
     #[inline]
     pub unsafe fn zero() -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_setzero_si512() }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_setzero_si256() }
         }
@@ -270,7 +270,7 @@ impl Vector16 {
         {
             Self { data: std::arch::aarch64::vld1q_dup_s16(&0) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: 0 }
         }
@@ -283,11 +283,11 @@ impl Vector32 {
 
     #[inline]
     pub unsafe fn add(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_add_epi32(a.data, b.data) }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_add_epi32(a.data, b.data) }
         }
@@ -295,7 +295,7 @@ impl Vector32 {
         {
             Self { data: std::arch::aarch64::vaddq_s32(a.data, b.data) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: a.data + b.data }
         }
@@ -303,9 +303,9 @@ impl Vector32 {
 
     #[inline]
     pub unsafe fn sum(a: Self) -> i32 {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
-            let high_256 = std::arch::x86_64::_mm512_extracti64x4_epi64(a.data);
+            let high_256 = std::arch::x86_64::_mm512_extracti64x4_epi64::<1>(a.data);
             let low_256 = std::arch::x86_64::_mm512_castsi512_si256(a.data);
             let sum_256 = std::arch::x86_64::_mm256_add_epi32(low_256, high_256);
             let upper_128 = std::arch::x86_64::_mm256_extracti128_si256::<1>(sum_256);
@@ -318,7 +318,7 @@ impl Vector32 {
 
             std::arch::x86_64::_mm_cvtsi128_si32(sum_32)
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             let upper_128 = std::arch::x86_64::_mm256_extracti128_si256::<1>(a.data);
             let lower_128 = std::arch::x86_64::_mm256_castsi256_si128(a.data);
@@ -334,7 +334,7 @@ impl Vector32 {
         {
             std::arch::aarch64::vaddlvq_s32(a.data) as i32
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             a.data
         }
@@ -342,11 +342,11 @@ impl Vector32 {
 
     #[inline]
     pub unsafe fn zero() -> Self {
-        #[cfg(target_feature = "avx512")]
+        #[cfg(target_feature = "avx512f")]
         {
             Self { data: std::arch::x86_64::_mm512_setzero_si512() }
         }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512")))]
+        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
         {
             Self { data: std::arch::x86_64::_mm256_setzero_si256() }
         }
@@ -354,7 +354,7 @@ impl Vector32 {
         {
             Self { data: std::arch::aarch64::vld1q_dup_s32(&0) }
         }
-        #[cfg(not(any(target_feature = "avx512", target_feature = "avx2", target_feature = "neon")))]
+        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
             Self { data: 0 }
         }
