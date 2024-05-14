@@ -777,7 +777,7 @@ impl Board {
         let tt_capture = !tt_move.is_null() && self.is_capture(tt_move);
 
         // TT-reduction (IIR).
-        if NT::PV && tt_hit.is_none() {
+        if NT::PV && tt_move.is_null() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth);
         }
 
