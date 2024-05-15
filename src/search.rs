@@ -583,6 +583,8 @@ impl Board {
         let height = self.height();
 
         debug_assert_eq!(height == 0, NT::ROOT);
+        debug_assert!(!(NT::PV && cut_node));
+        debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
 
         info.seldepth =
             if NT::ROOT { ZERO_PLY } else { info.seldepth.max(Depth::from(i32::try_from(height).unwrap())) };
@@ -606,8 +608,6 @@ impl Board {
                 return alpha;
             }
         }
-
-        debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
 
         let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
