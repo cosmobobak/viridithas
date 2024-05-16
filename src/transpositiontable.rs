@@ -300,11 +300,7 @@ impl<'a> TTView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe(key, 0);
-        match result {
-            Some(TTHit { mov: tt_move, value: tt_value, .. }) => Some((tt_move, tt_value)),
-            _ => None,
-        }
+        self.probe(key, 0).map(|TTHit { mov, value, .. }| (mov, value))
     }
 
     pub fn hashfull(&self) -> usize {
