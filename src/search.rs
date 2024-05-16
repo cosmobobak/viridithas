@@ -479,13 +479,11 @@ impl Board {
             alpha = stand_pat;
         }
 
-        let tt_move = tt_hit.and_then(|e| e.mov);
-
         let mut best_move = None;
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, info.conf.qs_see_bound);
+        let mut move_picker = CapturePicker::new(tt_hit.and_then(|e| e.mov), [None; 2], None, info.conf.qs_see_bound);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -894,6 +892,8 @@ impl Board {
                 stat_score += t.get_continuation_history_score(self, m, 0);
                 stat_score += t.get_continuation_history_score(self, m, 1);
                 // stat_score += t.get_continuation_history_score(self, m, 3);
+            } else {
+                stat_score += t.get_tactical_history_score(self, m);
             }
 
             // lmp & fp.
@@ -931,7 +931,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score / 128)
             {
                 continue;
             }
@@ -1032,11 +1032,6 @@ impl Board {
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
                         score = -self.alpha_beta::<OffPV>(l_pv, info, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
-                    }
-
-                    if is_quiet && (score <= alpha || score >= beta) {
-                        let is_good = score >= beta;
-                        self.update_continuation_history_single(t, m, new_depth, is_good);
                     }
                 }
                 // if we failed completely, then do full-window search
@@ -1141,18 +1136,6 @@ impl Board {
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
-    }
-
-    /// Update continuation history tables for a single move.
-    fn update_continuation_history_single(
-        &mut self,
-        t: &mut ThreadData,
-        move_to_adjust: Move,
-        depth: Depth,
-        is_good: bool,
-    ) {
-        t.update_continuation_history_single(self, move_to_adjust, depth, 0, is_good);
-        t.update_continuation_history_single(self, move_to_adjust, depth, 1, is_good);
     }
 
     /// Update the tactical history table.

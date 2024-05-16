@@ -76,6 +76,14 @@ impl ThreadData<'_> {
         }
     }
 
+    /// Get the tactical history score for a single move.
+    pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let piece_moved = pos.moved_piece(m);
+        let capture = caphist_piece_type(pos, m);
+        let to = m.to();
+        i32::from(self.tactical_history.get(piece_moved, to, capture))
+    }
+
     /// Update the continuation history counters of a batch of moves.
     pub fn update_continuation_history(
         &mut self,
@@ -101,30 +109,6 @@ impl ThreadData<'_> {
             let piece = pos.moved_piece(m);
             update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
         }
-    }
-
-    /// Update the continuation history counter for a single move.
-    /// PRECONDITION: unlike `update_continuation_history`, this runs after
-    /// the move has been made.
-    pub fn update_continuation_history_single(
-        &mut self,
-        pos: &Board,
-        move_to_adjust: Move,
-        depth: Depth,
-        index: usize,
-        is_good: bool,
-    ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        let conthist_index = match pos.history.len().checked_sub(index + 2).and_then(|i| pos.history.get(i)) {
-            None | Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) => return,
-            Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
-        };
-        let table = self.cont_hists[index].as_mut();
-        let cmh_block = table.get_index_mut(conthist_index);
-
-        let to = move_to_adjust.history_to_square();
-        let piece = pos.piece_at(to);
-        update_history(cmh_block.get_mut(piece, to), depth, is_good);
     }
 
     /// Get the continuation history scores for a batch of moves.
