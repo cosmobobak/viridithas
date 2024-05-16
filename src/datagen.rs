@@ -368,6 +368,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
             let (score, best_move) =
                 board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
 
+            let Some(best_move) = best_move else {
+                println!("[WARNING!] search returned a null move as the best move!");
+                println!("[WARNING!] this occurred in position {}", board.fen());
+                continue 'generation_main_loop;
+            };
+
             game.add_move(best_move, score.try_into().unwrap());
 
             let abs_score = score.abs();

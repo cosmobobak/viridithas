@@ -787,10 +787,6 @@ impl Board {
     /// Checks whether a move is pseudo-legal.
     /// This means that it is a legal move, except for the fact that it might leave the king in check.
     pub fn is_pseudo_legal(&self, m: Move) -> bool {
-        if m.is_null() {
-            return false;
-        }
-
         let from = m.from();
         let to = m.to();
 
@@ -1309,12 +1305,6 @@ impl Board {
     /// Makes a guess about the new position key after a move.
     /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
     pub fn key_after(&self, m: Move) -> u64 {
-        if m.is_null() {
-            let mut new_key = self.key;
-            hash_side(&mut new_key);
-            return new_key;
-        }
-
         let src = m.from();
         let tgt = m.to();
         let piece = self.moved_piece(m);
@@ -1329,6 +1319,12 @@ impl Board {
             hash_piece(&mut new_key, captured, tgt);
         }
 
+        new_key
+    }
+
+    pub fn key_after_null_move(&self) -> u64 {
+        let mut new_key = self.key;
+        hash_side(&mut new_key);
         new_key
     }
 
@@ -1879,10 +1875,10 @@ mod tests {
     #[test]
     fn castling_pseudolegality() {
         use super::Board;
-        use crate::chessmove::Move;
+        use crate::chessmove::{Move, MoveFlags};
         use crate::util::Square;
         let board = Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20").unwrap();
-        let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, Move::CASTLE_FLAG);
+        let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, MoveFlags::Castle);
         assert!(!board.is_pseudo_legal(kingside_castle));
     }
 
@@ -1932,9 +1928,8 @@ mod tests {
     #[test]
     fn key_after_works_for_nullmove() {
         use super::Board;
-        use crate::chessmove::Move;
         let mut board = Board::default();
-        let key = board.key_after(Move::NULL);
+        let key = board.key_after_null_move();
         board.make_nullmove();
         assert_eq!(board.key, key);
     }

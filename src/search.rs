@@ -147,7 +147,7 @@ impl Board {
         info: &mut SearchInfo,
         thread_headers: &mut [ThreadData],
         tt: TTView,
-    ) -> (i32, Move) {
+    ) -> (i32, Option<Move>) {
         set_up_for_search(self, info, thread_headers);
 
         let legal_moves = self.legal_moves();
@@ -159,7 +159,7 @@ impl Board {
                 println!("info depth 0 score cp 0");
             }
             println!("bestmove (none)");
-            return (0, Move::NULL);
+            return (0, None);
         }
         if legal_moves.len() == 1 {
             info.time_manager.notify_one_legal_move();
@@ -176,7 +176,7 @@ impl Board {
             if info.print_to_stdout {
                 println!("bestmove {best_move}");
             }
-            return (score, best_move);
+            return (score, Some(best_move));
         }
 
         let global_stopped = info.stopped;
@@ -222,7 +222,7 @@ impl Board {
         }
 
         assert!(legal_moves.contains(&best_move), "search returned an illegal move.");
-        (if self.turn() == Colour::WHITE { pv.score } else { -pv.score }, best_move)
+        (if self.turn() == Colour::WHITE { pv.score } else { -pv.score }, Some(best_move))
     }
 
     /// Performs the iterative deepening search.
@@ -380,19 +380,19 @@ impl Board {
 
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
-        let tt_move = t.tt.probe_for_provisional_info(self.hashkey()).map_or(Move::NULL, |e| e.0);
+        let tt_move = t.tt.probe_for_provisional_info(self.hashkey()).and_then(|e| e.0);
         let mut mp = MovePicker::<MainSearch>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
-        let mut m = Move::NULL;
+        let mut m = None;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_simple(mov) {
                 continue;
             }
             // if we get here, it means the move is legal.
-            m = mov;
+            m = Some(mov);
             self.unmake_move_base();
             break;
         }
-        m
+        m.expect("Board::default_move called on a position with no legal moves")
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
@@ -462,9 +462,9 @@ impl Board {
             }
         } else {
             let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
-                                                              // store the eval into the TT if we won't overwrite anything:
             if tt_hit.is_none() {
-                t.tt.store(key, height, Move::NULL, VALUE_NONE, v, Bound::None, ZERO_PLY);
+                // store the eval into the TT if we won't overwrite anything
+                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY);
             }
             v
         };
@@ -479,13 +479,13 @@ impl Board {
             alpha = stand_pat;
         }
 
-        let tt_move = tt_hit.map_or(Move::NULL, |e| e.mov);
+        let tt_move = tt_hit.and_then(|e| e.mov);
 
-        let mut best_move = Move::NULL;
+        let mut best_move = None;
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, info.conf.qs_see_bound);
+        let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, info.conf.qs_see_bound);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -512,7 +512,7 @@ impl Board {
             if score > best_score {
                 best_score = score;
                 if score > alpha {
-                    best_move = m;
+                    best_move = Some(m);
                     alpha = score;
                     pv.load_from(m, &lpv);
                 }
@@ -542,7 +542,7 @@ impl Board {
     }
 
     /// Get the two killer moves for this position.
-    pub const fn get_killer_set(&self, t: &ThreadData) -> [Move; 2] {
+    pub const fn get_killer_set(&self, t: &ThreadData) -> [Option<Move>; 2] {
         let ply = self.height();
         t.killer_move_table[ply]
     }
@@ -611,7 +611,7 @@ impl Board {
 
         let excluded = t.excluded[height];
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let tt_hit = if excluded.is_null() {
+        let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
                     && hit.depth >= depth
@@ -635,7 +635,7 @@ impl Board {
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
         if !NT::ROOT
-            && excluded.is_null() // do not probe the tablebases if we're in a singular-verification search.
+            && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
                 || self.n_men() < cardinality)
@@ -660,7 +660,7 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    t.tt.store(key, height, Move::NULL, tb_value, VALUE_NONE, tb_bound, depth);
+                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth);
                     return tb_value;
                 }
 
@@ -677,7 +677,7 @@ impl Board {
 
         let static_eval = if in_check {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
-        } else if !excluded.is_null() {
+        } else if excluded.is_some() {
             t.evals[height] // if we're in a singular-verification search, we already have the static eval.
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
@@ -702,10 +702,10 @@ impl Board {
         t.double_extensions[height] = if NT::ROOT { 0 } else { t.double_extensions[height - 1] };
 
         // clear out the next set of killer moves.
-        t.killer_move_table[height + 1] = [Move::NULL; 2];
+        t.killer_move_table[height + 1] = [None; 2];
 
         // whole-node pruning techniques:
-        if !NT::ROOT && !NT::PV && !in_check && excluded.is_null() {
+        if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -742,7 +742,7 @@ impl Board {
                         info.conf.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
-                t.tt.prefetch(self.key_after(Move::NULL));
+                t.tt.prefetch(self.key_after_null_move());
                 self.make_nullmove();
                 let mut null_score = -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
                 self.unmake_nullmove();
@@ -773,16 +773,16 @@ impl Board {
             }
         }
 
-        let mut tt_move = tt_hit.map_or(Move::NULL, |hit| hit.mov);
-        let tt_capture = !tt_move.is_null() && self.is_capture(tt_move);
+        let mut tt_move = tt_hit.and_then(|hit| hit.mov);
+        let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
         // TT-reduction (IIR).
-        if NT::PV && tt_move.is_null() {
+        if NT::PV && tt_move.is_none() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth);
         }
 
         // cutnode-based TT reduction.
-        if cut_node && excluded.is_null() && tt_move.is_null() {
+        if cut_node && excluded.is_none() && tt_move.is_none() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
@@ -792,7 +792,7 @@ impl Board {
         // move ordering will be terrible. To rectify this,
         // we do a shallower search first, to get a bestmove
         // and help along the history tables.
-        if NT::PV && depth > Depth::new(3) && tt_move.is_null() {
+        if NT::PV && depth > Depth::new(3) && tt_move.is_none() {
             let iid_depth = depth - 2;
             self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
             tt_move = t.best_moves[height];
@@ -802,8 +802,8 @@ impl Board {
         let see_table = [info.conf.see_tactical_margin * depth.squared(), info.conf.see_quiet_margin * depth.round()];
 
         // store the eval into the TT if we won't overwrite anything:
-        if tt_hit.is_none() && !in_check && excluded.is_null() {
-            t.tt.store(key, height, Move::NULL, VALUE_NONE, static_eval, Bound::None, ZERO_PLY);
+        if tt_hit.is_none() && !in_check && excluded.is_none() {
+            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY);
         }
 
         // probcut:
@@ -816,20 +816,20 @@ impl Board {
         // that it's not going to be helpful.
         if !NT::PV
             && !in_check
-            && excluded.is_null()
+            && excluded.is_none()
             && depth >= info.conf.probcut_min_depth
             && !is_game_theoretic_score(beta)
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let mut move_picker = CapturePicker::new(tt_move, [Move::NULL; 2], Move::NULL, 0);
+            let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, 0);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
                 }
 
                 // skip non-tacticals from the TT:
-                if m == tt_move && !self.is_tactical(m) {
+                if Some(m) == tt_move && !self.is_tactical(m) {
                     continue;
                 }
 
@@ -849,14 +849,14 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    t.tt.store(key, height, m, value, static_eval, Bound::Lower, depth - 3);
+                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3);
                     return value;
                 }
             }
         }
 
         let original_alpha = alpha;
-        let mut best_move = Move::NULL;
+        let mut best_move = None;
         let mut best_score = -INFINITY;
         let mut moves_made = 0;
 
@@ -878,7 +878,7 @@ impl Board {
                     continue;
                 }
             }
-            if excluded == m {
+            if excluded == Some(m) {
                 continue;
             }
 
@@ -897,7 +897,7 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter = m == killers[0] || m == killers[1] || m == counter_move;
+            let killer_or_counter = Some(m) == killers[0] || Some(m) == killers[1] || Some(m) == counter_move;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -952,8 +952,8 @@ impl Board {
             moves_made += 1;
 
             let maybe_singular = depth >= info.conf.singularity_depth
-                && excluded.is_null()
-                && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == m && tt_depth >= depth - 3);
+                && excluded.is_none()
+                && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == Some(m) && tt_depth >= depth - 3);
 
             let extension;
             if NT::ROOT {
@@ -1064,7 +1064,7 @@ impl Board {
             if score > best_score {
                 best_score = score;
                 if score > alpha {
-                    best_move = m;
+                    best_move = Some(m);
                     alpha = score;
                     pv.load_from(m, l_pv);
                 }
@@ -1077,7 +1077,7 @@ impl Board {
         }
 
         if moves_made == 0 {
-            if !excluded.is_null() {
+            if excluded.is_some() {
                 return alpha;
             }
             if in_check {
@@ -1099,29 +1099,27 @@ impl Board {
         if alpha != original_alpha {
             // we raised alpha, so this is either a PV-node or a cut-node,
             // so we update history metrics.
-            let bm_quiet = !self.is_tactical(best_move);
-            if bm_quiet {
+            let best_move = best_move.expect("if alpha was raised, we should have a best move.");
+            if !self.is_tactical(best_move) {
                 t.insert_killer(self, best_move);
                 t.insert_countermove(self, best_move);
 
-                let moves_to_adjust = quiets_tried.as_slice();
                 // this heuristic is on the whole unmotivated, beyond mere empiricism.
                 // perhaps it's really important to know which quiet moves are good in "bad" positions?
                 let history_depth_boost = i32::from(static_eval <= alpha);
-                self.update_quiet_history(t, moves_to_adjust, best_move, depth + history_depth_boost);
+                self.update_quiet_history(t, quiets_tried.as_slice(), best_move, depth + history_depth_boost);
             }
 
             // we unconditionally update the tactical history table
             // because tactical moves ought to be good in any position,
             // so it's good to decrease tactical history scores even
             // when the best move was non-tactical.
-            let moves_to_adjust = tacticals_tried.as_slice();
-            self.update_tactical_history(t, moves_to_adjust, best_move, depth);
+            self.update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
         }
 
-        if excluded.is_null() {
+        if excluded.is_none() {
             debug_assert!(
-                alpha != original_alpha || best_move.is_null(),
+                alpha != original_alpha || best_move.is_none(),
                 "alpha was not raised, but best_move was not null!"
             );
             t.tt.store(key, height, best_move, best_score, static_eval, flag, depth);
@@ -1146,7 +1144,13 @@ impl Board {
     }
 
     /// Update continuation history tables for a single move.
-    fn update_continuation_history_single(&mut self, t: &mut ThreadData, move_to_adjust: Move, depth: Depth, is_good: bool) {
+    fn update_continuation_history_single(
+        &mut self,
+        t: &mut ThreadData,
+        move_to_adjust: Move,
+        depth: Depth,
+        is_good: bool,
+    ) {
         t.update_continuation_history_single(self, move_to_adjust, depth, 0, is_good);
         t.update_continuation_history_single(self, move_to_adjust, depth, 1, is_good);
     }
@@ -1180,9 +1184,9 @@ impl Board {
         let r_depth = (depth - 1) / 2;
         // undo the singular move so we can search the position that it exists in.
         self.unmake_move(t);
-        t.excluded[self.height()] = m;
+        t.excluded[self.height()] = Some(m);
         let value = self.alpha_beta::<OffPV>(&mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
-        t.excluded[self.height()] = Move::NULL;
+        t.excluded[self.height()] = None;
         if value >= r_beta && r_beta >= beta {
             mp.stage = Stage::Done; // multicut!!
             return ZERO_PLY;
@@ -1216,13 +1220,13 @@ impl Board {
     ) -> bool {
         let r_beta = (value - margin).max(-MATE_SCORE);
         let r_depth = (depth - 1) / 2;
-        t.excluded[self.height()] = m;
+        t.excluded[self.height()] = Some(m);
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value =
             self.alpha_beta::<CheckForced>(&mut PVariation::default(), info, t, r_depth, r_beta - 1, r_beta, false);
         info.print_to_stdout = pts_prev;
-        t.excluded[self.height()] = Move::NULL;
+        t.excluded[self.height()] = None;
         value < r_beta
     }
 

@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    chessmove::Move,
+    chessmove::{Move, MoveFlags},
     piece::{Black, Col, Colour, PieceType, White},
     squareset::SquareSet,
     uci::CHESS960,
@@ -162,11 +162,11 @@ impl Board {
 
         if attacks_west.non_empty() {
             let from_sq = attacks_west.first();
-            move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, Move::EP_FLAG));
+            move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, MoveFlags::EnPassant));
         }
         if attacks_east.non_empty() {
             let from_sq = attacks_east.first();
-            move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, Move::EP_FLAG));
+            move_list.push::<true>(Move::new_with_flags(from_sq, self.ep_sq, MoveFlags::EnPassant));
         }
     }
 
@@ -452,7 +452,7 @@ impl Board {
                 }
                 && !self.sq_attacked_by::<C::Opposite>(k_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(from, k_to, Move::CASTLE_FLAG));
+                move_list.push::<false>(Move::new_with_flags(from, k_to, MoveFlags::Castle));
             }
 
             if q_perm != Square::NO_SQUARE
@@ -460,7 +460,7 @@ impl Board {
                 && !cache.unwrap_or_else(|| self.sq_attacked_by::<C::Opposite>(from))
                 && !self.sq_attacked_by::<C::Opposite>(q_thru)
             {
-                move_list.push::<false>(Move::new_with_flags(from, q_to, Move::CASTLE_FLAG));
+                move_list.push::<false>(Move::new_with_flags(from, q_to, MoveFlags::Castle));
             }
         }
     }
@@ -480,7 +480,7 @@ impl Board {
         if (relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())).is_empty()
             && !self.any_attacked(king_path, C::Opposite::COLOUR)
         {
-            move_list.push::<false>(Move::new_with_flags(king_sq, castling_sq, Move::CASTLE_FLAG));
+            move_list.push::<false>(Move::new_with_flags(king_sq, castling_sq, MoveFlags::Castle));
         }
     }
 

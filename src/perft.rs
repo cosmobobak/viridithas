@@ -63,7 +63,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 
 #[cfg(test)]
 pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
-    use crate::{board::movegen::movepicker::MainMovePicker, chessmove::Move};
+    use crate::board::movegen::movepicker::MainMovePicker;
 
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -73,7 +73,7 @@ pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u6
         return 1;
     }
 
-    let mut ml = MainMovePicker::new(Move::NULL, [Move::NULL, Move::NULL], Move::NULL, 0);
+    let mut ml = MainMovePicker::new(None, [None, None], None, 0);
 
     let mut count = 0;
     while let Some(m) = ml.next(pos, t) {

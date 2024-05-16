@@ -243,7 +243,7 @@ mod tests {
         let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(position.san(mov).as_deref(), Some("Bxd5+")));
+        assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Bxd5+")));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
 
         drop(guard);
@@ -263,7 +263,7 @@ mod tests {
         let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(position.san(mov).as_deref(), Some("Qxd5")));
+        assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
 
         drop(guard);
@@ -283,7 +283,7 @@ mod tests {
         let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(position.san(mov).as_deref(), Some("Qxd4")));
+        assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
 
         drop(guard);
@@ -303,7 +303,7 @@ mod tests {
         let mut t = ThreadData::new(0, &position, tt.view());
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(position.san(mov).as_deref(), Some("Bxd4+")));
+        assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Bxd4+")));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.
 
         drop(guard);

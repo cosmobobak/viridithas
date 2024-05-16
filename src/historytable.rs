@@ -184,7 +184,7 @@ impl DoubleHistoryTable {
 
 #[derive(Clone)]
 pub struct MoveTable {
-    table: Vec<Move>,
+    table: Vec<Option<Move>>,
 }
 
 impl MoveTable {
@@ -194,19 +194,19 @@ impl MoveTable {
 
     pub fn clear(&mut self) {
         if self.table.is_empty() {
-            self.table.resize(BOARD_N_SQUARES * 12, Move::NULL);
+            self.table.resize(BOARD_N_SQUARES * 12, None);
         } else {
-            self.table.fill(Move::NULL);
+            self.table.fill(None);
         }
     }
 
     pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
         let pt = piece.hist_table_offset();
         let sq = sq.index();
-        self.table[pt * BOARD_N_SQUARES + sq] = m;
+        self.table[pt * BOARD_N_SQUARES + sq] = Some(m);
     }
 
-    pub fn get(&self, piece: Piece, sq: Square) -> Move {
+    pub fn get(&self, piece: Piece, sq: Square) -> Option<Move> {
         let pt = piece.hist_table_offset();
         let sq = sq.index();
         self.table[pt * BOARD_N_SQUARES + sq]

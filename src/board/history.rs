@@ -169,11 +169,11 @@ impl ThreadData<'_> {
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
         let idx = pos.height;
-        if self.killer_move_table[idx][0] == m {
+        if self.killer_move_table[idx][0] == Some(m) {
             return;
         }
         self.killer_move_table[idx][1] = self.killer_move_table[idx][0];
-        self.killer_move_table[idx][0] = m;
+        self.killer_move_table[idx][0] = Some(m);
     }
 
     /// Add a move to the countermove table.
@@ -193,12 +193,10 @@ impl ThreadData<'_> {
     }
 
     /// Returns the counter move for this position.
-    pub fn get_counter_move(&self, pos: &Board) -> Move {
-        let Some(&Undo { cont_hist_index, .. }) = pos.history.last() else {
-            return Move::NULL;
-        };
+    pub fn get_counter_move(&self, pos: &Board) -> Option<Move> {
+        let &Undo { cont_hist_index, .. } = pos.history.last()?;
         if cont_hist_index.square == Square::NO_SQUARE {
-            return Move::NULL;
+            return None;
         }
 
         let prev_to = cont_hist_index.square;

@@ -93,6 +93,12 @@ impl Game {
                 break;
             }
             let mv = Move::from_raw(u16::from_le_bytes([buf[0], buf[1]]));
+            let Some(mv) = mv else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "parsed invalid move - move was null (the all-zeroes bitpattern)".to_string(),
+                ));
+            };
             if !mv.is_valid() || mv.from() == mv.to() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,

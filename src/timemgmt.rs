@@ -120,7 +120,7 @@ pub struct TimeManager {
     /// The value from the last iteration of search.
     prev_score: i32,
     /// The best move from the last iteration of search.
-    prev_move: Move,
+    prev_move: Option<Move>,
     /// The number of ID iterations for which the best move remained.
     stability: usize,
     /// Number of times that we have failed low.
@@ -144,7 +144,7 @@ impl Default for TimeManager {
             hard_time: Duration::from_secs(0),
             opt_time: Duration::from_secs(0),
             prev_score: 0,
-            prev_move: Move::NULL,
+            prev_move: None,
             stability: 0,
             failed_low: 0,
             mate_counter: 0,
@@ -178,7 +178,7 @@ impl TimeManager {
 
     pub fn reset_for_id(&mut self, conf: &Config) {
         self.prev_score = 0;
-        self.prev_move = Move::NULL;
+        self.prev_move = None;
         self.stability = 0;
         self.failed_low = 0;
         self.mate_counter = 0;
@@ -353,7 +353,7 @@ impl TimeManager {
             let hard_time = Duration::from_millis(hard_time);
             let opt_time = Duration::from_millis(opt_time);
 
-            if best_move == self.prev_move {
+            if Some(best_move) == self.prev_move {
                 self.stability += 1;
             } else {
                 self.stability = 0;
@@ -380,7 +380,7 @@ impl TimeManager {
             self.last_factors = [stability_multiplier, failed_low_multiplier];
         }
 
-        self.prev_move = best_move;
+        self.prev_move = Some(best_move);
         self.prev_score = eval;
     }
 

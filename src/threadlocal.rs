@@ -13,8 +13,8 @@ use crate::{
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
     pub evals: [i32; MAX_PLY],
-    pub excluded: [Move; MAX_PLY],
-    pub best_moves: [Move; MAX_PLY],
+    pub excluded: [Option<Move>; MAX_PLY],
+    pub best_moves: [Option<Move>; MAX_PLY],
     // double-extension array is right-padded by one because
     // singular verification will try to access the next ply
     // in an edge case.
@@ -27,7 +27,7 @@ pub struct ThreadData<'a> {
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
     pub cont_hists: [Box<DoubleHistoryTable>; 2],
-    pub killer_move_table: [[Move; 2]; MAX_PLY + 1],
+    pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
 
     pub thread_id: usize,
@@ -48,8 +48,8 @@ impl<'a> ThreadData<'a> {
     pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>) -> Self {
         let mut td = Self {
             evals: [0; MAX_PLY],
-            excluded: [Move::NULL; MAX_PLY],
-            best_moves: [Move::NULL; MAX_PLY],
+            excluded: [None; MAX_PLY],
+            best_moves: [None; MAX_PLY],
             double_extensions: [0; MAX_PLY + 1],
             checks: [false; MAX_PLY],
             banned_nmp: 0,
@@ -58,7 +58,7 @@ impl<'a> ThreadData<'a> {
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
             cont_hists: [(); 2].map(|()| DoubleHistoryTable::boxed()),
-            killer_move_table: [[Move::NULL; 2]; MAX_PLY + 1],
+            killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
@@ -89,7 +89,7 @@ impl<'a> ThreadData<'a> {
         self.main_history.clear();
         self.tactical_history.clear();
         self.cont_hists.iter_mut().for_each(|h| h.clear());
-        self.killer_move_table.fill([Move::NULL; 2]);
+        self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
@@ -100,7 +100,7 @@ impl<'a> ThreadData<'a> {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.cont_hists.iter_mut().for_each(|h| h.age_entries());
-        self.killer_move_table.fill([Move::NULL; 2]);
+        self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;

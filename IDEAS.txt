@@ -23,4 +23,3 @@ MINOR:
 - iid tinkering (ttmove, excluded move)
 - look for bad zero-init of arrays.
 - skip tt entry reload in the store() function.
-- use NonZeroU16 for move repr and represent nullmoves using Option (or something).
