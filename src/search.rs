@@ -1033,6 +1033,11 @@ impl Board {
                     if new_depth - 1 > reduced_depth {
                         score = -self.alpha_beta::<OffPV>(l_pv, info, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                     }
+
+                    if is_quiet && (score <= alpha || score >= beta) {
+                        let is_good = score >= beta;
+                        self.update_continuation_history_single(t, m, new_depth, is_good);
+                    }
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
@@ -1132,12 +1137,18 @@ impl Board {
         info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
     }
 
-    /// Update the main, counter-move, and followup history tables.
+    /// Update the main and continuation history tables for a batch of moves.
     fn update_quiet_history(&mut self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
+    }
+
+    /// Update continuation history tables for a single move.
+    fn update_continuation_history_single(&mut self, t: &mut ThreadData, move_to_adjust: Move, depth: Depth, is_good: bool) {
+        t.update_continuation_history_single(self, move_to_adjust, depth, 0, is_good);
+        t.update_continuation_history_single(self, move_to_adjust, depth, 1, is_good);
     }
 
     /// Update the tactical history table.

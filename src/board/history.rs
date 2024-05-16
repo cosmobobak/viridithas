@@ -103,6 +103,30 @@ impl ThreadData<'_> {
         }
     }
 
+    /// Update the continuation history counter for a single move.
+    /// PRECONDITION: unlike `update_continuation_history`, this runs after
+    /// the move has been made.
+    pub fn update_continuation_history_single(
+        &mut self,
+        pos: &Board,
+        move_to_adjust: Move,
+        depth: Depth,
+        index: usize,
+        is_good: bool,
+    ) {
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        let conthist_index = match pos.history.len().checked_sub(index + 2).and_then(|i| pos.history.get(i)) {
+            None | Some(Undo { cont_hist_index: ContHistIndex { square: Square::NO_SQUARE, .. }, .. }) => return,
+            Some(Undo { cont_hist_index, .. }) => *cont_hist_index,
+        };
+        let table = self.cont_hists[index].as_mut();
+        let cmh_block = table.get_index_mut(conthist_index);
+
+        let to = move_to_adjust.history_to_square();
+        let piece = pos.piece_at(to);
+        update_history(cmh_block.get_mut(piece, to), depth, is_good);
+    }
+
     /// Get the continuation history scores for a batch of moves.
     pub(super) fn get_continuation_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry], index: usize) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
