@@ -77,6 +77,7 @@ impl ThreadData<'_> {
     }
 
     /// Get the tactical history score for a single move.
+    #[allow(dead_code)]
     pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.moved_piece(m);
         let capture = caphist_piece_type(pos, m);

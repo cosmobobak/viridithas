@@ -897,7 +897,7 @@ impl Board {
                 stat_score += t.get_continuation_history_score(self, m, 1);
                 // stat_score += t.get_continuation_history_score(self, m, 3);
             } else {
-                stat_score += t.get_tactical_history_score(self, m);
+                // stat_score += t.get_tactical_history_score(self, m);
             }
 
             // lmp & fp.
