@@ -73,6 +73,7 @@ const NMP_BASE_REDUCTION: Depth = Depth::new(4);
 const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
 const LMP_DEPTH: Depth = Depth::new(8);
 const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
+const TT_EXTENSION_DEPTH: Depth = Depth::new(7);
 const FUTILITY_DEPTH: Depth = Depth::new(6);
 const SINGULARITY_DEPTH: Depth = Depth::new(8);
 const DOUBLE_EXTENSION_MARGIN: i32 = 15;
@@ -611,14 +612,17 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
-                if !NT::PV
-                    && hit.depth >= depth
-                    && !fifty_move_rule_near
-                    && (hit.bound == Bound::Exact
-                        || (hit.bound == Bound::Lower && hit.value >= beta)
-                        || (hit.bound == Bound::Upper && hit.value <= alpha))
-                {
-                    return hit.value;
+                if !NT::PV && hit.depth >= depth {
+                    if !fifty_move_rule_near
+                        && (hit.bound == Bound::Exact
+                            || (hit.bound == Bound::Lower && hit.value >= beta)
+                            || (hit.bound == Bound::Upper && hit.value <= alpha))
+                    {
+                        return hit.value;
+                    }
+                    // otherwise use the fact that we have a really deep entry
+                    // as evidence that we should search more deeply here.
+                    depth += Depth::from(depth < info.conf.tt_extension_depth);
                 }
 
                 Some(hit)
@@ -990,13 +994,13 @@ impl Board {
                     && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
-                    // extend/reduce using the stat_score of the move
-                    r -= i32::clamp(
-                        stat_score / info.conf.history_lmr_divisor,
-                        -info.conf.history_lmr_bound,
-                        info.conf.history_lmr_bound,
-                    );
                     if is_quiet {
+                        // extend/reduce using the stat_score of the move
+                        r -= i32::clamp(
+                            stat_score / info.conf.history_lmr_divisor,
+                            -info.conf.history_lmr_bound,
+                            info.conf.history_lmr_bound,
+                        );
                         // reduce special moves one less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
