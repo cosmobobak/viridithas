@@ -622,7 +622,7 @@ impl Board {
                     }
                     // otherwise use the fact that we have a really deep entry
                     // as evidence that we should search more deeply here.
-                    depth += Depth::from(depth < info.conf.tt_extension_depth);
+                    // depth += Depth::from(depth < info.conf.tt_extension_depth);
                 }
 
                 Some(hit)
@@ -779,12 +779,12 @@ impl Board {
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
         // TT-reduction (IIR).
-        if NT::PV && tt_move.is_none() {
+        if NT::PV && tt_hit.is_none() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth);
         }
 
         // cutnode-based TT reduction.
-        if cut_node && excluded.is_none() && tt_move.is_none() {
+        if cut_node && /* excluded.is_none() && */ tt_move.is_none() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
@@ -794,7 +794,7 @@ impl Board {
         // move ordering will be terrible. To rectify this,
         // we do a shallower search first, to get a bestmove
         // and help along the history tables.
-        if NT::PV && depth > Depth::new(3) && tt_move.is_none() {
+        if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
             self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
             tt_move = t.best_moves[height];
