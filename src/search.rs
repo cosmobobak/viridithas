@@ -612,6 +612,7 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
+                #[allow(clippy::collapsible_if)]
                 if !NT::PV && hit.depth >= depth {
                     if !fifty_move_rule_near
                         && (hit.bound == Bound::Exact
@@ -620,6 +621,7 @@ impl Board {
                     {
                         return hit.value;
                     }
+
                     // otherwise use the fact that we have a really deep entry
                     // as evidence that we should search more deeply here.
                     // depth += Depth::from(depth < info.conf.tt_extension_depth);
@@ -788,18 +790,6 @@ impl Board {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
-        // internal iterative deepening -
-        // if we didn't get a TT hit, and we're in the PV,
-        // then this is going to be a costly search because
-        // move ordering will be terrible. To rectify this,
-        // we do a shallower search first, to get a bestmove
-        // and help along the history tables.
-        if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
-            let iid_depth = depth - 2;
-            self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
-            tt_move = t.best_moves[height];
-        }
-
         // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
         let see_table = [info.conf.see_tactical_margin * depth.squared(), info.conf.see_quiet_margin * depth.round()];
 
@@ -855,6 +845,18 @@ impl Board {
                     return value;
                 }
             }
+        }
+
+        // internal iterative deepening -
+        // if we didn't get a TT hit, and we're in the PV,
+        // then this is going to be a costly search because
+        // move ordering will be terrible. To rectify this,
+        // we do a shallower search first, to get a bestmove
+        // and help along the history tables.
+        if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
+            let iid_depth = depth - 2;
+            self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
+            tt_move = t.best_moves[height];
         }
 
         let original_alpha = alpha;
