@@ -931,7 +931,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score / 128)
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
             }
@@ -990,13 +990,13 @@ impl Board {
                     && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
+                    // extend/reduce using the stat_score of the move
+                    r -= i32::clamp(
+                        stat_score / info.conf.history_lmr_divisor,
+                        -info.conf.history_lmr_bound,
+                        info.conf.history_lmr_bound,
+                    );
                     if is_quiet {
-                        // extend/reduce using the stat_score of the move
-                        r -= i32::clamp(
-                            stat_score / info.conf.history_lmr_divisor,
-                            -info.conf.history_lmr_bound,
-                            info.conf.history_lmr_bound,
-                        );
                         // reduce special moves one less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
