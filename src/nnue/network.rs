@@ -193,68 +193,38 @@ pub struct FeatureUpdate {
     pub piece: Piece,
 }
 
-impl FeatureUpdate {
-    const NULL: Self = Self { sq: Square::A1, piece: Piece::WP };
-}
-
 impl Display for FeatureUpdate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{piece} on {sq}", piece = self.piece, sq = self.sq)
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct UpdateBuffer {
-    add: [FeatureUpdate; 2],
-    add_count: u8,
-    sub: [FeatureUpdate; 2],
-    sub_count: u8,
-}
-
-impl Debug for UpdateBuffer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "UpdateBuffer {{ adds: [")?;
-        for i in 0..self.add_count {
-            write!(f, "{}, ", self.add[i as usize])?;
-        }
-        write!(f, "], subs: [")?;
-        for i in 0..self.sub_count {
-            write!(f, "{}, ", self.sub[i as usize])?;
-        }
-        write!(f, "] }}")
-    }
-}
-
-impl Default for UpdateBuffer {
-    fn default() -> Self {
-        Self { add: [FeatureUpdate::NULL; 2], add_count: 0, sub: [FeatureUpdate::NULL; 2], sub_count: 0 }
-    }
+    add: ArrayVec<FeatureUpdate, 2>,
+    sub: ArrayVec<FeatureUpdate, 2>,
 }
 
 impl UpdateBuffer {
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
-        self.add[self.add_count as usize] = FeatureUpdate { sq: to, piece };
-        self.add_count += 1;
-        self.sub[self.sub_count as usize] = FeatureUpdate { sq: from, piece };
-        self.sub_count += 1;
+        self.add.push(FeatureUpdate { sq: to, piece });
+        self.sub.push(FeatureUpdate { sq: from, piece });
     }
 
     pub fn clear_piece(&mut self, sq: Square, piece: Piece) {
-        self.sub[self.sub_count as usize] = FeatureUpdate { sq, piece };
-        self.sub_count += 1;
+        self.sub.push(FeatureUpdate { sq, piece });
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        self.add[self.add_count as usize] = FeatureUpdate { sq, piece };
-        self.add_count += 1;
+        self.add.push(FeatureUpdate { sq, piece });
     }
 
     pub fn adds(&self) -> &[FeatureUpdate] {
-        &self.add[..self.add_count as usize]
+        &self.add[..]
     }
 
     pub fn subs(&self) -> &[FeatureUpdate] {
-        &self.sub[..self.sub_count as usize]
+        &self.sub[..]
     }
 }
 
@@ -474,7 +444,6 @@ impl NNUEState {
                 white_king,
                 black_king,
                 pov_update,
-                self.accumulators[curr_index].update_buffer,
                 curr_index + 1,
             );
 
@@ -509,14 +478,13 @@ impl NNUEState {
         white_king: Square,
         black_king: Square,
         pov_update: PovUpdate,
-        update_buffer: UpdateBuffer,
         create_at_idx: usize,
     ) {
         let (front, back) = self.accumulators.split_at_mut(create_at_idx);
         let src = front.last().unwrap();
         let tgt = back.first_mut().unwrap();
 
-        match (update_buffer.adds(), update_buffer.subs()) {
+        match (src.update_buffer.adds(), src.update_buffer.subs()) {
             // quiet or promotion
             (&[add], &[sub]) => {
                 Self::apply_quiet(white_king, black_king, add, sub, pov_update, src, tgt);
@@ -529,7 +497,7 @@ impl NNUEState {
             (&[add1, add2], &[sub1, sub2]) => {
                 Self::apply_castling(white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt);
             }
-            (_, _) => panic!("invalid update buffer: {update_buffer:?}"),
+            (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
         }
     }
 
