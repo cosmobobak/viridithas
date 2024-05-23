@@ -3,7 +3,7 @@
 use crate::{
     board::Board,
     chessmove::Move,
-    piece::{Colour, PieceType},
+    piece::{Colour, Piece, PieceType},
     search::draw_score,
     threadlocal::ThreadData,
     util::MAX_DEPTH,
@@ -51,12 +51,12 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
 }
 
 impl Board {
-    const fn material_scale(&self) -> i32 {
+    fn material_scale(&self) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        700 + (PieceType::KNIGHT.see_value() * self.pieces.all_knights().count() as i32
-            + PieceType::BISHOP.see_value() * self.pieces.all_bishops().count() as i32
-            + PieceType::ROOK.see_value() * self.pieces.all_rooks().count() as i32
-            + PieceType::QUEEN.see_value() * self.pieces.all_queens().count() as i32)
+        700 + (PieceType::Knight.see_value() * self.pieces.all_knights().count() as i32
+            + PieceType::Bishop.see_value() * self.pieces.all_bishops().count() as i32
+            + PieceType::Rook.see_value() * self.pieces.all_rooks().count() as i32
+            + PieceType::Queen.see_value() * self.pieces.all_queens().count() as i32)
             / 32
     }
 
@@ -109,14 +109,14 @@ impl Board {
 
     pub fn estimated_see(&self, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = self.piece_at(m.to()).piece_type().see_value();
+        let mut value = self.piece_at(m.to()).map_or(0, |p| PieceType::see_value(Piece::piece_type(p)));
 
-        if m.is_promo() {
+        if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += m.promotion_type().see_value() - PieceType::PAWN.see_value();
+            value += promo.see_value() - PieceType::Pawn.see_value();
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = PieceType::PAWN.see_value();
+            value = PieceType::Pawn.see_value();
         }
 
         value

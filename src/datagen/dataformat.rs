@@ -160,12 +160,12 @@ impl Game {
                 let bitboard = &board.pieces;
                 bbs[0] = bitboard.occupied_co(Colour::WHITE).inner();
                 bbs[1] = bitboard.occupied_co(Colour::BLACK).inner();
-                bbs[2] = bitboard.of_type(PieceType::PAWN).inner();
-                bbs[3] = bitboard.of_type(PieceType::KNIGHT).inner();
-                bbs[4] = bitboard.of_type(PieceType::BISHOP).inner();
-                bbs[5] = bitboard.of_type(PieceType::ROOK).inner();
-                bbs[6] = bitboard.of_type(PieceType::QUEEN).inner();
-                bbs[7] = bitboard.of_type(PieceType::KING).inner();
+                bbs[2] = bitboard.of_type(PieceType::Pawn).inner();
+                bbs[3] = bitboard.of_type(PieceType::Knight).inner();
+                bbs[4] = bitboard.of_type(PieceType::Bishop).inner();
+                bbs[5] = bitboard.of_type(PieceType::Rook).inner();
+                bbs[6] = bitboard.of_type(PieceType::Queen).inner();
+                bbs[7] = bitboard.of_type(PieceType::King).inner();
                 callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,

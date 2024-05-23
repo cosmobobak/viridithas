@@ -75,13 +75,13 @@ impl Board {
             ));
         }
 
-        if self.piece_at(self.king_sq(Colour::WHITE)) != Piece::WK {
+        if self.piece_at(self.king_sq(Colour::WHITE)) != Some(Piece::WK) {
             return Err(format!(
                 "white king square is corrupt: expected white king, got {:?}",
                 self.piece_at(self.king_sq(Colour::WHITE))
             ));
         }
-        if self.piece_at(self.king_sq(Colour::BLACK)) != Piece::BK {
+        if self.piece_at(self.king_sq(Colour::BLACK)) != Some(Piece::BK) {
             return Err(format!(
                 "black king square is corrupt: expected black king, got {:?}",
                 self.piece_at(self.king_sq(Colour::BLACK))

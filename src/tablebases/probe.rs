@@ -134,15 +134,15 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
         let promotion = (result & TB_RESULT_PROMOTES_MASK) >> TB_RESULT_PROMOTES_SHIFT;
 
         let promo_piece_type = match promotion {
-            TB_PROMOTES_QUEEN => PieceType::QUEEN,
-            TB_PROMOTES_ROOK => PieceType::ROOK,
-            TB_PROMOTES_BISHOP => PieceType::BISHOP,
-            TB_PROMOTES_KNIGHT => PieceType::KNIGHT,
-            _ => PieceType::NONE,
+            TB_PROMOTES_QUEEN => Some(PieceType::Queen),
+            TB_PROMOTES_ROOK => Some(PieceType::Rook),
+            TB_PROMOTES_BISHOP => Some(PieceType::Bishop),
+            TB_PROMOTES_KNIGHT => Some(PieceType::Knight),
+            _ => None,
         };
 
         for &m in moves.iter_moves() {
-            if m.from() == from && m.to() == to && (promotion == 0 || m.safe_promotion_type() == promo_piece_type) {
+            if m.from() == from && m.to() == to && (promotion == 0 || m.promotion_type() == promo_piece_type) {
                 return Some(WdlDtzResult { wdl, dtz, best_move: m });
             }
         }

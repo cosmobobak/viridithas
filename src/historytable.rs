@@ -47,14 +47,12 @@ impl HistoryTable {
         self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub const fn get(&self, piece: Piece, sq: Square) -> i16 {
-        let pt = piece.hist_table_offset();
-        self.table[pt][sq.index()]
+    pub fn get(&self, piece: Piece, sq: Square) -> i16 {
+        self.table[piece][sq.index()]
     }
 
     pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        let pt = piece.hist_table_offset();
-        &mut self.table[pt][sq.index()]
+        &mut self.table[piece][sq.index()]
     }
 }
 
@@ -119,12 +117,12 @@ impl CaptureHistoryTable {
         self.table.iter_mut().for_each(HistoryTable::age_entries);
     }
 
-    pub const fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
-        self.table[capture.index()].get(piece, sq)
+    pub fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
+        self.table[capture].get(piece, sq)
     }
 
     pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
-        self.table[capture.index()].get_mut(piece, sq)
+        self.table[capture].get_mut(piece, sq)
     }
 }
 
@@ -132,12 +130,6 @@ impl CaptureHistoryTable {
 pub struct ContHistIndex {
     pub piece: Piece,
     pub square: Square,
-}
-
-impl Default for ContHistIndex {
-    fn default() -> Self {
-        Self { piece: Piece::EMPTY, square: Square::NO_SQUARE }
-    }
 }
 
 #[allow(clippy::large_stack_frames)]
@@ -172,43 +164,33 @@ impl DoubleHistoryTable {
     }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        let pt = index.piece.hist_table_offset();
-        &mut self.table[pt][index.square.index()]
+        &mut self.table[index.piece][index.square.index()]
     }
 
-    pub const fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        let pt = index.piece.hist_table_offset();
-        &self.table[pt][index.square.index()]
+    pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
+        &self.table[index.piece][index.square.index()]
     }
 }
 
 #[derive(Clone)]
 pub struct MoveTable {
-    table: Vec<Option<Move>>,
+    table: Box<[[Option<Move>; BOARD_N_SQUARES]; 12]>,
 }
 
 impl MoveTable {
-    pub const fn new() -> Self {
-        Self { table: Vec::new() }
+    pub fn new() -> Self {
+        Self { table: Box::new([[None; BOARD_N_SQUARES]; 12]) }
     }
 
     pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table.resize(BOARD_N_SQUARES * 12, None);
-        } else {
-            self.table.fill(None);
-        }
+        self.table.iter_mut().for_each(|t| t.fill(None));
     }
 
     pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
-        let pt = piece.hist_table_offset();
-        let sq = sq.index();
-        self.table[pt * BOARD_N_SQUARES + sq] = Some(m);
+        self.table[piece][sq.index()] = Some(m);
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> Option<Move> {
-        let pt = piece.hist_table_offset();
-        let sq = sq.index();
-        self.table[pt * BOARD_N_SQUARES + sq]
+        self.table[piece][sq.index()]
     }
 }

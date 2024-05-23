@@ -127,22 +127,22 @@ impl Board {
             // in quiescence search, we only generate promotions to queen.
             for from in attacking_west & promo_rank & valid_west {
                 let to = if C::WHITE { from.add(7) } else { from.sub(9) };
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
+                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             }
             for from in attacking_east & promo_rank & valid_east {
                 let to = if C::WHITE { from.add(9) } else { from.sub(7) };
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::QUEEN));
+                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             }
         } else {
             for from in attacking_west & promo_rank & valid_west {
                 let to = if C::WHITE { from.add(7) } else { from.sub(9) };
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in [PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
             for from in attacking_east & promo_rank & valid_east {
                 let to = if C::WHITE { from.add(9) } else { from.sub(7) };
-                for promo in [PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT] {
+                for promo in [PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -192,7 +192,7 @@ impl Board {
         }
         for sq in promoting_pawns & shifted_valid_squares {
             let to = if C::WHITE { sq.add(8) } else { sq.sub(8) };
-            for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
+            for promo in [PieceType::Queen, PieceType::Knight, PieceType::Rook, PieceType::Bishop] {
                 move_list.push::<true>(Move::new_with_promo(sq, to, promo));
             }
         }
@@ -213,9 +213,9 @@ impl Board {
             let to = if C::WHITE { sq.add(8) } else { sq.sub(8) };
             if Mode::CAPTURES_ONLY {
                 // in quiescence search, we only generate promotions to queen.
-                move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::QUEEN));
+                move_list.push::<true>(Move::new_with_promo(sq, to, PieceType::Queen));
             } else {
-                for promo in [PieceType::QUEEN, PieceType::KNIGHT, PieceType::ROOK, PieceType::BISHOP] {
+                for promo in [PieceType::Queen, PieceType::Knight, PieceType::Rook, PieceType::Bishop] {
                     move_list.push::<true>(Move::new_with_promo(sq, to, promo));
                 }
             }

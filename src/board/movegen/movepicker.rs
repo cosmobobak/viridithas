@@ -225,7 +225,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
-        const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
+        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
         // zero-out the ordering scores
         for m in &mut *moves {
             m.score = 0;
@@ -233,7 +233,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
 
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
-            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov).index()];
+            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov)];
             if pos.static_exchange_eval(*mov, see_threshold) {
                 *score += WINNING_CAPTURE_SCORE;
             }

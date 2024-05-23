@@ -18,15 +18,21 @@ macro_rules! cfor {
     }
 }
 
-const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
+const fn init_hash_keys() -> ([[u64; 64]; 12], [u64; 64], [u64; 16], u64) {
     let mut state = XorShiftState::new();
-    let mut piece_keys = [[0; 64]; 13];
-    cfor!(let mut index = 0; index < 13; index += 1; {
+    let mut piece_keys = [[0; 64]; 12];
+    cfor!(let mut index = 0; index < 12; index += 1; {
         cfor!(let mut sq = 0; sq < 64; sq += 1; {
             let key;
             (key, state) = state.next_self();
             piece_keys[index][sq] = key;
         });
+    });
+    let mut ep_keys = [0; 64];
+    cfor!(let mut sq = 0; sq < 64; sq += 1; {
+        let key;
+        (key, state) = state.next_self();
+        ep_keys[sq] = key;
     });
     let mut castle_keys = [0; 16];
     cfor!(let mut index = 0; index < 16; index += 1; {
@@ -37,12 +43,13 @@ const fn init_hash_keys() -> ([[u64; 64]; 13], [u64; 16], u64) {
     let key;
     (key, _) = state.next_self();
     let side_key = key;
-    (piece_keys, castle_keys, side_key)
+    (piece_keys, ep_keys, castle_keys, side_key)
 }
 
-pub static PIECE_KEYS: [[u64; 64]; 13] = init_hash_keys().0;
-pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().1;
-pub const SIDE_KEY: u64 = init_hash_keys().2;
+pub static PIECE_KEYS: [[u64; 64]; 12] = init_hash_keys().0;
+pub static EP_KEYS: [u64; 64] = init_hash_keys().1;
+pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().2;
+pub const SIDE_KEY: u64 = init_hash_keys().3;
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];

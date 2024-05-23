@@ -1228,7 +1228,8 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        let mut next_victim = if m.is_promo() { m.promotion_type() } else { self.piece_at(from).piece_type() };
+        let mut next_victim =
+            m.promotion_type().map_or_else(|| self.piece_at(from).unwrap().piece_type(), |promo| promo);
 
         let mut balance = self.estimated_see(m) - threshold;
 
@@ -1276,12 +1277,12 @@ impl Board {
             occupied ^= (my_attackers & self.pieces.of_type(next_victim)).first().as_set();
 
             // diagonal moves reveal bishops and queens:
-            if next_victim == PieceType::PAWN || next_victim == PieceType::BISHOP || next_victim == PieceType::QUEEN {
+            if next_victim == PieceType::Pawn || next_victim == PieceType::Bishop || next_victim == PieceType::Queen {
                 attackers |= bitboards::bishop_attacks(to, occupied) & diag_sliders;
             }
 
             // orthogonal moves reveal rooks and queens:
-            if next_victim == PieceType::ROOK || next_victim == PieceType::QUEEN {
+            if next_victim == PieceType::Rook || next_victim == PieceType::Queen {
                 attackers |= bitboards::rook_attacks(to, occupied) & orth_sliders;
             }
 
@@ -1296,7 +1297,7 @@ impl Board {
                 // As a slight optimisation for move legality checking, if our last attacking
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
-                if next_victim == PieceType::KING && (attackers & self.pieces.occupied_co(colour)).non_empty() {
+                if next_victim == PieceType::King && (attackers & self.pieces.occupied_co(colour)).non_empty() {
                     colour = colour.flip();
                 }
                 break;

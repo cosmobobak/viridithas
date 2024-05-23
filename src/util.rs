@@ -317,9 +317,9 @@ pub struct Undo {
     pub ep_square: Square,
     pub fifty_move_counter: u8,
     pub threats: Threats,
-    pub cont_hist_index: ContHistIndex,
+    pub cont_hist_index: Option<ContHistIndex>,
     pub bitboard: BitBoard,
-    pub piece_array: [Piece; 64],
+    pub piece_array: [Option<Piece>; 64],
     pub key: u64,
 }
 
@@ -330,9 +330,9 @@ impl Default for Undo {
             ep_square: Square::NO_SQUARE,
             fifty_move_counter: 0,
             threats: Threats { all: SquareSet::EMPTY, checkers: SquareSet::EMPTY },
-            cont_hist_index: ContHistIndex::default(),
+            cont_hist_index: None,
             bitboard: BitBoard::NULL,
-            piece_array: [Piece::EMPTY; 64],
+            piece_array: [None; 64],
             key: 0,
         }
     }

@@ -194,7 +194,7 @@ pub struct FeatureUpdate {
 }
 
 impl FeatureUpdate {
-    const NULL: Self = Self { sq: Square::NO_SQUARE, piece: Piece::EMPTY };
+    const NULL: Self = Self { sq: Square::A1, piece: Piece::WP };
 }
 
 impl Display for FeatureUpdate {
@@ -287,7 +287,7 @@ impl BucketAccumulatorCache {
             // verify all the cached board states make sense
             for colour in Colour::all() {
                 for bucket in 0..BUCKETS {
-                    let cached_board_state = self.board_states[colour.index()][bucket];
+                    let cached_board_state = self.board_states[colour][bucket];
                     if cached_board_state == unsafe { std::mem::zeroed() } {
                         continue;
                     }
@@ -313,7 +313,7 @@ impl BucketAccumulatorCache {
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
-        self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
+        self.board_states[side_we_care_about][bucket].update_iter(board_state, |f, is_add| {
             let (white_idx, black_idx) = feature::indices(wk, bk, f);
             let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
             if is_add {
@@ -328,9 +328,9 @@ impl BucketAccumulatorCache {
         simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
         simd::copy(cache_acc, acc.select_mut(side_we_care_about));
-        acc.correct[side_we_care_about.index()] = true;
+        acc.correct[side_we_care_about] = true;
 
-        self.board_states[side_we_care_about.index()][bucket] = board_state;
+        self.board_states[side_we_care_about][bucket] = board_state;
     }
 }
 
@@ -428,7 +428,7 @@ impl NNUEState {
     }
 
     fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
-        if piece.piece_type() != PieceType::KING {
+        if piece.piece_type() != PieceType::King {
             return false;
         }
 
@@ -449,7 +449,7 @@ impl NNUEState {
             if piece.colour() == view && Self::requires_refresh(piece, from, to) {
                 return false;
             }
-            if curr.correct[view.index()] {
+            if curr.correct[view] {
                 return true;
             }
         }
@@ -460,7 +460,7 @@ impl NNUEState {
         loop {
             curr_index -= 1;
 
-            if self.accumulators[curr_index].correct[view.index()] {
+            if self.accumulators[curr_index].correct[view] {
                 break;
             }
         }
@@ -478,7 +478,7 @@ impl NNUEState {
                 curr_index + 1,
             );
 
-            self.accumulators[curr_index + 1].correct[view.index()] = true;
+            self.accumulators[curr_index + 1].correct[view] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -490,7 +490,7 @@ impl NNUEState {
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
     pub fn force(&mut self, board: &Board) {
         for colour in Colour::all() {
-            if !self.accumulators[self.current_acc].correct[colour.index()] {
+            if !self.accumulators[self.current_acc].correct[colour] {
                 if self.can_efficiently_update(colour) {
                     self.apply_lazy_updates(board, colour);
                 } else {

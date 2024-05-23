@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Index, IndexMut},
+};
 
 pub trait Col {
     type Opposite: Col;
@@ -45,74 +48,39 @@ impl Display for Colour {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PieceType {
-    v: u8,
-}
-
-impl Debug for PieceType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.v {
-            0 => write!(f, "PieceType::PAWN"),
-            1 => write!(f, "PieceType::KNIGHT"),
-            2 => write!(f, "PieceType::BISHOP"),
-            3 => write!(f, "PieceType::ROOK"),
-            4 => write!(f, "PieceType::QUEEN"),
-            5 => write!(f, "PieceType::KING"),
-            6 => write!(f, "PieceType::NO_PIECE_TYPE"),
-            _ => write!(f, "PieceType::INVALID({})", self.v),
-        }
-    }
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum PieceType {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
 }
 
 impl Display for PieceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.v {
-            0 => write!(f, "Pawn"),
-            1 => write!(f, "Knight"),
-            2 => write!(f, "Bishop"),
-            3 => write!(f, "Rook"),
-            4 => write!(f, "Queen"),
-            5 => write!(f, "King"),
-            6 => write!(f, "NoPieceType"),
-            _ => write!(f, "?"),
+        match self {
+            Self::Pawn => write!(f, "Pawn"),
+            Self::Knight => write!(f, "Knight"),
+            Self::Bishop => write!(f, "Bishop"),
+            Self::Rook => write!(f, "Rook"),
+            Self::Queen => write!(f, "Queen"),
+            Self::King => write!(f, "King"),
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Piece {
-    v: u8,
-}
-
-impl Debug for Piece {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.v {
-            0 => write!(f, "Piece::WHITE_PAWN"),
-            1 => write!(f, "Piece::WHITE_KNIGHT"),
-            2 => write!(f, "Piece::WHITE_BISHOP"),
-            3 => write!(f, "Piece::WHITE_ROOK"),
-            4 => write!(f, "Piece::WHITE_QUEEN"),
-            5 => write!(f, "Piece::WHITE_KING"),
-            6 => write!(f, "Piece::BLACK_PAWN"),
-            7 => write!(f, "Piece::BLACK_KNIGHT"),
-            8 => write!(f, "Piece::BLACK_BISHOP"),
-            9 => write!(f, "Piece::BLACK_ROOK"),
-            10 => write!(f, "Piece::BLACK_QUEEN"),
-            11 => write!(f, "Piece::BLACK_KING"),
-            12 => write!(f, "Piece::EMPTY"),
-            _ => write!(f, "Piece::INVALID({})", self.v),
-        }
-    }
+#[rustfmt::skip]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Piece {
+    WP, WN, WB, WR, WQ, WK,
+    BP, BN, BB, BR, BQ, BK,
 }
 
 impl Display for Piece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.v {
-            0..=11 => write!(f, "{}", self.char().unwrap()),
-            12 => write!(f, "."),
-            _ => write!(f, "?"),
-        }
+        write!(f, "{}", self.char())
     }
 }
 
@@ -142,33 +110,33 @@ impl Colour {
 }
 
 impl PieceType {
-    pub const PAWN: Self = Self { v: 0 };
-    pub const KNIGHT: Self = Self { v: 1 };
-    pub const BISHOP: Self = Self { v: 2 };
-    pub const ROOK: Self = Self { v: 3 };
-    pub const QUEEN: Self = Self { v: 4 };
-    pub const KING: Self = Self { v: 5 };
-    pub const NONE: Self = Self { v: 6 };
+    pub const fn new(v: u8) -> Option<Self> {
+        if v < 6 {
+            Some(unsafe { std::mem::transmute(v) })
+        } else {
+            None
+        }
+    }
 
-    pub const fn new(v: u8) -> Self {
-        debug_assert!(v < 7);
-        Self { v }
+    pub const unsafe fn from_index_unchecked(v: u8) -> Self {
+        std::mem::transmute(v)
     }
 
     pub const fn inner(self) -> u8 {
-        self.v
+        self as u8
     }
 
     pub const fn legal_promo(self) -> bool {
-        self.v == Self::QUEEN.v || self.v == Self::KNIGHT.v || self.v == Self::BISHOP.v || self.v == Self::ROOK.v
+        // self == Self::QUEEN || self == Self::KNIGHT || self == Self::BISHOP || self == Self::ROOK
+        matches!(self, Self::Queen | Self::Knight | Self::Bishop | Self::Rook)
     }
 
     pub const fn promo_char(self) -> Option<char> {
         match self {
-            Self::QUEEN => Some('q'),
-            Self::KNIGHT => Some('n'),
-            Self::BISHOP => Some('b'),
-            Self::ROOK => Some('r'),
+            Self::Queen => Some('q'),
+            Self::Knight => Some('n'),
+            Self::Bishop => Some('b'),
+            Self::Rook => Some('r'),
             _ => None,
         }
     }
@@ -178,17 +146,17 @@ impl PieceType {
     }
 
     pub const fn index(self) -> usize {
-        self.v as usize
+        self as usize
     }
 
     pub fn from_symbol(c: u8) -> Option<Self> {
         const SYMBOLS: [u8; 7] = *b"PNBRQK.";
-        SYMBOLS.iter().position(|&x| x == c).and_then(|x| Some(Self::new(x.try_into().ok()?)))
+        SYMBOLS.iter().position(|&x| x == c).and_then(|x| Self::new(x.try_into().ok()?))
     }
 
-    pub const fn see_value(self) -> i32 {
-        const SEE_PIECE_VALUES: [i32; 7] = [161, 445, 463, 704, 1321, 0, 0];
-        SEE_PIECE_VALUES[self.index()]
+    pub fn see_value(self) -> i32 {
+        const SEE_PIECE_VALUES: [i32; 6] = [161, 445, 463, 704, 1321, 0];
+        SEE_PIECE_VALUES[self]
     }
 }
 
@@ -206,40 +174,28 @@ impl Iterator for PieceTypesIterator {
     type Item = PieceType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.v == 6 {
-            None
-        } else {
-            let v = self.v;
-            self.v += 1;
-            Some(PieceType::new(v))
-        }
+        let v = self.v;
+        self.v += 1;
+        PieceType::new(v)
     }
 }
 
 impl Piece {
-    pub const WP: Self = Self::new(Colour::WHITE, PieceType::PAWN);
-    pub const WN: Self = Self::new(Colour::WHITE, PieceType::KNIGHT);
-    pub const WB: Self = Self::new(Colour::WHITE, PieceType::BISHOP);
-    pub const WR: Self = Self::new(Colour::WHITE, PieceType::ROOK);
-    pub const WQ: Self = Self::new(Colour::WHITE, PieceType::QUEEN);
-    pub const WK: Self = Self::new(Colour::WHITE, PieceType::KING);
-
-    pub const BP: Self = Self::new(Colour::BLACK, PieceType::PAWN);
-    pub const BN: Self = Self::new(Colour::BLACK, PieceType::KNIGHT);
-    pub const BB: Self = Self::new(Colour::BLACK, PieceType::BISHOP);
-    pub const BR: Self = Self::new(Colour::BLACK, PieceType::ROOK);
-    pub const BQ: Self = Self::new(Colour::BLACK, PieceType::QUEEN);
-    pub const BK: Self = Self::new(Colour::BLACK, PieceType::KING);
-
-    pub const EMPTY: Self = Self { v: 12 };
-
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
-        debug_assert!(piece_type.v < 7);
-        Self { v: colour.v as u8 * 6 + piece_type.v }
+        let index = colour.v as u8 * 6 + piece_type as u8;
+        unsafe { std::mem::transmute(index) }
+    }
+
+    pub const fn from_index(v: u8) -> Option<Self> {
+        if v < 12 {
+            unsafe { std::mem::transmute(v) }
+        } else {
+            None
+        }
     }
 
     pub const fn colour(self) -> Colour {
-        if self.v < 6 {
+        if (self as u8) < 6 {
             Colour::WHITE
         } else {
             Colour::BLACK
@@ -247,41 +203,31 @@ impl Piece {
     }
 
     pub const fn piece_type(self) -> PieceType {
+        // TODO: potential optimisation available.
         match self {
-            Self::WP | Self::BP => PieceType::PAWN,
-            Self::WN | Self::BN => PieceType::KNIGHT,
-            Self::WB | Self::BB => PieceType::BISHOP,
-            Self::WR | Self::BR => PieceType::ROOK,
-            Self::WQ | Self::BQ => PieceType::QUEEN,
-            Self::WK | Self::BK => PieceType::KING,
-            _ => PieceType::NONE,
+            Self::WP | Self::BP => PieceType::Pawn,
+            Self::WN | Self::BN => PieceType::Knight,
+            Self::WB | Self::BB => PieceType::Bishop,
+            Self::WR | Self::BR => PieceType::Rook,
+            Self::WQ | Self::BQ => PieceType::Queen,
+            Self::WK | Self::BK => PieceType::King,
         }
     }
 
-    pub const fn index(self) -> usize {
-        self.v as usize
-    }
-
-    pub const fn hist_table_offset(self) -> usize {
-        debug_assert!(!self.is_empty());
-        self.v as usize
-    }
-
-    pub const fn char(self) -> Option<char> {
+    pub const fn char(self) -> char {
         match self {
-            Self::WP => Some('P'),
-            Self::WN => Some('N'),
-            Self::WB => Some('B'),
-            Self::WR => Some('R'),
-            Self::WQ => Some('Q'),
-            Self::WK => Some('K'),
-            Self::BP => Some('p'),
-            Self::BN => Some('n'),
-            Self::BB => Some('b'),
-            Self::BR => Some('r'),
-            Self::BQ => Some('q'),
-            Self::BK => Some('k'),
-            _ => None,
+            Self::WP => 'P',
+            Self::WN => 'N',
+            Self::WB => 'B',
+            Self::WR => 'R',
+            Self::WQ => 'Q',
+            Self::WK => 'K',
+            Self::BP => 'p',
+            Self::BN => 'n',
+            Self::BB => 'b',
+            Self::BR => 'r',
+            Self::BQ => 'q',
+            Self::BK => 'k',
         }
     }
 
@@ -299,12 +245,7 @@ impl Piece {
             Self::BR => b'r',
             Self::BQ => b'q',
             Self::BK => b'k',
-            _ => b'.',
         }
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.v == Self::EMPTY.v
     }
 
     #[allow(dead_code)]
@@ -314,7 +255,7 @@ impl Piece {
 
     #[allow(dead_code)]
     pub const fn inner(self) -> u8 {
-        self.v
+        self as u8
     }
 }
 
@@ -332,12 +273,56 @@ impl Iterator for PiecesIterator {
     type Item = Piece;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.v == 12 {
-            None
-        } else {
-            let v = self.v;
-            self.v += 1;
-            Some(Piece { v })
-        }
+        let v = self.v;
+        self.v += 1;
+        Piece::from_index(v)
+    }
+}
+
+impl<T> Index<Colour> for [T; 2] {
+    type Output = T;
+
+    fn index(&self, index: Colour) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(usize::from(index.v)) }
+    }
+}
+
+impl<T> IndexMut<Colour> for [T; 2] {
+    fn index_mut(&mut self, index: Colour) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(usize::from(index.v)) }
+    }
+}
+
+impl<T> Index<PieceType> for [T; 6] {
+    type Output = T;
+
+    fn index(&self, index: PieceType) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(index as usize) }
+    }
+}
+
+impl<T> IndexMut<PieceType> for [T; 6] {
+    fn index_mut(&mut self, index: PieceType) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(index as usize) }
+    }
+}
+
+impl<T> Index<Piece> for [T; 12] {
+    type Output = T;
+
+    fn index(&self, index: Piece) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(index as usize) }
+    }
+}
+
+impl<T> IndexMut<Piece> for [T; 12] {
+    fn index_mut(&mut self, index: Piece) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(index as usize) }
     }
 }

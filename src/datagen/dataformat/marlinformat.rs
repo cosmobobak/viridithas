@@ -14,7 +14,7 @@ use crate::board::GameOutcome;
 
 use crate::piece::PieceType;
 
-const UNMOVED_ROOK: u8 = PieceType::NONE.inner();
+const UNMOVED_ROOK: u8 = 6; // one higher than the max piecetype enum value
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -43,13 +43,13 @@ impl PackedBoard {
 
         let mut pieces = util::U4Array32::default();
         for (i, sq) in occupancy.iter().enumerate() {
-            let piece = board.piece_at(sq);
+            let piece = board.piece_at(sq).unwrap();
             let piece_type = piece.piece_type();
             let colour = piece.colour();
 
             let mut piece_code = piece_type.inner();
             let rank1 = if colour == Colour::WHITE { Rank::RANK_1 } else { Rank::RANK_8 };
-            if piece_type == PieceType::ROOK && sq.rank() == rank1 {
+            if piece_type == PieceType::Rook && sq.rank() == rank1 {
                 let castling_sq = if board.king_sq(colour) < sq {
                     board.castling_rights().kingside(colour)
                 } else {
@@ -87,17 +87,17 @@ impl PackedBoard {
             let piece_code = self.pieces.get(i) & 0b0111;
             let piece_type = match piece_code {
                 UNMOVED_ROOK => {
-                    if seen_king[colour.index()] {
+                    if seen_king[colour] {
                         *builder.castling_rights_mut().kingside_mut(colour) = sq;
                     } else {
                         *builder.castling_rights_mut().queenside_mut(colour) = sq;
                     }
-                    PieceType::ROOK
+                    PieceType::Rook
                 }
-                _ => PieceType::new(piece_code),
+                _ => PieceType::new(piece_code).unwrap(),
             };
-            if piece_type == PieceType::KING {
-                seen_king[colour.index()] = true;
+            if piece_type == PieceType::King {
+                seen_king[colour] = true;
             }
             builder.add_piece(sq, Piece::new(colour, piece_type));
         }

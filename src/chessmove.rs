@@ -38,9 +38,8 @@ impl Move {
     pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
-        debug_assert_ne!(promotion, PieceType::NONE, "attempted to construct promotion to none");
-        debug_assert_ne!(promotion, PieceType::PAWN, "attempted to construct promotion to pawn");
-        debug_assert_ne!(promotion, PieceType::KING, "attempted to construct promotion to king");
+        debug_assert_ne!(promotion, PieceType::Pawn, "attempted to construct promotion to pawn");
+        debug_assert_ne!(promotion, PieceType::King, "attempted to construct promotion to king");
         let promotion = u16::from(promotion.inner()).wrapping_sub(1) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
         let data = u16::from(from)
             | (u16::from(to) << Self::TO_SHIFT)
@@ -82,18 +81,16 @@ impl Move {
         Square::new(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8)
     }
 
-    pub fn promotion_type(self) -> PieceType {
-        debug_assert!(self.is_promo());
-        let output = PieceType::new(((self.data.get() >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1);
-        debug_assert!(output.legal_promo());
-        output
-    }
-
-    pub fn safe_promotion_type(self) -> PieceType {
+    pub fn promotion_type(self) -> Option<PieceType> {
         if self.is_promo() {
-            self.promotion_type()
+            // SAFETY: out-of-range values are made impossible by the mask.
+            let output = unsafe {
+                PieceType::from_index_unchecked(((self.data.get() >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1)
+            };
+            debug_assert!(output.legal_promo());
+            Some(output)
         } else {
-            PieceType::NONE
+            None
         }
     }
 
@@ -134,12 +131,12 @@ impl Move {
     }
 
     pub fn is_valid(self) -> bool {
-        let promotion = self.safe_promotion_type();
-        if promotion != PieceType::NONE && !self.is_promo() {
+        let promotion = self.promotion_type();
+        if promotion.is_some() && !self.is_promo() {
             // promotion type is set but not a promotion move
             return false;
         }
-        promotion == PieceType::NONE || promotion.legal_promo()
+        promotion.is_none() || promotion.unwrap().legal_promo()
     }
 
     pub const fn inner(self) -> u16 {
@@ -154,8 +151,8 @@ impl Move {
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if CHESS960.load(Ordering::Relaxed) {
-            if self.is_promo() {
-                let pchar = self.promotion_type().promo_char().unwrap_or('?');
+            if let Some(promo) = self.promotion_type() {
+                let pchar = promo.promo_char().unwrap_or('?');
                 write!(f, "{}{}{pchar}", self.from(), self.to())?;
             } else {
                 write!(f, "{}{}", self.from(), self.to())?;
@@ -172,8 +169,8 @@ impl Display for Move {
                     _ => unreachable!(),
                 }
             }
-            if self.is_promo() {
-                let pchar = self.promotion_type().promo_char().unwrap_or('?');
+            if let Some(promo) = self.promotion_type() {
+                let pchar = promo.promo_char().unwrap_or('?');
                 write!(f, "{}{}{}", self.from(), to, pchar)?;
             } else {
                 write!(f, "{}{}", self.from(), to)?;
@@ -193,7 +190,7 @@ impl Debug for Move {
             self.from(),
             self.to(),
             self.to(),
-            self.safe_promotion_type().promo_char().unwrap_or('X'),
+            self.promotion_type().and_then(PieceType::promo_char).unwrap_or('X'),
             self.is_promo(),
             self.is_ep(),
             self.is_castle()
@@ -219,7 +216,7 @@ mod tests {
     #[test]
     fn test_promotion() {
         use super::*;
-        let m = Move::new_with_promo(Square::A7, Square::A8, PieceType::QUEEN);
+        let m = Move::new_with_promo(Square::A7, Square::A8, PieceType::Queen);
         println!("{m:?}");
         println!("bitpattern: {:016b}", m.data);
         assert_eq!(m.from(), Square::A7);
@@ -227,7 +224,7 @@ mod tests {
         assert!(m.is_promo());
         assert!(!m.is_ep());
         assert!(!m.is_castle());
-        assert_eq!(m.promotion_type(), PieceType::QUEEN);
+        assert_eq!(m.promotion_type(), Some(PieceType::Queen));
         assert!(m.is_valid());
     }
 
