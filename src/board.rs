@@ -199,7 +199,6 @@ impl Board {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
         self.pieces.visit_pieces(|sq, piece| {
-            // TODO: potential issue with checking existence
             hash_piece(&mut key, piece, sq);
         });
 
