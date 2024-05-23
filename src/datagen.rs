@@ -368,6 +368,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
             let (score, best_move) =
                 board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
 
+            let Some(best_move) = best_move else {
+                println!("[WARNING!] search returned a null move as the best move!");
+                println!("[WARNING!] this occurred in position {}", board.fen());
+                continue 'generation_main_loop;
+            };
+
             game.add_move(best_move, score.try_into().unwrap());
 
             let abs_score = score.abs();
@@ -739,11 +745,11 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
         writeln!(output_buffer, "{header}\n").unwrap();
         let mut fullmoves = 0;
         for mv in game.moves() {
-            if fullmoves % 12 == 0 && board.turn() == Colour::WHITE {
+            if fullmoves % 12 == 0 && board.turn() == Colour::White {
                 writeln!(output_buffer).unwrap();
             }
             let san = board.san(mv).unwrap();
-            if board.turn() == Colour::WHITE {
+            if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
             } else {
                 fullmoves += 1;
@@ -810,8 +816,8 @@ impl Display for MaterialConfiguration {
 impl From<&Board> for MaterialConfiguration {
     fn from(board: &Board) -> Self {
         let mut mc = Self::default();
-        let white = board.pieces.occupied_co(Colour::WHITE);
-        let black = board.pieces.occupied_co(Colour::BLACK);
+        let white = board.pieces.occupied_co(Colour::White);
+        let black = board.pieces.occupied_co(Colour::Black);
         for piece in PieceType::all().take(5) {
             let pieces = board.pieces.of_type(piece);
             let white_pieces = pieces & white;
@@ -869,8 +875,8 @@ pub fn dataset_stats(dataset_path: &Path) {
             *stats.eval_counts.entry(evaluation).or_default() += 1;
             *stats.piece_counts.entry(u8::try_from(position.pieces.occupied().count()).unwrap()).or_default() += 1;
             *stats.material_counts.entry(MaterialConfiguration::from(position)).or_default() += 1;
-            *stats.pov_king_positions.entry(position.king_sq(Colour::WHITE)).or_default() += 1;
-            *stats.pov_king_positions.entry(position.king_sq(Colour::BLACK).flip_rank()).or_default() += 1;
+            *stats.pov_king_positions.entry(position.king_sq(Colour::White)).or_default() += 1;
+            *stats.pov_king_positions.entry(position.king_sq(Colour::Black).flip_rank()).or_default() += 1;
         });
         move_buffer = game.into_move_buffer();
 

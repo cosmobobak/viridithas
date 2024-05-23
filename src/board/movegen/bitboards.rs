@@ -5,7 +5,7 @@ use crate::{
     nnue::network::FeatureUpdate,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
-    util::Square,
+    util::{File, Rank, Square},
 };
 
 /// Iterator over the squares of a bitboard.
@@ -32,7 +32,7 @@ impl Iterator for BitLoop {
             #[allow(clippy::cast_possible_truncation)]
             let lsb: u8 = self.value.trailing_zeros() as u8;
             self.value &= self.value - 1;
-            Some(Square::new(lsb))
+            Some(unsafe { Square::new_unchecked(lsb) })
         }
     }
 }
@@ -77,16 +77,16 @@ impl BitBoard {
         self.all_pawns() & self.our_pieces::<C>()
     }
 
-    pub const fn occupied_co(&self, colour: Colour) -> SquareSet {
-        self.colours[colour.index()]
+    pub fn occupied_co(&self, colour: Colour) -> SquareSet {
+        self.colours[colour]
     }
 
-    pub const fn their_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::Opposite::COLOUR.index()]
+    pub fn their_pieces<C: Col>(&self) -> SquareSet {
+        self.colours[C::Opposite::COLOUR]
     }
 
-    pub const fn our_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::COLOUR.index()]
+    pub fn our_pieces<C: Col>(&self) -> SquareSet {
+        self.colours[C::COLOUR]
     }
 
     pub fn orthos<C: Col>(&self) -> SquareSet {
@@ -102,7 +102,7 @@ impl BitBoard {
     }
 
     pub fn occupied(&self) -> SquareSet {
-        self.colours[Colour::WHITE.index()] | self.colours[Colour::BLACK.index()]
+        self.colours[Colour::White] | self.colours[Colour::Black]
     }
 
     pub fn knights<C: Col>(&self) -> SquareSet {
@@ -121,28 +121,28 @@ impl BitBoard {
         self.all_queens() & self.our_pieces::<C>()
     }
 
-    pub const fn all_pawns(&self) -> SquareSet {
-        self.pieces[PieceType::PAWN.index()]
+    pub fn all_pawns(&self) -> SquareSet {
+        self.pieces[PieceType::Pawn]
     }
 
-    pub const fn all_knights(&self) -> SquareSet {
-        self.pieces[PieceType::KNIGHT.index()]
+    pub fn all_knights(&self) -> SquareSet {
+        self.pieces[PieceType::Knight]
     }
 
-    pub const fn all_bishops(&self) -> SquareSet {
-        self.pieces[PieceType::BISHOP.index()]
+    pub fn all_bishops(&self) -> SquareSet {
+        self.pieces[PieceType::Bishop]
     }
 
-    pub const fn all_rooks(&self) -> SquareSet {
-        self.pieces[PieceType::ROOK.index()]
+    pub fn all_rooks(&self) -> SquareSet {
+        self.pieces[PieceType::Rook]
     }
 
-    pub const fn all_queens(&self) -> SquareSet {
-        self.pieces[PieceType::QUEEN.index()]
+    pub fn all_queens(&self) -> SquareSet {
+        self.pieces[PieceType::Queen]
     }
 
-    pub const fn all_kings(&self) -> SquareSet {
-        self.pieces[PieceType::KING.index()]
+    pub fn all_kings(&self) -> SquareSet {
+        self.pieces[PieceType::King]
     }
 
     pub fn reset(&mut self) {
@@ -151,32 +151,32 @@ impl BitBoard {
 
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
         let from_to_bb = from.as_set() | to.as_set();
-        self.pieces[piece.piece_type().index()] ^= from_to_bb;
-        self.colours[piece.colour().index()] ^= from_to_bb;
+        self.pieces[piece.piece_type()] ^= from_to_bb;
+        self.colours[piece.colour()] ^= from_to_bb;
     }
 
     pub fn set_piece_at(&mut self, sq: Square, piece: Piece) {
         let sq_bb = sq.as_set();
-        self.pieces[piece.piece_type().index()] |= sq_bb;
-        self.colours[piece.colour().index()] |= sq_bb;
+        self.pieces[piece.piece_type()] |= sq_bb;
+        self.colours[piece.colour()] |= sq_bb;
     }
 
     pub fn clear_piece_at(&mut self, sq: Square, piece: Piece) {
         let sq_bb = sq.as_set();
-        self.pieces[piece.piece_type().index()] &= !sq_bb;
-        self.colours[piece.colour().index()] &= !sq_bb;
+        self.pieces[piece.piece_type()] &= !sq_bb;
+        self.colours[piece.colour()] &= !sq_bb;
     }
 
-    pub const fn any_pawns(&self) -> bool {
+    pub fn any_pawns(&self) -> bool {
         self.all_pawns().non_empty()
     }
 
-    pub const fn piece_bb(&self, piece: Piece) -> SquareSet {
-        SquareSet::intersection(self.pieces[piece.piece_type().index()], self.colours[piece.colour().index()])
+    pub fn piece_bb(&self, piece: Piece) -> SquareSet {
+        SquareSet::intersection(self.pieces[piece.piece_type()], self.colours[piece.colour()])
     }
 
-    pub const fn of_type(&self, piece_type: PieceType) -> SquareSet {
-        self.pieces[piece_type.index()]
+    pub fn of_type(&self, piece_type: PieceType) -> SquareSet {
+        self.pieces[piece_type]
     }
 
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
@@ -195,18 +195,18 @@ impl BitBoard {
             | king_attackers
     }
 
-    pub fn piece_at(&self, sq: Square) -> Piece {
+    pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         let sq_bb = sq.as_set();
         let colour = if (self.our_pieces::<White>() & sq_bb).non_empty() {
-            Colour::WHITE
+            Colour::White
         } else if (self.our_pieces::<Black>() & sq_bb).non_empty() {
-            Colour::BLACK
+            Colour::Black
         } else {
-            return Piece::EMPTY;
+            return None;
         };
         for piece in PieceType::all() {
-            if (self.pieces[piece.index()] & sq_bb).non_empty() {
-                return Piece::new(colour, piece);
+            if (self.pieces[piece] & sq_bb).non_empty() {
+                return Some(Piece::new(colour, piece));
             }
         }
         panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}");
@@ -231,8 +231,8 @@ impl BitBoard {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 let piece = Piece::new(colour, piece_type);
-                let source_bb = self.pieces[piece_type.index()] & self.colours[colour.index()];
-                let target_bb = target.pieces[piece_type.index()] & target.colours[colour.index()];
+                let source_bb = self.pieces[piece_type] & self.colours[colour];
+                let target_bb = target.pieces[piece_type] & target.colours[colour];
                 let added = target_bb & !source_bb;
                 let removed = source_bb & !target_bb;
                 for sq in added {
@@ -249,7 +249,7 @@ impl BitBoard {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 let piece = Piece::new(colour, piece_type);
-                let bb = self.pieces[piece_type.index()] & self.colours[colour.index()];
+                let bb = self.pieces[piece_type] & self.colours[colour];
                 for sq in bb {
                     callback(sq, piece);
                 }
@@ -259,20 +259,20 @@ impl BitBoard {
 
     /// Returns true if the current position *would* be a draw by insufficient material,
     /// if there were no pawns on the board.
-    pub const fn is_material_draw(&self) -> bool {
-        if self.of_type(PieceType::ROOK).is_empty() && self.of_type(PieceType::QUEEN).is_empty() {
-            if self.of_type(PieceType::BISHOP).is_empty() {
+    pub fn is_material_draw(&self) -> bool {
+        if self.of_type(PieceType::Rook).is_empty() && self.of_type(PieceType::Queen).is_empty() {
+            if self.of_type(PieceType::Bishop).is_empty() {
                 if self.piece_bb(Piece::WN).count() < 3 && self.piece_bb(Piece::BN).count() < 3 {
                     return true;
                 }
-            } else if (self.of_type(PieceType::KNIGHT).is_empty()
+            } else if (self.of_type(PieceType::Knight).is_empty()
                 && self.piece_bb(Piece::WB).count().abs_diff(self.piece_bb(Piece::BB).count()) < 2)
                 || SquareSet::union(self.piece_bb(Piece::WB), self.piece_bb(Piece::WN)).count() == 1
                     && SquareSet::union(self.piece_bb(Piece::BB), self.piece_bb(Piece::BN)).count() == 1
             {
                 return true;
             }
-        } else if self.of_type(PieceType::QUEEN).is_empty() {
+        } else if self.of_type(PieceType::Queen).is_empty() {
             if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).count() == 1 {
                 if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() < 2
                     && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count() < 2
@@ -324,12 +324,12 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
-        PieceType::BISHOP => magic::get_diagonal_attacks(sq, blockers),
-        PieceType::ROOK => magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::QUEEN => magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::KNIGHT => lookups::get_knight_attacks(sq),
-        PieceType::KING => lookups::get_king_attacks(sq),
-        _ => panic!("Invalid piece type: {pt:?}"),
+        PieceType::Bishop => magic::get_diagonal_attacks(sq, blockers),
+        PieceType::Rook => magic::get_orthogonal_attacks(sq, blockers),
+        PieceType::Queen => magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers),
+        PieceType::Knight => lookups::get_knight_attacks(sq),
+        PieceType::King => lookups::get_king_attacks(sq),
+        PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
     }
 }
 
@@ -344,13 +344,11 @@ pub struct Threats {
 
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for rank in (0..=7).rev() {
-            for file in 0..=7 {
+        for rank in Rank::ALL.into_iter().rev() {
+            for file in File::ALL {
                 let sq = Square::from_rank_file(rank, file);
-                let piece = self.piece_at(sq);
-                let piece_char = piece.char();
-                if let Some(symbol) = piece_char {
-                    write!(f, " {symbol}")?;
+                if let Some(piece) = self.piece_at(sq) {
+                    write!(f, " {}", piece.char())?;
                 } else {
                     write!(f, " .")?;
                 }

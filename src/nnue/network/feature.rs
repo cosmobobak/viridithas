@@ -19,12 +19,12 @@ impl FeatureIndex {
     }
 }
 
-pub const fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (FeatureIndex, FeatureIndex) {
+pub fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (FeatureIndex, FeatureIndex) {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
-    let white_sq = if white_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
-    let black_sq = if black_king.file() >= File::FILE_E { f.sq.flip_file() } else { f.sq };
+    let white_sq = if white_king.file() >= File::E { f.sq.flip_file() } else { f.sq };
+    let black_sq = if black_king.file() >= File::E { f.sq.flip_file() } else { f.sq };
 
     let piece_type = f.piece.piece_type().index();
     let colour = f.piece.colour().index();

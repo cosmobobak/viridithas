@@ -466,13 +466,6 @@ static ROOK_MAGICS: [u64; 64] = [
 
 #[allow(clippy::cast_possible_truncation)]
 pub fn get_diagonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let sq = sq.index();
-    if sq >= 64 {
-        unsafe {
-            // assert to the compiler that it's chill not to bounds-check
-            macros::inconceivable!();
-        }
-    }
     let relevant_blockers = blockers & BISHOP_MASKS[sq];
     let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
     let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
@@ -487,13 +480,6 @@ pub fn get_diagonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 
 #[allow(clippy::cast_possible_truncation)]
 pub fn get_orthogonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let sq = sq.index();
-    if sq >= 64 {
-        unsafe {
-            // assert to the compiler that it's chill not to bounds-check
-            macros::inconceivable!();
-        }
-    }
     let relevant_blockers = blockers & ROOK_MASKS[sq];
     let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
     let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;

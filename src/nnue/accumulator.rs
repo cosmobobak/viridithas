@@ -32,8 +32,8 @@ impl Accumulator {
     /// Select the buffer by colour.
     pub fn select_mut(&mut self, colour: Colour) -> &mut Align64<[i16; LAYER_1_SIZE]> {
         match colour {
-            Colour::WHITE => &mut self.white,
-            Colour::BLACK => &mut self.black,
+            Colour::White => &mut self.white,
+            Colour::Black => &mut self.black,
         }
     }
 }

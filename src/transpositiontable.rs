@@ -68,7 +68,7 @@ impl AgeAndFlag {
 #[repr(C)]
 pub struct TTEntry {
     pub key: u16,                   // 16 bits
-    pub m: Move,                    // 16 bits
+    pub m: Option<Move>,            // 16 bits
     pub score: i16,                 // 16 bits
     pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
@@ -81,7 +81,7 @@ const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 1
 impl TTEntry {
     pub const NULL: Self = Self {
         key: 0,
-        m: Move::NULL,
+        m: None,
         score: 0,
         depth: CompactDepthStorage::NULL,
         age_and_flag: AgeAndFlag::NULL,
@@ -121,7 +121,7 @@ pub struct TTView<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct TTHit {
-    pub mov: Move,
+    pub mov: Option<Move>,
     pub depth: Depth,
     pub bound: Bound,
     pub value: i32,
@@ -197,7 +197,16 @@ impl<'a> TTView<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn store(&self, key: u64, ply: usize, mut best_move: Move, score: i32, eval: i32, flag: Bound, depth: Depth) {
+    pub fn store(
+        &self,
+        key: u64,
+        ply: usize,
+        mut best_move: Option<Move>,
+        score: i32,
+        eval: i32,
+        flag: Bound,
+        depth: Depth,
+    ) {
         debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
         debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
@@ -210,7 +219,7 @@ impl<'a> TTView<'a> {
         let parts = [self.table[index][0].load(Ordering::Relaxed), self.table[index][1].load(Ordering::Relaxed)];
         let entry: TTEntry = parts.into();
 
-        if best_move.is_null() && entry.key == key {
+        if best_move.is_none() && entry.key == key {
             // if we don't have a best move, and the entry is for the same position,
             // then we should retain the best move from the previous entry.
             best_move = entry.m;
@@ -299,12 +308,8 @@ impl<'a> TTView<'a> {
         }
     }
 
-    pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Move, i32)> {
-        let result = self.probe(key, 0);
-        match result {
-            Some(TTHit { mov: tt_move, value: tt_value, .. }) => Some((tt_move, tt_value)),
-            _ => None,
-        }
+    pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Option<Move>, i32)> {
+        self.probe(key, 0).map(|TTHit { mov, value, .. }| (mov, value))
     }
 
     pub fn hashfull(&self) -> usize {
@@ -342,7 +347,7 @@ mod tests {
     fn tt_entry_roundtrip() {
         let entry = TTEntry {
             key: 0x1234,
-            m: Move::new(Square::A1, Square::A2),
+            m: Some(Move::new(Square::A1, Square::A2)),
             score: 0,
             depth: ZERO_PLY.try_into().unwrap(),
             age_and_flag: AgeAndFlag::new(63, Bound::Exact),

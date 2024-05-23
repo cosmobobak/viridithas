@@ -40,9 +40,9 @@ const BUCKET_MAP: [usize; 64] = [
     8, 8, 8, 8, 17, 17, 17, 17,
     8, 8, 8, 8, 17, 17, 17, 17,
 ];
-pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
-    let white_bucket = BUCKET_MAP[white_king.index()];
-    let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+pub fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
+    let white_bucket = BUCKET_MAP[white_king];
+    let black_bucket = BUCKET_MAP[black_king.flip_rank()];
     (white_bucket, black_bucket)
 }
 
@@ -180,8 +180,8 @@ impl PovUpdate {
 
     pub const fn colour(colour: Colour) -> Self {
         match colour {
-            Colour::WHITE => Self { white: true, black: false },
-            Colour::BLACK => Self { white: false, black: true },
+            Colour::White => Self { white: true, black: false },
+            Colour::Black => Self { white: false, black: true },
         }
     }
 }
@@ -194,7 +194,7 @@ pub struct FeatureUpdate {
 }
 
 impl FeatureUpdate {
-    const NULL: Self = Self { sq: Square::NO_SQUARE, piece: Piece::EMPTY };
+    const NULL: Self = Self { sq: Square::A1, piece: Piece::WP };
 }
 
 impl Display for FeatureUpdate {
@@ -287,7 +287,7 @@ impl BucketAccumulatorCache {
             // verify all the cached board states make sense
             for colour in Colour::all() {
                 for bucket in 0..BUCKETS {
-                    let cached_board_state = self.board_states[colour.index()][bucket];
+                    let cached_board_state = self.board_states[colour][bucket];
                     if cached_board_state == unsafe { std::mem::zeroed() } {
                         continue;
                     }
@@ -295,7 +295,7 @@ impl BucketAccumulatorCache {
                     let black_king = cached_board_state.piece_bb(Piece::BK).first();
                     let (white_bucket_from_board_position, black_bucket_from_board_position) =
                         get_bucket_indices(white_king, black_king);
-                    if colour == Colour::WHITE {
+                    if colour == Colour::White {
                         assert_eq!(white_bucket_from_board_position, bucket);
                     } else {
                         assert_eq!(black_bucket_from_board_position, bucket);
@@ -304,18 +304,18 @@ impl BucketAccumulatorCache {
             }
         }
 
-        let side_we_care_about = if pov_update.white { Colour::WHITE } else { Colour::BLACK };
+        let side_we_care_about = if pov_update.white { Colour::White } else { Colour::Black };
         let wk = board_state.piece_bb(Piece::WK).first();
         let bk = board_state.piece_bb(Piece::BK).first();
         let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
-        let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
+        let bucket = if side_we_care_about == Colour::White { white_bucket } else { black_bucket };
         let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
-        self.board_states[side_we_care_about.index()][bucket].update_iter(board_state, |f, is_add| {
+        self.board_states[side_we_care_about][bucket].update_iter(board_state, |f, is_add| {
             let (white_idx, black_idx) = feature::indices(wk, bk, f);
-            let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
+            let index = if side_we_care_about == Colour::White { white_idx } else { black_idx };
             if is_add {
                 adds.push(index);
             } else {
@@ -328,9 +328,9 @@ impl BucketAccumulatorCache {
         simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
         simd::copy(cache_acc, acc.select_mut(side_we_care_about));
-        acc.correct[side_we_care_about.index()] = true;
+        acc.correct[side_we_care_about] = true;
 
-        self.board_states[side_we_care_about.index()][bucket] = board_state;
+        self.board_states[side_we_care_about][bucket] = board_state;
     }
 }
 
@@ -428,11 +428,11 @@ impl NNUEState {
     }
 
     fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
-        if piece.piece_type() != PieceType::KING {
+        if piece.piece_type() != PieceType::King {
             return false;
         }
 
-        BUCKET_MAP[from.index()] != BUCKET_MAP[to.index()]
+        BUCKET_MAP[from] != BUCKET_MAP[to]
     }
 
     fn can_efficiently_update(&self, view: Colour) -> bool {
@@ -449,7 +449,7 @@ impl NNUEState {
             if piece.colour() == view && Self::requires_refresh(piece, from, to) {
                 return false;
             }
-            if curr.correct[view.index()] {
+            if curr.correct[view] {
                 return true;
             }
         }
@@ -460,14 +460,14 @@ impl NNUEState {
         loop {
             curr_index -= 1;
 
-            if self.accumulators[curr_index].correct[view.index()] {
+            if self.accumulators[curr_index].correct[view] {
                 break;
             }
         }
 
         let pov_update = PovUpdate::colour(view);
-        let white_king = board.king_sq(Colour::WHITE);
-        let black_king = board.king_sq(Colour::BLACK);
+        let white_king = board.king_sq(Colour::White);
+        let black_king = board.king_sq(Colour::Black);
 
         loop {
             self.materialise_new_acc_from(
@@ -478,7 +478,7 @@ impl NNUEState {
                 curr_index + 1,
             );
 
-            self.accumulators[curr_index + 1].correct[view.index()] = true;
+            self.accumulators[curr_index + 1].correct[view] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -490,7 +490,7 @@ impl NNUEState {
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
     pub fn force(&mut self, board: &Board) {
         for colour in Colour::all() {
-            if !self.accumulators[self.current_acc].correct[colour.index()] {
+            if !self.accumulators[self.current_acc].correct[colour] {
                 if self.can_efficiently_update(colour) {
                     self.apply_lazy_updates(board, colour);
                 } else {
@@ -656,7 +656,7 @@ impl NNUEState {
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) = if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
+        let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
         let output = flatten(us, them, &NNUE.output_weights);
 
@@ -728,7 +728,7 @@ pub unsafe fn flatten_inner(
 pub fn inference_benchmark(state: &NNUEState) {
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
-        std::hint::black_box(state.evaluate(Colour::WHITE));
+        std::hint::black_box(state.evaluate(Colour::White));
     }
     let elapsed = start.elapsed();
     let nanos = elapsed.as_nanos();

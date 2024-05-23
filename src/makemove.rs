@@ -4,7 +4,7 @@
 // the Board::make_move() function.
 
 use crate::{
-    lookups::{CASTLE_KEYS, PIECE_KEYS, SIDE_KEY},
+    lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
     piece::Piece,
     util::{CastlingRights, Square},
 };
@@ -15,9 +15,7 @@ pub fn hash_castling(key: &mut u64, castle_perm: CastlingRights) {
 }
 
 pub fn hash_piece(key: &mut u64, piece: Piece, sq: Square) {
-    debug_assert!((piece.index()) < PIECE_KEYS.len());
-    debug_assert!(sq.on_board());
-    let piece_key = PIECE_KEYS[piece.index()][sq.index()];
+    let piece_key = PIECE_KEYS[piece][sq];
     *key ^= piece_key;
 }
 
@@ -26,7 +24,6 @@ pub fn hash_side(key: &mut u64) {
 }
 
 pub fn hash_ep(key: &mut u64, ep_sq: Square) {
-    debug_assert!(ep_sq.on_board());
-    let ep_key = PIECE_KEYS[Piece::EMPTY.index()][ep_sq.index()];
+    let ep_key = EP_KEYS[ep_sq];
     *key ^= ep_key;
 }

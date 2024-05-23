@@ -42,9 +42,9 @@ pub struct MovePicker<MovePickerMode> {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
-    tt_move: Move,
-    killers: [Move; 2],
-    counter_move: Move,
+    tt_move: Option<Move>,
+    killers: [Option<Move>; 2],
+    counter_move: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
     _mode: std::marker::PhantomData<MovePickerMode>,
@@ -54,8 +54,13 @@ pub type MainMovePicker = MovePicker<MainSearch>;
 pub type CapturePicker = MovePicker<Qsearch>;
 
 impl<Mode: MovePickerMode> MovePicker<Mode> {
-    pub fn new(tt_move: Move, killers: [Move; 2], counter_move: Move, see_threshold: i32) -> Self {
-        debug_assert!(killers[0].is_null() || killers[0] != killers[1], "Killers are both {}", killers[0]);
+    pub fn new(
+        tt_move: Option<Move>,
+        killers: [Option<Move>; 2],
+        counter_move: Option<Move>,
+        see_threshold: i32,
+    ) -> Self {
+        debug_assert!(killers[0].is_none() || killers[0] != killers[1], "Killers are both {:?}", killers[0]);
         Self {
             movelist: MoveList::new(),
             index: 0,
@@ -71,6 +76,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
 
     /// Returns true if a move was already yielded by the movepicker.
     pub fn was_tried_lazily(&self, m: Move) -> bool {
+        let m = Some(m);
         m == self.tt_move || m == self.killers[0] || m == self.killers[1] || m == self.counter_move
     }
 
@@ -81,8 +87,10 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
-            if position.is_pseudo_legal(self.tt_move) {
-                return Some(MoveListEntry { mov: self.tt_move, score: TT_MOVE_SCORE });
+            if let Some(tt_move) = self.tt_move {
+                if position.is_pseudo_legal(tt_move) {
+                    return Some(MoveListEntry { mov: tt_move, score: TT_MOVE_SCORE });
+                }
             }
         }
         if self.stage == Stage::GenerateCaptures {
@@ -105,14 +113,22 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
-            if !self.skip_quiets && self.killers[0] != self.tt_move && position.is_pseudo_legal(self.killers[0]) {
-                return Some(MoveListEntry { mov: self.killers[0], score: FIRST_KILLER_SCORE });
+            if !self.skip_quiets && self.killers[0] != self.tt_move {
+                if let Some(killer) = self.killers[0] {
+                    if position.is_pseudo_legal(killer) {
+                        return Some(MoveListEntry { mov: killer, score: FIRST_KILLER_SCORE });
+                    }
+                }
             }
         }
         if self.stage == Stage::YieldKiller2 {
             self.stage = Stage::YieldCounterMove;
-            if !self.skip_quiets && self.killers[1] != self.tt_move && position.is_pseudo_legal(self.killers[1]) {
-                return Some(MoveListEntry { mov: self.killers[1], score: SECOND_KILLER_SCORE });
+            if !self.skip_quiets && self.killers[1] != self.tt_move {
+                if let Some(killer) = self.killers[1] {
+                    if position.is_pseudo_legal(killer) {
+                        return Some(MoveListEntry { mov: killer, score: SECOND_KILLER_SCORE });
+                    }
+                }
             }
         }
         if self.stage == Stage::YieldCounterMove {
@@ -121,9 +137,12 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
                 && self.counter_move != self.tt_move
                 && self.counter_move != self.killers[0]
                 && self.counter_move != self.killers[1]
-                && position.is_pseudo_legal(self.counter_move)
             {
-                return Some(MoveListEntry { mov: self.counter_move, score: COUNTER_MOVE_SCORE });
+                if let Some(counter) = self.counter_move {
+                    if position.is_pseudo_legal(counter) {
+                        return Some(MoveListEntry { mov: counter, score: COUNTER_MOVE_SCORE });
+                    }
+                }
             }
         }
         if self.stage == Stage::GenerateQuiets {
@@ -206,7 +225,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
-        const MVV_SCORE: [i32; 5] = [0, 2400, 2400, 4800, 9600];
+        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
         // zero-out the ordering scores
         for m in &mut *moves {
             m.score = 0;
@@ -214,7 +233,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
 
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
-            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov).index()];
+            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov)];
             if pos.static_exchange_eval(*mov, see_threshold) {
                 *score += WINNING_CAPTURE_SCORE;
             }

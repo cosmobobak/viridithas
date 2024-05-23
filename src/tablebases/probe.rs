@@ -66,8 +66,8 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let wdl = tb_probe_wdl(
-            board.pieces.occupied_co(Colour::WHITE).inner(),
-            board.pieces.occupied_co(Colour::BLACK).inner(),
+            board.pieces.occupied_co(Colour::White).inner(),
+            board.pieces.occupied_co(Colour::Black).inner(),
             board.pieces.all_kings().inner(),
             board.pieces.all_queens().inner(),
             board.pieces.all_rooks().inner(),
@@ -77,7 +77,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
             0,
             0,
             0,
-            board.turn() == Colour::WHITE,
+            board.turn() == Colour::White,
         );
 
         match wdl {
@@ -99,8 +99,8 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     #[cfg(feature = "syzygy")]
     unsafe {
         let result = tb_probe_root(
-            board.pieces.occupied_co(Colour::WHITE).inner(),
-            board.pieces.occupied_co(Colour::BLACK).inner(),
+            board.pieces.occupied_co(Colour::White).inner(),
+            board.pieces.occupied_co(Colour::Black).inner(),
             board.pieces.all_kings().inner(),
             board.pieces.all_queens().inner(),
             board.pieces.all_rooks().inner(),
@@ -110,7 +110,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
             u32::from(board.fifty_move_counter()),
             0,
             0,
-            board.turn() == Colour::WHITE,
+            board.turn() == Colour::White,
             ptr::null_mut(),
         );
 
@@ -129,20 +129,20 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
         let mut moves = MoveList::new();
         board.generate_moves(&mut moves);
 
-        let from = Square::new(((result & TB_RESULT_FROM_MASK) >> TB_RESULT_FROM_SHIFT) as u8);
-        let to = Square::new(((result & TB_RESULT_TO_MASK) >> TB_RESULT_TO_SHIFT) as u8);
+        let from = Square::new(((result & TB_RESULT_FROM_MASK) >> TB_RESULT_FROM_SHIFT) as u8).unwrap();
+        let to = Square::new(((result & TB_RESULT_TO_MASK) >> TB_RESULT_TO_SHIFT) as u8).unwrap();
         let promotion = (result & TB_RESULT_PROMOTES_MASK) >> TB_RESULT_PROMOTES_SHIFT;
 
         let promo_piece_type = match promotion {
-            TB_PROMOTES_QUEEN => PieceType::QUEEN,
-            TB_PROMOTES_ROOK => PieceType::ROOK,
-            TB_PROMOTES_BISHOP => PieceType::BISHOP,
-            TB_PROMOTES_KNIGHT => PieceType::KNIGHT,
-            _ => PieceType::NONE,
+            TB_PROMOTES_QUEEN => Some(PieceType::Queen),
+            TB_PROMOTES_ROOK => Some(PieceType::Rook),
+            TB_PROMOTES_BISHOP => Some(PieceType::Bishop),
+            TB_PROMOTES_KNIGHT => Some(PieceType::Knight),
+            _ => None,
         };
 
         for &m in moves.iter_moves() {
-            if m.from() == from && m.to() == to && (promotion == 0 || m.safe_promotion_type() == promo_piece_type) {
+            if m.from() == from && m.to() == to && (promotion == 0 || m.promotion_type() == promo_piece_type) {
                 return Some(WdlDtzResult { wdl, dtz, best_move: m });
             }
         }
@@ -175,7 +175,7 @@ pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
 pub fn get_wdl_white(board: &Board) -> Option<WDL> {
     let probe_result = get_root_wdl_dtz(board)?;
 
-    let stm = board.turn() == Colour::WHITE;
+    let stm = board.turn() == Colour::White;
 
     match probe_result.wdl {
         WDL::Win => Some(if stm { WDL::Win } else { WDL::Loss }),

@@ -2,6 +2,7 @@ pub mod depth;
 
 use std::{
     fmt::{self, Display},
+    ops::{Index, IndexMut},
     str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -11,7 +12,6 @@ use crate::{
         evaluation::MATE_SCORE,
         movegen::bitboards::{BitBoard, Threats},
     },
-    cfor,
     historytable::ContHistIndex,
     piece::{Colour, Piece},
     squareset::SquareSet,
@@ -25,35 +25,141 @@ pub const INFINITY: i32 = MATE_SCORE + 1;
 pub const VALUE_NONE: i32 = INFINITY + 1;
 pub const MEGABYTE: usize = 1024 * 1024;
 
-pub struct File;
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+pub enum File {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+}
 
 impl File {
-    pub const FILE_A: u8 = 0;
-    pub const FILE_B: u8 = 1;
-    pub const FILE_C: u8 = 2;
-    pub const FILE_D: u8 = 3;
-    pub const FILE_E: u8 = 4;
-    pub const FILE_F: u8 = 5;
-    pub const FILE_G: u8 = 6;
-    pub const FILE_H: u8 = 7;
+    pub const ALL: [Self; 8] = [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H];
+
+    pub const fn abs_diff(self, other: Self) -> u8 {
+        (self as u8).abs_diff(other as u8)
+    }
+
+    pub const fn from_index(index: u8) -> Option<Self> {
+        if index < 8 {
+            Some(unsafe { std::mem::transmute(index) })
+        } else {
+            None
+        }
+    }
+
+    pub const fn add(self, diff: u8) -> Option<Self> {
+        Self::from_index(self as u8 + diff)
+    }
+
+    pub const fn sub(self, diff: u8) -> Option<Self> {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+        Self::from_index((self as i8 - diff as i8) as u8)
+    }
 }
 
-pub struct Rank;
+impl<T> Index<File> for [T; 8] {
+    type Output = T;
 
-#[allow(dead_code)]
+    fn index(&self, index: File) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(index as usize) }
+    }
+}
+
+impl<T> IndexMut<File> for [T; 8] {
+    fn index_mut(&mut self, index: File) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(index as usize) }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+pub enum Rank {
+    One,
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+}
+
 impl Rank {
-    pub const RANK_1: u8 = 0;
-    pub const RANK_2: u8 = 1;
-    pub const RANK_3: u8 = 2;
-    pub const RANK_4: u8 = 3;
-    pub const RANK_5: u8 = 4;
-    pub const RANK_6: u8 = 5;
-    pub const RANK_7: u8 = 6;
-    pub const RANK_8: u8 = 7;
+    pub const ALL: [Self; 8] =
+        [Self::One, Self::Two, Self::Three, Self::Four, Self::Five, Self::Six, Self::Seven, Self::Eight];
+
+    pub const fn abs_diff(self, other: Self) -> u8 {
+        (self as u8).abs_diff(other as u8)
+    }
+
+    pub const fn from_index(index: u8) -> Option<Self> {
+        if index < 8 {
+            Some(unsafe { std::mem::transmute(index) })
+        } else {
+            None
+        }
+    }
+
+    pub const fn add(self, diff: u8) -> Option<Self> {
+        Self::from_index(self as u8 + diff)
+    }
+
+    pub const fn sub(self, diff: u8) -> Option<Self> {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+        Self::from_index((self as i8 - diff as i8) as u8)
+    }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
-pub struct Square(u8);
+impl<T> Index<Rank> for [T; 8] {
+    type Output = T;
+
+    fn index(&self, index: Rank) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(index as usize) }
+    }
+}
+
+impl<T> IndexMut<Rank> for [T; 8] {
+    fn index_mut(&mut self, index: Rank) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(index as usize) }
+    }
+}
+
+#[rustfmt::skip]
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+pub enum Square {
+    A1, B1, C1, D1, E1, F1, G1, H1,
+    A2, B2, C2, D2, E2, F2, G2, H2,
+    A3, B3, C3, D3, E3, F3, G3, H3,
+    A4, B4, C4, D4, E4, F4, G4, H4,
+    A5, B5, C5, D5, E5, F5, G5, H5,
+    A6, B6, C6, D6, E6, F6, G6, H6,
+    A7, B7, C7, D7, E7, F7, G7, H7,
+    A8, B8, C8, D8, E8, F8, G8, H8,
+}
+
+impl<T> Index<Square> for [T; 64] {
+    type Output = T;
+
+    fn index(&self, index: Square) -> &Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked(index as usize) }
+    }
+}
+
+impl<T> IndexMut<Square> for [T; 64] {
+    fn index_mut(&mut self, index: Square) -> &mut Self::Output {
+        // SAFETY: the legal values for this type are all in bounds.
+        unsafe { self.get_unchecked_mut(index as usize) }
+    }
+}
 
 static SQUARE_NAMES: [&str; 64] = [
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a3", "b3", "c3",
@@ -64,101 +170,35 @@ static SQUARE_NAMES: [&str; 64] = [
 
 #[allow(clippy::unusual_byte_groupings)]
 impl Square {
-    pub const A1: Self = Self(0);
-    pub const B1: Self = Self(1);
-    pub const C1: Self = Self(2);
-    pub const D1: Self = Self(3);
-    pub const E1: Self = Self(4);
-    pub const F1: Self = Self(5);
-    pub const G1: Self = Self(6);
-    pub const H1: Self = Self(7);
-    pub const A2: Self = Self(8);
-    pub const B2: Self = Self(9);
-    pub const C2: Self = Self(10);
-    pub const D2: Self = Self(11);
-    pub const E2: Self = Self(12);
-    pub const F2: Self = Self(13);
-    pub const G2: Self = Self(14);
-    pub const H2: Self = Self(15);
-    pub const A3: Self = Self(16);
-    pub const B3: Self = Self(17);
-    pub const C3: Self = Self(18);
-    pub const D3: Self = Self(19);
-    pub const E3: Self = Self(20);
-    pub const F3: Self = Self(21);
-    pub const G3: Self = Self(22);
-    pub const H3: Self = Self(23);
-    pub const A4: Self = Self(24);
-    pub const B4: Self = Self(25);
-    pub const C4: Self = Self(26);
-    pub const D4: Self = Self(27);
-    pub const E4: Self = Self(28);
-    pub const F4: Self = Self(29);
-    pub const G4: Self = Self(30);
-    pub const H4: Self = Self(31);
-    pub const A5: Self = Self(32);
-    pub const B5: Self = Self(33);
-    pub const C5: Self = Self(34);
-    pub const D5: Self = Self(35);
-    pub const E5: Self = Self(36);
-    pub const F5: Self = Self(37);
-    pub const G5: Self = Self(38);
-    pub const H5: Self = Self(39);
-    pub const A6: Self = Self(40);
-    pub const B6: Self = Self(41);
-    pub const C6: Self = Self(42);
-    pub const D6: Self = Self(43);
-    pub const E6: Self = Self(44);
-    pub const F6: Self = Self(45);
-    pub const G6: Self = Self(46);
-    pub const H6: Self = Self(47);
-    pub const A7: Self = Self(48);
-    pub const B7: Self = Self(49);
-    pub const C7: Self = Self(50);
-    pub const D7: Self = Self(51);
-    pub const E7: Self = Self(52);
-    pub const F7: Self = Self(53);
-    pub const G7: Self = Self(54);
-    pub const H7: Self = Self(55);
-    pub const A8: Self = Self(56);
-    pub const B8: Self = Self(57);
-    pub const C8: Self = Self(58);
-    pub const D8: Self = Self(59);
-    pub const E8: Self = Self(60);
-    pub const F8: Self = Self(61);
-    pub const G8: Self = Self(62);
-    pub const H8: Self = Self(63);
-    pub const NO_SQUARE: Self = Self(64);
-
-    pub const fn from_rank_file(rank: u8, file: u8) -> Self {
-        let inner = rank * 8 + file;
-        debug_assert!(inner <= 64);
-        Self(inner)
+    pub const fn from_rank_file(rank: Rank, file: File) -> Self {
+        let inner = rank as u8 * 8 + file as u8;
+        // SAFETY: Rank and File are constrained such that inner is always < 64.
+        unsafe { std::mem::transmute(inner) }
     }
 
-    pub const fn new(inner: u8) -> Self {
-        debug_assert!(inner <= 64);
-        Self(inner)
-    }
-
-    pub const fn new_checked(inner: u8) -> Option<Self> {
-        if inner <= 64 {
-            Some(Self(inner))
+    pub const fn new(inner: u8) -> Option<Self> {
+        if inner < 64 {
+            Some(unsafe { std::mem::transmute(inner) })
         } else {
             None
         }
     }
 
+    pub const unsafe fn new_unchecked(inner: u8) -> Self {
+        debug_assert!(inner < 64);
+        std::mem::transmute(inner)
+    }
+
     pub const fn flip_rank(self) -> Self {
-        Self(self.0 ^ 0b111_000)
+        unsafe { std::mem::transmute(self as u8 ^ 0b111_000) }
     }
 
     pub const fn flip_file(self) -> Self {
-        Self(self.0 ^ 0b000_111)
+        unsafe { std::mem::transmute(self as u8 ^ 0b000_111) }
     }
 
     pub const fn relative_to(self, side: Colour) -> Self {
-        if matches!(side, Colour::WHITE) {
+        if matches!(side, Colour::White) {
             self
         } else {
             self.flip_rank()
@@ -166,12 +206,12 @@ impl Square {
     }
 
     /// The file that this square is on.
-    pub const fn file(self) -> u8 {
-        self.0 % 8
+    pub const fn file(self) -> File {
+        unsafe { std::mem::transmute(self as u8 % 8) }
     }
     /// The rank that this square is on.
-    pub const fn rank(self) -> u8 {
-        self.0 / 8
+    pub const fn rank(self) -> Rank {
+        unsafe { std::mem::transmute(self as u8 / 8) }
     }
 
     pub const fn distance(a: Self, b: Self) -> u8 {
@@ -180,64 +220,57 @@ impl Square {
 
     pub const fn signed_inner(self) -> i8 {
         #![allow(clippy::cast_possible_wrap)]
-        self.0 as i8
+        self as i8
     }
 
     pub const fn index(self) -> usize {
-        self.0 as usize
+        self as usize
     }
 
     pub const fn inner(self) -> u8 {
-        self.0
+        self as u8
     }
 
-    pub const fn add(self, offset: u8) -> Self {
+    pub const fn add(self, offset: u8) -> Option<Self> {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-        let res = self.0 + offset;
-        debug_assert!(res < 64, "Square::add overflowed");
-        Self(res)
+        let res = self as u8 + offset;
+        Self::new(res)
     }
 
-    pub const fn add_beyond_board(self, offset: u8) -> Self {
+    pub const unsafe fn add_unchecked(self, offset: u8) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-        let res = self.0 + offset;
-        debug_assert!(res < 65, "Square::add_beyond_board overflowed");
-        Self(res)
+        let res = self as u8 + offset;
+        Self::new_unchecked(res)
     }
 
-    pub const fn sub(self, offset: u8) -> Self {
+    pub const fn sub(self, offset: u8) -> Option<Self> {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
-        let res = self.0 - offset;
-        debug_assert!(res < 64, "Square::sub overflowed");
-        Self(res)
-    }
-
-    pub const fn on_board(self) -> bool {
-        self.0 < 64
+        let res = self as u8 - offset;
+        Self::new(res)
     }
 
     pub const fn as_set(self) -> SquareSet {
-        SquareSet::from_inner(1 << self.0)
+        SquareSet::from_inner(1 << self as u8)
     }
 
-    pub fn pawn_push(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+    pub fn pawn_push(self, side: Colour) -> Option<Self> {
+        if side == Colour::White {
             self.add(8)
         } else {
             self.sub(8)
         }
     }
 
-    pub fn pawn_right(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+    pub fn pawn_right(self, side: Colour) -> Option<Self> {
+        if side == Colour::White {
             self.add(9)
         } else {
             self.sub(7)
         }
     }
 
-    pub fn pawn_left(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+    pub fn pawn_left(self, side: Colour) -> Option<Self> {
+        if side == Colour::White {
             self.add(7)
         } else {
             self.sub(9)
@@ -245,46 +278,26 @@ impl Square {
     }
 
     #[rustfmt::skip]
-    pub const fn le(self, other: Self) -> bool { self.0 <= other.0 }
+    pub const fn le(self, other: Self) -> bool { self as u8 <= other as u8 }
     #[rustfmt::skip]
-    pub const fn ge(self, other: Self) -> bool { self.0 >= other.0 }
+    pub const fn ge(self, other: Self) -> bool { self as u8 >= other as u8 }
     #[rustfmt::skip]
-    pub const fn lt(self, other: Self) -> bool { self.0 < other.0  }
+    pub const fn lt(self, other: Self) -> bool { (self as u8) < other as u8  }
     #[rustfmt::skip]
-    pub const fn gt(self, other: Self) -> bool { self.0 > other.0  }
+    pub const fn gt(self, other: Self) -> bool { self as u8 > other as u8  }
 
     pub fn all() -> impl Iterator<Item = Self> {
-        (0..64).map(Self::new)
+        (0..64u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 
-    pub fn name(self) -> Option<&'static str> {
-        SQUARE_NAMES.get(self.index()).copied()
+    pub fn name(self) -> &'static str {
+        SQUARE_NAMES[self]
     }
 }
 
 impl Display for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = SQUARE_NAMES.get(self.index()).copied();
-        if let Some(name) = name {
-            write!(f, "{name}")
-        } else if self.0 == 64 {
-            write!(f, "NO_SQUARE")
-        } else {
-            write!(f, "ILLEGAL: Square({})", self.0)
-        }
-    }
-}
-
-impl std::fmt::Debug for Square {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = SQUARE_NAMES.get(self.index()).copied();
-        if let Some(name) = name {
-            write!(f, "{name}")
-        } else if self.0 == 64 {
-            write!(f, "NO_SQUARE")
-        } else {
-            write!(f, "ILLEGAL: Square({})", self.0)
-        }
+        write!(f, "{}", SQUARE_NAMES[*self])
     }
 }
 
@@ -296,13 +309,13 @@ impl FromStr for Square {
             .iter()
             .position(|&name| name == s)
             .and_then(|index| -> Option<u8> { index.try_into().ok() })
-            .map(Self::new)
+            .and_then(Self::new)
             .ok_or("Invalid square name")
     }
 }
 impl From<Square> for u16 {
     fn from(square: Square) -> Self {
-        Self::from(square.0)
+        square as Self
     }
 }
 
@@ -314,12 +327,12 @@ pub const BQCA: u8 = 0b1000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
     pub castle_perm: CastlingRights,
-    pub ep_square: Square,
+    pub ep_square: Option<Square>,
     pub fifty_move_counter: u8,
     pub threats: Threats,
-    pub cont_hist_index: ContHistIndex,
+    pub cont_hist_index: Option<ContHistIndex>,
     pub bitboard: BitBoard,
-    pub piece_array: [Piece; 64],
+    pub piece_array: [Option<Piece>; 64],
     pub key: u64,
 }
 
@@ -327,12 +340,12 @@ impl Default for Undo {
     fn default() -> Self {
         Self {
             castle_perm: CastlingRights::NONE,
-            ep_square: Square::NO_SQUARE,
+            ep_square: None,
             fifty_move_counter: 0,
             threats: Threats { all: SquareSet::EMPTY, checkers: SquareSet::EMPTY },
-            cont_hist_index: ContHistIndex::default(),
+            cont_hist_index: None,
             bitboard: BitBoard::NULL,
-            piece_array: [Piece::EMPTY; 64],
+            piece_array: [None; 64],
             key: 0,
         }
     }
@@ -346,71 +359,71 @@ pub enum CheckState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CastlingRights {
-    pub wk: Square,
-    pub wq: Square,
-    pub bk: Square,
-    pub bq: Square,
+    pub wk: Option<Square>,
+    pub wq: Option<Square>,
+    pub bk: Option<Square>,
+    pub bq: Option<Square>,
 }
 
 impl CastlingRights {
-    pub const NONE: Self =
-        Self { wk: Square::NO_SQUARE, wq: Square::NO_SQUARE, bk: Square::NO_SQUARE, bq: Square::NO_SQUARE };
+    pub const NONE: Self = Self { wk: None, wq: None, bk: None, bq: None };
 
-    pub fn hashkey_index(self) -> usize {
+    pub const fn hashkey_index(self) -> usize {
         let mut index = 0;
-        if self.wk != Square::NO_SQUARE {
+        if self.wk.is_some() {
             index |= WKCA;
         }
-        if self.wq != Square::NO_SQUARE {
+        if self.wq.is_some() {
             index |= WQCA;
         }
-        if self.bk != Square::NO_SQUARE {
+        if self.bk.is_some() {
             index |= BKCA;
         }
-        if self.bq != Square::NO_SQUARE {
+        if self.bq.is_some() {
             index |= BQCA;
         }
         index as usize
     }
 
     pub fn remove(&mut self, sq: Square) {
+        let sq = Some(sq);
         if self.wk == sq {
-            self.wk = Square::NO_SQUARE;
+            self.wk = None;
         } else if self.wq == sq {
-            self.wq = Square::NO_SQUARE;
+            self.wq = None;
         } else if self.bk == sq {
-            self.bk = Square::NO_SQUARE;
+            self.bk = None;
         } else if self.bq == sq {
-            self.bq = Square::NO_SQUARE;
+            self.bq = None;
         }
     }
 
-    pub fn kingside(self, side: Colour) -> Square {
-        if side == Colour::WHITE {
+    pub fn kingside(self, side: Colour) -> Option<Square> {
+        if side == Colour::White {
             self.wk
         } else {
             self.bk
         }
     }
 
-    pub fn kingside_mut(&mut self, side: Colour) -> &mut Square {
-        if side == Colour::WHITE {
+    pub fn kingside_mut(&mut self, side: Colour) -> &mut Option<Square> {
+        if side == Colour::White {
             &mut self.wk
         } else {
             &mut self.bk
         }
     }
 
-    pub fn queenside(self, side: Colour) -> Square {
-        if side == Colour::WHITE {
+    pub fn queenside(self, side: Colour) -> Option<Square> {
+        if side == Colour::White {
             self.wq
         } else {
             self.bq
         }
     }
 
-    pub fn queenside_mut(&mut self, side: Colour) -> &mut Square {
-        if side == Colour::WHITE {
+    pub fn queenside_mut(&mut self, side: Colour) -> &mut Option<Square> {
+        if side == Colour::White {
             &mut self.wq
         } else {
             &mut self.bq
@@ -420,31 +433,31 @@ impl CastlingRights {
 
 impl Display for CastlingRights {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const FILE_NAMES: &[u8] = b"abcdefgh";
+        const FILE_NAMES: [u8; 8] = *b"abcdefgh";
         if CHESS960.load(Ordering::Relaxed) {
-            if self.wk != Square::NO_SQUARE {
-                write!(f, "{}", FILE_NAMES[self.wk.file() as usize].to_ascii_uppercase() as char)?;
+            if let Some(right) = self.wk {
+                write!(f, "{}", FILE_NAMES[right.file()].to_ascii_uppercase() as char)?;
             }
-            if self.wq != Square::NO_SQUARE {
-                write!(f, "{}", FILE_NAMES[self.wq.file() as usize].to_ascii_uppercase() as char)?;
+            if let Some(right) = self.wq {
+                write!(f, "{}", FILE_NAMES[right.file()].to_ascii_uppercase() as char)?;
             }
-            if self.bk != Square::NO_SQUARE {
-                write!(f, "{}", FILE_NAMES[self.bk.file() as usize] as char)?;
+            if let Some(right) = self.bk {
+                write!(f, "{}", FILE_NAMES[right.file()] as char)?;
             }
-            if self.bq != Square::NO_SQUARE {
-                write!(f, "{}", FILE_NAMES[self.bq.file() as usize] as char)?;
+            if let Some(right) = self.bq {
+                write!(f, "{}", FILE_NAMES[right.file()] as char)?;
             }
         } else {
-            if self.wk != Square::NO_SQUARE {
+            if self.wk.is_some() {
                 write!(f, "K")?;
             }
-            if self.wq != Square::NO_SQUARE {
+            if self.wq.is_some() {
                 write!(f, "Q")?;
             }
-            if self.bk != Square::NO_SQUARE {
+            if self.bk.is_some() {
                 write!(f, "k")?;
             }
-            if self.bq != Square::NO_SQUARE {
+            if self.bq.is_some() {
                 write!(f, "q")?;
             }
         }
@@ -472,11 +485,21 @@ const fn in_between(sq1: Square, sq2: Square) -> SquareSet {
 
 pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     let mut res = [[SquareSet::EMPTY; 64]; 64];
-    cfor!(let mut from = Square::A1; from.0 < Square::NO_SQUARE.0; from = from.add_beyond_board(1); {
-        cfor!(let mut to = Square::A1; to.0 < Square::NO_SQUARE.0; to = to.add_beyond_board(1); {
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
             res[from.index()][to.index()] = in_between(from, to);
-        });
-    });
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
     res
 };
 
@@ -546,16 +569,16 @@ mod tests {
     fn ray_test() {
         use super::{Square, RAY_BETWEEN};
         use crate::squareset::SquareSet;
-        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::A1.index()], SquareSet::EMPTY);
-        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::B1.index()], SquareSet::EMPTY);
-        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::C1.index()], Square::B1.as_set());
-        assert_eq!(RAY_BETWEEN[Square::A1.index()][Square::D1.index()], Square::B1.as_set() | Square::C1.as_set());
-        assert_eq!(RAY_BETWEEN[Square::B1.index()][Square::D1.index()], Square::C1.as_set());
-        assert_eq!(RAY_BETWEEN[Square::D1.index()][Square::B1.index()], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::C1], Square::B1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::D1], Square::B1.as_set() | Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::B1][Square::D1], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::D1][Square::B1], Square::C1.as_set());
 
         for from in Square::all() {
             for to in Square::all() {
-                assert_eq!(RAY_BETWEEN[from.index()][to.index()], RAY_BETWEEN[to.index()][from.index()]);
+                assert_eq!(RAY_BETWEEN[from][to], RAY_BETWEEN[to][from]);
             }
         }
     }
@@ -563,7 +586,7 @@ mod tests {
     #[test]
     fn ray_diag_test() {
         use super::{Square, RAY_BETWEEN};
-        let ray = RAY_BETWEEN[Square::B5.index()][Square::E8.index()];
+        let ray = RAY_BETWEEN[Square::B5][Square::E8];
         assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }
 }

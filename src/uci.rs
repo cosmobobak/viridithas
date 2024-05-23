@@ -177,10 +177,10 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
             "depth" => depth = Some(part_parse("depth", parts.next())?),
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
-            "wtime" => clocks[pos.turn().index()] = Some(part_parse("wtime", parts.next())?),
-            "btime" => clocks[pos.turn().flip().index()] = Some(part_parse("btime", parts.next())?),
-            "winc" => incs[pos.turn().index()] = Some(part_parse("winc", parts.next())?),
-            "binc" => incs[pos.turn().flip().index()] = Some(part_parse("binc", parts.next())?),
+            "wtime" => clocks[pos.turn()] = Some(part_parse("wtime", parts.next())?),
+            "btime" => clocks[pos.turn().flip()] = Some(part_parse("btime", parts.next())?),
+            "winc" => incs[pos.turn()] = Some(part_parse("winc", parts.next())?),
+            "binc" => incs[pos.turn().flip()] = Some(part_parse("binc", parts.next())?),
             "infinite" => limit = SearchLimit::Infinite,
             "mate" => {
                 let mate_distance: usize = part_parse("mate", parts.next())?;
@@ -430,7 +430,7 @@ impl Display for PrettyScoreFormatWrapper {
             501..=10000 => write!(f, "\u{001b}[38;5;4m")?,   // much better for us, blue.
             _ => write!(f, "\u{001b}[38;5;219m")?,           // probably a mate score, pink.
         }
-        let white_pov = if self.1 == Colour::WHITE { self.0 } else { -self.0 };
+        let white_pov = if self.1 == Colour::White { self.0 } else { -self.0 };
         if is_mate_score(white_pov) {
             let plies_to_mate = MATE_SCORE - white_pov.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;

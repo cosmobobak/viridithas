@@ -15,7 +15,7 @@ use super::{
     MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR,
     NMP_REDUCTION_EVAL_DIVISOR, NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
     PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN,
-    SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_REDUCTION_DEPTH,
+    SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_EXTENSION_DEPTH, TT_REDUCTION_DEPTH,
 };
 
 #[derive(Clone, Debug)]
@@ -39,6 +39,7 @@ pub struct Config {
     pub nmp_verification_depth: Depth,
     pub lmp_depth: Depth,
     pub tt_reduction_depth: Depth,
+    pub tt_extension_depth: Depth,
     pub futility_depth: Depth,
     pub singularity_depth: Depth,
     pub dext_margin: i32,
@@ -90,6 +91,7 @@ impl Config {
             nmp_verification_depth: NMP_VERIFICATION_DEPTH,
             lmp_depth: LMP_DEPTH,
             tt_reduction_depth: TT_REDUCTION_DEPTH,
+            tt_extension_depth: TT_EXTENSION_DEPTH,
             futility_depth: FUTILITY_DEPTH,
             singularity_depth: SINGULARITY_DEPTH,
             dext_margin: DOUBLE_EXTENSION_MARGIN,
@@ -180,6 +182,7 @@ impl Config {
             NMP_VERIFICATION_DEPTH = [self.nmp_verification_depth],
             LMP_DEPTH = [self.lmp_depth],
             TT_REDUCTION_DEPTH = [self.tt_reduction_depth],
+            TT_EXTENSION_DEPTH = [self.tt_extension_depth],
             FUTILITY_DEPTH = [self.futility_depth],
             SINGULARITY_DEPTH = [self.singularity_depth],
             DOUBLE_EXTENSION_MARGIN = [self.dext_margin],
@@ -240,6 +243,7 @@ impl Config {
             NMP_VERIFICATION_DEPTH = [self.nmp_verification_depth, 8, 16, 1],
             LMP_DEPTH = [self.lmp_depth, 5, 12, 1],
             TT_REDUCTION_DEPTH = [self.tt_reduction_depth, 2, 8, 1],
+            TT_EXTENSION_DEPTH = [self.tt_extension_depth, 2, 16, 1],
             FUTILITY_DEPTH = [self.futility_depth, 2, 10, 1],
             SINGULARITY_DEPTH = [self.singularity_depth, 6, 12, 1],
             DOUBLE_EXTENSION_MARGIN = [self.dext_margin, 5, 100, 1],

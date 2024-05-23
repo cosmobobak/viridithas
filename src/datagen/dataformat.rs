@@ -93,6 +93,12 @@ impl Game {
                 break;
             }
             let mv = Move::from_raw(u16::from_le_bytes([buf[0], buf[1]]));
+            let Some(mv) = mv else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "parsed invalid move - move was null (the all-zeroes bitpattern)".to_string(),
+                ));
+            };
             if !mv.is_valid() || mv.from() == mv.to() {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -152,18 +158,18 @@ impl Game {
             if filter(*mv, i32::from(eval), &board) {
                 let mut bbs = [0; 8];
                 let bitboard = &board.pieces;
-                bbs[0] = bitboard.occupied_co(Colour::WHITE).inner();
-                bbs[1] = bitboard.occupied_co(Colour::BLACK).inner();
-                bbs[2] = bitboard.of_type(PieceType::PAWN).inner();
-                bbs[3] = bitboard.of_type(PieceType::KNIGHT).inner();
-                bbs[4] = bitboard.of_type(PieceType::BISHOP).inner();
-                bbs[5] = bitboard.of_type(PieceType::ROOK).inner();
-                bbs[6] = bitboard.of_type(PieceType::QUEEN).inner();
-                bbs[7] = bitboard.of_type(PieceType::KING).inner();
+                bbs[0] = bitboard.occupied_co(Colour::White).inner();
+                bbs[1] = bitboard.occupied_co(Colour::Black).inner();
+                bbs[2] = bitboard.of_type(PieceType::Pawn).inner();
+                bbs[3] = bitboard.of_type(PieceType::Knight).inner();
+                bbs[4] = bitboard.of_type(PieceType::Bishop).inner();
+                bbs[5] = bitboard.of_type(PieceType::Rook).inner();
+                bbs[6] = bitboard.of_type(PieceType::Queen).inner();
+                bbs[7] = bitboard.of_type(PieceType::King).inner();
                 callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,
-                        (board.turn() != Colour::WHITE).into(),
+                        (board.turn() != Colour::White).into(),
                         eval,
                         f32::from(wdl) / 2.0,
                     )
