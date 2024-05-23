@@ -99,7 +99,6 @@ impl Board {
     }
 
     pub fn zugzwang_unlikely(&self) -> bool {
-        // TODO: this can be done without even looking at the king / pawn BBs
         let stm = self.turn();
         let us = self.pieces.occupied_co(stm);
         let kings = self.pieces.all_kings();

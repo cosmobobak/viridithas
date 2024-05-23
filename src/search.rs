@@ -166,18 +166,19 @@ impl Board {
             info.time_manager.notify_one_legal_move();
         }
 
-        // Probe the tablebases if we're in a TB position.
-        // TODO: make this behave nicely if we're in analysis mode.
-        if let Some((best_move, score)) = tablebases::probe::get_tablebase_move(self) {
-            let mut pv = PVariation::default();
-            pv.load_from(best_move, &PVariation::default());
-            pv.score = score;
-            TB_HITS.store(1, Ordering::SeqCst);
-            readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true);
-            if info.print_to_stdout {
-                println!("bestmove {best_move}");
+        // Probe the tablebases if we're in a TB position and in a game.
+        if info.time_manager.is_dynamic() {
+            if let Some((best_move, score)) = tablebases::probe::get_tablebase_move(self) {
+                let mut pv = PVariation::default();
+                pv.load_from(best_move, &PVariation::default());
+                pv.score = score;
+                TB_HITS.store(1, Ordering::SeqCst);
+                readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true);
+                if info.print_to_stdout {
+                    println!("bestmove {best_move}");
+                }
+                return (score, Some(best_move));
             }
-            return (score, Some(best_move));
         }
 
         let global_stopped = info.stopped;
