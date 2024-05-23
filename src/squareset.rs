@@ -121,7 +121,7 @@ impl SquareSet {
     #[allow(clippy::cast_possible_truncation)]
     pub const fn first(self) -> Square {
         debug_assert!(self.inner != 0, "Tried to get first square of empty bitboard");
-        Square::new(self.inner.trailing_zeros() as u8)
+        unsafe { Square::new_unchecked(self.inner.trailing_zeros() as u8) }
     }
 
     pub const fn from_square(square: Square) -> Self {

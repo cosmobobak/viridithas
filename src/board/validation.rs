@@ -25,7 +25,7 @@ impl Board {
 
         // check bitboard / piece array coherency
         for sq in Square::all() {
-            let piece = self.piece_array[sq.index()];
+            let piece = self.piece_array[sq];
             if self.pieces.piece_at(sq) != piece {
                 return Err(format!(
                     "bitboard / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
@@ -43,15 +43,14 @@ impl Board {
             return Err(format!("key is corrupt: expected {:?}, got {:?}", self.generate_pos_key(), self.key));
         }
 
-        if !(self.ep_sq == Square::NO_SQUARE
-            || (self.ep_sq.rank() == Rank::RANK_6 && self.side == Colour::White)
-            || (self.ep_sq.rank() == Rank::RANK_3 && self.side == Colour::Black))
+        if !(self.ep_sq.is_none()
+            || (self.ep_sq.unwrap().rank() == Rank::Six && self.side == Colour::White)
+            || (self.ep_sq.unwrap().rank() == Rank::Three && self.side == Colour::Black))
         {
             return Err(format!(
-                "en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})",
-                Square::NO_SQUARE,
-                self.ep_sq,
-                self.ep_sq.rank()
+                "en passant square is corrupt: expected square to be None or to be on ranks 6 or 3, got {} ({:?})",
+                self.ep_sq.unwrap(),
+                self.ep_sq.unwrap().rank()
             ));
         }
 

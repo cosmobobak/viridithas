@@ -5,7 +5,7 @@ use crate::{
     nnue::network::FeatureUpdate,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
-    util::Square,
+    util::{File, Rank, Square},
 };
 
 /// Iterator over the squares of a bitboard.
@@ -32,7 +32,7 @@ impl Iterator for BitLoop {
             #[allow(clippy::cast_possible_truncation)]
             let lsb: u8 = self.value.trailing_zeros() as u8;
             self.value &= self.value - 1;
-            Some(Square::new(lsb))
+            Some(unsafe { Square::new_unchecked(lsb) })
         }
     }
 }
@@ -344,8 +344,8 @@ pub struct Threats {
 
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for rank in (0..=7).rev() {
-            for file in 0..=7 {
+        for rank in Rank::ALL.into_iter().rev() {
+            for file in File::ALL {
                 let sq = Square::from_rank_file(rank, file);
                 if let Some(piece) = self.piece_at(sq) {
                     write!(f, " {}", piece.char())?;

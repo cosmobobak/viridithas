@@ -43,7 +43,7 @@ pub struct Board {
     /// The side to move.
     side: Colour,
     /// The en passant square.
-    ep_sq: Square,
+    ep_sq: Option<Square>,
     /// A mask of the rooks that can castle.
     castle_perm: CastlingRights,
     /// The number of half moves made since the last capture or pawn advance.
@@ -112,7 +112,7 @@ impl Board {
             pieces: BitBoard::NULL,
             piece_array: [None; 64],
             side: Colour::White,
-            ep_sq: Square::NO_SQUARE,
+            ep_sq: None,
             fifty_move_counter: 0,
             height: 0,
             ply: 0,
@@ -125,11 +125,11 @@ impl Board {
         out
     }
 
-    pub const fn ep_sq(&self) -> Square {
+    pub const fn ep_sq(&self) -> Option<Square> {
         self.ep_sq
     }
 
-    pub fn ep_sq_mut(&mut self) -> &mut Square {
+    pub fn ep_sq_mut(&mut self) -> &mut Option<Square> {
         &mut self.ep_sq
     }
 
@@ -166,7 +166,6 @@ impl Board {
             Colour::White => self.pieces.king::<White>().first(),
             Colour::Black => self.pieces.king::<Black>().first(),
         };
-        debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(self.pieces.piece_at(sq).unwrap().colour(), side);
         debug_assert_eq!(self.pieces.piece_at(sq).unwrap().piece_type(), PieceType::King);
         sq
@@ -208,9 +207,8 @@ impl Board {
             hash_side(&mut key);
         }
 
-        if self.ep_sq != Square::NO_SQUARE {
-            debug_assert!(self.ep_sq.on_board());
-            hash_ep(&mut key, self.ep_sq);
+        if let Some(ep_sq) = self.ep_sq {
+            hash_ep(&mut key, ep_sq);
         }
 
         hash_castling(&mut key, self.castle_perm);
@@ -287,7 +285,7 @@ impl Board {
         self.pieces.reset();
         self.piece_array = [None; 64];
         self.side = Colour::White;
-        self.ep_sq = Square::NO_SQUARE;
+        self.ep_sq = None;
         self.fifty_move_counter = 0;
         self.height = 0;
         self.ply = 0;
@@ -299,25 +297,26 @@ impl Board {
 
     #[cfg(test)]
     pub fn set_frc_idx(&mut self, scharnagl: usize) {
+        #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960, "scharnagl index out of range");
         let backrank = Self::get_scharnagl_backrank(scharnagl);
         self.reset();
-        for (file, &piece_type) in backrank.iter().enumerate() {
-            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+        for (&piece_type, file) in backrank.iter().zip(File::ALL) {
+            let sq = Square::from_rank_file(Rank::One, file);
             self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
-        for file in 0..8 {
+        for file in File::ALL {
             // add pawns
-            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            let sq = Square::from_rank_file(Rank::Two, file);
             self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
-        for (file, &piece_type) in backrank.iter().enumerate() {
-            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+        for (&piece_type, file) in backrank.iter().zip(File::ALL) {
+            let sq = Square::from_rank_file(Rank::Eight, file);
             self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
-        for file in 0..8 {
+        for file in File::ALL {
             // add pawns
-            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
         let mut rook_indices =
@@ -325,36 +324,37 @@ impl Board {
         let queenside_file = rook_indices.next().unwrap();
         let kingside_file = rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
-            wk: Square::from_rank_file(Rank::RANK_1, kingside_file.try_into().unwrap()),
-            wq: Square::from_rank_file(Rank::RANK_1, queenside_file.try_into().unwrap()),
-            bk: Square::from_rank_file(Rank::RANK_8, kingside_file.try_into().unwrap()),
-            bq: Square::from_rank_file(Rank::RANK_8, queenside_file.try_into().unwrap()),
+            wk: Some(Square::from_rank_file(Rank::One, File::from_index(kingside_file as u8).unwrap())),
+            wq: Some(Square::from_rank_file(Rank::One, File::from_index(queenside_file as u8).unwrap())),
+            bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(kingside_file as u8).unwrap())),
+            bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(queenside_file as u8).unwrap())),
         };
         self.key = self.generate_pos_key();
         self.threats = self.generate_threats(self.side.flip());
     }
 
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
+        #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
         let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
         let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
         self.reset();
-        for (file, &piece_type) in white_backrank.iter().enumerate() {
-            let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
+        for (&piece_type, file) in white_backrank.iter().zip(File::ALL) {
+            let sq = Square::from_rank_file(Rank::One, file);
             self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
-        for file in 0..8 {
+        for file in File::ALL {
             // add pawns
-            let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
+            let sq = Square::from_rank_file(Rank::Two, file);
             self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
-        for (file, &piece_type) in black_backrank.iter().enumerate() {
-            let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
+        for (&piece_type, file) in black_backrank.iter().zip(File::ALL) {
+            let sq = Square::from_rank_file(Rank::Eight, file);
             self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
-        for file in 0..8 {
+        for file in File::ALL {
             // add pawns
-            let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
+            let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
         let mut white_rook_indices =
@@ -382,10 +382,10 @@ impl Board {
         let black_queenside_file = black_rook_indices.next().unwrap();
         let black_kingside_file = black_rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
-            wk: Square::from_rank_file(Rank::RANK_1, white_kingside_file.try_into().unwrap()),
-            wq: Square::from_rank_file(Rank::RANK_1, white_queenside_file.try_into().unwrap()),
-            bk: Square::from_rank_file(Rank::RANK_8, black_kingside_file.try_into().unwrap()),
-            bq: Square::from_rank_file(Rank::RANK_8, black_queenside_file.try_into().unwrap()),
+            wk: Some(Square::from_rank_file(Rank::One, File::from_index(white_kingside_file as u8).unwrap())),
+            wq: Some(Square::from_rank_file(Rank::One, File::from_index(white_queenside_file as u8).unwrap())),
+            bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_kingside_file as u8).unwrap())),
+            bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_queenside_file as u8).unwrap())),
         };
         self.key = self.generate_pos_key();
         self.threats = self.generate_threats(self.side.flip());
@@ -414,18 +414,18 @@ impl Board {
         let n = scharnagl;
         let (n2, b1) = (n / 4, n % 4);
         match b1 {
-            0 => out[File::FILE_B as usize] = Some(PieceType::Bishop),
-            1 => out[File::FILE_D as usize] = Some(PieceType::Bishop),
-            2 => out[File::FILE_F as usize] = Some(PieceType::Bishop),
-            3 => out[File::FILE_H as usize] = Some(PieceType::Bishop),
+            0 => out[File::B] = Some(PieceType::Bishop),
+            1 => out[File::D] = Some(PieceType::Bishop),
+            2 => out[File::F] = Some(PieceType::Bishop),
+            3 => out[File::H] = Some(PieceType::Bishop),
             _ => unreachable!(),
         }
         let (n3, b2) = (n2 / 4, n2 % 4);
         match b2 {
-            0 => out[File::FILE_A as usize] = Some(PieceType::Bishop),
-            1 => out[File::FILE_C as usize] = Some(PieceType::Bishop),
-            2 => out[File::FILE_E as usize] = Some(PieceType::Bishop),
-            3 => out[File::FILE_G as usize] = Some(PieceType::Bishop),
+            0 => out[File::A] = Some(PieceType::Bishop),
+            1 => out[File::C] = Some(PieceType::Bishop),
+            2 => out[File::E] = Some(PieceType::Bishop),
+            3 => out[File::G] = Some(PieceType::Bishop),
             _ => unreachable!(),
         }
         let (n4, mut q) = (n3 / 6, n3 % 6);
@@ -471,8 +471,8 @@ impl Board {
             return Err(format!("FEN string is not ASCII: {fen}"));
         }
 
-        let mut rank = Rank::RANK_8;
-        let mut file = File::FILE_A;
+        let mut rank = Rank::Eight;
+        let mut file = File::A;
 
         self.reset();
 
@@ -502,8 +502,8 @@ impl Board {
                     count = c - b'0';
                 }
                 b'/' => {
-                    rank -= 1;
-                    file = File::FILE_A;
+                    rank = rank.sub(1).unwrap();
+                    file = File::A;
                     continue;
                 }
                 c => {
@@ -517,7 +517,7 @@ impl Board {
                     // this is only ever run once, as count is 1 for non-empty pieces.
                     self.add_piece(sq, piece);
                 }
-                file += 1;
+                file = file.add(1).unwrap_or(File::H);
             }
         }
 
@@ -590,10 +590,10 @@ impl Board {
             Some(castling) if !CHESS960.load(Ordering::SeqCst) => {
                 for &c in castling {
                     match c {
-                        b'K' => self.castle_perm.wk = Square::H1,
-                        b'Q' => self.castle_perm.wq = Square::A1,
-                        b'k' => self.castle_perm.bk = Square::H8,
-                        b'q' => self.castle_perm.bq = Square::A8,
+                        b'K' => self.castle_perm.wk = Some(Square::H1),
+                        b'Q' => self.castle_perm.wq = Some(Square::A1),
+                        b'k' => self.castle_perm.bk = Some(Square::H8),
+                        b'q' => self.castle_perm.bq = Some(Square::A8),
                         _ => {
                             return Err(format!(
                                 "FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"",
@@ -607,42 +607,42 @@ impl Board {
                 // valid shredder castling strings are of the form "AHah", "Bd"
                 let white_king = self.king_sq(Colour::White);
                 let black_king = self.king_sq(Colour::Black);
-                if white_king.rank() != Rank::RANK_1 && shredder_castling.iter().any(u8::is_ascii_uppercase) {
+                if white_king.rank() != Rank::One && shredder_castling.iter().any(u8::is_ascii_uppercase) {
                     return Err(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
-                if black_king.rank() != Rank::RANK_8 && shredder_castling.iter().any(u8::is_ascii_lowercase) {
+                if black_king.rank() != Rank::Eight && shredder_castling.iter().any(u8::is_ascii_lowercase) {
                     return Err(format!("FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
                 for &c in shredder_castling {
                     match c {
                         c if c.is_ascii_uppercase() => {
-                            let file = c - b'A';
+                            let file = File::from_index(c - b'A').unwrap();
                             let king_file = white_king.file();
                             if file == king_file {
-                                return Err(format!("FEN string is invalid, white king is on file {}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                                return Err(format!("FEN string is invalid, white king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                             }
-                            let sq = Square::from_rank_file(Rank::RANK_1, file);
+                            let sq = Square::from_rank_file(Rank::One, file);
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
-                                self.castle_perm.wk = sq;
+                                self.castle_perm.wk = Some(sq);
                             } else {
                                 // castling rights are to the left of the king, so it's "queenside" castling rights.
-                                self.castle_perm.wq = sq;
+                                self.castle_perm.wq = Some(sq);
                             }
                         }
                         c if c.is_ascii_lowercase() => {
-                            let file = c - b'a';
+                            let file = File::from_index(c - b'a').unwrap();
                             let king_file = black_king.file();
                             if file == king_file {
-                                return Err(format!("FEN string is invalid, black king is on file {}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                                return Err(format!("FEN string is invalid, black king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                             }
-                            let sq = Square::from_rank_file(Rank::RANK_8, file);
+                            let sq = Square::from_rank_file(Rank::Eight, file);
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
-                                self.castle_perm.bk = sq;
+                                self.castle_perm.bk = Some(sq);
                             } else {
                                 // castling rights are to the left of the king, so it's "queenside" castling rights.
-                                self.castle_perm.bq = sq;
+                                self.castle_perm.bq = Some(sq);
                             }
                         }
                         _ => {
@@ -659,7 +659,7 @@ impl Board {
     fn set_ep(&mut self, ep_part: Option<&[u8]>) -> Result<(), FenParseError> {
         match ep_part {
             None => return Err("FEN string is invalid, expected en passant part.".to_string()),
-            Some([b'-']) => self.ep_sq = Square::NO_SQUARE,
+            Some([b'-']) => self.ep_sq = None,
             Some(ep_sq) => {
                 if ep_sq.len() != 2 {
                     return Err(format!(
@@ -669,13 +669,15 @@ impl Board {
                 }
                 let file = ep_sq[0] - b'a';
                 let rank = ep_sq[1] - b'1';
-                if !((File::FILE_A..=File::FILE_H).contains(&file) && (Rank::RANK_1..=Rank::RANK_8).contains(&rank)) {
+                let file = File::from_index(file);
+                let rank = Rank::from_index(rank);
+                if !(file.is_some() && rank.is_some()) {
                     return Err(format!(
                         "FEN string is invalid, expected en passant part to be of the form 'a1', got \"{}\"",
                         std::str::from_utf8(ep_sq).unwrap_or("<invalid utf8>")
                     ));
                 }
-                self.ep_sq = Square::from_rank_file(rank, file);
+                self.ep_sq = Some(Square::from_rank_file(rank.unwrap(), file.unwrap()));
             }
         }
 
@@ -729,7 +731,6 @@ impl Board {
     }
 
     pub fn sq_attacked_by<C: Col>(&self, sq: Square) -> bool {
-        debug_assert!(sq.on_board());
         // we remove this check because the board actually *can*
         // be in an inconsistent state when we call this, as it's
         // used to determine if a move is legal, and we'd like to
@@ -829,15 +830,17 @@ impl Board {
                 return false;
             }
             if m.is_ep() {
-                return to == self.ep_sq;
+                return Some(to) == self.ep_sq;
             } else if is_pawn_double_push {
-                if from.relative_to(self.side).rank() != Rank::RANK_2 {
+                if from.relative_to(self.side).rank() != Rank::Two {
                     return false;
                 }
-                let one_forward = from.pawn_push(self.side);
-                return self.piece_at(one_forward).is_none() && to == one_forward.pawn_push(self.side);
+                let Some(one_forward) = from.pawn_push(self.side) else {
+                    return false;
+                };
+                return self.piece_at(one_forward).is_none() && Some(to) == one_forward.pawn_push(self.side);
             } else if captured_piece.is_none() {
-                return to == from.pawn_push(self.side);
+                return Some(to) == from.pawn_push(self.side);
             }
             // pawn capture
             if self.side == Colour::White {
@@ -873,7 +876,7 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if m.to() != (if self.side == Colour::Black { self.castle_perm.bk } else { self.castle_perm.wk }) {
+            if Some(m.to()) != (if self.side == Colour::Black { self.castle_perm.bk } else { self.castle_perm.wk }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -885,7 +888,7 @@ impl Board {
             }
         } else {
             // queenside castling.
-            if m.to() != (if self.side == Colour::Black { self.castle_perm.bq } else { self.castle_perm.wq }) {
+            if Some(m.to()) != (if self.side == Colour::Black { self.castle_perm.bq } else { self.castle_perm.wq }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -898,9 +901,9 @@ impl Board {
         };
 
         // king_path is the path the king takes to get to its destination.
-        let king_path = RAY_BETWEEN[m.from().index()][king_dst.index()];
+        let king_path = RAY_BETWEEN[m.from()][king_dst];
         // rook_path is the path the rook takes to get to its destination.
-        let rook_path = RAY_BETWEEN[m.from().index()][m.to().index()];
+        let rook_path = RAY_BETWEEN[m.from()][m.to()];
         // castle_occ is the occupancy that "counts" for castling.
         let castle_occ = self.pieces.occupied() ^ m.from().as_set() ^ m.to().as_set();
 
@@ -922,40 +925,32 @@ impl Board {
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        debug_assert!(sq.on_board());
-
         self.pieces.set_piece_at(sq, piece);
         *self.piece_at_mut(sq) = Some(piece);
     }
 
     /// Gets the piece that will be moved by the given move.
     pub fn moved_piece(&self, m: Move) -> Option<Piece> {
-        debug_assert!(m.from().on_board());
-        let idx = m.from().index();
+        let idx = m.from();
         self.piece_array[idx]
     }
 
     /// Gets the piece that will be captured by the given move.
     pub fn captured_piece(&self, m: Move) -> Option<Piece> {
-        debug_assert!(m.to().on_board());
         if m.is_castle() {
             return None;
         }
-        let idx = m.to().index();
+        let idx = m.to();
         self.piece_array[idx]
     }
 
     /// Determines whether this move would be a capture in the current position.
     pub fn is_capture(&self, m: Move) -> bool {
-        debug_assert!(m.from().on_board());
-        debug_assert!(m.to().on_board());
         self.captured_piece(m).is_some()
     }
 
     /// Determines whether this move would be a double pawn push in the current position.
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
-        debug_assert!(m.from().on_board());
-        debug_assert!(m.to().on_board());
         let from_bb = m.from().as_set();
         if (from_bb & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
             return false;
@@ -977,14 +972,12 @@ impl Board {
 
     /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        debug_assert!(sq.on_board());
-        self.piece_array[sq.index()]
+        self.piece_array[sq]
     }
 
     /// Gets a mutable reference to the piece at the given square.
     pub fn piece_at_mut(&mut self, sq: Square) -> &mut Option<Piece> {
-        debug_assert!(sq.on_board());
-        &mut self.piece_array[sq.index()]
+        &mut self.piece_array[sq]
     }
 
     pub fn make_move_simple(&mut self, m: Move) -> bool {
@@ -1027,32 +1020,29 @@ impl Board {
             }
         }
 
-        debug_assert!(from.on_board());
-        debug_assert!(to.on_board());
-
         if m.is_ep() {
-            let clear_at = if side == Colour::White { to.sub(8) } else { to.add(8) };
+            let clear_at = if side == Colour::White { to.sub(8) } else { to.add(8) }.unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
             self.pieces.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
         } else if m.is_castle() {
             self.pieces.clear_piece_at(from, piece);
             let (rook_from, rook_to) = match to {
-                _ if to == self.castle_perm.wk => {
+                _ if Some(to) == self.castle_perm.wk => {
                     to = Square::G1;
-                    (self.castle_perm.wk, Square::F1)
+                    (self.castle_perm.wk.unwrap(), Square::F1)
                 }
-                _ if to == self.castle_perm.wq => {
+                _ if Some(to) == self.castle_perm.wq => {
                     to = Square::C1;
-                    (self.castle_perm.wq, Square::D1)
+                    (self.castle_perm.wq.unwrap(), Square::D1)
                 }
-                _ if to == self.castle_perm.bk => {
+                _ if Some(to) == self.castle_perm.bk => {
                     to = Square::G8;
-                    (self.castle_perm.bk, Square::F8)
+                    (self.castle_perm.bk.unwrap(), Square::F8)
                 }
-                _ if to == self.castle_perm.bq => {
+                _ if Some(to) == self.castle_perm.bq => {
                     to = Square::C8;
-                    (self.castle_perm.bq, Square::D8)
+                    (self.castle_perm.bq.unwrap(), Square::D8)
                 }
                 _ => {
                     panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
@@ -1068,7 +1058,7 @@ impl Board {
             }
         }
 
-        self.ep_sq = Square::NO_SQUARE;
+        self.ep_sq = None;
 
         self.fifty_move_counter += 1;
 
@@ -1088,10 +1078,10 @@ impl Board {
             {
                 if side == Colour::White {
                     self.ep_sq = from.add(8);
-                    debug_assert!(self.ep_sq.rank() == Rank::RANK_3);
+                    debug_assert!(self.ep_sq.unwrap().rank() == Rank::Three);
                 } else {
                     self.ep_sq = from.sub(8);
-                    debug_assert!(self.ep_sq.rank() == Rank::RANK_6);
+                    debug_assert!(self.ep_sq.unwrap().rank() == Rank::Six);
                 }
             }
         }
@@ -1133,8 +1123,8 @@ impl Board {
         let mut key = self.key;
 
         // remove a previous en passant square from the hash
-        if saved_state.ep_square != Square::NO_SQUARE {
-            hash_ep(&mut key, saved_state.ep_square);
+        if let Some(ep_sq) = saved_state.ep_square {
+            hash_ep(&mut key, ep_sq);
         }
 
         // hash out the castling to insert it again after updating rights.
@@ -1143,38 +1133,38 @@ impl Board {
         // update castling rights
         let mut new_rights = self.castle_perm;
         if piece == Piece::WR {
-            if from == self.castle_perm.wk {
-                new_rights.wk = Square::NO_SQUARE;
-            } else if from == self.castle_perm.wq {
-                new_rights.wq = Square::NO_SQUARE;
+            if Some(from) == self.castle_perm.wk {
+                new_rights.wk = None;
+            } else if Some(from) == self.castle_perm.wq {
+                new_rights.wq = None;
             }
         } else if piece == Piece::BR {
-            if from == self.castle_perm.bk {
-                new_rights.bk = Square::NO_SQUARE;
-            } else if from == self.castle_perm.bq {
-                new_rights.bq = Square::NO_SQUARE;
+            if Some(from) == self.castle_perm.bk {
+                new_rights.bk = None;
+            } else if Some(from) == self.castle_perm.bq {
+                new_rights.bq = None;
             }
         } else if piece == Piece::WK {
-            new_rights.wk = Square::NO_SQUARE;
-            new_rights.wq = Square::NO_SQUARE;
+            new_rights.wk = None;
+            new_rights.wq = None;
         } else if piece == Piece::BK {
-            new_rights.bk = Square::NO_SQUARE;
-            new_rights.bq = Square::NO_SQUARE;
+            new_rights.bk = None;
+            new_rights.bq = None;
         }
         new_rights.remove(to);
         self.castle_perm = new_rights;
 
         // apply all the updates to the zobrist hash
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut key, self.ep_sq);
+        if let Some(ep_sq) = self.ep_sq {
+            hash_ep(&mut key, ep_sq);
         }
         hash_side(&mut key);
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
-            self.piece_array[sq.index()] = None;
+            self.piece_array[sq] = None;
             hash_piece(&mut key, piece, sq);
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
-            self.piece_array[sq.index()] = Some(piece);
+            self.piece_array[sq] = Some(piece);
             hash_piece(&mut key, piece, sq);
         }
         // reinsert the castling rights
@@ -1232,13 +1222,13 @@ impl Board {
         self.history.push(Undo { ep_square: self.ep_sq, threats: self.threats, key: self.key, ..Default::default() });
 
         let mut key = self.key;
-        if self.ep_sq != Square::NO_SQUARE {
-            hash_ep(&mut key, self.ep_sq);
+        if let Some(ep_sq) = self.ep_sq {
+            hash_ep(&mut key, ep_sq);
         }
         hash_side(&mut key);
         self.key = key;
 
-        self.ep_sq = Square::NO_SQUARE;
+        self.ep_sq = None;
         self.side = self.side.flip();
         self.ply += 1;
         self.height += 1;
@@ -1340,7 +1330,7 @@ impl Board {
     pub fn parse_uci(&self, uci: &str) -> Result<Move, MoveParseError> {
         use crate::errors::MoveParseError::{
             IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength, InvalidPromotionPiece,
-            InvalidToSquareFile, InvalidToSquareRank,
+            InvalidToSquareFile, InvalidToSquareRank, Unknown,
         };
         let san_bytes = uci.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
@@ -1362,8 +1352,14 @@ impl Board {
             return Err(InvalidPromotionPiece(san_bytes[4] as char));
         }
 
-        let from = Square::from_rank_file(san_bytes[1] - b'1', san_bytes[0] - b'a');
-        let to = Square::from_rank_file(san_bytes[3] - b'1', san_bytes[2] - b'a');
+        let from = Square::from_rank_file(
+            Rank::from_index(san_bytes[1] - b'1').ok_or(Unknown)?,
+            File::from_index(san_bytes[0] - b'a').ok_or(Unknown)?,
+        );
+        let to = Square::from_rank_file(
+            Rank::from_index(san_bytes[3] - b'1').ok_or(Unknown)?,
+            File::from_index(san_bytes[2] - b'a').ok_or(Unknown)?,
+        );
 
         let mut list = MoveList::new();
         self.generate_moves(&mut list);
@@ -1411,7 +1407,8 @@ impl Board {
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from())?;
-        let is_capture = self.is_capture(m) || (moved_piece.piece_type() == PieceType::Pawn && to_sq == self.ep_sq);
+        let is_capture =
+            self.is_capture(m) || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::Pawn if !is_capture => "",
             PieceType::Pawn => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
@@ -1568,8 +1565,8 @@ impl Board {
         #![allow(clippy::cast_possible_truncation)]
         let mut bytes_written = 0;
         let mut counter = 0;
-        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
-            for file in File::FILE_A..=File::FILE_H {
+        for rank in Rank::ALL.into_iter().rev() {
+            for file in File::ALL {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
                 if let Some(piece) = piece {
@@ -1587,7 +1584,7 @@ impl Board {
                 bytes_written += f.write(&[counter + b'0'])?;
             }
             counter = 0;
-            if rank != 0 {
+            if rank != Rank::One {
                 bytes_written += f.write(b"/")?;
             }
         }
@@ -1605,14 +1602,14 @@ impl Board {
             bytes_written += [self.castle_perm.wk, self.castle_perm.wq, self.castle_perm.bk, self.castle_perm.bq]
                 .into_iter()
                 .zip(b"KQkq")
-                .filter(|(m, _)| *m != Square::NO_SQUARE)
+                .filter(|(m, _)| m.is_some())
                 .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
         }
         bytes_written += f.write(b" ")?;
-        if self.ep_sq == Square::NO_SQUARE {
-            bytes_written += f.write(b"-")?;
+        if let Some(ep_sq) = self.ep_sq {
+            bytes_written += f.write(ep_sq.name().as_bytes())?;
         } else {
-            bytes_written += f.write(self.ep_sq.name().unwrap().as_bytes())?;
+            bytes_written += f.write(b"-")?;
         }
         let hc = self.fifty_move_counter;
         let hundreds = hc / 100;
@@ -1764,9 +1761,9 @@ impl Default for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        for rank in (Rank::RANK_1..=Rank::RANK_8).rev() {
-            write!(f, "{} ", rank + 1)?;
-            for file in File::FILE_A..=File::FILE_H {
+        for rank in Rank::ALL.into_iter().rev() {
+            write!(f, "{} ", rank as u8 + 1)?;
+            for file in File::ALL {
                 let sq = Square::from_rank_file(rank, file);
                 if let Some(piece) = self.piece_at(sq) {
                     write!(f, "{piece} ")?;
@@ -1969,8 +1966,8 @@ mod tests {
         assert!(not_ep_capturable.make_move_simple(d5));
         assert!(ep_capturable.make_move_simple(d5));
 
-        assert_eq!(not_ep_capturable.ep_sq, Square::NO_SQUARE);
-        assert_eq!(ep_capturable.ep_sq, Square::D6);
+        assert_eq!(not_ep_capturable.ep_sq, None);
+        assert_eq!(ep_capturable.ep_sq, Some(Square::D6));
 
         assert_eq!(not_ep_capturable.key, not_ep_capturable_key);
         assert_eq!(ep_capturable.key, ep_capturable_key);
@@ -1983,6 +1980,6 @@ mod tests {
         use crate::util::Square;
         let mut board = Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
-        assert_eq!(board.ep_sq, Square::B6);
+        assert_eq!(board.ep_sq, Some(Square::B6));
     }
 }

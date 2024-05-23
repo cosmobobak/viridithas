@@ -15,8 +15,7 @@ pub fn hash_castling(key: &mut u64, castle_perm: CastlingRights) {
 }
 
 pub fn hash_piece(key: &mut u64, piece: Piece, sq: Square) {
-    debug_assert!(sq.on_board());
-    let piece_key = PIECE_KEYS[piece][sq.index()];
+    let piece_key = PIECE_KEYS[piece][sq];
     *key ^= piece_key;
 }
 
@@ -25,7 +24,6 @@ pub fn hash_side(key: &mut u64) {
 }
 
 pub fn hash_ep(key: &mut u64, ep_sq: Square) {
-    debug_assert!(ep_sq.on_board());
-    let ep_key = EP_KEYS[ep_sq.index()];
+    let ep_key = EP_KEYS[ep_sq];
     *key ^= ep_key;
 }

@@ -3,7 +3,7 @@ use crate::{
     historytable::update_history,
     piece::PieceType,
     threadlocal::ThreadData,
-    util::{depth::Depth, Square, Undo, MAX_DEPTH},
+    util::{depth::Depth, Undo, MAX_DEPTH},
 };
 
 use super::{movegen::MoveListEntry, Board};
@@ -164,9 +164,6 @@ impl ThreadData<'_> {
         let Some(&Undo { cont_hist_index: Some(cont_hist_index), .. }) = pos.history.last() else {
             return;
         };
-        if cont_hist_index.square == Square::NO_SQUARE {
-            return;
-        }
 
         let prev_to = cont_hist_index.square;
         let prev_piece = cont_hist_index.piece;
@@ -179,9 +176,6 @@ impl ThreadData<'_> {
         let Some(&Undo { cont_hist_index: Some(cont_hist_index), .. }) = pos.history.last() else {
             return None;
         };
-        if cont_hist_index.square == Square::NO_SQUARE {
-            return None;
-        }
 
         let prev_to = cont_hist_index.square;
         let prev_piece = cont_hist_index.piece;

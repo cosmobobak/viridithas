@@ -74,11 +74,13 @@ impl Move {
     }
 
     pub const fn from(self) -> Square {
-        Square::new((self.data.get() & Self::SQ_MASK) as u8)
+        // SAFETY: SQ_MASK guarantees that this is in bounds.
+        unsafe { Square::new_unchecked((self.data.get() & Self::SQ_MASK) as u8) }
     }
 
     pub const fn to(self) -> Square {
-        Square::new(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8)
+        // SAFETY: SQ_MASK guarantees that this is in bounds.
+        unsafe { Square::new_unchecked(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8) }
     }
 
     pub fn promotion_type(self) -> Option<PieceType> {
@@ -120,10 +122,10 @@ impl Move {
             let to_rank = self.from().rank();
             if self.to() > self.from() {
                 // kingside castling, king goes to the G file
-                Square::from_rank_file(to_rank, File::FILE_G)
+                Square::from_rank_file(to_rank, File::G)
             } else {
                 // queenside castling, king goes to the C file
-                Square::from_rank_file(to_rank, File::FILE_C)
+                Square::from_rank_file(to_rank, File::C)
             }
         } else {
             self.to()

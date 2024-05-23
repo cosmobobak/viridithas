@@ -40,9 +40,9 @@ const BUCKET_MAP: [usize; 64] = [
     8, 8, 8, 8, 17, 17, 17, 17,
     8, 8, 8, 8, 17, 17, 17, 17,
 ];
-pub const fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
-    let white_bucket = BUCKET_MAP[white_king.index()];
-    let black_bucket = BUCKET_MAP[black_king.flip_rank().index()];
+pub fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
+    let white_bucket = BUCKET_MAP[white_king];
+    let black_bucket = BUCKET_MAP[black_king.flip_rank()];
     (white_bucket, black_bucket)
 }
 
@@ -432,7 +432,7 @@ impl NNUEState {
             return false;
         }
 
-        BUCKET_MAP[from.index()] != BUCKET_MAP[to.index()]
+        BUCKET_MAP[from] != BUCKET_MAP[to]
     }
 
     fn can_efficiently_update(&self, view: Colour) -> bool {

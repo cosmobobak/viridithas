@@ -266,7 +266,7 @@ impl Board {
             if ThTy::MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
                 let bm_frac = if d > 8 {
                     let best_move = pv.moves[0];
-                    let best_move_subtree_size = info.root_move_nodes[best_move.from().index()][best_move.to().index()];
+                    let best_move_subtree_size = info.root_move_nodes[best_move.from()][best_move.to()];
                     let tree_size = info.nodes.get_local();
                     #[allow(clippy::cast_precision_loss)]
                     Some(best_move_subtree_size as f64 / tree_size as f64)
@@ -1051,7 +1051,7 @@ impl Board {
             // record subtree size for TimeManager
             if NT::ROOT && t.thread_id == 0 {
                 let subtree_size = info.nodes.get_local() - nodes_before_search;
-                info.root_move_nodes[m.from().index()][m.to().index()] += subtree_size;
+                info.root_move_nodes[m.from()][m.to()] += subtree_size;
             }
 
             if extension >= ONE_PLY * 2 {
@@ -1252,7 +1252,7 @@ impl Board {
         // occupied starts with the position after the move `m` is made.
         let mut occupied = (self.pieces.occupied() ^ from.as_set()) | to.as_set();
         if m.is_ep() {
-            occupied ^= self.ep_sq().as_set();
+            occupied ^= self.ep_sq().unwrap().as_set();
         }
 
         let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;

@@ -48,11 +48,11 @@ impl HistoryTable {
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> i16 {
-        self.table[piece][sq.index()]
+        self.table[piece][sq]
     }
 
     pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        &mut self.table[piece][sq.index()]
+        &mut self.table[piece][sq]
     }
 }
 
@@ -164,11 +164,11 @@ impl DoubleHistoryTable {
     }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        &mut self.table[index.piece][index.square.index()]
+        &mut self.table[index.piece][index.square]
     }
 
     pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        &self.table[index.piece][index.square.index()]
+        &self.table[index.piece][index.square]
     }
 }
 
@@ -187,10 +187,10 @@ impl MoveTable {
     }
 
     pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
-        self.table[piece][sq.index()] = Some(m);
+        self.table[piece][sq] = Some(m);
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> Option<Move> {
-        self.table[piece][sq.index()]
+        self.table[piece][sq]
     }
 }

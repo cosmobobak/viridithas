@@ -54,13 +54,13 @@ pub const SIDE_KEY: u64 = init_hash_keys().3;
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
-    cfor!(let mut sq = Square::A1; true; sq = sq.add(1); {
+    cfor!(let mut sq = Square::A1; true; sq = unsafe { sq.add_unchecked(1) }; {
         let mut attacks_bb = 0;
         cfor!(let mut idx = 0; idx < 8; idx += 1; {
             let delta = deltas[idx];
             let attacked_sq = sq.signed_inner() + delta;
             #[allow(clippy::cast_sign_loss)]
-            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(sq, Square::new(attacked_sq as u8)) <= 2 {
+            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(sq, unsafe { Square::new_unchecked(attacked_sq as u8) }) <= 2 {
                 attacks_bb |= 1 << attacked_sq;
             }
         });
@@ -74,13 +74,11 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
 
 pub fn get_knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
-    debug_assert!(sq.on_board());
-    KNIGHT_ATTACKS[sq.index()]
+    KNIGHT_ATTACKS[sq]
 }
 pub fn get_king_attacks(sq: Square) -> SquareSet {
     static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
-    debug_assert!(sq.on_board());
-    KING_ATTACKS[sq.index()]
+    KING_ATTACKS[sq]
 }
 
 mod tests {
@@ -113,10 +111,10 @@ mod tests {
         use crate::util::Square;
         // testing that the attack bitboards match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_knight_attacks(Square::new(0)), SquareSet::from_inner(132_096));
-        assert_eq!(get_knight_attacks(Square::new(63)), SquareSet::from_inner(9_077_567_998_918_656));
+        assert_eq!(get_knight_attacks(Square::new(0).unwrap()), SquareSet::from_inner(132_096));
+        assert_eq!(get_knight_attacks(Square::new(63).unwrap()), SquareSet::from_inner(9_077_567_998_918_656));
 
-        assert_eq!(get_king_attacks(Square::new(0)), SquareSet::from_inner(770));
-        assert_eq!(get_king_attacks(Square::new(63)), SquareSet::from_inner(4_665_729_213_955_833_856));
+        assert_eq!(get_king_attacks(Square::new(0).unwrap()), SquareSet::from_inner(770));
+        assert_eq!(get_king_attacks(Square::new(63).unwrap()), SquareSet::from_inner(4_665_729_213_955_833_856));
     }
 }

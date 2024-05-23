@@ -9,6 +9,7 @@ pub enum MoveParseError {
     InvalidToSquareRank(char),
     InvalidPromotionPiece(char),
     IllegalMove(String),
+    Unknown,
 }
 impl Display for MoveParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -20,6 +21,7 @@ impl Display for MoveParseError {
             Self::InvalidToSquareRank(rank) => write!(f, "Invalid to-square rank {rank}"),
             Self::InvalidPromotionPiece(piece) => write!(f, "Invalid promotion piece {piece}"),
             Self::IllegalMove(m) => write!(f, "Illegal move {m}"),
+            Self::Unknown => write!(f, "Unknown error."),
         }
     }
 }

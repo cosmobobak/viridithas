@@ -129,8 +129,8 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
         let mut moves = MoveList::new();
         board.generate_moves(&mut moves);
 
-        let from = Square::new(((result & TB_RESULT_FROM_MASK) >> TB_RESULT_FROM_SHIFT) as u8);
-        let to = Square::new(((result & TB_RESULT_TO_MASK) >> TB_RESULT_TO_SHIFT) as u8);
+        let from = Square::new(((result & TB_RESULT_FROM_MASK) >> TB_RESULT_FROM_SHIFT) as u8).unwrap();
+        let to = Square::new(((result & TB_RESULT_TO_MASK) >> TB_RESULT_TO_SHIFT) as u8).unwrap();
         let promotion = (result & TB_RESULT_PROMOTES_MASK) >> TB_RESULT_PROMOTES_SHIFT;
 
         let promo_piece_type = match promotion {
