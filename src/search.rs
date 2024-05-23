@@ -223,7 +223,7 @@ impl Board {
         }
 
         assert!(legal_moves.contains(&best_move), "search returned an illegal move.");
-        (if self.turn() == Colour::WHITE { pv.score } else { -pv.score }, Some(best_move))
+        (if self.turn() == Colour::White { pv.score } else { -pv.score }, Some(best_move))
     }
 
     /// Performs the iterative deepening search.
@@ -1362,7 +1362,7 @@ fn readout_info(
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
     let nps = (nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
-    if board.turn() == Colour::BLACK {
+    if board.turn() == Colour::Black {
         bound = match bound {
             Bound::Upper => Bound::Lower,
             Bound::Lower => Bound::Upper,

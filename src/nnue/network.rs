@@ -180,8 +180,8 @@ impl PovUpdate {
 
     pub const fn colour(colour: Colour) -> Self {
         match colour {
-            Colour::WHITE => Self { white: true, black: false },
-            Colour::BLACK => Self { white: false, black: true },
+            Colour::White => Self { white: true, black: false },
+            Colour::Black => Self { white: false, black: true },
         }
     }
 }
@@ -295,7 +295,7 @@ impl BucketAccumulatorCache {
                     let black_king = cached_board_state.piece_bb(Piece::BK).first();
                     let (white_bucket_from_board_position, black_bucket_from_board_position) =
                         get_bucket_indices(white_king, black_king);
-                    if colour == Colour::WHITE {
+                    if colour == Colour::White {
                         assert_eq!(white_bucket_from_board_position, bucket);
                     } else {
                         assert_eq!(black_bucket_from_board_position, bucket);
@@ -304,18 +304,18 @@ impl BucketAccumulatorCache {
             }
         }
 
-        let side_we_care_about = if pov_update.white { Colour::WHITE } else { Colour::BLACK };
+        let side_we_care_about = if pov_update.white { Colour::White } else { Colour::Black };
         let wk = board_state.piece_bb(Piece::WK).first();
         let bk = board_state.piece_bb(Piece::BK).first();
         let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
-        let bucket = if side_we_care_about == Colour::WHITE { white_bucket } else { black_bucket };
+        let bucket = if side_we_care_about == Colour::White { white_bucket } else { black_bucket };
         let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[side_we_care_about][bucket].update_iter(board_state, |f, is_add| {
             let (white_idx, black_idx) = feature::indices(wk, bk, f);
-            let index = if side_we_care_about == Colour::WHITE { white_idx } else { black_idx };
+            let index = if side_we_care_about == Colour::White { white_idx } else { black_idx };
             if is_add {
                 adds.push(index);
             } else {
@@ -466,8 +466,8 @@ impl NNUEState {
         }
 
         let pov_update = PovUpdate::colour(view);
-        let white_king = board.king_sq(Colour::WHITE);
-        let black_king = board.king_sq(Colour::BLACK);
+        let white_king = board.king_sq(Colour::White);
+        let black_king = board.king_sq(Colour::Black);
 
         loop {
             self.materialise_new_acc_from(
@@ -656,7 +656,7 @@ impl NNUEState {
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) = if stm == Colour::WHITE { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
+        let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
         let output = flatten(us, them, &NNUE.output_weights);
 
@@ -728,7 +728,7 @@ pub unsafe fn flatten_inner(
 pub fn inference_benchmark(state: &NNUEState) {
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
-        std::hint::black_box(state.evaluate(Colour::WHITE));
+        std::hint::black_box(state.evaluate(Colour::White));
     }
     let elapsed = start.elapsed();
     let nanos = elapsed.as_nanos();

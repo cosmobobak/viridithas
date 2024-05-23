@@ -15,34 +15,26 @@ pub struct Black;
 impl Col for White {
     type Opposite = Black;
     const WHITE: bool = true;
-    const COLOUR: Colour = Colour::WHITE;
+    const COLOUR: Colour = Colour::White;
 }
 
 impl Col for Black {
     type Opposite = White;
     const WHITE: bool = false;
-    const COLOUR: Colour = Colour::BLACK;
+    const COLOUR: Colour = Colour::Black;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Colour {
-    v: bool,
-}
-
-impl Debug for Colour {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Self::WHITE => write!(f, "Colour::WHITE"),
-            Self::BLACK => write!(f, "Colour::BLACK"),
-        }
-    }
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Colour {
+    White,
+    Black,
 }
 
 impl Display for Colour {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Self::WHITE => write!(f, "White"),
-            Self::BLACK => write!(f, "Black"),
+            Self::White => write!(f, "White"),
+            Self::Black => write!(f, "Black"),
         }
     }
 }
@@ -85,27 +77,31 @@ impl Display for Piece {
 }
 
 impl Colour {
-    pub const WHITE: Self = Self { v: false };
-    pub const BLACK: Self = Self { v: true };
-
     pub const fn new(v: bool) -> Self {
-        Self { v }
+        if v {
+            Self::Black
+        } else {
+            Self::White
+        }
     }
 
     pub const fn flip(self) -> Self {
-        Self::new(!self.v)
+        match self {
+            Self::White => Self::Black,
+            Self::Black => Self::White,
+        }
     }
 
     pub const fn index(self) -> usize {
-        self.v as usize
+        self as usize
     }
 
-    pub const fn inner(self) -> bool {
-        self.v
+    pub const fn inner(self) -> u8 {
+        self as u8
     }
 
     pub fn all() -> impl Iterator<Item = Self> {
-        [Self::WHITE, Self::BLACK].iter().copied()
+        [Self::White, Self::Black].iter().copied()
     }
 }
 
@@ -182,7 +178,7 @@ impl Iterator for PieceTypesIterator {
 
 impl Piece {
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
-        let index = colour.v as u8 * 6 + piece_type as u8;
+        let index = colour as u8 * 6 + piece_type as u8;
         unsafe { std::mem::transmute(index) }
     }
 
@@ -196,22 +192,16 @@ impl Piece {
 
     pub const fn colour(self) -> Colour {
         if (self as u8) < 6 {
-            Colour::WHITE
+            Colour::White
         } else {
-            Colour::BLACK
+            Colour::Black
         }
     }
 
     pub const fn piece_type(self) -> PieceType {
-        // TODO: potential optimisation available.
-        match self {
-            Self::WP | Self::BP => PieceType::Pawn,
-            Self::WN | Self::BN => PieceType::Knight,
-            Self::WB | Self::BB => PieceType::Bishop,
-            Self::WR | Self::BR => PieceType::Rook,
-            Self::WQ | Self::BQ => PieceType::Queen,
-            Self::WK | Self::BK => PieceType::King,
-        }
+        let pt_index = self as u8 % 6;
+        // SAFETY: pt_index is always within the bounds of the type.
+        unsafe { PieceType::from_index_unchecked(pt_index) }
     }
 
     pub const fn char(self) -> char {
@@ -284,14 +274,14 @@ impl<T> Index<Colour> for [T; 2] {
 
     fn index(&self, index: Colour) -> &Self::Output {
         // SAFETY: the legal values for this type are all in bounds.
-        unsafe { self.get_unchecked(usize::from(index.v)) }
+        unsafe { self.get_unchecked(index as usize) }
     }
 }
 
 impl<T> IndexMut<Colour> for [T; 2] {
     fn index_mut(&mut self, index: Colour) -> &mut Self::Output {
         // SAFETY: the legal values for this type are all in bounds.
-        unsafe { self.get_unchecked_mut(usize::from(index.v)) }
+        unsafe { self.get_unchecked_mut(index as usize) }
     }
 }
 

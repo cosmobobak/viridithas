@@ -158,7 +158,7 @@ impl Square {
     }
 
     pub const fn relative_to(self, side: Colour) -> Self {
-        if matches!(side, Colour::WHITE) {
+        if matches!(side, Colour::White) {
             self
         } else {
             self.flip_rank()
@@ -221,7 +221,7 @@ impl Square {
     }
 
     pub fn pawn_push(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.add(8)
         } else {
             self.sub(8)
@@ -229,7 +229,7 @@ impl Square {
     }
 
     pub fn pawn_right(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.add(9)
         } else {
             self.sub(7)
@@ -237,7 +237,7 @@ impl Square {
     }
 
     pub fn pawn_left(self, side: Colour) -> Self {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.add(7)
         } else {
             self.sub(9)
@@ -386,7 +386,7 @@ impl CastlingRights {
     }
 
     pub fn kingside(self, side: Colour) -> Square {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.wk
         } else {
             self.bk
@@ -394,7 +394,7 @@ impl CastlingRights {
     }
 
     pub fn kingside_mut(&mut self, side: Colour) -> &mut Square {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             &mut self.wk
         } else {
             &mut self.bk
@@ -402,7 +402,7 @@ impl CastlingRights {
     }
 
     pub fn queenside(self, side: Colour) -> Square {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.wq
         } else {
             self.bq
@@ -410,7 +410,7 @@ impl CastlingRights {
     }
 
     pub fn queenside_mut(&mut self, side: Colour) -> &mut Square {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             &mut self.wq
         } else {
             &mut self.bq

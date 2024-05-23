@@ -158,8 +158,8 @@ impl Game {
             if filter(*mv, i32::from(eval), &board) {
                 let mut bbs = [0; 8];
                 let bitboard = &board.pieces;
-                bbs[0] = bitboard.occupied_co(Colour::WHITE).inner();
-                bbs[1] = bitboard.occupied_co(Colour::BLACK).inner();
+                bbs[0] = bitboard.occupied_co(Colour::White).inner();
+                bbs[1] = bitboard.occupied_co(Colour::Black).inner();
                 bbs[2] = bitboard.of_type(PieceType::Pawn).inner();
                 bbs[3] = bitboard.of_type(PieceType::Knight).inner();
                 bbs[4] = bitboard.of_type(PieceType::Bishop).inner();
@@ -169,7 +169,7 @@ impl Game {
                 callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,
-                        (board.turn() != Colour::WHITE).into(),
+                        (board.turn() != Colour::White).into(),
                         eval,
                         f32::from(wdl) / 2.0,
                     )

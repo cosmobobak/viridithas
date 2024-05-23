@@ -224,7 +224,7 @@ impl Board {
 
     pub fn generate_moves(&self, move_list: &mut MoveList) {
         move_list.clear();
-        if self.side == Colour::WHITE {
+        if self.side == Colour::White {
             self.generate_moves_for::<White>(move_list);
         } else {
             self.generate_moves_for::<Black>(move_list);
@@ -315,7 +315,7 @@ impl Board {
 
     pub fn generate_captures<Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
         move_list.clear();
-        if self.side == Colour::WHITE {
+        if self.side == Colour::White {
             self.generate_captures_for::<White, Mode>(move_list);
         } else {
             self.generate_captures_for::<Black, Mode>(move_list);
@@ -486,7 +486,7 @@ impl Board {
 
     pub fn generate_quiets(&self, move_list: &mut MoveList) {
         // we don't need to clear the move list here because we're only adding to it.
-        if self.side == Colour::WHITE {
+        if self.side == Colour::White {
             self.generate_quiets_for::<White>(move_list);
         } else {
             self.generate_quiets_for::<Black>(move_list);

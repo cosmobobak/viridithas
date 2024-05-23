@@ -102,7 +102,7 @@ impl BitBoard {
     }
 
     pub fn occupied(&self) -> SquareSet {
-        self.colours[Colour::WHITE] | self.colours[Colour::BLACK]
+        self.colours[Colour::White] | self.colours[Colour::Black]
     }
 
     pub fn knights<C: Col>(&self) -> SquareSet {
@@ -198,9 +198,9 @@ impl BitBoard {
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         let sq_bb = sq.as_set();
         let colour = if (self.our_pieces::<White>() & sq_bb).non_empty() {
-            Colour::WHITE
+            Colour::White
         } else if (self.our_pieces::<Black>() & sq_bb).non_empty() {
-            Colour::BLACK
+            Colour::Black
         } else {
             return None;
         };

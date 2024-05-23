@@ -71,8 +71,8 @@ pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
     assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook bitboards {msg}");
     assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen bitboards {msg}");
     assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::WHITE), rhs.pieces.occupied_co(Colour::WHITE), "white bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::BLACK), rhs.pieces.occupied_co(Colour::BLACK), "black bitboards {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white bitboards {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black bitboards {msg}");
     for sq in Square::all() {
         assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
     }
@@ -111,7 +111,7 @@ impl Board {
         let mut out = Self {
             pieces: BitBoard::NULL,
             piece_array: [None; 64],
-            side: Colour::WHITE,
+            side: Colour::White,
             ep_sq: Square::NO_SQUARE,
             fifty_move_counter: 0,
             height: 0,
@@ -142,7 +142,7 @@ impl Board {
     }
 
     pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
-        self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::BLACK);
+        self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
     pub const fn hashkey(&self) -> u64 {
@@ -159,12 +159,12 @@ impl Board {
     }
 
     pub fn king_sq(&self, side: Colour) -> Square {
-        debug_assert!(side == Colour::WHITE || side == Colour::BLACK);
+        debug_assert!(side == Colour::White || side == Colour::Black);
         debug_assert_eq!(self.pieces.king::<White>().count(), 1);
         debug_assert_eq!(self.pieces.king::<Black>().count(), 1);
         let sq = match side {
-            Colour::WHITE => self.pieces.king::<White>().first(),
-            Colour::BLACK => self.pieces.king::<Black>().first(),
+            Colour::White => self.pieces.king::<White>().first(),
+            Colour::Black => self.pieces.king::<Black>().first(),
         };
         debug_assert!(sq < Square::NO_SQUARE);
         debug_assert_eq!(self.pieces.piece_at(sq).unwrap().colour(), side);
@@ -204,7 +204,7 @@ impl Board {
             hash_piece(&mut key, piece, sq);
         });
 
-        if self.side == Colour::WHITE {
+        if self.side == Colour::White {
             hash_side(&mut key);
         }
 
@@ -229,7 +229,7 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.generate_threats_from::<White>()
         } else {
             self.generate_threats_from::<Black>()
@@ -286,7 +286,7 @@ impl Board {
     pub fn reset(&mut self) {
         self.pieces.reset();
         self.piece_array = [None; 64];
-        self.side = Colour::WHITE;
+        self.side = Colour::White;
         self.ep_sq = Square::NO_SQUARE;
         self.fifty_move_counter = 0;
         self.height = 0;
@@ -304,21 +304,21 @@ impl Board {
         self.reset();
         for (file, &piece_type) in backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+            self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
         for file in 0..8 {
             // add pawns
             let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::Pawn));
+            self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
         for (file, &piece_type) in backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+            self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
         for file in 0..8 {
             // add pawns
             let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::Pawn));
+            self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
         let mut rook_indices =
             backrank.iter().enumerate().filter_map(|(i, &piece)| if piece == PieceType::Rook { Some(i) } else { None });
@@ -341,21 +341,21 @@ impl Board {
         self.reset();
         for (file, &piece_type) in white_backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_1, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::WHITE, piece_type));
+            self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
         for file in 0..8 {
             // add pawns
             let sq = Square::from_rank_file(Rank::RANK_2, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::WHITE, PieceType::Pawn));
+            self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
         for (file, &piece_type) in black_backrank.iter().enumerate() {
             let sq = Square::from_rank_file(Rank::RANK_8, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::BLACK, piece_type));
+            self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
         for file in 0..8 {
             // add pawns
             let sq = Square::from_rank_file(Rank::RANK_7, file.try_into().unwrap());
-            self.add_piece(sq, Piece::new(Colour::BLACK, PieceType::Pawn));
+            self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
         let mut white_rook_indices =
             white_backrank.iter().enumerate().filter_map(
@@ -570,8 +570,8 @@ impl Board {
 
     fn set_side(&mut self, side_part: Option<&[u8]>) -> Result<(), FenParseError> {
         self.side = match side_part {
-            Some([b'w']) => Colour::WHITE,
-            Some([b'b']) => Colour::BLACK,
+            Some([b'w']) => Colour::White,
+            Some([b'b']) => Colour::Black,
             Some(other) => {
                 return Err(format!(
                     "FEN string is invalid, expected side to be 'w' or 'b', got \"{}\"",
@@ -605,8 +605,8 @@ impl Board {
             }
             Some(shredder_castling) => {
                 // valid shredder castling strings are of the form "AHah", "Bd"
-                let white_king = self.king_sq(Colour::WHITE);
-                let black_king = self.king_sq(Colour::BLACK);
+                let white_king = self.king_sq(Colour::White);
+                let black_king = self.king_sq(Colour::Black);
                 if white_king.rank() != Rank::RANK_1 && shredder_castling.iter().any(u8::is_ascii_uppercase) {
                     return Err(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
@@ -710,7 +710,7 @@ impl Board {
                     .parse::<usize>()
                     .map_err(|_| "FEN string is invalid, expected fullmove number part to be a number")?;
                 self.ply = (fullmove_number - 1) * 2;
-                if self.side == Colour::BLACK {
+                if self.side == Colour::Black {
                     self.ply += 1;
                 }
             }
@@ -721,7 +721,7 @@ impl Board {
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
-        if side == Colour::WHITE {
+        if side == Colour::White {
             self.sq_attacked_by::<White>(sq)
         } else {
             self.sq_attacked_by::<Black>(sq)
@@ -738,7 +738,7 @@ impl Board {
         // #[cfg(debug_assertions)]
         // self.check_validity().unwrap();
 
-        if C::WHITE == (self.side == Colour::BLACK) {
+        if C::WHITE == (self.side == Colour::Black) {
             return self.threats.all.contains_square(sq);
         }
 
@@ -840,7 +840,7 @@ impl Board {
                 return to == from.pawn_push(self.side);
             }
             // pawn capture
-            if self.side == Colour::WHITE {
+            if self.side == Colour::White {
                 return (pawn_attacks::<White>(from.as_set()) & to.as_set()).non_empty();
             }
             return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
@@ -864,7 +864,7 @@ impl Board {
         if moved.piece_type() != PieceType::King {
             return false;
         }
-        let home_rank = if self.side == Colour::WHITE { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
+        let home_rank = if self.side == Colour::White { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
         if (m.to().as_set() & home_rank).is_empty() {
             return false;
         }
@@ -873,24 +873,24 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if m.to() != (if self.side == Colour::BLACK { self.castle_perm.bk } else { self.castle_perm.wk }) {
+            if m.to() != (if self.side == Colour::Black { self.castle_perm.bk } else { self.castle_perm.wk }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::BLACK {
+            if self.side == Colour::Black {
                 (Square::G8, Square::F8)
             } else {
                 (Square::G1, Square::F1)
             }
         } else {
             // queenside castling.
-            if m.to() != (if self.side == Colour::BLACK { self.castle_perm.bq } else { self.castle_perm.wq }) {
+            if m.to() != (if self.side == Colour::Black { self.castle_perm.bq } else { self.castle_perm.wq }) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::BLACK {
+            if self.side == Colour::Black {
                 (Square::C8, Square::D8)
             } else {
                 (Square::C1, Square::D1)
@@ -1031,7 +1031,7 @@ impl Board {
         debug_assert!(to.on_board());
 
         if m.is_ep() {
-            let clear_at = if side == Colour::WHITE { to.sub(8) } else { to.add(8) };
+            let clear_at = if side == Colour::White { to.sub(8) } else { to.add(8) };
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
             self.pieces.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
@@ -1086,7 +1086,7 @@ impl Board {
                     & self.pieces.occupied_co(side.flip())
                     != SquareSet::EMPTY
             {
-                if side == Colour::WHITE {
+                if side == Colour::White {
                     self.ep_sq = from.add(8);
                     debug_assert!(self.ep_sq.rank() == Rank::RANK_3);
                 } else {
@@ -1593,7 +1593,7 @@ impl Board {
         }
 
         bytes_written += f.write(b" ")?;
-        if self.side == Colour::WHITE {
+        if self.side == Colour::White {
             bytes_written += f.write(b"w")?;
         } else {
             bytes_written += f.write(b"b")?;
@@ -1695,8 +1695,8 @@ impl Board {
             GameOutcome::Ongoing
         } else if self.in_check() {
             match self.side {
-                Colour::WHITE => GameOutcome::BlackWinMate,
-                Colour::BLACK => GameOutcome::WhiteWinMate,
+                Colour::White => GameOutcome::BlackWinMate,
+                Colour::Black => GameOutcome::WhiteWinMate,
             }
         } else {
             GameOutcome::DrawStalemate

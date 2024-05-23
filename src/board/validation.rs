@@ -19,7 +19,7 @@ impl Board {
         #![allow(clippy::similar_names, clippy::cast_possible_truncation)]
 
         // check turn
-        if self.side != Colour::WHITE && self.side != Colour::BLACK {
+        if self.side != Colour::White && self.side != Colour::Black {
             return Err(format!("invalid side: {:?}", self.side));
         }
 
@@ -36,7 +36,7 @@ impl Board {
             }
         }
 
-        if !(self.side == Colour::WHITE || self.side == Colour::BLACK) {
+        if !(self.side == Colour::White || self.side == Colour::Black) {
             return Err(format!("side is corrupt: expected WHITE or BLACK, got {:?}", self.side));
         }
         if self.generate_pos_key() != self.key {
@@ -44,8 +44,8 @@ impl Board {
         }
 
         if !(self.ep_sq == Square::NO_SQUARE
-            || (self.ep_sq.rank() == Rank::RANK_6 && self.side == Colour::WHITE)
-            || (self.ep_sq.rank() == Rank::RANK_3 && self.side == Colour::BLACK))
+            || (self.ep_sq.rank() == Rank::RANK_6 && self.side == Colour::White)
+            || (self.ep_sq.rank() == Rank::RANK_3 && self.side == Colour::Black))
         {
             return Err(format!(
                 "en passant square is corrupt: expected square to be {} or to be on ranks 6 or 3, got {} (Rank {})",
@@ -75,16 +75,16 @@ impl Board {
             ));
         }
 
-        if self.piece_at(self.king_sq(Colour::WHITE)) != Some(Piece::WK) {
+        if self.piece_at(self.king_sq(Colour::White)) != Some(Piece::WK) {
             return Err(format!(
                 "white king square is corrupt: expected white king, got {:?}",
-                self.piece_at(self.king_sq(Colour::WHITE))
+                self.piece_at(self.king_sq(Colour::White))
             ));
         }
-        if self.piece_at(self.king_sq(Colour::BLACK)) != Some(Piece::BK) {
+        if self.piece_at(self.king_sq(Colour::Black)) != Some(Piece::BK) {
             return Err(format!(
                 "black king square is corrupt: expected black king, got {:?}",
-                self.piece_at(self.king_sq(Colour::BLACK))
+                self.piece_at(self.king_sq(Colour::Black))
             ));
         }
 

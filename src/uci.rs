@@ -430,7 +430,7 @@ impl Display for PrettyScoreFormatWrapper {
             501..=10000 => write!(f, "\u{001b}[38;5;4m")?,   // much better for us, blue.
             _ => write!(f, "\u{001b}[38;5;219m")?,           // probably a mate score, pink.
         }
-        let white_pov = if self.1 == Colour::WHITE { self.0 } else { -self.0 };
+        let white_pov = if self.1 == Colour::White { self.0 } else { -self.0 };
         if is_mate_score(white_pov) {
             let plies_to_mate = MATE_SCORE - white_pov.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;

@@ -85,7 +85,7 @@ impl Board {
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         // detect draw by insufficient material
         if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
-            return if self.side == Colour::WHITE {
+            return if self.side == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
                 -draw_score(t, nodes, self.turn())
