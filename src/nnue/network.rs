@@ -440,12 +440,7 @@ impl NNUEState {
         let black_king = board.king_sq(Colour::Black);
 
         loop {
-            self.materialise_new_acc_from(
-                white_king,
-                black_king,
-                pov_update,
-                curr_index + 1,
-            );
+            self.materialise_new_acc_from(white_king, black_king, pov_update, curr_index + 1);
 
             self.accumulators[curr_index + 1].correct[view] = true;
 
