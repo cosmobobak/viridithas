@@ -613,19 +613,14 @@ impl Board {
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
-                #[allow(clippy::collapsible_if)]
-                if !NT::PV && hit.depth >= depth {
-                    if !fifty_move_rule_near
-                        && (hit.bound == Bound::Exact
-                            || (hit.bound == Bound::Lower && hit.value >= beta)
-                            || (hit.bound == Bound::Upper && hit.value <= alpha))
-                    {
-                        return hit.value;
-                    }
-
-                    // otherwise use the fact that we have a really deep entry
-                    // as evidence that we should search more deeply here.
-                    // depth += Depth::from(depth < info.conf.tt_extension_depth);
+                if !NT::PV
+                    && hit.depth >= depth
+                    && !fifty_move_rule_near
+                    && (hit.bound == Bound::Exact
+                        || (hit.bound == Bound::Lower && hit.value >= beta)
+                        || (hit.bound == Bound::Upper && hit.value <= alpha))
+                {
+                    return hit.value;
                 }
 
                 Some(hit)
@@ -967,13 +962,44 @@ impl Board {
                 extension = ZERO_PLY;
             } else if maybe_singular {
                 let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
-                extension =
-                    self.singularity::<NT::Next>(info, t, m, tt_value, alpha, beta, depth, &mut move_picker, cut_node);
-
-                if move_picker.stage == Stage::Done {
-                    // got a multi-cut bubbled up from the singularity search
-                    // so we just bail out.
+                let r_beta = Self::singularity_margin(tt_value, depth);
+                let r_depth = (depth - 1) / 2;
+                // undo the singular move so we can search the position that it exists in.
+                self.unmake_move(t);
+                t.excluded[self.height()] = Some(m);
+                let value = self.alpha_beta::<OffPV>(
+                    &mut PVariation::default(),
+                    info,
+                    t,
+                    r_depth,
+                    r_beta - 1,
+                    r_beta,
+                    cut_node,
+                );
+                t.excluded[self.height()] = None;
+                if value >= r_beta && r_beta >= beta {
+                    // multi-cut: if a move other than the best one beats beta,
+                    // then we can cut with relatively high confidence.
                     return Self::singularity_margin(tt_value, depth);
+                }
+                // re-make the singular move.
+                self.make_move(m, t);
+
+                if value < r_beta {
+                    if !NT::PV && t.double_extensions[self.height()] <= 12 && value < r_beta - info.conf.dext_margin {
+                        // double-extend if we failed low by a lot
+                        extension = ONE_PLY * 2;
+                    } else {
+                        // normal singular extension
+                        extension = ONE_PLY;
+                    }
+                } else if tt_value >= beta || tt_value <= alpha {
+                    // the tt_value >= beta condition is a sort of "light multi-cut"
+                    // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
+                    extension = -ONE_PLY;
+                } else {
+                    // no extension.
+                    extension = ZERO_PLY;
                 }
             } else if self.in_check() {
                 // self.in_check() determines if the opponent is in check,
@@ -1153,47 +1179,6 @@ impl Board {
     /// The reduced beta margin for Singular Extension.
     fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
         (tt_value - (depth * 3 / 4).round()).max(-MATE_SCORE)
-    }
-
-    /// Produce extensions when a move is singular - that is, if it is a move that is
-    /// significantly better than the rest of the moves in a position.
-    pub fn singularity<NT: NodeType>(
-        &mut self,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-        m: Move,
-        tt_value: i32,
-        alpha: i32,
-        beta: i32,
-        depth: Depth,
-        mp: &mut MainMovePicker,
-        cut_node: bool,
-    ) -> Depth {
-        let mut lpv = PVariation::default();
-        let r_beta = Self::singularity_margin(tt_value, depth);
-        let r_depth = (depth - 1) / 2;
-        // undo the singular move so we can search the position that it exists in.
-        self.unmake_move(t);
-        t.excluded[self.height()] = Some(m);
-        let value = self.alpha_beta::<OffPV>(&mut lpv, info, t, r_depth, r_beta - 1, r_beta, cut_node);
-        t.excluded[self.height()] = None;
-        if value >= r_beta && r_beta >= beta {
-            mp.stage = Stage::Done; // multicut!!
-            return ZERO_PLY;
-        }
-        // re-make the singular move.
-        self.make_move(m, t);
-
-        let double_extend =
-            !NT::PV && value < r_beta - info.conf.dext_margin && t.double_extensions[self.height()] <= 12;
-
-        match () {
-            () if double_extend => ONE_PLY * 2, // double-extend if we failed low by a lot (the move is very singular)
-            () if value < r_beta => ONE_PLY,    // singular extension
-            () if tt_value >= beta => -ONE_PLY, // somewhat multi-cut-y
-            () if tt_value <= alpha => -ONE_PLY, // tt_value <= alpha is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/)
-            () => ZERO_PLY,                      // no extension
-        }
     }
 
     /// Test if a move is *forced* - that is, if it is a move that is
