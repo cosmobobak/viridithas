@@ -994,6 +994,7 @@ impl Board {
                         extension = ONE_PLY;
                     }
                 } else if cut_node {
+                    // produce a strong negative extension if we didn't fail low on a cut-node.
                     extension = -ONE_PLY * 2;
                 } else if tt_value >= beta || tt_value <= alpha {
                     // the tt_value >= beta condition is a sort of "light multi-cut"
