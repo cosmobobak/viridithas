@@ -782,7 +782,7 @@ impl Board {
         }
 
         // cutnode-based TT reduction.
-        if cut_node && /* excluded.is_none() && */ tt_move.is_none() {
+        if cut_node && excluded.is_none() && tt_move.is_none() {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
