@@ -97,14 +97,21 @@ const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
 pub trait NodeType {
+    /// Whether this node is on the principal variation.
     const PV: bool;
+    /// Whether this node is the root of the search tree.
     const ROOT: bool;
+    /// The node type that arises from a PV search in this node.
     type Next: NodeType;
 }
 
+/// The root node of the search tree.
 struct Root;
+/// A node with a non-null search window.
 struct OnPV;
+/// A node with a null window, where we're trying to prove a PV.
 struct OffPV;
+/// A root node with a null window used for time-management searches.
 struct CheckForced;
 
 impl NodeType for Root {
