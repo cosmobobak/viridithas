@@ -969,7 +969,7 @@ impl Board {
 
             let extension;
             if NT::ROOT {
-                extension = ZERO_PLY;
+                extension = 0;
             } else if maybe_singular {
                 let Some(TTHit { value: tt_value, .. }) = tt_hit else { unreachable!() };
                 let r_beta = Self::singularity_margin(tt_value, depth);
@@ -998,30 +998,30 @@ impl Board {
                 if value < r_beta {
                     if !NT::PV && t.double_extensions[self.height()] <= 12 && value < r_beta - info.conf.dext_margin {
                         // double-extend if we failed low by a lot
-                        extension = ONE_PLY * 2;
+                        extension = 2;
                     } else {
                         // normal singular extension
-                        extension = ONE_PLY;
+                        extension = 1;
                     }
                 } else if cut_node {
                     // produce a strong negative extension if we didn't fail low on a cut-node.
-                    extension = -ONE_PLY * 2;
+                    extension = -2;
                 } else if tt_value >= beta || tt_value <= alpha {
                     // the tt_value >= beta condition is a sort of "light multi-cut"
                     // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
-                    extension = -ONE_PLY;
+                    extension = -1;
                 } else {
                     // no extension.
-                    extension = ZERO_PLY;
+                    extension = 0;
                 }
             } else if self.in_check() {
                 // self.in_check() determines if the opponent is in check,
                 // because we have already made the move.
-                extension = Depth::from(is_quiet || is_winning_capture);
+                extension = i32::from(is_quiet || is_winning_capture);
             } else {
-                extension = ZERO_PLY;
+                extension = 0;
             }
-            if extension >= ONE_PLY * 2 {
+            if extension >= 2 {
                 t.double_extensions[height] += 1;
             }
 
@@ -1094,7 +1094,7 @@ impl Board {
                 info.root_move_nodes[m.from()][m.to()] += subtree_size;
             }
 
-            if extension >= ONE_PLY * 2 {
+            if extension >= 2 {
                 t.double_extensions[height] -= 1;
             }
 
