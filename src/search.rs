@@ -97,14 +97,21 @@ const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
 pub trait NodeType {
+    /// Whether this node is on the principal variation.
     const PV: bool;
+    /// Whether this node is the root of the search tree.
     const ROOT: bool;
+    /// The node type that arises from a PV search in this node.
     type Next: NodeType;
 }
 
+/// The root node of the search tree.
 struct Root;
+/// A node with a non-null search window.
 struct OnPV;
+/// A node with a null window, where we're trying to prove a PV.
 struct OffPV;
+/// A root node with a null window used for time-management searches.
 struct CheckForced;
 
 impl NodeType for Root {
@@ -416,7 +423,8 @@ impl Board {
 
         let key = self.hashkey();
 
-        let mut lpv = PVariation::default();
+        let mut local_pv = PVariation::default();
+        let l_pv = &mut local_pv;
 
         pv.moves.clear();
 
@@ -506,7 +514,7 @@ impl Board {
             info.nodes.increment();
             moves_made += 1;
 
-            let score = -self.quiescence::<NT::Next>(&mut lpv, info, t, -beta, -alpha);
+            let score = -self.quiescence::<NT::Next>(l_pv, info, t, -beta, -alpha);
             self.unmake_move(t);
 
             if score > best_score {
@@ -514,7 +522,9 @@ impl Board {
                 if score > alpha {
                     best_move = Some(m);
                     alpha = score;
-                    pv.load_from(m, &lpv);
+                    if NT::PV {
+                        pv.load_from(m, l_pv);
+                    }
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
@@ -1097,7 +1107,9 @@ impl Board {
                 if score > alpha {
                     best_move = Some(m);
                     alpha = score;
-                    pv.load_from(m, l_pv);
+                    if NT::PV {
+                        pv.load_from(m, l_pv);
+                    }
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
