@@ -416,7 +416,8 @@ impl Board {
 
         let key = self.hashkey();
 
-        let mut lpv = PVariation::default();
+        let mut local_pv = PVariation::default();
+        let l_pv = &mut local_pv;
 
         pv.moves.clear();
 
@@ -506,7 +507,7 @@ impl Board {
             info.nodes.increment();
             moves_made += 1;
 
-            let score = -self.quiescence::<NT::Next>(&mut lpv, info, t, -beta, -alpha);
+            let score = -self.quiescence::<NT::Next>(l_pv, info, t, -beta, -alpha);
             self.unmake_move(t);
 
             if score > best_score {
@@ -514,7 +515,9 @@ impl Board {
                 if score > alpha {
                     best_move = Some(m);
                     alpha = score;
-                    pv.load_from(m, &lpv);
+                    if NT::PV {
+                        pv.load_from(m, l_pv);
+                    }
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
@@ -1097,7 +1100,9 @@ impl Board {
                 if score > alpha {
                     best_move = Some(m);
                     alpha = score;
-                    pv.load_from(m, l_pv);
+                    if NT::PV {
+                        pv.load_from(m, l_pv);
+                    }
                 }
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
