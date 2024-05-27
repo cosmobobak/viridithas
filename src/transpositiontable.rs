@@ -296,7 +296,14 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        Some(TTHit { mov: tt_move, depth: tt_depth, bound: tt_bound, value: tt_value, eval: entry.evaluation.into(), was_pv: entry.pv != 0 })
+        Some(TTHit {
+            mov: tt_move,
+            depth: tt_depth,
+            bound: tt_bound,
+            value: tt_value,
+            eval: entry.evaluation.into(),
+            was_pv: entry.pv != 0,
+        })
     }
 
     pub fn prefetch(&self, key: u64) {
