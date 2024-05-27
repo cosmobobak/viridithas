@@ -461,6 +461,8 @@ impl Board {
             None
         };
 
+        let ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
@@ -474,7 +476,7 @@ impl Board {
             let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
             if tt_hit.is_none() {
                 // store the eval into the TT if we won't overwrite anything
-                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY);
+                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY, ttpv);
             }
             v
         };
@@ -546,7 +548,7 @@ impl Board {
             Bound::Upper
         };
 
-        t.tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY);
+        t.tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY, ttpv);
 
         best_score
     }
@@ -641,6 +643,8 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search.
         };
 
+        let ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
         let cardinality = tablebases::probe::get_max_pieces_count();
@@ -670,7 +674,7 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth);
+                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth, ttpv);
                     return tb_value;
                 }
 
@@ -801,7 +805,7 @@ impl Board {
 
         // store the eval into the TT if we won't overwrite anything:
         if tt_hit.is_none() && !in_check && excluded.is_none() {
-            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY);
+            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY, ttpv);
         }
 
         // probcut:
@@ -847,7 +851,7 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3);
+                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3, ttpv);
                     return value;
                 }
             }
@@ -1046,7 +1050,7 @@ impl Board {
                         // reduce special moves one less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
-                        r += i32::from(!NT::PV);
+                        r += i32::from(!NT::PV) - i32::from(ttpv);
                         // reduce more if it's a cut-node
                         r += i32::from(cut_node);
                         // reduce more if not improving
@@ -1165,7 +1169,7 @@ impl Board {
                 alpha != original_alpha || best_move.is_none(),
                 "alpha was not raised, but best_move was not null!"
             );
-            t.tt.store(key, height, best_move, best_score, static_eval, flag, depth);
+            t.tt.store(key, height, best_move, best_score, static_eval, flag, depth, ttpv);
         }
 
         t.best_moves[height] = best_move;
