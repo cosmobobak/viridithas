@@ -24,3 +24,12 @@ MINOR:
 - look for bad zero-init of arrays.
 - skip tt entry reload in the store() function.
 - tt clusters
+
+ANNUEP:
+- quantisation
+- training run length
+- optimiser
+- weight decay
+- size
+- bucket count (i/o)
+- crelu/screlu

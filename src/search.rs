@@ -730,10 +730,11 @@ impl Board {
                 }
             }
 
-            // beta-pruning. (reverse futility pruning)
+            // static null-move pruning, also called beta pruning,
+            // reverse futility pruning, and child node futility pruning.
             // if the static eval is too high, we can prune the node.
-            // this is a lot like stand_pat in quiescence search.
-            if depth <= info.conf.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
+            // this is a generalisation of stand_pat in quiescence search.
+            if !ttpv && depth <= info.conf.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
                 return (static_eval + beta) / 2;
             }
 

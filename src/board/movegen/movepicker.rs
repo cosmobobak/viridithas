@@ -16,8 +16,8 @@ pub trait MovePickerMode {
     const CAPTURES_ONLY: bool;
 }
 
-pub struct Qsearch;
-impl MovePickerMode for Qsearch {
+pub struct QSearch;
+impl MovePickerMode for QSearch {
     const CAPTURES_ONLY: bool = true;
 }
 pub struct MainSearch;
@@ -51,7 +51,7 @@ pub struct MovePicker<MovePickerMode> {
 }
 
 pub type MainMovePicker = MovePicker<MainSearch>;
-pub type CapturePicker = MovePicker<Qsearch>;
+pub type CapturePicker = MovePicker<QSearch>;
 
 impl<Mode: MovePickerMode> MovePicker<Mode> {
     pub fn new(
