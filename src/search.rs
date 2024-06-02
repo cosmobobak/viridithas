@@ -1048,11 +1048,11 @@ impl Board {
                             -info.conf.history_lmr_bound,
                             info.conf.history_lmr_bound,
                         );
-                        // reduce special moves one less
+                        // reduce refutation moves less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
                         r += i32::from(!NT::PV) - i32::from(ttpv);
-                        // reduce more if it's a cut-node
+                        // reduce more on cut nodes
                         r += i32::from(cut_node);
                         // reduce more if not improving
                         // r += i32::from(!improving);
