@@ -1,6 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    ops::{Index, IndexMut},
+    fmt::{Debug, Display}, mem::size_of, ops::{Index, IndexMut}
 };
 
 pub trait Col {
@@ -25,10 +24,13 @@ impl Col for Black {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
 pub enum Colour {
     White,
     Black,
 }
+
+const _COLOUR_ASSERT: () = assert!(size_of::<Colour>() == size_of::<Option<Colour>>());
 
 impl Display for Colour {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -41,6 +43,7 @@ impl Display for Colour {
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u8)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -49,6 +52,8 @@ pub enum PieceType {
     Queen,
     King,
 }
+
+const _PIECE_TYPE_ASSERT: () = assert!(size_of::<PieceType>() == size_of::<Option<PieceType>>());
 
 impl Display for PieceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,10 +70,13 @@ impl Display for PieceType {
 
 #[rustfmt::skip]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u8)]
 pub enum Piece {
     WP, WN, WB, WR, WQ, WK,
     BP, BN, BB, BR, BQ, BK,
 }
+
+const _PIECE_ASSERT: () = assert!(size_of::<Piece>() == size_of::<Option<Piece>>());
 
 impl Display for Piece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

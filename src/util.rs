@@ -1,10 +1,7 @@
 pub mod depth;
 
 use std::{
-    fmt::{self, Display},
-    ops::{Index, IndexMut},
-    str::FromStr,
-    sync::atomic::{AtomicU64, Ordering},
+    fmt::{self, Display}, mem::size_of, ops::{Index, IndexMut}, str::FromStr, sync::atomic::{AtomicU64, Ordering}
 };
 
 use crate::{
@@ -26,6 +23,7 @@ pub const VALUE_NONE: i32 = INFINITY + 1;
 pub const MEGABYTE: usize = 1024 * 1024;
 
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+#[repr(u8)]
 pub enum File {
     A,
     B,
@@ -36,6 +34,8 @@ pub enum File {
     G,
     H,
 }
+
+const _FILE_ASSERT: () = assert!(size_of::<File>() == size_of::<Option<File>>());
 
 impl File {
     pub const ALL: [Self; 8] = [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H];
@@ -79,6 +79,7 @@ impl<T> IndexMut<File> for [T; 8] {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+#[repr(u8)]
 pub enum Rank {
     One,
     Two,
@@ -89,6 +90,8 @@ pub enum Rank {
     Seven,
     Eight,
 }
+
+const _RANK_ASSERT: () = assert!(size_of::<Rank>() == size_of::<Option<Rank>>());
 
 impl Rank {
     pub const ALL: [Self; 8] =
@@ -134,6 +137,7 @@ impl<T> IndexMut<Rank> for [T; 8] {
 
 #[rustfmt::skip]
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+#[repr(u8)]
 pub enum Square {
     A1, B1, C1, D1, E1, F1, G1, H1,
     A2, B2, C2, D2, E2, F2, G2, H2,
@@ -144,6 +148,8 @@ pub enum Square {
     A7, B7, C7, D7, E7, F7, G7, H7,
     A8, B8, C8, D8, E8, F8, G8, H8,
 }
+
+const _SQUARE_ASSERT: () = assert!(size_of::<Square>() == size_of::<Option<Square>>());
 
 impl<T> Index<Square> for [T; 64] {
     type Output = T;
