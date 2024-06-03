@@ -6,6 +6,6 @@ pub struct StackEntry {
     pub eval: i32,
     pub excluded: Option<Move>,
     pub best_move: Option<Move>,
-    pub double_extensions: i32,
+    pub dextensions: i32,
     pub ttpv: bool,
 }

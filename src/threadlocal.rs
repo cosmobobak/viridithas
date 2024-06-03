@@ -1,15 +1,22 @@
 use std::array;
 
 use crate::{
-    board::Board, chessmove::Move, historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable}, nnue, piece::Colour, search::pv::PVariation, stack::StackEntry, transpositiontable::TTView, util::MAX_PLY
+    board::Board,
+    chessmove::Move,
+    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
+    nnue,
+    piece::Colour,
+    search::pv::PVariation,
+    stack::StackEntry,
+    transpositiontable::TTView,
+    util::MAX_PLY,
 };
 
 #[derive(Clone)]
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
-    // double-extension array is right-padded by one because
-    // singular verification will try to access the next ply
-    // in an edge case.
+    // stack array is right-padded by one because singular verification
+    // will try to access the next ply in an edge case.
     pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,

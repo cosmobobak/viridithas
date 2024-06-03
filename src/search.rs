@@ -715,7 +715,7 @@ impl Board {
         // neutral with regards to the evaluation.
         let improving = !in_check && height >= 2 && static_eval >= t.ss[height - 2].eval;
 
-        t.ss[height].double_extensions = if NT::ROOT { 0 } else { t.ss[height - 1].double_extensions };
+        t.ss[height].dextensions = if NT::ROOT { 0 } else { t.ss[height - 1].dextensions };
 
         // clear out the next set of killer moves.
         t.killer_move_table[height + 1] = [None; 2];
@@ -736,7 +736,10 @@ impl Board {
             // reverse futility pruning, and child node futility pruning.
             // if the static eval is too high, we can prune the node.
             // this is a generalisation of stand_pat in quiescence search.
-            if !t.ss[height].ttpv && depth <= info.conf.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
+            if !t.ss[height].ttpv
+                && depth <= info.conf.rfp_depth
+                && static_eval - Self::rfp_margin(info, depth, improving) > beta
+            {
                 return (static_eval + beta) / 2;
             }
 
@@ -1003,7 +1006,7 @@ impl Board {
                 self.make_move(m, t);
 
                 if value < r_beta {
-                    if !NT::PV && t.ss[self.height()].double_extensions <= 12 && value < r_beta - info.conf.dext_margin {
+                    if !NT::PV && t.ss[self.height()].dextensions <= 12 && value < r_beta - info.conf.dext_margin {
                         // double-extend if we failed low by a lot
                         extension = 2;
                     } else {
@@ -1029,7 +1032,7 @@ impl Board {
                 extension = 0;
             }
             if extension >= 2 {
-                t.ss[height].double_extensions += 1;
+                t.ss[height].dextensions += 1;
             }
 
             let mut score;
@@ -1102,7 +1105,7 @@ impl Board {
             }
 
             if extension >= 2 {
-                t.ss[height].double_extensions -= 1;
+                t.ss[height].dextensions -= 1;
             }
 
             if info.stopped() {
