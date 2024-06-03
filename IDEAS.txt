@@ -23,7 +23,13 @@ MINOR:
 - iid tinkering (ttmove, excluded move)
 - look for bad zero-init of arrays.
 - skip tt entry reload in the store() function.
-- clean up extensions, use i32, use bools as values for dext.
-- https://chess.swehosting.se/test/6671/
-- triple extensions
 - tt clusters
+
+ANNUEP:
+- quantisation
+- training run length
+- optimiser
+- weight decay
+- size
+- bucket count (i/o)
+- crelu/screlu

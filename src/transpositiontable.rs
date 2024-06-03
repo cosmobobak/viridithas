@@ -73,7 +73,8 @@ pub struct TTEntry {
     pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
     pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
     pub evaluation: i16,            // 16 bits
-    pub dummy: [u8; 6],             // 48 bits
+    pub pv: u8,                     // 8 bits
+    pub dummy: [u8; 5],             // 40 bits
 }
 
 const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 16, "TT entry is not one word");
@@ -86,7 +87,8 @@ impl TTEntry {
         depth: CompactDepthStorage::NULL,
         age_and_flag: AgeAndFlag::NULL,
         evaluation: 0,
-        dummy: [0; 6],
+        pv: 0,
+        dummy: [0; 5],
     };
 }
 
@@ -126,6 +128,7 @@ pub struct TTHit {
     pub bound: Bound,
     pub value: i32,
     pub eval: i32,
+    pub was_pv: bool,
 }
 
 impl TT {
@@ -206,6 +209,7 @@ impl<'a> TTView<'a> {
         eval: i32,
         flag: Bound,
         depth: Depth,
+        pv: bool,
     ) {
         debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
         debug_assert!(score >= -INFINITY);
@@ -238,7 +242,7 @@ impl<'a> TTView<'a> {
 
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
-        let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4;
+        let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4 + Depth::from(pv);
         let record_prority = Depth::from(entry.depth) + record_flag_bonus;
 
         // replace the entry:
@@ -261,6 +265,7 @@ impl<'a> TTView<'a> {
                 evaluation: eval.try_into().expect(
                     "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
+                pv: pv.into(),
                 dummy: Default::default(),
             }
             .into();
@@ -291,7 +296,14 @@ impl<'a> TTView<'a> {
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-        Some(TTHit { mov: tt_move, depth: tt_depth, bound: tt_bound, value: tt_value, eval: entry.evaluation.into() })
+        Some(TTHit {
+            mov: tt_move,
+            depth: tt_depth,
+            bound: tt_bound,
+            value: tt_value,
+            eval: entry.evaluation.into(),
+            was_pv: entry.pv != 0,
+        })
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -352,7 +364,8 @@ mod tests {
             depth: ZERO_PLY.try_into().unwrap(),
             age_and_flag: AgeAndFlag::new(63, Bound::Exact),
             evaluation: 1337,
-            dummy: [0; 6],
+            pv: 1,
+            dummy: [0; 5],
         };
         let packed: [u64; 2] = entry.into();
         let unpacked: TTEntry = packed.into();
