@@ -1,3 +1,5 @@
+use std::array;
+
 use crate::{
     board::Board,
     chessmove::Move,
@@ -5,6 +7,7 @@ use crate::{
     nnue,
     piece::Colour,
     search::pv::PVariation,
+    stack::StackEntry,
     transpositiontable::TTView,
     util::MAX_PLY,
 };
@@ -12,14 +15,9 @@ use crate::{
 #[derive(Clone)]
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
-    pub evals: [i32; MAX_PLY],
-    pub excluded: [Option<Move>; MAX_PLY],
-    pub best_moves: [Option<Move>; MAX_PLY],
-    // double-extension array is right-padded by one because
-    // singular verification will try to access the next ply
-    // in an edge case.
-    pub double_extensions: [i32; MAX_PLY + 1],
-    pub checks: [bool; MAX_PLY],
+    // stack array is right-padded by one because singular verification
+    // will try to access the next ply in an edge case.
+    pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
     pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::network::NNUEState>,
@@ -47,11 +45,7 @@ impl<'a> ThreadData<'a> {
 
     pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>) -> Self {
         let mut td = Self {
-            evals: [0; MAX_PLY],
-            excluded: [None; MAX_PLY],
-            best_moves: [None; MAX_PLY],
-            double_extensions: [0; MAX_PLY + 1],
-            checks: [false; MAX_PLY],
+            ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
             multi_pv_excluded: Vec::new(),
             nnue: nnue::network::NNUEState::new(board),

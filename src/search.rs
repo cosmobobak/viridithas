@@ -461,7 +461,7 @@ impl Board {
             None
         };
 
-        let ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+        t.ss[height].ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
 
         let stand_pat = if in_check {
             -INFINITY // could be being mated!
@@ -476,7 +476,7 @@ impl Board {
             let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
             if tt_hit.is_none() {
                 // store the eval into the TT if we won't overwrite anything
-                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY, ttpv);
+                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY, t.ss[height].ttpv);
             }
             v
         };
@@ -548,7 +548,7 @@ impl Board {
             Bound::Upper
         };
 
-        t.tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY, ttpv);
+        t.tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY, t.ss[height].ttpv);
 
         best_score
     }
@@ -621,7 +621,7 @@ impl Board {
             }
         }
 
-        let excluded = t.excluded[height];
+        let excluded = t.ss[height].excluded;
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
@@ -643,7 +643,9 @@ impl Board {
             None // do not probe the TT if we're in a singular-verification search.
         };
 
-        let ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+        if excluded.is_none() {
+            t.ss[height].ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+        }
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
@@ -674,7 +676,7 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth, ttpv);
+                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth, t.ss[height].ttpv);
                     return tb_value;
                 }
 
@@ -692,7 +694,7 @@ impl Board {
         let static_eval = if in_check {
             -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         } else if excluded.is_some() {
-            t.evals[height] // if we're in a singular-verification search, we already have the static eval.
+            t.ss[height].eval // if we're in a singular-verification search, we already have the static eval.
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
@@ -704,16 +706,16 @@ impl Board {
             self.evaluate(t, info.nodes.get_local()) // otherwise, use the static evaluation.
         };
 
-        t.evals[height] = static_eval;
+        t.ss[height].eval = static_eval;
 
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less aggressive with alpha-reductions (eval is too low).
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
-        let improving = !in_check && height >= 2 && static_eval >= t.evals[height - 2];
+        let improving = !in_check && height >= 2 && static_eval >= t.ss[height - 2].eval;
 
-        t.double_extensions[height] = if NT::ROOT { 0 } else { t.double_extensions[height - 1] };
+        t.ss[height].dextensions = if NT::ROOT { 0 } else { t.ss[height - 1].dextensions };
 
         // clear out the next set of killer moves.
         t.killer_move_table[height + 1] = [None; 2];
@@ -734,7 +736,10 @@ impl Board {
             // reverse futility pruning, and child node futility pruning.
             // if the static eval is too high, we can prune the node.
             // this is a generalisation of stand_pat in quiescence search.
-            if !ttpv && depth <= info.conf.rfp_depth && static_eval - Self::rfp_margin(info, depth, improving) > beta {
+            if !t.ss[height].ttpv
+                && depth <= info.conf.rfp_depth
+                && static_eval - Self::rfp_margin(info, depth, improving) > beta
+            {
                 return (static_eval + beta) / 2;
             }
 
@@ -806,7 +811,7 @@ impl Board {
 
         // store the eval into the TT if we won't overwrite anything:
         if tt_hit.is_none() && !in_check && excluded.is_none() {
-            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY, ttpv);
+            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
         }
 
         // probcut:
@@ -852,7 +857,7 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3, ttpv);
+                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3, t.ss[height].ttpv);
                     return value;
                 }
             }
@@ -867,7 +872,7 @@ impl Board {
         if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
             let iid_depth = depth - 2;
             self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
-            tt_move = t.best_moves[height];
+            tt_move = t.ss[height].best_move;
         }
 
         let original_alpha = alpha;
@@ -981,7 +986,7 @@ impl Board {
                 let r_depth = (depth - 1) / 2;
                 // undo the singular move so we can search the position that it exists in.
                 self.unmake_move(t);
-                t.excluded[self.height()] = Some(m);
+                t.ss[self.height()].excluded = Some(m);
                 let value = self.alpha_beta::<OffPV>(
                     &mut PVariation::default(),
                     info,
@@ -991,7 +996,7 @@ impl Board {
                     r_beta,
                     cut_node,
                 );
-                t.excluded[self.height()] = None;
+                t.ss[self.height()].excluded = None;
                 if value >= r_beta && r_beta >= beta {
                     // multi-cut: if a move other than the best one beats beta,
                     // then we can cut with relatively high confidence.
@@ -1001,7 +1006,7 @@ impl Board {
                 self.make_move(m, t);
 
                 if value < r_beta {
-                    if !NT::PV && t.double_extensions[self.height()] <= 12 && value < r_beta - info.conf.dext_margin {
+                    if !NT::PV && t.ss[self.height()].dextensions <= 12 && value < r_beta - info.conf.dext_margin {
                         // double-extend if we failed low by a lot
                         extension = 2;
                     } else {
@@ -1027,7 +1032,7 @@ impl Board {
                 extension = 0;
             }
             if extension >= 2 {
-                t.double_extensions[height] += 1;
+                t.ss[height].dextensions += 1;
             }
 
             let mut score;
@@ -1051,7 +1056,7 @@ impl Board {
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
-                        r += i32::from(!NT::PV) - i32::from(ttpv);
+                        r += i32::from(!NT::PV) - i32::from(t.ss[height].ttpv);
                         // reduce more on cut nodes
                         r += i32::from(cut_node);
                         // reduce more if not improving
@@ -1100,7 +1105,7 @@ impl Board {
             }
 
             if extension >= 2 {
-                t.double_extensions[height] -= 1;
+                t.ss[height].dextensions -= 1;
             }
 
             if info.stopped() {
@@ -1170,10 +1175,10 @@ impl Board {
                 alpha != original_alpha || best_move.is_none(),
                 "alpha was not raised, but best_move was not null!"
             );
-            t.tt.store(key, height, best_move, best_score, static_eval, flag, depth, ttpv);
+            t.tt.store(key, height, best_move, best_score, static_eval, flag, depth, t.ss[height].ttpv);
         }
 
-        t.best_moves[height] = best_move;
+        t.ss[height].best_move = best_move;
 
         best_score
     }
@@ -1215,13 +1220,13 @@ impl Board {
     ) -> bool {
         let r_beta = (value - margin).max(-MATE_SCORE);
         let r_depth = (depth - 1) / 2;
-        t.excluded[self.height()] = Some(m);
+        t.ss[self.height()].excluded = Some(m);
         let pts_prev = info.print_to_stdout;
         info.print_to_stdout = false;
         let value =
             self.alpha_beta::<CheckForced>(&mut PVariation::default(), info, t, r_depth, r_beta - 1, r_beta, false);
         info.print_to_stdout = pts_prev;
-        t.excluded[self.height()] = None;
+        t.ss[self.height()].excluded = None;
         value < r_beta
     }
 

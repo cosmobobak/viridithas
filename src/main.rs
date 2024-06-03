@@ -12,6 +12,7 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
+mod datagen;
 mod errors;
 mod historytable;
 mod image;
@@ -25,14 +26,13 @@ mod rng;
 mod search;
 mod searchinfo;
 mod squareset;
+mod stack;
 mod tablebases;
 mod threadlocal;
 mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
-
-mod datagen;
 
 use cli::Subcommands::{Analyse, Bench, CountPositions, Datagen, Perft, Splat, Spsa, VisNNUE};
 
