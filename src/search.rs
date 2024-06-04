@@ -1060,7 +1060,7 @@ impl Board {
                         // reduce more on cut nodes
                         r += i32::from(cut_node);
                         // reduce more if not improving
-                        // r += i32::from(!improving);
+                        r += i32::from(!improving);
                         // reduce more if the move from the transposition table is tactical
                         r += i32::from(tt_capture);
                     } else if is_winning_capture {
