@@ -372,13 +372,6 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
     }
 }
 
-/// Vector-accelerated memcopy.
-#[inline]
-pub fn copy(src: &Align64<[i16; LAYER_1_SIZE]>, dst: &mut Align64<[i16; LAYER_1_SIZE]>) {
-    // hard to beat memcpy, isn't it.
-    unsafe { std::ptr::copy_nonoverlapping(src, dst, 1) };
-}
-
 /// Apply add/subtract updates in place.
 pub fn vector_update_inplace(
     input: &mut Align64<[i16; LAYER_1_SIZE]>,

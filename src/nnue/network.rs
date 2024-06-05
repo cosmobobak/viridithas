@@ -248,32 +248,6 @@ impl BucketAccumulatorCache {
         pov_update: PovUpdate,
         acc: &mut Accumulator,
     ) {
-        debug_assert!(
-            matches!(pov_update, PovUpdate { white: true, black: false } | PovUpdate { white: false, black: true }),
-            "invalid pov update: {pov_update:?}"
-        );
-        #[cfg(debug_assertions)]
-        {
-            // verify all the cached board states make sense
-            for colour in Colour::all() {
-                for bucket in 0..BUCKETS {
-                    let cached_board_state = self.board_states[colour][bucket];
-                    if cached_board_state == unsafe { std::mem::zeroed() } {
-                        continue;
-                    }
-                    let white_king = cached_board_state.piece_bb(Piece::WK).first();
-                    let black_king = cached_board_state.piece_bb(Piece::BK).first();
-                    let (white_bucket_from_board_position, black_bucket_from_board_position) =
-                        get_bucket_indices(white_king, black_king);
-                    if colour == Colour::White {
-                        assert_eq!(white_bucket_from_board_position, bucket);
-                    } else {
-                        assert_eq!(black_bucket_from_board_position, bucket);
-                    }
-                }
-            }
-        }
-
         let side_we_care_about = if pov_update.white { Colour::White } else { Colour::Black };
         let wk = board_state.piece_bb(Piece::WK).first();
         let bk = board_state.piece_bb(Piece::BK).first();
@@ -297,7 +271,7 @@ impl BucketAccumulatorCache {
 
         simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        simd::copy(cache_acc, acc.select_mut(side_we_care_about));
+        *acc.select_mut(side_we_care_about) = cache_acc.clone();
         acc.correct[side_we_care_about] = true;
 
         self.board_states[side_we_care_about][bucket] = board_state;

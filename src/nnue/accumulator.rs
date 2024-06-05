@@ -2,10 +2,7 @@
 
 use crate::piece::Colour;
 
-use super::{
-    network::{Align64, MovedPiece, PovUpdate, UpdateBuffer, LAYER_1_SIZE},
-    simd,
-};
+use super::network::{Align64, MovedPiece, PovUpdate, UpdateBuffer, LAYER_1_SIZE};
 
 /// Activations of the hidden layer.
 #[derive(Debug, Clone)]
@@ -22,10 +19,10 @@ impl Accumulator {
     /// Initializes the accumulator with the given bias.
     pub fn init(&mut self, bias: &Align64<[i16; LAYER_1_SIZE]>, update: PovUpdate) {
         if update.white {
-            simd::copy(bias, &mut self.white);
+            self.white = bias.clone();
         }
         if update.black {
-            simd::copy(bias, &mut self.black);
+            self.black = bias.clone();
         }
     }
 
