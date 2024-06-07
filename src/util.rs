@@ -1,7 +1,11 @@
 pub mod depth;
 
 use std::{
-    fmt::{self, Display}, mem::size_of, ops::{Index, IndexMut}, str::FromStr, sync::atomic::{AtomicU64, Ordering}
+    fmt::{self, Display},
+    mem::size_of,
+    ops::{Index, IndexMut},
+    str::FromStr,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use crate::{

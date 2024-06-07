@@ -1,5 +1,7 @@
 use std::{
-    fmt::{Debug, Display}, mem::size_of, ops::{Index, IndexMut}
+    fmt::{Debug, Display},
+    mem::size_of,
+    ops::{Index, IndexMut},
 };
 
 pub trait Col {
