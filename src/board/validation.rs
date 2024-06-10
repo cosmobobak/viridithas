@@ -39,8 +39,8 @@ impl Board {
         if !(self.side == Colour::White || self.side == Colour::Black) {
             return Err(format!("side is corrupt: expected WHITE or BLACK, got {:?}", self.side));
         }
-        if self.generate_pos_key() != self.key {
-            return Err(format!("key is corrupt: expected {:?}, got {:?}", self.generate_pos_key(), self.key));
+        if self.generate_pos_key().0 != self.key {
+            return Err(format!("key is corrupt: expected {:?}, got {:?}", self.generate_pos_key().0, self.key));
         }
 
         if !(self.ep_sq.is_none()

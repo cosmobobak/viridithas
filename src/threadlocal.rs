@@ -3,7 +3,7 @@ use std::array;
 use crate::{
     board::Board,
     chessmove::Move,
-    historytable::{CaptureHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
+    historytable::{CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
     nnue,
     piece::Colour,
     search::pv::PVariation,
@@ -27,6 +27,7 @@ pub struct ThreadData<'a> {
     pub cont_hists: [Box<DoubleHistoryTable>; 2],
     pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
+    pub correction_history: Box<CorrectionHistoryTable>,
 
     pub thread_id: usize,
 
@@ -54,6 +55,7 @@ impl<'a> ThreadData<'a> {
             cont_hists: [(); 2].map(|()| DoubleHistoryTable::boxed()),
             killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
+            correction_history: CorrectionHistoryTable::boxed(),
             thread_id,
             pvs: vec![PVariation::default(); MAX_PLY],
             completed: 0,
@@ -85,6 +87,7 @@ impl<'a> ThreadData<'a> {
         self.cont_hists.iter_mut().for_each(|h| h.clear());
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
+        self.correction_history.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());
@@ -96,6 +99,7 @@ impl<'a> ThreadData<'a> {
         self.cont_hists.iter_mut().for_each(|h| h.age_entries());
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
+        self.correction_history.age_entries();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(PVariation::default());

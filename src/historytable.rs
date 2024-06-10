@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    piece::{Piece, PieceType},
+    piece::{Colour, Piece, PieceType},
     util::{depth::Depth, Square, BOARD_N_SQUARES},
 };
 
@@ -16,11 +16,17 @@ const fn history_bonus(depth: Depth) -> i32 {
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
+pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
+pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
+pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
+pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 
 pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
+    const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let delta = if is_good { history_bonus(depth) } else { -history_bonus(depth) };
-    *val += delta as i16 - (i32::from(*val) * delta.abs() / i32::from(MAX_HISTORY)) as i16;
+    let curr = i32::from(*val);
+    *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
 
 #[derive(Clone)]
@@ -57,6 +63,7 @@ impl HistoryTable {
 }
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct ThreatsHistoryTable {
     table: [[HistoryTable; 2]; 2],
 }
@@ -88,6 +95,7 @@ impl ThreatsHistoryTable {
 }
 
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct CaptureHistoryTable {
     table: [HistoryTable; 6],
 }
@@ -134,6 +142,7 @@ pub struct ContHistIndex {
 
 #[allow(clippy::large_stack_frames)]
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct DoubleHistoryTable {
     table: [[HistoryTable; BOARD_N_SQUARES]; 12],
 }
@@ -192,5 +201,46 @@ impl MoveTable {
 
     pub fn get(&self, piece: Piece, sq: Square) -> Option<Move> {
         self.table[piece][sq]
+    }
+}
+
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct CorrectionHistoryTable {
+    table: [[i32; CORRECTION_HISTORY_SIZE]; 2],
+}
+
+impl CorrectionHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn age_entries(&mut self) {
+        self.table.iter_mut().flatten().for_each(|x| *x /= i32::from(AGEING_DIVISOR));
+    }
+
+    pub fn clear(&mut self) {
+        self.table.iter_mut().for_each(|t| t.fill(0));
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get(&self, side: Colour, key: u64) -> i32 {
+        self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize]
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
+        &mut self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize]
     }
 }
