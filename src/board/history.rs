@@ -1,6 +1,6 @@
 use crate::{
     chessmove::Move,
-    historytable::update_history,
+    historytable::{update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE},
     piece::PieceType,
     threadlocal::ThreadData,
     util::{depth::Depth, Undo, MAX_DEPTH},
@@ -181,6 +181,23 @@ impl ThreadData<'_> {
         let prev_piece = cont_hist_index.piece;
 
         self.counter_move_table.get(prev_piece, prev_to)
+    }
+
+    /// Update the correction history for a pawn pattern.
+    pub fn update_correction_history(&mut self, pos: &Board, depth: Depth, diff: i32) {
+        let entry = self.correction_history.get_mut(pos.turn(), pos.pawn_key());
+        let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
+        let new_weight = 16.min(1 + depth.round());
+        debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
+
+        let update = *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
+        *entry = i32::clamp(update / CORRECTION_HISTORY_WEIGHT_SCALE, -CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_MAX);
+    }
+
+    /// Adjust a raw evaluation using statistics from the correction history.
+    pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
+        let entry = self.correction_history.get(pos.turn(), pos.pawn_key());
+        raw_eval + entry / CORRECTION_HISTORY_GRAIN
     }
 }
 

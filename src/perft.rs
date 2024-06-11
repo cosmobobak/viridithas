@@ -263,15 +263,15 @@ mod tests {
         let e4 = Move::new(Square::E2, Square::E4);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
-        let hashkey_before = pos.hashkey();
+        let hashkey_before = pos.zobrist_key();
         pos.make_move_simple(e4);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
-        assert_ne!(pos.hashkey(), hashkey_before);
+        assert_ne!(pos.zobrist_key(), hashkey_before);
         pos.unmake_move_base();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
-        assert_eq!(pos.hashkey(), hashkey_before);
+        assert_eq!(pos.zobrist_key(), hashkey_before);
     }
 
     #[test]
@@ -283,14 +283,14 @@ mod tests {
         let exd5 = Move::new(Square::E4, Square::D5);
         let bitboard_before = pos.pieces;
         println!("{bitboard_before}");
-        let hashkey_before = pos.hashkey();
+        let hashkey_before = pos.zobrist_key();
         pos.make_move_simple(exd5);
         assert_ne!(pos.pieces, bitboard_before);
         println!("{bb_after}", bb_after = pos.pieces);
-        assert_ne!(pos.hashkey(), hashkey_before);
+        assert_ne!(pos.zobrist_key(), hashkey_before);
         pos.unmake_move_base();
         assert_eq!(pos.pieces, bitboard_before);
         println!("{bb_returned}", bb_returned = pos.pieces);
-        assert_eq!(pos.hashkey(), hashkey_before);
+        assert_eq!(pos.zobrist_key(), hashkey_before);
     }
 }

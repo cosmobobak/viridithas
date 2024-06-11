@@ -389,7 +389,7 @@ impl Board {
 
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
-        let tt_move = t.tt.probe_for_provisional_info(self.hashkey()).and_then(|e| e.0);
+        let tt_move = t.tt.probe_for_provisional_info(self.zobrist_key()).and_then(|e| e.0);
         let mut mp = MovePicker::<MainSearch>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = None;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
@@ -421,7 +421,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.hashkey();
+        let key = self.zobrist_key();
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -463,22 +463,32 @@ impl Board {
 
         t.ss[height].ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
 
-        let stand_pat = if in_check {
-            -INFINITY // could be being mated!
+        let raw_eval;
+        let stand_pat;
+
+        if in_check {
+            // could be being mated!
+            raw_eval = -INFINITY;
+            stand_pat = -INFINITY;
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
-            let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+            // if we have a TT hit, check the cached TT eval.
+            let v = *tt_eval;
             if v == VALUE_NONE {
-                self.evaluate(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+                // regenerate the static eval if it's VALUE_NONE.
+                raw_eval = self.evaluate(t, info.nodes.get_local());
             } else {
-                v // if the TT eval is not VALUE_NONE, use it.
+                // if the TT eval is not VALUE_NONE, use it.
+                raw_eval = v;
             }
+            stand_pat = t.correct_evaluation(self, raw_eval);
         } else {
-            let v = self.evaluate(t, info.nodes.get_local()); // otherwise, use the static evaluation.
+            // otherwise, use the static evaluation.
+            raw_eval = self.evaluate(t, info.nodes.get_local());
             if tt_hit.is_none() {
                 // store the eval into the TT if we won't overwrite anything
-                t.tt.store(key, height, None, VALUE_NONE, v, Bound::None, ZERO_PLY, t.ss[height].ttpv);
+                t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
             }
-            v
+            stand_pat = t.correct_evaluation(self, raw_eval);
         };
 
         if stand_pat >= beta {
@@ -548,7 +558,7 @@ impl Board {
             Bound::Upper
         };
 
-        t.tt.store(key, height, best_move, best_score, stand_pat, flag, ZERO_PLY, t.ss[height].ttpv);
+        t.tt.store(key, height, best_move, best_score, raw_eval, flag, ZERO_PLY, t.ss[height].ttpv);
 
         best_score
     }
@@ -577,7 +587,7 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.hashkey();
+        let key = self.zobrist_key();
 
         let in_check = self.in_check();
         if depth <= ZERO_PLY && !in_check {
@@ -691,19 +701,32 @@ impl Board {
             }
         }
 
-        let static_eval = if in_check {
-            -INFINITY // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+        let raw_eval;
+        let static_eval;
+
+        if in_check {
+            // when we're in check, it could be checkmate, so it's unsound to use evaluate().
+            raw_eval = -INFINITY;
+            static_eval = -INFINITY;
         } else if excluded.is_some() {
-            t.ss[height].eval // if we're in a singular-verification search, we already have the static eval.
+            // if we're in a singular-verification search, we already have the static eval.
+            // we can set raw_eval to whatever we like, because we're not going to be saving it.
+            raw_eval = VALUE_NONE;
+            static_eval = t.ss[height].eval;
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
-                self.evaluate(t, info.nodes.get_local()) // regenerate the static eval if it's VALUE_NONE.
+                // regenerate the static eval if it's VALUE_NONE.
+                raw_eval = self.evaluate(t, info.nodes.get_local());
             } else {
-                v // if the TT eval is not VALUE_NONE, use it.
+                // if the TT eval is not VALUE_NONE, use it.
+                raw_eval = v;
             }
+            static_eval = t.correct_evaluation(self, raw_eval);
         } else {
-            self.evaluate(t, info.nodes.get_local()) // otherwise, use the static evaluation.
+            // otherwise, use the static evaluation.
+            raw_eval = self.evaluate(t, info.nodes.get_local());
+            static_eval = t.correct_evaluation(self, raw_eval);
         };
 
         t.ss[height].eval = static_eval;
@@ -811,7 +834,7 @@ impl Board {
 
         // store the eval into the TT if we won't overwrite anything:
         if tt_hit.is_none() && !in_check && excluded.is_none() {
-            t.tt.store(key, height, None, VALUE_NONE, static_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
+            t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
         }
 
         // probcut:
@@ -857,7 +880,7 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    t.tt.store(key, height, Some(m), value, static_eval, Bound::Lower, depth - 3, t.ss[height].ttpv);
+                    t.tt.store(key, height, Some(m), value, raw_eval, Bound::Lower, depth - 3, t.ss[height].ttpv);
                     return value;
                 }
             }
@@ -1175,7 +1198,16 @@ impl Board {
                 alpha != original_alpha || best_move.is_none(),
                 "alpha was not raised, but best_move was not null!"
             );
-            t.tt.store(key, height, best_move, best_score, static_eval, flag, depth, t.ss[height].ttpv);
+            // if we're not in check, and we don't have a tactical best-move,
+            // and the static eval needs moving in a direction, then update corrhist.
+            if !(in_check
+                || matches!(best_move, Some(m) if self.is_tactical(m))
+                || flag == Bound::Lower && best_score <= static_eval
+                || flag == Bound::Upper && best_score >= static_eval)
+            {
+                t.update_correction_history(self, depth, best_score - static_eval);
+            }
+            t.tt.store(key, height, best_move, best_score, raw_eval, flag, depth, t.ss[height].ttpv);
         }
 
         t.ss[height].best_move = best_move;

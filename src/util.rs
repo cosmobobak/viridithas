@@ -344,6 +344,7 @@ pub struct Undo {
     pub bitboard: BitBoard,
     pub piece_array: [Option<Piece>; 64],
     pub key: u64,
+    pub pawn_key: u64,
 }
 
 impl Default for Undo {
@@ -357,6 +358,7 @@ impl Default for Undo {
             bitboard: BitBoard::NULL,
             piece_array: [None; 64],
             key: 0,
+            pawn_key: 0,
         }
     }
 }

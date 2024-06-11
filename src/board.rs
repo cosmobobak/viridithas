@@ -53,6 +53,8 @@ pub struct Board {
 
     /// The Zobrist hash of the board.
     key: u64,
+    /// The Zobrist hash of the pawns on the board.
+    pawn_key: u64,
 
     /// Squares that the opponent attacks
     threats: Threats,
@@ -117,6 +119,7 @@ impl Board {
             height: 0,
             ply: 0,
             key: 0,
+            pawn_key: 0,
             threats: Threats::default(),
             castle_perm: CastlingRights::NONE,
             history: Vec::new(),
@@ -145,8 +148,12 @@ impl Board {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
-    pub const fn hashkey(&self) -> u64 {
+    pub const fn zobrist_key(&self) -> u64 {
         self.key
+    }
+
+    pub const fn pawn_key(&self) -> u64 {
+        self.pawn_key
     }
 
     pub fn n_men(&self) -> u8 {
@@ -195,11 +202,15 @@ impl Board {
         &mut self.castle_perm
     }
 
-    pub fn generate_pos_key(&self) -> u64 {
+    pub fn generate_pos_key(&self) -> (u64, u64) {
         #![allow(clippy::cast_possible_truncation)]
         let mut key = 0;
+        let mut pawn_key = 0;
         self.pieces.visit_pieces(|sq, piece| {
             hash_piece(&mut key, piece, sq);
+            if piece.piece_type() == PieceType::Pawn {
+                hash_piece(&mut pawn_key, piece, sq);
+            }
         });
 
         if self.side == Colour::White {
@@ -214,11 +225,11 @@ impl Board {
 
         debug_assert!(self.fifty_move_counter <= 100);
 
-        key
+        (key, pawn_key)
     }
 
     pub fn regenerate_zobrist(&mut self) {
-        self.key = self.generate_pos_key();
+        (self.key, self.pawn_key) = self.generate_pos_key();
     }
 
     pub fn regenerate_threats(&mut self) {
@@ -290,6 +301,7 @@ impl Board {
         self.ply = 0;
         self.castle_perm = CastlingRights::NONE;
         self.key = 0;
+        self.pawn_key = 0;
         self.threats = Threats::default();
         self.history.clear();
     }
@@ -328,7 +340,7 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(queenside_file as u8).unwrap())),
         };
-        self.key = self.generate_pos_key();
+        (self.key, self.pawn_key) = self.generate_pos_key();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -386,7 +398,7 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_queenside_file as u8).unwrap())),
         };
-        self.key = self.generate_pos_key();
+        (self.key, self.pawn_key) = self.generate_pos_key();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -528,7 +540,7 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        self.key = self.generate_pos_key();
+        (self.key, self.pawn_key) = self.generate_pos_key();
         self.threats = self.generate_threats(self.side.flip());
 
         Ok(())
@@ -1005,6 +1017,7 @@ impl Board {
             bitboard: self.pieces,
             piece_array: self.piece_array,
             key: self.key,
+            pawn_key: self.pawn_key,
         };
 
         // from, to, and piece are valid unless this is a castling move,
@@ -1110,6 +1123,7 @@ impl Board {
             // self.ply -= 1;
             self.side = self.side.flip();
             // self.key = key;
+            // self.pawn_key = pawn_key;
             // self.castle_perm = castle_perm;
             self.ep_sq = ep_square;
             self.fifty_move_counter = fifty_move_counter;
@@ -1120,6 +1134,7 @@ impl Board {
         }
 
         let mut key = self.key;
+        let mut pawn_key = self.pawn_key;
 
         // remove a previous en passant square from the hash
         if let Some(ep_sq) = saved_state.ep_square {
@@ -1161,14 +1176,21 @@ impl Board {
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.piece_array[sq] = None;
             hash_piece(&mut key, piece, sq);
+            if piece.piece_type() == PieceType::Pawn {
+                hash_piece(&mut pawn_key, piece, sq);
+            }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.piece_array[sq] = Some(piece);
             hash_piece(&mut key, piece, sq);
+            if piece.piece_type() == PieceType::Pawn {
+                hash_piece(&mut pawn_key, piece, sq);
+            }
         }
         // reinsert the castling rights
         hash_castling(&mut key, self.castle_perm);
         self.key = key;
+        self.pawn_key = pawn_key;
 
         self.ply += 1;
         self.height += 1;
@@ -1194,12 +1216,13 @@ impl Board {
 
         let undo = self.history.last().expect("No move to unmake!");
 
-        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, .. } = undo;
+        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, pawn_key, .. } = undo;
 
         self.height -= 1;
         self.ply -= 1;
         self.side = self.side.flip();
         self.key = *key;
+        self.pawn_key = *pawn_key;
         self.castle_perm = *castle_perm;
         self.ep_sq = *ep_square;
         self.fifty_move_counter = *fifty_move_counter;
