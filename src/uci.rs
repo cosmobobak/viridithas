@@ -1,6 +1,7 @@
-#![deny(clippy::panic, clippy::unwrap_used, clippy::todo, clippy::unimplemented)]
+#![deny(clippy::panic, clippy::unwrap_used, clippy::expect_used, clippy::todo, clippy::unimplemented)]
 
 use std::{
+    error::Error,
     fmt::{self, Display},
     io::Write,
     num::{ParseFloatError, ParseIntError},
@@ -11,6 +12,8 @@ use std::{
     },
     time::Instant,
 };
+
+use anyhow::{anyhow, bail, Context};
 
 use crate::{
     bench::BENCH_POSITIONS,
@@ -114,27 +117,25 @@ impl Display for UciError {
 // position fen
 // position startpos
 // ... moves e2e4 e7e5 b7b8q
-fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
+fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
     let mut parts = text.split_ascii_whitespace();
     let command =
-        parts.next().ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_position".into()))?;
+        parts.next().with_context(|| UciError::UnexpectedCommandTermination("No command in parse_position".into()))?;
     if command != "position" {
-        return Err(UciError::InvalidFormat("Expected 'position'".into()));
+        bail!(UciError::InvalidFormat("Expected 'position'".into()));
     }
     let determiner = parts
         .next()
-        .ok_or_else(|| UciError::UnexpectedCommandTermination("No determiner after \"position\"".into()))?;
+        .with_context(|| UciError::UnexpectedCommandTermination("No determiner after \"position\"".into()))?;
     if determiner == "startpos" {
         pos.set_startpos();
         let moves = parts.next(); // skip "moves"
         if !(matches!(moves, Some("moves") | None)) {
-            return Err(UciError::InvalidFormat(
-                "Expected either \"moves\" or no content to follow \"startpos\".".into(),
-            ));
+            bail!(UciError::InvalidFormat("Expected either \"moves\" or no content to follow \"startpos\".".into(),));
         }
     } else {
         if determiner != "fen" {
-            return Err(UciError::InvalidFormat(format!("Unknown term after \"position\": {determiner}")));
+            bail!(UciError::InvalidFormat(format!("Unknown term after \"position\": {determiner}")));
         }
         let mut fen = String::new();
         for part in &mut parts {
@@ -144,7 +145,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
             fen.push_str(part);
             fen.push(' ');
         }
-        pos.set_from_fen(&fen)?;
+        pos.set_from_fen(&fen).with_context(|| format!("Failed to set fen {fen}"))?;
     }
     for san in parts {
         pos.zero_height(); // stuff breaks really hard without this lmao
@@ -155,7 +156,7 @@ fn parse_position(text: &str, pos: &mut Board) -> Result<(), UciError> {
     Ok(())
 }
 
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciError> {
+fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> anyhow::Result<()> {
     #![allow(clippy::too_many_lines)]
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
@@ -167,14 +168,14 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
 
     let mut parts = text.split_ascii_whitespace();
     let command =
-        parts.next().ok_or_else(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
+        parts.next().with_context(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
     if command != "go" {
-        return Err(UciError::InvalidFormat("Expected \"go\"".into()));
+        bail!(UciError::InvalidFormat("Expected \"go\"".into()));
     }
 
     while let Some(part) = parts.next() {
         match part {
-            "depth" => depth = Some(part_parse("depth", parts.next())?),
+            "depth" => depth = Some(part_parse("depth", parts.next()).with_context(|| "Failed to parse depth part.")?),
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
             "wtime" => clocks[pos.turn()] = Some(part_parse("wtime", parts.next())?),
@@ -189,7 +190,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
                 limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
-            other => return Err(UciError::InvalidFormat(format!("Unknown term: {other}"))),
+            other => bail!(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
@@ -211,9 +212,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
         limit = SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
-        return Err(UciError::InvalidFormat(
-            "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
-        ));
+        bail!(UciError::InvalidFormat("at least one of [wtime, btime, winc, binc] provided, but not all.".into(),));
     }
 
     if let Some(nodes) = nodes {
@@ -226,15 +225,15 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> Result<(), UciErr
     Ok(())
 }
 
-fn part_parse<T>(target: &str, next_part: Option<&str>) -> Result<T, UciError>
+fn part_parse<T>(target: &str, next_part: Option<&str>) -> anyhow::Result<T>
 where
     T: FromStr,
-    <T as FromStr>::Err: Display,
+    <T as FromStr>::Err: Display + Send + Sync + Error + 'static,
 {
-    let next_part = next_part.ok_or_else(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
+    let next_part = next_part.with_context(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
     let value = next_part.parse();
-    value.map_err(|e| {
-        UciError::InvalidFormat(format!("value for {target} is not a number: {e}, tried to parse {next_part}"))
+    value.with_context(|| {
+        UciError::InvalidFormat(format!("value for {target} is not a number, tried to parse {next_part}"))
     })
 }
 
@@ -245,32 +244,32 @@ struct SetOptions {
 }
 
 #[allow(clippy::too_many_lines)]
-fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, UciError> {
+fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOptions> {
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     let Some(_) = parts.next() else {
-        return Err(UnexpectedCommandTermination("no \"setoption\" found".into()));
+        bail!(UnexpectedCommandTermination("no \"setoption\" found".into()));
     };
     let Some(name_part) = parts.next() else {
-        return Err(UciError::InvalidFormat("no \"name\" after \"setoption\"".into()));
+        bail!(UciError::InvalidFormat("no \"name\" after \"setoption\"".into()));
     };
     if name_part != "name" {
-        return Err(UciError::InvalidFormat(format!(
+        bail!(UciError::InvalidFormat(format!(
             "unexpected character after \"setoption\", expected \"name\", got \"{name_part}\". Did you mean \"setoption name {name_part}\"?"
         )));
     }
     let opt_name = parts
         .next()
-        .ok_or_else(|| UnexpectedCommandTermination("no option name given after \"setoption name\"".into()))?;
+        .with_context(|| UnexpectedCommandTermination("no option name given after \"setoption name\"".into()))?;
     let Some(value_part) = parts.next() else {
-        return Err(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
+        bail!(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
     };
     if value_part != "value" {
-        return Err(UciError::InvalidFormat(format!(
+        bail!(UciError::InvalidFormat(format!(
             "unexpected character after \"setoption name {opt_name}\", expected \"value\", got \"{value_part}\". Did you mean \"setoption name {opt_name} value {value_part}\"?"
         )));
     }
-    let opt_value = parts.next().ok_or_else(|| {
+    let opt_value = parts.next().with_context(|| {
         UnexpectedCommandTermination(format!("no option value given after \"setoption name {opt_name} value\""))
     })?;
     let mut out = pre_config;
@@ -280,7 +279,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
         if param_name == opt_name {
             let res = parser(opt_value);
             if let Err(e) = res {
-                return Err(UciError::InvalidFormat(e.to_string()));
+                bail!(UciError::InvalidFormat(e.to_string()));
             }
             found_match = true;
             break;
@@ -294,9 +293,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_HASH_MEGABYTES) {
                 // "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
-                return Err(UciError::IllegalValue(format!(
-                    "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
-                )));
+                bail!(UciError::IllegalValue(format!("Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}")));
             }
             out.hash_mb = value;
         }
@@ -304,7 +301,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_THREADS) {
                 // "Threads value must be between 1 and {UCI_MAX_THREADS}"
-                return Err(UciError::IllegalValue(format!("Threads value must be between 1 and {UCI_MAX_THREADS}")));
+                bail!(UciError::IllegalValue(format!("Threads value must be between 1 and {UCI_MAX_THREADS}")));
             }
             out.threads = value;
         }
@@ -312,7 +309,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_MULTIPV) {
                 // "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
-                return Err(UciError::IllegalValue(format!("MultiPV value must be between 1 and {UCI_MAX_MULTIPV}")));
+                bail!(UciError::IllegalValue(format!("MultiPV value must be between 1 and {UCI_MAX_MULTIPV}")));
             }
             MULTI_PV.store(value, Ordering::SeqCst);
         }
@@ -327,27 +324,27 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
                 *lock = path;
                 SYZYGY_ENABLED.store(true, Ordering::SeqCst);
             } else {
-                return Err(UciError::InternalError("failed to take lock on SyzygyPath".into()));
+                bail!(UciError::InternalError("failed to take lock on SyzygyPath".into()));
             }
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
             if value > 6 {
-                return Err(UciError::IllegalValue("SyzygyProbeLimit value must be between 0 and 6".to_string()));
+                bail!(UciError::IllegalValue("SyzygyProbeLimit value must be between 0 and 6".to_string()));
             }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
             if !(1..=100).contains(&value) {
-                return Err(UciError::IllegalValue("SyzygyProbeDepth value must be between 0 and 100".to_string()));
+                bail!(UciError::IllegalValue("SyzygyProbeDepth value must be between 0 and 100".to_string()));
             }
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
         "Contempt" => {
             let value: i32 = opt_value.parse()?;
             if !(-10000..=10000).contains(&value) {
-                return Err(UciError::IllegalValue("Contempt value must be between -10000 and 10000".to_string()));
+                bail!(UciError::IllegalValue("Contempt value must be between -10000 and 10000".to_string()));
             }
             CONTEMPT.store(value, Ordering::SeqCst);
         }
@@ -362,21 +359,21 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> Result<SetOptions, Uci
     Ok(out)
 }
 
-fn stdin_reader() -> mpsc::Receiver<String> {
+fn stdin_reader() -> anyhow::Result<(mpsc::Receiver<String>, std::thread::JoinHandle<anyhow::Result<()>>)> {
     let (sender, receiver) = mpsc::channel();
-    std::thread::Builder::new()
+    let handle = std::thread::Builder::new()
         .name("stdin-reader".into())
         .spawn(|| stdin_reader_worker(sender))
-        .expect("Couldn't start stdin reader worker thread");
-    receiver
+        .with_context(|| "Couldn't start stdin reader worker thread")?;
+    Ok((receiver, handle))
 }
 
-fn stdin_reader_worker(sender: mpsc::Sender<String>) {
+fn stdin_reader_worker(sender: mpsc::Sender<String>) -> anyhow::Result<()> {
     let mut linebuf = String::with_capacity(128);
     while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
         if bytes == 0 {
             // EOF
-            sender.send("quit".into()).expect("couldn't send quit command to main thread");
+            sender.send("quit".into()).with_context(|| "couldn't send quit command to main thread")?;
             QUIT.store(true, Ordering::SeqCst);
             break;
         }
@@ -386,15 +383,17 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) {
             continue;
         }
         if let Err(e) = sender.send(cmd.to_owned()) {
-            eprintln!("info string error sending command to main thread: {e}");
-            break;
+            bail!("info string error sending command to main thread: {e}");
         }
         if !STDIN_READER_THREAD_KEEP_RUNNING.load(atomic::Ordering::SeqCst) {
             break;
         }
         linebuf.clear();
     }
+
     std::mem::drop(sender);
+
+    Ok(())
 }
 
 pub struct ScoreFormatWrapper(i32);
@@ -513,14 +512,15 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn main_loop(global_bench: bool) {
+pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
     let stopped = AtomicBool::new(false);
-    let stdin = Mutex::new(stdin_reader());
+    let (stdin, stdin_reader_handle) = stdin_reader()?;
+    let stdin = Mutex::new(stdin);
     let nodes = AtomicU64::new(0);
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
@@ -531,13 +531,13 @@ pub fn main_loop(global_bench: bool) {
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
-        bench("openbench", &info.conf).expect("bench failed");
-        return;
+        bench("openbench", &info.conf).with_context(|| "bench failed")?;
+        return Ok(());
     }
 
     loop {
-        std::io::stdout().flush().expect("couldn't flush stdout");
-        let Ok(line) = stdin.lock().expect("failed to take lock on stdin").recv() else {
+        std::io::stdout().flush().with_context(|| "couldn't flush stdout")?;
+        let Ok(line) = stdin.lock().map_err(|_| anyhow!("failed to take lock on stdin"))?.recv() else {
             break;
         };
         let input = line.trim();
@@ -562,7 +562,7 @@ pub fn main_loop(global_bench: bool) {
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!("SyzygyPath: {}", SYZYGY_PATH.lock().expect("failed to lock syzygy path"));
+                println!("SyzygyPath: {}", SYZYGY_PATH.lock().map_err(|_| anyhow!("failed to lock syzygy path"))?);
                 println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
                 println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
                 println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
@@ -587,7 +587,7 @@ pub fn main_loop(global_bench: bool) {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    pos.evaluate(thread_data.first_mut().expect("the thread headers are empty."), 0)
+                    pos.evaluate(thread_data.first_mut().with_context(|| "the thread headers are empty.")?, 0)
                 };
                 println!("{eval}");
                 Ok(())
@@ -596,7 +596,7 @@ pub fn main_loop(global_bench: bool) {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    thread_data.first_mut().expect("the thread headers are empty.").nnue.evaluate(pos.turn())
+                    thread_data.first_mut().with_context(|| "the thread headers are empty.")?.nnue.evaluate(pos.turn())
                 };
                 println!("{eval}");
                 Ok(())
@@ -650,14 +650,14 @@ pub fn main_loop(global_bench: bool) {
                         let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
                         depth
                             .parse::<usize>()
-                            .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                            .with_context(|| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
                             .map(|depth| divide_perft(depth, &mut pos))
                     }
                     Some(depth) => depth
                         .parse::<usize>()
-                        .map_err(|_| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                        .with_context(|| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
                         .map(|depth| block_perft(depth, &mut pos)),
-                    None => Err(UciError::InvalidFormat("expected a depth after 'go perft'".to_string())),
+                    None => Err(anyhow!(UciError::InvalidFormat("expected a depth after 'go perft'".to_string()))),
                 }
             }
             input if input.starts_with("go") => {
@@ -669,7 +669,7 @@ pub fn main_loop(global_bench: bool) {
                 res
             }
             benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf),
-            _ => Err(UciError::UnknownCommand(input.to_string())),
+            _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
 
         if let Err(e) = res {
@@ -682,11 +682,15 @@ pub fn main_loop(global_bench: bool) {
         }
     }
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
+    if stdin_reader_handle.is_finished() {
+        stdin_reader_handle.join().map_err(|_| anyhow!("Thread panicked!"))??;
+    }
+    Ok(())
 }
 
 const BENCH_DEPTH: usize = 16;
 const BENCH_THREADS: usize = 1;
-fn bench(benchcmd: &str, search_params: &Config) -> Result<(), UciError> {
+fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
@@ -701,7 +705,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> Result<(), UciError> {
         .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
-    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().expect("this array is nonempty.");
+    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().with_context(|| "this array is nonempty.")?;
     for fen in BENCH_POSITIONS {
         let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {
@@ -772,8 +776,8 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     );
 }
 
-fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> Result<(), UciError> {
-    parse_position("position startpos\n", pos)?;
+fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> anyhow::Result<()> {
+    parse_position("position startpos\n", pos).with_context(|| "Failed to set startpos")?;
     tt.clear(thread_data.len());
     thread_data.iter_mut().for_each(ThreadData::clear_tables);
     Ok(())

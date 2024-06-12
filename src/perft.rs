@@ -6,6 +6,8 @@ use std::{
     sync::atomic::Ordering,
 };
 
+use anyhow::{bail, Context};
+
 #[cfg(test)]
 use crate::threadlocal::ThreadData;
 use crate::{
@@ -87,20 +89,20 @@ pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u6
     count
 }
 
-pub fn gamut() {
+pub fn gamut() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     const NODES_LIMIT: u64 = 60_000;
     #[cfg(not(debug_assertions))]
     const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
     println!("running perft on perftsuite.epd");
-    let f = File::open("epds/perftsuite.epd").unwrap();
+    let f = File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
     let mut pos = Board::new();
     for line in BufReader::new(f).lines() {
-        let line = line.unwrap();
+        let line = line?;
         let mut parts = line.split(';');
-        let fen = parts.next().unwrap().trim();
-        pos.set_from_fen(fen).unwrap();
+        let fen = parts.next().with_context(|| "Failed to find fen in line.")?.trim();
+        pos.set_from_fen(fen)?;
         for depth_part in parts {
             let depth_part = depth_part.trim();
             let (d, nodes) = depth_part.split_once(' ').unwrap();
@@ -114,8 +116,7 @@ pub fn gamut() {
             if perft_nodes == nodes {
                 println!("PASS: fen {fen}, depth {d}");
             } else {
-                println!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
-                panic!("perft failed");
+                bail!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
             }
         }
     }
@@ -142,12 +143,12 @@ pub fn gamut() {
             if perft_nodes == nodes {
                 println!("PASS: fen {fen}, depth {d}");
             } else {
-                println!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
-                panic!("perft failed");
+                bail!("FAIL: fen {fen}, depth {d}: expected {nodes}, got {perft_nodes}");
             }
         }
     }
     CHESS960.store(false, Ordering::SeqCst);
+    Ok(())
 }
 
 mod tests {

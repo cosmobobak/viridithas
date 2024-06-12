@@ -4,6 +4,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use crate::{
@@ -667,10 +668,10 @@ pub fn inference_benchmark(state: &NNUEState) {
     println!("{ns_per_eval} ns per evaluation");
 }
 
-pub fn visualise_nnue() {
+pub fn visualise_nnue() -> anyhow::Result<()> {
     // create folder for the images
     let path = std::path::PathBuf::from("nnue-visualisations");
-    std::fs::create_dir_all(&path).unwrap();
+    std::fs::create_dir_all(&path).with_context(|| "Failed to create NNUE visualisations folder.")?;
     for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
         crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
     }
@@ -678,4 +679,5 @@ pub fn visualise_nnue() {
     println!("Min / Max L1 values: {min} / {max}");
     let (min, max) = crate::nnue::network::NNUE.min_max_output_weight();
     println!("Min / Max L2 values: {min} / {max}");
+    Ok(())
 }

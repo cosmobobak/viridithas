@@ -6,6 +6,7 @@ use crate::{
 };
 
 use self::marlinformat::{util::I16Le, PackedBoard};
+use anyhow::{anyhow, Context};
 
 mod marlinformat;
 
@@ -133,25 +134,27 @@ impl Game {
     /// Converts the game into a sequence of marlinformat `PackedBoard` objects, yielding only those positions that pass the filter.
     pub fn splat_to_marlinformat(
         &self,
-        mut callback: impl FnMut(marlinformat::PackedBoard),
+        mut callback: impl FnMut(marlinformat::PackedBoard) -> anyhow::Result<()>,
         filter: impl Fn(Move, i32, &Board) -> bool,
-    ) {
+    ) -> anyhow::Result<()> {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         for (mv, eval) in &self.moves {
             let eval = eval.get();
             if filter(*mv, i32::from(eval), &board) {
-                callback(board.pack(eval, wdl, 0));
+                callback(board.pack(eval, wdl, 0))?;
             }
             board.make_move_simple(*mv);
         }
+
+        Ok(())
     }
 
     /// Converts the game into a sequence of bulletformat `ChessBoard` objects, yielding only those positions that pass the filter.
     pub fn splat_to_bulletformat(
         &self,
-        mut callback: impl FnMut(bulletformat::ChessBoard),
+        mut callback: impl FnMut(bulletformat::ChessBoard) -> anyhow::Result<()>,
         filter: impl Fn(Move, i32, &Board) -> bool,
-    ) {
+    ) -> anyhow::Result<()> {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         for (mv, eval) in &self.moves {
             let eval = eval.get();
@@ -173,11 +176,14 @@ impl Game {
                         eval,
                         f32::from(wdl) / 2.0,
                     )
-                    .unwrap(),
-                );
+                    .map_err(|e| anyhow!(e))
+                    .with_context(|| "Failed to convert raw components into bulletformat::ChessBoard.")?,
+                )?;
             }
             board.make_move_simple(*mv);
         }
+
+        Ok(())
     }
 
     /// Efficiency method that allows us to recover the move vector without allocating a new vector.
@@ -186,6 +192,7 @@ impl Game {
     }
 }
 
+#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use crate::uci::CHESS960;
@@ -229,7 +236,14 @@ mod tests {
         game.add_move(Move::new(Square::G1, Square::F3), 200);
 
         let mut boards = Vec::new();
-        game.splat_to_marlinformat(|board| boards.push(board), |_, _, _| true);
+        game.splat_to_marlinformat(
+            |board| {
+                boards.push(board);
+                Ok(())
+            },
+            |_, _, _| true,
+        )
+        .unwrap();
         assert_eq!(boards.len(), 3);
         let mut check_board = Board::default();
         assert_eq!(boards[0].unpack().0.fen(), check_board.fen());
