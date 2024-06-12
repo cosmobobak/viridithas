@@ -1,9 +1,22 @@
-#[cfg(any(feature = "bindgen", feature = "syzygy"))]
 use std::env;
 
 fn main() {
+    prep_net();
     build_dependencies();
     generate_bindings();
+}
+
+fn prep_net() {
+    let net_path = env::var("EVALFILE").unwrap_or("viridithas.nnue".into());
+    if net_path == "viridithas.nnue" {
+        // check if net exists
+        if let Err(e) = std::fs::metadata(net_path) {
+            eprintln!("Couldn't read default net during build script! {e}");
+            eprintln!("Note: viri looks for a default net in the project root called \"viridithas.nnue\".");
+        }
+        return;
+    }
+    std::fs::copy(net_path, "viridithas.nnue").unwrap();
 }
 
 fn build_dependencies() {
@@ -35,7 +48,7 @@ fn generate_bindings() {
 fn generate_fathom_bindings() {
     let bindings = bindgen::Builder::default()
         .header("./deps/fathom/src/tbprobe.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .layout_tests(false)
         .generate()
         .unwrap();
