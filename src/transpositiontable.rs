@@ -143,6 +143,7 @@ impl TT {
         // dealloc the old table:
         self.table = Vec::new();
         // construct a new vec:
+        // SAFETY: zeroed memory is a legal bitpattern for AtomicU64.
         unsafe {
             let layout = std::alloc::Layout::array::<[AtomicU64; 2]>(new_len).unwrap();
             let ptr = std::alloc::alloc_zeroed(layout);
@@ -307,6 +308,8 @@ impl<'a> TTView<'a> {
     }
 
     pub fn prefetch(&self, key: u64) {
+        // SAFETY: The pointer we construct is in-bounds, and _mm_prefetch
+        // doesn't really do anything particularly dangerous anyway.
         #[cfg(target_arch = "x86_64")]
         unsafe {
             use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};

@@ -114,10 +114,12 @@ impl PackedBoard {
     }
 
     pub const fn as_bytes(self) -> [u8; std::mem::size_of::<Self>()] {
+        // SAFETY: PackedBoard is entirely integer types, and so can be safely transmuted into bytes.
         unsafe { std::mem::transmute(self) }
     }
 
     pub const fn from_bytes(bytes: [u8; std::mem::size_of::<Self>()]) -> Self {
+        // SAFETY: PackedBoard can safely (although not correctly) be constructed from any bitpattern.
         unsafe { std::mem::transmute(bytes) }
     }
 }

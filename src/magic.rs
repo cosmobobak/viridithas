@@ -469,6 +469,10 @@ pub fn get_diagonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let relevant_blockers = blockers & BISHOP_MASKS[sq];
     let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
     let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
+    // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
+    // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
+    // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
+    // in bounds.
     unsafe {
         if idx >= BISHOP_ATTACKS[sq].len() {
             // assert to the compiler that it's chill not to bounds-check
@@ -483,6 +487,10 @@ pub fn get_orthogonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let relevant_blockers = blockers & ROOK_MASKS[sq];
     let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
     let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
+    // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
+    // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
+    // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
+    // in bounds.
     unsafe {
         if idx >= ROOK_ATTACKS[sq].len() {
             // assert to the compiler that it's chill not to bounds-check

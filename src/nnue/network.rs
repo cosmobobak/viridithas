@@ -607,57 +607,51 @@ fn flatten(
     them: &Align64<[i16; LAYER_1_SIZE]>,
     weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
 ) -> i32 {
-    unsafe { flatten_inner(us, them, weights) }
-}
-
-/// Execute an activation on the partial activations,
-/// and accumulate the result into a sum.
-pub unsafe fn flatten_inner(
-    us: &Align64<[i16; LAYER_1_SIZE]>,
-    them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-) -> i32 {
     const CHUNK: usize = Vector16::COUNT;
 
-    let mut sum = Vector32::zero();
-    let min = Vector16::zero();
-    #[allow(clippy::cast_possible_truncation)]
-    let max = Vector16::splat(QA as i16);
+    // SAFETY: a great number of unsafe functions are called in the below code, but we're
+    // implementing a perfectly safe pattern, just using SIMD equivalents of normal things.
+    unsafe {
+        let mut sum = Vector32::zero();
+        let min = Vector16::zero();
+        #[allow(clippy::cast_possible_truncation)]
+        let max = Vector16::splat(QA as i16);
 
-    // the following code uses a trick devised by the author of the Lizard chess engine.
-    // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
-    // and we do this in the following manner:
-    // 1. load the input, x
-    // 2. compute v := clamp(x, 0, QA)
-    // 3. load the weight, w
-    // 4. compute t := v * w via truncating 16-bit multiply.
-    //    this step relies on our invariant that v * w fits in i16.
-    // 5. compute product := v * t via horizontally accumulating
-    //    expand-to-i32 multiply.
-    // 6. add product to the running sum.
-    // at this point we've computed clamp(x, 0, QA)^2 * w
-    // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
-    // the clever part is step #4, which the compiler cannot know to do.
+        // the following code uses a trick devised by the author of the Lizard chess engine.
+        // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
+        // and we do this in the following manner:
+        // 1. load the input, x
+        // 2. compute v := clamp(x, 0, QA)
+        // 3. load the weight, w
+        // 4. compute t := v * w via truncating 16-bit multiply.
+        //    this step relies on our invariant that v * w fits in i16.
+        // 5. compute product := v * t via horizontally accumulating
+        //    expand-to-i32 multiply.
+        // 6. add product to the running sum.
+        // at this point we've computed clamp(x, 0, QA)^2 * w
+        // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
+        // the clever part is step #4, which the compiler cannot know to do.
 
-    // accumulate the first half of the weights
-    for i in 0..LAYER_1_SIZE / CHUNK {
-        let x = Vector16::load_at(us, i * CHUNK);
-        let v = Vector16::min(Vector16::max(x, min), max);
-        let w = Vector16::load_at(weights, i * CHUNK);
-        let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
-        sum = Vector32::add(sum, product);
+        // accumulate the first half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = Vector16::load_at(us, i * CHUNK);
+            let v = Vector16::min(Vector16::max(x, min), max);
+            let w = Vector16::load_at(weights, i * CHUNK);
+            let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
+            sum = Vector32::add(sum, product);
+        }
+
+        // accumulate the second half of the weights
+        for i in 0..LAYER_1_SIZE / CHUNK {
+            let x = Vector16::load_at(them, i * CHUNK);
+            let v = Vector16::min(Vector16::max(x, min), max);
+            let w = Vector16::load_at(weights, LAYER_1_SIZE + i * CHUNK);
+            let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
+            sum = Vector32::add(sum, product);
+        }
+
+        Vector32::sum(sum) / QA
     }
-
-    // accumulate the second half of the weights
-    for i in 0..LAYER_1_SIZE / CHUNK {
-        let x = Vector16::load_at(them, i * CHUNK);
-        let v = Vector16::min(Vector16::max(x, min), max);
-        let w = Vector16::load_at(weights, LAYER_1_SIZE + i * CHUNK);
-        let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
-        sum = Vector32::add(sum, product);
-    }
-
-    Vector32::sum(sum) / QA
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.

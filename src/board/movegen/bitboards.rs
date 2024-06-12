@@ -28,10 +28,11 @@ impl Iterator for BitLoop {
             None
         } else {
             // faster if we have bmi (maybe)
-            // SOUNDNESS: the trailing_zeros of a u64 cannot exceed 64, which is less than u8::MAX
             #[allow(clippy::cast_possible_truncation)]
             let lsb: u8 = self.value.trailing_zeros() as u8;
             self.value &= self.value - 1;
+            // SAFETY: u64::trailing_zeros can only return values within `0..64`,
+            // all of which correspond to valid enum variants of Square.
             Some(unsafe { Square::new_unchecked(lsb) })
         }
     }

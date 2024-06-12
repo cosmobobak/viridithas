@@ -121,6 +121,8 @@ impl SquareSet {
     #[allow(clippy::cast_possible_truncation)]
     pub const fn first(self) -> Square {
         debug_assert!(self.inner != 0, "Tried to get first square of empty bitboard");
+        // SAFETY: u64::trailing_zeros can only return values within `0..64`,
+        // all of which correspond to valid enum variants of Square.
         unsafe { Square::new_unchecked(self.inner.trailing_zeros() as u8) }
     }
 

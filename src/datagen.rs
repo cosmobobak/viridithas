@@ -671,6 +671,7 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, 
         } else {
             game.splat_to_bulletformat(
                 |chess_board| {
+                    // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
                     let bytes =
                         unsafe { std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(chess_board) };
                     output_buffer.write_all(&bytes).unwrap();

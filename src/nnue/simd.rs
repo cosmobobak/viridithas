@@ -257,22 +257,26 @@ impl Vector16 {
     }
 
     #[inline]
-    pub unsafe fn zero() -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_setzero_si512() }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_setzero_si256() }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vld1q_dup_s16(&0) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: 0 }
+    pub fn zero() -> Self {
+        // SAFETY: All of these functions are actually perfectly fine to call on their own.
+        #[allow(unused_unsafe)]
+        unsafe {
+            #[cfg(target_feature = "avx512f")]
+            {
+                Self { data: std::arch::x86_64::_mm512_setzero_si512() }
+            }
+            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+            {
+                Self { data: std::arch::x86_64::_mm256_setzero_si256() }
+            }
+            #[cfg(target_feature = "neon")]
+            {
+                Self { data: std::arch::aarch64::vld1q_dup_s16(&0) }
+            }
+            #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
+            {
+                Self { data: 0 }
+            }
         }
     }
 }
@@ -361,15 +365,13 @@ impl Vector32 {
     }
 }
 
-unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; LAYER_1_SIZE]> {
-    unsafe {
-        // don't immediately cast to Align64, as we want to check the alignment first.
-        let ptr = slice.as_ptr();
-        debug_assert_eq!(ptr.align_offset(64), 0);
-        // alignments are sensible, so we can safely cast.
-        #[allow(clippy::cast_ptr_alignment)]
-        &*ptr.cast()
-    }
+unsafe fn slice_to_aligned<'a>(slice: &'a [i16]) -> &'a Align64<[i16; LAYER_1_SIZE]> {
+    // don't immediately cast to Align64, as we want to check the alignment first.
+    let ptr = slice.as_ptr();
+    debug_assert_eq!(ptr.align_offset(64), 0);
+    // alignments are sensible, so we can safely cast.
+    #[allow(clippy::cast_ptr_alignment)]
+    &*ptr.cast()
 }
 
 /// Apply add/subtract updates in place.
@@ -381,9 +383,11 @@ pub fn vector_update_inplace(
 ) {
     const REGISTERS: usize = 16;
     const UNROLL: usize = Vector16::COUNT * REGISTERS;
-    let mut registers = [unsafe { Vector16::zero() }; 16];
+    let mut registers = [Vector16::zero(); 16];
     for i in 0..LAYER_1_SIZE / UNROLL {
         let unroll_offset = i * UNROLL;
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
+        // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
             for (r_idx, reg) in registers.iter_mut().enumerate() {
                 *reg = Vector16::load_at(input, unroll_offset + r_idx * Vector16::COUNT);
@@ -421,9 +425,18 @@ pub fn vector_add_sub(
 ) {
     let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
     let offset_sub = feature_idx_sub.index() * LAYER_1_SIZE;
-    let s_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + LAYER_1_SIZE)) };
-    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
+    let s_block;
+    let a_block;
+    // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
+    // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds,
+    // as FeatureIndex ranges in 0..768.
+    unsafe {
+        s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + LAYER_1_SIZE));
+        a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
+    }
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
+        // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);
             let w_sub = Vector16::load_at(s_block, i * Vector16::COUNT);
@@ -447,10 +460,20 @@ pub fn vector_add_sub2(
     let offset_add = feature_idx_add.index() * LAYER_1_SIZE;
     let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
     let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
-    let a_block = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE)) };
-    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
-    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
+    let a_block;
+    let s_block1;
+    let s_block2;
+    // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
+    // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
+    // FeatureIndex ranges in 0..768.
+    unsafe {
+        a_block  = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
+        s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE));
+        s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE));
+    }
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
+        // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);
             let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);
@@ -478,11 +501,22 @@ pub fn vector_add2_sub2(
     let offset_add2 = feature_idx_add2.index() * LAYER_1_SIZE;
     let offset_sub1 = feature_idx_sub1.index() * LAYER_1_SIZE;
     let offset_sub2 = feature_idx_sub2.index() * LAYER_1_SIZE;
-    let a_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + LAYER_1_SIZE)) };
-    let a_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + LAYER_1_SIZE)) };
-    let s_block1 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE)) };
-    let s_block2 = unsafe { slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE)) };
+    let a_block1;
+    let a_block2;
+    let s_block1;
+    let s_block2;
+    // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
+    // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
+    // FeatureIndex ranges in 0..768.
+    unsafe {
+        a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + LAYER_1_SIZE));
+        a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + LAYER_1_SIZE));
+        s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE));
+        s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE));
+    }
     for i in 0..LAYER_1_SIZE / Vector16::COUNT {
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
+        // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
             let x = Vector16::load_at(input, i * Vector16::COUNT);
             let w_sub1 = Vector16::load_at(s_block1, i * Vector16::COUNT);

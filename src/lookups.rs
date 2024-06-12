@@ -54,13 +54,15 @@ pub const SIDE_KEY: u64 = init_hash_keys().3;
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
-    cfor!(let mut sq = Square::A1; true; sq = unsafe { sq.add_unchecked(1) }; {
+    cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
         let mut attacks_bb = 0;
         cfor!(let mut idx = 0; idx < 8; idx += 1; {
             let delta = deltas[idx];
             let attacked_sq = sq.signed_inner() + delta;
             #[allow(clippy::cast_sign_loss)]
-            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(sq, unsafe { Square::new_unchecked(attacked_sq as u8) }) <= 2 {
+            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
+                sq,
+                Square::new_clamped(attacked_sq as u8)) <= 2 {
                 attacks_bb |= 1 << attacked_sq;
             }
         });

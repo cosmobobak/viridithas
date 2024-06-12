@@ -50,6 +50,7 @@ impl File {
 
     pub const fn from_index(index: u8) -> Option<Self> {
         if index < 8 {
+            // SAFETY: inner is less than 8, so it corresponds to a valid enum variant.
             Some(unsafe { std::mem::transmute(index) })
         } else {
             None
@@ -107,6 +108,7 @@ impl Rank {
 
     pub const fn from_index(index: u8) -> Option<Self> {
         if index < 8 {
+            // SAFETY: inner is less than 8, so it corresponds to a valid enum variant.
             Some(unsafe { std::mem::transmute(index) })
         } else {
             None
@@ -188,22 +190,38 @@ impl Square {
 
     pub const fn new(inner: u8) -> Option<Self> {
         if inner < 64 {
+            // SAFETY: inner is less than 64, so it corresponds to a valid enum variant.
             Some(unsafe { std::mem::transmute(inner) })
         } else {
             None
         }
     }
 
+    pub const fn new_clamped(inner: u8) -> Self {
+        let inner = min!(inner, 63);
+        let maybe_square = Self::new(inner);
+        if let Some(sq) = maybe_square {
+            sq
+        } else {
+            panic!()
+        }
+    }
+
+    /// SAFETY: you may only call this function with value of `inner` less than 64.
     pub const unsafe fn new_unchecked(inner: u8) -> Self {
         debug_assert!(inner < 64);
         std::mem::transmute(inner)
     }
 
     pub const fn flip_rank(self) -> Self {
+        // SAFETY: given the precondition that `self as u8` is less than 64,
+        // this operation cannot construct a value >= 64.
         unsafe { std::mem::transmute(self as u8 ^ 0b111_000) }
     }
 
     pub const fn flip_file(self) -> Self {
+        // SAFETY: given the precondition that `self as u8` is less than 64,
+        // this operation cannot construct a value >= 64.
         unsafe { std::mem::transmute(self as u8 ^ 0b000_111) }
     }
 
@@ -217,10 +235,15 @@ impl Square {
 
     /// The file that this square is on.
     pub const fn file(self) -> File {
+        // SAFETY: `self as u8` is less than 64, and this operation can only
+        // decrease the value, so cannot construct a value >= 64.
         unsafe { std::mem::transmute(self as u8 % 8) }
     }
+
     /// The rank that this square is on.
     pub const fn rank(self) -> Rank {
+        // SAFETY: `self as u8` is less than 64, and this operation can only
+        // decrease the value, so cannot construct a value >= 64.
         unsafe { std::mem::transmute(self as u8 / 8) }
     }
 
@@ -247,12 +270,28 @@ impl Square {
         Self::new(res)
     }
 
+    pub const fn saturating_add(self, offset: u8) -> Self {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        let res = self as u8 + offset;
+        let inner = min!(res, 63);
+        let maybe_square = Self::new(inner);
+        if let Some(sq) = maybe_square {
+            sq
+        } else {
+            panic!()
+        }
+    }
+
+    /// SAFETY: You may not call this function with a square and offset such that
+    /// `square as u8 + offset` is outwith `0..64`.
     pub const unsafe fn add_unchecked(self, offset: u8) -> Self {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self as u8 + offset;
         Self::new_unchecked(res)
     }
 
+    /// SAFETY: You may not call this function with a square and offset such that
+    /// `square as u8 - offset` is outwith `0..64`.
     pub const fn sub(self, offset: u8) -> Option<Self> {
         #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         let res = self as u8 - offset;
@@ -297,6 +336,7 @@ impl Square {
     pub const fn gt(self, other: Self) -> bool { self as u8 > other as u8  }
 
     pub fn all() -> impl Iterator<Item = Self> {
+        // SAFETY: all values are within `0..64`.
         (0..64u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 

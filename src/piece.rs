@@ -118,6 +118,7 @@ impl Colour {
 impl PieceType {
     pub const fn new(v: u8) -> Option<Self> {
         if v < 6 {
+            // SAFETY: inner is less than 6, so it corresponds to a valid enum variant.
             Some(unsafe { std::mem::transmute(v) })
         } else {
             None
@@ -189,11 +190,15 @@ impl Iterator for PieceTypesIterator {
 impl Piece {
     pub const fn new(colour: Colour, piece_type: PieceType) -> Self {
         let index = colour as u8 * 6 + piece_type as u8;
+        // SAFETY: Colour is {0, 1}, piece_type is {0, 1, 2, 3, 4, 5}.
+        // colour * 6 + piece_type is therefore at most 11, which corresponds
+        // to a valid enum variant.
         unsafe { std::mem::transmute(index) }
     }
 
     pub const fn from_index(v: u8) -> Option<Self> {
         if v < 12 {
+            // SAFETY: inner is less than 12, so it corresponds to a valid enum variant.
             unsafe { std::mem::transmute(v) }
         } else {
             None
