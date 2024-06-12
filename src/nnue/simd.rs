@@ -467,7 +467,7 @@ pub fn vector_add_sub2(
     // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
     // FeatureIndex ranges in 0..768.
     unsafe {
-        a_block  = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
+        a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + LAYER_1_SIZE));
         s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + LAYER_1_SIZE));
         s_block2 = slice_to_aligned(bucket.get_unchecked(offset_sub2..offset_sub2 + LAYER_1_SIZE));
     }

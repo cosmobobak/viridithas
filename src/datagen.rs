@@ -16,6 +16,7 @@ use std::{
     time::Instant,
 };
 
+use anyhow::{bail, Context};
 use bulletformat::ChessBoard;
 use rand::Rng;
 
@@ -126,17 +127,16 @@ impl DataGenOptions {
     }
 }
 
-pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
+pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if !cfg!(feature = "datagen") {
-        println!("datagen feature not enabled (compile with --features datagen)");
-        return;
+        bail!("datagen feature not enabled (compile with --features datagen)");
     }
 
     ctrlc::set_handler(move || {
         STOP_GENERATION.store(true, Ordering::SeqCst);
         println!("Stopping generation, please don't force quit.");
     })
-    .expect("Failed to set Ctrl-C handler");
+    .with_context(|| "Failed to set Ctrl-C handler")?;
 
     let options: DataGenOptions = cli_config.build();
 
@@ -154,7 +154,11 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
     if let Some(tb_path) = &options.tablebases_path {
         let tb_path = tb_path.to_string_lossy();
         tablebases::probe::init(&tb_path);
-        *SYZYGY_PATH.lock().unwrap() = tb_path.to_string();
+        if let Ok(mut lock) = SYZYGY_PATH.lock() {
+            *lock = tb_path.to_string();
+        } else {
+            bail!("Failed to take lock on SYZYGY_PATH");
+        }
         SYZYGY_ENABLED.store(true, Ordering::SeqCst);
         if options.log_level > 0 {
             println!("Syzygy tablebases enabled.");
@@ -174,7 +178,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
 
     // create the directory for the data
     let data_dir = PathBuf::from("data").join(run_id);
-    std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+    std::fs::create_dir_all(&data_dir).with_context(|| "Failed to create data directory")?;
 
     let mut counters = Vec::new();
     std::thread::scope(|s| {
@@ -186,24 +190,32 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) {
             })
             .collect::<Vec<_>>();
         for handle in thread_handles {
-            counters.push(handle.join().unwrap());
+            if let Ok(res) = handle.join() {
+                counters.push(res);
+            } else {
+                bail!("Thread failed to join!");
+            }
         }
-    });
+        Ok(())
+    })?;
 
     if options.log_level > 0 {
         println!("Done!");
     }
 
-    let counters = counters.into_iter().reduce(|mut a, b| {
-        for (key, value) in b {
+    let counters = counters.into_iter().reduce(|a, b| {
+        let mut a = a?;
+        for (key, value) in b? {
             *a.entry(key).or_insert(0) += value;
         }
-        a
+        Ok(a)
     });
 
     if let Some(counters) = counters {
-        print_game_stats(&counters);
+        print_game_stats(&counters?);
     }
+
+    Ok(())
 }
 
 fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
@@ -223,7 +235,11 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     clippy::too_many_lines,
     clippy::cast_possible_truncation
 )]
-fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> HashMap<GameOutcome, u64> {
+fn generate_on_thread(
+    id: usize,
+    options: &DataGenOptions,
+    data_dir: &Path,
+) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
     // so no worries :3
@@ -242,7 +258,8 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
-    let mut output_file = File::create(data_dir.join(format!("thread_{id}.bin"))).unwrap();
+    let mut output_file =
+        File::create(data_dir.join(format!("thread_{id}.bin"))).with_context(|| "Failed to create output file.")?;
     let mut output_buffer = BufWriter::new(&mut output_file);
 
     let mut counters = [
@@ -281,12 +298,12 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
             let est_completion_date = chrono::Local::now()
                 .checked_add_signed(
                     chrono::Duration::try_seconds(time_remaining as i64)
-                        .expect("failed to convert remaining time to seconds"),
+                        .with_context(|| "failed to convert remaining time to seconds")?,
                 )
-                .expect("failed to add remaining time to current time");
+                .with_context(|| "failed to add remaining time to current time")?;
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
-            std::io::stderr().flush().unwrap();
+            std::io::stderr().flush().with_context(|| "Failed to flush stderr.")?;
             if game % 1024 == 0 {
                 eprintln!("Game stats for main thread:");
                 print_game_stats(&counters);
@@ -374,7 +391,7 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
                 continue 'generation_main_loop;
             };
 
-            game.add_move(best_move, score.try_into().unwrap());
+            game.add_move(best_move, score.try_into().with_context(|| "Failed to convert score into eval.")?);
 
             let abs_score = score.abs();
             if abs_score >= 2000 {
@@ -423,13 +440,13 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         game.set_outcome(outcome);
 
         // write to file
-        game.serialise_into(&mut output_buffer).unwrap();
+        game.serialise_into(&mut output_buffer).with_context(|| "Failed to serialise game into output buffer.")?;
 
         // increment the counter
         FENS_GENERATED.fetch_add(count as u64, Ordering::SeqCst);
 
         // STEP 5: update the game outcome statistics
-        *counters.get_mut(&outcome).unwrap() += 1;
+        *counters.entry(outcome).or_default() += 1;
 
         // STEP 6: check if we should stop because the STOP_GENERATION signal was set.
         if STOP_GENERATION.load(Ordering::SeqCst) {
@@ -437,9 +454,9 @@ fn generate_on_thread(id: usize, options: &DataGenOptions, data_dir: &Path) -> H
         }
     }
 
-    output_buffer.flush().unwrap();
+    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
 
-    counters
+    Ok(counters)
 }
 
 fn show_boot_info(options: &DataGenOptions) {
@@ -456,15 +473,15 @@ fn show_boot_info(options: &DataGenOptions) {
     }
 }
 
-fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
+fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
     #![allow(clippy::option_if_let_else, clippy::too_many_lines)]
     println!();
     let mut user_input = String::new();
     loop {
         print!(">>> ");
-        std::io::stdout().flush().unwrap();
+        std::io::stdout().flush().with_context(|| "Failed to flush stdout.")?;
         user_input.clear();
-        std::io::stdin().read_line(&mut user_input).unwrap();
+        std::io::stdin().read_line(&mut user_input).with_context(|| "Failed to read line from stdin.")?;
         let mut user_input = user_input.split_whitespace();
         let Some(command) = user_input.next() else {
             continue;
@@ -555,7 +572,8 @@ fn config_loop(mut options: DataGenOptions) -> DataGenOptions {
             }
         }
     }
-    options
+
+    Ok(options)
 }
 
 impl Display for DataGenOptions {
@@ -629,16 +647,20 @@ fn should_filter(mv: Move, eval: i32, board: &Board) -> bool {
 
 /// Unpacks the variable-length game format into either bulletformat or marlinformat records,
 /// filtering as it goes.
-pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, limit: Option<usize>) {
+pub fn run_splat(
+    input: &Path,
+    output: &Path,
+    filter: bool,
+    marlinformat: bool,
+    limit: Option<usize>,
+) -> anyhow::Result<()> {
     // check that the input file exists
     if !input.exists() {
-        eprintln!("Input file does not exist.");
-        return;
+        bail!("Input file does not exist.");
     }
     // check that the output does not exist
     if output.exists() {
-        eprintln!("Output file already exists.");
-        return;
+        bail!("Output file already exists.");
     }
 
     let filter_fn = |mv: Move, eval: i32, board: &Board| {
@@ -649,11 +671,11 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, 
     };
 
     // open the input file
-    let input_file = File::open(input).unwrap();
+    let input_file = File::open(input).with_context(|| "Failed to create input file")?;
     let mut input_buffer = BufReader::new(input_file);
 
     // open the output file
-    let output_file = File::create(output).unwrap();
+    let output_file = File::create(output).with_context(|| "Failed to create output file")?;
     let mut output_buffer = BufWriter::new(output_file);
 
     println!("Splatting...");
@@ -664,26 +686,30 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, 
         if marlinformat {
             game.splat_to_marlinformat(
                 |packed_board| {
-                    output_buffer.write_all(&packed_board.as_bytes()).unwrap();
+                    output_buffer
+                        .write_all(&packed_board.as_bytes())
+                        .with_context(|| "Failed to write PackedBoard into buffered writer.")
                 },
                 filter_fn,
-            );
+            )?;
         } else {
             game.splat_to_bulletformat(
                 |chess_board| {
                     // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
                     let bytes =
                         unsafe { std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(chess_board) };
-                    output_buffer.write_all(&bytes).unwrap();
+                    output_buffer
+                        .write_all(&bytes)
+                        .with_context(|| "Failed to write bulletformat::ChessBoard into buffered writer.")
                 },
                 filter_fn,
-            );
+            )?;
         }
         move_buffer = game.into_move_buffer();
         game_count += 1;
         if game_count % 2048 == 0 {
             print!("\r{game_count} games splatted");
-            std::io::stdout().flush().unwrap();
+            std::io::stdout().flush().with_context(|| "Failed to flush stdout.")?;
         }
         if let Some(limit) = limit {
             if game_count >= limit {
@@ -693,30 +719,31 @@ pub fn run_splat(input: &Path, output: &Path, filter: bool, marlinformat: bool, 
     }
     println!();
 
-    output_buffer.flush().unwrap();
+    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
+
+    Ok(())
 }
 
 /// Unpacks the variable-length game format into a PGN file.
-pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
+pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::Result<()> {
     // check that the input file exists
     if !input.exists() {
-        eprintln!("Input file does not exist.");
-        return;
+        bail!("Input file does not exist.");
     }
     // check that the output does not exist
     if output.exists() {
-        eprintln!("Output file already exists.");
-        return;
+        bail!("Output file already exists.");
     }
 
     // open the input file
-    let input_file = File::open(input).unwrap();
+    let input_file = File::open(input).with_context(|| "Failed to create input file")?;
     let mut input_buffer = BufReader::new(input_file);
 
     // open the output file
-    let output_file = File::create(output).unwrap();
+    let output_file = File::create(output).with_context(|| "Failed to create output file")?;
     let mut output_buffer = BufWriter::new(output_file);
 
+    let file_name = input.file_name().with_context(|| "Failed to get filename.")?.to_string_lossy();
     let make_header = |outcome: WDL, fen: String| {
         format!(
             r#"[Event "datagen id {}"]
@@ -726,7 +753,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
 [Black "Viridithas"]
 [Result "{}"]
 [FEN "{}"]"#,
-            input.file_name().unwrap().to_string_lossy(),
+            file_name,
             match outcome {
                 WDL::Win => "1-0",
                 WDL::Loss => "0-1",
@@ -749,7 +776,8 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
             if fullmoves % 12 == 0 && board.turn() == Colour::White {
                 writeln!(output_buffer).unwrap();
             }
-            let san = board.san(mv).unwrap();
+            let san =
+                board.san(mv).with_context(|| format!("Failed to create SAN for move {mv} in position {board}."))?;
             if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
             } else {
@@ -779,7 +807,9 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) {
         }
     }
 
-    output_buffer.flush().unwrap();
+    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -823,8 +853,8 @@ impl From<&Board> for MaterialConfiguration {
             let pieces = board.pieces.of_type(piece);
             let white_pieces = pieces & white;
             let black_pieces = pieces & black;
-            mc.counts[piece.index()] = u8::try_from(white_pieces.count()).unwrap();
-            mc.counts[piece.index() + 5] = u8::try_from(black_pieces.count()).unwrap();
+            mc.counts[piece.index()] = u8::try_from(white_pieces.count()).unwrap_or(u8::MAX);
+            mc.counts[piece.index() + 5] = u8::try_from(black_pieces.count()).unwrap_or(u8::MAX);
         }
         // normalize the counts so that the white side has more material than the black side
         let ordering_key = |subslice: &[u8]| -> u64 {
@@ -854,7 +884,7 @@ struct DataSetStats {
 }
 
 /// Scans a variable-length game format file and prints statistics about it.
-pub fn dataset_stats(dataset_path: &Path) {
+pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mut move_buffer = Vec::new();
     let mut stats = DataSetStats::default();
 
@@ -863,18 +893,24 @@ pub fn dataset_stats(dataset_path: &Path) {
     // because the format is variable-length, we can't know exactly our progress in terms of game-count.
     // we *can*, however, know how far we are through the file, so we use that as a progress indicator:
     print!("Progress: 0%");
-    std::io::stdout().flush().unwrap();
+    std::io::stdout().flush().with_context(|| "Failed to flush stdout!")?;
     // get the file size
-    let file_size = dataset_path.metadata().unwrap().len();
+    let file_size = dataset_path
+        .metadata()
+        .with_context(|| format!("Failed to get metadata for {}", dataset_path.to_string_lossy()))?
+        .len();
 
-    let mut reader = BufReader::new(File::open(dataset_path).unwrap());
+    let mut reader = BufReader::new(File::open(dataset_path).with_context(|| "Failed to open dataset.")?);
 
     while let Ok(game) = dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
         stats.games += 1;
         *stats.length_counts.entry(game.len()).or_default() += 1;
         game.visit_positions(|position, evaluation| {
             *stats.eval_counts.entry(evaluation).or_default() += 1;
-            *stats.piece_counts.entry(u8::try_from(position.pieces.occupied().count()).unwrap()).or_default() += 1;
+            *stats
+                .piece_counts
+                .entry(u8::try_from(position.pieces.occupied().count()).unwrap_or(u8::MAX))
+                .or_default() += 1;
             *stats.material_counts.entry(MaterialConfiguration::from(position)).or_default() += 1;
             *stats.pov_king_positions.entry(position.king_sq(Colour::White)).or_default() += 1;
             *stats.pov_king_positions.entry(position.king_sq(Colour::Black).flip_rank()).or_default() += 1;
@@ -883,10 +919,10 @@ pub fn dataset_stats(dataset_path: &Path) {
 
         // print progress
         if stats.games % 1024 == 0 {
-            let progress = reader.stream_position().unwrap();
+            let progress = reader.stream_position().with_context(|| "Failed to get stream position.")?;
             let percentage = progress * 100 / file_size;
             print!("\rProgress: {percentage}%");
-            std::io::stdout().flush().unwrap();
+            std::io::stdout().flush().with_context(|| "Failed to flush stdout!")?;
         }
     }
     println!();
@@ -896,56 +932,58 @@ pub fn dataset_stats(dataset_path: &Path) {
     println!("Writing length counts to length_counts.csv");
     let mut length_counts = stats.length_counts.iter().collect::<Vec<_>>();
     length_counts.sort_unstable_by_key(|(length, _)| *length);
-    let mut length_counts_file = BufWriter::new(File::create("length_counts.csv").unwrap());
-    writeln!(length_counts_file, "length,count").unwrap();
+    let mut length_counts_file = BufWriter::new(File::create("length_counts.csv")?);
+    writeln!(length_counts_file, "length,count")?;
     for (length, count) in length_counts {
-        writeln!(length_counts_file, "{length},{count}").unwrap();
+        writeln!(length_counts_file, "{length},{count}")?;
     }
-    length_counts_file.flush().unwrap();
+    length_counts_file.flush()?;
     println!("Writing eval counts to eval_counts.csv");
     let mut eval_counts = stats.eval_counts.into_iter().collect::<Vec<_>>();
     eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
-    let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv").unwrap());
-    writeln!(eval_counts_file, "eval,count").unwrap();
+    let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv")?);
+    writeln!(eval_counts_file, "eval,count")?;
     for (eval, count) in eval_counts {
-        writeln!(eval_counts_file, "{eval},{count}").unwrap();
+        writeln!(eval_counts_file, "{eval},{count}")?;
     }
-    eval_counts_file.flush().unwrap();
+    eval_counts_file.flush()?;
     println!("Writing piece counts to piece_counts.csv");
     let mut piece_counts = stats.piece_counts.into_iter().collect::<Vec<_>>();
     piece_counts.sort_unstable_by_key(|(count, _)| *count);
-    let mut piece_counts_file = BufWriter::new(File::create("piece_counts.csv").unwrap());
-    writeln!(piece_counts_file, "men,count").unwrap();
+    let mut piece_counts_file = BufWriter::new(File::create("piece_counts.csv")?);
+    writeln!(piece_counts_file, "men,count")?;
     for (men, count) in piece_counts {
-        writeln!(piece_counts_file, "{men},{count}").unwrap();
+        writeln!(piece_counts_file, "{men},{count}")?;
     }
-    piece_counts_file.flush().unwrap();
+    piece_counts_file.flush()?;
     println!("Writing material counts to material_counts.csv");
     let material_counts = stats.material_counts.into_iter().collect::<Vec<_>>();
-    let mut material_counts_file = BufWriter::new(File::create("material_counts.csv").unwrap());
-    writeln!(material_counts_file, "material,count").unwrap();
+    let mut material_counts_file = BufWriter::new(File::create("material_counts.csv")?);
+    writeln!(material_counts_file, "material,count")?;
     for (mc, count) in material_counts {
-        writeln!(material_counts_file, "{mc},{count}").unwrap();
+        writeln!(material_counts_file, "{mc},{count}")?;
     }
-    material_counts_file.flush().unwrap();
+    material_counts_file.flush()?;
     println!("Writing PoV king positions to pov_king_positions.csv");
     let pov_king_positions = stats.pov_king_positions.into_iter().collect::<Vec<_>>();
-    let mut pov_king_positions_file = BufWriter::new(File::create("pov_king_positions.csv").unwrap());
-    writeln!(pov_king_positions_file, "square,count").unwrap();
+    let mut pov_king_positions_file = BufWriter::new(File::create("pov_king_positions.csv")?);
+    writeln!(pov_king_positions_file, "square,count")?;
     for (sq, count) in pov_king_positions {
-        writeln!(pov_king_positions_file, "{sq},{count}", sq = sq.index()).unwrap();
+        writeln!(pov_king_positions_file, "{sq},{count}", sq = sq.index())?;
     }
-    pov_king_positions_file.flush().unwrap();
+    pov_king_positions_file.flush()?;
 
     #[allow(clippy::cast_precision_loss)]
     let mean_game_len = ((stats.length_counts.iter().map(|(k, v)| k * v).sum::<usize>() as u128 * 1000)
         / stats.games as u128) as f64
         / 1000.0;
     println!("Mean game length: {mean_game_len}");
+
+    Ok(())
 }
 
 /// Scans one or more variable-length game format files and prints the position counts.
-pub fn dataset_count(path: &Path) {
+pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     let mut move_buffer = Vec::new();
 
     let mut total_count = 0u64;
@@ -972,13 +1010,12 @@ pub fn dataset_count(path: &Path) {
     };
 
     if paths.is_empty() {
-        eprintln!("No files found at {}", path.display());
-        return;
+        bail!("No files found at {}", path.display());
     }
 
     for path in paths {
-        let file = File::open(&path).unwrap();
-        let len = file.metadata().expect("Failed to get file metadata!").len();
+        let file = File::open(&path)?;
+        let len = file.metadata().with_context(|| "Failed to get file metadata!")?.len();
         let mut reader = BufReader::new(file);
         let mut count = 0u64;
         loop {
@@ -1001,4 +1038,6 @@ pub fn dataset_count(path: &Path) {
     }
 
     println!("Total: {total_count}");
+
+    Ok(())
 }

@@ -1,6 +1,5 @@
 // #![feature(stdarch_x86_avx512)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 
 //! Viridithas, a UCI chess engine written in Rust.
@@ -41,7 +40,7 @@ pub static NAME: &str = "Viridithas";
 /// The version of the engine.
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -63,13 +62,14 @@ fn main() {
             } else {
                 println!("{}", search::parameters::Config::default().emit_csv_for_spsa());
             }
+            Ok(())
         }
         Some(Splat { input, marlinformat, pgn, output, limit }) => {
             if pgn {
-                datagen::run_topgn(&input, &output, limit);
+                datagen::run_topgn(&input, &output, limit)
             } else {
-                datagen::run_splat(&input, &output, true, marlinformat, limit);
-            };
+                datagen::run_splat(&input, &output, true, marlinformat, limit)
+            }
         }
         Some(Datagen { games, threads, tbs, depth_limit, dfrc }) => {
             datagen::gen_data_main(datagen::DataGenOptionsBuilder {
@@ -78,7 +78,7 @@ fn main() {
                 tablebases_path: tbs,
                 use_depth: depth_limit,
                 generate_dfrc: dfrc,
-            });
+            })
         }
         Some(Bench) => uci::main_loop(true),
         None => uci::main_loop(false),
