@@ -62,15 +62,15 @@ const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: SquareS
     occupancy
 }
 
-const fn mask_bishop_attacks(sq: i32) -> SquareSet {
+const fn mask_bishop_attacks(sq: Square) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
     let (mut f, mut r);
 
     // target files and ranks
-    let tr = sq / 8;
-    let tf = sq % 8;
+    let tr = sq.rank() as i32;
+    let tf = sq.file() as i32;
 
     cfor!((r, f) = (tr + 1, tf + 1); r <= 6 && f <= 6; (r, f) = (r + 1, f + 1); {
         attacks |= 1 << (r * 8 + f);
@@ -88,15 +88,15 @@ const fn mask_bishop_attacks(sq: i32) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-const fn mask_rook_attacks(sq: i32) -> SquareSet {
+const fn mask_rook_attacks(sq: Square) -> SquareSet {
     let mut attacks = 0;
 
     // file and rank
     let (mut f, mut r);
 
     // target files and ranks
-    let tr = sq / 8;
-    let tf = sq % 8;
+    let tr = sq.rank() as i32;
+    let tf = sq.file() as i32;
 
     cfor!(r = tr + 1; r <= 6; r += 1; {
         attacks |= 1 << (r * 8 + tf);
@@ -114,7 +114,7 @@ const fn mask_rook_attacks(sq: i32) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-const fn bishop_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
+const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -124,8 +124,8 @@ const fn bishop_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
     let (mut f, mut r);
 
     // target files and ranks
-    let tr = square / 8;
-    let tf = square % 8;
+    let tr = square.rank() as i32;
+    let tf = square.file() as i32;
 
     cfor!((r, f) = (tr + 1, tf + 1); r <= 7 && f <= 7; (r, f) = (r + 1, f + 1); {
         let sq_bb = 1 << (r * 8 + f);
@@ -159,7 +159,7 @@ const fn bishop_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-const fn rook_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
+const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -169,8 +169,8 @@ const fn rook_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
     let (mut f, mut r);
 
     // target files and ranks
-    let tr = square / 8;
-    let tf = square % 8;
+    let tr = square.rank() as i32;
+    let tf = square.file() as i32;
 
     cfor!(r = tr + 1; r <= 7; r += 1; {
         let sq_bb = 1 << (r * 8 + tf);
@@ -209,7 +209,7 @@ const fn rook_attacks_on_the_fly(square: i32, block: SquareSet) -> SquareSet {
 |                :3                    |
 \**************************************/
 
-fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
+fn find_magic(square: Square, relevant_bits: i32, is_bishop: bool) -> u64 {
     // occupancies array
     let mut occupancies = [SquareSet::EMPTY; 4096];
 
@@ -285,8 +285,8 @@ fn find_magic(square: i32, relevant_bits: i32, is_bishop: bool) -> u64 {
 pub fn init_magics() {
     println!("Generating bishop magics...");
     println!("static BISHOP_MAGICS: [u64; 64] = [");
-    for (square, &relbits) in BISHOP_REL_BITS.iter().enumerate() {
-        let magic = find_magic(square as i32, relbits, true);
+    for (square, &relbits) in Square::all().zip(BISHOP_REL_BITS.iter()) {
+        let magic = find_magic(square, relbits, true);
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
@@ -298,8 +298,8 @@ pub fn init_magics() {
 
     println!("Generating rook magics...");
     println!("static ROOK_MAGICS: [u64; 64] = [");
-    for (square, &relbits) in ROOK_REL_BITS.iter().enumerate() {
-        let magic = find_magic(square as i32, relbits, false);
+    for (square, &relbits) in Square::all().zip(ROOK_REL_BITS.iter()) {
+        let magic = find_magic(square, relbits, false);
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
@@ -315,7 +315,7 @@ macro_rules! init_masks_with {
     ($attack_function:ident) => {{
         let mut masks = [SquareSet::EMPTY; 64];
         cfor!(let mut square = 0; square < 64; square += 1; {
-            masks[square] = $attack_function(square as _);
+            masks[square as usize] = $attack_function(Square::new_clamped(square));
         });
         masks
     }};

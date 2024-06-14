@@ -696,8 +696,7 @@ pub fn run_splat(
             game.splat_to_bulletformat(
                 |chess_board| {
                     // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
-                    let bytes =
-                        unsafe { std::mem::transmute::<_, [u8; std::mem::size_of::<ChessBoard>()]>(chess_board) };
+                    let bytes = unsafe { std::mem::transmute::<ChessBoard, [u8; 32]>(chess_board) };
                     output_buffer
                         .write_all(&bytes)
                         .with_context(|| "Failed to write bulletformat::ChessBoard into buffered writer.")

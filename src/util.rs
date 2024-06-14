@@ -51,7 +51,7 @@ impl File {
     pub const fn from_index(index: u8) -> Option<Self> {
         if index < 8 {
             // SAFETY: inner is less than 8, so it corresponds to a valid enum variant.
-            Some(unsafe { std::mem::transmute(index) })
+            Some(unsafe { std::mem::transmute::<u8, Self>(index) })
         } else {
             None
         }
@@ -109,7 +109,7 @@ impl Rank {
     pub const fn from_index(index: u8) -> Option<Self> {
         if index < 8 {
             // SAFETY: inner is less than 8, so it corresponds to a valid enum variant.
-            Some(unsafe { std::mem::transmute(index) })
+            Some(unsafe { std::mem::transmute::<u8, Self>(index) })
         } else {
             None
         }
@@ -191,7 +191,7 @@ impl Square {
     pub const fn new(inner: u8) -> Option<Self> {
         if inner < 64 {
             // SAFETY: inner is less than 64, so it corresponds to a valid enum variant.
-            Some(unsafe { std::mem::transmute(inner) })
+            Some(unsafe { std::mem::transmute::<u8, Self>(inner) })
         } else {
             None
         }

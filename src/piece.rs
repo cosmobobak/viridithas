@@ -119,7 +119,7 @@ impl PieceType {
     pub const fn new(v: u8) -> Option<Self> {
         if v < 6 {
             // SAFETY: inner is less than 6, so it corresponds to a valid enum variant.
-            Some(unsafe { std::mem::transmute(v) })
+            Some(unsafe { std::mem::transmute::<u8, Self>(v) })
         } else {
             None
         }
@@ -199,7 +199,7 @@ impl Piece {
     pub const fn from_index(v: u8) -> Option<Self> {
         if v < 12 {
             // SAFETY: inner is less than 12, so it corresponds to a valid enum variant.
-            unsafe { std::mem::transmute(v) }
+            Some(unsafe { std::mem::transmute::<u8, Self>(v) })
         } else {
             None
         }
