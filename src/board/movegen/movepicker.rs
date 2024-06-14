@@ -1,7 +1,5 @@
 use crate::{
-    board::{history, Board},
-    chessmove::Move,
-    threadlocal::ThreadData,
+    board::{history, Board}, chessmove::Move, historytable::MAX_HISTORY, threadlocal::ThreadData
 };
 
 use super::{MoveList, MoveListEntry};
@@ -97,10 +95,10 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(self.movelist.len(), 0, "movelist not empty before capture generation");
             position.generate_captures::<Mode>(&mut self.movelist);
-            Self::score_captures(t, position, &mut self.movelist, self.see_threshold);
+            Self::score_captures(t, position, &mut self.movelist);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once() {
+            if let Some(m) = self.yield_once(position) {
                 if m.score >= WINNING_CAPTURE_SCORE {
                     return Some(m);
                 }
@@ -155,7 +153,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once() {
+            if let Some(m) = self.yield_once(position) {
                 return Some(m);
             }
             self.stage = Stage::Done;
@@ -170,7 +168,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self) -> Option<MoveListEntry> {
+    fn yield_once(&mut self, pos: &Board) -> Option<MoveListEntry> {
         loop {
             // If we have already tried all moves, return None.
             if self.index == self.movelist.len() {
@@ -189,7 +187,16 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
                 }
             }
 
-            let m = self.movelist[best_num];
+            let m = &mut self.movelist[best_num];
+
+            // test if this is a potentially-winning capture that's yet to be SEE-ed:
+            if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY)) && !pos.static_exchange_eval(m.mov, self.see_threshold) {
+                // if it fails SEE, then we want to try the next best move, and de-mark this one.
+                m.score -= WINNING_CAPTURE_SCORE;
+                continue;
+            }
+
+            let m = *m;
 
             // swap the best move with the first unsorted move.
             self.movelist.swap(best_num, self.index);
@@ -224,7 +231,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         // t.get_continuation_history_scores(pos, ms, 3);
     }
 
-    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry], see_threshold: i32) {
+    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
         // zero-out the ordering scores
         for m in &mut *moves {
@@ -234,9 +241,8 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
             *score += MVV_SCORE[history::caphist_piece_type(pos, *mov)];
-            if pos.static_exchange_eval(*mov, see_threshold) {
-                *score += WINNING_CAPTURE_SCORE;
-            }
+            // provisionally add the WINNING_CAPTURE offset, for lazily SEE-guarding stuff later.
+            *score += WINNING_CAPTURE_SCORE;
         }
     }
 }
