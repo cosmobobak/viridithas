@@ -1,5 +1,8 @@
 use crate::{
-    board::{history, Board}, chessmove::Move, historytable::MAX_HISTORY, threadlocal::ThreadData
+    board::{history, Board},
+    chessmove::Move,
+    historytable::MAX_HISTORY,
+    threadlocal::ThreadData,
 };
 
 use super::{MoveList, MoveListEntry};
@@ -190,7 +193,9 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
             let m = &mut self.movelist[best_num];
 
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY)) && !pos.static_exchange_eval(m.mov, self.see_threshold) {
+            if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY))
+                && !pos.static_exchange_eval(m.mov, self.see_threshold)
+            {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 m.score -= WINNING_CAPTURE_SCORE;
                 continue;
@@ -233,16 +238,15 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
-        // zero-out the ordering scores
+
+        // provisionally set the WINNING_CAPTURE offset, for lazily SEE-guarding stuff later.
         for m in &mut *moves {
-            m.score = 0;
+            m.score = WINNING_CAPTURE_SCORE;
         }
 
         t.get_tactical_history_scores(pos, moves);
         for MoveListEntry { mov, score } in moves {
             *score += MVV_SCORE[history::caphist_piece_type(pos, *mov)];
-            // provisionally add the WINNING_CAPTURE offset, for lazily SEE-guarding stuff later.
-            *score += WINNING_CAPTURE_SCORE;
         }
     }
 }
