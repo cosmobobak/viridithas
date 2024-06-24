@@ -87,19 +87,19 @@ impl<'a> ThreadData<'a> {
         self.main_history.clear();
         self.tactical_history.clear();
         self.cont_hists.iter_mut().for_each(|h| h.clear());
+        self.correction_history.clear();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
-        self.correction_history.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs = Self::EMPTY_PV_TABLE;
     }
 
     pub fn set_up_for_search(&mut self, board: &Board) {
-        // self.main_history.age_entries();
-        // self.tactical_history.age_entries();
-        // self.cont_hists.iter_mut().for_each(|h| h.age_entries());
-        // self.correction_history.age_entries();
+        self.main_history.age_entries();
+        self.tactical_history.age_entries();
+        self.cont_hists.iter_mut().for_each(|h| h.age_entries());
+        self.correction_history.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
