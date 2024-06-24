@@ -4,7 +4,7 @@ use crate::{
     util::{depth::Depth, Square, BOARD_N_SQUARES},
 };
 
-const AGEING_DIVISOR: i16 = 2;
+// const AGEING_DIVISOR: i16 = 2;
 
 const fn history_bonus(depth: Depth) -> i32 {
     let depth = depth.round();
@@ -48,10 +48,10 @@ impl HistoryTable {
         }
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
-    }
+    // pub fn age_entries(&mut self) {
+    //     debug_assert!(!self.table.is_empty());
+    //     self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
+    // }
 
     pub fn get(&self, piece: Piece, sq: Square) -> i16 {
         self.table[piece][sq]
@@ -80,10 +80,10 @@ impl ThreatsHistoryTable {
         self.table.iter_mut().flatten().for_each(HistoryTable::clear);
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
-    }
+    // pub fn age_entries(&mut self) {
+    //     debug_assert!(!self.table.is_empty());
+    //     self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+    // }
 
     pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
@@ -120,10 +120,10 @@ impl CaptureHistoryTable {
         self.table.iter_mut().for_each(HistoryTable::clear);
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().for_each(HistoryTable::age_entries);
-    }
+    // pub fn age_entries(&mut self) {
+    //     debug_assert!(!self.table.is_empty());
+    //     self.table.iter_mut().for_each(HistoryTable::age_entries);
+    // }
 
     pub fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
         self.table[capture].get(piece, sq)
@@ -167,10 +167,10 @@ impl DoubleHistoryTable {
         self.table.iter_mut().flatten().for_each(HistoryTable::clear);
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
-    }
+    // pub fn age_entries(&mut self) {
+    //     debug_assert!(!self.table.is_empty());
+    //     self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+    // }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
         &mut self.table[index.piece][index.square]
@@ -226,9 +226,9 @@ impl CorrectionHistoryTable {
         }
     }
 
-    pub fn age_entries(&mut self) {
-        self.table.iter_mut().flatten().for_each(|x| *x /= i32::from(AGEING_DIVISOR));
-    }
+    // pub fn age_entries(&mut self) {
+    //     self.table.iter_mut().flatten().for_each(|x| *x /= i32::from(AGEING_DIVISOR));
+    // }
 
     pub fn clear(&mut self) {
         self.table.iter_mut().for_each(|t| t.fill(0));

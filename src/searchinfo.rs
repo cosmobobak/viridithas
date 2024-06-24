@@ -93,7 +93,9 @@ impl<'a> SearchInfo<'a> {
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
-        self.root_move_nodes = [[0; 64]; 64];
+        for rmnc in self.root_move_nodes.iter_mut().flatten() {
+            *rmnc = 0;
+        }
         self.time_manager.reset_for_id(&self.conf);
         #[cfg(feature = "stats")]
         {

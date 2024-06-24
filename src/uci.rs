@@ -156,8 +156,9 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> anyhow::Result<()> {
+fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
     #![allow(clippy::too_many_lines)]
+
     let mut depth: Option<i32> = None;
     let mut moves_to_go: Option<u64> = None;
     let mut movetime: Option<u64> = None;
@@ -219,10 +220,7 @@ fn parse_go(text: &str, info: &mut SearchInfo, pos: &Board) -> anyhow::Result<()
         limit = SearchLimit::Nodes(nodes);
     }
 
-    info.time_manager.set_limit(limit);
-    info.time_manager.start();
-
-    Ok(())
+    Ok(limit)
 }
 
 fn part_parse<T>(target: &str, next_part: Option<&str>) -> anyhow::Result<T>
@@ -609,6 +607,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 nnue::network::inference_benchmark(&thread_data[0].nnue);
                 Ok(())
             }
+            "gobench" => go_benchmark(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
                     search_config: info.conf.clone(),
@@ -661,12 +660,17 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 }
             }
             input if input.starts_with("go") => {
-                let res = parse_go(input, &mut info, &pos);
-                if res.is_ok() {
+                // start the clock *immediately*
+                info.time_manager.start();
+                let res = parse_go(input, &pos);
+                if let Ok(search_limit) = res {
+                    info.time_manager.set_limit(search_limit);
                     tt.increase_age();
                     pos.search_position(&mut info, &mut thread_data, tt.view());
+                    Ok(())
+                } else {
+                    res.map(|_| ())
                 }
-                res
             }
             benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf),
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
@@ -720,10 +724,14 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
         for t in &mut thread_data {
             t.nnue.reinit_from(&pos);
         }
-        let res = parse_go(&bench_string, &mut info, &pos);
-        if let Err(e) = res {
-            info.print_to_stdout = true;
-            return Err(e);
+        info.time_manager.start();
+        let res = parse_go(&bench_string, &pos);
+        match res {
+            Ok(limit) => info.time_manager.set_limit(limit),
+            Err(e) => {
+                info.print_to_stdout = true;
+                return Err(e);
+            }
         }
         tt.increase_age();
         pos.search_position(&mut info, &mut thread_data, tt.view());
@@ -741,6 +749,34 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
         println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
     }
     info.print_to_stdout = true;
+    Ok(())
+}
+
+/// Benchmark the go UCI command.
+pub fn go_benchmark() -> anyhow::Result<()> {
+    #![allow(clippy::cast_precision_loss)]
+    const COUNT: usize = 1000;
+    const THREADS: usize = 250;
+    let stopped = AtomicBool::new(false);
+    let nodes = AtomicU64::new(0);
+    let mut info = SearchInfo::new(&stopped, &nodes);
+    info.print_to_stdout = false;
+    let mut pos = Board::default();
+    let mut tt = TT::new();
+    tt.resize(16 * MEGABYTE);
+    let mut thread_data =
+        (0..THREADS).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p, tt.view())).collect::<Vec<_>>();
+    let start = std::time::Instant::now();
+    for _ in 0..COUNT {
+        info.time_manager.start();
+        let limit = parse_go(std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"), &pos)?;
+        info.time_manager.set_limit(limit);
+        tt.increase_age();
+        std::hint::black_box(pos.search_position(&mut info, &mut thread_data, tt.view()));
+    }
+    let elapsed = start.elapsed();
+    let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);
+    println!("{micros} us per parse_go");
     Ok(())
 }
 

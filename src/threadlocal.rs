@@ -31,7 +31,7 @@ pub struct ThreadData<'a> {
 
     pub thread_id: usize,
 
-    pub pvs: Vec<PVariation>,
+    pub pvs: [PVariation; MAX_PLY],
     pub completed: usize,
     pub depth: usize,
 
@@ -43,6 +43,8 @@ pub struct ThreadData<'a> {
 impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
+    const ARRAY_REPEAT_VALUE: PVariation = PVariation::default_const();
+    const EMPTY_PV_TABLE: [PVariation; MAX_PLY] = [Self::ARRAY_REPEAT_VALUE; MAX_PLY];
 
     pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>) -> Self {
         let mut td = Self {
@@ -57,7 +59,7 @@ impl<'a> ThreadData<'a> {
             counter_move_table: MoveTable::new(),
             correction_history: CorrectionHistoryTable::boxed(),
             thread_id,
-            pvs: vec![PVariation::default(); MAX_PLY],
+            pvs: Self::EMPTY_PV_TABLE,
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
@@ -90,19 +92,19 @@ impl<'a> ThreadData<'a> {
         self.correction_history.clear();
         self.depth = 0;
         self.completed = 0;
-        self.pvs.fill(PVariation::default());
+        self.pvs = Self::EMPTY_PV_TABLE;
     }
 
     pub fn set_up_for_search(&mut self, board: &Board) {
-        self.main_history.age_entries();
-        self.tactical_history.age_entries();
-        self.cont_hists.iter_mut().for_each(|h| h.age_entries());
+        // self.main_history.age_entries();
+        // self.tactical_history.age_entries();
+        // self.cont_hists.iter_mut().for_each(|h| h.age_entries());
+        // self.correction_history.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
-        self.correction_history.age_entries();
         self.depth = 0;
         self.completed = 0;
-        self.pvs.fill(PVariation::default());
+        self.pvs = Self::EMPTY_PV_TABLE;
         self.nnue.reinit_from(board);
         self.stm_at_root = board.turn();
     }
@@ -116,7 +118,7 @@ impl<'a> ThreadData<'a> {
         self.completed = self.depth - 1;
     }
 
-    pub fn pv(&self) -> &PVariation {
+    pub const fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
     }
 }
