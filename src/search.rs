@@ -220,8 +220,8 @@ impl Board {
         let pv = best_thread.pv().clone();
         let best_move = pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
 
-        if info.print_to_stdout && info.skip_print() {
-            // we haven't printed any ID logging yet, so give one as we leave search.
+        if info.print_to_stdout {
+            // always give a final info log before ending search
             let nodes = info.nodes.get_global();
             readout_info(self, Bound::Exact, &pv, depth_achieved, info, tt, nodes, true);
         }
