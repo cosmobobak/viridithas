@@ -816,7 +816,7 @@ impl Board {
             }
         }
 
-        let mut tt_move = tt_hit.and_then(|hit| hit.mov);
+        let tt_move = tt_hit.and_then(|hit| hit.mov);
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
         // TT-reduction (IIR).
@@ -884,18 +884,6 @@ impl Board {
                     return value;
                 }
             }
-        }
-
-        // internal iterative deepening -
-        // if we didn't get a TT hit, and we're in the PV,
-        // then this is going to be a costly search because
-        // move ordering will be terrible. To rectify this,
-        // we do a shallower search first, to get a bestmove
-        // and help along the history tables.
-        if NT::PV && depth > Depth::new(3) && tt_hit.is_none() {
-            let iid_depth = depth - 2;
-            self.alpha_beta::<NT>(l_pv, info, t, iid_depth, alpha, beta, cut_node);
-            tt_move = t.ss[height].best_move;
         }
 
         let original_alpha = alpha;
