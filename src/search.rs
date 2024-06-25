@@ -156,7 +156,9 @@ impl Board {
         thread_headers: &mut [ThreadData],
         tt: TTView,
     ) -> (i32, Option<Move>) {
-        set_up_for_search(self, info, thread_headers);
+        self.zero_height();
+        info.set_up_for_search();
+        TB_HITS.store(0, Ordering::Relaxed);
 
         let legal_moves = self.legal_moves();
         if legal_moves.is_empty() {
@@ -190,20 +192,25 @@ impl Board {
 
         let global_stopped = info.stopped;
         assert!(!global_stopped.load(Ordering::SeqCst), "global_stopped must be false");
+
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
-        let board_copy = self.clone();
-        let info_copy = info.clone();
-        let mut board_info_copies = rest.iter().map(|_| (board_copy.clone(), info_copy.clone())).collect::<Vec<_>>();
-
         thread::scope(|s| {
             s.spawn(|| {
-                self.iterative_deepening::<MainThread>(info, t1);
+                // copy data into thread
+                let mut board = self.clone();
+                let mut info = info.clone();
+                t1.set_up_for_search(&board);
+                board.iterative_deepening::<MainThread>(&mut info, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
-            for (t, (board, info)) in rest.iter_mut().zip(&mut board_info_copies) {
+            for t in rest.iter_mut() {
                 s.spawn(|| {
-                    board.iterative_deepening::<HelperThread>(info, t);
+                    // copy data into thread
+                    let mut board = self.clone();
+                    let mut info = info.clone();
+                    t.set_up_for_search(&board);
+                    board.iterative_deepening::<HelperThread>(&mut info, t);
                 });
             }
         });
@@ -213,8 +220,8 @@ impl Board {
         let pv = best_thread.pv().clone();
         let best_move = pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
 
-        if info.print_to_stdout && info.skip_print() {
-            // we haven't printed any ID logging yet, so give one as we leave search.
+        if info.print_to_stdout {
+            // always give a final info log before ending search
             let nodes = info.nodes.get_global();
             readout_info(self, Bound::Exact, &pv, depth_achieved, info, tt, nodes, true);
         }
@@ -1555,11 +1562,4 @@ impl AspirationWindow {
     }
 }
 
-fn set_up_for_search(board: &mut Board, info: &mut SearchInfo, thread_headers: &mut [ThreadData]) {
-    board.zero_height();
-    info.set_up_for_search();
-    for td in thread_headers {
-        td.set_up_for_search(board);
-    }
-    TB_HITS.store(0, Ordering::Relaxed);
-}
+
