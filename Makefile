@@ -1,22 +1,28 @@
 EXE = Viridithas
 LXE = viridithas
 VERSION = ???
-_THIS := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-TMPDIR := $(_THIS)/tmp
+TMPDIR := tmp
 
 ifeq ($(OS),Windows_NT)
-	NAME := $(EXE).exe
-	V1NAME := $(LXE)-$(VERSION)-x86_64-win-v1.exe
-	V2NAME := $(LXE)-$(VERSION)-x86_64-win-v2.exe
-	V3NAME := $(LXE)-$(VERSION)-x86_64-win-v3.exe
-	V4NAME := $(LXE)-$(VERSION)-x86_64-win-v4.exe
+    INF := win
+    EXT := .exe
+    RMFILE := del
+    RMDIR := rmdir /s /q
+    MKDIR := mkdir
+    NAME := $(EXE).exe
 else
-	NAME := $(EXE)
-	V1NAME := $(LXE)-$(VERSION)-x86_64-linux-v1
-	V2NAME := $(LXE)-$(VERSION)-x86_64-linux-v2
-	V3NAME := $(LXE)-$(VERSION)-x86_64-linux-v3
-	V4NAME := $(LXE)-$(VERSION)-x86_64-linux-v4
+    INF := linux
+    EXT :=
+    RMFILE := rm
+    RMDIR := rm -rf
+    MKDIR := mkdir -p
+    NAME := $(EXE)
 endif
+
+V1NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v1$(EXT)
+V2NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v2$(EXT)
+V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
+V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
 openbench:
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
@@ -37,17 +43,17 @@ datagen:
 	cargo rustc --release --features syzygy,bindgen,datagen -- -C target-cpu=native
 
 tmp-dir:
-	mkdir -p $(TMPDIR)
+	mkdir $(TMPDIR)
 
 x86-64 x86-64-v2 x86-64-v3 x86-64-v4 native: tmp-dir
-	cargo rustc -r --features syzygy,bindgen,final-release -- -C target-cpu=$@ -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VER)-$@$(EXT)
-	./$(LXE)-$(VER)-$@$(EXT) bench
+	cargo rustc -r --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-generate=$(TMPDIR) --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
+	./$(LXE)-$(VERSION)-$(INF)-$@$(EXT) bench
 	llvm-profdata merge -o $(TMPDIR)/merged.profdata $(TMPDIR)
 
-	cargo rustc -r --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VER)-$@$(EXT)
+	cargo rustc -r --features syzygy,bindgen,final-release -- -C target-feature=+crt-static -C target-cpu=$@ -C profile-use=$(TMPDIR)/merged.profdata --emit link=$(LXE)-$(VERSION)-$(INF)-$@$(EXT)
 
-	rm -rf $(TMPDIR)/*
-	rm -f *.pdb
+	$(RMDIR) $(TMPDIR)
+	$(RMFILE) *.pdb
 
 bench:
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
