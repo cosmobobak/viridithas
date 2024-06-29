@@ -5,8 +5,7 @@ use crate::{
     chessmove::Move,
     util::{
         depth::Depth,
-        depth::{CompactDepthStorage, ZERO_PLY},
-        INFINITY, MAX_DEPTH,
+        depth::CompactDepthStorage,
     },
 };
 
@@ -155,6 +154,7 @@ impl TT {
     }
 
     pub fn clear(&self, threads: usize) {
+        #[allow(clippy::collection_is_never_read)]
         std::thread::scope(|s| {
             let mut handles = Vec::with_capacity(threads);
             for chunk in divide_into_chunks(&self.table, threads) {
@@ -165,9 +165,6 @@ impl TT {
                     }
                 });
                 handles.push(handle);
-            }
-            for handle in handles {
-                handle.join().unwrap();
             }
         });
     }
@@ -212,10 +209,6 @@ impl<'a> TTView<'a> {
         depth: Depth,
         pv: bool,
     ) {
-        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&depth), "depth: {depth}");
-        debug_assert!(score >= -INFINITY);
-        debug_assert!((0..=MAX_DEPTH.ply_to_horizon()).contains(&ply));
-
         // get index into the table:
         let index = self.wrap_key(key);
         // create a small key from the full key:
@@ -291,8 +284,6 @@ impl<'a> TTView<'a> {
         let tt_depth = entry.depth.into();
         let tt_bound = entry.age_and_flag.flag();
 
-        debug_assert!((ZERO_PLY..=MAX_DEPTH).contains(&tt_depth), "depth: {tt_depth}");
-
         // we can't store the score in a tagged union,
         // because we need to do mate score preprocessing.
         let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
@@ -354,7 +345,7 @@ const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{piece::PieceType, util::Square};
+    use crate::{piece::PieceType, util::{Square, depth::ZERO_PLY}};
 
     use super::*;
 

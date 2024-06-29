@@ -19,7 +19,6 @@ pub struct ThreadData<'a> {
     // will try to access the next ply in an edge case.
     pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
-    pub multi_pv_excluded: Vec<Move>,
     pub nnue: Box<nnue::network::NNUEState>,
 
     pub main_history: ThreatsHistoryTable,
@@ -50,7 +49,6 @@ impl<'a> ThreadData<'a> {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
-            multi_pv_excluded: Vec::new(),
             nnue: nnue::network::NNUEState::new(board),
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
