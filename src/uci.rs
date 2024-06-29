@@ -38,7 +38,6 @@ use crate::{
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
 const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 const UCI_MAX_THREADS: usize = 512;
-const UCI_MAX_MULTIPV: usize = 500;
 
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
@@ -48,12 +47,8 @@ pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
-pub static MULTI_PV: AtomicUsize = AtomicUsize::new(1);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
 pub static CHESS960: AtomicBool = AtomicBool::new(false);
-pub fn is_multipv() -> bool {
-    MULTI_PV.load(Ordering::SeqCst) > 1
-}
 
 #[derive(Debug, PartialEq, Eq)]
 enum UciError {
@@ -303,14 +298,6 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
             }
             out.threads = value;
         }
-        "MultiPV" => {
-            let value: usize = opt_value.parse()?;
-            if !(value > 0 && value <= UCI_MAX_MULTIPV) {
-                // "MultiPV value must be between 1 and {UCI_MAX_MULTIPV}"
-                bail!(UciError::IllegalValue(format!("MultiPV value must be between 1 and {UCI_MAX_MULTIPV}")));
-            }
-            MULTI_PV.store(value, Ordering::SeqCst);
-        }
         "PrettyPrint" => {
             let value: bool = opt_value.parse()?;
             PRETTY_PRINT.store(value, Ordering::SeqCst);
@@ -500,7 +487,6 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
     println!("option name UCI_Chess960 type check default false");
-    // println!("option name MultiPV type spin default 1 min 1 max 500");
     if full {
         for (id, default, min, max, _) in info.conf.base_config() {
             println!("option name {id} type spin default {default} min {min} max {max}");
@@ -564,7 +550,6 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
                 println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
                 println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
-                // println!("MultiPV: {}", MULTI_PV.load(Ordering::SeqCst));
                 if arg == "ucidumpfull" {
                     for (id, default) in Config::default().ids_with_values() {
                         println!("{id}: {default}");

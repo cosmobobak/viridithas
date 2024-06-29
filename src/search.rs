@@ -909,13 +909,6 @@ impl Board {
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
         while let Some(MoveListEntry { mov: m, score: movepick_score }) = move_picker.next(self, t) {
-            debug_assert!(!quiets_tried.as_slice().contains(&m) && !tacticals_tried.as_slice().contains(&m));
-            if NT::ROOT && uci::is_multipv() {
-                // handle multi-pv
-                if t.multi_pv_excluded.contains(&m) {
-                    continue;
-                }
-            }
             if excluded == Some(m) {
                 continue;
             }
