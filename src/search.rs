@@ -1570,5 +1570,3 @@ impl AspirationWindow {
         self.beta_fails += 1;
     }
 }
-
-

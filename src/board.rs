@@ -16,7 +16,18 @@ use crate::{
     board::movegen::{
         bitboards::{self, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
         MoveList,
-    }, chessmove::Move, cuckoo, historytable::ContHistIndex, makemove::{hash_castling, hash_ep, hash_piece, hash_side}, nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer}, piece::{Black, Col, Colour, Piece, PieceType, White}, search::pv::PVariation, squareset::{self, SquareSet}, threadlocal::ThreadData, uci::CHESS960, util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN}
+    },
+    chessmove::Move,
+    cuckoo,
+    historytable::ContHistIndex,
+    makemove::{hash_castling, hash_ep, hash_piece, hash_side},
+    nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
+    search::pv::PVariation,
+    squareset::{self, SquareSet},
+    threadlocal::ThreadData,
+    uci::CHESS960,
+    util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
 };
 
 use self::movegen::{

@@ -8,8 +8,7 @@ use crate::{
 };
 
 pub const KEYS: [u64; 8192] = unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
-pub const MOVES: [Option<Move>; 8192] =
-    unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
+pub const MOVES: [Option<Move>; 8192] = unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
 
 pub const fn h1(key: u64) -> usize {
     (key & 0x1FFF) as usize

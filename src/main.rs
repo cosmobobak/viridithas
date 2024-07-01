@@ -11,6 +11,7 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
+mod cuckoo;
 mod datagen;
 mod errors;
 mod historytable;
@@ -32,7 +33,6 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
-mod cuckoo;
 
 use cli::Subcommands::{Analyse, Bench, CountPositions, Datagen, Perft, Splat, Spsa, VisNNUE};
 
