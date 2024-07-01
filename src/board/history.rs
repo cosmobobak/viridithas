@@ -102,7 +102,7 @@ impl ThreadData<'_> {
             Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
             _ => return,
         };
-        let cmh_block = self.cont_hist.get_index_mut(conthist_index);
+        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m).unwrap();
@@ -120,7 +120,7 @@ impl ThreadData<'_> {
             Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
             _ => return,
         };
-        let cmh_block = self.cont_hist.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov).unwrap();
@@ -138,7 +138,7 @@ impl ThreadData<'_> {
             Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
             _ => return 0,
         };
-        let cmh_block = self.cont_hist.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(conthist_index);
         let to = m.history_to_square();
         let piece = pos.moved_piece(m).unwrap();
         i32::from(cmh_block.get(piece, to))
