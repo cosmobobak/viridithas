@@ -16,17 +16,7 @@ use crate::{
     board::movegen::{
         bitboards::{self, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
         MoveList,
-    },
-    chessmove::Move,
-    historytable::ContHistIndex,
-    makemove::{hash_castling, hash_ep, hash_piece, hash_side},
-    nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
-    piece::{Black, Col, Colour, Piece, PieceType, White},
-    search::pv::PVariation,
-    squareset::{self, SquareSet},
-    threadlocal::ThreadData,
-    uci::CHESS960,
-    util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
+    }, chessmove::Move, cuckoo, historytable::ContHistIndex, makemove::{hash_castling, hash_ep, hash_piece, hash_side}, nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer}, piece::{Black, Col, Colour, Piece, PieceType, White}, search::pv::PVariation, squareset::{self, SquareSet}, threadlocal::ThreadData, uci::CHESS960, util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN}
 };
 
 use self::movegen::{
@@ -1664,6 +1654,60 @@ impl Board {
 
     pub const fn full_move_number(&self) -> usize {
         self.ply / 2 + 1
+    }
+
+    pub fn has_game_cycle(&self, ply: usize) -> bool {
+        let end = std::cmp::min(self.fifty_move_counter() as usize, self.history.len());
+
+        if end < 3 {
+            return false;
+        }
+
+        let old_key = |i: usize| self.history[self.history.len() - i].key;
+
+        let occ = self.pieces.occupied();
+        let original_key = self.key;
+
+        let mut other = !(original_key ^ old_key(1));
+
+        for i in (3..=end).step_by(2) {
+            let curr_key = old_key(i);
+
+            other ^= !(curr_key ^ old_key(i - 1));
+            if other != 0 {
+                continue;
+            }
+
+            let diff = original_key ^ curr_key;
+
+            let mut slot = cuckoo::h1(diff);
+
+            if diff != cuckoo::KEYS[slot] {
+                slot = cuckoo::h2(diff);
+            }
+
+            if diff != cuckoo::KEYS[slot] {
+                continue;
+            }
+
+            let mv = cuckoo::MOVES[slot].unwrap();
+
+            if (occ & RAY_BETWEEN[mv.from()][mv.to()]).is_empty() {
+                // repetition is after root, done:
+                if ply > i {
+                    return true;
+                }
+
+                let mut piece = self.piece_at(mv.from());
+                if piece.is_none() {
+                    piece = self.piece_at(mv.to());
+                }
+
+                return piece.unwrap().colour() == self.side;
+            }
+        }
+
+        false
     }
 
     #[allow(dead_code /* for datagen */)]

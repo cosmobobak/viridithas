@@ -450,6 +450,14 @@ impl Board {
             return if in_check { 0 } else { self.evaluate(t, info.nodes.get_local()) };
         }
 
+        // upcoming repetition detection
+        if alpha < 0 && self.has_game_cycle(height) {
+            alpha = 0;
+            if alpha >= beta {
+                return alpha;
+            }
+        }
+
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
@@ -635,6 +643,14 @@ impl Board {
             beta = beta.min(mate_in(height + 1));
             if alpha >= beta {
                 return alpha;
+            }
+
+            // upcoming repetition detection
+            if alpha < 0 && self.has_game_cycle(height) {
+                alpha = 0;
+                if alpha >= beta {
+                    return alpha;
+                }
             }
         }
 
