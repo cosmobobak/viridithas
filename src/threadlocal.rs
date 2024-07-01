@@ -23,7 +23,7 @@ pub struct ThreadData<'a> {
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
-    pub cont_hists: [Box<DoubleHistoryTable>; 2],
+    pub continuation_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
     pub correction_history: Box<CorrectionHistoryTable>,
@@ -52,7 +52,7 @@ impl<'a> ThreadData<'a> {
             nnue: nnue::network::NNUEState::new(board),
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
-            cont_hists: [(); 2].map(|()| DoubleHistoryTable::boxed()),
+            continuation_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             correction_history: CorrectionHistoryTable::boxed(),
@@ -84,7 +84,7 @@ impl<'a> ThreadData<'a> {
     pub fn clear_tables(&mut self) {
         self.main_history.clear();
         self.tactical_history.clear();
-        self.cont_hists.iter_mut().for_each(|h| h.clear());
+        self.continuation_history.clear();
         self.correction_history.clear();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
@@ -96,7 +96,7 @@ impl<'a> ThreadData<'a> {
     pub fn set_up_for_search(&mut self, board: &Board) {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
-        self.cont_hists.iter_mut().for_each(|h| h.age_entries());
+        self.continuation_history.age_entries();
         self.correction_history.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
