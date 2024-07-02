@@ -241,20 +241,22 @@ impl<'a> TTView<'a> {
         let mut idx = 0;
 
         // select the entry:
-        for i in 0..CLUSTER_SIZE {
-            let entry = cluster.load(i);
+        if !(tte.key == 0 || tte.key == key) {
+            for i in 1..CLUSTER_SIZE {
+                let entry = cluster.load(i);
 
-            if entry.key == 0 || entry.key == key {
-                tte = entry;
-                idx = i;
-                break;
-            }
+                if entry.key == 0 || entry.key == key {
+                    tte = entry;
+                    idx = i;
+                    break;
+                }
 
-            if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
-            {
-                tte = entry;
-                idx = i;
+                if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                    > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                {
+                    tte = entry;
+                    idx = i;
+                }
             }
         }
 
