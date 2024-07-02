@@ -22,6 +22,7 @@ use crate::{
         movegen::MoveList,
         Board,
     },
+    cuckoo,
     errors::{FenParseError, MoveParseError},
     nnue, perft,
     piece::Colour,
@@ -593,6 +594,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 Ok(())
             }
             "gobench" => go_benchmark(),
+            "initcuckoo" => cuckoo::init(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
                     search_config: info.conf.clone(),

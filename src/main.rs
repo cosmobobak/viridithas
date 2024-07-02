@@ -11,6 +11,7 @@ mod bench;
 mod board;
 mod chessmove;
 mod cli;
+mod cuckoo;
 mod datagen;
 mod errors;
 mod historytable;
