@@ -110,20 +110,27 @@ impl TTClusterMemory {
         // SAFETY: All bitpatterns of TTEntry are valid.
         unsafe {
             let bits = match idx {
+                // INTERNAL IMPLEMENTATION DETAIL:
+                // We swap the access pattern of the second and third entries, accessing the entry that is third
+                // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
+                // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
+                // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
+                // As such, we save the costliest access for last. 
+                // (the memory-layout-second entry requires three atomic operations, because of address alignment)
                 0 => {
                     let part1 = self.entry1_block1.load(Ordering::Relaxed);
                     let part2 = self.entry1_block2.load(Ordering::Relaxed);
                     // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
                     u128::from(part1) | u128::from(part2) << 64
                 }
-                1 => {
+                2 => {
                     let part1 = self.entry2_block1.load(Ordering::Relaxed);
                     let part2 = self.entry2_block2.load(Ordering::Relaxed);
                     let part3 = self.entry2_block3.load(Ordering::Relaxed);
                     // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
                     u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
                 }
-                2 => {
+                1 => {
                     let part1 = self.entry3_block1.load(Ordering::Relaxed);
                     let part2 = self.entry3_block2.load(Ordering::Relaxed);
                     // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
@@ -138,13 +145,20 @@ impl TTClusterMemory {
     pub fn store(&self, idx: usize, entry: TTEntry) {
         let bits = entry.as_bits();
         match idx {
+            // INTERNAL IMPLEMENTATION DETAIL:
+            // We swap the access pattern of the second and third entries, accessing the entry that is third
+            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
+            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
+            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
+            // As such, we save the costliest access for last. 
+            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
             0 => {
                 let part1 = u64::from_ne_bytes([bits[0], bits[1], bits[2], bits[3], bits[4], bits[5], bits[6], bits[7]]);
                 let part2 = u16::from_ne_bytes([bits[8], bits[9]]);
                 self.entry1_block1.store(part1, Ordering::Relaxed);
                 self.entry1_block2.store(part2, Ordering::Relaxed);
             }
-            1 => {
+            2 => {
                 let part1 = u16::from_ne_bytes([bits[0], bits[1]]);
                 let part2 = u32::from_ne_bytes([bits[2], bits[3], bits[4], bits[5]]);
                 let part3 = u32::from_ne_bytes([bits[6], bits[7], bits[8], bits[9]]);
@@ -152,7 +166,7 @@ impl TTClusterMemory {
                 self.entry2_block2.store(part2, Ordering::Relaxed);
                 self.entry2_block3.store(part3, Ordering::Relaxed);
             }
-            2 => {
+            1 => {
                 let part1 = u32::from_ne_bytes([bits[0], bits[1], bits[2], bits[3]]);
                 //                                  It's okay to overwrite here, it's just padding memory. vvvv
                 let part2 = u64::from_ne_bytes([bits[4], bits[5], bits[6], bits[7], bits[8], bits[9], 0, 0]);
