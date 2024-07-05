@@ -311,7 +311,7 @@ impl<'a> TTView<'a> {
         let mut tte;
         let mut idx;
         // select the entry:
-        if saved_idx == ClusterIndex::NONE { 
+        if saved_idx == ClusterIndex::NONE {
             tte = cluster.load(0);
             idx = 0;
             if !(tte.key == 0 || tte.key == key) {
@@ -325,7 +325,8 @@ impl<'a> TTView<'a> {
                     }
 
                     if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                        > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                        > i32::from(entry.depth.inner())
+                            - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                     {
                         tte = entry;
                         idx = i;
@@ -407,14 +408,17 @@ impl<'a> TTView<'a> {
             let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
             #[allow(clippy::cast_possible_truncation)]
-            return (Some(TTHit {
-                mov: tt_move,
-                depth: tt_depth,
-                bound: tt_bound,
-                value: tt_value,
-                eval: entry.evaluation.into(),
-                was_pv: entry.info.pv(),
-            }), ClusterIndex { idx: i as u8 });
+            return (
+                Some(TTHit {
+                    mov: tt_move,
+                    depth: tt_depth,
+                    bound: tt_bound,
+                    value: tt_value,
+                    eval: entry.evaluation.into(),
+                    was_pv: entry.info.pv(),
+                }),
+                ClusterIndex { idx: i as u8 },
+            );
         }
 
         (None, ClusterIndex::NONE)
