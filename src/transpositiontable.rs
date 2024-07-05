@@ -4,7 +4,9 @@ use std::{
 };
 
 use crate::{
-    board::evaluation::MINIMUM_TB_WIN_SCORE, chessmove::Move, util::depth::{CompactDepthStorage, Depth}
+    board::evaluation::MINIMUM_TB_WIN_SCORE,
+    chessmove::Move,
+    util::depth::{CompactDepthStorage, Depth},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,7 +93,7 @@ const CLUSTER_SIZE: usize = 32 / size_of::<TTEntry>();
 #[repr(C, align(32))]
 struct TTClusterMemory {
     entry1_block1: AtomicU64,
-    entry1_block2: AtomicU16, 
+    entry1_block2: AtomicU16,
     entry2_block1: AtomicU16,
     entry2_block2: AtomicU32,
     entry2_block3: AtomicU32,
@@ -115,7 +117,7 @@ impl TTClusterMemory {
                 // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
                 // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
                 // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-                // As such, we save the costliest access for last. 
+                // As such, we save the costliest access for last.
                 // (the memory-layout-second entry requires three atomic operations, because of address alignment)
                 0 => {
                     let part1 = self.entry1_block1.load(Ordering::Relaxed);
@@ -150,10 +152,11 @@ impl TTClusterMemory {
             // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
             // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
             // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-            // As such, we save the costliest access for last. 
+            // As such, we save the costliest access for last.
             // (the memory-layout-second entry requires three atomic operations, because of address alignment)
             0 => {
-                let part1 = u64::from_ne_bytes([bits[0], bits[1], bits[2], bits[3], bits[4], bits[5], bits[6], bits[7]]);
+                let part1 =
+                    u64::from_ne_bytes([bits[0], bits[1], bits[2], bits[3], bits[4], bits[5], bits[6], bits[7]]);
                 let part2 = u16::from_ne_bytes([bits[8], bits[9]]);
                 self.entry1_block1.store(part1, Ordering::Relaxed);
                 self.entry1_block2.store(part2, Ordering::Relaxed);
