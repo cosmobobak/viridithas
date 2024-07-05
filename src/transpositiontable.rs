@@ -80,6 +80,7 @@ pub struct TTEntry {
 }
 
 impl TTEntry {
+    #[allow(dead_code)]
     fn as_bits(self) -> [u8; 10] {
         // SAFETY: TTEntry can be safely turned into bits.
         unsafe { transmute::<Self, [u8; 10]>(self) }
@@ -145,7 +146,11 @@ impl TTClusterMemory {
     }
 
     pub fn store(&self, idx: usize, entry: TTEntry) {
-        let bits = entry.as_bits();
+        #![allow(clippy::cast_possible_truncation)]
+        let mut memory = TTEntryReadTarget { bits: 0 };
+        memory.entry = entry;
+        // SAFETY: This is all initialised.
+        let bits = unsafe { memory.bits };
         match idx {
             // INTERNAL IMPLEMENTATION DETAIL:
             // We swap the access pattern of the second and third entries, accessing the entry that is third
@@ -155,26 +160,17 @@ impl TTClusterMemory {
             // As such, we save the costliest access for last.
             // (the memory-layout-second entry requires three atomic operations, because of address alignment)
             0 => {
-                let part1 =
-                    u64::from_ne_bytes([bits[0], bits[1], bits[2], bits[3], bits[4], bits[5], bits[6], bits[7]]);
-                let part2 = u16::from_ne_bytes([bits[8], bits[9]]);
-                self.entry1_block1.store(part1, Ordering::Relaxed);
-                self.entry1_block2.store(part2, Ordering::Relaxed);
+                self.entry1_block1.store(bits as u64, Ordering::Relaxed);
+                self.entry1_block2.store((bits >> 64) as u16, Ordering::Relaxed);
             }
             2 => {
-                let part1 = u16::from_ne_bytes([bits[0], bits[1]]);
-                let part2 = u32::from_ne_bytes([bits[2], bits[3], bits[4], bits[5]]);
-                let part3 = u32::from_ne_bytes([bits[6], bits[7], bits[8], bits[9]]);
-                self.entry2_block1.store(part1, Ordering::Relaxed);
-                self.entry2_block2.store(part2, Ordering::Relaxed);
-                self.entry2_block3.store(part3, Ordering::Relaxed);
+                self.entry2_block1.store(bits as u16, Ordering::Relaxed);
+                self.entry2_block2.store((bits >> 16) as u32, Ordering::Relaxed);
+                self.entry2_block3.store((bits >> 48) as u32, Ordering::Relaxed);
             }
             1 => {
-                let part1 = u32::from_ne_bytes([bits[0], bits[1], bits[2], bits[3]]);
-                //                                  It's okay to overwrite here, it's just padding memory. vvvv
-                let part2 = u64::from_ne_bytes([bits[4], bits[5], bits[6], bits[7], bits[8], bits[9], 0, 0]);
-                self.entry3_block1.store(part1, Ordering::Relaxed);
-                self.entry3_block2.store(part2, Ordering::Relaxed);
+                self.entry3_block1.store(bits as u32, Ordering::Relaxed);
+                self.entry3_block2.store((bits >> 32) as u64, Ordering::Relaxed);
             }
             _ => panic!("Index out of bounds!"),
         }
