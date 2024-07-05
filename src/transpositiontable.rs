@@ -3,8 +3,6 @@ use std::{
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
-use arrayvec::ArrayVec;
-
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
@@ -310,11 +308,31 @@ impl<'a> TTView<'a> {
         // load the cluster:
         let cluster = &self.table[index];
 
-        let tte;
-        let idx;
+        let mut tte;
+        let mut idx;
         // select the entry:
         if saved_idx == ClusterIndex::NONE {
-            panic!("Got invalid ClusterIndex!");
+            tte = cluster.load(0);
+            idx = 0;
+            if !(tte.key == 0 || tte.key == key) {
+                for i in 1..CLUSTER_SIZE {
+                    let entry = cluster.load(i);
+
+                    if entry.key == 0 || entry.key == key {
+                        tte = entry;
+                        idx = i;
+                        break;
+                    }
+
+                    if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                        > i32::from(entry.depth.inner())
+                            - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                    {
+                        tte = entry;
+                        idx = i;
+                    }
+                }
+            }
         } else {
             idx = saved_idx.idx as usize;
             tte = cluster.load(idx);
@@ -373,13 +391,11 @@ impl<'a> TTView<'a> {
 
         // load the entry:
         let cluster = &self.table[index];
-        let mut cache = ArrayVec::<_, 3>::new();
 
         for i in 0..CLUSTER_SIZE {
             let entry = cluster.load(i);
 
             if entry.key != key {
-                cache.push(entry);
                 continue;
             }
 
@@ -405,31 +421,7 @@ impl<'a> TTView<'a> {
             );
         }
 
-        let tt_age = i32::from(self.age);
-
-        let mut tte = cache[0];
-        let mut idx = 0;
-        if !(tte.key == 0 || tte.key == key) {
-            for i in 1..CLUSTER_SIZE {
-                let entry = cache[i];
-
-                if entry.key == 0 || entry.key == key {
-                    idx = i;
-                    break;
-                }
-
-                if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner())
-                        - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
-                {
-                    tte = entry;
-                    idx = i;
-                }
-            }
-        }
-
-        #[allow(clippy::cast_possible_truncation)]
-        (None, ClusterIndex { idx: idx as u8 })
+        (None, ClusterIndex::NONE)
     }
 
     pub fn prefetch(&self, key: u64) {
