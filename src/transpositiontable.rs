@@ -405,13 +405,15 @@ impl<'a> TTView<'a> {
             );
         }
 
+        assert_eq!(cache.len(), CLUSTER_SIZE);
+
         let tt_age = i32::from(self.age);
 
-        let mut tte = cache[0];
+        let mut tte = &cache[0];
         let mut idx = 0;
         if !(tte.key == 0 || tte.key == key) {
             for i in 1..CLUSTER_SIZE {
-                let entry = cache[i];
+                let entry = &cache[i];
 
                 if entry.key == 0 || entry.key == key {
                     idx = i;
