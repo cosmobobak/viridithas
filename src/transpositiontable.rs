@@ -1,12 +1,10 @@
 use std::{
-    mem::{size_of, transmute, MaybeUninit},
-    sync::atomic::{AtomicU16, AtomicU8, Ordering},
+    mem::{size_of, transmute},
+    sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
 use crate::{
-    board::evaluation::MINIMUM_TB_WIN_SCORE,
-    chessmove::Move,
-    util::{depth::CompactDepthStorage, depth::Depth},
+    board::evaluation::MINIMUM_TB_WIN_SCORE, chessmove::Move, util::depth::{CompactDepthStorage, Depth}
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,51 +77,100 @@ pub struct TTEntry {
     pub evaluation: i16,            // 16 bits
 }
 
-const CLUSTER_SIZE: usize = 32 / size_of::<TTEntry>();
-
-/// Object representing the backing memory used to store a `TTEntry`.
-#[derive(Debug, Default)]
-#[repr(C)]
-struct TTEntryMemory {
-    storage: [AtomicU16; size_of::<TTEntry>() / size_of::<AtomicU16>()],
+impl TTEntry {
+    fn as_bits(self) -> [u8; 10] {
+        // SAFETY: TTEntry can be safely turned into bits.
+        unsafe { transmute::<Self, [u8; 10]>(self) }
+    }
 }
+
+const CLUSTER_SIZE: usize = 32 / size_of::<TTEntry>();
 
 /// Object representing the backing memory used to store tt entries.
 #[derive(Debug, Default)]
-#[repr(C)]
+#[repr(C, align(32))]
 struct TTClusterMemory {
-    entries: [TTEntryMemory; CLUSTER_SIZE],
-    padding: [u8; 32 - CLUSTER_SIZE * size_of::<TTEntry>()],
+    entry1_block1: AtomicU64,
+    entry1_block2: AtomicU16, 
+    entry2_block1: AtomicU16,
+    entry2_block2: AtomicU32,
+    entry2_block3: AtomicU32,
+    entry3_block1: AtomicU32,
+    entry3_block2: AtomicU64,
+}
+
+#[repr(C)]
+union TTEntryReadTarget {
+    bits: u128,
+    entry: TTEntry,
 }
 
 impl TTClusterMemory {
     pub fn load(&self, idx: usize) -> TTEntry {
         // SAFETY: All bitpatterns of TTEntry are valid.
         unsafe {
-            let mut load_storage: [MaybeUninit<u16>; size_of::<TTEntry>() / size_of::<u16>()] =
-                MaybeUninit::uninit().assume_init();
-            for (l, s) in load_storage.iter_mut().zip(&self.entries[idx].storage) {
-                l.write(s.load(Ordering::Relaxed));
-            }
-            transmute(load_storage)
+            let bits = match idx {
+                0 => {
+                    let part1 = self.entry1_block1.load(Ordering::Relaxed);
+                    let part2 = self.entry1_block2.load(Ordering::Relaxed);
+                    // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
+                    u128::from(part1) | u128::from(part2) << 64
+                }
+                1 => {
+                    let part1 = self.entry2_block1.load(Ordering::Relaxed);
+                    let part2 = self.entry2_block2.load(Ordering::Relaxed);
+                    let part3 = self.entry2_block3.load(Ordering::Relaxed);
+                    // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
+                    u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
+                }
+                2 => {
+                    let part1 = self.entry3_block1.load(Ordering::Relaxed);
+                    let part2 = self.entry3_block2.load(Ordering::Relaxed);
+                    // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
+                    u128::from(part1) | u128::from(part2) << 32
+                }
+                _ => panic!("Index out of bounds!"),
+            };
+            TTEntryReadTarget { bits }.entry
         }
     }
 
     pub fn store(&self, idx: usize, entry: TTEntry) {
-        let memory = &self.entries[idx].storage;
-        // SAFETY: All bitpatterns of TTCluster are valid and there are no padding bytes.
-        let entry_bytes: [u16; size_of::<TTEntry>() / size_of::<u16>()] = unsafe { transmute(entry) };
-        for (byte, storage) in entry_bytes.into_iter().zip(memory) {
-            storage.store(byte, Ordering::Relaxed);
+        let bits = entry.as_bits();
+        match idx {
+            0 => {
+                let part1 = u64::from_ne_bytes([bits[0], bits[1], bits[2], bits[3], bits[4], bits[5], bits[6], bits[7]]);
+                let part2 = u16::from_ne_bytes([bits[8], bits[9]]);
+                self.entry1_block1.store(part1, Ordering::Relaxed);
+                self.entry1_block2.store(part2, Ordering::Relaxed);
+            }
+            1 => {
+                let part1 = u16::from_ne_bytes([bits[0], bits[1]]);
+                let part2 = u32::from_ne_bytes([bits[2], bits[3], bits[4], bits[5]]);
+                let part3 = u32::from_ne_bytes([bits[6], bits[7], bits[8], bits[9]]);
+                self.entry2_block1.store(part1, Ordering::Relaxed);
+                self.entry2_block2.store(part2, Ordering::Relaxed);
+                self.entry2_block3.store(part3, Ordering::Relaxed);
+            }
+            2 => {
+                let part1 = u32::from_ne_bytes([bits[0], bits[1], bits[2], bits[3]]);
+                //                                  It's okay to overwrite here, it's just padding memory. vvvv
+                let part2 = u64::from_ne_bytes([bits[4], bits[5], bits[6], bits[7], bits[8], bits[9], 0, 0]);
+                self.entry3_block1.store(part1, Ordering::Relaxed);
+                self.entry3_block2.store(part2, Ordering::Relaxed);
+            }
+            _ => panic!("Index out of bounds!"),
         }
     }
 
     pub fn clear(&self) {
-        for entry in &self.entries {
-            for short in &entry.storage {
-                short.store(0, Ordering::Relaxed);
-            }
-        }
+        self.entry1_block1.store(0, Ordering::Relaxed);
+        self.entry1_block2.store(0, Ordering::Relaxed);
+        self.entry2_block1.store(0, Ordering::Relaxed);
+        self.entry2_block2.store(0, Ordering::Relaxed);
+        self.entry2_block3.store(0, Ordering::Relaxed);
+        self.entry3_block1.store(0, Ordering::Relaxed);
+        self.entry3_block2.store(0, Ordering::Relaxed);
     }
 }
 
@@ -408,17 +455,28 @@ mod tests {
 
     #[test]
     fn tt_entry_roundtrip() {
+        #![allow(clippy::cast_possible_wrap)]
+        fn format_slice_hex(slice: &[u8]) -> String {
+            let inner = slice.iter().map(|x| format!("{x:02X}")).collect::<Vec<_>>();
+            let inner = inner.join(", ");
+            format!("[{inner}]")
+        }
         let entry = TTEntry {
             key: 0x1234,
-            m: Some(Move::new(Square::A1, Square::A2)),
-            score: 0,
-            depth: ZERO_PLY.try_into().unwrap(),
+            m: Some(Move::new(Square::new_clamped(0x1A), Square::new_clamped(0x1B))),
+            score: 0xAB,
+            depth: Depth::new(0x13).try_into().unwrap(),
             info: PackedInfo::new(31, Bound::Exact, true),
-            evaluation: 1337,
+            evaluation: 0xCDEFu16 as i16,
         };
         let cluster_memory = TTClusterMemory::default();
-        cluster_memory.store(0, entry);
-        let loaded = cluster_memory.load(0);
-        assert_eq!(loaded, entry);
+        for i in 0..3 {
+            cluster_memory.store(i, entry);
+            let loaded = cluster_memory.load(i);
+            println!("Slot {i}");
+            println!(" Stored: {}", format_slice_hex(&entry.as_bits()));
+            println!(" Loaded: {}", format_slice_hex(&loaded.as_bits()));
+            assert_eq!(entry.as_bits(), loaded.as_bits(), "Assertion failed for slot {i}!");
+        }
     }
 }
