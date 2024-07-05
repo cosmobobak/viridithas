@@ -1,5 +1,5 @@
 use std::{
-    mem::{size_of, transmute},
+    mem::size_of,
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
@@ -212,6 +212,15 @@ pub struct TTHit {
     pub was_pv: bool,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct ClusterIndex {
+    idx: u8,
+}
+
+impl ClusterIndex {
+    pub const NONE: Self = Self { idx: 4 };
+}
+
 impl TT {
     pub const fn new() -> Self {
         Self { table: Vec::new(), age: AtomicU8::new(0) }
@@ -288,6 +297,7 @@ impl<'a> TTView<'a> {
         flag: Bound,
         depth: Depth,
         pv: bool,
+        saved_idx: ClusterIndex,
     ) {
         // get index into the table:
         let index = self.wrap_key(key);
@@ -297,27 +307,34 @@ impl<'a> TTView<'a> {
         let tt_age = i32::from(self.age);
         // load the cluster:
         let cluster = &self.table[index];
-        let mut tte = cluster.load(0);
-        let mut idx = 0;
 
+        let mut tte;
+        let mut idx;
         // select the entry:
-        if !(tte.key == 0 || tte.key == key) {
-            for i in 1..CLUSTER_SIZE {
-                let entry = cluster.load(i);
+        if saved_idx == ClusterIndex::NONE { 
+            tte = cluster.load(0);
+            idx = 0;
+            if !(tte.key == 0 || tte.key == key) {
+                for i in 1..CLUSTER_SIZE {
+                    let entry = cluster.load(i);
 
-                if entry.key == 0 || entry.key == key {
-                    tte = entry;
-                    idx = i;
-                    break;
-                }
+                    if entry.key == 0 || entry.key == key {
+                        tte = entry;
+                        idx = i;
+                        break;
+                    }
 
-                if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
-                {
-                    tte = entry;
-                    idx = i;
+                    if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                        > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                    {
+                        tte = entry;
+                        idx = i;
+                    }
                 }
             }
+        } else {
+            idx = saved_idx.idx as usize;
+            tte = cluster.load(idx);
         }
 
         if best_move.is_none() && tte.key == key {
@@ -367,7 +384,7 @@ impl<'a> TTView<'a> {
         }
     }
 
-    pub fn probe(&self, key: u64, ply: usize) -> Option<TTHit> {
+    pub fn probe(&self, key: u64, ply: usize) -> (Option<TTHit>, ClusterIndex) {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
@@ -389,17 +406,18 @@ impl<'a> TTView<'a> {
             // because we need to do mate score preprocessing.
             let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
 
-            return Some(TTHit {
+            #[allow(clippy::cast_possible_truncation)]
+            return (Some(TTHit {
                 mov: tt_move,
                 depth: tt_depth,
                 bound: tt_bound,
                 value: tt_value,
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
-            });
+            }), ClusterIndex { idx: i as u8 });
         }
 
-        None
+        (None, ClusterIndex::NONE)
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -419,7 +437,7 @@ impl<'a> TTView<'a> {
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Option<Move>, i32)> {
-        self.probe(key, 0).map(|TTHit { mov, value, .. }| (mov, value))
+        self.probe(key, 0).0.map(|TTHit { mov, value, .. }| (mov, value))
     }
 
     pub fn hashfull(&self) -> usize {

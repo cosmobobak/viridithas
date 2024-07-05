@@ -30,7 +30,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, TTHit, TTView},
+    transpositiontable::{Bound, ClusterIndex, TTHit, TTView},
     uci,
     util::{
         depth::{Depth, ONE_PLY, ZERO_PLY},
@@ -460,7 +460,8 @@ impl Board {
 
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
+        let (tte, tt_idx) = t.tt.probe(key, height);
+        let tt_hit = if let Some(hit) = tte {
             if !NT::PV
                 && !in_check
                 && !fifty_move_rule_near
@@ -501,7 +502,7 @@ impl Board {
             raw_eval = self.evaluate(t, info.nodes.get_local());
             if tt_hit.is_none() {
                 // store the eval into the TT if we won't overwrite anything
-                t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
+                t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv, tt_idx);
             }
             stand_pat = t.correct_evaluation(self, raw_eval);
         };
@@ -573,7 +574,7 @@ impl Board {
             Bound::Upper
         };
 
-        t.tt.store(key, height, best_move, best_score, raw_eval, flag, ZERO_PLY, t.ss[height].ttpv);
+        t.tt.store(key, height, best_move, best_score, raw_eval, flag, ZERO_PLY, t.ss[height].ttpv, tt_idx);
 
         best_score
     }
@@ -656,8 +657,11 @@ impl Board {
 
         let excluded = t.ss[height].excluded;
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let tt_idx;
         let tt_hit = if excluded.is_none() {
-            if let Some(hit) = t.tt.probe(key, height) {
+            let tte;
+            (tte, tt_idx) = t.tt.probe(key, height);
+            if let Some(hit) = tte {
                 if !NT::PV
                     && hit.depth >= depth
                     && !fifty_move_rule_near
@@ -673,6 +677,7 @@ impl Board {
                 None
             }
         } else {
+            tt_idx = ClusterIndex::NONE;
             None // do not probe the TT if we're in a singular-verification search.
         };
 
@@ -709,7 +714,7 @@ impl Board {
                     || (tb_bound == Bound::Lower && tb_value >= beta)
                     || (tb_bound == Bound::Upper && tb_value <= alpha)
                 {
-                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth, t.ss[height].ttpv);
+                    t.tt.store(key, height, None, tb_value, VALUE_NONE, tb_bound, depth, t.ss[height].ttpv, tt_idx);
                     return tb_value;
                 }
 
@@ -857,7 +862,7 @@ impl Board {
 
         // store the eval into the TT if we won't overwrite anything:
         if tt_hit.is_none() && !in_check && excluded.is_none() {
-            t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
+            t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv, tt_idx);
         }
 
         // probcut:
@@ -903,7 +908,7 @@ impl Board {
                 self.unmake_move(t);
 
                 if value >= pc_beta {
-                    t.tt.store(key, height, Some(m), value, raw_eval, Bound::Lower, depth - 3, t.ss[height].ttpv);
+                    t.tt.store(key, height, Some(m), value, raw_eval, Bound::Lower, depth - 3, t.ss[height].ttpv, tt_idx);
                     return value;
                 }
             }
@@ -1211,7 +1216,7 @@ impl Board {
             {
                 t.update_correction_history(self, depth, best_score - static_eval);
             }
-            t.tt.store(key, height, best_move, best_score, raw_eval, flag, depth, t.ss[height].ttpv);
+            t.tt.store(key, height, best_move, best_score, raw_eval, flag, depth, t.ss[height].ttpv, tt_idx);
         }
 
         t.ss[height].best_move = best_move;
