@@ -419,8 +419,7 @@ impl<'a> TTView<'a> {
                 }
 
                 if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner())
-                        - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                    > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
                     tte = entry;
                     idx = i;
