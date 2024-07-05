@@ -1,6 +1,5 @@
-
 use std::{
-    mem::{size_of, transmute, MaybeUninit},
+    mem::{size_of, transmute},
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
@@ -102,14 +101,17 @@ struct TTClusterMemory {
     entry3_block2: AtomicU64,
 }
 
+#[repr(C)]
+union TTEntryReadTarget {
+    bits: u128,
+    entry: TTEntry,
+}
+
 impl TTClusterMemory {
     pub fn load(&self, idx: usize) -> TTEntry {
         // SAFETY: All bitpatterns of TTEntry are valid.
         unsafe {
-            #![allow(clippy::cast_ptr_alignment)]
-            let mut bits: [MaybeUninit<u16>; 6] = MaybeUninit::uninit().assume_init();
-            let ptr = bits.as_mut_ptr();
-            match idx {
+            let bits = match idx {
                 // INTERNAL IMPLEMENTATION DETAIL:
                 // We swap the access pattern of the second and third entries, accessing the entry that is third
                 // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
@@ -121,31 +123,24 @@ impl TTClusterMemory {
                     let part1 = self.entry1_block1.load(Ordering::Relaxed);
                     let part2 = self.entry1_block2.load(Ordering::Relaxed);
                     // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                    // u128::from(part1) | u128::from(part2) << 64
-                    ptr.cast::<u64>().write(part1);
-                    ptr.add(4).cast::<u16>().write(part2);
+                    u128::from(part1) | u128::from(part2) << 64
                 }
                 2 => {
                     let part1 = self.entry2_block1.load(Ordering::Relaxed);
                     let part2 = self.entry2_block2.load(Ordering::Relaxed);
                     let part3 = self.entry2_block3.load(Ordering::Relaxed);
                     // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                    // u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
-                    ptr.cast::<u16>().write(part1);
-                    ptr.add(1).cast::<u32>().write(part2);
-                    ptr.add(3).cast::<u32>().write(part3);
+                    u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
                 }
                 1 => {
                     let part1 = self.entry3_block1.load(Ordering::Relaxed);
                     let part2 = self.entry3_block2.load(Ordering::Relaxed);
                     // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                    // u128::from(part1) | u128::from(part2) << 32
-                    ptr.cast::<u32>().write(part1);
-                    ptr.add(2).cast::<u64>().write(part2);
+                    u128::from(part1) | u128::from(part2) << 32
                 }
                 _ => panic!("Index out of bounds!"),
             };
-            std::ptr::read(ptr.cast())
+            TTEntryReadTarget { bits }.entry
         }
     }
 
