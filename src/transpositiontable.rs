@@ -1,5 +1,5 @@
 use std::{
-    mem::{size_of, transmute},
+    mem::size_of,
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
@@ -187,7 +187,6 @@ impl TTClusterMemory {
     }
 }
 
-// const _TT_ENTRY_SIZE: () = assert!(size_of::<TTEntry>() == 10);
 const _CLUSTER_SIZE: () = assert!(size_of::<TTClusterMemory>() == 32, "TT Cluster size is suboptimal.");
 
 #[derive(Debug)]
