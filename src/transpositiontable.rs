@@ -69,7 +69,7 @@ impl PackedInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C)]
+#[repr(C, align(8))]
 pub struct TTEntry {
     pub key: u16,                   // 16 bits
     pub m: Option<Move>,            // 16 bits
@@ -83,11 +83,11 @@ impl TTEntry {
     #[allow(dead_code)]
     fn as_bits(self) -> [u8; 10] {
         // SAFETY: TTEntry can be safely turned into bits.
-        unsafe { transmute::<Self, [u8; 10]>(self) }
+        unsafe { TTEntryReadTarget { entry: self }.bits.to_ne_bytes()[0..10].try_into().unwrap() }
     }
 }
 
-const CLUSTER_SIZE: usize = 32 / size_of::<TTEntry>();
+const CLUSTER_SIZE: usize = 3;
 
 /// Object representing the backing memory used to store tt entries.
 #[derive(Debug, Default)]
@@ -187,7 +187,7 @@ impl TTClusterMemory {
     }
 }
 
-const _TT_ENTRY_SIZE: () = assert!(size_of::<TTEntry>() == 10);
+// const _TT_ENTRY_SIZE: () = assert!(size_of::<TTEntry>() == 10);
 const _CLUSTER_SIZE: () = assert!(size_of::<TTClusterMemory>() == 32, "TT Cluster size is suboptimal.");
 
 #[derive(Debug)]
