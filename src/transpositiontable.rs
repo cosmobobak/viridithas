@@ -221,7 +221,7 @@ impl TT {
         // dealloc the old table:
         self.table = Vec::new();
         // construct a new vec:
-        // SAFETY: zeroed memory is a legal bitpattern for AtomicU64.
+        // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
             let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
             let ptr = std::alloc::alloc_zeroed(layout);
