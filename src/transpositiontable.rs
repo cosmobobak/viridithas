@@ -71,19 +71,23 @@ impl PackedInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C, align(8))]
 pub struct TTEntry {
-    pub key: u16,                   // 16 bits
-    pub m: Option<Move>,            // 16 bits
-    pub score: i16,                 // 16 bits
-    pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
-    pub info: PackedInfo,           // 5 + 1 + 2 bits, wrapper around a u8
-    pub evaluation: i16,            // 16 bits
+    pub key: u16,                   // 2 bytes
+    pub m: Option<Move>,            // 2 bytes
+    pub score: i16,                 // 2 bytes
+    pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
+    pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
+    pub evaluation: i16,            // 2 bytes
 }
 
 impl TTEntry {
     #[allow(dead_code)]
-    fn as_bits(self) -> [u8; 10] {
-        // SAFETY: TTEntry can be safely turned into bits.
-        unsafe { TTEntryReadTarget { entry: self }.bits.to_ne_bytes()[0..10].try_into().unwrap() }
+    fn to_ne_bytes(self) -> [u8; 10] {
+        let mut memory = TTEntryReadTarget { bytes: 0 };
+        memory.entry = self;
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // whole u128 is initialised.
+        let bytes = unsafe { memory.bytes };
+        bytes.to_ne_bytes()[0..10].try_into().unwrap()
     }
 }
 
@@ -104,53 +108,54 @@ struct TTClusterMemory {
 
 #[repr(C)]
 union TTEntryReadTarget {
-    bits: u128,
+    bytes: u128,
     entry: TTEntry,
 }
 
 impl TTClusterMemory {
     pub fn load(&self, idx: usize) -> TTEntry {
+        let bytes = match idx {
+            // INTERNAL IMPLEMENTATION DETAIL:
+            // We swap the access pattern of the second and third entries, accessing the entry that is third
+            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
+            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
+            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
+            // As such, we save the costliest access for last.
+            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
+            0 => {
+                let part1 = self.entry1_block1.load(Ordering::Relaxed);
+                let part2 = self.entry1_block2.load(Ordering::Relaxed);
+                // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 64
+            }
+            2 => {
+                let part1 = self.entry2_block1.load(Ordering::Relaxed);
+                let part2 = self.entry2_block2.load(Ordering::Relaxed);
+                let part3 = self.entry2_block3.load(Ordering::Relaxed);
+                // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
+            }
+            1 => {
+                let part1 = self.entry3_block1.load(Ordering::Relaxed);
+                let part2 = self.entry3_block2.load(Ordering::Relaxed);
+                // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 32
+            }
+            _ => panic!("Index out of bounds!"),
+        };
         // SAFETY: All bitpatterns of TTEntry are valid.
         unsafe {
-            let bits = match idx {
-                // INTERNAL IMPLEMENTATION DETAIL:
-                // We swap the access pattern of the second and third entries, accessing the entry that is third
-                // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
-                // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
-                // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-                // As such, we save the costliest access for last.
-                // (the memory-layout-second entry requires three atomic operations, because of address alignment)
-                0 => {
-                    let part1 = self.entry1_block1.load(Ordering::Relaxed);
-                    let part2 = self.entry1_block2.load(Ordering::Relaxed);
-                    // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                    u128::from(part1) | u128::from(part2) << 64
-                }
-                2 => {
-                    let part1 = self.entry2_block1.load(Ordering::Relaxed);
-                    let part2 = self.entry2_block2.load(Ordering::Relaxed);
-                    let part3 = self.entry2_block3.load(Ordering::Relaxed);
-                    // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                    u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
-                }
-                1 => {
-                    let part1 = self.entry3_block1.load(Ordering::Relaxed);
-                    let part2 = self.entry3_block2.load(Ordering::Relaxed);
-                    // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                    u128::from(part1) | u128::from(part2) << 32
-                }
-                _ => panic!("Index out of bounds!"),
-            };
-            TTEntryReadTarget { bits }.entry
+            TTEntryReadTarget { bytes }.entry
         }
     }
 
     pub fn store(&self, idx: usize, entry: TTEntry) {
         #![allow(clippy::cast_possible_truncation)]
-        let mut memory = TTEntryReadTarget { bits: 0 };
+        let mut memory = TTEntryReadTarget { bytes: 0 };
         memory.entry = entry;
-        // SAFETY: This is all initialised.
-        let bits = unsafe { memory.bits };
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // whole u128 is initialised.
+        let bytes = unsafe { memory.bytes };
         match idx {
             // INTERNAL IMPLEMENTATION DETAIL:
             // We swap the access pattern of the second and third entries, accessing the entry that is third
@@ -160,17 +165,17 @@ impl TTClusterMemory {
             // As such, we save the costliest access for last.
             // (the memory-layout-second entry requires three atomic operations, because of address alignment)
             0 => {
-                self.entry1_block1.store(bits as u64, Ordering::Relaxed);
-                self.entry1_block2.store((bits >> 64) as u16, Ordering::Relaxed);
+                self.entry1_block1.store(bytes as u64, Ordering::Relaxed);
+                self.entry1_block2.store((bytes >> 64) as u16, Ordering::Relaxed);
             }
             2 => {
-                self.entry2_block1.store(bits as u16, Ordering::Relaxed);
-                self.entry2_block2.store((bits >> 16) as u32, Ordering::Relaxed);
-                self.entry2_block3.store((bits >> 48) as u32, Ordering::Relaxed);
+                self.entry2_block1.store(bytes as u16, Ordering::Relaxed);
+                self.entry2_block2.store((bytes >> 16) as u32, Ordering::Relaxed);
+                self.entry2_block3.store((bytes >> 48) as u32, Ordering::Relaxed);
             }
             1 => {
-                self.entry3_block1.store(bits as u32, Ordering::Relaxed);
-                self.entry3_block2.store((bits >> 32) as u64, Ordering::Relaxed);
+                self.entry3_block1.store(bytes as u32, Ordering::Relaxed);
+                self.entry3_block2.store((bytes >> 32) as u64, Ordering::Relaxed);
             }
             _ => panic!("Index out of bounds!"),
         }
@@ -486,9 +491,9 @@ mod tests {
             cluster_memory.store(i, entry);
             let loaded = cluster_memory.load(i);
             println!("Slot {i}");
-            println!(" Stored: {}", format_slice_hex(&entry.as_bits()));
-            println!(" Loaded: {}", format_slice_hex(&loaded.as_bits()));
-            assert_eq!(entry.as_bits(), loaded.as_bits(), "Assertion failed for slot {i}!");
+            println!(" Stored: {}", format_slice_hex(&entry.to_ne_bytes()));
+            println!(" Loaded: {}", format_slice_hex(&loaded.to_ne_bytes()));
+            assert_eq!(entry.to_ne_bytes(), loaded.to_ne_bytes(), "Assertion failed for slot {i}!");
         }
     }
 }
