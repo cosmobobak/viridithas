@@ -1,9 +1,12 @@
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::{
+    mem::size_of,
+    sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
+};
 
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
-    util::{depth::CompactDepthStorage, depth::Depth},
+    util::depth::{CompactDepthStorage, Depth},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,20 +36,21 @@ fn divide_into_chunks<T>(slice: &[T], n_chunks: usize) -> impl Iterator<Item = &
     slice.chunks(chunk_size)
 }
 
+const MAX_AGE: i32 = 1 << 5; // must be power of 2
+const AGE_MASK: i32 = MAX_AGE - 1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AgeAndFlag {
+pub struct PackedInfo {
     data: u8,
 }
 
-impl AgeAndFlag {
-    const NULL: Self = Self { data: 0 };
-
-    const fn new(age: u8, flag: Bound) -> Self {
-        Self { data: (age << 2) | flag as u8 }
+impl PackedInfo {
+    const fn new(age: u8, flag: Bound, pv: bool) -> Self {
+        Self { data: (age << 3) | (pv as u8) << 2 | flag as u8 }
     }
 
     const fn age(self) -> u8 {
-        self.data >> 2
+        self.data >> 3
     }
 
     fn flag(self) -> Bound {
@@ -58,62 +62,147 @@ impl AgeAndFlag {
             _ => unreachable!(),
         }
     }
+
+    const fn pv(self) -> bool {
+        self.data & 0b100 != 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C)]
+#[repr(C, align(8))]
 pub struct TTEntry {
-    pub key: u16,                   // 16 bits
-    pub m: Option<Move>,            // 16 bits
-    pub score: i16,                 // 16 bits
-    pub depth: CompactDepthStorage, // 8 bits, wrapper around a u8
-    pub age_and_flag: AgeAndFlag,   // 6 + 2 bits, wrapper around a u8
-    pub evaluation: i16,            // 16 bits
-    pub pv: u8,                     // 8 bits
-    pub dummy: [u8; 5],             // 40 bits
+    pub key: u16,                   // 2 bytes
+    pub m: Option<Move>,            // 2 bytes
+    pub score: i16,                 // 2 bytes
+    pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
+    pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
+    pub evaluation: i16,            // 2 bytes
 }
-
-const _TT_ENTRIES_ARE_ONE_WORD: () = assert!(std::mem::size_of::<TTEntry>() == 16, "TT entry is not one word");
 
 impl TTEntry {
-    pub const NULL: Self = Self {
-        key: 0,
-        m: None,
-        score: 0,
-        depth: CompactDepthStorage::NULL,
-        age_and_flag: AgeAndFlag::NULL,
-        evaluation: 0,
-        pv: 0,
-        dummy: [0; 5],
-    };
-}
-
-impl From<[u64; 2]> for TTEntry {
-    fn from(data: [u64; 2]) -> Self {
-        // SAFETY: This is safe because all fields of TTEntry are (at base) integral types,
-        // and TTEntry is repr(C).
-        unsafe { std::mem::transmute(data) }
+    #[allow(dead_code)]
+    fn to_ne_bytes(self) -> [u8; 10] {
+        let mut memory = TTEntryReadTarget { bytes: 0 };
+        memory.entry = self;
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // whole u128 is initialised.
+        let bytes = unsafe { memory.bytes };
+        bytes.to_ne_bytes()[0..10].try_into().unwrap()
     }
 }
 
-impl From<TTEntry> for [u64; 2] {
-    fn from(entry: TTEntry) -> Self {
-        // SAFETY: This is safe because all bitpatterns of `u64` are valid.
-        unsafe { std::mem::transmute(entry) }
+const CLUSTER_SIZE: usize = 3;
+
+/// Object representing the backing memory used to store tt entries.
+#[derive(Debug, Default)]
+#[repr(C, align(32))]
+struct TTClusterMemory {
+    entry1_block1: AtomicU64,
+    entry1_block2: AtomicU16,
+    entry2_block1: AtomicU16,
+    entry2_block2: AtomicU32,
+    entry2_block3: AtomicU32,
+    entry3_block1: AtomicU32,
+    entry3_block2: AtomicU64,
+}
+
+#[repr(C)]
+union TTEntryReadTarget {
+    bytes: u128,
+    entry: TTEntry,
+}
+
+impl TTClusterMemory {
+    pub fn load(&self, idx: usize) -> TTEntry {
+        let bytes = match idx {
+            // INTERNAL IMPLEMENTATION DETAIL:
+            // We swap the access pattern of the second and third entries, accessing the entry that is third
+            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
+            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
+            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
+            // As such, we save the costliest access for last.
+            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
+            0 => {
+                let part1 = self.entry1_block1.load(Ordering::Relaxed);
+                let part2 = self.entry1_block2.load(Ordering::Relaxed);
+                // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 64
+            }
+            2 => {
+                let part1 = self.entry2_block1.load(Ordering::Relaxed);
+                let part2 = self.entry2_block2.load(Ordering::Relaxed);
+                let part3 = self.entry2_block3.load(Ordering::Relaxed);
+                // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
+            }
+            1 => {
+                let part1 = self.entry3_block1.load(Ordering::Relaxed);
+                let part2 = self.entry3_block2.load(Ordering::Relaxed);
+                // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
+                u128::from(part1) | u128::from(part2) << 32
+            }
+            _ => panic!("Index out of bounds!"),
+        };
+        // SAFETY: All bitpatterns of TTEntry are valid.
+        unsafe {
+            TTEntryReadTarget { bytes }.entry
+        }
+    }
+
+    pub fn store(&self, idx: usize, entry: TTEntry) {
+        #![allow(clippy::cast_possible_truncation)]
+        let mut memory = TTEntryReadTarget { bytes: 0 };
+        memory.entry = entry;
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // whole u128 is initialised.
+        let bytes = unsafe { memory.bytes };
+        match idx {
+            // INTERNAL IMPLEMENTATION DETAIL:
+            // We swap the access pattern of the second and third entries, accessing the entry that is third
+            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
+            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
+            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
+            // As such, we save the costliest access for last.
+            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
+            0 => {
+                self.entry1_block1.store(bytes as u64, Ordering::Relaxed);
+                self.entry1_block2.store((bytes >> 64) as u16, Ordering::Relaxed);
+            }
+            2 => {
+                self.entry2_block1.store(bytes as u16, Ordering::Relaxed);
+                self.entry2_block2.store((bytes >> 16) as u32, Ordering::Relaxed);
+                self.entry2_block3.store((bytes >> 48) as u32, Ordering::Relaxed);
+            }
+            1 => {
+                self.entry3_block1.store(bytes as u32, Ordering::Relaxed);
+                self.entry3_block2.store((bytes >> 32) as u64, Ordering::Relaxed);
+            }
+            _ => panic!("Index out of bounds!"),
+        }
+    }
+
+    pub fn clear(&self) {
+        self.entry1_block1.store(0, Ordering::Relaxed);
+        self.entry1_block2.store(0, Ordering::Relaxed);
+        self.entry2_block1.store(0, Ordering::Relaxed);
+        self.entry2_block2.store(0, Ordering::Relaxed);
+        self.entry2_block3.store(0, Ordering::Relaxed);
+        self.entry3_block1.store(0, Ordering::Relaxed);
+        self.entry3_block2.store(0, Ordering::Relaxed);
     }
 }
 
-const TT_ENTRY_SIZE: usize = std::mem::size_of::<TTEntry>();
+const _CLUSTER_SIZE: () = assert!(size_of::<TTClusterMemory>() == 32, "TT Cluster size is suboptimal.");
 
 #[derive(Debug)]
 pub struct TT {
-    table: Vec<[AtomicU64; 2]>,
+    table: Vec<TTClusterMemory>,
     age: AtomicU8,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct TTView<'a> {
-    table: &'a [[AtomicU64; 2]],
+    table: &'a [TTClusterMemory],
     age: u8,
 }
 
@@ -128,20 +217,18 @@ pub struct TTHit {
 }
 
 impl TT {
-    const NULL_VALUE: u64 = 0;
-
     pub const fn new() -> Self {
         Self { table: Vec::new(), age: AtomicU8::new(0) }
     }
 
     pub fn resize(&mut self, bytes: usize) {
-        let new_len = bytes / TT_ENTRY_SIZE;
+        let new_len = bytes / size_of::<TTClusterMemory>();
         // dealloc the old table:
         self.table = Vec::new();
         // construct a new vec:
-        // SAFETY: zeroed memory is a legal bitpattern for AtomicU64.
+        // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
-            let layout = std::alloc::Layout::array::<[AtomicU64; 2]>(new_len).unwrap();
+            let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
             let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
@@ -157,8 +244,7 @@ impl TT {
             for chunk in divide_into_chunks(&self.table, threads) {
                 let handle = s.spawn(move || {
                     for entry in chunk {
-                        entry[0].store(Self::NULL_VALUE, Ordering::Relaxed);
-                        entry[1].store(Self::NULL_VALUE, Ordering::Relaxed);
+                        entry.clear();
                     }
                 });
                 handles.push(handle);
@@ -176,12 +262,13 @@ impl TT {
     }
 
     pub fn increase_age(&self) {
-        let new_age = (self.age.load(Ordering::Relaxed) + 1) & 0b11_1111; // keep age in range [0, 63]
+        #![allow(clippy::cast_possible_truncation)]
+        let new_age = (self.age.load(Ordering::Relaxed) + 1) & AGE_MASK as u8; // keep age in range [0, MAX_AGE]
         self.age.store(new_age, Ordering::Relaxed);
     }
 
     pub fn size(&self) -> usize {
-        self.table.len() * TT_ENTRY_SIZE
+        self.table.len() * size_of::<TTClusterMemory>()
     }
 }
 
@@ -210,14 +297,37 @@ impl<'a> TTView<'a> {
         let index = self.wrap_key(key);
         // create a small key from the full key:
         let key = TT::pack_key(key);
-        // load the entry:
-        let parts = [self.table[index][0].load(Ordering::Relaxed), self.table[index][1].load(Ordering::Relaxed)];
-        let entry: TTEntry = parts.into();
+        // get current table age:
+        let tt_age = i32::from(self.age);
+        // load the cluster:
+        let cluster = &self.table[index];
+        let mut tte = cluster.load(0);
+        let mut idx = 0;
 
-        if best_move.is_none() && entry.key == key {
+        // select the entry:
+        if !(tte.key == 0 || tte.key == key) {
+            for i in 1..CLUSTER_SIZE {
+                let entry = cluster.load(i);
+
+                if entry.key == 0 || entry.key == key {
+                    tte = entry;
+                    idx = i;
+                    break;
+                }
+
+                if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                    > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                {
+                    tte = entry;
+                    idx = i;
+                }
+            }
+        }
+
+        if best_move.is_none() && tte.key == key {
             // if we don't have a best move, and the entry is for the same position,
             // then we should retain the best move from the previous entry.
-            best_move = entry.m;
+            best_move = tte.m;
         }
 
         // normalise mate / TB scores:
@@ -226,42 +336,38 @@ impl<'a> TTView<'a> {
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
-        let record_flag_bonus = i32::from(entry.age_and_flag.flag());
+        let record_flag_bonus = i32::from(tte.info.flag());
 
         // preferentially overwrite entries that are from searches on previous positions in the game.
-        let age_differential = (i32::from(self.age) + 64 - i32::from(entry.age_and_flag.age())) & 0b11_1111;
+        let age_differential = (MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK;
 
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
         let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4 + Depth::from(pv);
-        let record_prority = Depth::from(entry.depth) + record_flag_bonus;
+        let record_prority = Depth::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
         // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
         // 2. if the entry is for a different position
         // 3. if it's an exact entry, and the old entry is not exact
         // 4. if the new entry is of higher priority than the old entry
-        if entry.key != key
-            || flag == Bound::Exact && entry.age_and_flag.flag() != Bound::Exact
+        if tte.key != key
+            || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
-            let write: [u64; 2] = TTEntry {
+            let write = TTEntry {
                 key,
                 m: best_move,
                 score: score.try_into().expect(
                     "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
                 depth: depth.try_into().unwrap(),
-                age_and_flag: AgeAndFlag::new(self.age, flag),
+                info: PackedInfo::new(self.age, flag, pv),
                 evaluation: eval.try_into().expect(
                     "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
-                pv: pv.into(),
-                dummy: Default::default(),
-            }
-            .into();
-            self.table[index][0].store(write[0], Ordering::Relaxed);
-            self.table[index][1].store(write[1], Ordering::Relaxed);
+            };
+            self.table[index].store(idx, write);
         }
     }
 
@@ -270,29 +376,34 @@ impl<'a> TTView<'a> {
         let key = TT::pack_key(key);
 
         // load the entry:
-        let parts = [self.table[index][0].load(Ordering::Relaxed), self.table[index][1].load(Ordering::Relaxed)];
-        let entry: TTEntry = parts.into();
+        let cluster = &self.table[index];
 
-        if entry.key != key {
-            return None;
+        for i in 0..CLUSTER_SIZE {
+            let entry = cluster.load(i);
+
+            if entry.key != key {
+                continue;
+            }
+
+            let tt_move = entry.m;
+            let tt_depth = entry.depth.into();
+            let tt_bound = entry.info.flag();
+
+            // we can't store the score in a tagged union,
+            // because we need to do mate score preprocessing.
+            let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
+
+            return Some(TTHit {
+                mov: tt_move,
+                depth: tt_depth,
+                bound: tt_bound,
+                value: tt_value,
+                eval: entry.evaluation.into(),
+                was_pv: entry.info.pv(),
+            });
         }
 
-        let tt_move = entry.m;
-        let tt_depth = entry.depth.into();
-        let tt_bound = entry.age_and_flag.flag();
-
-        // we can't store the score in a tagged union,
-        // because we need to do mate score preprocessing.
-        let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
-
-        Some(TTHit {
-            mov: tt_move,
-            depth: tt_depth,
-            bound: tt_bound,
-            value: tt_value,
-            eval: entry.evaluation.into(),
-            was_pv: entry.pv != 0,
-        })
+        None
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -307,7 +418,7 @@ impl<'a> TTView<'a> {
             let entry = &self.table[index];
 
             // prefetch the entry:
-            _mm_prefetch(std::ptr::from_ref::<[AtomicU64; 2]>(entry).cast::<i8>(), _MM_HINT_T0);
+            _mm_prefetch(std::ptr::from_ref::<TTClusterMemory>(entry).cast::<i8>(), _MM_HINT_T0);
         }
     }
 
@@ -316,7 +427,17 @@ impl<'a> TTView<'a> {
     }
 
     pub fn hashfull(&self) -> usize {
-        self.table.iter().take(1000).filter(|e| e[0].load(Ordering::Relaxed) != 0).count()
+        let mut hit = 0;
+        for i in 0..2000 {
+            let cluster = &self.table[i];
+            for i in 0..CLUSTER_SIZE {
+                let entry = cluster.load(i);
+                if entry.key != 0 && entry.info.age() == self.age {
+                    hit += 1;
+                }
+            }
+        }
+        hit / 2 * CLUSTER_SIZE
     }
 }
 
@@ -351,25 +472,28 @@ mod tests {
 
     #[test]
     fn tt_entry_roundtrip() {
+        #![allow(clippy::cast_possible_wrap)]
+        fn format_slice_hex(slice: &[u8]) -> String {
+            let inner = slice.iter().map(|x| format!("{x:02X}")).collect::<Vec<_>>();
+            let inner = inner.join(", ");
+            format!("[{inner}]")
+        }
         let entry = TTEntry {
             key: 0x1234,
-            m: Some(Move::new(Square::A1, Square::A2)),
-            score: 0,
-            depth: ZERO_PLY.try_into().unwrap(),
-            age_and_flag: AgeAndFlag::new(63, Bound::Exact),
-            evaluation: 1337,
-            pv: 1,
-            dummy: [0; 5],
+            m: Some(Move::new(Square::new_clamped(0x1A), Square::new_clamped(0x1B))),
+            score: 0xAB,
+            depth: Depth::new(0x13).try_into().unwrap(),
+            info: PackedInfo::new(31, Bound::Exact, true),
+            evaluation: 0xCDEFu16 as i16,
         };
-        let packed: [u64; 2] = entry.into();
-        let unpacked: TTEntry = packed.into();
-        assert_eq!(entry, unpacked);
-    }
-
-    #[test]
-    fn null_tt_entry_is_zero() {
-        let entry = TTEntry::NULL;
-        let packed: [u64; 2] = entry.into();
-        assert_eq!(packed, [TT::NULL_VALUE; 2]);
+        let cluster_memory = TTClusterMemory::default();
+        for i in 0..3 {
+            cluster_memory.store(i, entry);
+            let loaded = cluster_memory.load(i);
+            println!("Slot {i}");
+            println!(" Stored: {}", format_slice_hex(&entry.to_ne_bytes()));
+            println!(" Loaded: {}", format_slice_hex(&loaded.to_ne_bytes()));
+            assert_eq!(entry.to_ne_bytes(), loaded.to_ne_bytes(), "Assertion failed for slot {i}!");
+        }
     }
 }

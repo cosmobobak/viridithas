@@ -108,14 +108,6 @@ impl Move {
         (self.data.get() & CASTLE_FLAG_BITS) != 0 && self.data.get() & EP_FLAG_BITS == 0
     }
 
-    pub fn is_kingside_castling(self) -> bool {
-        self.is_castle() && self.to() > self.from()
-    }
-
-    pub fn is_queenside_castling(self) -> bool {
-        self.is_castle() && self.to() < self.from()
-    }
-
     /// Handles castling moves, which are a bit weird.
     pub fn history_to_square(self) -> Square {
         if self.is_castle() {
