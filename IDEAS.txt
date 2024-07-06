@@ -4,11 +4,9 @@ MAJOR:
 -- Crazyhouse
 
 MINOR:
-- Rust features to watch for: full const generics, const floating-point maths.
 -- datagen, data reanalysis, maybe other things
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
 - make optimism work
-- HalfKAT?
 - extra features in the unused pawn backranks for NNUE
   - opposite coloured bishops
   - locked pawns?
@@ -20,10 +18,6 @@ MINOR:
 - futility tinkering
 - use history for more things
 - iir tinkering (ttmove, non-PV nodes, other fiddling)
-- iid tinkering (ttmove, excluded move)
-- look for bad zero-init of arrays.
-- skip tt entry reload in the store() function.
-- tt clusters
 
 ANNUEP:
 - quantisation
@@ -32,4 +26,3 @@ ANNUEP:
 - weight decay
 - size
 - bucket count (i/o)
-- crelu/screlu
