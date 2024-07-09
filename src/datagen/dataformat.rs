@@ -131,6 +131,24 @@ impl Game {
         }
     }
 
+    /// Internally counts how many positions would pass the filter in this game.
+    pub fn filter_pass_count(
+        &self,
+        filter: impl Fn(Move, i32, &Board) -> bool,
+    ) -> u64 {
+        let mut cnt = 0;
+        let (mut board, _, _, _) = self.initial_position.unpack();
+        for (mv, eval) in &self.moves {
+            let eval = eval.get();
+            if filter(*mv, i32::from(eval), &board) {
+                cnt += 1;
+            }
+            board.make_move_simple(*mv);
+        }
+
+        cnt
+    }
+
     /// Converts the game into a sequence of marlinformat `PackedBoard` objects, yielding only those positions that pass the filter.
     pub fn splat_to_marlinformat(
         &self,

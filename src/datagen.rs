@@ -986,6 +986,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     let mut move_buffer = Vec::new();
 
     let mut total_count = 0u64;
+    let mut filtered_count = 0u64;
 
     let paths = if path.is_dir() {
         fs::read_dir(path).map_or_else(
@@ -1012,15 +1013,20 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
         bail!("No files found at {}", path.display());
     }
 
+    let mpl = paths.iter().map(|path| path.display().to_string().len()).max().unwrap();
+    let start = Instant::now();
+
     for path in paths {
         let file = File::open(&path)?;
         let len = file.metadata().with_context(|| "Failed to get file metadata!")?.len();
         let mut reader = BufReader::new(file);
         let mut count = 0u64;
+        let mut filtered = 0u64;
         loop {
             match dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
                 Ok(game) => {
                     count += game.len() as u64;
+                    filtered += game.filter_pass_count(|mv, eval, board| !should_filter(mv, eval, board));
                     move_buffer = game.into_move_buffer();
                 }
                 Err(error) => {
@@ -1033,10 +1039,15 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
             }
         }
         total_count += count;
-        println!("{}: {}", path.display(), count);
+        filtered_count += filtered;
+        println!("{:mpl$}: {} | {}", path.display(), count, filtered);
+        print!(" {} pos/s\r", u128::from(total_count) * 1000 / start.elapsed().as_millis());
+        std::io::stdout().flush()?;
     }
 
+    println!();
     println!("Total: {total_count}");
+    println!("Total that pass the filter: {filtered_count}");
 
     Ok(())
 }
