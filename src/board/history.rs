@@ -28,12 +28,13 @@ impl ThreadData<'_> {
 
     /// Update the history counters for a single move.
     pub fn update_history_single(&mut self, pos: &Board, m: Move, depth: Depth) {
-        let piece_moved = pos.moved_piece(m);
-        debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos}");
+        let Some(piece_moved) = pos.moved_piece(m) else {
+            return;
+        };
         let from = m.from();
         let to = m.history_to_square();
         let val = self.main_history.get_mut(
-            piece_moved.unwrap(),
+            piece_moved,
             to,
             pos.threats.all.contains_square(from),
             pos.threats.all.contains_square(to),
@@ -127,6 +128,10 @@ impl ThreadData<'_> {
 
     /// Update the continuation history counter for a single move.
     pub fn update_continuation_history_single(&mut self, pos: &Board, m: Move, depth: Depth, index: usize) {
+        let Some(piece) = pos.moved_piece(m) else {
+            return;
+        };
+        let to = m.history_to_square();
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
         if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
             return;
@@ -136,9 +141,6 @@ impl ThreadData<'_> {
             _ => return,
         };
         let cmh_block = self.continuation_history.get_index_mut(conthist_index);
-
-        let to = m.history_to_square();
-        let piece = pos.moved_piece(m).unwrap();
         update_history(cmh_block.get_mut(piece, to), depth, true);
     }
 
