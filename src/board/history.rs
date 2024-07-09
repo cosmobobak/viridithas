@@ -26,6 +26,21 @@ impl ThreadData<'_> {
         }
     }
 
+    /// Update the history counters for a single move.
+    pub fn update_history_single(&mut self, pos: &Board, m: Move, depth: Depth) {
+        let piece_moved = pos.moved_piece(m);
+        debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos}");
+        let from = m.from();
+        let to = m.history_to_square();
+        let val = self.main_history.get_mut(
+            piece_moved.unwrap(),
+            to,
+            pos.threats.all.contains_square(from),
+            pos.threats.all.contains_square(to),
+        );
+        update_history(val, depth, true);
+    }
+
     /// Get the history scores for a batch of moves.
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
@@ -108,6 +123,23 @@ impl ThreadData<'_> {
             let piece = pos.moved_piece(m).unwrap();
             update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
         }
+    }
+
+    /// Update the continuation history counter for a single move.
+    pub fn update_continuation_history_single(&mut self, pos: &Board, m: Move, depth: Depth, index: usize) {
+        // get the index'th from the back of the conthist history, and make sure the entry is valid.
+        if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
+            return;
+        }
+        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
+            Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
+            _ => return,
+        };
+        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
+
+        let to = m.history_to_square();
+        let piece = pos.moved_piece(m).unwrap();
+        update_history(cmh_block.get_mut(piece, to), depth, true);
     }
 
     /// Get the continuation history scores for a batch of moves.
