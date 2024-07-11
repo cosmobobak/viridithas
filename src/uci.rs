@@ -24,7 +24,7 @@ use crate::{
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    nnue, perft,
+    nnue::{self, network}, perft,
     piece::Colour,
     search::{parameters::Config, LMTable},
     searchinfo::SearchInfo,
@@ -580,7 +580,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    thread_data.first_mut().with_context(|| "the thread headers are empty.")?.nnue.evaluate(pos.turn())
+                    thread_data.first_mut().with_context(|| "the thread headers are empty.")?.nnue.evaluate(pos.turn(), network::output_bucket(&pos))
                 };
                 println!("{eval}");
                 Ok(())

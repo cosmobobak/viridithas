@@ -41,10 +41,19 @@ const BUCKET_MAP: [usize; 64] = [
     8, 8, 8, 8, 17, 17, 17, 17,
     8, 8, 8, 8, 17, 17, 17, 17,
 ];
+/// Get indices into the feature transformer given king positions.
 pub fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
     let white_bucket = BUCKET_MAP[white_king];
     let black_bucket = BUCKET_MAP[black_king.flip_rank()];
     (white_bucket, black_bucket)
+}
+/// The number of output buckets
+pub const OUTPUT_BUCKETS: usize = 8;
+/// Get index into the output layer given a board state.
+pub fn output_bucket(pos: &Board) -> usize {
+    #![allow(clippy::cast_possible_truncation)]
+    const DIVISOR: usize = (32 + OUTPUT_BUCKETS - 1) / OUTPUT_BUCKETS;
+    (pos.n_men() as usize - 2) / DIVISOR
 }
 
 const QA: i32 = 255;
@@ -60,8 +69,8 @@ pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!("../../vir
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
     pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: Align64<[i16; LAYER_1_SIZE * 2]>,
-    pub output_bias: i16,
+    pub output_weights: [Align64<[i16; LAYER_1_SIZE * 2]>; OUTPUT_BUCKETS],
+    pub output_bias: [i16; OUTPUT_BUCKETS],
 }
 
 impl NNUEParams {
@@ -136,7 +145,7 @@ impl NNUEParams {
     pub fn min_max_output_weight(&self) -> (i16, i16) {
         let mut min = i16::MAX;
         let mut max = i16::MIN;
-        for &f in &self.output_weights.0 {
+        for f in self.output_weights.iter().flat_map(|x| x.0) {
             if f < min {
                 min = f;
             }
@@ -589,16 +598,16 @@ impl NNUEState {
     }
 
     /// Evaluate the final layer on the partial activations.
-    pub fn evaluate(&self, stm: Colour) -> i32 {
+    pub fn evaluate(&self, stm: Colour, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = flatten(us, them, &NNUE.output_weights);
+        let output = flatten(us, them, &NNUE.output_weights[out]);
 
-        (output + i32::from(NNUE.output_bias)) * SCALE / QAB
+        (output + i32::from(NNUE.output_bias[out])) * SCALE / QAB
     }
 }
 
@@ -660,7 +669,7 @@ fn flatten(
 pub fn inference_benchmark(state: &NNUEState) {
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
-        std::hint::black_box(state.evaluate(Colour::White));
+        std::hint::black_box(state.evaluate(Colour::White, 0));
     }
     let elapsed = start.elapsed();
     let nanos = elapsed.as_nanos();
