@@ -665,6 +665,13 @@ impl Board {
                         || (hit.bound == Bound::Lower && hit.value >= beta)
                         || (hit.bound == Bound::Upper && hit.value <= alpha))
                 {
+                    if let Some(mov) = hit.mov {
+                        // add to the history of a quiet move that fails high here.
+                        if hit.value >= beta && !self.is_tactical(mov) {
+                            self.update_quiet_history_single(t, mov, depth);
+                        }
+                    }
+
                     return hit.value;
                 }
 
@@ -1225,15 +1232,23 @@ impl Board {
     }
 
     /// Update the main and continuation history tables for a batch of moves.
-    fn update_quiet_history(&mut self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+    fn update_quiet_history(&self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
     }
 
+    /// Update the main and continuation history tables for a single move.
+    fn update_quiet_history_single(&self, t: &mut ThreadData, move_to_adjust: Move, depth: Depth) {
+        t.update_history_single(self, move_to_adjust, depth);
+        t.update_continuation_history_single(self, move_to_adjust, depth, 0);
+        t.update_continuation_history_single(self, move_to_adjust, depth, 1);
+        // t.update_continuation_history_single(self, move_to_adjust, depth, 3);
+    }
+
     /// Update the tactical history table.
-    fn update_tactical_history(&mut self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+    fn update_tactical_history(&self, t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         t.update_tactical_history(self, moves_to_adjust, best_move, depth);
     }
 
