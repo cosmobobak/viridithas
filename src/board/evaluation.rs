@@ -1,12 +1,7 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use crate::{
-    board::Board,
-    chessmove::Move,
-    piece::{Colour, Piece, PieceType},
-    search::draw_score,
-    threadlocal::ThreadData,
-    util::MAX_DEPTH,
+    board::Board, chessmove::Move, nnue::network, piece::{Colour, Piece, PieceType}, search::draw_score, threadlocal::ThreadData, util::MAX_DEPTH
 };
 
 /// The value of checkmate.
@@ -62,7 +57,8 @@ impl Board {
 
     pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         // get the raw network output
-        let v = t.nnue.evaluate(self.side);
+        let output_bucket = network::output_bucket(self);
+        let v = t.nnue.evaluate(self.side, output_bucket);
 
         // scale down the value estimate when there's not much
         // material left - this will incentivize keeping material
