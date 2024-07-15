@@ -220,15 +220,15 @@ impl Vector16 {
         }
         #[cfg(target_feature = "neon")]
         {
-            // load bits
+            // lo
             let a_lo = std::arch::aarch64::vget_low_s16(a.data);
-            let a_hi = std::arch::aarch64::vget_high_s16(a.data);
             let b_lo = std::arch::aarch64::vget_low_s16(b.data);
-            let b_hi = std::arch::aarch64::vget_high_s16(b.data);
-            // multiplication
-            let acc = std::arch::aarch64::vmull_s16(b_lo, a_lo);
-            let acc = std::arch::aarch64::vmlal_s16(acc, b_hi, a_hi);
-            Vector32 { data: acc }
+            let lo_prod = std::arch::aarch64::vmull_s16(b_lo, a_lo);
+            // hi
+            let hi_prod = std::arch::aarch64::vmull_high_s16(a.data, b.data);
+            // sum
+            let data = std::arch::aarch64::vpaddq_s32(lo_prod, hi_prod);
+            Vector32 { data }
         }
         #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
         {
