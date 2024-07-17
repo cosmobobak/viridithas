@@ -512,12 +512,11 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │                                          │ cosmo.tardis.ac/2024/07/15/nnue-research-02/
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
     compact │ semiotic with smaller dataset, much      │ fixed-nodes:
-            │ shorter training run, and cosine lr.     │
-            │                                          │
-            │                                          │
-            │                                          │
-            │                                          │
-            │                                          │
-            │                                          │
-            │                                          │
+            │ shorter training run, and cosine lr.     │ Elo   | -518.30 +- 65.56 (95%)
+            │                                          │ SPRT  | N=25000 Threads=1 Hash=16MB
+            │ i suspect the data unpacking was bugged, │ LLR   | -3.52 (-2.94, 2.94) [0.00, 3.00]
+            │ as bullet-utils crashed multiple times   │ Games | N: 602 W: 16 L: 560 D: 26
+            │ during data preprocessing.               │ Penta | [260, 24, 17, 0, 0]
+            │                                          │ https://chess.swehosting.se/test/7443/
+            │                                          │ vs. semiotic
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
