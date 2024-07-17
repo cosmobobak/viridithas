@@ -444,5 +444,79 @@ marlineater │ alchemist with WDL 1.0.                  │ STC:
             │ as signalis2-epoch15 in OB.              │ vs artemis.
             │                                          │
             │ bucketing scheme is shown in the         │
-            │ network release.                         │ release: https://github.com/cosmobobak/viridithas-networks/releases/tag/signalis
+            │ network release.                         │
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    gestalt │ nine-buckets horizontally mirrored       │ fixed-nodes:
+            │ 1536x2 network, with larger dataset.     │ Elo   │ 34.12 +- 9.08 (95%)
+            │                                          │ SPRT  │ N=25000 Threads=1 Hash=16MB
+            │                                          │ LLR   │ 3.07 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games │ N: 2564 W: 880 L: 629 D: 1055
+            │                                          │ Penta │ [46, 237, 513, 392, 94]
+            │                                          │ https://chess.swehosting.se/test/5868/
+            │                                          │ vs. signalis
+            │                                          │
+            │                                          │ STC:
+            │                                          │ Elo   │ 23.64 +- 7.02 (95%)
+            │                                          │ SPRT  │ 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   │ 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games │ N: 2988 W: 864 L: 661 D: 1463
+            │                                          │ Penta │ [23, 274, 712, 447, 38]
+            │                                          │ https://chess.swehosting.se/test/5869/
+            │                                          │ vs. signalis
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   semiotic │ gestalt with bigger dataset and eight    │ fixed-nodes:
+            │ material-count output buckets.           │ Elo   | 19.76 +- 6.80 (95%)
+            │                                          │ SPRT  | N=25000 Threads=1 Hash=16MB
+            │                                          │ LLR   | 3.06 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games | N: 4348 W: 1365 L: 1118 D: 1865
+            │                                          │ Penta | [87, 437, 919, 604, 127]
+            │                                          │ https://chess.swehosting.se/test/7374/
+            │                                          │ vs. gestalt
+            │                                          │
+            │                                          │ STC:
+            │                                          │ Elo   | 23.89 +- 6.91 (95%)
+            │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games | N: 2826 W: 781 L: 587 D: 1458
+            │                                          │ Penta | [14, 257, 686, 433, 23]
+            │                                          │ https://chess.swehosting.se/test/7376/
+            │                                          │ vs. gestalt
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+   skirmish │ gestalt with the tweaks enumerated at    │ fixed-nodes:
+            │ end of the second ANNUEP blogpost        │ Elo   | 14.81 +- 5.85 (95%)
+            │                                          │ SPRT  | N=25000 Threads=1 Hash=16MB
+            │                                          │ LLR   | 2.97 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games | N: 5492 W: 1663 L: 1429 D: 2400
+            │                                          │ Penta | [92, 569, 1254, 675, 156]
+            │                                          │ https://chess.swehosting.se/test/7391/
+            │                                          │ vs. semiotic
+            │                                          │
+            │                                          │ STC:
+            │                                          │ Elo   | 6.82 +- 3.55 (95%)
+            │                                          │ SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            │                                          │ LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games | N: 10540 W: 2673 L: 2466 D: 5401
+            │                                          │ Penta | [42, 1197, 2628, 1318, 85]
+            │                                          │ https://chess.swehosting.se/test/7396/
+            │                                          │ vs. semiotic
+            │                                          │
+            │                                          │ LTC:
+            │                                          │ Elo   | 0.72 +- 3.75 (95%)
+            │                                          │ SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            │                                          │ LLR   | -0.00 (-2.94, 2.94) [0.00, 3.00]
+            │                                          │ Games | N: 7760 W: 1758 L: 1742 D: 4260
+            │                                          │ Penta | [6, 862, 2146, 842, 24]
+            │                                          │ https://chess.swehosting.se/test/7398/
+            │                                          │ vs. semiotic
+            │                                          │
+            │                                          │ cosmo.tardis.ac/2024/07/15/nnue-research-02/
+────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
+    compact │ semiotic with smaller dataset, much      │ fixed-nodes:
+            │ shorter training run, and cosine lr.     │ Elo   | -518.30 +- 65.56 (95%)
+            │                                          │ SPRT  | N=25000 Threads=1 Hash=16MB
+            │ i suspect the data unpacking was bugged, │ LLR   | -3.52 (-2.94, 2.94) [0.00, 3.00]
+            │ as bullet-utils crashed multiple times   │ Games | N: 602 W: 16 L: 560 D: 26
+            │ during data preprocessing.               │ Penta | [260, 24, 17, 0, 0]
+            │                                          │ https://chess.swehosting.se/test/7443/
+            │                                          │ vs. semiotic
 ────────────┼──────────────────────────────────────────┼───────────────────────────────────────────────
