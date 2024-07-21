@@ -495,7 +495,18 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            stand_pat = t.correct_evaluation(self, raw_eval);
+            let adj_eval = t.correct_evaluation(self, raw_eval);
+
+            // try correcting via search score from TT:
+            let (tt_flag, tt_value) = tt_hit.as_ref().map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
+            if tt_flag == Bound::Exact
+                || tt_flag == Bound::Upper && tt_value < adj_eval
+                || tt_flag == Bound::Lower && tt_value > adj_eval
+            {
+                stand_pat = tt_value;
+            } else {
+                stand_pat = adj_eval;
+            }
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info.nodes.get_local());
