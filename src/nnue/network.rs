@@ -27,20 +27,35 @@ pub const INPUT: usize = 768;
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const LAYER_1_SIZE: usize = 1536;
-/// The number of buckets in the feature transformer.
-pub const BUCKETS: usize = 9;
-/// The mapping from square to bucket.
-#[rustfmt::skip]
-const BUCKET_MAP: [usize; 64] = [
-    0, 1, 2, 3, 12, 11, 10, 9, 
-    4, 4, 5, 5, 14, 14, 13, 13,
-    6, 6, 6, 6, 15, 15, 15, 15,
-    7, 7, 7, 7, 16, 16, 16, 16,
-    8, 8, 8, 8, 17, 17, 17, 17,
-    8, 8, 8, 8, 17, 17, 17, 17,
-    8, 8, 8, 8, 17, 17, 17, 17,
-    8, 8, 8, 8, 17, 17, 17, 17,
+/// The structure of the king-buckets.
+const HALF_BUCKET_MAP: [usize; 32] = [
+    0, 1, 2, 3,
+    4, 4, 5, 5,
+    6, 6, 6, 6,
+    7, 7, 7, 7,
+    8, 8, 8, 8,
+    8, 8, 8, 8,
+    8, 8, 8, 8,
+    8, 8, 8, 8,
 ];
+/// The number of buckets in the feature transformer.
+pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
+/// The mapping from square to bucket.
+const BUCKET_MAP: [usize; 64] = {
+    let mut map = [0; 64];
+    let mut row = 0;
+    while row < 8 {
+        let mut col = 0;
+        while col < 4 {
+            let mirrored = 7 - col;
+            map[row * 8 + col] = HALF_BUCKET_MAP[row * 4 + col];
+            map[row * 8 + mirrored] = HALF_BUCKET_MAP[row * 4 + col] + BUCKETS;
+            col += 1;
+        }
+        row += 1;
+    }
+    map
+};
 /// Get indices into the feature transformer given king positions.
 pub fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
     let white_bucket = BUCKET_MAP[white_king];
@@ -158,7 +173,7 @@ impl NNUEParams {
 
     pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
         // handle mirroring
-        let bucket = bucket % 9;
+        let bucket = bucket % BUCKETS;
         let start = bucket * INPUT * LAYER_1_SIZE;
         let end = start + INPUT * LAYER_1_SIZE;
         let slice = &self.feature_weights[start..end];
