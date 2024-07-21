@@ -1,7 +1,13 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use crate::{
-    board::Board, chessmove::Move, nnue::network, piece::{Colour, Piece, PieceType}, search::draw_score, threadlocal::ThreadData, util::MAX_DEPTH
+    board::Board,
+    chessmove::Move,
+    nnue::network,
+    piece::{Colour, Piece, PieceType},
+    search::draw_score,
+    threadlocal::ThreadData,
+    util::MAX_DEPTH,
 };
 
 /// The value of checkmate.

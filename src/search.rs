@@ -497,7 +497,8 @@ impl Board {
             }
             let adj_eval = t.correct_evaluation(self, raw_eval);
 
-            // try correcting via search score from TT:
+            // try correcting via search score from TT.
+            // notably, this doesn't work for main search for ~reasons.
             let (tt_flag, tt_value) = tt_hit.as_ref().map_or((Bound::None, VALUE_NONE), |tte| (tte.bound, tte.value));
             if tt_flag == Bound::Exact
                 || tt_flag == Bound::Upper && tt_value < adj_eval
@@ -510,10 +511,9 @@ impl Board {
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info.nodes.get_local());
-            if tt_hit.is_none() {
-                // store the eval into the TT if we won't overwrite anything
-                t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
-            }
+            // store the eval into the TT. We know that we won't overwrite anything,
+            // because this branch is one where there wasn't a TT-hit.
+            t.tt.store(key, height, None, VALUE_NONE, raw_eval, Bound::None, ZERO_PLY, t.ss[height].ttpv);
             stand_pat = t.correct_evaluation(self, raw_eval);
         };
 

@@ -132,10 +132,7 @@ impl Game {
     }
 
     /// Internally counts how many positions would pass the filter in this game.
-    pub fn filter_pass_count(
-        &self,
-        filter: impl Fn(Move, i32, &Board) -> bool,
-    ) -> u64 {
+    pub fn filter_pass_count(&self, filter: impl Fn(Move, i32, &Board) -> bool) -> u64 {
         let mut cnt = 0;
         let (mut board, _, _, _) = self.initial_position.unpack();
         for (mv, eval) in &self.moves {

@@ -84,7 +84,7 @@ impl TTEntry {
     fn to_ne_bytes(self) -> [u8; 10] {
         let mut memory = TTEntryReadTarget { bytes: 0 };
         memory.entry = self;
-        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the
         // whole u128 is initialised.
         let bytes = unsafe { memory.bytes };
         bytes.to_ne_bytes()[0..10].try_into().unwrap()
@@ -144,16 +144,14 @@ impl TTClusterMemory {
             _ => panic!("Index out of bounds!"),
         };
         // SAFETY: All bitpatterns of TTEntry are valid.
-        unsafe {
-            TTEntryReadTarget { bytes }.entry
-        }
+        unsafe { TTEntryReadTarget { bytes }.entry }
     }
 
     pub fn store(&self, idx: usize, entry: TTEntry) {
         #![allow(clippy::cast_possible_truncation)]
         let mut memory = TTEntryReadTarget { bytes: 0 };
         memory.entry = entry;
-        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the 
+        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the
         // whole u128 is initialised.
         let bytes = unsafe { memory.bytes };
         match idx {
