@@ -4,7 +4,6 @@ MAJOR:
 -- Crazyhouse
 
 MINOR:
--- datagen, data reanalysis, maybe other things
 - validate this FEN properly: "r3qrk1/pppb1pbp/3p1np1/3P2B1/2PpP3/2N2PP1/PP1Q3P/R3KB1R w kq - 0 4"
 - make optimism work
 - extra features in the unused pawn backranks for NNUE
@@ -13,14 +12,10 @@ MINOR:
   - bishop pair
   - passed pawns by file?
 - better errors for Fathom.
-- add filtering for counts
 - probcut tinkering (SF in-check trick)
 - futility tinkering
 - use history for more things
 - iir tinkering (ttmove, non-PV nodes, other fiddling)
-- tt correction 
-  - https://discord.com/channels/759496923324874762/866539700986970114/1258321981640671293
-  - http://chess.grantnet.us/test/37494/
 - eval corrhist 
   - https://github.com/connormcmonigle/seer-nnue/pull/185/files
   - google "low-rank"
@@ -32,6 +27,3 @@ ANNUEP:
 - quantisation
 - training run length
 - optimiser
-- weight decay
-- size
-- bucket count (i/o)
