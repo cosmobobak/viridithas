@@ -16,25 +16,11 @@ use std::{
 use anyhow::{anyhow, bail, Context};
 
 use crate::{
-    bench::BENCH_POSITIONS,
-    board::{
+    bench::BENCH_POSITIONS, board::{
         evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
         movegen::MoveList,
         Board,
-    },
-    cuckoo,
-    errors::{FenParseError, MoveParseError},
-    nnue::{self, network},
-    perft,
-    piece::Colour,
-    search::{parameters::Config, LMTable},
-    searchinfo::SearchInfo,
-    tablebases,
-    threadlocal::ThreadData,
-    timemgmt::SearchLimit,
-    transpositiontable::TT,
-    util::{MAX_DEPTH, MEGABYTE},
-    NAME, VERSION,
+    }, cuckoo, errors::{FenParseError, MoveParseError}, nnue::{self, network}, perft, piece::Colour, search::{parameters::Config, LMTable}, searchinfo::SearchInfo, tablebases, term, threadlocal::ThreadData, timemgmt::SearchLimit, transpositiontable::TT, util::{MAX_DEPTH, MEGABYTE}, NAME, VERSION
 };
 
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
@@ -499,6 +485,8 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
+    term::set_mode()?;
+
     let mut pos = Board::default();
 
     let mut tt = TT::new();
