@@ -20,25 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// The below code is from https://github.com/ogham/rust-ansi-term.
-
-// int main(int arg_count, char **args) {
-//     // Change output buffer size
-//     setvbuf(stdout, nullptr, _IONBF, 0);
-
-// #ifdef WIN32
-//     // Enable ANSI escape codes
-//     const auto stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-
-//     DWORD console_mode = 0;
-//     GetConsoleMode(stdout_handle, &console_mode);
-
-//     console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-//     SetConsoleMode(stdout_handle, console_mode);
-// #endif
-
-//     uci::AcceptCommands(arg_count, args);
-// }
+// The below code is adapted from https://github.com/ogham/rust-ansi-term.
 
 /// Enables ANSI code support on Windows 10.
 ///
@@ -56,11 +38,12 @@ fn enable_ansi_support() -> Result<(), u32> {
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
     use std::ptr::null_mut;
-    use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
-    use winapi::um::errhandlingapi::GetLastError;
-    use winapi::um::fileapi::{CreateFileW, OPEN_EXISTING};
-    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-    use winapi::um::winnt::{FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE};
+    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE;
+    use windows_sys::Win32::Storage::FileSystem::{CreateFileW, OPEN_EXISTING};
+    use windows_sys::Win32::System::Console::{GetConsoleMode, SetConsoleMode};
 
     const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 
@@ -75,25 +58,22 @@ fn enable_ansi_support() -> Result<(), u32> {
             null_mut(),
             OPEN_EXISTING,
             0,
-            null_mut(),
+            0,
         );
-        if console_handle == INVALID_HANDLE_VALUE
-        {
+        if console_handle == INVALID_HANDLE_VALUE {
             return Err(GetLastError());
         }
 
         // ref: https://docs.microsoft.com/en-us/windows/console/getconsolemode
         let mut console_mode: u32 = 0;
-        if 0 == GetConsoleMode(console_handle, &mut console_mode)
-        {
+        if 0 == GetConsoleMode(console_handle, &mut console_mode) {
             return Err(GetLastError());
         }
 
         // VT processing not already enabled?
         if console_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING == 0 {
             // https://docs.microsoft.com/en-us/windows/console/setconsolemode
-            if 0 == SetConsoleMode(console_handle, console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
-            {
+            if 0 == SetConsoleMode(console_handle, console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
                 return Err(GetLastError());
             }
         }
@@ -106,9 +86,12 @@ fn enable_ansi_support() -> Result<(), u32> {
 pub fn set_mode() -> anyhow::Result<()> {
     #[cfg(windows)]
     {
+        use anyhow::Context;
+
         let res = enable_ansi_support();
         // do some processing
-        res.with_context(|| "Setting terminal mode failed!")
+        res.map_err(|error_code| anyhow::anyhow!("Windows error code {error_code}"))
+            .with_context(|| "Setting terminal mode failed!")
     }
     #[cfg(not(windows))]
     Ok(())
