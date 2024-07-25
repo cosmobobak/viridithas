@@ -547,3 +547,44 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | https://chess.swehosting.se/test/7448/
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
+   eternity | 13-buckets 2048x2 net, trained for 200   | fixed-nodes:
+            | superbatches with cosine lr.             | Elo   | -1.97 +- 2.72 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | performance was sufficiently close to    | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            | semiotic to make me think it was         | Games | N: 26234 W: 7280 L: 7429 D: 11525
+            | possible to beat semiotic with a much    | Penta | [616, 3174, 5625, 3147, 555]
+            | shorter training run.                    | https://chess.swehosting.se/test/7479/
+            |                                          | vs. semiotic
+------------|------------------------------------------|-----------------------------------------------
+   everedge | semiotic but trained with WDL warmup to  | fixed-nodes:
+            | 0.5 over the course of 160 superbatches. | Elo   | -5.78 +- 4.10 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11490 W: 3123 L: 3314 D: 5053
+            |                                          | Penta | [260, 1472, 2450, 1325, 238]
+            |                                          | https://chess.swehosting.se/test/7481/
+            |                                          | vs. semiotic
+------------|------------------------------------------|-----------------------------------------------
+  pendragon | 2048x2 net with an extra billion         | fixed-nodes v1:
+            | fens from semiotic injected.             | Elo   | 5.93 +- 3.53 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | first version had 13 buckets and trained | LLR   | 2.99 (-2.94, 2.94) [0.00, 3.00]
+            | for 400 superbatches.                    | Games | N: 16004 W: 4664 L: 4391 D: 6949
+            |                                          | Penta | [375, 1805, 3375, 2066, 381]
+            | second version had 16 buckets and a      | https://chess.swehosting.se/test/7580/
+            | king bucket feature factoriser which     | vs. semiotic
+            | significantly increased time per batch,  | 
+            | so run was much longer despite also      | fixed-nodes v2:
+            | running for 400 superbatches.            | Elo   | 31.64 +- 8.76 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2588 W: 874 L: 639 D: 1075
+            |                                          | Penta | [44, 234, 539, 397, 80]
+            |                                          | https://chess.swehosting.se/test/7587/
+            |                                          | vs. semiotic
+            |                                          | 
+            |                                          | STC v2:
+vs. semiotic
+            |                                          | LTC v2:
+vs. semiotic
+------------|------------------------------------------|-----------------------------------------------
