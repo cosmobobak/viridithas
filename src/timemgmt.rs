@@ -195,7 +195,7 @@ impl TimeManager {
         }
     }
 
-    pub fn check_up(&mut self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
+    pub fn check_up(&self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
         match self.limit {
             SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => stopped.load(Ordering::SeqCst),
             SearchLimit::Nodes(nodes) => {
@@ -255,7 +255,7 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::SoftNodes { .. })
     }
 
-    pub fn solved_breaker<ThTy: SmpThreadType>(&mut self, value: i32, depth: usize) -> ControlFlow<()> {
+    pub const fn solved_breaker<ThTy: SmpThreadType>(&self, value: i32, depth: usize) -> ControlFlow<()> {
         if !ThTy::MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
