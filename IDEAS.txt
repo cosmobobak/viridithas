@@ -22,6 +22,13 @@ MINOR:
 - lasso reg / berky lasso / activation l1
   - "Berky lasso was worth ~20 Elo in Seer so do with that information what you will"
   - "Same process, net with berky lasso -10, net without -30. Which adds to the confusion."
+- madvise 
+  - https://github.com/expo-dev/expositor/commit/fd7a8a8db89d73974145dc068cf37179b69a0ad4
+  - https://github.com/expo-dev/expositor/blob/main/src/cache.rs
+- more aggro cutnode lmr
+  - https://github.com/Vast342/Clarity/compare/d5806e2b..efa524fd
+- whatever the hell this is
+  - https://github.com/Vizvezdenec/Stockfish/compare/b55217fd02...f5f472eb38
 
 ANNUEP:
 - quantisation

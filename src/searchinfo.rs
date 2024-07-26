@@ -111,7 +111,7 @@ impl<'a> SearchInfo<'a> {
         self.stdin_rx = Some(stdin_rx);
     }
 
-    pub fn check_up(&mut self) -> bool {
+    pub fn check_up(&self) -> bool {
         let already_stopped = self.stopped.load(Ordering::SeqCst);
         if already_stopped {
             return true;

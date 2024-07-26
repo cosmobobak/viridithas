@@ -26,18 +26,18 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 1536;
+pub const LAYER_1_SIZE: usize = 2048;
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
-    0, 1, 2, 3,
-    4, 4, 5, 5,
-    6, 6, 6, 6,
-    7, 7, 7, 7,
-    8, 8, 8, 8,
-    8, 8, 8, 8,
-    8, 8, 8, 8,
-    8, 8, 8, 8,
+     0,  1,  2,  3,
+     4,  5,  6,  7,
+     8,  9, 10, 11,
+     8,  9, 10, 11,
+    12, 12, 13, 13,
+    12, 12, 13, 13,
+    14, 14, 15, 15,
+    14, 14, 15, 15,
 ];
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
