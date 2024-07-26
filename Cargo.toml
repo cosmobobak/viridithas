@@ -34,6 +34,17 @@ bulletformat = "1.2.0"
 arrayvec = "0.7.4"
 anyhow = "1.0.86"
 
+[dependencies.windows-sys]
+version = "0.52"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Storage",
+    "Win32_Storage_FileSystem",
+]
+
 [profile.release]
 lto = true
 panic = "abort"

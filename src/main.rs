@@ -33,6 +33,7 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
+mod term;
 
 use cli::Subcommands::{Analyse, Bench, CountPositions, Datagen, Perft, Splat, Spsa, VisNNUE};
 
