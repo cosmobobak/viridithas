@@ -584,7 +584,20 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. semiotic
             |                                          | 
             |                                          | STC v2:
-vs. semiotic
+            |                                          | Elo   | 0.51 +- 3.01 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -0.22 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 15616 W: 3704 L: 3681 D: 8231
+            |                                          | Penta | [133, 1860, 3771, 1939, 105]
+            |                                          | https://chess.swehosting.se/test/7588/
+            |                                          | vs. semiotic
+            |                                          | 
             |                                          | LTC v2:
-vs. semiotic
+            |                                          | Elo   | 4.83 +- 2.85 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 14880 W: 3434 L: 3227 D: 8219
+            |                                          | Penta | [43, 1658, 3832, 1863, 44]
+            |                                          | https://chess.swehosting.se/test/7590/
+            |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
