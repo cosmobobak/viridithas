@@ -861,12 +861,12 @@ impl Board {
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
         // TT-reduction (IIR).
-        if NT::PV && tt_hit.is_none() {
+        if NT::PV && tt_hit.map_or(true, |tte| tte.depth + 4 <= depth) {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth);
         }
 
         // cutnode-based TT reduction.
-        if cut_node && excluded.is_none() && tt_move.is_none() {
+        if cut_node && excluded.is_none() && (tt_move.is_none() || tt_hit.map_or(true, |tte| tte.depth + 4 <= depth)) {
             depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
         }
 
