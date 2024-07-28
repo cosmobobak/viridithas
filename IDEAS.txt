@@ -25,10 +25,6 @@ MINOR:
 - madvise 
   - https://github.com/expo-dev/expositor/commit/fd7a8a8db89d73974145dc068cf37179b69a0ad4
   - https://github.com/expo-dev/expositor/blob/main/src/cache.rs
-- more aggro cutnode lmr
-  - https://github.com/Vast342/Clarity/compare/d5806e2b..efa524fd
-- whatever the hell this is
-  - https://github.com/Vizvezdenec/Stockfish/compare/b55217fd02...f5f472eb38
 
 ANNUEP:
 - quantisation

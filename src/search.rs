@@ -784,6 +784,9 @@ impl Board {
         // clear out the next set of killer moves.
         t.killer_move_table[height + 1] = [None; 2];
 
+        // clear out the next ply's cutoff counter.
+        t.ss[height + 1].cutoff_count = 0;
+
         // whole-node pruning techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
             // razoring.
@@ -1109,6 +1112,8 @@ impl Board {
                         r += i32::from(!improving);
                         // reduce more if the move from the transposition table is tactical
                         r += i32::from(tt_capture);
+                        // reduce less if next ply has had few fail highs
+                        r -= i32::from(t.ss[height].cutoff_count < 4);
                     } else if is_winning_capture {
                         // reduce winning captures less
                         r -= 1;
@@ -1170,6 +1175,7 @@ impl Board {
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
                     info.log_fail_high::<false>(moves_made - 1, movepick_score);
+                    t.ss[height].cutoff_count += 1;
                     break;
                 }
             }
