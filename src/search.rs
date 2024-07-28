@@ -998,6 +998,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
+                && self.threats().all.contains_square(m.to())
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
             {
                 continue;
