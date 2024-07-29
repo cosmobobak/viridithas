@@ -13,7 +13,7 @@ const HUGE_PAGE_SIZE: usize = 0x0020_0000;
 
 #[repr(align(0x0020_0000))]
 pub struct HugePage {
-    _data: [u8; HUGE_PAGE_SIZE],
+    _data: [AtomicU8; HUGE_PAGE_SIZE],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
