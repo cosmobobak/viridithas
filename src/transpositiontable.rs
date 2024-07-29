@@ -9,11 +9,11 @@ use crate::{
     util::depth::{CompactDepthStorage, Depth},
 };
 
-const MB: usize = 0x0020_0000;
+const HUGE_PAGE_SIZE: usize = 0x0020_0000;
 
 #[repr(align(0x0020_0000))]
 pub struct HugePage {
-    _data: [u8; MB],
+    _data: [u8; HUGE_PAGE_SIZE],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,8 +226,8 @@ impl TT {
     }
 
     pub fn resize(&mut self, bytes: usize) {
-        let pages = 1.max(bytes / MB);
-        let bytes_to_alloc = pages * MB;
+        let pages = 1.max(bytes / HUGE_PAGE_SIZE);
+        let bytes_to_alloc = pages * HUGE_PAGE_SIZE;
         // dealloc the old table:
         self.table = Vec::new();
         // construct a new vec:
@@ -275,9 +275,9 @@ impl TT {
     }
 
     fn reinterpret(&self) -> &[TTClusterMemory] {
-        const CLUSTERS_PER_MB: usize = MB / size_of::<TTClusterMemory>();
+        const CLUSTERS_PER_PAGE: usize = HUGE_PAGE_SIZE / size_of::<TTClusterMemory>();
         let ptr = self.table.as_ptr();
-        let len = self.table.len() * CLUSTERS_PER_MB;
+        let len = self.table.len() * CLUSTERS_PER_PAGE;
         // SAFETY: HugePage is more strictly aligned than TTClusterMemory,
         // and all bitpatterns are valid for TTClusterMemory.
         unsafe {
