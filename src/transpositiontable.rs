@@ -9,6 +9,13 @@ use crate::{
     util::depth::{CompactDepthStorage, Depth},
 };
 
+const MB: usize = 0x0020_0000;
+
+#[repr(align(0x0020_0000))]
+pub struct HugePage {
+    _data: [u8; MB],
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Bound {
@@ -192,9 +199,8 @@ impl TTClusterMemory {
 
 const _CLUSTER_SIZE: () = assert!(size_of::<TTClusterMemory>() == 32, "TT Cluster size is suboptimal.");
 
-#[derive(Debug)]
 pub struct TT {
-    table: Vec<TTClusterMemory>,
+    table: Vec<HugePage>,
     age: AtomicU8,
 }
 
@@ -220,18 +226,62 @@ impl TT {
     }
 
     pub fn resize(&mut self, bytes: usize) {
-        let new_len = bytes / size_of::<TTClusterMemory>();
+        let pages = 1.max(bytes / MB);
+        let bytes_to_alloc = pages * MB;
         // dealloc the old table:
         self.table = Vec::new();
         // construct a new vec:
         // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
-            let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
+            let layout = std::alloc::Layout::array::<HugePage>(pages).unwrap();
             let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            self.table = Vec::from_raw_parts(ptr.cast(), new_len, new_len);
+
+            #[cfg(target_os = "linux")]
+            {
+                let mut ret: i64;
+                let madvise: u64 = 28;
+                let addr: u64 = ptr as u64;
+                let length: u64 = bytes_to_alloc as u64;
+                let advice: u64 = 14;
+
+                std::arch::asm!(
+                    "syscall"
+                    , inout("rax") madvise => ret
+                    ,    in("rdi") addr
+                    ,    in("rsi") length
+                    ,    in("rdx") advice
+                    ,   out("r10") _
+                    ,   out("r8" ) _
+                    ,   out("r9" ) _
+                    ,   out("rcx") _
+                    ,   out("r11") _
+                );
+                if ret != 0 {
+                    println!("info error madvise returned {ret}");
+                }
+            }
+
+            // Immediately fault pages for perf:
+            let small_pages = bytes_to_alloc / 4096;
+            for x in 0..small_pages {
+                *ptr.add(x * 4096) = 0;
+            }
+
+            self.table = Vec::from_raw_parts(ptr.cast(), pages, pages);
+        }
+    }
+
+    fn reinterpret(&self) -> &[TTClusterMemory] {
+        const CLUSTERS_PER_MB: usize = MB / size_of::<TTClusterMemory>();
+        let ptr = self.table.as_ptr();
+        let len = self.table.len() * CLUSTERS_PER_MB;
+        // SAFETY: HugePage is more strictly aligned than TTClusterMemory,
+        // and all bitpatterns are valid for TTClusterMemory.
+        unsafe {
+            std::slice::from_raw_parts(ptr.cast(), len)
         }
     }
 
@@ -239,7 +289,7 @@ impl TT {
         #[allow(clippy::collection_is_never_read)]
         std::thread::scope(|s| {
             let mut handles = Vec::with_capacity(threads);
-            for chunk in divide_into_chunks(&self.table, threads) {
+            for chunk in divide_into_chunks(self.reinterpret(), threads) {
                 let handle = s.spawn(move || {
                     for entry in chunk {
                         entry.clear();
@@ -256,7 +306,7 @@ impl TT {
     }
 
     pub fn view(&self) -> TTView {
-        TTView { table: &self.table, age: self.age.load(Ordering::Relaxed) }
+        TTView { table: self.reinterpret(), age: self.age.load(Ordering::Relaxed) }
     }
 
     pub fn increase_age(&self) {
