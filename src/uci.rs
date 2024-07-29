@@ -504,7 +504,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
 
     let stopped = AtomicBool::new(false);
     let (stdin, stdin_reader_handle) = stdin_reader()?;
@@ -616,7 +616,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                         let new_size = conf.hash_mb * MEGABYTE;
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
-                        tt.resize(new_size);
+                        tt.resize(new_size, conf.threads);
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
                             .zip(std::iter::repeat(&pos))
@@ -696,7 +696,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..BENCH_THREADS)
         .zip(std::iter::repeat(&pos))
         .map(|(i, p)| ThreadData::new(i, p, tt.view()))
@@ -757,7 +757,7 @@ pub fn go_benchmark() -> anyhow::Result<()> {
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data =
         (0..THREADS).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p, tt.view())).collect::<Vec<_>>();
     let start = std::time::Instant::now();

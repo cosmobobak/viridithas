@@ -225,7 +225,7 @@ impl TT {
         Self { table: Vec::new(), age: AtomicU8::new(0) }
     }
 
-    pub fn resize(&mut self, bytes: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: usize) {
         let pages = 1.max(bytes / HUGE_PAGE_SIZE);
         let bytes_to_alloc = pages * HUGE_PAGE_SIZE;
         // dealloc the old table:
@@ -266,8 +266,29 @@ impl TT {
 
             // Immediately fault pages for perf:
             let small_pages = bytes_to_alloc / 4096;
-            for x in 0..small_pages {
-                *ptr.add(x * 4096) = 0;
+            if threads <= 1 {
+                for x in 0..small_pages {
+                    *ptr.add(x * 4096) = 0;
+                }
+            } else {
+                #[allow(clippy::collection_is_never_read)]
+                std::thread::scope(|s| {
+                    // dirty pointer smuggling.
+                    let addr = ptr as usize;
+                    let mut handles = Vec::with_capacity(threads);
+                    for t in 0..threads {
+                        handles.push(s.spawn(move || {
+                            let ptr = addr as *mut u8;
+                            let start = small_pages * t / threads;
+                            let end = small_pages * (t + 1) / threads;
+                            for x in start..end {
+                                let write = ptr.add(x * 4096);
+                                assert!(write as usize - addr < addr + bytes_to_alloc);
+                                *write = 0;
+                            }
+                        }));
+                    }
+                });
             }
 
             self.table = Vec::from_raw_parts(ptr.cast(), pages, pages);
@@ -280,9 +301,7 @@ impl TT {
         let len = self.table.len() * CLUSTERS_PER_PAGE;
         // SAFETY: HugePage is more strictly aligned than TTClusterMemory,
         // and all bitpatterns are valid for TTClusterMemory.
-        unsafe {
-            std::slice::from_raw_parts(ptr.cast(), len)
-        }
+        unsafe { std::slice::from_raw_parts(ptr.cast(), len) }
     }
 
     pub fn clear(&self, threads: usize) {

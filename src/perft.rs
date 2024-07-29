@@ -199,7 +199,7 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let mut t = ThreadData::new(0, &pos, tt.view());
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
@@ -215,7 +215,7 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let mut t = ThreadData::new(0, &pos, tt.view());
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
@@ -234,7 +234,7 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let mut t = ThreadData::new(0, &pos, tt.view());
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
