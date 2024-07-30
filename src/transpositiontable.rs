@@ -239,7 +239,7 @@ impl TT {
                 std::alloc::handle_alloc_error(layout);
             }
 
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             {
                 let mut ret: i64;
                 let madvise: u64 = 28;
