@@ -17,7 +17,9 @@ use crate::{
             is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
-            self, movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE}, MoveListEntry, MAX_POSITION_MOVES
+            self,
+            movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE},
+            MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
     },

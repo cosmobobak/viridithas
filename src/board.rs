@@ -13,9 +13,7 @@ use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 
 use crate::{
-    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
-        MoveList,
-    },
+    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList},
     chessmove::Move,
     cuckoo,
     historytable::ContHistIndex,
@@ -23,7 +21,7 @@ use crate::{
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     piece::{Black, Col, Colour, Piece, PieceType, White},
     search::pv::PVariation,
-    squareset::{self, SquareSet},
+    squareset::SquareSet,
     threadlocal::ThreadData,
     uci::CHESS960,
     util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
@@ -1220,8 +1218,9 @@ impl Board {
 
         let undo = self.history.last().expect("No move to unmake!");
 
-        let Undo { castle_perm, ep_square, fifty_move_counter, threats, piece_layout, piece_array, key, pawn_key, .. } =
-            undo;
+        let Undo {
+            castle_perm, ep_square, fifty_move_counter, threats, piece_layout, piece_array, key, pawn_key, ..
+        } = undo;
 
         self.height -= 1;
         self.ply -= 1;
@@ -1453,8 +1452,8 @@ impl Board {
         };
         let needs_disambiguation =
             possible_ambiguous_attackers.count() > 1 && moved_piece.piece_type() != PieceType::Pawn;
-        let from_file = squareset::BB_FILES[m.from().file() as usize];
-        let from_rank = squareset::BB_RANKS[m.from().rank() as usize];
+        let from_file = SquareSet::FILES[m.from().file()];
+        let from_rank = SquareSet::RANKS[m.from().rank()];
         let can_be_disambiguated_by_file = (possible_ambiguous_attackers & from_file).count() == 1;
         let can_be_disambiguated_by_rank = (possible_ambiguous_attackers & from_rank).count() == 1;
         let needs_both = !can_be_disambiguated_by_file && !can_be_disambiguated_by_rank;

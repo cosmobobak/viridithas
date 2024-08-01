@@ -1,10 +1,10 @@
-pub mod piecelayout;
 pub mod movepicker;
+pub mod piecelayout;
 
 use arrayvec::ArrayVec;
 
-pub use self::piecelayout::SquareIter;
 use self::movepicker::{MainSearch, MovePickerMode};
+pub use self::piecelayout::SquareIter;
 
 use super::Board;
 
@@ -15,7 +15,12 @@ use std::{
 };
 
 use crate::{
-    chessmove::{Move, MoveFlags}, lookups, magic, piece::{Black, Col, Colour, PieceType, White}, squareset::SquareSet, uci::CHESS960, util::{Square, RAY_BETWEEN}
+    chessmove::{Move, MoveFlags},
+    lookups, magic,
+    piece::{Black, Col, Colour, PieceType, White},
+    squareset::SquareSet,
+    uci::CHESS960,
+    util::{Square, RAY_BETWEEN},
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;

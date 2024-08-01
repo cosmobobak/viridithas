@@ -2,33 +2,13 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, N
 
 use crate::{board::movegen::SquareIter, util::Square};
 
+/// A set of squares, with support for very fast set operations and in-order iteration.
+/// Most chess engines call this type `Bitboard`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
 pub struct SquareSet {
     inner: u64,
 }
-
-pub static BB_RANKS: [SquareSet; 8] = [
-    SquareSet::RANK_1,
-    SquareSet::RANK_2,
-    SquareSet::RANK_3,
-    SquareSet::RANK_4,
-    SquareSet::RANK_5,
-    SquareSet::RANK_6,
-    SquareSet::RANK_7,
-    SquareSet::RANK_8,
-];
-
-pub static BB_FILES: [SquareSet; 8] = [
-    SquareSet::FILE_A,
-    SquareSet::FILE_B,
-    SquareSet::FILE_C,
-    SquareSet::FILE_D,
-    SquareSet::FILE_E,
-    SquareSet::FILE_F,
-    SquareSet::FILE_G,
-    SquareSet::FILE_H,
-];
 
 impl SquareSet {
     pub const EMPTY: Self = Self { inner: 0 };
@@ -52,6 +32,28 @@ impl SquareSet {
     pub const FILE_H: Self = Self { inner: 0x8080_8080_8080_8080 };
     pub const LIGHT_SQUARES: Self = Self { inner: 0x55AA_55AA_55AA_55AA };
     pub const DARK_SQUARES: Self = Self { inner: 0xAA55_AA55_AA55_AA55 };
+
+    pub const RANKS: [Self; 8] = [
+        Self::RANK_1,
+        Self::RANK_2,
+        Self::RANK_3,
+        Self::RANK_4,
+        Self::RANK_5,
+        Self::RANK_6,
+        Self::RANK_7,
+        Self::RANK_8,
+    ];
+
+    pub const FILES: [Self; 8] = [
+        Self::FILE_A,
+        Self::FILE_B,
+        Self::FILE_C,
+        Self::FILE_D,
+        Self::FILE_E,
+        Self::FILE_F,
+        Self::FILE_G,
+        Self::FILE_H,
+    ];
 
     pub const fn from_inner(inner: u64) -> Self {
         Self { inner }
