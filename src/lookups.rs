@@ -111,7 +111,7 @@ mod tests {
         use crate::lookups::{get_king_attacks, get_knight_attacks};
         use crate::squareset::SquareSet;
         use crate::util::Square;
-        // testing that the attack bitboards match the ones in the python-chess library,
+        // testing that the attack squaresets match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(get_knight_attacks(Square::new(0).unwrap()), SquareSet::from_inner(132_096));
         assert_eq!(get_knight_attacks(Square::new(63).unwrap()), SquareSet::from_inner(9_077_567_998_918_656));

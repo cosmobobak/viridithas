@@ -13,8 +13,7 @@ use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 
 use crate::{
-    board::movegen::{
-        bitboards::{self, bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
+    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
         MoveList,
     },
     chessmove::Move,
@@ -31,14 +30,14 @@ use crate::{
 };
 
 use self::movegen::{
-    bitboards::{BitBoard, Threats},
+    piecelayout::{PieceLayout, Threats},
     MoveListEntry,
 };
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
-    /// The bitboards of all the pieces on the board.
-    pub(crate) pieces: BitBoard,
+    /// The square-sets of all the pieces on the board.
+    pub(crate) pieces: PieceLayout,
     /// An array to accelerate `Board::piece_at()`.
     piece_array: [Option<Piece>; 64],
     /// The side to move.
@@ -68,14 +67,14 @@ pub struct Board {
 /// This is used for debugging.
 #[allow(dead_code, clippy::cognitive_complexity)]
 pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
-    assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn bitboards {msg}");
-    assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight bitboards {msg}");
-    assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop bitboards {msg}");
-    assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook bitboards {msg}");
-    assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen bitboards {msg}");
-    assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white bitboards {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black bitboards {msg}");
+    assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn square-sets {msg}");
+    assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight square-sets {msg}");
+    assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop square-sets {msg}");
+    assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook square-sets {msg}");
+    assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen square-sets {msg}");
+    assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king square-sets {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white square-sets {msg}");
+    assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black square-sets {msg}");
     for sq in Square::all() {
         assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
     }
@@ -112,7 +111,7 @@ impl Board {
 
     pub fn new() -> Self {
         let mut out = Self {
-            pieces: BitBoard::NULL,
+            pieces: PieceLayout::NULL,
             piece_array: [None; 64],
             side: Colour::White,
             ep_sq: None,
@@ -774,25 +773,25 @@ impl Board {
         }
 
         // knights
-        let knight_attacks_from_this_square = bitboards::knight_attacks(sq);
+        let knight_attacks_from_this_square = movegen::knight_attacks(sq);
         if (our_knights & knight_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // bishops, queens
-        let diag_attacks_from_this_square = bitboards::bishop_attacks(sq, blockers);
+        let diag_attacks_from_this_square = movegen::bishop_attacks(sq, blockers);
         if (our_diags & diag_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square = bitboards::rook_attacks(sq, blockers);
+        let ortho_attacks_from_this_square = movegen::rook_attacks(sq, blockers);
         if (our_orthos & ortho_attacks_from_this_square).non_empty() {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square = bitboards::king_attacks(sq);
+        let king_attacks_from_this_square = movegen::king_attacks(sq);
         if (our_king & king_attacks_from_this_square).non_empty() {
             return true;
         }
@@ -865,7 +864,7 @@ impl Board {
             return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
         }
 
-        (to.as_set() & bitboards::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())).non_empty()
+        (to.as_set() & movegen::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())).non_empty()
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -1019,7 +1018,7 @@ impl Board {
             fifty_move_counter: self.fifty_move_counter,
             threats: self.threats,
             cont_hist_index: Some(ContHistIndex { piece, square: m.history_to_square() }),
-            bitboard: self.pieces,
+            piece_layout: self.pieces,
             piece_array: self.piece_array,
             key: self.key,
             pawn_key: self.pawn_key,
@@ -1122,7 +1121,7 @@ impl Board {
             // this would be a function but we run into borrow checker issues
             // because it's currently not smart enough to realize that we're
             // borrowing disjoint parts of the board.
-            let Undo { ep_square, fifty_move_counter, bitboard, .. } = saved_state;
+            let Undo { ep_square, fifty_move_counter, piece_layout, .. } = saved_state;
 
             // self.height -= 1;
             // self.ply -= 1;
@@ -1133,7 +1132,7 @@ impl Board {
             self.ep_sq = ep_square;
             self.fifty_move_counter = fifty_move_counter;
             // self.threats = threats;
-            self.pieces = bitboard;
+            self.pieces = piece_layout;
             // self.piece_array = piece_array;
             return false;
         }
@@ -1221,7 +1220,7 @@ impl Board {
 
         let undo = self.history.last().expect("No move to unmake!");
 
-        let Undo { castle_perm, ep_square, fifty_move_counter, threats, bitboard, piece_array, key, pawn_key, .. } =
+        let Undo { castle_perm, ep_square, fifty_move_counter, threats, piece_layout, piece_array, key, pawn_key, .. } =
             undo;
 
         self.height -= 1;
@@ -1233,7 +1232,7 @@ impl Board {
         self.ep_sq = *ep_square;
         self.fifty_move_counter = *fifty_move_counter;
         self.threats = *threats;
-        self.pieces = *bitboard;
+        self.pieces = *piece_layout;
         self.piece_array = *piece_array;
 
         self.history.pop();
@@ -1321,8 +1320,8 @@ impl Board {
     }
 
     pub fn last_move_was_nullmove(&self) -> bool {
-        if let Some(Undo { bitboard, .. }) = self.history.last() {
-            bitboard.all_kings().is_empty()
+        if let Some(Undo { piece_layout, .. }) = self.history.last() {
+            piece_layout.all_kings().is_empty()
         } else {
             false
         }
@@ -1449,7 +1448,7 @@ impl Board {
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::Pawn {
             SquareSet::EMPTY
         } else {
-            bitboards::attacks_by_type(moved_piece.piece_type(), to_sq, self.pieces.occupied())
+            movegen::attacks_by_type(moved_piece.piece_type(), to_sq, self.pieces.occupied())
                 & self.pieces.piece_bb(moved_piece)
         };
         let needs_disambiguation =

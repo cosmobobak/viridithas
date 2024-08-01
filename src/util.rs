@@ -11,7 +11,7 @@ use std::{
 use crate::{
     board::{
         evaluation::MATE_SCORE,
-        movegen::bitboards::{BitBoard, Threats},
+        movegen::piecelayout::{PieceLayout, Threats},
     },
     historytable::ContHistIndex,
     piece::{Colour, Piece},
@@ -381,7 +381,7 @@ pub struct Undo {
     pub fifty_move_counter: u8,
     pub threats: Threats,
     pub cont_hist_index: Option<ContHistIndex>,
-    pub bitboard: BitBoard,
+    pub piece_layout: PieceLayout,
     pub piece_array: [Option<Piece>; 64],
     pub key: u64,
     pub pawn_key: u64,
@@ -395,7 +395,7 @@ impl Default for Undo {
             fifty_move_counter: 0,
             threats: Threats { all: SquareSet::EMPTY, checkers: SquareSet::EMPTY },
             cont_hist_index: None,
-            bitboard: BitBoard::NULL,
+            piece_layout: PieceLayout::NULL,
             piece_array: [None; 64],
             key: 0,
             pawn_key: 0,

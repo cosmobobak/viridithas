@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign};
 
-use crate::{board::movegen::BitLoop, util::Square};
+use crate::{board::movegen::SquareIter, util::Square};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
@@ -114,13 +114,13 @@ impl SquareSet {
     }
 
     #[allow(clippy::missing_const_for_fn)]
-    pub fn iter(self) -> BitLoop {
-        BitLoop::new(self.inner)
+    pub fn iter(self) -> SquareIter {
+        SquareIter::new(self.inner)
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub const fn first(self) -> Square {
-        debug_assert!(self.inner != 0, "Tried to get first square of empty bitboard");
+        debug_assert!(self.inner != 0, "Tried to get first square of empty square-set");
         // SAFETY: u64::trailing_zeros can only return values within `0..64`,
         // all of which correspond to valid enum variants of Square.
         unsafe { Square::new_unchecked(self.inner.trailing_zeros() as u8) }
@@ -158,7 +158,7 @@ impl SquareSet {
 
 impl IntoIterator for SquareSet {
     type Item = Square;
-    type IntoIter = BitLoop;
+    type IntoIter = SquareIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()

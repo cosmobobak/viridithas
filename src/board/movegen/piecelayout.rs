@@ -1,26 +1,26 @@
 use std::fmt::Display;
 
 use crate::{
-    lookups, magic,
+    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
     nnue::network::FeatureUpdate,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
     util::{File, Rank, Square},
 };
 
-/// Iterator over the squares of a bitboard.
+/// Iterator over the squares of a square-set.
 /// The squares are returned in increasing order.
-pub struct BitLoop {
+pub struct SquareIter {
     value: u64,
 }
 
-impl BitLoop {
+impl SquareIter {
     pub const fn new(value: u64) -> Self {
         Self { value }
     }
 }
 
-impl Iterator for BitLoop {
+impl Iterator for SquareIter {
     type Item = Square;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -39,12 +39,12 @@ impl Iterator for BitLoop {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct BitBoard {
+pub struct PieceLayout {
     pieces: [SquareSet; 6],
     colours: [SquareSet; 2],
 }
 
-impl BitBoard {
+impl PieceLayout {
     pub const NULL: Self = Self::new(
         SquareSet::EMPTY,
         SquareSet::EMPTY,
@@ -210,7 +210,7 @@ impl BitBoard {
                 return Some(Piece::new(colour, piece));
             }
         }
-        panic!("Bit set in colour bitboard for {colour:?} but not in piece bitboards! square is {sq}");
+        panic!("Bit set in colour square-set for {colour:?} but not in piece square-sets! square is {sq}");
     }
 
     fn any_bbs_overlapping(&self) -> bool {
@@ -300,40 +300,6 @@ impl BitBoard {
     }
 }
 
-pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_diagonal_attacks(sq, blockers)
-}
-pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_orthogonal_attacks(sq, blockers)
-}
-// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-// }
-pub fn knight_attacks(sq: Square) -> SquareSet {
-    lookups::get_knight_attacks(sq)
-}
-pub fn king_attacks(sq: Square) -> SquareSet {
-    lookups::get_king_attacks(sq)
-}
-pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
-    if C::WHITE {
-        bb.north_east_one() | bb.north_west_one()
-    } else {
-        bb.south_east_one() | bb.south_west_one()
-    }
-}
-
-pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
-    match pt {
-        PieceType::Bishop => magic::get_diagonal_attacks(sq, blockers),
-        PieceType::Rook => magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::Queen => magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::Knight => lookups::get_knight_attacks(sq),
-        PieceType::King => lookups::get_king_attacks(sq),
-        PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Threats {
     pub all: SquareSet,
@@ -343,7 +309,7 @@ pub struct Threats {
     pub checkers: SquareSet,
 }
 
-impl Display for BitBoard {
+impl Display for PieceLayout {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for rank in Rank::ALL.into_iter().rev() {
             for file in File::ALL {
@@ -357,7 +323,7 @@ impl Display for BitBoard {
             writeln!(f)?;
         }
         if self.any_bbs_overlapping() {
-            writeln!(f, "WARNING: Some bitboards are overlapping")?;
+            writeln!(f, "WARNING: Some square-sets are overlapping")?;
         }
         Ok(())
     }

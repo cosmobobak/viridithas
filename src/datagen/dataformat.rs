@@ -175,15 +175,15 @@ impl Game {
             let eval = eval.get();
             if filter(*mv, i32::from(eval), &board) {
                 let mut bbs = [0; 8];
-                let bitboard = &board.pieces;
-                bbs[0] = bitboard.occupied_co(Colour::White).inner();
-                bbs[1] = bitboard.occupied_co(Colour::Black).inner();
-                bbs[2] = bitboard.of_type(PieceType::Pawn).inner();
-                bbs[3] = bitboard.of_type(PieceType::Knight).inner();
-                bbs[4] = bitboard.of_type(PieceType::Bishop).inner();
-                bbs[5] = bitboard.of_type(PieceType::Rook).inner();
-                bbs[6] = bitboard.of_type(PieceType::Queen).inner();
-                bbs[7] = bitboard.of_type(PieceType::King).inner();
+                let piece_layout = &board.pieces;
+                bbs[0] = piece_layout.occupied_co(Colour::White).inner();
+                bbs[1] = piece_layout.occupied_co(Colour::Black).inner();
+                bbs[2] = piece_layout.of_type(PieceType::Pawn).inner();
+                bbs[3] = piece_layout.of_type(PieceType::Knight).inner();
+                bbs[4] = piece_layout.of_type(PieceType::Bishop).inner();
+                bbs[5] = piece_layout.of_type(PieceType::Rook).inner();
+                bbs[6] = piece_layout.of_type(PieceType::Queen).inner();
+                bbs[7] = piece_layout.of_type(PieceType::King).inner();
                 callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,

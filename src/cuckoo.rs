@@ -1,5 +1,5 @@
 use crate::{
-    board::movegen::bitboards::attacks_by_type,
+    board::movegen::attacks_by_type,
     chessmove::Move,
     lookups::{PIECE_KEYS, SIDE_KEY},
     piece::{Piece, PieceType},

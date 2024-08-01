@@ -17,9 +17,7 @@ use crate::{
             is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE, MINIMUM_TB_WIN_SCORE,
         },
         movegen::{
-            bitboards,
-            movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE},
-            MoveListEntry, MAX_POSITION_MOVES,
+            self, movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE}, MoveListEntry, MAX_POSITION_MOVES
         },
         Board,
     },
@@ -1352,12 +1350,12 @@ impl Board {
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn || next_victim == PieceType::Bishop || next_victim == PieceType::Queen {
-                attackers |= bitboards::bishop_attacks(to, occupied) & diag_sliders;
+                attackers |= movegen::bishop_attacks(to, occupied) & diag_sliders;
             }
 
             // orthogonal moves reveal rooks and queens:
             if next_victim == PieceType::Rook || next_victim == PieceType::Queen {
-                attackers |= bitboards::rook_attacks(to, occupied) & orth_sliders;
+                attackers |= movegen::rook_attacks(to, occupied) & orth_sliders;
             }
 
             attackers &= occupied;

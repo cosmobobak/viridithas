@@ -13,7 +13,7 @@ macro_rules! cfor {
     }
 }
 
-/// The number of relevant bits in a bitboard.
+/// The number of relevant bits in the bitboard representation of the attack squareset.
 /// For example, on a1, a bishop has 7 squares it can move to
 /// along the long diagonal - but the contents of h8 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 6.
@@ -29,7 +29,7 @@ static BISHOP_REL_BITS: [i32; 64] = [
     6, 5, 5, 5, 5, 5, 5, 6,
 ];
 
-/// The number of relevant bits in a bitboard.
+/// The number of relevant bits in the bitboard representation of the attack squareset.
 /// For example, on a1, a rook has 14 squares it can move to
 /// along the file or rank - but the contents of a8 and h1 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 12.

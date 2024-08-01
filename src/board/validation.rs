@@ -10,7 +10,7 @@ use crate::{
 #[cfg(debug_assertions)]
 use crate::errors::PositionValidityError;
 
-use super::{movegen::bitboards::BitLoop, Board};
+use super::{movegen::piecelayout::SquareIter, Board};
 
 impl Board {
     #[cfg(debug_assertions)]
@@ -23,12 +23,12 @@ impl Board {
             return Err(format!("invalid side: {:?}", self.side));
         }
 
-        // check bitboard / piece array coherency
+        // check square-set / piece array coherency
         for sq in Square::all() {
             let piece = self.piece_array[sq];
             if self.pieces.piece_at(sq) != piece {
                 return Err(format!(
-                    "bitboard / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
+                    "square-set / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
                     sq,
                     piece,
                     self.piece_at(sq)

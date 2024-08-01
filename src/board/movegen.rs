@@ -1,9 +1,9 @@
-pub mod bitboards;
+pub mod piecelayout;
 pub mod movepicker;
 
 use arrayvec::ArrayVec;
 
-pub use self::bitboards::BitLoop;
+pub use self::piecelayout::SquareIter;
 use self::movepicker::{MainSearch, MovePickerMode};
 
 use super::Board;
@@ -15,11 +15,7 @@ use std::{
 };
 
 use crate::{
-    chessmove::{Move, MoveFlags},
-    piece::{Black, Col, Colour, PieceType, White},
-    squareset::SquareSet,
-    uci::CHESS960,
-    util::{Square, RAY_BETWEEN},
+    chessmove::{Move, MoveFlags}, lookups, magic, piece::{Black, Col, Colour, PieceType, White}, squareset::SquareSet, uci::CHESS960, util::{Square, RAY_BETWEEN}
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -88,6 +84,40 @@ impl Display for MoveList {
         }
         writeln!(f, "  {} ${}", self.inner[self.inner.len() - 1].mov, self.inner[self.inner.len() - 1].score)?;
         write!(f, "]")
+    }
+}
+
+pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    magic::get_diagonal_attacks(sq, blockers)
+}
+pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    magic::get_orthogonal_attacks(sq, blockers)
+}
+// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
+// }
+pub fn knight_attacks(sq: Square) -> SquareSet {
+    lookups::get_knight_attacks(sq)
+}
+pub fn king_attacks(sq: Square) -> SquareSet {
+    lookups::get_king_attacks(sq)
+}
+pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
+    if C::WHITE {
+        bb.north_east_one() | bb.north_west_one()
+    } else {
+        bb.south_east_one() | bb.south_west_one()
+    }
+}
+
+pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
+    match pt {
+        PieceType::Bishop => magic::get_diagonal_attacks(sq, blockers),
+        PieceType::Rook => magic::get_orthogonal_attacks(sq, blockers),
+        PieceType::Queen => magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers),
+        PieceType::Knight => lookups::get_knight_attacks(sq),
+        PieceType::King => lookups::get_king_attacks(sq),
+        PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
     }
 }
 
@@ -250,7 +280,7 @@ impl Board {
 
         if self.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
-            let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+            let moves = king_attacks(our_king_sq) & !self.threats.all;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(our_king_sq, to));
             }
@@ -273,7 +303,7 @@ impl Board {
         // knights
         let our_knights = self.pieces.knights::<C>();
         for sq in our_knights {
-            let moves = bitboards::knight_attacks(sq) & valid_target_squares;
+            let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -283,7 +313,7 @@ impl Board {
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+        let moves = king_attacks(our_king_sq) & !self.threats.all;
         for to in moves & their_pieces {
             move_list.push::<true>(Move::new(our_king_sq, to));
         }
@@ -295,7 +325,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.diags::<C>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
-            let moves = bitboards::bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -307,7 +337,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.orthos::<C>();
         for sq in our_orthogonal_sliders {
-            let moves = bitboards::rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -340,7 +370,7 @@ impl Board {
 
         if self.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
-            let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+            let moves = king_attacks(our_king_sq) & !self.threats.all;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(our_king_sq, to));
             }
@@ -364,14 +394,14 @@ impl Board {
         let our_knights = self.pieces.knights::<C>();
         let their_pieces = self.pieces.their_pieces::<C>();
         for sq in our_knights {
-            let moves = bitboards::knight_attacks(sq) & valid_target_squares;
+            let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+        let moves = king_attacks(our_king_sq) & !self.threats.all;
         for to in moves & their_pieces {
             move_list.push::<true>(Move::new(our_king_sq, to));
         }
@@ -380,7 +410,7 @@ impl Board {
         let our_diagonal_sliders = self.pieces.diags::<C>();
         let blockers = self.pieces.occupied();
         for sq in our_diagonal_sliders {
-            let moves = bitboards::bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -389,7 +419,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.orthos::<C>();
         for sq in our_orthogonal_sliders {
-            let moves = bitboards::rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
                 move_list.push::<true>(Move::new(sq, to));
             }
@@ -534,7 +564,7 @@ impl Board {
 
         if self.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
-            let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+            let moves = king_attacks(our_king_sq) & !self.threats.all;
             for to in moves & freespace {
                 move_list.push::<false>(Move::new(our_king_sq, to));
             }
@@ -553,14 +583,14 @@ impl Board {
         // knights
         let our_knights = self.pieces.knights::<C>();
         for sq in our_knights {
-            let moves = bitboards::knight_attacks(sq) & valid_target_squares;
+            let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }
         }
 
         // kings
-        let moves = bitboards::king_attacks(our_king_sq) & !self.threats.all;
+        let moves = king_attacks(our_king_sq) & !self.threats.all;
         for to in moves & !blockers {
             move_list.push::<false>(Move::new(our_king_sq, to));
         }
@@ -568,7 +598,7 @@ impl Board {
         // bishops and queens
         let our_diagonal_sliders = self.pieces.diags::<C>();
         for sq in our_diagonal_sliders {
-            let moves = bitboards::bishop_attacks(sq, blockers) & valid_target_squares;
+            let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }
@@ -577,7 +607,7 @@ impl Board {
         // rooks and queens
         let our_orthogonal_sliders = self.pieces.orthos::<C>();
         for sq in our_orthogonal_sliders {
-            let moves = bitboards::rook_attacks(sq, blockers) & valid_target_squares;
+            let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
                 move_list.push::<false>(Move::new(sq, to));
             }

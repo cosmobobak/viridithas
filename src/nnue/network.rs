@@ -8,7 +8,7 @@ use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use crate::{
-    board::{movegen::bitboards::BitBoard, Board},
+    board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
     nnue::simd::{Vector16, Vector32},
     piece::{Colour, Piece, PieceType},
@@ -263,14 +263,14 @@ pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
     accs: [Accumulator; BUCKETS * 2],
-    board_states: [[BitBoard; BUCKETS * 2]; 2],
+    board_states: [[PieceLayout; BUCKETS * 2]; 2],
 }
 
 impl BucketAccumulatorCache {
     #[allow(clippy::too_many_lines)]
     pub fn load_accumulator_for_position(
         &mut self,
-        board_state: BitBoard,
+        board_state: PieceLayout,
         pov_update: PovUpdate,
         acc: &mut Accumulator,
     ) {
@@ -381,7 +381,7 @@ impl NNUEState {
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
-            *board_state = BitBoard::NULL;
+            *board_state = PieceLayout::NULL;
         }
 
         // refresh the first accumulator
