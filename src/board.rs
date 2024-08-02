@@ -9,8 +9,9 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use rand::prelude::SliceRandom;
-use rand::rngs::ThreadRng;
+
+#[cfg(feature = "datagen")]
+use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
     board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList},
@@ -27,10 +28,7 @@ use crate::{
     util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
 };
 
-use self::movegen::{
-    piecelayout::{PieceLayout, Threats},
-    MoveListEntry,
-};
+use self::movegen::piecelayout::{PieceLayout, Threats};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
@@ -1723,11 +1721,11 @@ impl Board {
         false
     }
 
-    #[allow(dead_code /* for datagen */)]
+    #[cfg(feature = "datagen")]
     pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
         let mut ml = MoveList::new();
         self.generate_moves(&mut ml);
-        let MoveListEntry { mov, .. } = ml.choose(rng)?;
+        let self::movegen::MoveListEntry { mov, .. } = ml.choose(rng)?;
         self.make_move(*mov, t);
         Some(*mov)
     }

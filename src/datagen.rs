@@ -21,6 +21,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context};
 use bulletformat::ChessBoard;
+use dataformat::Filter;
 use rand::Rng;
 
 use crate::{
@@ -629,31 +630,12 @@ impl FromStr for DataGenLimit {
     }
 }
 
-fn should_filter(mv: Move, eval: i32, board: &Board) -> bool {
-    if board.ply() < MIN_SAVE_PLY {
-        return true;
-    }
-    if is_game_theoretic_score(eval) {
-        return true;
-    }
-    if board.pieces.occupied().count() < 4 {
-        return true;
-    }
-    if board.is_tactical(mv) {
-        return true;
-    }
-    if board.in_check() {
-        return true;
-    }
-    false
-}
-
 /// Unpacks the variable-length game format into either bulletformat or marlinformat records,
 /// filtering as it goes.
 pub fn run_splat(
     input: &Path,
     output: &Path,
-    filter: bool,
+    cfg_path: Option<&Path>,
     marlinformat: bool,
     limit: Option<usize>,
 ) -> anyhow::Result<()> {
@@ -666,12 +648,17 @@ pub fn run_splat(
         bail!("Output file already exists.");
     }
 
-    let filter_fn = |mv: Move, eval: i32, board: &Board| {
-        if !filter {
-            return true;
-        }
-        !should_filter(mv, eval, board)
+    let filter_state = if let Some(path) = cfg_path {
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("Failed to read filter config file at {path:?}"))?;
+        toml::from_str(&text).with_context(|| {
+            let default = toml::to_string_pretty(&Filter::default()).unwrap();
+            format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
+        })?
+    } else {
+        Filter::default()
     };
+    let filter_fn = |mv: Move, eval: i32, board: &Board| !filter_state.should_filter(mv, eval, board);
 
     // open the input file
     let input_file = File::open(input).with_context(|| "Failed to create input file")?;
@@ -1015,6 +1002,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     let stdout_lock = Mutex::new(());
     let stdout_lock = &stdout_lock;
 
+    let filter_state = Filter::default();
     let (total_count, filtered_count) = std::thread::scope(|s| -> anyhow::Result<(u64, u64)> {
         let mut thread_handles = Vec::new();
         for path in paths {
@@ -1029,7 +1017,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
                     match dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
                         Ok(game) => {
                             count += game.len() as u64;
-                            filtered += game.filter_pass_count(|mv, eval, board| !should_filter(mv, eval, board));
+                            filtered += game.filter_pass_count(|mv, eval, board| !filter_state.should_filter(mv, eval, board));
                             move_buffer = game.into_move_buffer();
                         }
                         Err(error) => {

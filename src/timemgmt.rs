@@ -48,9 +48,21 @@ pub enum SearchLimit {
     Depth(Depth),
     Time(u64),
     Nodes(u64),
-    SoftNodes { soft_limit: u64, hard_limit: u64 },
-    Mate { ply: usize },
-    Dynamic { our_clock: u64, their_clock: u64, our_inc: u64, their_inc: u64, moves_to_go: Option<u64> },
+    Mate {
+        ply: usize,
+    },
+    Dynamic {
+        our_clock: u64,
+        their_clock: u64,
+        our_inc: u64,
+        their_inc: u64,
+        moves_to_go: Option<u64>,
+    },
+    #[cfg(feature = "datagen")]
+    SoftNodes {
+        soft_limit: u64,
+        hard_limit: u64,
+    },
 }
 
 impl Default for SearchLimit {
@@ -223,6 +235,7 @@ impl TimeManager {
                 }
                 past_limit
             }
+            #[cfg(feature = "datagen")]
             SearchLimit::SoftNodes { hard_limit, .. } => {
                 // this should never *really* return true, but we do this in case of search explosions.
                 let past_limit = nodes_so_far >= hard_limit;
@@ -235,9 +248,11 @@ impl TimeManager {
     }
 
     /// If we have used enough time that stopping after finishing a depth would be good here.
+    #[allow(unused_variables)]
     pub fn is_past_opt_time(&self, nodes: u64) -> bool {
         match self.limit {
             SearchLimit::Dynamic { .. } => self.time_since_start() >= self.opt_time,
+            #[cfg(feature = "datagen")]
             SearchLimit::SoftNodes { soft_limit, .. } => nodes >= soft_limit,
             _ => false,
         }
@@ -251,8 +266,14 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
+    #[allow(clippy::unused_self)]
     pub const fn is_soft_nodes(&self) -> bool {
-        matches!(self.limit, SearchLimit::SoftNodes { .. })
+        #[cfg(feature = "datagen")]
+        {
+            matches!(self.limit, SearchLimit::SoftNodes { .. })
+        }
+        #[cfg(not(feature = "datagen"))]
+        false
     }
 
     pub const fn solved_breaker<ThTy: SmpThreadType>(&self, value: i32, depth: usize) -> ControlFlow<()> {

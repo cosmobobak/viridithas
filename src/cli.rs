@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 
 use clap::Parser;
 
@@ -20,14 +19,16 @@ pub enum Subcommands {
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
     /// Count the number of positions contained within one or more packed game records.
+    #[cfg(feature = "datagen")]
     CountPositions {
         /// Path to input packed game record, or directory containing only packed game records.
-        input: PathBuf,
+        input: std::path::PathBuf,
     },
     /// Analyse a packed game record
+    #[cfg(feature = "datagen")]
     Analyse {
         /// Path to input packed game record.
-        input: PathBuf,
+        input: std::path::PathBuf,
     },
     /// Emit configuration for SPSA
     Spsa {
@@ -35,11 +36,12 @@ pub enum Subcommands {
         json: bool,
     },
     /// Splat a packed game record into bulletformat records (or other format)
+    #[cfg(feature = "datagen")]
     Splat {
         /// Path to input packed game record.
-        input: PathBuf,
+        input: std::path::PathBuf,
         /// Output path.
-        output: PathBuf,
+        output: std::path::PathBuf,
         /// Splat into marlinformat instead of bulletformat.
         #[clap(long)]
         marlinformat: bool,
@@ -49,8 +51,12 @@ pub enum Subcommands {
         /// Limit the number of games to convert.
         #[clap(long, value_name = "N")]
         limit: Option<usize>,
+        /// Override the filter settings.
+        #[clap(long)]
+        cfg_path: Option<std::path::PathBuf>,
     },
     /// Generate self-play data
+    #[cfg(feature = "datagen")]
     Datagen {
         /// Number of games to play
         #[clap(long, value_name = "N")]
@@ -60,7 +66,7 @@ pub enum Subcommands {
         threads: usize,
         /// Path to a tablebases folder
         #[clap(long, value_name = "PATH")]
-        tbs: Option<PathBuf>,
+        tbs: Option<std::path::PathBuf>,
         /// Limit by depth instead of nodes
         #[clap(long)]
         depth_limit: bool,

@@ -1,5 +1,5 @@
 use crate::{
-    board::{Board, GameOutcome},
+    board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
     chessmove::Move,
     piece::{Colour, PieceType},
     tablebases::probe::WDL,
@@ -7,8 +7,64 @@ use crate::{
 
 use self::marlinformat::{util::I16Le, PackedBoard};
 use anyhow::{anyhow, Context};
+use serde::{Deserialize, Serialize};
 
 mod marlinformat;
+
+/// The configuration for a filter that can be applied to a game during unpacking.
+#[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize)]
+#[allow(clippy::struct_field_names)]
+pub struct Filter {
+    /// Filter out positions that have a ply count less than this value.
+    min_ply: usize,
+    /// Filter out positions that have fewer pieces on the board than this value.
+    min_pieces: u32,
+    /// Filter out positions that have an absolute evaluation above this value.
+    max_eval: i32,
+    /// Filter out positions where a tactical move was made.
+    filter_tactical: bool,
+    /// Filter out positions that are in check.
+    filter_check: bool,
+    /// Filter out positions where a castling move was made.
+    filter_castling: bool,
+}
+
+impl Default for Filter {
+    fn default() -> Self {
+        Self {
+            min_ply: 16,
+            min_pieces: 4,
+            max_eval: MINIMUM_TB_WIN_SCORE,
+            filter_tactical: true,
+            filter_check: true,
+            filter_castling: false,
+        }
+    }
+}
+
+impl Filter {
+    pub fn should_filter(&self, mv: Move, eval: i32, board: &Board) -> bool {
+        if board.ply() < self.min_ply {
+            return true;
+        }
+        if eval.abs() >= self.max_eval {
+            return true;
+        }
+        if board.pieces.occupied().count() < self.min_pieces {
+            return true;
+        }
+        if self.filter_tactical && board.is_tactical(mv) {
+            return true;
+        }
+        if self.filter_check && board.in_check() {
+            return true;
+        }
+        if self.filter_castling && mv.is_castle() {
+            return true;
+        }
+        false
+    }
+}
 
 /// A game annotated with evaluations starting from a potentially custom position, with support for efficent binary serialisation and deserialisation.
 pub struct Game {

@@ -7,12 +7,14 @@
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "datagen")]
+mod datagen;
+
 mod bench;
 mod board;
 mod chessmove;
 mod cli;
 mod cuckoo;
-mod datagen;
 mod errors;
 mod historytable;
 mod image;
@@ -35,7 +37,9 @@ mod transpositiontable;
 mod uci;
 mod util;
 
-use cli::Subcommands::{Analyse, Bench, CountPositions, Datagen, Perft, Splat, Spsa, VisNNUE};
+use cli::Subcommands::{Bench, Perft, Spsa, VisNNUE};
+#[cfg(feature = "datagen")]
+use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -56,7 +60,9 @@ fn main() -> anyhow::Result<()> {
     match cli.subcommand {
         Some(Perft) => perft::gamut(),
         Some(VisNNUE) => nnue::network::visualise_nnue(),
+        #[cfg(feature = "datagen")]
         Some(Analyse { input }) => datagen::dataset_stats(&input),
+        #[cfg(feature = "datagen")]
         Some(CountPositions { input }) => datagen::dataset_count(&input),
         Some(Spsa { json }) => {
             if json {
@@ -66,13 +72,15 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Some(Splat { input, marlinformat, pgn, output, limit }) => {
+        #[cfg(feature = "datagen")]
+        Some(Splat { input, marlinformat, pgn, output, limit, cfg_path }) => {
             if pgn {
                 datagen::run_topgn(&input, &output, limit)
             } else {
-                datagen::run_splat(&input, &output, true, marlinformat, limit)
+                datagen::run_splat(&input, &output, cfg_path.as_deref(), marlinformat, limit)
             }
         }
+        #[cfg(feature = "datagen")]
         Some(Datagen { games, threads, tbs, depth_limit, dfrc }) => {
             datagen::gen_data_main(datagen::DataGenOptionsBuilder {
                 num_games: games,

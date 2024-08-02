@@ -32,6 +32,7 @@ pub struct WdlDtzResult {
 
 /// Loads Syzygy tablebases stored in `syzygy_path` location.
 pub fn init(syzygy_path: &str) {
+    // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
         let path = CString::new(syzygy_path).unwrap();
@@ -46,6 +47,7 @@ pub fn get_max_pieces_count() -> u8 {
     #[cfg(feature = "syzygy")]
     {
         let user_limit = uci::SYZYGY_PROBE_LIMIT.load(std::sync::atomic::Ordering::SeqCst);
+        // SAFETY: Not much.
         let hard_limit = unsafe { TB_LARGEST as u8 };
         std::cmp::min(user_limit, hard_limit)
     }
@@ -63,6 +65,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
         return None;
     }
 
+    // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
         let wdl = tb_probe_wdl(
@@ -96,6 +99,8 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
 pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     const WHITE: bool = true;
     const BLACK: bool = false;
+
+    // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
         let result = tb_probe_root(
