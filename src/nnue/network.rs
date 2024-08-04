@@ -1,6 +1,5 @@
 use std::{
     fmt::{Debug, Display},
-    mem,
     ops::{Deref, DerefMut},
 };
 
@@ -78,8 +77,7 @@ const QAB: i32 = QA * QB;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
-// SAFETY: alignment to u16 is guaranteed because transmute() is a copy operation.
-pub static NNUE: NNUEParams = unsafe { mem::transmute(*include_bytes!("../../viridithas.nnue")) };
+pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 #[repr(C)]
 pub struct NNUEParams {
@@ -90,6 +88,20 @@ pub struct NNUEParams {
 }
 
 impl NNUEParams {
+    pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
+        // SAFETY: NNUEParams can be zeroed.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            let region = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
+            zstd::stream::copy_decode(COMPRESSED_NNUE, region)?;
+            Ok(Box::from_raw(ptr.cast()))
+        }
+    }
+
     pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         // remap pieces to keep opposite colours together
@@ -270,6 +282,7 @@ impl BucketAccumulatorCache {
     #[allow(clippy::too_many_lines)]
     pub fn load_accumulator_for_position(
         &mut self,
+        nnue_params: &NNUEParams,
         board_state: PieceLayout,
         pov_update: PovUpdate,
         acc: &mut Accumulator,
@@ -293,7 +306,7 @@ impl BucketAccumulatorCache {
             }
         });
 
-        let weights = NNUE.select_feature_weights(bucket);
+        let weights = nnue_params.select_feature_weights(bucket);
 
         simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
@@ -342,7 +355,7 @@ pub struct NNUEState {
 impl NNUEState {
     /// Create a new `NNUEState`.
     #[allow(clippy::unnecessary_box_returns)]
-    pub fn new(board: &Board) -> Box<Self> {
+    pub fn new(board: &Board, nnue_params: &NNUEParams) -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // NNUEState is INPUT * 2 * 2 + LAYER_1_SIZE * ACC_STACK_SIZE * 2 * 2 + 8 bytes
         // at time of writing, this adds up to 396,296 bytes.
@@ -365,19 +378,19 @@ impl NNUEState {
             Box::from_raw(ptr.cast())
         };
 
-        net.reinit_from(board);
+        net.reinit_from(board, nnue_params);
 
         net
     }
 
     /// Reinitialise the state from a board.
-    pub fn reinit_from(&mut self, board: &Board) {
+    pub fn reinit_from(&mut self, board: &Board, nnue_params: &NNUEParams) {
         // set the current accumulator to the first one
         self.current_acc = 0;
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.init(&NNUE.feature_bias, PovUpdate::BOTH);
+            acc.init(&nnue_params.feature_bias, PovUpdate::BOTH);
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -386,11 +399,13 @@ impl NNUEState {
 
         // refresh the first accumulator
         self.bucket_cache.load_accumulator_for_position(
+            nnue_params,
             board.pieces,
             PovUpdate { white: true, black: false },
             &mut self.accumulators[0],
         );
         self.bucket_cache.load_accumulator_for_position(
+            nnue_params,
             board.pieces,
             PovUpdate { white: false, black: true },
             &mut self.accumulators[0],
@@ -425,7 +440,7 @@ impl NNUEState {
         }
     }
 
-    fn apply_lazy_updates(&mut self, board: &Board, view: Colour) {
+    fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, view: Colour) {
         let mut curr_index = self.current_acc;
         loop {
             curr_index -= 1;
@@ -440,7 +455,7 @@ impl NNUEState {
         let black_king = board.king_sq(Colour::Black);
 
         loop {
-            self.materialise_new_acc_from(white_king, black_king, pov_update, curr_index + 1);
+            self.materialise_new_acc_from(white_king, black_king, pov_update, curr_index + 1, nnue_params);
 
             self.accumulators[curr_index + 1].correct[view] = true;
 
@@ -452,13 +467,14 @@ impl NNUEState {
     }
 
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
-    pub fn force(&mut self, board: &Board) {
+    pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
             if !self.accumulators[self.current_acc].correct[colour] {
                 if self.can_efficiently_update(colour) {
-                    self.apply_lazy_updates(board, colour);
+                    self.apply_lazy_updates(nnue_params, board, colour);
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
+                        nnue_params,
                         board.pieces,
                         PovUpdate::colour(colour),
                         &mut self.accumulators[self.current_acc],
@@ -474,6 +490,7 @@ impl NNUEState {
         black_king: Square,
         pov_update: PovUpdate,
         create_at_idx: usize,
+        nnue_params: &NNUEParams,
     ) {
         let (front, back) = self.accumulators.split_at_mut(create_at_idx);
         let src = front.last().unwrap();
@@ -482,15 +499,15 @@ impl NNUEState {
         match (src.update_buffer.adds(), src.update_buffer.subs()) {
             // quiet or promotion
             (&[add], &[sub]) => {
-                Self::apply_quiet(white_king, black_king, add, sub, pov_update, src, tgt);
+                Self::apply_quiet(white_king, black_king, add, sub, pov_update, src, tgt, nnue_params);
             }
             // capture
             (&[add], &[sub1, sub2]) => {
-                Self::apply_capture(white_king, black_king, add, sub1, sub2, pov_update, src, tgt);
+                Self::apply_capture(white_king, black_king, add, sub1, sub2, pov_update, src, tgt, nnue_params);
             }
             // castling
             (&[add1, add2], &[sub1, sub2]) => {
-                Self::apply_castling(white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt);
+                Self::apply_castling(white_king, black_king, add1, add2, sub1, sub2, pov_update, src, tgt, nnue_params);
             }
             (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
         }
@@ -506,14 +523,15 @@ impl NNUEState {
         update: PovUpdate,
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
+        nnue_params: &NNUEParams,
     ) {
         let (white_add, black_add) = feature::indices(white_king, black_king, add);
         let (white_sub, black_sub) = feature::indices(white_king, black_king, sub);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUE.select_feature_weights(white_bucket);
-        let black_bucket = NNUE.select_feature_weights(black_bucket);
+        let white_bucket = nnue_params.select_feature_weights(white_bucket);
+        let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
@@ -534,6 +552,7 @@ impl NNUEState {
         update: PovUpdate,
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
+        nnue_params: &NNUEParams,
     ) {
         let (white_add, black_add) = feature::indices(white_king, black_king, add);
         let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
@@ -541,8 +560,8 @@ impl NNUEState {
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUE.select_feature_weights(white_bucket);
-        let black_bucket = NNUE.select_feature_weights(black_bucket);
+        let white_bucket = nnue_params.select_feature_weights(white_bucket);
+        let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add_sub2(
@@ -578,6 +597,7 @@ impl NNUEState {
         update: PovUpdate,
         source_acc: &Accumulator,
         target_acc: &mut Accumulator,
+        nnue_params: &NNUEParams,
     ) {
         let (white_add1, black_add1) = feature::indices(white_king, black_king, add1);
         let (white_add2, black_add2) = feature::indices(white_king, black_king, add2);
@@ -586,8 +606,8 @@ impl NNUEState {
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = NNUE.select_feature_weights(white_bucket);
-        let black_bucket = NNUE.select_feature_weights(black_bucket);
+        let white_bucket = nnue_params.select_feature_weights(white_bucket);
+        let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
             simd::vector_add2_sub2(
@@ -614,16 +634,16 @@ impl NNUEState {
     }
 
     /// Evaluate the final layer on the partial activations.
-    pub fn evaluate(&self, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nnue_params: &NNUEParams, stm: Colour, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = flatten(us, them, &NNUE.output_weights[out]);
+        let output = flatten(us, them, &nnue_params.output_weights[out]);
 
-        (output + i32::from(NNUE.output_bias[out])) * SCALE / QAB
+        (output + i32::from(nnue_params.output_bias[out])) * SCALE / QAB
     }
 }
 
@@ -682,10 +702,10 @@ fn flatten(
 
 /// Benchmark the inference portion of the NNUE evaluation.
 /// (everything after the feature extraction)
-pub fn inference_benchmark(state: &NNUEState) {
+pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
-        std::hint::black_box(state.evaluate(Colour::White, 0));
+        std::hint::black_box(state.evaluate(nnue_params, Colour::White, 0));
     }
     let elapsed = start.elapsed();
     let nanos = elapsed.as_nanos();
@@ -694,15 +714,16 @@ pub fn inference_benchmark(state: &NNUEState) {
 }
 
 pub fn visualise_nnue() -> anyhow::Result<()> {
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
     // create folder for the images
     let path = std::path::PathBuf::from("nnue-visualisations");
     std::fs::create_dir_all(&path).with_context(|| "Failed to create NNUE visualisations folder.")?;
     for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
-        crate::nnue::network::NNUE.visualise_neuron(neuron, &path);
+        nnue_params.visualise_neuron(neuron, &path);
     }
-    let (min, max) = crate::nnue::network::NNUE.min_max_feature_weight();
+    let (min, max) = nnue_params.min_max_feature_weight();
     println!("Min / Max L1 values: {min} / {max}");
-    let (min, max) = crate::nnue::network::NNUE.min_max_output_weight();
+    let (min, max) = nnue_params.min_max_output_weight();
     println!("Min / Max L2 values: {min} / {max}");
     Ok(())
 }

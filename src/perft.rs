@@ -157,6 +157,7 @@ mod tests {
 
     use crate::{
         chessmove::Move,
+        nnue::network::NNUEParams,
         piece::PieceType,
         transpositiontable::TT,
         util::{Square, MEGABYTE},
@@ -200,7 +201,8 @@ mod tests {
         let mut pos = Board::default();
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16);
-        let mut t = ThreadData::new(0, &pos, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
@@ -216,7 +218,8 @@ mod tests {
         let mut pos = Board::default();
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16);
-        let mut t = ThreadData::new(0, &pos, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });
@@ -235,7 +238,8 @@ mod tests {
         pos.set_from_fen(TEST_FEN).unwrap();
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16);
-        let mut t = ThreadData::new(0, &pos, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
             pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
         });

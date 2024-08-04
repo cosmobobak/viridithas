@@ -31,6 +31,7 @@ use crate::{
     },
     chessmove::Move,
     datagen::dataformat::Game,
+    nnue::network::NNUEParams,
     piece::{Colour, PieceType},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -142,6 +143,8 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     })
     .with_context(|| "Failed to set Ctrl-C handler")?;
 
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+
     let options: DataGenOptions = cli_config.build();
 
     CHESS960.store(options.generate_dfrc, Ordering::SeqCst);
@@ -190,7 +193,8 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
             .map(|id| {
                 let opt_ref = &options;
                 let path_ref = &data_dir;
-                s.spawn(move || generate_on_thread(id, opt_ref, path_ref))
+                let nnue_params_ref = &nnue_params;
+                s.spawn(move || generate_on_thread(id, opt_ref, path_ref, nnue_params_ref))
             })
             .collect::<Vec<_>>();
         for handle in thread_handles {
@@ -243,6 +247,7 @@ fn generate_on_thread(
     id: usize,
     options: &DataGenOptions,
     data_dir: &Path,
+    nnue_params: &NNUEParams,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     // this rng is different between each thread
     // (https://rust-random.github.io/book/guide-parallel.html)
@@ -251,7 +256,7 @@ fn generate_on_thread(
     let mut board = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut thread_data = ThreadData::new(0, &board, tt.view());
+    let mut thread_data = ThreadData::new(0, &board, tt.view(), nnue_params);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
@@ -319,7 +324,7 @@ fn generate_on_thread(
         } else {
             board.set_startpos();
         }
-        thread_data.nnue.reinit_from(&board);
+        thread_data.nnue.reinit_from(&board, thread_data.nnue_params);
         tt.clear(1);
         info.set_up_for_search();
         // generate game
