@@ -222,6 +222,7 @@ mod tests {
             Board,
         },
         magic,
+        nnue::network::NNUEParams,
         threadlocal::ThreadData,
         timemgmt::TimeManager,
         transpositiontable::TT,
@@ -242,7 +243,8 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &position, tt.view(), &nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Bxd5+")));
@@ -262,7 +264,8 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &position, tt.view(), &nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Qxd5")));
@@ -282,7 +285,8 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &position, tt.view(), &nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Qxd4")));
@@ -302,7 +306,8 @@ mod tests {
         let mut info = SearchInfo { time_manager, ..SearchInfo::new(&stopped, &nodes) };
         let mut tt = TT::new();
         tt.resize(MEGABYTE);
-        let mut t = ThreadData::new(0, &position, tt.view());
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &position, tt.view(), &nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(position.san(mov.unwrap()).as_deref(), Some("Bxd4+")));

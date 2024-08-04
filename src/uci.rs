@@ -24,7 +24,10 @@ use crate::{
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    nnue::{self, network},
+    nnue::{
+        self,
+        network::{self, NNUEParams},
+    },
     perft,
     piece::Colour,
     search::{parameters::Config, LMTable},
@@ -506,6 +509,8 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
 
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+
     let stopped = AtomicBool::new(false);
     let (stdin, stdin_reader_handle) = stdin_reader()?;
     let stdin = Mutex::new(stdin);
@@ -513,7 +518,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
 
-    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view())];
+    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), &nnue_params)];
 
     let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
@@ -583,11 +588,8 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    thread_data
-                        .first_mut()
-                        .with_context(|| "the thread headers are empty.")?
-                        .nnue
-                        .evaluate(pos.turn(), network::output_bucket(&pos))
+                    let t1 = thread_data.first_mut().with_context(|| "the thread headers are empty.")?;
+                    t1.nnue.evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
                 };
                 println!("{eval}");
                 Ok(())
@@ -597,7 +599,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 Ok(())
             }
             "nnuebench" => {
-                nnue::network::inference_benchmark(&thread_data[0].nnue);
+                nnue::network::inference_benchmark(&thread_data[0].nnue, thread_data[0].nnue_params);
                 Ok(())
             }
             "gobench" => go_benchmark(),
@@ -620,7 +622,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
                             .zip(std::iter::repeat(&pos))
-                            .map(|(i, p)| ThreadData::new(i, p, tt.view()))
+                            .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
                             .collect();
                         Ok(())
                     }
@@ -631,7 +633,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 let res = parse_position(input, &mut pos);
                 if res.is_ok() {
                     for t in &mut thread_data {
-                        t.nnue.reinit_from(&pos);
+                        t.nnue.reinit_from(&pos, t.nnue_params);
                     }
                 }
                 res
@@ -697,9 +699,10 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
     let mut thread_data = (0..BENCH_THREADS)
         .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p, tt.view()))
+        .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
         .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
@@ -716,7 +719,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
             return Err(e);
         }
         for t in &mut thread_data {
-            t.nnue.reinit_from(&pos);
+            t.nnue.reinit_from(&pos, &nnue_params);
         }
         info.time_manager.start();
         let res = parse_go(&bench_string, &pos);
@@ -758,8 +761,11 @@ pub fn go_benchmark() -> anyhow::Result<()> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let mut thread_data =
-        (0..THREADS).zip(std::iter::repeat(&pos)).map(|(i, p)| ThreadData::new(i, p, tt.view())).collect::<Vec<_>>();
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    let mut thread_data = (0..THREADS)
+        .zip(std::iter::repeat(&pos))
+        .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
+        .collect::<Vec<_>>();
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
         info.time_manager.start();

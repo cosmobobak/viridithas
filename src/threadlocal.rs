@@ -4,7 +4,7 @@ use crate::{
     board::Board,
     chessmove::Move,
     historytable::{CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
-    nnue,
+    nnue::{self, network::NNUEParams},
     piece::Colour,
     search::pv::PVariation,
     stack::StackEntry,
@@ -20,6 +20,7 @@ pub struct ThreadData<'a> {
     pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
+    pub nnue_params: &'a NNUEParams,
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
@@ -45,11 +46,12 @@ impl<'a> ThreadData<'a> {
     const ARRAY_REPEAT_VALUE: PVariation = PVariation::default_const();
     const EMPTY_PV_TABLE: [PVariation; MAX_PLY] = [Self::ARRAY_REPEAT_VALUE; MAX_PLY];
 
-    pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>) -> Self {
+    pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>, nnue_params: &'a NNUEParams) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
-            nnue: nnue::network::NNUEState::new(board),
+            nnue: nnue::network::NNUEState::new(board, nnue_params),
+            nnue_params,
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
             continuation_history: DoubleHistoryTable::boxed(),
@@ -103,7 +105,7 @@ impl<'a> ThreadData<'a> {
         self.depth = 0;
         self.completed = 0;
         self.pvs = Self::EMPTY_PV_TABLE;
-        self.nnue.reinit_from(board);
+        self.nnue.reinit_from(board, self.nnue_params);
         self.stm_at_root = board.turn();
     }
 

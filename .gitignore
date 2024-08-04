@@ -21,6 +21,7 @@ tuning/log.txt
 Viridithas
 tb5
 *.nnue
+*.nnue.zst
 src/tablebases/bindings.rs
 perf.data*
 flamegraph.svg

@@ -37,9 +37,9 @@ mod transpositiontable;
 mod uci;
 mod util;
 
-use cli::Subcommands::{Bench, Perft, Spsa, VisNNUE};
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
+use cli::Subcommands::{Bench, Perft, Spsa, VisNNUE};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
