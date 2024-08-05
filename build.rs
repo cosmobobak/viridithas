@@ -7,16 +7,16 @@ fn main() {
 }
 
 fn prep_net() {
-    let net_path = env::var("EVALFILE").unwrap_or("viridithas.nnue".into());
-    if net_path == "viridithas.nnue" {
+    let net_path = env::var("EVALFILE").unwrap_or("viridithas.nnue.zst".into());
+    if net_path == "viridithas.nnue.zst" {
         // check if net exists
         if let Err(e) = std::fs::metadata(net_path) {
             eprintln!("Couldn't read default net during build script! {e}");
-            eprintln!("Note: viri looks for a default net in the project root called \"viridithas.nnue\".");
+            eprintln!("Note: viri looks for a default net in the project root called \"viridithas.nnue.zst\".");
         }
         return;
     }
-    std::fs::copy(net_path, "viridithas.nnue").unwrap();
+    std::fs::copy(net_path, "viridithas.nnue.zst").unwrap();
 }
 
 fn build_dependencies() {
