@@ -1,5 +1,8 @@
 use std::{
-    fmt::{Debug, Display}, ops::{Deref, DerefMut}
+    fmt::{Debug, Display},
+    fs::File,
+    io::BufReader,
+    ops::{Deref, DerefMut},
 };
 
 use anyhow::Context;
@@ -24,7 +27,13 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const LAYER_1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 2048;
+/// The size of the second layer of the network.
+pub const L2_SIZE: usize = 16;
+/// The size of the third layer of the network.
+pub const L3_SIZE: usize = 32;
+/// chunking constant for l1
+pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
@@ -72,18 +81,124 @@ pub fn output_bucket(pos: &Board) -> usize {
 
 const QA: i32 = 255;
 const QB: i32 = 64;
-const QAB: i32 = QA * QB;
+// const QAB: i32 = QA * QB;
+const FT_SHIFT: i32 = 9;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
 pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 #[repr(C)]
+struct UnquantisedNetwork {
+    ft_weights: [f32; INPUT * L1_SIZE * BUCKETS],
+    ft_biases: [f32; L1_SIZE],
+    l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases: [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases: [[f32; L3_SIZE]; OUTPUT_BUCKETS],
+    l3_weights: [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases: [f32; OUTPUT_BUCKETS],
+}
+
+#[repr(C)]
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * LAYER_1_SIZE * BUCKETS]>,
-    pub feature_bias: Align64<[i16; LAYER_1_SIZE]>,
-    pub output_weights: [Align64<[i16; LAYER_1_SIZE * 2]>; OUTPUT_BUCKETS],
-    pub output_bias: [i16; OUTPUT_BUCKETS],
+    pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
+    pub feature_bias: Align64<[i16; L1_SIZE]>,
+    pub l1_weights: [Align64<[i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias: [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_bias: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_bias: [f32; OUTPUT_BUCKETS],
+}
+
+impl UnquantisedNetwork {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    fn process(&self, use_simd: bool) -> Box<NNUEParams> {
+        let mut net = NNUEParams::zeroed();
+        // quantise the feature transformer weights
+        for (src, tgt) in self.ft_weights.iter().zip(net.feature_weights.0.iter_mut()) {
+            let scaled = *src * QA as f32;
+            *tgt = scaled.round() as i16;
+        }
+
+        // quantise the feature transformer biases
+        for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.0.iter_mut()) {
+            let scaled = *src * QA as f32;
+            *tgt = scaled.round() as i16;
+        }
+
+        // transpose the L{1,2,3} weights and biases
+        for bucket in 0..OUTPUT_BUCKETS {
+            // quant the L1 weights
+            if use_simd {
+                for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
+                    for j in 0..L2_SIZE {
+                        for k in 0..L1_CHUNK_PER_32 {
+                            let v = (f32::round(self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32)) as i8;
+                            net.l1_weights[bucket].0[i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
+                        }
+                    }
+                }
+            } else {
+                for i in 0..L1_SIZE {
+                    for j in 0..L2_SIZE {
+                        let v = (f32::round(self.l1_weights[i][bucket][j] * QB as f32)) as i8;
+                        net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
+                    }
+                }
+            }
+
+            // transfer the L1 biases
+            for i in 0..L2_SIZE {
+                net.l1_bias[bucket].0[i] = self.l1_biases[bucket][i];
+            }
+
+            // transpose the L2 weights
+            if use_simd {
+                for i in 0..L2_SIZE {
+                    for j in 0..L3_SIZE {
+                        net.l2_weights[bucket].0[i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
+                    }
+                }
+            } else {
+                for i in 0..L2_SIZE {
+                    for j in 0..L3_SIZE {
+                        net.l2_weights[bucket].0[j * L2_SIZE + i] = self.l2_weights[i][bucket][j];
+                    }
+                }
+            }
+
+            // transfer the L2 biases
+            for i in 0..L3_SIZE {
+                net.l2_bias[bucket].0[i] = self.l2_biases[bucket][i];
+            }
+
+            // transpose the L3 weights
+            for i in 0..L3_SIZE {
+                net.l3_weights[bucket].0[i] = self.l3_weights[i][bucket];
+            }
+
+            // transfer the L3 biases
+            net.l3_bias[bucket] = self.l3_biases[bucket];
+        }
+
+        net
+    }
+
+    fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
+        // SAFETY: NNUEParams can be zeroed.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            let mem = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
+            reader.read_exact(mem)?;
+            Ok(Box::from_raw(ptr.cast()))
+        }
+    }
 }
 
 impl NNUEParams {
@@ -108,93 +223,31 @@ impl NNUEParams {
         }
     }
 
-    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
-        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        // remap pieces to keep opposite colours together
-        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
-        assert!(neuron < LAYER_1_SIZE);
-        let starting_idx = neuron;
-        let mut slice = Vec::with_capacity(768);
-        for colour in Colour::all() {
-            for piece_type in PieceType::all() {
-                for square in Square::all() {
-                    let feature_indices = feature::indices(
-                        Square::H1,
-                        Square::H8,
-                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
-                    );
-                    let index = feature_indices.0.index() * LAYER_1_SIZE + starting_idx;
-                    slice.push(self.feature_weights[index]);
-                }
+    fn zeroed() -> Box<Self> {
+        // SAFETY: NNUEParams can be zeroed.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
             }
+            Box::from_raw(ptr.cast())
         }
-
-        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
-
-        for (piece, chunk) in slice.chunks(64).enumerate() {
-            let piece = PIECE_REMAPPING[piece];
-            let piece_colour = piece % 2;
-            let piece_type = piece / 2;
-            let (max, min) = if piece_type == 0 {
-                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            } else {
-                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
-            };
-            let weight_to_colour = |weight: i16| -> u32 {
-                let intensity = f32::from(weight - min) / f32::from(max - min);
-                let idx = (intensity * 255.0).round() as u8;
-                image::inferno_colour_map(idx)
-            };
-            for (square, &weight) in chunk.iter().enumerate() {
-                let row = square / 8;
-                let col = square % 8;
-                let colour = if (row == 0 || row == 7) && piece_type == 0 {
-                    0 // pawns on first and last rank are always 0
-                } else {
-                    weight_to_colour(weight)
-                };
-                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
-            }
-        }
-
-        let path = path.join(format!("neuron_{neuron}.tga"));
-        image.save_as_tga(path);
     }
 
-    pub fn min_max_feature_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for &f in &self.feature_weights.0 {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
+    fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
+        let ptr = std::ptr::from_ref::<Self>(self).cast::<u8>();
+        let len = size_of::<Self>();
+        // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
+        writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
+        Ok(())
     }
 
-    pub fn min_max_output_weight(&self) -> (i16, i16) {
-        let mut min = i16::MAX;
-        let mut max = i16::MIN;
-        for f in self.output_weights.iter().flat_map(|x| x.0) {
-            if f < min {
-                min = f;
-            }
-            if f > max {
-                max = f;
-            }
-        }
-        (min, max)
-    }
-
-    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * LAYER_1_SIZE]> {
+    pub fn select_feature_weights(&self, bucket: usize) -> &Align64<[i16; INPUT * L1_SIZE]> {
         // handle mirroring
         let bucket = bucket % BUCKETS;
-        let start = bucket * INPUT * LAYER_1_SIZE;
-        let end = start + INPUT * LAYER_1_SIZE;
+        let start = bucket * INPUT * L1_SIZE;
+        let end = start + INPUT * L1_SIZE;
         let slice = &self.feature_weights[start..end];
         // SAFETY: The resulting slice is indeed INPUT * LAYER_1_SIZE long,
         // and we check that the slice is aligned to 64 bytes.
@@ -209,6 +262,15 @@ impl NNUEParams {
             &*ptr.cast()
         }
     }
+}
+
+pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Result<()> {
+    let mut reader = BufReader::new(File::open(input)?);
+    let mut writer = File::create(output)?;
+    let unquantised_net = UnquantisedNetwork::read(&mut reader)?;
+    let net = unquantised_net.process(false);
+    net.write(&mut writer)?;
+    Ok(())
 }
 
 /// The size of the stack used to store the activations of the hidden layer.
@@ -323,7 +385,7 @@ impl BucketAccumulatorCache {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[repr(C, align(64))]
 pub struct Align64<T>(pub T);
 
@@ -640,25 +702,31 @@ impl NNUEState {
     }
 
     /// Evaluate the final layer on the partial activations.
-    pub fn evaluate(&self, nnue_params: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
         let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let output = flatten(us, them, &nnue_params.output_weights[out]);
+        let mut ft_outputs = Align64([0; L1_SIZE]);
+        let mut l1_outputs = Align64([0.0; L2_SIZE]);
+        let mut l2_outputs = Align64([0.0; L3_SIZE]);
+        let mut l3_output = 0.0;
 
-        (output + i32::from(nnue_params.output_bias[out])) * SCALE / QAB
+        activate_ft(us, them, &mut ft_outputs);
+        propagate_l1(&ft_outputs, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
+        propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
+        propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
+
+        (l3_output * SCALE as f32) as i32
     }
 }
 
 /// Implementation of the forward pass.
-fn flatten(
-    us: &Align64<[i16; LAYER_1_SIZE]>,
-    them: &Align64<[i16; LAYER_1_SIZE]>,
-    weights: &Align64<[i16; LAYER_1_SIZE * 2]>,
-) -> i32 {
+#[allow(dead_code)]
+fn flatten(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, weights: &Align64<[i16; L1_SIZE * 2]>) -> i32 {
     const CHUNK: usize = Vector16::COUNT;
 
     // SAFETY: a great number of unsafe functions are called in the below code, but we're
@@ -685,7 +753,7 @@ fn flatten(
         // the clever part is step #4, which the compiler cannot know to do.
 
         // accumulate the first half of the weights
-        for i in 0..LAYER_1_SIZE / CHUNK {
+        for i in 0..L1_SIZE / CHUNK {
             let x = Vector16::load_at(us, i * CHUNK);
             let v = Vector16::min(Vector16::max(x, min), max);
             let w = Vector16::load_at(weights, i * CHUNK);
@@ -694,16 +762,89 @@ fn flatten(
         }
 
         // accumulate the second half of the weights
-        for i in 0..LAYER_1_SIZE / CHUNK {
+        for i in 0..L1_SIZE / CHUNK {
             let x = Vector16::load_at(them, i * CHUNK);
             let v = Vector16::min(Vector16::max(x, min), max);
-            let w = Vector16::load_at(weights, LAYER_1_SIZE + i * CHUNK);
+            let w = Vector16::load_at(weights, L1_SIZE + i * CHUNK);
             let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
             sum = Vector32::add(sum, product);
         }
 
         Vector32::sum(sum) / QA
     }
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
+    // this is just autovec'd for the moment.
+    for (a, acc) in [us, them].into_iter().enumerate() {
+        for i in 0..L1_SIZE / 2 {
+            let l = acc.0[i];
+            let r = acc.0[L1_SIZE / 2 + i];
+            let cl = i32::clamp(i32::from(l), 0, QA);
+            let cr = i32::clamp(i32::from(r), 0, QA);
+            output.0[i + a * L1_SIZE / 2] = ((cl * cr) >> FT_SHIFT) as u8;
+        }
+    }
+}
+
+#[allow(clippy::needless_range_loop, clippy::cast_precision_loss)]
+fn propagate_l1(
+    inputs: &Align64<[u8; L1_SIZE]>,
+    weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
+    biases: &Align64<[f32; L2_SIZE]>,
+    output: &mut Align64<[f32; L2_SIZE]>,
+) {
+    const SUM_DIV: f32 = ((QA * QA * QB) >> FT_SHIFT) as f32;
+    // this is just autovec'd for the moment.
+    let mut sums = [0; L2_SIZE];
+    for i in 0..L1_SIZE {
+        for j in 0..L2_SIZE {
+            sums[j] += i32::from(inputs.0[i]) * i32::from(weights.0[j * L1_SIZE + i]);
+        }
+    }
+
+    for i in 0..L2_SIZE {
+        // convert to f32 and activate L1
+        let clipped = f32::clamp((sums[i] as f32) / SUM_DIV + biases.0[i], 0.0, 1.0);
+        output.0[i] = clipped * clipped;
+    }
+}
+
+#[allow(clippy::needless_range_loop)]
+fn propagate_l2(
+    inputs: &Align64<[f32; L2_SIZE]>,
+    weights: &Align64<[f32; L2_SIZE * L3_SIZE]>,
+    biases: &Align64<[f32; L3_SIZE]>,
+    output: &mut Align64<[f32; L3_SIZE]>,
+) {
+    // this is just autovec'd for the moment.
+    let mut sums = [0.0; L3_SIZE];
+
+    sums.copy_from_slice(&biases.0);
+
+    // affine transform for l2
+    for i in 0..L2_SIZE {
+        for j in 0..L3_SIZE {
+            sums[j] += inputs.0[i] * weights.0[j * L2_SIZE + i];
+        }
+    }
+
+    // activate l2
+    for i in 0..L3_SIZE {
+        let clipped = f32::clamp(sums[i], 0.0, 1.0);
+        output.0[i] = clipped * clipped;
+    }
+}
+
+fn propagate_l3(inputs: &Align64<[f32; L3_SIZE]>, weights: &Align64<[f32; L3_SIZE]>, bias: f32, output: &mut f32) {
+    let mut sum = bias;
+
+    for i in 0..L3_SIZE {
+        sum += inputs.0[i] * weights.0[i];
+    }
+
+    *output = sum;
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.
@@ -724,12 +865,80 @@ pub fn visualise_nnue() -> anyhow::Result<()> {
     // create folder for the images
     let path = std::path::PathBuf::from("nnue-visualisations");
     std::fs::create_dir_all(&path).with_context(|| "Failed to create NNUE visualisations folder.")?;
-    for neuron in 0..crate::nnue::network::LAYER_1_SIZE {
+    for neuron in 0..crate::nnue::network::L1_SIZE {
         nnue_params.visualise_neuron(neuron, &path);
     }
     let (min, max) = nnue_params.min_max_feature_weight();
-    println!("Min / Max L1 values: {min} / {max}");
-    let (min, max) = nnue_params.min_max_output_weight();
-    println!("Min / Max L2 values: {min} / {max}");
+    println!("Min / Max FT values: {min} / {max}");
     Ok(())
+}
+
+impl NNUEParams {
+    pub fn visualise_neuron(&self, neuron: usize, path: &std::path::Path) {
+        #![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // remap pieces to keep opposite colours together
+        static PIECE_REMAPPING: [usize; 12] = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11];
+        assert!(neuron < L1_SIZE);
+        let starting_idx = neuron;
+        let mut slice = Vec::with_capacity(768);
+        for colour in Colour::all() {
+            for piece_type in PieceType::all() {
+                for square in Square::all() {
+                    let feature_indices = feature::indices(
+                        Square::H1,
+                        Square::H8,
+                        FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
+                    );
+                    let index = feature_indices.0.index() * L1_SIZE + starting_idx;
+                    slice.push(self.feature_weights[index]);
+                }
+            }
+        }
+
+        let mut image = Image::zeroed(8 * 6 + 5, 8 * 2 + 1); // + for inter-piece spacing
+
+        for (piece, chunk) in slice.chunks(64).enumerate() {
+            let piece = PIECE_REMAPPING[piece];
+            let piece_colour = piece % 2;
+            let piece_type = piece / 2;
+            let (max, min) = if piece_type == 0 {
+                let chunk = &chunk[8..56]; // first and last rank are always 0 for pawns
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            } else {
+                (*chunk.iter().max().unwrap(), *chunk.iter().min().unwrap())
+            };
+            let weight_to_colour = |weight: i16| -> u32 {
+                let intensity = f32::from(weight - min) / f32::from(max - min);
+                let idx = (intensity * 255.0).round() as u8;
+                image::inferno_colour_map(idx)
+            };
+            for (square, &weight) in chunk.iter().enumerate() {
+                let row = square / 8;
+                let col = square % 8;
+                let colour = if (row == 0 || row == 7) && piece_type == 0 {
+                    0 // pawns on first and last rank are always 0
+                } else {
+                    weight_to_colour(weight)
+                };
+                image.set(col + piece_type * 8 + piece_type, row + piece_colour * 9, colour);
+            }
+        }
+
+        let path = path.join(format!("neuron_{neuron}.tga"));
+        image.save_as_tga(path);
+    }
+
+    pub fn min_max_feature_weight(&self) -> (i16, i16) {
+        let mut min = i16::MAX;
+        let mut max = i16::MIN;
+        for &f in &self.feature_weights.0 {
+            if f < min {
+                min = f;
+            }
+            if f > max {
+                max = f;
+            }
+        }
+        (min, max)
+    }
 }
