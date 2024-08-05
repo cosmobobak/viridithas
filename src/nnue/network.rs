@@ -174,7 +174,7 @@ impl UnquantisedNetwork {
                 net.l2_bias[bucket].0[i] = self.l2_biases[bucket][i];
             }
 
-            // transpose the L3 weights
+            // transfer the L3 weights
             for i in 0..L3_SIZE {
                 net.l3_weights[bucket].0[i] = self.l3_weights[i][bucket];
             }
