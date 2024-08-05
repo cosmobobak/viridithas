@@ -27,9 +27,9 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 1280;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 8;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
@@ -212,8 +212,10 @@ impl NNUEParams {
             }
             let mut region = std::slice::from_raw_parts_mut(ptr.cast::<u8>(), layout.size());
             let expected_bytes = region.len() as u64;
-            let mut decoder = zstd::Decoder::new(COMPRESSED_NNUE)?;
-            let bytes_written = std::io::copy(&mut decoder, &mut region)?;
+            let mut decoder = zstd::Decoder::new(COMPRESSED_NNUE)
+                .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+            let bytes_written = std::io::copy(&mut decoder, &mut region)
+                .with_context(|| "Failed to decompress NNUE weights.")?;
             anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
             Ok(Box::from_raw(ptr.cast()))
         }
