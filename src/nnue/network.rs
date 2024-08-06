@@ -149,7 +149,7 @@ impl UnquantisedNetwork {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
                         let v = (f32::round(self.l1_weights[i][bucket][j] * QB as f32)) as i8;
-                        net.l1_weights[bucket].0[i * L2_SIZE + j] = v;
+                        net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
                     }
                 }
             }
