@@ -50,8 +50,6 @@ fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    println!("size of nnue params struct: {:?}", std::mem::size_of::<nnue::network::NNUEParams>());
-
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return uci::main_loop(false);

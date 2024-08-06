@@ -788,9 +788,7 @@ fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, out
             let r = acc.0[L1_SIZE / 2 + i];
             let cl = i32::clamp(i32::from(l), 0, QA);
             let cr = i32::clamp(i32::from(r), 0, QA);
-            println!("{} * {} = {}", cl, cr, cl * cr);
             let r = (cl * cr) / QA;
-            assert!((0..256).contains(&r));
             output.0[i + a * L1_SIZE / 2] = r as u8;
         }
     }
@@ -804,7 +802,6 @@ fn propagate_l1(
     output: &mut Align64<[f32; L2_SIZE]>,
 ) {
     const SUM_DIV: f32 = QAB as f32;
-    dbg!(&inputs.0);
     // this is just autovec'd for the moment.
     let mut sums = [0; L2_SIZE];
     for i in 0..L1_SIZE {
