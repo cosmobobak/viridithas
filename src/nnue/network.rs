@@ -194,9 +194,11 @@ impl UnquantisedNetwork {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let mem = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             reader.read_exact(mem)?;
-            Ok(Box::from_raw(ptr.cast()))
+            Ok(net)
         }
     }
 }
