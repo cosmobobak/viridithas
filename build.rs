@@ -12,7 +12,7 @@ fn prep_net() {
         // check if net exists
         if let Err(e) = std::fs::metadata(net_path) {
             eprintln!("Couldn't read default net during build script! {e}");
-            eprintln!("Note: viri looks for a default net in the project root called \"viridithas.nnue.zst\".");
+            eprintln!("Note: viri looks for a zstd-compressed default net in the project root called \"viridithas.nnue.zst\".");
         }
         return;
     }

@@ -27,9 +27,9 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 1280;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 8;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
@@ -89,7 +89,8 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 #[repr(C)]
 struct UnquantisedNetwork {
-    ft_weights: [f32; INPUT * L1_SIZE * BUCKETS],
+    // extra bucket for the feature-factoriser.
+    ft_weights: [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
     ft_biases: [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases: [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -119,10 +120,14 @@ impl UnquantisedNetwork {
         
         let mut net = NNUEParams::zeroed();
         // quantise the feature transformer weights
-        for (src, tgt) in self.ft_weights.iter().zip(net.feature_weights.0.iter_mut()) {
-            let scaled = *src * QA as f32;
-            assert!(scaled.abs() <= QA_BOUND, "feature transformer weight {scaled} is too large (max = {QA_BOUND})");
-            *tgt = scaled.round() as i16;
+        let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
+        let factoriser = buckets.next().unwrap();
+        for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.0.chunks_exact_mut(INPUT * L1_SIZE)) {
+            for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
+                let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
+                assert!(scaled.abs() <= QA_BOUND, "feature transformer weight {scaled} is too large (max = {QA_BOUND})");
+                *tgt = scaled.round() as i16;
+            }
         }
 
         // quantise the feature transformer biases
@@ -195,6 +200,7 @@ impl UnquantisedNetwork {
     }
 
     fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
+        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -213,6 +219,7 @@ impl UnquantisedNetwork {
 
 impl NNUEParams {
     pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
+        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -791,9 +798,10 @@ fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, out
         for i in 0..L1_SIZE / 2 {
             let l = acc.0[i];
             let r = acc.0[L1_SIZE / 2 + i];
-            let cl = i16::clamp(l, 0, QA as i16);
-            let cr = i16::clamp(r, 0, QA as i16);
-            output.0[i + a * L1_SIZE / 2] = ((i32::from(cl) * i32::from(cr)) / QA) as u8;
+            let cl = i32::clamp(i32::from(l), 0, QA);
+            let cr = i32::clamp(i32::from(r), 0, QA);
+            let r = (cl * cr) / QA;
+            output.0[i + a * L1_SIZE / 2] = r as u8;
         }
     }
 }
@@ -829,9 +837,7 @@ fn propagate_l2(
     output: &mut Align64<[f32; L3_SIZE]>,
 ) {
     // this is just autovec'd for the moment.
-    let mut sums = [0.0; L3_SIZE];
-
-    sums.copy_from_slice(&biases.0);
+    let mut sums = biases.0;
 
     // affine transform for l2
     for i in 0..L2_SIZE {
