@@ -1,9 +1,6 @@
 use std::env;
 
 fn main() {
-    // evil for OB.
-    env::set_var("CC", "clang");
-    env::set_var("CXX", "clang++");
     prep_net();
     build_dependencies();
     generate_bindings();
