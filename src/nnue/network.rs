@@ -187,6 +187,7 @@ impl UnquantisedNetwork {
     }
 
     fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
+        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -203,6 +204,7 @@ impl UnquantisedNetwork {
 
 impl NNUEParams {
     pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
+        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -793,7 +795,7 @@ fn propagate_l1(
     biases: &Align64<[f32; L2_SIZE]>,
     output: &mut Align64<[f32; L2_SIZE]>,
 ) {
-    const SUM_DIV: f32 = ((QA * QA * QB) >> FT_SHIFT) as f32;
+    const SUM_DIV: f32 = ((QA * QA * QB)/* >> FT_SHIFT */) as f32;
     // this is just autovec'd for the moment.
     let mut sums = [0; L2_SIZE];
     for i in 0..L1_SIZE {
