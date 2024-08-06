@@ -81,8 +81,8 @@ pub fn output_bucket(pos: &Board) -> usize {
 
 const QA: i32 = 255;
 const QB: i32 = 64;
-// const QAB: i32 = QA * QB;
-const FT_SHIFT: i32 = 9;
+const QAB: i32 = QA * QB;
+// const FT_SHIFT: i32 = 9;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -90,7 +90,8 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 #[repr(C)]
 struct UnquantisedNetwork {
-    ft_weights: [f32; INPUT * L1_SIZE * BUCKETS],
+    // extra bucket for the feature-factoriser.
+    ft_weights: [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
     ft_biases: [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases: [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -117,9 +118,13 @@ impl UnquantisedNetwork {
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // quantise the feature transformer weights
-        for (src, tgt) in self.ft_weights.iter().zip(net.feature_weights.0.iter_mut()) {
-            let scaled = *src * QA as f32;
-            *tgt = scaled.round() as i16;
+        let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
+        let factoriser = buckets.next().unwrap();
+        for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.0.chunks_exact_mut(INPUT * L1_SIZE)) {
+            for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
+                let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
+                *tgt = scaled.round() as i16;
+            }
         }
 
         // quantise the feature transformer biases
@@ -144,7 +149,7 @@ impl UnquantisedNetwork {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
                         let v = (f32::round(self.l1_weights[i][bucket][j] * QB as f32)) as i8;
-                        net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
+                        net.l1_weights[bucket].0[i * L2_SIZE + j] = v;
                     }
                 }
             }
@@ -783,7 +788,10 @@ fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, out
             let r = acc.0[L1_SIZE / 2 + i];
             let cl = i32::clamp(i32::from(l), 0, QA);
             let cr = i32::clamp(i32::from(r), 0, QA);
-            output.0[i + a * L1_SIZE / 2] = ((cl * cr) >> FT_SHIFT) as u8;
+            println!("{} * {} = {}", cl, cr, cl * cr);
+            let r = (cl * cr) / QA;
+            assert!((0..256).contains(&r));
+            output.0[i + a * L1_SIZE / 2] = r as u8;
         }
     }
 }
@@ -795,7 +803,8 @@ fn propagate_l1(
     biases: &Align64<[f32; L2_SIZE]>,
     output: &mut Align64<[f32; L2_SIZE]>,
 ) {
-    const SUM_DIV: f32 = ((QA * QA * QB)/* >> FT_SHIFT */) as f32;
+    const SUM_DIV: f32 = QAB as f32;
+    dbg!(&inputs.0);
     // this is just autovec'd for the moment.
     let mut sums = [0; L2_SIZE];
     for i in 0..L1_SIZE {
@@ -819,9 +828,7 @@ fn propagate_l2(
     output: &mut Align64<[f32; L3_SIZE]>,
 ) {
     // this is just autovec'd for the moment.
-    let mut sums = [0.0; L3_SIZE];
-
-    sums.copy_from_slice(&biases.0);
+    let mut sums = biases.0;
 
     // affine transform for l2
     for i in 0..L2_SIZE {
