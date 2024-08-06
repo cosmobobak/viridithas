@@ -82,7 +82,6 @@ pub fn output_bucket(pos: &Board) -> usize {
 const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
-// const FT_SHIFT: i32 = 9;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -116,6 +115,9 @@ pub struct NNUEParams {
 impl UnquantisedNetwork {
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
+        const QA_BOUND: f32 = 1.98 * QA as f32;
+        const QB_BOUND: f32 = 1.98 * QB as f32;
+        
         let mut net = NNUEParams::zeroed();
         // quantise the feature transformer weights
         let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
@@ -123,6 +125,7 @@ impl UnquantisedNetwork {
         for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.0.chunks_exact_mut(INPUT * L1_SIZE)) {
             for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
                 let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
+                assert!(scaled.abs() <= QA_BOUND, "feature transformer weight {scaled} is too large (max = {QA_BOUND})");
                 *tgt = scaled.round() as i16;
             }
         }
@@ -130,6 +133,7 @@ impl UnquantisedNetwork {
         // quantise the feature transformer biases
         for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.0.iter_mut()) {
             let scaled = *src * QA as f32;
+            assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
 
@@ -140,7 +144,9 @@ impl UnquantisedNetwork {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                     for j in 0..L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            let v = (f32::round(self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32)) as i8;
+                            let v = self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
+                            assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                            let v = v.round() as i8;
                             net.l1_weights[bucket].0[i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
                         }
                     }
@@ -148,7 +154,9 @@ impl UnquantisedNetwork {
             } else {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
-                        let v = (f32::round(self.l1_weights[i][bucket][j] * QB as f32)) as i8;
+                        let v = self.l1_weights[i][bucket][j] * QB as f32;
+                        assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                        let v = v.round() as i8;
                         net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
                     }
                 }
@@ -200,9 +208,11 @@ impl UnquantisedNetwork {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let mem = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             reader.read_exact(mem)?;
-            Ok(Box::from_raw(ptr.cast()))
+            Ok(net)
         }
     }
 }
@@ -217,14 +227,16 @@ impl NNUEParams {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let mut region = std::slice::from_raw_parts_mut(ptr.cast::<u8>(), layout.size());
-            let expected_bytes = region.len() as u64;
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mut mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
+            let expected_bytes = mem.len() as u64;
             let mut decoder = zstd::Decoder::new(COMPRESSED_NNUE)
                 .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
-            let bytes_written = std::io::copy(&mut decoder, &mut region)
+            let bytes_written = std::io::copy(&mut decoder, &mut mem)
                 .with_context(|| "Failed to decompress NNUE weights.")?;
             anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
-            Ok(Box::from_raw(ptr.cast()))
+            Ok(net)
         }
     }
 
