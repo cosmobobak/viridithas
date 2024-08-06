@@ -24,11 +24,6 @@ V2NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v2$(EXT)
 V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
 V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
-ifeq ($(CC),cargo)
-    CC := clang
-    CXX := clang++
-endif
-
 openbench:
 	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 
