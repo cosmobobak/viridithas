@@ -81,8 +81,7 @@ pub fn output_bucket(pos: &Board) -> usize {
 
 const QA: i32 = 255;
 const QB: i32 = 64;
-// const QAB: i32 = QA * QB;
-const FT_SHIFT: i32 = 9;
+const QAB: i32 = QA * QB;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -115,16 +114,21 @@ pub struct NNUEParams {
 impl UnquantisedNetwork {
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
+        const QA_BOUND: f32 = 1.98 * QA as f32;
+        const QB_BOUND: f32 = 1.98 * QB as f32;
+        
         let mut net = NNUEParams::zeroed();
         // quantise the feature transformer weights
         for (src, tgt) in self.ft_weights.iter().zip(net.feature_weights.0.iter_mut()) {
             let scaled = *src * QA as f32;
+            assert!(scaled.abs() <= QA_BOUND, "feature transformer weight {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
 
         // quantise the feature transformer biases
         for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.0.iter_mut()) {
             let scaled = *src * QA as f32;
+            assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
 
@@ -135,7 +139,9 @@ impl UnquantisedNetwork {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                     for j in 0..L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            let v = (f32::round(self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32)) as i8;
+                            let v = self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
+                            assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                            let v = v.round() as i8;
                             net.l1_weights[bucket].0[i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
                         }
                     }
@@ -143,7 +149,9 @@ impl UnquantisedNetwork {
             } else {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
-                        let v = (f32::round(self.l1_weights[i][bucket][j] * QB as f32)) as i8;
+                        let v = self.l1_weights[i][bucket][j] * QB as f32;
+                        assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                        let v = v.round() as i8;
                         net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
                     }
                 }
@@ -783,9 +791,9 @@ fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, out
         for i in 0..L1_SIZE / 2 {
             let l = acc.0[i];
             let r = acc.0[L1_SIZE / 2 + i];
-            let cl = i32::clamp(i32::from(l), 0, QA);
-            let cr = i32::clamp(i32::from(r), 0, QA);
-            output.0[i + a * L1_SIZE / 2] = ((cl * cr) >> FT_SHIFT) as u8;
+            let cl = i16::clamp(l, 0, QA as i16);
+            let cr = i16::clamp(r, 0, QA as i16);
+            output.0[i + a * L1_SIZE / 2] = ((i32::from(cl) * i32::from(cr)) / QA) as u8;
         }
     }
 }
@@ -797,7 +805,7 @@ fn propagate_l1(
     biases: &Align64<[f32; L2_SIZE]>,
     output: &mut Align64<[f32; L2_SIZE]>,
 ) {
-    const SUM_DIV: f32 = ((QA * QA * QB) >> FT_SHIFT) as f32;
+    const SUM_DIV: f32 = QAB as f32;
     // this is just autovec'd for the moment.
     let mut sums = [0; L2_SIZE];
     for i in 0..L1_SIZE {
