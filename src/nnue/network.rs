@@ -11,14 +11,14 @@ use arrayvec::ArrayVec;
 use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
-    nnue::simd::{Vector16, Vector32},
     piece::{Colour, Piece, PieceType},
     util::{Square, MAX_DEPTH},
 };
 
-use super::{accumulator::Accumulator, simd};
+use super::accumulator::{self, Accumulator};
 
 pub mod feature;
+mod layers;
 
 /// The size of the input layer of the network.
 pub const INPUT: usize = 768;
@@ -390,7 +390,7 @@ impl BucketAccumulatorCache {
 
         let weights = nnue_params.select_feature_weights(bucket);
 
-        simd::vector_update_inplace(cache_acc, weights, &adds, &subs);
+        accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
         *acc.select_mut(side_we_care_about) = cache_acc.clone();
         acc.correct[side_we_care_about] = true;
@@ -616,10 +616,10 @@ impl NNUEState {
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
-            simd::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
+            accumulator::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
         }
         if update.black {
-            simd::vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
+            accumulator::vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
         }
     }
 
@@ -646,7 +646,7 @@ impl NNUEState {
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
-            simd::vector_add_sub2(
+            accumulator::vector_add_sub2(
                 &source_acc.white,
                 &mut target_acc.white,
                 white_bucket,
@@ -656,7 +656,7 @@ impl NNUEState {
             );
         }
         if update.black {
-            simd::vector_add_sub2(
+            accumulator::vector_add_sub2(
                 &source_acc.black,
                 &mut target_acc.black,
                 black_bucket,
@@ -692,7 +692,7 @@ impl NNUEState {
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
-            simd::vector_add2_sub2(
+            accumulator::vector_add2_sub2(
                 &source_acc.white,
                 &mut target_acc.white,
                 white_bucket,
@@ -703,7 +703,7 @@ impl NNUEState {
             );
         }
         if update.black {
-            simd::vector_add2_sub2(
+            accumulator::vector_add2_sub2(
                 &source_acc.black,
                 &mut target_acc.black,
                 black_bucket,
@@ -729,135 +729,13 @@ impl NNUEState {
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
-        activate_ft(us, them, &mut ft_outputs);
-        propagate_l1(&ft_outputs, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
-        propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
-        propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
+        layers::activate_ft(us, them, &mut ft_outputs);
+        layers::propagate_l1(&ft_outputs, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
+        layers::propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
+        layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
 
         (l3_output * SCALE as f32) as i32
     }
-}
-
-/// Implementation of the forward pass.
-#[allow(dead_code)]
-fn flatten(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, weights: &Align64<[i16; L1_SIZE * 2]>) -> i32 {
-    const CHUNK: usize = Vector16::COUNT;
-
-    // SAFETY: a great number of unsafe functions are called in the below code, but we're
-    // implementing a perfectly safe pattern, just using SIMD equivalents of normal things.
-    unsafe {
-        let mut sum = Vector32::zero();
-        let min = Vector16::zero();
-        #[allow(clippy::cast_possible_truncation)]
-        let max = Vector16::splat(QA as i16);
-
-        // the following code uses a trick devised by the author of the Lizard chess engine.
-        // we're implementing the function f(x) = clamp(x, 0, QA)^2 * w,
-        // and we do this in the following manner:
-        // 1. load the input, x
-        // 2. compute v := clamp(x, 0, QA)
-        // 3. load the weight, w
-        // 4. compute t := v * w via truncating 16-bit multiply.
-        //    this step relies on our invariant that v * w fits in i16.
-        // 5. compute product := v * t via horizontally accumulating
-        //    expand-to-i32 multiply.
-        // 6. add product to the running sum.
-        // at this point we've computed clamp(x, 0, QA)^2 * w
-        // by doing (clamp(x, 0, QA) * w) * clamp(x, 0, QA).
-        // the clever part is step #4, which the compiler cannot know to do.
-
-        // accumulate the first half of the weights
-        for i in 0..L1_SIZE / CHUNK {
-            let x = Vector16::load_at(us, i * CHUNK);
-            let v = Vector16::min(Vector16::max(x, min), max);
-            let w = Vector16::load_at(weights, i * CHUNK);
-            let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
-            sum = Vector32::add(sum, product);
-        }
-
-        // accumulate the second half of the weights
-        for i in 0..L1_SIZE / CHUNK {
-            let x = Vector16::load_at(them, i * CHUNK);
-            let v = Vector16::min(Vector16::max(x, min), max);
-            let w = Vector16::load_at(weights, L1_SIZE + i * CHUNK);
-            let product = Vector16::mul_widening(v, Vector16::mul_truncating(v, w));
-            sum = Vector32::add(sum, product);
-        }
-
-        Vector32::sum(sum) / QA
-    }
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
-fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
-    // this is just autovec'd for the moment.
-    for (a, acc) in [us, them].into_iter().enumerate() {
-        for i in 0..L1_SIZE / 2 {
-            let l = acc.0[i];
-            let r = acc.0[L1_SIZE / 2 + i];
-            let cl = i32::clamp(i32::from(l), 0, QA);
-            let cr = i32::clamp(i32::from(r), 0, QA);
-            let r = (cl * cr) / QA;
-            output.0[i + a * L1_SIZE / 2] = r as u8;
-        }
-    }
-}
-
-#[allow(clippy::needless_range_loop, clippy::cast_precision_loss)]
-fn propagate_l1(
-    inputs: &Align64<[u8; L1_SIZE]>,
-    weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-    biases: &Align64<[f32; L2_SIZE]>,
-    output: &mut Align64<[f32; L2_SIZE]>,
-) {
-    const SUM_DIV: f32 = QAB as f32;
-    // this is just autovec'd for the moment.
-    let mut sums = [0; L2_SIZE];
-    for i in 0..L1_SIZE {
-        for j in 0..L2_SIZE {
-            sums[j] += i32::from(inputs.0[i]) * i32::from(weights.0[j * L1_SIZE + i]);
-        }
-    }
-
-    for i in 0..L2_SIZE {
-        // convert to f32 and activate L1
-        let clipped = f32::clamp((sums[i] as f32) / SUM_DIV + biases.0[i], 0.0, 1.0);
-        output.0[i] = clipped * clipped;
-    }
-}
-
-#[allow(clippy::needless_range_loop)]
-fn propagate_l2(
-    inputs: &Align64<[f32; L2_SIZE]>,
-    weights: &Align64<[f32; L2_SIZE * L3_SIZE]>,
-    biases: &Align64<[f32; L3_SIZE]>,
-    output: &mut Align64<[f32; L3_SIZE]>,
-) {
-    // this is just autovec'd for the moment.
-    let mut sums = biases.0;
-
-    // affine transform for l2
-    for i in 0..L2_SIZE {
-        for j in 0..L3_SIZE {
-            sums[j] += inputs.0[i] * weights.0[j * L2_SIZE + i];
-        }
-    }
-
-    // activate l2
-    for i in 0..L3_SIZE {
-        let clipped = f32::clamp(sums[i], 0.0, 1.0);
-        output.0[i] = clipped * clipped;
-    }
-}
-
-fn propagate_l3(inputs: &Align64<[f32; L3_SIZE]>, weights: &Align64<[f32; L3_SIZE]>, bias: f32, output: &mut f32) {
-    let mut sum = bias;
-
-    for i in 0..L3_SIZE {
-        sum += inputs.0[i] * weights.0[i];
-    }
-
-    *output = sum;
 }
 
 /// Benchmark the inference portion of the NNUE evaluation.
