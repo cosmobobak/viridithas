@@ -199,7 +199,6 @@ impl UnquantisedNetwork {
     }
 
     fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
-        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -218,7 +217,6 @@ impl UnquantisedNetwork {
 
 impl NNUEParams {
     pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
-        // TODO: FIX MEMORY LEAK
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -232,8 +230,8 @@ impl NNUEParams {
             let expected_bytes = mem.len() as u64;
             let mut decoder = ruzstd::StreamingDecoder::new(COMPRESSED_NNUE)
                 .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
-            let bytes_written = std::io::copy(&mut decoder, &mut mem)
-                .with_context(|| "Failed to decompress NNUE weights.")?;
+            let bytes_written =
+                std::io::copy(&mut decoder, &mut mem).with_context(|| "Failed to decompress NNUE weights.")?;
             anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
             Ok(net)
         }

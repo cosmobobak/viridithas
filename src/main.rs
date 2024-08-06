@@ -39,7 +39,7 @@ mod util;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
-use cli::Subcommands::{Bench, Quantise, Perft, Spsa, VisNNUE};
+use cli::Subcommands::{Bench, Perft, Quantise, Spsa, VisNNUE};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
