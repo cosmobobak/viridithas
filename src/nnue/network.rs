@@ -27,9 +27,9 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 1280;
+pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 8;
+pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
@@ -117,7 +117,7 @@ impl UnquantisedNetwork {
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
-        
+
         let mut net = NNUEParams::zeroed();
         // quantise the feature transformer weights
         let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
@@ -125,7 +125,6 @@ impl UnquantisedNetwork {
         for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.0.chunks_exact_mut(INPUT * L1_SIZE)) {
             for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
                 let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
-                assert!(scaled.abs() <= QA_BOUND, "feature transformer weight {scaled} is too large (max = {QA_BOUND})");
                 *tgt = scaled.round() as i16;
             }
         }
