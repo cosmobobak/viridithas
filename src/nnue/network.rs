@@ -1,6 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    ops::{Deref, DerefMut},
+    fmt::{Debug, Display}, ops::{Deref, DerefMut}
 };
 
 use anyhow::Context;
@@ -96,9 +95,16 @@ impl NNUEParams {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let region = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
-            zstd::stream::copy_decode(COMPRESSED_NNUE, region)?;
-            Ok(Box::from_raw(ptr.cast()))
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mut mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
+            let expected_bytes = mem.len() as u64;
+            let mut decoder = ruzstd::StreamingDecoder::new(COMPRESSED_NNUE)
+                .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+            let bytes_written = std::io::copy(&mut decoder, &mut mem)
+                .with_context(|| "Failed to decompress NNUE weights.")?;
+            anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+            Ok(net)
         }
     }
 
