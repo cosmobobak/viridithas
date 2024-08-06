@@ -194,9 +194,11 @@ impl UnquantisedNetwork {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let mem = std::slice::from_raw_parts_mut(ptr.cast(), layout.size());
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             reader.read_exact(mem)?;
-            Ok(Box::from_raw(ptr.cast()))
+            Ok(net)
         }
     }
 }
@@ -210,12 +212,16 @@ impl NNUEParams {
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            let mut region = std::slice::from_raw_parts_mut(ptr.cast::<u8>(), layout.size());
-            let expected_bytes = region.len() as u64;
-            let mut decoder = zstd::Decoder::new(COMPRESSED_NNUE)?;
-            let bytes_written = std::io::copy(&mut decoder, &mut region)?;
+            #[allow(clippy::cast_ptr_alignment)]
+            let mut net = Box::from_raw(ptr.cast::<Self>());
+            let mut mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
+            let expected_bytes = mem.len() as u64;
+            let mut decoder = zstd::Decoder::new(COMPRESSED_NNUE)
+                .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+            let bytes_written = std::io::copy(&mut decoder, &mut mem)
+                .with_context(|| "Failed to decompress NNUE weights.")?;
             anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
-            Ok(Box::from_raw(ptr.cast()))
+            Ok(net)
         }
     }
 
