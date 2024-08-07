@@ -47,8 +47,8 @@ unsafe fn slice_to_aligned<'a>(slice: &'a [i16]) -> &'a Align64<[i16; L1_SIZE]> 
 
 #[cfg(target_feature = "avx2")]
 mod avx2 {
-use super::*;
-use crate::nnue::simd::*;
+use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
+use crate::nnue::simd::{I16_CHUNK_SIZE, vec_add_epi16, vec_load_epi16, vec_store_epi16, vec_sub_epi16, vec_zero_epi16};
 
 /// Apply add/subtract updates in place.
 pub fn vector_update_inplace(

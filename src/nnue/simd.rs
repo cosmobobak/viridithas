@@ -87,6 +87,11 @@ mod avx2 {
         debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi32>() == 0);
         _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
     }
+    #[inline] pub unsafe fn vec_store_epiu32(dst: &mut u32, vec: vepi32) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi32>() == 0);
+        _mm256_storeu_si256(std::ptr::from_mut(dst).cast(), vec);
+    }
     #[inline] pub unsafe fn vec_max_epi16(vec0: vepi16, vec1: vepi16)   -> vepi16  { return _mm256_max_epi16(vec0, vec1); }
     #[inline] pub unsafe fn vec_min_epi16  (vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_min_epi16(vec0, vec1); }
     #[inline] pub unsafe fn vec_add_epi16(vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_add_epi16(vec0, vec1); }
@@ -94,7 +99,7 @@ mod avx2 {
     #[inline] pub unsafe fn vec_add_epi32(vec0: vepi32, vec1: vepi32) -> vepi32 { return _mm256_add_epi32(vec0, vec1); }
     #[inline] pub unsafe fn vec_mulhi_epi16(vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_mulhi_epi16(vec0, vec1); }
     #[inline] pub unsafe fn vec_slli_epi16<const SHIFT: i32>(vec: vepi16)  -> vepi16  { return _mm256_slli_epi16(vec, SHIFT); }
-    #[inline] pub unsafe fn vec_nnz_mask(vec: vepi32) -> i32 { return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(vec, _mm256_setzero_si256()))); }
+    #[inline] pub unsafe fn vec_nnz_mask(vec: vepi32) -> u16 { return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(vec, _mm256_setzero_si256()))) as u16; }
     #[inline] pub unsafe fn vec_packus_permute_epi16(vec0: vepi16, vec1: vepi16) -> vepi8 {
         let packed = _mm256_packus_epi16(vec0, vec1);
         return _mm256_permute4x64_epi64(packed, super::mm_shuffle(3, 1, 2, 0));
