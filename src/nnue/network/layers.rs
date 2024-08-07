@@ -100,11 +100,7 @@ mod avx2 {
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16,
-            vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask,
-            vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16,
-            vec_store_epi32, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32,
-            F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE,
+            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epi32, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
         },
     };
 
@@ -145,7 +141,8 @@ mod avx2 {
         clippy::cast_possible_truncation,
         clippy::cast_precision_loss,
         clippy::cast_ptr_alignment,
-        clippy::needless_range_loop
+        clippy::needless_range_loop,
+        clippy::similar_names,
     )]
     pub fn activate_ft_and_propagate_l1(
         us: &Align64<[i16; L1_SIZE]>,
@@ -155,67 +152,54 @@ mod avx2 {
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
-        const L1_DIV: f32 = (QA * QA * QB) as f32 / (1 << FT_SHIFT) as f32;
+        const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA * QA * QB) as f32;
 
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
         unsafe {
-            let zero = vec_zero_epi16();
+            let ft_zero = vec_zero_epi16();
             let ft_one = vec_set1_epi16(QA as i16);
 
-            let mut sums = Align64([vec_zero_epi32(); L2_SIZE / I32_CHUNK_SIZE]);
-            let mut registers = Align64([0i32; size_of::<vepi32>() / size_of::<i32>()]);
+            let mut ft_outputs = Align64([0; L1_SIZE]);
 
             let mut offset = 0;
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2) {
-                    let i1_0 = vec_load_epi16(&acc[i]);
-                    let i1_1 = vec_load_epi16(&acc[i + I16_CHUNK_SIZE]);
+                    let input0a   = vec_load_epi16(&acc[i + 0              + 0]);
+                    let input0b   = vec_load_epi16(&acc[i + I16_CHUNK_SIZE + 0]);
+                    let input1a   = vec_load_epi16(&acc[i + 0              + L1_PAIR_COUNT]);
+                    let input1b   = vec_load_epi16(&acc[i + I16_CHUNK_SIZE + L1_PAIR_COUNT]);
 
-                    let i2_0 = vec_load_epi16(&acc[i + L1_PAIR_COUNT]);
-                    let i2_1 = vec_load_epi16(&acc[i + L1_PAIR_COUNT + I16_CHUNK_SIZE]);
+                    let clipped0a = vec_min_epi16(vec_max_epi16(input0a, ft_zero), ft_one);
+                    let clipped0b = vec_min_epi16(vec_max_epi16(input0b, ft_zero), ft_one);
+                    let clipped1a = vec_min_epi16(input1a, ft_one);
+                    let clipped1b = vec_min_epi16(input1b, ft_one);
 
-                    let c1_0 = vec_max_epi16(vec_min_epi16(i1_0, ft_one), zero);
-                    let c1_1 = vec_max_epi16(vec_min_epi16(i1_1, ft_one), zero);
-
-                    let c2_0 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(vec_min_epi16(i2_0, ft_one));
-                    let c2_1 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(vec_min_epi16(i2_1, ft_one));
-
-                    let p_0 = vec_mulhi_epi16(c1_0, c2_0);
-                    let p_1 = vec_mulhi_epi16(c1_1, c2_1);
-
-                    let product = vec_packus_permute_epi16(p_0, p_1);
-
-                    vec_store_epi32(&mut registers[0], product);
-
-                    let nnz_mask = vec_nnz_mask(product);
-
-                    for lookup in 0..registers.len() / 8 {
-                        let mask_slice = (nnz_mask >> (lookup * 8)) & 0xFF;
-                        let nnz_entry = NNZ_TABLE.table[mask_slice as usize];
-                        for j in 0..nnz_entry.count {
-                            let nnz = nnz_entry.indices[j as usize] as usize;
-                            let input32 = vec_set1_epi32(registers[nnz + lookup * 8]);
-                            let weight = std::ptr::from_ref(
-                                &weights[((nnz + 8 * lookup) * L1_CHUNK_PER_32 + i + offset) * L2_SIZE],
-                            )
-                            .cast::<vepi8>();
-                            for k in 0..L2_SIZE / I32_CHUNK_SIZE {
-                                sums[k] = vec_dpbusd_epi32(sums[k], input32, *weight.add(k));
-                            }
-                        }
-                    }
+                    let producta  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0a), clipped1a);
+                    let productb  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0b), clipped1b);
+                    vec_store_epiu8(&mut ft_outputs[offset + i], vec_packus_permute_epi16(producta, productb));
                 }
                 offset += L1_PAIR_COUNT;
             }
 
-            let one = vec_set1_ps(1.0);
+            let mut sums = [vec_zero_epi32(); L2_SIZE / F32_CHUNK_SIZE];
+            let inputs32 = std::ptr::from_ref(&ft_outputs).cast::<i32>();
+            for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
+                let input = vec_set1_epi32(*inputs32.add(i));
+                let weight = std::ptr::from_ref(&weights[i * L1_CHUNK_PER_32 * L2_SIZE]).cast::<vepi8>();
+                for j in 0..L2_SIZE / F32_CHUNK_SIZE {
+                    sums[j] = vec_dpbusd_epi32(sums[j], input, *weight.add(j));
+                }
+            }
+
+            let zero    = vec_zero_ps();
+            let one     = vec_set1_ps(1.0);
+            let sum_mul  = vec_set1_ps(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK_SIZE {
                 // Convert into floats, and activate L1
                 let bias_vec = vec_load_ps(&biases[i * F32_CHUNK_SIZE]);
-                let sum_div = vec_set1_ps(L1_DIV);
-                let sum_ps = vec_add_ps(vec_div_ps(vec_cvtepi32_ps(sums[i]), sum_div), bias_vec);
-                let clipped = vec_min_ps(vec_max_ps(sum_ps, vec_zero_ps()), one);
-                let squared = vec_mul_ps(clipped, clipped);
+                let sum_ps   = vec_mul_add_ps(vec_cvtepi32_ps(sums[i]), sum_mul, bias_vec);
+                let clipped  = vec_min_ps(vec_max_ps(sum_ps, zero), one);
+                let squared  = vec_mul_ps(clipped, clipped);
                 vec_store_ps(&mut output[i * F32_CHUNK_SIZE], squared);
             }
         }
