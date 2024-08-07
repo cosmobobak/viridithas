@@ -47,50 +47,50 @@ mod avx2 {
     #[inline] pub unsafe fn vec_zero_epi32() -> vepi32 { return _mm256_setzero_si256(); }
     #[inline] pub unsafe fn vec_set1_epi16(n: i16)  -> vepi16 { return _mm256_set1_epi16(n); }
     #[inline] pub unsafe fn vec_set1_epi32(n: i32)  -> vepi32 { return _mm256_set1_epi32(n); }
-    #[inline] pub unsafe fn vec_load_epi8(src: &i8) -> vepi8 { 
+    #[inline] pub unsafe fn vec_load_epi8(src: *const i8) -> vepi8 { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
-        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+        debug_assert!((src as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(src.cast());
     }
-    #[inline] pub unsafe fn vec_store_epi8(dst: &mut i8, vec: vepi8) { 
+    #[inline] pub unsafe fn vec_store_epi8(dst: *mut i8, vec: vepi8) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi8>() == 0);
-        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+        debug_assert!((dst as usize) % std::mem::align_of::<vepi8>() == 0);
+        _mm256_store_si256(dst.cast(), vec);
     }
-    #[inline] pub unsafe fn vec_load_epiu8(src: &u8) -> vepi8 { 
+    #[inline] pub unsafe fn vec_load_epiu8(src: *const u8) -> vepi8 { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
-        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+        debug_assert!((src as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(src.cast());
     }
-    #[inline] pub unsafe fn vec_store_epiu8(dst: &mut u8, vec: vepi8) { 
+    #[inline] pub unsafe fn vec_store_epiu8(dst: *mut u8, vec: vepi8) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi8>() == 0);
-        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+        debug_assert!((dst as usize) % std::mem::align_of::<vepi8>() == 0);
+        _mm256_store_si256(dst.cast(), vec);
     }
-    #[inline] pub unsafe fn vec_load_epi16(src: &i16) -> vepi16 { 
+    #[inline] pub unsafe fn vec_load_epi16(src: *const i16) -> vepi16 { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
-        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+        debug_assert!((src as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(src.cast());
     }
-    #[inline] pub unsafe fn vec_store_epi16(dst: &mut i16, vec: vepi16) { 
+    #[inline] pub unsafe fn vec_store_epi16(dst: *mut i16, vec: vepi16) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi16>() == 0);
-        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+        debug_assert!((dst as usize) % std::mem::align_of::<vepi16>() == 0);
+        _mm256_store_si256(dst.cast(), vec);
     }
-    #[inline] pub unsafe fn vec_load_epi32(src: &i32) -> vepi16 { 
+    #[inline] pub unsafe fn vec_load_epi32(src: *const i32) -> vepi16 { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
-        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+        debug_assert!((src as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(src.cast());
     }
-    #[inline] pub unsafe fn vec_store_epi32(dst: &mut i32, vec: vepi16) { 
+    #[inline] pub unsafe fn vec_store_epi32(dst: *mut i32, vec: vepi16) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi32>() == 0);
-        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+        debug_assert!((dst as usize) % std::mem::align_of::<vepi32>() == 0);
+        _mm256_store_si256(dst.cast(), vec);
     }
-    #[inline] pub unsafe fn vec_store_epiu32(dst: &mut u32, vec: vepi32) { 
+    #[inline] pub unsafe fn vec_store_epiu32(dst: *mut u32, vec: vepi32) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi32>() == 0);
-        _mm256_storeu_si256(std::ptr::from_mut(dst).cast(), vec);
+        debug_assert!((dst as usize) % std::mem::align_of::<vepi32>() == 0);
+        _mm256_storeu_si256(dst.cast(), vec);
     }
     #[inline] pub unsafe fn vec_max_epi16(vec0: vepi16, vec1: vepi16)   -> vepi16  { return _mm256_max_epi16(vec0, vec1); }
     #[inline] pub unsafe fn vec_min_epi16  (vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_min_epi16(vec0, vec1); }
@@ -115,14 +115,14 @@ mod avx2 {
 
     #[inline] pub unsafe fn vec_zero_ps () -> vps32 { return _mm256_setzero_ps(); }
     #[inline] pub unsafe fn vec_set1_ps (n: f32) -> vps32 { return _mm256_set1_ps(n); }
-    #[inline] pub unsafe fn vec_load_ps (src: &f32) -> vps32 { 
+    #[inline] pub unsafe fn vec_load_ps (src: *const f32) -> vps32 { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vps32>() == 0);
+        debug_assert!((src as usize) % std::mem::align_of::<vps32>() == 0);
         return _mm256_load_ps(src);
     }
-    #[inline] pub unsafe fn vec_store_ps(dst: &mut f32, vec: vps32) { 
+    #[inline] pub unsafe fn vec_store_ps(dst: *mut f32, vec: vps32) { 
         // check alignment in debug mode
-        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vps32>() == 0);
+        debug_assert!((dst as usize) % std::mem::align_of::<vps32>() == 0);
         _mm256_store_ps(dst, vec);
     }
     #[inline] pub unsafe fn vec_add_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_add_ps(vec0, vec1); }

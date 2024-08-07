@@ -31,7 +31,8 @@ mod generic {
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
             for j in 0..L2_SIZE {
-                *sums.get_unchecked_mut(j) += i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
+                *sums.get_unchecked_mut(j) +=
+                    i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
             }
         }
 
@@ -96,11 +97,16 @@ mod generic {
 
 #[cfg(target_feature = "avx2")]
 mod avx2 {
+    use std::mem::MaybeUninit;
+
     use super::{Align64, FT_SHIFT, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE
+            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16,
+            vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_packus_permute_epi16, vec_reduce_add_ps,
+            vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16,
+            vec_zero_epi32, vec_zero_ps, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE,
         },
     };
 
@@ -112,7 +118,7 @@ mod avx2 {
         clippy::cast_precision_loss,
         clippy::cast_ptr_alignment,
         clippy::needless_range_loop,
-        clippy::similar_names,
+        clippy::similar_names
     )]
     pub fn activate_ft_and_propagate_l1(
         us: &Align64<[i16; L1_SIZE]>,
@@ -129,24 +135,27 @@ mod avx2 {
             let ft_zero = vec_zero_epi16();
             let ft_one = vec_set1_epi16(QA as i16);
 
-            let mut ft_outputs = Align64([0; L1_SIZE]);
+            let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> = MaybeUninit::uninit().assume_init();
 
             let mut offset = 0;
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2) {
-                    let input0a   = vec_load_epi16(acc.get_unchecked(i + 0              + 0));
-                    let input0b   = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + 0));
-                    let input1a   = vec_load_epi16(acc.get_unchecked(i + 0              + L1_PAIR_COUNT));
-                    let input1b   = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let input0a = vec_load_epi16(acc.get_unchecked(i + 0 + 0));
+                    let input0b = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + 0));
+                    let input1a = vec_load_epi16(acc.get_unchecked(i + 0 + L1_PAIR_COUNT));
+                    let input1b = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + L1_PAIR_COUNT));
 
                     let clipped0a = vec_min_epi16(vec_max_epi16(input0a, ft_zero), ft_one);
                     let clipped0b = vec_min_epi16(vec_max_epi16(input0b, ft_zero), ft_one);
                     let clipped1a = vec_min_epi16(input1a, ft_one);
                     let clipped1b = vec_min_epi16(input1b, ft_one);
 
-                    let producta  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0a), clipped1a);
-                    let productb  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0b), clipped1b);
-                    vec_store_epiu8(ft_outputs.get_unchecked_mut(offset + i), vec_packus_permute_epi16(producta, productb));
+                    let producta = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0a), clipped1a);
+                    let productb = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0b), clipped1b);
+                    vec_store_epiu8(
+                        std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(),
+                        vec_packus_permute_epi16(producta, productb),
+                    );
                 }
                 offset += L1_PAIR_COUNT;
             }
@@ -161,15 +170,15 @@ mod avx2 {
                 }
             }
 
-            let zero    = vec_zero_ps();
-            let one     = vec_set1_ps(1.0);
-            let sum_mul  = vec_set1_ps(L1_MUL);
+            let zero = vec_zero_ps();
+            let one = vec_set1_ps(1.0);
+            let sum_mul = vec_set1_ps(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK_SIZE {
                 // Convert into floats, and activate L1
                 let bias_vec = vec_load_ps(biases.get_unchecked(i * F32_CHUNK_SIZE));
-                let sum_ps   = vec_mul_add_ps(vec_cvtepi32_ps(*sums.get_unchecked(i)), sum_mul, bias_vec);
-                let clipped  = vec_min_ps(vec_max_ps(sum_ps, zero), one);
-                let squared  = vec_mul_ps(clipped, clipped);
+                let sum_ps = vec_mul_add_ps(vec_cvtepi32_ps(*sums.get_unchecked(i)), sum_mul, bias_vec);
+                let clipped = vec_min_ps(vec_max_ps(sum_ps, zero), one);
+                let squared = vec_mul_ps(clipped, clipped);
                 vec_store_ps(output.get_unchecked_mut(i * F32_CHUNK_SIZE), squared);
             }
         }
@@ -194,7 +203,8 @@ mod avx2 {
                 let input_vec = vec_set1_ps(*inputs.get_unchecked(i));
                 let weight = std::ptr::from_ref(weights.get_unchecked(i * L3_SIZE)).cast::<vps32>();
                 for j in 0..L3_SIZE / F32_CHUNK_SIZE {
-                    *sum_vecs.get_unchecked_mut(j) = vec_mul_add_ps(input_vec, *weight.add(j), *sum_vecs.get_unchecked(j));
+                    *sum_vecs.get_unchecked_mut(j) =
+                        vec_mul_add_ps(input_vec, *weight.add(j), *sum_vecs.get_unchecked(j));
                 }
             }
 
