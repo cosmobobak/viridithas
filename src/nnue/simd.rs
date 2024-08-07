@@ -25,687 +25,127 @@
 ///    This place is best shunned and left uninhabited.                                               ///
 ///                                                                                                   ///
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
-use super::network::Align64;
 
-#[derive(Clone, Copy)]
-pub struct VectorI16 {
-    #[cfg(target_feature = "avx512f")]
-    data: std::arch::x86_64::__m512i,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-    data: std::arch::x86_64::__m256i,
-    #[cfg(target_feature = "neon")]
-    data: std::arch::aarch64::int16x8_t,
-    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-    data: i16,
-}
-
-impl VectorI16 {
-    pub const SIZE: usize = std::mem::size_of::<Self>();
-    pub const COUNT: usize = Self::SIZE / std::mem::size_of::<i16>();
-
-    pub fn new(
-        #[cfg(target_feature = "avx512f")] data: std::arch::x86_64::__m512i,
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))] data: std::arch::x86_64::__m256i,
-        #[cfg(target_feature = "neon")] data: std::arch::aarch64::int16x8_t,
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))] data: i16,
-    ) -> Self {
-        Self { data }
-    }
-
-    #[inline]
-    pub unsafe fn load_at<const VEC_SIZE: usize>(memory: &Align64<[i16; VEC_SIZE]>, start_idx: usize) -> Self {
-        debug_assert!(start_idx % Self::COUNT == 0);
-        debug_assert!(start_idx + Self::COUNT <= memory.0.len());
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_load_si512(memory.0.as_ptr().add(start_idx).cast()) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_load_si256(memory.0.as_ptr().add(start_idx).cast()) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vld1q_s16(memory.0.as_ptr().add(start_idx).cast()) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: *memory.get_unchecked(start_idx) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn store_at<const VEC_SIZE: usize>(
-        memory: &mut Align64<[i16; VEC_SIZE]>,
-        value: Self,
-        start_idx: usize,
-    ) {
-        debug_assert!(start_idx % Self::COUNT == 0);
-        debug_assert!(start_idx + Self::COUNT <= memory.0.len());
-        #[cfg(target_feature = "avx512f")]
-        {
-            std::arch::x86_64::_mm512_store_si512(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            std::arch::x86_64::_mm256_store_si256(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            std::arch::aarch64::vst1q_s16(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            *memory.get_unchecked_mut(start_idx) = value.data
-        }
-    }
-
-    #[inline]
-    pub unsafe fn min(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_min_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_min_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vminq_s16(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: std::cmp::min(a.data, b.data) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn max(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_max_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_max_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vmaxq_s16(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: std::cmp::max(a.data, b.data) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn add(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_add_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_add_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vaddq_s16(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: a.data + b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn sub(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_sub_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_sub_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vsubq_s16(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: a.data - b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn mul_truncating(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_mullo_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_mullo_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vmulq_s16(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: a.data * b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn mul_widening(a: Self, b: Self) -> VectorI32 {
-        #[cfg(target_feature = "avx512f")]
-        {
-            VectorI32 { data: std::arch::x86_64::_mm512_madd_epi16(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            VectorI32 { data: std::arch::x86_64::_mm256_madd_epi16(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            // lo
-            let a_lo = std::arch::aarch64::vget_low_s16(a.data);
-            let b_lo = std::arch::aarch64::vget_low_s16(b.data);
-            let lo_prod = std::arch::aarch64::vmull_s16(b_lo, a_lo);
-            // hi
-            let hi_prod = std::arch::aarch64::vmull_high_s16(a.data, b.data);
-            // sum
-            let data = std::arch::aarch64::vpaddq_s32(lo_prod, hi_prod);
-            VectorI32 { data }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            VectorI32 { data: i32::from(a.data) * i32::from(b.data) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn splat(value: i16) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_set1_epi16(value) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_set1_epi16(value) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vld1q_dup_s16(&value) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: value }
-        }
-    }
-
-    #[inline]
-    pub fn zero() -> Self {
-        // SAFETY: All of these functions are actually perfectly fine to call on their own.
-        #[allow(unused_unsafe)]
-        unsafe {
-            #[cfg(target_feature = "avx512f")]
-            {
-                Self { data: std::arch::x86_64::_mm512_setzero_si512() }
-            }
-            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-            {
-                Self { data: std::arch::x86_64::_mm256_setzero_si256() }
-            }
-            #[cfg(target_feature = "neon")]
-            {
-                Self { data: std::arch::aarch64::vld1q_dup_s16(&0) }
-            }
-            #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-            {
-                Self { data: 0 }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct VectorI32 {
-    #[cfg(target_feature = "avx512f")]
-    data: std::arch::x86_64::__m512i,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-    data: std::arch::x86_64::__m256i,
-    #[cfg(target_feature = "neon")]
-    data: std::arch::aarch64::int32x4_t,
-    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-    data: i32,
-}
-
-impl VectorI32 {
-    pub const SIZE: usize = std::mem::size_of::<Self>();
-    pub const COUNT: usize = Self::SIZE / std::mem::size_of::<i32>();
-
-    #[inline]
-    pub unsafe fn add(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_add_epi32(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_add_epi32(a.data, b.data) }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vaddq_s32(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: a.data + b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn sum(a: Self) -> i32 {
-        #[cfg(target_feature = "avx512f")]
-        {
-            let high_256 = std::arch::x86_64::_mm512_extracti64x4_epi64::<1>(a.data);
-            let low_256 = std::arch::x86_64::_mm512_castsi512_si256(a.data);
-            let sum_256 = std::arch::x86_64::_mm256_add_epi32(low_256, high_256);
-            let upper_128 = std::arch::x86_64::_mm256_extracti128_si256::<1>(sum_256);
-            let lower_128 = std::arch::x86_64::_mm256_castsi256_si128(sum_256);
-            let sum_128 = std::arch::x86_64::_mm_add_epi32(upper_128, lower_128);
-            let upper_64 = std::arch::x86_64::_mm_unpackhi_epi64(sum_128, sum_128);
-            let sum_64 = std::arch::x86_64::_mm_add_epi32(upper_64, sum_128);
-            let upper_32 = std::arch::x86_64::_mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
-            let sum_32 = std::arch::x86_64::_mm_add_epi32(upper_32, sum_64);
-
-            std::arch::x86_64::_mm_cvtsi128_si32(sum_32)
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            let upper_128 = std::arch::x86_64::_mm256_extracti128_si256::<1>(a.data);
-            let lower_128 = std::arch::x86_64::_mm256_castsi256_si128(a.data);
-            let sum_128 = std::arch::x86_64::_mm_add_epi32(upper_128, lower_128);
-            let upper_64 = std::arch::x86_64::_mm_unpackhi_epi64(sum_128, sum_128);
-            let sum_64 = std::arch::x86_64::_mm_add_epi32(upper_64, sum_128);
-            let upper_32 = std::arch::x86_64::_mm_shuffle_epi32::<0b00_00_00_01>(sum_64);
-            let sum_32 = std::arch::x86_64::_mm_add_epi32(upper_32, sum_64);
-
-            std::arch::x86_64::_mm_cvtsi128_si32(sum_32)
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            std::arch::aarch64::vaddlvq_s32(a.data) as i32
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            a.data
-        }
-    }
-
-    #[inline]
-    pub unsafe fn zero() -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_setzero_si512() }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_setzero_si256() }
-        }
-        #[cfg(target_feature = "neon")]
-        {
-            Self { data: std::arch::aarch64::vld1q_dup_s32(&0) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-        {
-            Self { data: 0 }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct VectorF32 {
-    #[cfg(target_feature = "avx512f")]
-    data: std::arch::x86_64::__m512,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-    data: std::arch::x86_64::__m256,
-    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-    data: f32,
-}
-
-impl VectorF32 {
-    pub const SIZE: usize = std::mem::size_of::<Self>();
-    pub const COUNT: usize = Self::SIZE / std::mem::size_of::<f32>();
-
-    #[inline]
-    pub unsafe fn load_at<const VEC_SIZE: usize>(memory: &Align64<[f32; VEC_SIZE]>, start_idx: usize) -> Self {
-        debug_assert!(start_idx % Self::COUNT == 0);
-        debug_assert!(start_idx + Self::COUNT <= memory.0.len());
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_load_ps(memory.0.as_ptr().add(start_idx).cast()) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_load_ps(memory.0.as_ptr().add(start_idx).cast()) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: *memory.get_unchecked(start_idx) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn store_at<const VEC_SIZE: usize>(
-        memory: &mut Align64<[f32; VEC_SIZE]>,
-        value: Self,
-        start_idx: usize,
-    ) {
-        debug_assert!(start_idx % Self::COUNT == 0);
-        debug_assert!(start_idx + Self::COUNT <= memory.0.len());
-        #[cfg(target_feature = "avx512f")]
-        {
-            std::arch::x86_64::_mm512_store_ps(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            std::arch::x86_64::_mm256_store_ps(memory.0.as_mut_ptr().add(start_idx).cast(), value.data)
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            *memory.get_unchecked_mut(start_idx) = value.data
-        }
-    }
-
-    #[inline]
-    pub fn zero() -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_setzero_ps() }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_setzero_ps() }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: 0.0 }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn splat(value: f32) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_set1_ps(value) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_set1_ps(value) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: value }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn from_i32s(value: VectorI32) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_cvtepi32_ps(value.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_cvtepi32_ps(value.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: value.data as f32 }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn div(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_div_ps(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_div_ps(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: a.data / b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn mul(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_mul_ps(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_mul_ps(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: a.data * b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn add(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_add_ps(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_add_ps(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: a.data + b.data }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn max(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_max_ps(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_max_ps(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: a.data.max(b.data) }
-        }
-    }
-
-    #[inline]
-    pub unsafe fn min(a: Self, b: Self) -> Self {
-        #[cfg(target_feature = "avx512f")]
-        {
-            Self { data: std::arch::x86_64::_mm512_min_ps(a.data, b.data) }
-        }
-        #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-        {
-            Self { data: std::arch::x86_64::_mm256_min_ps(a.data, b.data) }
-        }
-        #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2")))]
-        {
-            Self { data: a.data.min(b.data) }
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct VectorI8 {
-    #[cfg(target_feature = "avx512f")]
-    data: std::arch::x86_64::__m512i,
-    #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-    data: std::arch::x86_64::__m256i,
-    #[cfg(target_feature = "neon")]
-    data: std::arch::aarch64::int8x8_t,
-    #[cfg(not(any(target_feature = "avx512f", target_feature = "avx2", target_feature = "neon")))]
-    data: i8,
-}
-
-#[cfg(target_feature = "avx512f")]
-mod avx512 {
-    use std::arch::x86_64::*;
-
-    type vepi8 = __m512i;
-    type vepi16 = __m512i;
-    type vepi32 = __m512i;
-    type vps32 = __m512;
-
-    #[inline]
-    unsafe fn vec_zero_epi16() -> vepi16 { _mm512_setzero_si512() }
-    #[inline]
-    unsafe fn vec_zero_epi32() -> vepi32 { _mm512_setzero_si512() }
-    #[inline]
-    unsafe fn vec_set1_epi16(value: i16) -> vepi16 { _mm512_set1_epi16(value) }
-    #[inline]
-    unsafe fn vec_load_epi(src: &vepi16) -> vepi16 { _mm512_load_si512(src) }
-    #[inline]
-    unsafe fn vec_store_epi(dst: &mut vepi16, src: vepi16) { _mm512_store_si512(dst, src) }
-    #[inline]
-    unsafe fn vec_max_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm512_max_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_min_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm512_min_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_mullo_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm512_mullo_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_srli_epi16(a: vepi16, shift: i32) -> vepi16 { _mm512_srli_epi16(a, shift) }
-    #[inline]
-    unsafe fn vec_packus_permute_epi16(a: vepi16, b: vepi16) -> vepi8 {
-        let packed = _mm512_packus_epi16(a, b);
-        _mm512_permutexvar_epi64(_mm512_setr_epi64(0, 2, 4, 6, 1, 3, 5, 7), packed)
-    }
-
-    #[inline]
-    unsafe fn vec_dpbusd_epi32(sum: vepi32, a: vepi8, b: vepi8) -> vepi32 {
-        #[cfg(target_feature = "avx512vnni")]
-        {
-            _mm512_dpbusd_epi32(sum, a, b)
-        }
-        #[cfg(not(target_feature = "avx512vnni"))]
-        {
-            let product16 = _mm512_maddubs_epi16(a, b);
-            let product32 = _mm512_madd_epi16(product16, _mm512_set1_epi16(1));
-            _mm512_add_epi32(sum, product32)
-        }
-    }
-
-    #[inline]
-    unsafe fn vec_set1_epi32(value: i32) -> vepi32 { _mm512_set1_epi32(value) }
-    #[inline]
-    unsafe fn vec_cvtepi32_ps(a: vepi32) -> vps32 { _mm512_cvtepi32_ps(a) }
-
-    #[inline]
-    unsafe fn vec_zero_ps() -> vps32 { _mm512_setzero_ps() }
-    #[inline]
-    unsafe fn vec_set1_ps(value: f32) -> vps32 { _mm512_set1_ps(value) }
-    #[inline]
-    unsafe fn vec_load_ps(src: &vps32) -> vps32 { _mm512_load_ps(src) }
-    #[inline]
-    unsafe fn vec_store_ps(dst: &mut vps32, src: vps32) { _mm512_store_ps(dst, src) }
-    #[inline]
-    unsafe fn vec_add_ps(a: vps32, b: vps32) -> vps32 { _mm512_add_ps(a, b) }
-    #[inline]
-    unsafe fn vec_mul_ps(a: vps32, b: vps32) -> vps32 { _mm512_mul_ps(a, b) }
-    #[inline]
-    unsafe fn vec_div_ps(a: vps32, b: vps32) -> vps32 { _mm512_div_ps(a, b) }
-    #[inline]
-    unsafe fn vec_min_ps(a: vps32, b: vps32) -> vps32 { _mm512_min_ps(a, b) }
-    #[inline]
-    unsafe fn vec_max_ps(a: vps32, b: vps32) -> vps32 { _mm512_max_ps(a, b) }
-    #[inline]
-    unsafe fn vec_mul_add_ps(a: vps32, b: vps32, c: vps32) -> vps32 { _mm512_fmadd_ps(a, b, c) }
-    #[inline]
-    unsafe fn vec_reduce_add_ps(a: vps32) -> f32 { _mm512_reduce_add_ps(a) }
+#[inline]
+pub const fn mm_shuffle(z: i32, y: i32, x: i32, w: i32) -> i32 {
+    ((z) << 6) | ((y) << 4) | ((x) << 2) | (w)
 }
 
 #[cfg(target_feature = "avx2")]
 mod avx2 {
+    #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
 
-    type vepi8 = __m256i;
-    type vepi16 = __m256i;
-    type vepi32 = __m256i;
-    type vps32 = __m256;
+    pub type vepi8 = __m256i;
+    pub type vepi16 = __m256i;
+    pub type vepi32 = __m256i;
+    pub type vepi64 = __m256i;
 
-    #[inline]
-    unsafe fn vec_zero_epi16() -> vepi16 { _mm256_setzero_si256() }
-    #[inline]
-    unsafe fn vec_zero_epi32() -> vepi32 { _mm256_setzero_si256() }
-    #[inline]
-    unsafe fn vec_set1_epi16(value: i16) -> vepi16 { _mm256_set1_epi16(value) }
-    #[inline]
-    unsafe fn vec_load_epi(src: &vepi16) -> vepi16 { _mm256_load_si256(src) }
-    #[inline]
-    unsafe fn vec_store_epi(dst: &mut vepi16, src: vepi16) { _mm256_store_si256(dst, src) }
-    #[inline]
-    unsafe fn vec_max_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm256_max_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_min_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm256_min_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_mullo_epi16(a: vepi16, b: vepi16) -> vepi16 { _mm256_mullo_epi16(a, b) }
-    #[inline]
-    unsafe fn vec_srli_epi16(a: vepi16, shift: i32) -> vepi16 { _mm256_srli_epi16(a, shift) }
-    #[inline]
-    unsafe fn vec_packus_permute_epi16(a: vepi16, b: vepi16) -> vepi8 {
-        let packed = _mm256_packus_epi16(a, b);
-        _mm256_permute4x64_epi64(packed, _MM_SHUFFLE(3, 1, 2, 0))
+    pub type vps32 = __m256;
+
+    #[inline] pub unsafe fn vec_zero_epi16() -> vepi16 { return _mm256_setzero_si256(); }
+    #[inline] pub unsafe fn vec_zero_epi32() -> vepi32 { return _mm256_setzero_si256(); }
+    #[inline] pub unsafe fn vec_set1_epi16(n: i16)  -> vepi16 { return _mm256_set1_epi16(n); }
+    #[inline] pub unsafe fn vec_set1_epi32(n: i32)  -> vepi32 { return _mm256_set1_epi32(n); }
+    #[inline] pub unsafe fn vec_load_epi8(src: &i8) -> vepi8 { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+    }
+    #[inline] pub unsafe fn vec_store_epi8(dst: &mut i8, vec: vepi8) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi8>() == 0);
+        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+    }
+    #[inline] pub unsafe fn vec_load_epiu8(src: &u8) -> vepi8 { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+    }
+    #[inline] pub unsafe fn vec_store_epiu8(dst: &mut u8, vec: vepi8) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi8>() == 0);
+        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+    }
+    #[inline] pub unsafe fn vec_load_epi16(src: &i16) -> vepi16 { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+    }
+    #[inline] pub unsafe fn vec_store_epi16(dst: &mut i16, vec: vepi16) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi16>() == 0);
+        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+    }
+    #[inline] pub unsafe fn vec_load_epi32(src: &i32) -> vepi16 { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vepi16>() == 0);
+        return _mm256_load_si256(std::ptr::from_ref(src).cast());
+    }
+    #[inline] pub unsafe fn vec_store_epi32(dst: &mut i32, vec: vepi16) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vepi32>() == 0);
+        _mm256_store_si256(std::ptr::from_mut(dst).cast(), vec);
+    }
+    #[inline] pub unsafe fn vec_max_epi16(vec0: vepi16, vec1: vepi16)   -> vepi16  { return _mm256_max_epi16(vec0, vec1); }
+    #[inline] pub unsafe fn vec_min_epi16  (vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_min_epi16(vec0, vec1); }
+    #[inline] pub unsafe fn vec_add_epi16(vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_add_epi16(vec0, vec1); }
+    #[inline] pub unsafe fn vec_sub_epi16(vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_sub_epi16(vec0, vec1); }
+    #[inline] pub unsafe fn vec_add_epi32(vec0: vepi32, vec1: vepi32) -> vepi32 { return _mm256_add_epi32(vec0, vec1); }
+    #[inline] pub unsafe fn vec_mulhi_epi16(vec0: vepi16, vec1: vepi16) -> vepi16 { return _mm256_mulhi_epi16(vec0, vec1); }
+    #[inline] pub unsafe fn vec_slli_epi16<const SHIFT: i32>(vec: vepi16)  -> vepi16  { return _mm256_slli_epi16(vec, SHIFT); }
+    #[inline] pub unsafe fn vec_nnz_mask(vec: vepi32) -> i32 { return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(vec, _mm256_setzero_si256()))); }
+    #[inline] pub unsafe fn vec_packus_permute_epi16(vec0: vepi16, vec1: vepi16) -> vepi8 {
+        let packed = _mm256_packus_epi16(vec0, vec1);
+        return _mm256_permute4x64_epi64(packed, super::mm_shuffle(3, 1, 2, 0));
     }
 
-    #[inline]
-    unsafe fn vec_dpbusd_epi32(sum: vepi32, a: vepi8, b: vepi8) -> vepi32 {
-        let product16 = _mm256_maddubs_epi16(a, b);
+    #[inline] pub unsafe fn vec_dpbusd_epi32(sum: vepi32, vec0: vepi8, vec1: vepi8) -> vepi32 {
+        let product16 = _mm256_maddubs_epi16(vec0, vec1);
         let product32 = _mm256_madd_epi16(product16, _mm256_set1_epi16(1));
-        _mm256_add_epi32(sum, product32)
+        return _mm256_add_epi32(sum, product32);
     }
 
-    #[inline]
-    unsafe fn vec_set1_epi32(value: i32) -> vepi32 { _mm256_set1_epi32(value) }
+    #[inline] pub unsafe fn vec_cvtepi32_ps(vec: vepi32) -> vps32 { return _mm256_cvtepi32_ps(vec); }
 
-    #[inline]
-    unsafe fn vec_cvtepi32_ps(value: vepi32) -> vps32 { _mm256_cvtepi32_ps(value) }
+    #[inline] pub unsafe fn vec_zero_ps () -> vps32 { return _mm256_setzero_ps(); }
+    #[inline] pub unsafe fn vec_set1_ps (n: f32) -> vps32 { return _mm256_set1_ps(n); }
+    #[inline] pub unsafe fn vec_load_ps (src: &f32) -> vps32 { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(src) as usize) % std::mem::align_of::<vps32>() == 0);
+        return _mm256_load_ps(src);
+    }
+    #[inline] pub unsafe fn vec_store_ps(dst: &mut f32, vec: vps32) { 
+        // check alignment in debug mode
+        debug_assert!((std::ptr::from_ref(dst) as usize) % std::mem::align_of::<vps32>() == 0);
+        _mm256_store_ps(dst, vec);
+    }
+    #[inline] pub unsafe fn vec_add_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_add_ps(vec0, vec1); }
+    #[inline] pub unsafe fn vec_mul_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_mul_ps(vec0, vec1); }
+    #[inline] pub unsafe fn vec_div_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_div_ps(vec0, vec1); }
+    #[inline] pub unsafe fn vec_max_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_max_ps(vec0, vec1); }
+    #[inline] pub unsafe fn vec_min_ps(vec0: vps32, vec1: vps32) -> vps32 { return _mm256_min_ps(vec0, vec1); }
+    #[inline] pub unsafe fn vec_mul_add_ps(vec0: vps32, vec1: vps32, vec2: vps32) -> vps32 { return _mm256_fmadd_ps(vec0, vec1, vec2); }
+    #[inline] pub unsafe fn vec_reduce_add_ps(vec: vps32) -> f32 {
+        let upper_128 = _mm256_extractf128_ps(vec, 1);
+        let lower_128 = _mm256_castps256_ps128(vec);
+        let sum_128 = _mm_add_ps(upper_128, lower_128);
 
-    #[inline]
-    unsafe fn vec_zero_ps() -> vps32 { _mm256_setzero_ps() }
-    #[inline]
-    unsafe fn vec_set1_ps(value: f32) -> vps32 { _mm256_set1_ps(value) }
-    #[inline]
-    unsafe fn vec_load_ps(src: &f32) -> vps32 { _mm256_load_ps(src) }
-    #[inline]
-    unsafe fn vec_store_ps(dst: &mut f32, src: vps32) { _mm256_store_ps(dst, src) }
-    #[inline]
-    unsafe fn vec_add_ps(a: vps32, b: vps32) -> vps32 { _mm256_add_ps(a, b) }
-    #[inline]
-    unsafe fn vec_mul_ps(a: vps32, b: vps32) -> vps32 { _mm256_mul_ps(a, b) }
-    #[inline]
-    unsafe fn vec_div_ps(a: vps32, b: vps32) -> vps32 { _mm256_div_ps(a, b) }
-    #[inline]
-    unsafe fn vec_min_ps(a: vps32, b: vps32) -> vps32 { _mm256_min_ps(a, b) }
-    #[inline]
-    unsafe fn vec_max_ps(a: vps32, b: vps32) -> vps32 { _mm256_max_ps(a, b) }
-    #[inline]
-    unsafe fn vec_mul_add_ps(a: vps32, b: vps32, c: vps32) -> vps32 { _mm256_fmadd_ps(a, b, c) }
-    #[inline]
-    unsafe fn vec_reduce_add_ps(a: vps32) -> f32 { _mm256_reduce_add_ps(a) }
+        let upper_64 = _mm_movehl_ps(sum_128, sum_128);
+        let sum_64 = _mm_add_ps(upper_64, sum_128);
+
+        let upper_32 = _mm_shuffle_ps(sum_64, sum_64, 1);
+        let sum_32 = _mm_add_ss(upper_32, sum_64);
+
+        return _mm_cvtss_f32(sum_32);
+    }
+
+    pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<vepi8>() / std::mem::size_of::<u8>();
+    pub const I8_CHUNK_SIZE_I32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<u8>();
+    pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<vepi16>() / std::mem::size_of::<i16>();
+    pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
+    pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<vps32>() / std::mem::size_of::<f32>();
 }
+
+#[cfg(target_feature = "avx2")]
+pub use avx2::*;

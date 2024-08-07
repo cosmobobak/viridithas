@@ -82,6 +82,7 @@ pub fn output_bucket(pos: &Board) -> usize {
 const QA: i32 = 255;
 const QB: i32 = 64;
 const QAB: i32 = QA * QB;
+const FT_SHIFT: i32 = 10;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -282,7 +283,7 @@ pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Re
     let mut reader = BufReader::new(File::open(input)?);
     let mut writer = File::create(output)?;
     let unquantised_net = UnquantisedNetwork::read(&mut reader)?;
-    let net = unquantised_net.process(false);
+    let net = unquantised_net.process(true);
     net.write(&mut writer)?;
     Ok(())
 }
@@ -724,13 +725,11 @@ impl NNUEState {
 
         let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let mut ft_outputs = Align64([0; L1_SIZE]);
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
-        layers::activate_ft(us, them, &mut ft_outputs);
-        layers::propagate_l1(&ft_outputs, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
+        layers::activate_ft_and_propagate_l1(us, them, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
         layers::propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
         layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
 
