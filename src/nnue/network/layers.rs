@@ -100,7 +100,11 @@ mod avx2 {
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epi32, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
+            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16,
+            vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask,
+            vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16,
+            vec_store_epi32, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32,
+            F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE,
         },
     };
 
@@ -141,7 +145,7 @@ mod avx2 {
         clippy::cast_possible_truncation,
         clippy::cast_precision_loss,
         clippy::cast_ptr_alignment,
-        clippy::needless_range_loop,
+        clippy::needless_range_loop
     )]
     pub fn activate_ft_and_propagate_l1(
         us: &Align64<[i16; L1_SIZE]>,
@@ -164,26 +168,20 @@ mod avx2 {
             let mut offset = 0;
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2) {
-                    let mut i1_0 = vec_load_epi16(&acc.0[i]);
-                    let mut i1_1 = vec_load_epi16(&acc.0[i + I16_CHUNK_SIZE]);
+                    let i1_0 = vec_load_epi16(&acc[i]);
+                    let i1_1 = vec_load_epi16(&acc[i + I16_CHUNK_SIZE]);
 
-                    let mut i2_0 = vec_load_epi16(&acc.0[i + L1_PAIR_COUNT]);
-                    let mut i2_1 = vec_load_epi16(&acc.0[i + L1_PAIR_COUNT + I16_CHUNK_SIZE]);
+                    let i2_0 = vec_load_epi16(&acc[i + L1_PAIR_COUNT]);
+                    let i2_1 = vec_load_epi16(&acc[i + L1_PAIR_COUNT + I16_CHUNK_SIZE]);
 
-                    i1_0 = vec_min_epi16(i1_0, ft_one);
-                    i1_1 = vec_min_epi16(i1_1, ft_one);
+                    let c1_0 = vec_max_epi16(vec_min_epi16(i1_0, ft_one), zero);
+                    let c1_1 = vec_max_epi16(vec_min_epi16(i1_1, ft_one), zero);
 
-                    i2_0 = vec_min_epi16(i2_0, ft_one);
-                    i2_1 = vec_min_epi16(i2_1, ft_one);
+                    let c2_0 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(vec_min_epi16(i2_0, ft_one));
+                    let c2_1 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(vec_min_epi16(i2_1, ft_one));
 
-                    i1_0 = vec_max_epi16(i1_0, zero);
-                    i1_1 = vec_max_epi16(i1_1, zero);
-
-                    i2_0 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(i2_0);
-                    i2_1 = vec_slli_epi16::<{ 16 - FT_SHIFT }>(i2_1);
-
-                    let p_0 = vec_mulhi_epi16(i1_0, i2_0);
-                    let p_1 = vec_mulhi_epi16(i1_1, i2_1);
+                    let p_0 = vec_mulhi_epi16(c1_0, c2_0);
+                    let p_1 = vec_mulhi_epi16(c1_1, c2_1);
 
                     let product = vec_packus_permute_epi16(p_0, p_1);
 
