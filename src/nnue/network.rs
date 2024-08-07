@@ -81,7 +81,7 @@ pub fn output_bucket(pos: &Board) -> usize {
 
 const QA: i32 = 255;
 const QB: i32 = 64;
-const QAB: i32 = QA * QB;
+// const QAB: i32 = QA * QB;
 const FT_SHIFT: i32 = 10;
 
 // read in the binary file containing the network parameters

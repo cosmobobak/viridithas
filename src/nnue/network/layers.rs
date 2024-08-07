@@ -1,4 +1,4 @@
-use super::{Align64, FT_SHIFT, L1_SIZE, L2_SIZE, L3_SIZE, QA, QAB, QB};
+use super::{Align64, FT_SHIFT, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
 
 #[cfg(not(target_feature = "avx2"))]
 mod generic {
@@ -26,7 +26,7 @@ mod generic {
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
-        const SUM_DIV: f32 = QAB as f32;
+        const SUM_DIV: f32 = (QA * QB) as f32;
         // this is just autovec'd for the moment.
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
@@ -100,11 +100,7 @@ mod avx2 {
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16,
-            vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_mul_add_ps,
-            vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_set1_epi16, vec_set1_epi32, vec_set1_ps,
-            vec_slli_epi16, vec_store_epi32, vec_store_ps, vec_zero_epi16,
-            vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE,
+            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epi32, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
         },
     };
 
@@ -122,13 +118,13 @@ mod avx2 {
     const NNZ_TABLE: NNZTable = {
         let mut table = [NNZEntry { indices: [0; 8], count: 0 }; 256];
 
-        let mut i = 0;
+        let mut i = 0u16;
         while i < 256 {
-            table[i].count = i.count_ones() as u8;
+            table[i as usize].count = i.count_ones() as u8;
             let mut j = i;
             let mut k = 0;
             while j != 0 {
-                table[i].indices[k] = j.trailing_zeros() as u8;
+                table[i as usize].indices[k] = j.trailing_zeros() as u8;
                 j &= j - 1;
                 k += 1;
             }
@@ -162,7 +158,7 @@ mod avx2 {
             let zero = vec_zero_epi16();
             let ft_one = vec_set1_epi16(QA as i16);
 
-            let mut sums = [vec_zero_epi32(); L2_SIZE / I32_CHUNK_SIZE];
+            let mut sums = Align64([vec_zero_epi32(); L2_SIZE / I32_CHUNK_SIZE]);
             let mut registers = Align64([0i32; size_of::<vepi32>() / size_of::<i32>()]);
 
             let mut offset = 0;
@@ -214,12 +210,15 @@ mod avx2 {
                 offset += L1_PAIR_COUNT;
             }
 
+            let one = vec_set1_ps(1.0);
             for i in 0..L2_SIZE / F32_CHUNK_SIZE {
                 // Convert into floats, and activate L1
                 let bias_vec = vec_load_ps(&biases[i * F32_CHUNK_SIZE]);
                 let sum_div = vec_set1_ps(L1_DIV);
                 let sum_ps = vec_add_ps(vec_div_ps(vec_cvtepi32_ps(sums[i]), sum_div), bias_vec);
-                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], vec_max_ps(vec_zero_ps(), sum_ps));
+                let clipped = vec_min_ps(vec_max_ps(sum_ps, vec_zero_ps()), one);
+                let squared = vec_mul_ps(clipped, clipped);
+                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], squared);
             }
         }
     }
@@ -248,8 +247,11 @@ mod avx2 {
             }
 
             // Activate L2
+            let one = vec_set1_ps(1.0);
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
-                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], vec_max_ps(sum_vecs[i], vec_zero_ps()));
+                let clipped = vec_min_ps(vec_max_ps(sum_vecs[i], vec_zero_ps()), one);
+                let squared = vec_mul_ps(clipped, clipped);
+                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], squared);
             }
         }
     }
@@ -260,13 +262,19 @@ mod avx2 {
         bias: f32,
         output: &mut f32,
     ) {
-        let mut sum = bias;
+        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
+        unsafe {
+            let mut sum_vec = vec_zero_ps();
 
-        for i in 0..L3_SIZE {
-            sum += inputs.0[i] * weights.0[i];
+            // Affine transform for L3
+            for i in (0..L3_SIZE).step_by(F32_CHUNK_SIZE) {
+                let weight_vec = vec_load_ps(&weights[i]);
+                let input_vec = vec_load_ps(&inputs[i]);
+                sum_vec = vec_mul_add_ps(input_vec, weight_vec, sum_vec);
+            }
+
+            *output = bias + vec_reduce_add_ps(sum_vec);
         }
-
-        *output = sum;
     }
 }
 
