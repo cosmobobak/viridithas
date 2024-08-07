@@ -123,7 +123,7 @@ impl UnquantisedNetwork {
         // quantise the feature transformer weights
         let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
         let factoriser = buckets.next().unwrap();
-        for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.0.chunks_exact_mut(INPUT * L1_SIZE)) {
+        for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE)) {
             for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
                 let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
                 *tgt = scaled.round() as i16;
@@ -131,7 +131,7 @@ impl UnquantisedNetwork {
         }
 
         // quantise the feature transformer biases
-        for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.0.iter_mut()) {
+        for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.iter_mut()) {
             let scaled = *src * QA as f32;
             assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
@@ -147,7 +147,7 @@ impl UnquantisedNetwork {
                             let v = self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
                             assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                             let v = v.round() as i8;
-                            net.l1_weights[bucket].0[i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
+                            net.l1_weights[bucket][i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
                         }
                     }
                 }
@@ -157,39 +157,39 @@ impl UnquantisedNetwork {
                         let v = self.l1_weights[i][bucket][j] * QB as f32;
                         assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                         let v = v.round() as i8;
-                        net.l1_weights[bucket].0[j * L1_SIZE + i] = v;
+                        net.l1_weights[bucket][j * L1_SIZE + i] = v;
                     }
                 }
             }
 
             // transfer the L1 biases
             for i in 0..L2_SIZE {
-                net.l1_bias[bucket].0[i] = self.l1_biases[bucket][i];
+                net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
             }
 
             // transpose the L2 weights
             if use_simd {
                 for i in 0..L2_SIZE {
                     for j in 0..L3_SIZE {
-                        net.l2_weights[bucket].0[i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
+                        net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
                     }
                 }
             } else {
                 for i in 0..L2_SIZE {
                     for j in 0..L3_SIZE {
-                        net.l2_weights[bucket].0[j * L2_SIZE + i] = self.l2_weights[i][bucket][j];
+                        net.l2_weights[bucket][j * L2_SIZE + i] = self.l2_weights[i][bucket][j];
                     }
                 }
             }
 
             // transfer the L2 biases
             for i in 0..L3_SIZE {
-                net.l2_bias[bucket].0[i] = self.l2_biases[bucket][i];
+                net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
             }
 
             // transfer the L3 weights
             for i in 0..L3_SIZE {
-                net.l3_weights[bucket].0[i] = self.l3_weights[i][bucket];
+                net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
             }
 
             // transfer the L3 biases

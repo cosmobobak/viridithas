@@ -9,12 +9,12 @@ mod generic {
         // this is just autovec'd for the moment.
         for (a, acc) in [us, them].into_iter().enumerate() {
             for i in 0..L1_SIZE / 2 {
-                let l = acc.0[i];
-                let r = acc.0[L1_SIZE / 2 + i];
+                let l = *acc.get_unchecked(i);
+                let r = *acc.get_unchecked(L1_SIZE / 2 + i);
                 let cl = i32::clamp(i32::from(l), 0, QA);
                 let cr = i32::clamp(i32::from(r), 0, QA);
                 let r = (cl * cr) / QA;
-                output.0[i + a * L1_SIZE / 2] = r as u8;
+                *output.get_unchecked_mut(i + a * L1_SIZE / 2) = r as u8;
             }
         }
     }
@@ -31,14 +31,14 @@ mod generic {
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
             for j in 0..L2_SIZE {
-                sums[j] += i32::from(inputs.0[i]) * i32::from(weights.0[j * L1_SIZE + i]);
+                *sums.get_unchecked_mut(j) += i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
             }
         }
 
         for i in 0..L2_SIZE {
             // convert to f32 and activate L1
-            let clipped = f32::clamp((sums[i] as f32) / SUM_DIV + biases.0[i], 0.0, 1.0);
-            output.0[i] = clipped * clipped;
+            let clipped = f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
+            *output.get_unchecked_mut(i) = clipped * clipped;
         }
     }
 
@@ -62,19 +62,19 @@ mod generic {
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
         // this is just autovec'd for the moment.
-        let mut sums = biases.0;
+        let mut sums = biases;
 
         // affine transform for l2
         for i in 0..L2_SIZE {
             for j in 0..L3_SIZE {
-                sums[j] += inputs.0[i] * weights.0[j * L2_SIZE + i];
+                *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
             }
         }
 
         // activate l2
         for i in 0..L3_SIZE {
-            let clipped = f32::clamp(sums[i], 0.0, 1.0);
-            output.0[i] = clipped * clipped;
+            let clipped = f32::clamp(*sums.get_unchecked(i), 0.0, 1.0);
+            *output.get_unchecked_mut(i) = clipped * clipped;
         }
     }
 
@@ -86,8 +86,8 @@ mod generic {
     ) {
         let mut sum = bias;
 
-        for i in 0..L3_SIZE {
-            sum += inputs.0[i] * weights.0[i];
+        for (i, w) in inputs.iter().zip(weights.iter()) {
+            sum += *i * *w;
         }
 
         *output = sum;
@@ -100,38 +100,8 @@ mod avx2 {
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_add_ps, vec_cvtepi32_ps, vec_div_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epi32, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
+            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE
         },
-    };
-
-    #[derive(Debug, Clone, Copy)]
-    struct NNZEntry {
-        indices: [u8; 8],
-        count: u8,
-    }
-
-    struct NNZTable {
-        table: [NNZEntry; 256],
-    }
-
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const NNZ_TABLE: NNZTable = {
-        let mut table = [NNZEntry { indices: [0; 8], count: 0 }; 256];
-
-        let mut i = 0u16;
-        while i < 256 {
-            table[i as usize].count = i.count_ones() as u8;
-            let mut j = i;
-            let mut k = 0;
-            while j != 0 {
-                table[i as usize].indices[k] = j.trailing_zeros() as u8;
-                j &= j - 1;
-                k += 1;
-            }
-            i += 1;
-        }
-
-        NNZTable { table }
     };
 
     #[allow(
@@ -164,10 +134,10 @@ mod avx2 {
             let mut offset = 0;
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2) {
-                    let input0a   = vec_load_epi16(&acc[i + 0              + 0]);
-                    let input0b   = vec_load_epi16(&acc[i + I16_CHUNK_SIZE + 0]);
-                    let input1a   = vec_load_epi16(&acc[i + 0              + L1_PAIR_COUNT]);
-                    let input1b   = vec_load_epi16(&acc[i + I16_CHUNK_SIZE + L1_PAIR_COUNT]);
+                    let input0a   = vec_load_epi16(acc.get_unchecked(i + 0              + 0));
+                    let input0b   = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + 0));
+                    let input1a   = vec_load_epi16(acc.get_unchecked(i + 0              + L1_PAIR_COUNT));
+                    let input1b   = vec_load_epi16(acc.get_unchecked(i + I16_CHUNK_SIZE + L1_PAIR_COUNT));
 
                     let clipped0a = vec_min_epi16(vec_max_epi16(input0a, ft_zero), ft_one);
                     let clipped0b = vec_min_epi16(vec_max_epi16(input0b, ft_zero), ft_one);
@@ -176,7 +146,7 @@ mod avx2 {
 
                     let producta  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0a), clipped1a);
                     let productb  = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0b), clipped1b);
-                    vec_store_epiu8(&mut ft_outputs[offset + i], vec_packus_permute_epi16(producta, productb));
+                    vec_store_epiu8(ft_outputs.get_unchecked_mut(offset + i), vec_packus_permute_epi16(producta, productb));
                 }
                 offset += L1_PAIR_COUNT;
             }
@@ -185,9 +155,9 @@ mod avx2 {
             let inputs32 = std::ptr::from_ref(&ft_outputs).cast::<i32>();
             for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                 let input = vec_set1_epi32(*inputs32.add(i));
-                let weight = std::ptr::from_ref(&weights[i * L1_CHUNK_PER_32 * L2_SIZE]).cast::<vepi8>();
+                let weight = std::ptr::from_ref(weights.get_unchecked(i * L1_CHUNK_PER_32 * L2_SIZE)).cast::<vepi8>();
                 for j in 0..L2_SIZE / F32_CHUNK_SIZE {
-                    sums[j] = vec_dpbusd_epi32(sums[j], input, *weight.add(j));
+                    *sums.get_unchecked_mut(j) = vec_dpbusd_epi32(*sums.get_unchecked(j), input, *weight.add(j));
                 }
             }
 
@@ -196,11 +166,11 @@ mod avx2 {
             let sum_mul  = vec_set1_ps(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK_SIZE {
                 // Convert into floats, and activate L1
-                let bias_vec = vec_load_ps(&biases[i * F32_CHUNK_SIZE]);
-                let sum_ps   = vec_mul_add_ps(vec_cvtepi32_ps(sums[i]), sum_mul, bias_vec);
+                let bias_vec = vec_load_ps(biases.get_unchecked(i * F32_CHUNK_SIZE));
+                let sum_ps   = vec_mul_add_ps(vec_cvtepi32_ps(*sums.get_unchecked(i)), sum_mul, bias_vec);
                 let clipped  = vec_min_ps(vec_max_ps(sum_ps, zero), one);
                 let squared  = vec_mul_ps(clipped, clipped);
-                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], squared);
+                vec_store_ps(output.get_unchecked_mut(i * F32_CHUNK_SIZE), squared);
             }
         }
     }
@@ -217,23 +187,23 @@ mod avx2 {
             let mut sum_vecs = [vec_zero_ps(); L3_SIZE / F32_CHUNK_SIZE];
 
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
-                sum_vecs[i] = vec_load_ps(&biases[i * F32_CHUNK_SIZE]);
+                *sum_vecs.get_unchecked_mut(i) = vec_load_ps(biases.get_unchecked(i * F32_CHUNK_SIZE));
             }
 
             for i in 0..L2_SIZE {
-                let input_vec = vec_set1_ps(inputs[i]);
-                let weight = std::ptr::from_ref(&weights[i * L3_SIZE]).cast::<vps32>();
+                let input_vec = vec_set1_ps(*inputs.get_unchecked(i));
+                let weight = std::ptr::from_ref(weights.get_unchecked(i * L3_SIZE)).cast::<vps32>();
                 for j in 0..L3_SIZE / F32_CHUNK_SIZE {
-                    sum_vecs[j] = vec_mul_add_ps(input_vec, *weight.add(j), sum_vecs[j]);
+                    *sum_vecs.get_unchecked_mut(j) = vec_mul_add_ps(input_vec, *weight.add(j), *sum_vecs.get_unchecked(j));
                 }
             }
 
             // Activate L2
             let one = vec_set1_ps(1.0);
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
-                let clipped = vec_min_ps(vec_max_ps(sum_vecs[i], vec_zero_ps()), one);
+                let clipped = vec_min_ps(vec_max_ps(*sum_vecs.get_unchecked(i), vec_zero_ps()), one);
                 let squared = vec_mul_ps(clipped, clipped);
-                vec_store_ps(&mut output[i * F32_CHUNK_SIZE], squared);
+                vec_store_ps(output.get_unchecked_mut(i * F32_CHUNK_SIZE), squared);
             }
         }
     }
@@ -250,8 +220,8 @@ mod avx2 {
 
             // Affine transform for L3
             for i in (0..L3_SIZE).step_by(F32_CHUNK_SIZE) {
-                let weight_vec = vec_load_ps(&weights[i]);
-                let input_vec = vec_load_ps(&inputs[i]);
+                let weight_vec = vec_load_ps(weights.get_unchecked(i));
+                let input_vec = vec_load_ps(inputs.get_unchecked(i));
                 sum_vec = vec_mul_add_ps(input_vec, weight_vec, sum_vec);
             }
 
