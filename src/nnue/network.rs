@@ -140,24 +140,7 @@ impl UnquantisedNetwork {
                 let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
                 *tgt = scaled.round() as i16;
             }
-            // for each input feature, 
-            for i in 0..INPUT {
-                // for each neuron in the layer,
-                for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-                    // get the neuron's corresponding weight in the unsorted bucket,
-                    // and write it to the same feature (but the new position) in the target bucket.
-                    let feature = i * L1_SIZE;
-                    tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
-                }
-                for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-                    let tgt_index = tgt_index + L1_SIZE / 2;
-                    let src_index = src_index + L1_SIZE / 2;
-                    // get the neuron's corresponding weight in the unsorted bucket,
-                    // and write it to the same feature (but the new position) in the target bucket.
-                    let feature = i * L1_SIZE;
-                    tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
-                }
-            }
+            repermute_ft_bucket(tgt_bucket, &unsorted);
         }
 
         // quantise the feature transformer biases
@@ -167,21 +150,12 @@ impl UnquantisedNetwork {
             assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
-        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            net.feature_bias[tgt_index] = unsorted[src_index];
-        }
-        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            net.feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
-        }
+        repermute_ft_bias(&mut net.feature_bias, &unsorted);
 
         // transpose the L{1,2,3} weights and biases
         let mut sorted = vec![[[0f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
-        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            sorted[tgt_index] = self.l1_weights[src_index];
-        }
-        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-            sorted[tgt_index + L1_SIZE / 2] = self.l1_weights[src_index + L1_SIZE / 2];
-        }
+        let l1_weights = &self.l1_weights;
+        repermute_l1_weights(&mut sorted, l1_weights);
         for bucket in 0..OUTPUT_BUCKETS {
             // quant the L1 weights
             if use_simd {
@@ -256,6 +230,45 @@ impl UnquantisedNetwork {
             let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             reader.read_exact(mem)?;
             Ok(net)
+        }
+    }
+}
+
+fn repermute_l1_weights(sorted: &mut [[[f32; 16]; 8]], l1_weights: &[[[f32; 16]; 8]; 2048]) {
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        sorted[tgt_index] = l1_weights[src_index];
+    }
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index + L1_SIZE / 2];
+    }
+}
+
+fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        feature_bias[tgt_index] = unsorted[src_index];
+    }
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
+    }
+}
+
+fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
+    // for each input feature, 
+    for i in 0..INPUT {
+        // for each neuron in the layer,
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            // get the neuron's corresponding weight in the unsorted bucket,
+            // and write it to the same feature (but the new position) in the target bucket.
+            let feature = i * L1_SIZE;
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+        }
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let tgt_index = tgt_index + L1_SIZE / 2;
+            let src_index = src_index + L1_SIZE / 2;
+            // get the neuron's corresponding weight in the unsorted bucket,
+            // and write it to the same feature (but the new position) in the target bucket.
+            let feature = i * L1_SIZE;
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
 }
