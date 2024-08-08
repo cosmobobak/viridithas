@@ -177,6 +177,16 @@ mod avx2 {
                 offset += L1_PAIR_COUNT;
             }
 
+            // logging for permutation
+            #[cfg(feature = "nnz-counts")]
+            for (i, elem) in ft_outputs.iter().enumerate() {
+                let elem = elem.assume_init();
+                let nnz = elem != 0;
+                if nnz {
+                    super::NNZ_COUNTS[i].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+
             let mut sums = [vec_zero_epi32(); L2_SIZE / F32_CHUNK_SIZE];
             let inputs32 = std::ptr::from_ref(&ft_outputs).cast::<i32>();
             for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
@@ -262,3 +272,9 @@ pub use avx2::*;
 
 #[cfg(not(target_feature = "avx2"))]
 pub use generic::*;
+
+// logging for permutation
+#[cfg(feature = "nnz-counts")]
+pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] = {
+    unsafe { std::mem::transmute([0u64; super::L1_SIZE]) }
+};

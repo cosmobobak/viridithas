@@ -17,6 +17,7 @@ syzygy = ["dep:cc"]
 bindgen = ["dep:bindgen"]
 tuning = []
 stats = []
+nnz-counts = []
 datagen = ["dep:serde", "dep:toml", "dep:rand", "dep:num_cpus", "dep:chrono", "dep:ctrlc", "dep:bulletformat"]
 final-release = []
 
