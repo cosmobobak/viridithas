@@ -1,20 +1,22 @@
-use super::{Align64, FT_SHIFT, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
-
 #[cfg(not(target_feature = "avx2"))]
 mod generic {
-    use super::*;
+    use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
     fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
         // this is just autovec'd for the moment.
         for (a, acc) in [us, them].into_iter().enumerate() {
             for i in 0..L1_SIZE / 2 {
-                let l = *acc.get_unchecked(i);
-                let r = *acc.get_unchecked(L1_SIZE / 2 + i);
-                let cl = i32::clamp(i32::from(l), 0, QA);
-                let cr = i32::clamp(i32::from(r), 0, QA);
-                let r = (cl * cr) / QA;
-                *output.get_unchecked_mut(i + a * L1_SIZE / 2) = r as u8;
+                // SAFETY: the largest index into `acc` that we construct is `L1_SIZE / 2 + (L1_SIZE / 2 - 1)`.
+                // this is in-bounds.
+                unsafe {
+                    let l = *acc.get_unchecked(i);
+                    let r = *acc.get_unchecked(L1_SIZE / 2 + i);
+                    let cl = i32::clamp(i32::from(l), 0, QA);
+                    let cr = i32::clamp(i32::from(r), 0, QA);
+                    let r = (cl * cr) / QA;
+                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) = r as u8;
+                }
             }
         }
     }
@@ -31,15 +33,22 @@ mod generic {
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
             for j in 0..L2_SIZE {
-                *sums.get_unchecked_mut(j) +=
-                    i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
+                // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
+                // and `weights` is `L1_SIZE * L2_SIZE` long.
+                unsafe {
+                    *sums.get_unchecked_mut(j) +=
+                        i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
+                }
             }
         }
 
         for i in 0..L2_SIZE {
             // convert to f32 and activate L1
-            let clipped = f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
-            *output.get_unchecked_mut(i) = clipped * clipped;
+            // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
+            unsafe {
+                let clipped = f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
+                *output.get_unchecked_mut(i) = clipped * clipped;
+            }
         }
     }
 
@@ -63,19 +72,26 @@ mod generic {
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
         // this is just autovec'd for the moment.
-        let mut sums = biases;
+        let mut sums = biases.clone();
 
         // affine transform for l2
         for i in 0..L2_SIZE {
             for j in 0..L3_SIZE {
-                *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
+                // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long, 
+                // and `weights` is `L2_SIZE * L3_SIZE` long.
+                unsafe {
+                    *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
+                }
             }
         }
 
         // activate l2
         for i in 0..L3_SIZE {
-            let clipped = f32::clamp(*sums.get_unchecked(i), 0.0, 1.0);
-            *output.get_unchecked_mut(i) = clipped * clipped;
+            // SAFETY: `sums` is `L3_SIZE` long, and `output` is `L3_SIZE` long.
+            unsafe {
+                let clipped = f32::clamp(*sums.get_unchecked(i), 0.0, 1.0);
+                *output.get_unchecked_mut(i) = clipped * clipped;
+            }
         }
     }
 
@@ -98,8 +114,7 @@ mod generic {
 #[cfg(target_feature = "avx2")]
 mod avx2 {
     use std::mem::MaybeUninit;
-
-    use super::{Align64, FT_SHIFT, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
+    use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
@@ -109,6 +124,8 @@ mod avx2 {
             vec_zero_epi32, vec_zero_ps, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE,
         },
     };
+
+    const FT_SHIFT: i32 = 10;
 
     #[allow(
         clippy::too_many_lines,

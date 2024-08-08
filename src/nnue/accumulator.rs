@@ -210,7 +210,7 @@ mod avx2 {
 
 #[cfg(not(target_feature = "avx2"))]
 mod generic {
-    use super::*;
+    use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(
@@ -235,7 +235,7 @@ mod generic {
                     let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let sub = *sub_block.get_unchecked(unroll_offset + r_idx);
-                        *reg = *reg - sub;
+                        *reg -= sub;
                     }
                 }
                 for &add_index in adds {
@@ -243,7 +243,7 @@ mod generic {
                     let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let add = *add_block.get_unchecked(unroll_offset + r_idx);
-                        *reg = *reg + add;
+                        *reg += add;
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {

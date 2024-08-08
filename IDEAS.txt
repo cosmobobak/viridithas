@@ -30,6 +30,7 @@ MINOR:
 - whatever the hell this is
   - https://github.com/Vizvezdenec/Stockfish/compare/b55217fd02...f5f472eb38
 - switch to step_by in acc code.
+- change zstd impl for releases
 
 ANNUEP:
 - quantisation
