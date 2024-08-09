@@ -63,7 +63,9 @@ pub enum SearchLimit {
         soft_limit: u64,
         hard_limit: u64,
     },
-    Pondering { saved_limit: Box<SearchLimit> },
+    Pondering {
+        saved_limit: Box<SearchLimit>,
+    },
 }
 
 impl Default for SearchLimit {
