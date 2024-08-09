@@ -86,29 +86,31 @@ const QB: i32 = 64;
 // have to do some path manipulation to get relative paths to work
 pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
+#[rustfmt::skip]
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights: [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
-    ft_biases: [f32; L1_SIZE],
+    ft_weights:   [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
+    ft_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases: [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases: [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights: [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases: [f32; OUTPUT_BUCKETS],
+    l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
+    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub feature_bias: Align64<[i16; L1_SIZE]>,
-    pub l1_weights: [Align64<[i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias: [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights: [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights: [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias: [f32; OUTPUT_BUCKETS],
+    pub feature_bias:    Align64<[i16; L1_SIZE]>,
+    pub l1_weights:     [Align64<[i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub l3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
 const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -285,16 +287,14 @@ impl NNUEParams {
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
-        // SAFETY: NNUEParams can be zeroed.
+        // SAFETY: NNUEParams is composed entiredly of POD types, so we can
+        // reinterpret it as bytes and write into it.
         unsafe {
-            let layout = std::alloc::Layout::new::<Self>();
-            let ptr = std::alloc::alloc_zeroed(layout);
-            if ptr.is_null() {
-                std::alloc::handle_alloc_error(layout);
-            }
-            #[allow(clippy::cast_ptr_alignment)]
-            let mut net = Box::from_raw(ptr.cast::<Self>());
-            let mut mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
+            let mut net = Self::zeroed();
+            let mut mem = std::slice::from_raw_parts_mut(
+                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
+                std::mem::size_of::<Self>(),
+            );
             let expected_bytes = mem.len() as u64;
             let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
                 .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
