@@ -63,6 +63,7 @@ pub enum SearchLimit {
         soft_limit: u64,
         hard_limit: u64,
     },
+    Pondering { saved_limit: Box<SearchLimit> },
 }
 
 impl Default for SearchLimit {
@@ -72,6 +73,19 @@ impl Default for SearchLimit {
 }
 
 impl SearchLimit {
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_pondering(self) -> Self {
+        Self::Pondering { saved_limit: Box::new(self) }
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn from_pondering(self) -> Self {
+        match self {
+            Self::Pondering { saved_limit } => *saved_limit,
+            other => other,
+        }
+    }
+
     pub const fn depth(&self) -> Option<Depth> {
         match self {
             Self::Depth(d) => Some(*d),
@@ -198,9 +212,13 @@ impl TimeManager {
         self.last_factors = [1.0, 1.0];
         self.best_move_nodes_fraction = None;
 
-        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
-            let (opt_time, hard_time, max_time) =
+        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit.clone().from_pondering() {
+            let (opt_time, mut hard_time, max_time) =
                 SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
+            // deal with "ponderhit" arriving while we're stuck on a depth:
+            if matches!(self.limit, SearchLimit::Pondering { .. }) {
+                hard_time = opt_time;
+            }
             self.max_time = Duration::from_millis(max_time);
             self.hard_time = Duration::from_millis(hard_time);
             self.opt_time = Duration::from_millis(opt_time);
@@ -244,6 +262,7 @@ impl TimeManager {
                 }
                 past_limit
             }
+            SearchLimit::Pondering { .. } => false,
         }
     }
 

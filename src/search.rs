@@ -195,20 +195,20 @@ impl Board {
 
         // start search threads:
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
+        let bcopy = self.clone();
+        let icopy = info.clone();
         thread::scope(|s| {
             s.spawn(|| {
                 // copy data into thread
-                let mut board = self.clone();
-                let mut info = info.clone();
-                t1.set_up_for_search(&board);
-                board.iterative_deepening::<MainThread>(&mut info, t1);
+                t1.set_up_for_search(self);
+                self.iterative_deepening::<MainThread>(info, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             for t in rest.iter_mut() {
                 s.spawn(|| {
                     // copy data into thread
-                    let mut board = self.clone();
-                    let mut info = info.clone();
+                    let mut board = bcopy.clone();
+                    let mut info = icopy.clone();
                     t.set_up_for_search(&board);
                     board.iterative_deepening::<HelperThread>(&mut info, t);
                 });
@@ -219,6 +219,7 @@ impl Board {
         let depth_achieved = best_thread.completed;
         let pv = best_thread.pv().clone();
         let best_move = pv.moves().first().copied().unwrap_or_else(|| self.default_move(&thread_headers[0]));
+        let ponder_move = pv.moves().get(1);
 
         if info.print_to_stdout {
             // always give a final info log before ending search
@@ -227,7 +228,8 @@ impl Board {
         }
 
         if info.print_to_stdout {
-            println!("bestmove {best_move}");
+            let maybe_ponder = ponder_move.map_or_else(String::new, |ponder_move| format!(" ponder {ponder_move}"));
+            println!("bestmove {best_move}{maybe_ponder}");
             #[cfg(feature = "stats")]
             info.print_stats();
             #[cfg(feature = "stats")]
@@ -259,6 +261,10 @@ impl Board {
                 if (info.time_manager.is_dynamic() || info.time_manager.is_soft_nodes())
                     && info.time_manager.is_past_opt_time(info.nodes.get_global())
                 {
+                    info.stopped.store(true, Ordering::SeqCst);
+                    break 'deepening;
+                }
+                if info.time_manager.limit().depth().unwrap_or(MAX_DEPTH - 1).ply_to_horizon() < d {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }

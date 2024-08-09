@@ -111,15 +111,23 @@ impl<'a> SearchInfo<'a> {
         self.stdin_rx = Some(stdin_rx);
     }
 
-    pub fn check_up(&self) -> bool {
+    pub fn check_up(&mut self) -> bool {
         let already_stopped = self.stopped.load(Ordering::SeqCst);
         if already_stopped {
             return true;
         }
         let res = self.time_manager.check_up(self.stopped, self.nodes.get_global());
         if let Some(Ok(cmd)) = self.stdin_rx.map(|m| m.lock().unwrap().try_recv()) {
-            self.stopped.store(true, Ordering::SeqCst);
             let cmd = cmd.trim();
+            if cmd == "ponderhit" {
+                println!("info string limit was {:?}", self.time_manager.limit());
+                let unpondering_limit = self.time_manager.limit().clone().from_pondering();
+                println!("info string unpondering limit is {unpondering_limit:?}");
+                self.time_manager.set_limit(unpondering_limit);
+                self.time_manager.start();
+                return self.time_manager.check_up(self.stopped, self.nodes.get_global());
+            }
+            self.stopped.store(true, Ordering::SeqCst);
             if cmd == "quit" {
                 uci::QUIT.store(true, Ordering::SeqCst);
             }
