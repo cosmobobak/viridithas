@@ -14,19 +14,22 @@ mod marlinformat;
 /// The configuration for a filter that can be applied to a game during unpacking.
 #[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
+#[serde(default)]
 pub struct Filter {
     /// Filter out positions that have a ply count less than this value.
     min_ply: usize,
     /// Filter out positions that have fewer pieces on the board than this value.
     min_pieces: u32,
     /// Filter out positions that have an absolute evaluation above this value.
-    max_eval: i32,
+    max_eval: u32,
     /// Filter out positions where a tactical move was made.
     filter_tactical: bool,
     /// Filter out positions that are in check.
     filter_check: bool,
     /// Filter out positions where a castling move was made.
     filter_castling: bool,
+    /// Filter out positions where eval diverges from WDL by more than this value.
+    max_eval_incorrectness: u32,
 }
 
 impl Default for Filter {
@@ -34,20 +37,21 @@ impl Default for Filter {
         Self {
             min_ply: 16,
             min_pieces: 4,
-            max_eval: MINIMUM_TB_WIN_SCORE,
+            max_eval: MINIMUM_TB_WIN_SCORE.try_into().unwrap(),
             filter_tactical: true,
             filter_check: true,
             filter_castling: false,
+            max_eval_incorrectness: u32::MAX,
         }
     }
 }
 
 impl Filter {
-    pub fn should_filter(&self, mv: Move, eval: i32, board: &Board) -> bool {
+    pub fn should_filter(&self, mv: Move, eval: i32, board: &Board, wdl: WDL) -> bool {
         if board.ply() < self.min_ply {
             return true;
         }
-        if eval.abs() >= self.max_eval {
+        if eval.unsigned_abs() >= self.max_eval {
             return true;
         }
         if board.pieces.occupied().count() < self.min_pieces {
@@ -61,6 +65,25 @@ impl Filter {
         }
         if self.filter_castling && mv.is_castle() {
             return true;
+        }
+        if self.max_eval_incorrectness != u32::MAX {
+            // if the game was a draw, prune evals that are too far away from a draw.
+            if wdl == WDL::Draw && eval.unsigned_abs() > self.max_eval_incorrectness {
+                return true;
+            }
+            // otherwise, if the winner's eval drops too low, prune.
+            let winner_pov_eval = if wdl == WDL::Win {
+                // if white won, get white's eval.
+                eval
+            } else {
+                // if black won, get black's eval.
+                -eval
+            };
+            // clamp winner_pov_eval down to 0, check size.
+            if winner_pov_eval.min(0).unsigned_abs() > self.max_eval_incorrectness {
+                // too high for the losing side.
+                return true;
+            }
         }
         false
     }
@@ -76,6 +99,17 @@ pub struct Game {
 
 const SEQUENCE_ELEM_SIZE: usize = std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
 const NULL_TERMINATOR: [u8; SEQUENCE_ELEM_SIZE] = [0; SEQUENCE_ELEM_SIZE];
+
+impl WDL {
+    pub fn from_packed(packed: u8) -> Self {
+        match packed {
+            2 => Self::Win,
+            1 => Self::Draw,
+            0 => Self::Loss,
+            _ => panic!("invalid WDL, expected 0, 1, or 2, got {packed}"),
+        }
+    }
+}
 
 impl Game {
     pub fn new(initial_position: &Board) -> Self {
@@ -96,12 +130,7 @@ impl Game {
 
     pub fn outcome(&self) -> WDL {
         let (_, _, wdl, _) = self.initial_position.unpack();
-        match wdl {
-            2 => WDL::Win,
-            1 => WDL::Draw,
-            0 => WDL::Loss,
-            _ => panic!("invalid WDL: {wdl}"),
-        }
+        WDL::from_packed(wdl)
     }
 
     pub fn add_move(&mut self, mv: Move, eval: i16) {
@@ -188,12 +217,13 @@ impl Game {
     }
 
     /// Internally counts how many positions would pass the filter in this game.
-    pub fn filter_pass_count(&self, filter: impl Fn(Move, i32, &Board) -> bool) -> u64 {
+    pub fn filter_pass_count(&self, filter: impl Fn(Move, i32, &Board, WDL) -> bool) -> u64 {
         let mut cnt = 0;
-        let (mut board, _, _, _) = self.initial_position.unpack();
+        let (mut board, _, wdl, _) = self.initial_position.unpack();
+        let outcome = WDL::from_packed(wdl);
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board) {
+            if filter(*mv, i32::from(eval), &board, outcome) {
                 cnt += 1;
             }
             board.make_move_simple(*mv);
@@ -206,12 +236,13 @@ impl Game {
     pub fn splat_to_marlinformat(
         &self,
         mut callback: impl FnMut(marlinformat::PackedBoard) -> anyhow::Result<()>,
-        filter: impl Fn(Move, i32, &Board) -> bool,
+        filter: impl Fn(Move, i32, &Board, WDL) -> bool,
     ) -> anyhow::Result<()> {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
+        let outcome = WDL::from_packed(wdl);
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board) {
+            if filter(*mv, i32::from(eval), &board, outcome) {
                 callback(board.pack(eval, wdl, 0))?;
             }
             board.make_move_simple(*mv);
@@ -224,12 +255,13 @@ impl Game {
     pub fn splat_to_bulletformat(
         &self,
         mut callback: impl FnMut(bulletformat::ChessBoard) -> anyhow::Result<()>,
-        filter: impl Fn(Move, i32, &Board) -> bool,
+        filter: impl Fn(Move, i32, &Board, WDL) -> bool,
     ) -> anyhow::Result<()> {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
+        let outcome = WDL::from_packed(wdl);
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board) {
+            if filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
                 let piece_layout = &board.pieces;
                 bbs[0] = piece_layout.occupied_co(Colour::White).inner();
@@ -312,7 +344,7 @@ mod tests {
                 boards.push(board);
                 Ok(())
             },
-            |_, _, _| true,
+            |_, _, _, _| true,
         )
         .unwrap();
         assert_eq!(boards.len(), 3);

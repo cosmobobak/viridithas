@@ -645,11 +645,11 @@ pub fn run_splat(
     limit: Option<usize>,
 ) -> anyhow::Result<()> {
     // check that the input file exists
-    if !input.exists() {
+    if !input.try_exists()? {
         bail!("Input file does not exist.");
     }
     // check that the output does not exist
-    if output.exists() {
+    if output.try_exists()? {
         bail!("Output file already exists.");
     }
 
@@ -663,7 +663,7 @@ pub fn run_splat(
     } else {
         Filter::default()
     };
-    let filter_fn = |mv: Move, eval: i32, board: &Board| !filter_state.should_filter(mv, eval, board);
+    let filter_fn = |mv: Move, eval: i32, board: &Board, wdl: WDL| !filter_state.should_filter(mv, eval, board, wdl);
 
     // open the input file
     let input_file = File::open(input).with_context(|| "Failed to create input file")?;
@@ -711,7 +711,7 @@ pub fn run_splat(
             }
         }
     }
-    println!();
+    println!("\r{game_count} games splatted.");
 
     output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
 
@@ -721,11 +721,11 @@ pub fn run_splat(
 /// Unpacks the variable-length game format into a PGN file.
 pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::Result<()> {
     // check that the input file exists
-    if !input.exists() {
+    if !input.try_exists()? {
         bail!("Input file does not exist.");
     }
     // check that the output does not exist
-    if output.exists() {
+    if output.try_exists()? {
         bail!("Output file already exists.");
     }
 
@@ -919,7 +919,7 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
             std::io::stdout().flush().with_context(|| "Failed to flush stdout!")?;
         }
     }
-    println!();
+    println!("\rProgress: 100%");
 
     println!("Statistics for dataset at {}", dataset_path.display());
     println!("Number of games: {}", stats.games);
@@ -1022,7 +1022,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
                     match dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
                         Ok(game) => {
                             count += game.len() as u64;
-                            filtered += game.filter_pass_count(|mv, eval, board| !filter_state.should_filter(mv, eval, board));
+                            filtered += game.filter_pass_count(|mv, eval, board, wdl| !filter_state.should_filter(mv, eval, board, wdl));
                             move_buffer = game.into_move_buffer();
                         }
                         Err(error) => {
