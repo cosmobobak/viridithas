@@ -166,6 +166,7 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
     let mut incs: [Option<i64>; 2] = [None, None];
     let mut nodes: Option<u64> = None;
     let mut limit = SearchLimit::Infinite;
+    let mut ponder = false;
 
     let mut parts = text.split_ascii_whitespace();
     let command =
@@ -191,6 +192,7 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
                 limit = SearchLimit::Mate { ply };
             }
             "nodes" => nodes = Some(part_parse("nodes", parts.next())?),
+            "ponder" => ponder = true,
             other => bail!(UciError::InvalidFormat(format!("Unknown term: {other}"))),
         }
     }
@@ -218,6 +220,10 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
 
     if let Some(nodes) = nodes {
         limit = SearchLimit::Nodes(nodes);
+    }
+
+    if ponder {
+        limit = limit.to_pondering();
     }
 
     Ok(limit)
@@ -491,6 +497,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("option name SyzygyProbeLimit type spin default 6 min 0 max 6");
     println!("option name SyzygyProbeDepth type spin default 1 min 1 max 100");
     println!("option name Contempt type spin default 0 min -10000 max 10000");
+    println!("option name Ponder type check default false");
     println!("option name UCI_Chess960 type check default false");
     if full {
         for (id, default, min, max, _) in info.conf.base_config() {
@@ -667,6 +674,10 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 } else {
                     res.map(|_| ())
                 }
+            }
+            "ponderhit" => {
+                println!("info error ponderhit given while not searching.");
+                Ok(())
             }
             benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf),
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),

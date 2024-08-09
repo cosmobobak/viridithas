@@ -133,10 +133,12 @@ impl Move {
         promotion.is_none() || promotion.unwrap().legal_promo()
     }
 
+    #[allow(dead_code)]
     pub const fn inner(self) -> u16 {
         self.data.get()
     }
 
+    #[allow(dead_code)]
     pub fn from_raw(data: u16) -> Option<Self> {
         NonZeroU16::new(data).map(|nz| Self { data: nz })
     }
