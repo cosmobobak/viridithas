@@ -280,6 +280,11 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 
 impl NNUEParams {
     pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
+        #[cfg(not(feature = "zstd"))]
+        type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
+        #[cfg(feature = "zstd")]
+        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
+
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -291,7 +296,7 @@ impl NNUEParams {
             let mut net = Box::from_raw(ptr.cast::<Self>());
             let mut mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             let expected_bytes = mem.len() as u64;
-            let mut decoder = ruzstd::StreamingDecoder::new(COMPRESSED_NNUE)
+            let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
                 .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
             let bytes_written =
                 std::io::copy(&mut decoder, &mut mem).with_context(|| "Failed to decompress NNUE weights.")?;
