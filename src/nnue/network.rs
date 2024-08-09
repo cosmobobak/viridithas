@@ -18,7 +18,7 @@ use crate::{
 use super::accumulator::{self, Accumulator};
 
 pub mod feature;
-mod layers;
+pub mod layers;
 
 /// The size of the input layer of the network.
 pub const INPUT: usize = 768;
@@ -111,8 +111,20 @@ pub struct NNUEParams {
     pub l3_bias: [f32; OUTPUT_BUCKETS],
 }
 
+const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
+    let mut indices = [0; L1_SIZE / 2];
+    let mut i = 0;
+    while i < L1_SIZE / 2 {
+        indices[i] = i;
+        i += 1;
+    }
+    indices
+};
+
+// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [840, 168, 838, 364, 27, 147, 350, 469, 825, 480, 343, 78, 759, 685, 153, 279, 284, 483, 623, 436, 80, 872, 824, 844, 1020, 774, 478, 337, 495, 120, 686, 694, 987, 597, 87, 789, 1, 702, 524, 456, 375, 766, 88, 487, 239, 803, 360, 262, 243, 417, 157, 963, 526, 608, 197, 109, 883, 333, 204, 843, 492, 744, 717, 25, 401, 796, 36, 905, 170, 301, 520, 368, 118, 1001, 199, 385, 509, 708, 576, 442, 128, 970, 105, 598, 895, 268, 158, 400, 681, 636, 915, 511, 477, 938, 948, 431, 15, 21, 863, 180, 182, 131, 581, 679, 1018, 688, 444, 484, 395, 43, 16, 622, 34, 315, 267, 238, 746, 990, 585, 125, 453, 852, 479, 918, 299, 795, 331, 297, 45, 414, 248, 633, 682, 797, 741, 277, 216, 202, 854, 369, 426, 537, 376, 943, 504, 121, 853, 293, 934, 54, 196, 410, 501, 129, 831, 917, 737, 641, 443, 402, 866, 595, 528, 184, 380, 745, 1008, 256, 880, 566, 47, 723, 981, 253, 229, 49, 629, 553, 835, 91, 813, 228, 278, 452, 514, 306, 704, 529, 1016, 86, 951, 409, 457, 510, 763, 396, 728, 485, 639, 516, 827, 276, 669, 942, 275, 830, 455, 877, 734, 906, 213, 348, 218, 650, 921, 270, 448, 468, 142, 980, 610, 188, 127, 758, 571, 920, 313, 548, 540, 664, 579, 668, 240, 503, 933, 302, 491, 40, 193, 308, 22, 435, 236, 782, 523, 290, 873, 223, 995, 8, 496, 135, 116, 670, 257, 543, 465, 74, 698, 982, 856, 955, 513, 736, 882, 89, 422, 527, 826, 773, 644, 440, 94, 577, 946, 563, 474, 359, 411, 324, 772, 66, 51, 649, 321, 286, 750, 189, 265, 839, 280, 73, 10, 490, 482, 507, 433, 365, 155, 727, 663, 926, 894, 269, 617, 472, 62, 793, 163, 373, 381, 33, 421, 176, 538, 144, 967, 99, 285, 783, 397, 977, 940, 953, 602, 1003, 106, 20, 881, 964, 899, 192, 535, 660, 986, 604, 710, 247, 146, 1015, 338, 263, 931, 713, 767, 370, 83, 48, 778, 35, 711, 808, 619, 707, 508, 291, 71, 947, 65, 356, 150, 319, 377, 791, 72, 140, 412, 264, 342, 837, 525, 570, 64, 167, 884, 757, 578, 654, 769, 675, 536, 388, 845, 560, 865, 642, 635, 821, 760, 221, 493, 584, 219, 389, 716, 190, 439, 497, 310, 672, 361, 960, 929, 232, 768, 464, 407, 935, 486, 69, 210, 37, 771, 897, 434, 178, 779, 42, 183, 829, 134, 850, 347, 505, 600, 371, 244, 517, 287, 973, 420, 209, 862, 591, 848, 612, 984, 44, 889, 60, 258, 531, 334, 386, 50, 32, 601, 374, 200, 274, 645, 419, 394, 31, 637, 220, 683, 515, 30, 770, 703, 599, 288, 810, 868, 186, 859, 902, 110, 594, 550, 97, 458, 1017, 701, 556, 266, 353, 1012, 857, 349, 607, 994, 841, 787, 462, 860, 993, 273, 855, 327, 613, 547, 316, 181, 822, 700, 937, 574, 226, 705, 624, 449, 445, 14, 425, 325, 108, 61, 871, 542, 621, 901, 292, 691, 790, 846, 53, 59, 816, 217, 587, 936, 557, 801, 205, 561, 954, 235, 222, 798, 765, 784, 5, 989, 154, 460, 283, 282, 530, 237, 596, 676, 903, 366, 996, 558, 620, 476, 721, 46, 117, 648, 152, 564, 781, 817, 786, 939, 661, 628, 384, 807, 304, 58, 177, 398, 339, 956, 569, 38, 317, 945, 101, 966, 502, 345, 195, 254, 544, 415, 326, 7, 56, 697, 294, 67, 133, 405, 447, 731, 809, 68, 13, 743, 161, 678, 114, 590, 609, 885, 665, 975, 693, 552, 847, 811, 90, 729, 169, 307, 305, 115, 296, 194, 1000, 818, 892, 861, 634, 311, 393, 473, 888, 156, 362, 559, 927, 1002, 832, 0, 699, 814, 4, 834, 928, 534, 191, 11, 588, 748, 974, 241, 573, 733, 466, 81, 233, 886, 864, 991, 272, 298, 2, 950, 489, 546, 187, 910, 726, 165, 211, 687, 870, 667, 225, 76, 521, 689, 320, 390, 39, 923, 896, 833, 383, 79, 533, 692, 351, 77, 732, 706, 709, 340, 932, 175, 988, 893, 126, 1019, 673, 143, 104, 751, 379, 589, 541, 735, 423, 657, 52, 842, 958, 968, 224, 461, 806, 3, 70, 112, 113, 215, 605, 618, 98, 432, 792, 75, 625, 869, 876, 57, 122, 430, 100, 712, 780, 413, 799, 84, 999, 404, 925, 93, 95, 271, 914, 494, 626, 715, 1011, 575, 851, 102, 1009, 214, 998, 295, 568, 738, 961, 565, 309, 555, 985, 162, 632, 874, 17, 658, 506, 891, 725, 261, 363, 488, 762, 913, 185, 646, 446, 145, 662, 1022, 965, 250, 922, 139, 159, 638, 18, 997, 630, 138, 459, 230, 85, 690, 652, 674, 234, 242, 231, 336, 408, 522, 441, 1004, 959, 1023, 898, 92, 512, 322, 909, 451, 580, 651, 467, 399, 119, 1005, 160, 592, 136, 655, 151, 437, 367, 722, 992, 907, 593, 719, 819, 329, 912, 804, 416, 858, 29, 438, 198, 684, 788, 500, 328, 312, 631, 582, 983, 777, 603, 355, 281, 611, 752, 332, 344, 260, 656, 137, 919, 900, 387, 714, 358, 372, 941, 201, 314, 972, 323, 828, 812, 761, 179, 532, 382, 63, 904, 303, 357, 227, 55, 424, 107, 289, 976, 406, 754, 567, 666, 251, 463, 103, 794, 203, 28, 742, 653, 908, 916, 164, 392, 428, 805, 206, 130, 659, 952, 677, 1021, 26, 123, 208, 671, 836, 785, 470, 971, 499, 640, 724, 481, 820, 172, 429, 23, 519, 539, 747, 391, 957, 551, 756, 606, 1007, 647, 696, 207, 615, 979, 171, 815, 124, 148, 740, 41, 627, 471, 330, 720, 911, 300, 149, 586, 9, 878, 427, 24, 245, 249, 255, 875, 730, 695, 583, 132, 96, 680, 111, 949, 141, 764, 403, 823, 318, 518, 879, 944, 775, 616, 572, 498, 867, 352, 475, 418, 1014, 166, 890, 978, 82, 718, 802, 354, 450, 454, 212, 755, 6, 1010, 887, 753, 562, 545, 549, 969, 174, 614, 962, 346, 749, 378, 12, 776, 259, 800, 1013, 173, 930, 1006, 19, 849, 335, 739, 554, 246, 252, 643, 924, 341];
+
 impl UnquantisedNetwork {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cognitive_complexity, clippy::needless_range_loop)]
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
@@ -122,27 +134,35 @@ impl UnquantisedNetwork {
         let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
         let factoriser = buckets.next().unwrap();
         for (src_bucket, tgt_bucket) in buckets.zip(net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE)) {
-            for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(tgt_bucket.iter_mut()) {
+            // for repermuting the weights.
+            let mut unsorted = vec![0i16; INPUT * L1_SIZE];
+            for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(unsorted.iter_mut()) {
                 let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
                 *tgt = scaled.round() as i16;
             }
+            repermute_ft_bucket(tgt_bucket, &unsorted);
         }
 
         // quantise the feature transformer biases
-        for (src, tgt) in self.ft_biases.iter().zip(net.feature_bias.iter_mut()) {
+        let mut unsorted = vec![0i16; L1_SIZE];
+        for (src, tgt) in self.ft_biases.iter().zip(unsorted.iter_mut()) {
             let scaled = *src * QA as f32;
             assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
+        repermute_ft_bias(&mut net.feature_bias, &unsorted);
 
         // transpose the L{1,2,3} weights and biases
+        let mut sorted = vec![[[0f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
+        let l1_weights = &self.l1_weights;
+        repermute_l1_weights(&mut sorted, l1_weights);
         for bucket in 0..OUTPUT_BUCKETS {
             // quant the L1 weights
             if use_simd {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                     for j in 0..L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            let v = self.l1_weights[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
+                            let v = sorted[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
                             assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                             let v = v.round() as i8;
                             net.l1_weights[bucket][i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
@@ -152,7 +172,7 @@ impl UnquantisedNetwork {
             } else {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
-                        let v = self.l1_weights[i][bucket][j] * QB as f32;
+                        let v = sorted[i][bucket][j] * QB as f32;
                         assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                         let v = v.round() as i8;
                         net.l1_weights[bucket][j * L1_SIZE + i] = v;
@@ -210,6 +230,45 @@ impl UnquantisedNetwork {
             let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
             reader.read_exact(mem)?;
             Ok(net)
+        }
+    }
+}
+
+fn repermute_l1_weights(sorted: &mut [[[f32; 16]; 8]], l1_weights: &[[[f32; 16]; 8]; 2048]) {
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        sorted[tgt_index] = l1_weights[src_index];
+    }
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index + L1_SIZE / 2];
+    }
+}
+
+fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        feature_bias[tgt_index] = unsorted[src_index];
+    }
+    for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
+    }
+}
+
+fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
+    // for each input feature, 
+    for i in 0..INPUT {
+        // for each neuron in the layer,
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            // get the neuron's corresponding weight in the unsorted bucket,
+            // and write it to the same feature (but the new position) in the target bucket.
+            let feature = i * L1_SIZE;
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+        }
+        for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
+            let tgt_index = tgt_index + L1_SIZE / 2;
+            let src_index = src_index + L1_SIZE / 2;
+            // get the neuron's corresponding weight in the unsorted bucket,
+            // and write it to the same feature (but the new position) in the target bucket.
+            let feature = i * L1_SIZE;
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
         }
     }
 }

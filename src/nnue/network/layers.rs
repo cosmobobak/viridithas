@@ -118,14 +118,75 @@ mod avx2 {
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16,
-            vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_packus_permute_epi16, vec_reduce_add_ps,
-            vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16,
-            vec_zero_epi32, vec_zero_ps, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE,
+            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_epi32, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
         },
     };
 
     const FT_SHIFT: i32 = 10;
+
+    #[derive(Debug, Clone, Copy)]
+    #[repr(C, align(16))]
+    struct NNZEntry {
+        indices: [u16; 8]
+    }
+
+    struct NNZTable {
+        table: [NNZEntry; 256],
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    const NNZ_TABLE: NNZTable = {
+        let mut table = [NNZEntry { indices: [0; 8] }; 256];
+
+        let mut i = 0;
+        while i < 256 {
+            let mut j = i;
+            let mut k = 0;
+            while j != 0 {
+                table[i].indices[k] = j.trailing_zeros() as u16;
+                j &= j - 1;
+                k += 1;
+            }
+            i += 1;
+        }
+
+        NNZTable { table }
+    };
+
+    unsafe fn find_nnz(input: &Align64<[i32; L1_SIZE / L1_CHUNK_PER_32]>, out: &mut Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]>) -> usize {
+        use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
+        use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
+        use std::arch::x86_64::_mm_load_si128 as vec128_load;
+        use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
+        use std::arch::x86_64::_mm_add_epi16 as vec128_add;
+
+        const INPUT_SIMD_WIDTH: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
+        const CHUNK_SIZE: usize = max!(INPUT_SIMD_WIDTH, 8);
+        const NUM_CHUNKS: usize = (L1_SIZE / L1_CHUNK_PER_32) / CHUNK_SIZE;
+        const INPUTS_PER_CHUNK: usize = CHUNK_SIZE / INPUT_SIMD_WIDTH;
+        const OUTPUTS_PER_CHUNK: usize = CHUNK_SIZE / 8;
+
+        let mut count = 0;
+        let mut base = vec128_zero();
+        let increment = vec128_set_16(8);
+        for i in 0..NUM_CHUNKS {
+            // bitmask of nonzero values in this chunk
+            let mut nnz = 0;
+            for j in 0..INPUTS_PER_CHUNK {
+                let input_chunk = vec_load_epi32(input.get_unchecked((i * INPUTS_PER_CHUNK + j) * I32_CHUNK_SIZE));
+                nnz |= u32::from(vec_nnz_mask(input_chunk)) << (j * INPUT_SIMD_WIDTH);
+            }
+            for j in 0..OUTPUTS_PER_CHUNK {
+                let lookup = (nnz >> (j * 8)) & 0xFF;
+                let offsets = vec128_load(std::ptr::from_ref(NNZ_TABLE.table.get_unchecked(lookup as usize)).cast());
+                vec128_storeu(std::ptr::from_mut(out.get_unchecked_mut(count)).cast(), vec128_add(base, offsets));
+                count += u32::count_ones(lookup) as usize;
+                base = vec128_add(base, increment);
+            }
+        }
+
+        count
+    }
 
     #[allow(
         clippy::too_many_lines,
@@ -177,13 +238,31 @@ mod avx2 {
                 offset += L1_PAIR_COUNT;
             }
 
+            // logging for permutation
+            #[cfg(feature = "nnz-counts")]
+            for (i, elem) in ft_outputs.iter().enumerate() {
+                let elem = elem.assume_init();
+                let nnz = elem != 0;
+                if nnz {
+                    super::NNZ_COUNTS[i].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+
+            let input32 = &*std::ptr::from_ref(&ft_outputs.0).cast::<Align64<[i32; L1_SIZE / L1_CHUNK_PER_32]>>();
+
+            let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> = MaybeUninit::uninit().assume_init();
+
+            let nnz_count = find_nnz(input32, &mut nnz);
+
             let mut sums = [vec_zero_epi32(); L2_SIZE / F32_CHUNK_SIZE];
-            let inputs32 = std::ptr::from_ref(&ft_outputs).cast::<i32>();
-            for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
-                let input = vec_set1_epi32(*inputs32.add(i));
-                let weight = std::ptr::from_ref(weights.get_unchecked(i * L1_CHUNK_PER_32 * L2_SIZE)).cast::<vepi8>();
-                for j in 0..L2_SIZE / F32_CHUNK_SIZE {
-                    *sums.get_unchecked_mut(j) = vec_dpbusd_epi32(*sums.get_unchecked(j), input, *weight.add(j));
+
+            for &i in nnz.get_unchecked(..nnz_count) {
+                let i = i.assume_init();
+                let input = vec_set1_epi32(*input32.get_unchecked(i as usize));
+                let i_col = i as usize * L2_SIZE * L1_CHUNK_PER_32;
+                let col = std::ptr::from_ref(weights.get_unchecked(i_col)).cast::<vepi8>();
+                for k in 0..L2_SIZE / F32_CHUNK_SIZE {
+                    *sums.get_unchecked_mut(k) = vec_dpbusd_epi32(*sums.get_unchecked(k), input, *col.add(k));
                 }
             }
 
@@ -262,3 +341,9 @@ pub use avx2::*;
 
 #[cfg(not(target_feature = "avx2"))]
 pub use generic::*;
+
+// logging for permutation
+#[cfg(feature = "nnz-counts")]
+pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] = {
+    unsafe { std::mem::transmute([0u64; super::L1_SIZE]) }
+};
