@@ -46,7 +46,8 @@ mod generic {
             // convert to f32 and activate L1
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             unsafe {
-                let clipped = f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
+                let clipped =
+                    f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
             }
         }
@@ -77,7 +78,7 @@ mod generic {
         // affine transform for l2
         for i in 0..L2_SIZE {
             for j in 0..L3_SIZE {
-                // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long, 
+                // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
                 // and `weights` is `L2_SIZE * L3_SIZE` long.
                 unsafe {
                     *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
@@ -113,21 +114,25 @@ mod generic {
 
 #[cfg(target_feature = "avx2")]
 mod avx2 {
-    use std::mem::MaybeUninit;
     use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{
-            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_epi32, vec_load_ps, vec_max_epi16, vec_max_ps, vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask, vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16, vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE
+            vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_epi32, vec_load_ps, vec_max_epi16, vec_max_ps,
+            vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask,
+            vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16,
+            vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32,
+            F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE,
         },
     };
+    use std::mem::MaybeUninit;
 
     const FT_SHIFT: i32 = 10;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
     struct NNZEntry {
-        indices: [u16; 8]
+        indices: [u16; 8],
     }
 
     struct NNZTable {
@@ -153,12 +158,15 @@ mod avx2 {
         NNZTable { table }
     };
 
-    unsafe fn find_nnz(input: &Align64<[i32; L1_SIZE / L1_CHUNK_PER_32]>, out: &mut Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]>) -> usize {
-        use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
-        use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
-        use std::arch::x86_64::_mm_load_si128 as vec128_load;
-        use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
+    unsafe fn find_nnz(
+        input: &Align64<[i32; L1_SIZE / L1_CHUNK_PER_32]>,
+        out: &mut Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]>,
+    ) -> usize {
         use std::arch::x86_64::_mm_add_epi16 as vec128_add;
+        use std::arch::x86_64::_mm_load_si128 as vec128_load;
+        use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
+        use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
+        use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
 
         const INPUT_SIMD_WIDTH: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
         const CHUNK_SIZE: usize = max!(INPUT_SIMD_WIDTH, 8);
@@ -344,6 +352,5 @@ pub use generic::*;
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
-pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] = {
-    unsafe { std::mem::transmute([0u64; super::L1_SIZE]) }
-};
+pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] =
+    { unsafe { std::mem::transmute([0u64; super::L1_SIZE]) } };

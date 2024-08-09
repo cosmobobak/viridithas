@@ -749,7 +749,10 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
 
     // logging for permutation
     #[cfg(feature = "nnz-counts")]
-    println!("NNZ counts: {:?}", network::layers::NNZ_COUNTS.iter().map(|c| c.load(Ordering::Relaxed)).collect::<Vec<u64>>());
+    println!(
+        "NNZ counts: {:?}",
+        network::layers::NNZ_COUNTS.iter().map(|c| c.load(Ordering::Relaxed)).collect::<Vec<u64>>()
+    );
 
     Ok(())
 }

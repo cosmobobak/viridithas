@@ -210,7 +210,7 @@ mod avx2 {
 
 #[cfg(not(target_feature = "avx2"))]
 mod generic {
-    use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
+    use super::{slice_to_aligned, Align64, FeatureIndex, INPUT, L1_SIZE};
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(
