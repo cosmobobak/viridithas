@@ -601,3 +601,21 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | https://chess.swehosting.se/test/7590/
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
+hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
+            | crelu/screlu/screlu activations.         | Elo   | 42.88 +- 10.08 (95%)
+            | trained under identical conditions to    | SPRT  | N=25000 Threads=1 Hash=16MB
+            | pendragon.                               | LLR   | 3.09 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2036 W: 718 L: 468 D: 850
+            |                                          | Penta | [28, 183, 394, 337, 76]
+            |                                          | https://chess.swehosting.se/test/7766/
+            |                                          | vs. pendragon
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | 9.44 +- 4.12 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 7028 W: 1661 L: 1470 D: 3897
+            |                                          | Penta | [14, 760, 1772, 957, 11]
+            |                                          | https://chess.swehosting.se/test/7788/
+            |                                          | vs. pendragon
+------------|------------------------------------------|-----------------------------------------------
