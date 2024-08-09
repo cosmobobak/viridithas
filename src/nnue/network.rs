@@ -33,7 +33,7 @@ pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
-pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
+pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<i8>();
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
@@ -314,7 +314,7 @@ impl NNUEParams {
 
     fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
         let ptr = std::ptr::from_ref::<Self>(self).cast::<u8>();
-        let len = size_of::<Self>();
+        let len = std::mem::size_of::<Self>();
         // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
         writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
         Ok(())
