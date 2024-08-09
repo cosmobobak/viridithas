@@ -17,14 +17,17 @@ syzygy = ["dep:cc"]
 bindgen = ["dep:bindgen"]
 tuning = []
 stats = []
+nnz-counts = []
 datagen = ["dep:serde", "dep:toml", "dep:rand", "dep:num_cpus", "dep:chrono", "dep:ctrlc", "dep:bulletformat"]
-final-release = []
+zstd = ["dep:zstd"]
+final-release = ["zstd", "bindgen", "syzygy"]
 
 [build-dependencies]
 cc = { version = "1.0.90", optional = true }
 bindgen = { version = "0.69.4", optional = true }
 
 [dependencies]
+# datagen dependencies
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 toml = { version = "0.8.19", optional = true }
@@ -32,11 +35,17 @@ num_cpus = { version = "1.16.0", optional = true }
 chrono = { version = "0.4.35", optional = true }
 ctrlc = { version = "3.4.4", optional = true }
 bulletformat = { version = "1.2.0", optional = true }
+
+# general dependencies
 clap = { version = "4.5.3", features = ["derive"] }
 arrayvec = "0.7.4"
 anyhow = "1.0.86"
 ruzstd = "0.7.0"
 
+# full-fat zstd for release builds
+zstd = { version = "0.13.2", optional = true }
+
+# for coloured terminal output
 [dependencies.windows-sys]
 version = "0.52"
 features = [

@@ -746,6 +746,14 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
         println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
     }
     info.print_to_stdout = true;
+
+    // logging for permutation
+    #[cfg(feature = "nnz-counts")]
+    println!(
+        "NNZ counts: {:?}",
+        network::layers::NNZ_COUNTS.iter().map(|c| c.load(Ordering::Relaxed)).collect::<Vec<u64>>()
+    );
+
     Ok(())
 }
 

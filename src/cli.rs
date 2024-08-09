@@ -15,6 +15,13 @@ pub enum Subcommands {
     Bench,
     /// Run the perft suite.
     Perft,
+    /// Quantise a network parameter file.
+    Quantise {
+        /// Path to input network parameter file.
+        input: std::path::PathBuf,
+        /// Path to output network parameter file.
+        output: std::path::PathBuf,
+    },
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
     /// Count the number of positions contained within one or more packed game records.
