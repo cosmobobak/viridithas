@@ -128,18 +128,22 @@ impl Board {
         self.ep_sq
     }
 
+    #[allow(dead_code)]
     pub fn ep_sq_mut(&mut self) -> &mut Option<Square> {
         &mut self.ep_sq
     }
 
+    #[allow(dead_code)]
     pub fn turn_mut(&mut self) -> &mut Colour {
         &mut self.side
     }
 
+    #[allow(dead_code)]
     pub fn halfmove_clock_mut(&mut self) -> &mut u8 {
         &mut self.fifty_move_counter
     }
 
+    #[allow(dead_code)]
     pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
@@ -198,6 +202,7 @@ impl Board {
         self.castle_perm
     }
 
+    #[allow(dead_code)]
     pub fn castling_rights_mut(&mut self) -> &mut CastlingRights {
         &mut self.castle_perm
     }
@@ -228,10 +233,12 @@ impl Board {
         (key, pawn_key)
     }
 
+    #[allow(dead_code)]
     pub fn regenerate_zobrist(&mut self) {
         (self.key, self.pawn_key) = self.generate_pos_key();
     }
 
+    #[allow(dead_code)]
     pub fn regenerate_threats(&mut self) {
         self.threats = self.generate_threats(self.side.flip());
     }
@@ -344,6 +351,7 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
+    #[allow(dead_code)]
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
@@ -402,6 +410,7 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
+    #[allow(dead_code)]
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
         // White's starting array can be derived from its number N (0 ... 959) as follows (https://en.wikipedia.org/wiki/Fischer_random_chess_numbering_scheme#Direct_derivation):
         // A. Divide N by 4, yielding quotient N2 and remainder B1. Place a Bishop upon the bright square corresponding to B1 (0=b, 1=d, 2=f, 3=h).
@@ -1663,6 +1672,7 @@ impl Board {
         Ok(bytes_written)
     }
 
+    #[allow(dead_code)]
     pub const fn full_move_number(&self) -> usize {
         self.ply / 2 + 1
     }

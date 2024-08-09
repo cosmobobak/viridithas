@@ -458,6 +458,7 @@ impl CastlingRights {
         }
     }
 
+    #[allow(dead_code)]
     pub fn kingside_mut(&mut self, side: Colour) -> &mut Option<Square> {
         if side == Colour::White {
             &mut self.wk
@@ -474,6 +475,7 @@ impl CastlingRights {
         }
     }
 
+    #[allow(dead_code)]
     pub fn queenside_mut(&mut self, side: Colour) -> &mut Option<Square> {
         if side == Colour::White {
             &mut self.wq
