@@ -200,7 +200,7 @@ impl TimeManager {
         &self.limit
     }
 
-    #[cfg(feature = "datagen")]
+    #[allow(dead_code)]
     pub fn default_with_limit(limit: SearchLimit) -> Self {
         Self { limit, ..Default::default() }
     }
