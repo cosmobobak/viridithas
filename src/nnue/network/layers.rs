@@ -113,7 +113,7 @@ mod generic {
 }
 
 #[cfg(target_feature = "avx2")]
-mod avx2 {
+mod x86simd {
     use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
@@ -121,13 +121,13 @@ mod avx2 {
             vec_cvtepi32_ps, vec_dpbusd_epi32, vec_load_epi16, vec_load_epi32, vec_load_ps, vec_max_epi16, vec_max_ps,
             vec_min_epi16, vec_min_ps, vec_mul_add_ps, vec_mul_ps, vec_mulhi_epi16, vec_nnz_mask,
             vec_packus_permute_epi16, vec_reduce_add_ps, vec_set1_epi16, vec_set1_epi32, vec_set1_ps, vec_slli_epi16,
-            vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32,
+            vec_store_epiu8, vec_store_ps, vec_zero_epi16, vec_zero_epi32, vec_zero_ps, vepi32, vepi8, vps32, S,
             F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE,
         },
     };
     use std::mem::MaybeUninit;
 
-    const FT_SHIFT: i32 = 10;
+    const FT_SHIFT: u32 = 10;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
@@ -236,8 +236,8 @@ mod avx2 {
                     let clipped1a = vec_min_epi16(input1a, ft_one);
                     let clipped1b = vec_min_epi16(input1b, ft_one);
 
-                    let producta = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0a), clipped1a);
-                    let productb = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT }>(clipped0b), clipped1b);
+                    let producta = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT as S }>(clipped0a), clipped1a);
+                    let productb = vec_mulhi_epi16(vec_slli_epi16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
                     vec_store_epiu8(
                         std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(),
                         vec_packus_permute_epi16(producta, productb),
@@ -345,7 +345,7 @@ mod avx2 {
 }
 
 #[cfg(target_feature = "avx2")]
-pub use avx2::*;
+pub use x86simd::*;
 
 #[cfg(not(target_feature = "avx2"))]
 pub use generic::*;
