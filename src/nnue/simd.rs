@@ -229,8 +229,6 @@ mod avx2 {
     pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<vepi16>() / std::mem::size_of::<i16>();
     pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
     pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<vps32>() / std::mem::size_of::<f32>();
-
-    // compile_error!("Compiling with AVX2 instructions!");
 }
 
 #[cfg(target_feature = "avx512f")]
@@ -427,8 +425,6 @@ mod avx512 {
     pub const I16_CHUNK_SIZE: usize = std::mem::size_of::<vepi16>() / std::mem::size_of::<i16>();
     pub const I32_CHUNK_SIZE: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
     pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<vps32>() / std::mem::size_of::<f32>();
-
-    // compile_error!("Compiling with AVX512 instructions!");
 }
 
 #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]

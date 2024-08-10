@@ -1,4 +1,4 @@
-#![feature(stdarch_x86_avx512)]
+// #![feature(stdarch_x86_avx512)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 
