@@ -849,7 +849,7 @@ fn win_rate_model(eval: i32, ply: usize) -> (i32, i32) {
     const AS: [f64; 4] = [-0.482_975_16, 6.606_540_42, 5.860_087_77, 187.010_789_32];
     const BS: [f64; 4] = [-5.963_499_01, 39.012_824_90, -78.131_169_94, 115.038_711_68];
     let m = min!(240.0, ply as f64) / 64.0;
-    debug_assert_eq!(NORMALISE_TO_PAWN_VALUE, AS.iter().sum::<f64>() as i32);
+    debug_assert_eq!(NORMALISE_TO_PAWN_VALUE, AS.iter().sum::<f64>().round() as i32, "AS sum should be {NORMALISE_TO_PAWN_VALUE} but is {:.2}", AS.iter().sum::<f64>());
     let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
     let b = BS[0].mul_add(m, BS[1]).mul_add(m, BS[2]).mul_add(m, BS[3]);
 
