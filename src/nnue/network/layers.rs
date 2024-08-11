@@ -1,4 +1,4 @@
-#[cfg(not(target_feature = "avx2"))]
+#[cfg(not(target_feature = "ssse3"))]
 mod generic {
     use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
 
@@ -112,7 +112,7 @@ mod generic {
     }
 }
 
-#[cfg(target_feature = "avx2")]
+#[cfg(target_feature = "ssse3")]
 mod x86simd {
     use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
@@ -344,10 +344,10 @@ mod x86simd {
     }
 }
 
-#[cfg(target_feature = "avx2")]
+#[cfg(target_feature = "ssse3")]
 pub use x86simd::*;
 
-#[cfg(not(target_feature = "avx2"))]
+#[cfg(not(target_feature = "ssse3"))]
 pub use generic::*;
 
 // logging for permutation
