@@ -8,7 +8,7 @@ use std::{
     str::{FromStr, ParseBoolError},
     sync::{
         atomic::{self, AtomicBool, AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-        mpsc, Mutex,
+        mpsc, Mutex, Once,
     },
     time::Instant,
 };
@@ -507,10 +507,10 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
     println!("uciok");
 }
 
+static SET_TERM: Once = Once::new();
+
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
-    term::set_mode()?;
-
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -665,6 +665,14 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
             input if input.starts_with("go") => {
                 // start the clock *immediately*
                 info.time_manager.start();
+
+                // if we're in pretty-printing mode, set the terminal properly:
+                if PRETTY_PRINT.load(Ordering::SeqCst) {
+                    SET_TERM.call_once(|| {
+                        term::set_mode_uci();
+                    });
+                }
+
                 let res = parse_go(input, &pos);
                 if let Ok(search_limit) = res {
                     info.time_manager.set_limit(search_limit);

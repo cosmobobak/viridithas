@@ -1,6 +1,6 @@
 [package]
 name = "viridithas"
-version = "14.0.0"
+version = "14.0.1"
 edition = "2021"
 description = "A superhuman chess engine."
 license = "MIT"

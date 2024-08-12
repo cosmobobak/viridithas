@@ -96,3 +96,7 @@ pub fn set_mode() -> anyhow::Result<()> {
     #[cfg(not(windows))]
     Ok(())
 }
+
+pub fn set_mode_uci() {
+    set_mode().unwrap();
+}
