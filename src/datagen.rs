@@ -199,7 +199,7 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
             .collect::<Vec<_>>();
         for handle in thread_handles {
             if let Ok(res) = handle.join() {
-                counters.push(res);
+                counters.push(res?);
             } else {
                 bail!("Thread failed to join!");
             }
@@ -211,16 +211,15 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
         println!("Done!");
     }
 
-    let counters = counters.into_iter().reduce(|a, b| {
-        let mut a = a?;
-        for (key, value) in b? {
-            *a.entry(key).or_insert(0) += value;
+    let counters = counters.into_iter().reduce(|mut acc, e| {
+        for (key, value) in e {
+            *acc.entry(key).or_insert(0) += value;
         }
-        Ok(a)
+        acc
     });
 
     if let Some(counters) = counters {
-        print_game_stats(&counters?);
+        print_game_stats(&counters);
     }
 
     Ok(())
