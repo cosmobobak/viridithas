@@ -117,7 +117,7 @@ mod x86simd {
     use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
-        simd::{self, vepi32, vepi8, vps32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S},
+        simd::{self, VecF32, VecI32, VecI8, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S},
     };
     use std::mem::MaybeUninit;
 
@@ -162,7 +162,7 @@ mod x86simd {
         use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
         use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
 
-        const INPUT_SIMD_WIDTH: usize = std::mem::size_of::<vepi32>() / std::mem::size_of::<i32>();
+        const INPUT_SIMD_WIDTH: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const CHUNK_SIZE: usize = max!(INPUT_SIMD_WIDTH, 8);
         const NUM_CHUNKS: usize = (L1_SIZE / L1_CHUNK_PER_32) / CHUNK_SIZE;
         const INPUTS_PER_CHUNK: usize = CHUNK_SIZE / INPUT_SIMD_WIDTH;
@@ -263,7 +263,7 @@ mod x86simd {
                 let i = i.assume_init();
                 let input = simd::splat_i32(*input32.get_unchecked(i as usize));
                 let i_col = i as usize * L2_SIZE * L1_CHUNK_PER_32;
-                let col = std::ptr::from_ref(weights.get_unchecked(i_col)).cast::<vepi8>();
+                let col = std::ptr::from_ref(weights.get_unchecked(i_col)).cast::<VecI8>();
                 for k in 0..L2_SIZE / F32_CHUNK_SIZE {
                     *sums.get_unchecked_mut(k) = simd::mul_add_u8_to_i32(
                         *sums.get_unchecked(k),
@@ -304,7 +304,7 @@ mod x86simd {
 
             for i in 0..L2_SIZE {
                 let input_vec = simd::splat_f32(*inputs.get_unchecked(i));
-                let weight = std::ptr::from_ref(weights.get_unchecked(i * L3_SIZE)).cast::<vps32>();
+                let weight = std::ptr::from_ref(weights.get_unchecked(i * L3_SIZE)).cast::<VecF32>();
                 for j in 0..L3_SIZE / F32_CHUNK_SIZE {
                     *sum_vecs.get_unchecked_mut(j) =
                         simd::mul_add_f32(input_vec, *weight.add(j), *sum_vecs.get_unchecked(j));
