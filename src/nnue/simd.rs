@@ -32,6 +32,7 @@ pub const fn mm_shuffle(z: i32, y: i32, x: i32, w: i32) -> i32 {
 }
 
 /// Given a regular type and a SIMD register type, and the new type name, create a new type that wraps the register type.
+#[allow(unused_macros)]
 macro_rules! wrap_simd_register {
     ($register_type:ty, $held_type:ty, $new_type:ident) => {
         #[repr(transparent)]
@@ -58,7 +59,7 @@ mod avx512 {
     wrap_simd_register!(__m512i, i8, VecI8);
     wrap_simd_register!(__m512i, i16, VecI16);
     wrap_simd_register!(__m512i, i32, VecI32);
-    wrap_simd_register!(__m512i, i64, vepi64);
+    wrap_simd_register!(__m512i, i64, VecI64);
     wrap_simd_register!(__m512, f32, VecF32);
 
     #[inline]
@@ -253,7 +254,7 @@ mod avx2 {
     wrap_simd_register!(__m256i, i8, VecI8);
     wrap_simd_register!(__m256i, i16, VecI16);
     wrap_simd_register!(__m256i, i32, VecI32);
-    wrap_simd_register!(__m256i, i64, vepi64);
+    wrap_simd_register!(__m256i, i64, VecI64);
     wrap_simd_register!(__m256, f32, VecF32);
 
     #[inline]
@@ -452,7 +453,7 @@ mod ssse3 {
     wrap_simd_register!(__m128i, i8, VecI8);
     wrap_simd_register!(__m128i, i16, VecI16);
     wrap_simd_register!(__m128i, i32, VecI32);
-    wrap_simd_register!(__m128i, i64, vepi64);
+    wrap_simd_register!(__m128i, i64, VecI64);
     wrap_simd_register!(__m128, f32, VecF32);
 
     #[inline]
@@ -648,6 +649,7 @@ pub use avx2::*;
 #[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
 pub use ssse3::*;
 
+#[cfg(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f"))]
 #[inline]
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
     VecI8::from_raw(vec.inner())
