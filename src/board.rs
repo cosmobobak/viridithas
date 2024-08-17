@@ -584,6 +584,7 @@ impl Board {
     pub fn fen(&self) -> String {
         let mut out = Vec::with_capacity(60);
         self.write_fen_into(&mut out).expect("something terrible happened while writing FEN");
+        debug_assert!(out.is_ascii());
         // SAFETY: we know that the string is valid UTF-8, because we only write ASCII characters.
         unsafe { String::from_utf8_unchecked(out) }
     }

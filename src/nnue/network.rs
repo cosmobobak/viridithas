@@ -288,7 +288,8 @@ impl NNUEParams {
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
         // SAFETY: NNUEParams is composed entiredly of POD types, so we can
-        // reinterpret it as bytes and write into it.
+        // reinterpret it as bytes and write into it. We don't need to worry
+        // about padding bytes, because the boxed NNUEParams is zeroed.
         unsafe {
             let mut net = Self::zeroed();
             let mut mem = std::slice::from_raw_parts_mut(
