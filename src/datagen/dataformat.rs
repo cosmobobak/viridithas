@@ -349,13 +349,13 @@ mod tests {
         .unwrap();
         assert_eq!(boards.len(), 3);
         let mut check_board = Board::default();
-        assert_eq!(boards[0].unpack().0.fen(), check_board.fen());
+        assert_eq!(boards[0].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[0].unpack().1, 3);
         assert!(check_board.make_move_simple(Move::new(Square::E2, Square::E4)));
-        assert_eq!(boards[1].unpack().0.fen(), check_board.fen());
+        assert_eq!(boards[1].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[1].unpack().1, -314);
         assert!(check_board.make_move_simple(Move::new(Square::E7, Square::E5)));
-        assert_eq!(boards[2].unpack().0.fen(), check_board.fen());
+        assert_eq!(boards[2].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[2].unpack().1, 200);
     }
 }

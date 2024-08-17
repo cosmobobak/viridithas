@@ -13,7 +13,7 @@ impl ThreadData<'_> {
     pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
-            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos}");
+            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos:X}");
             let from = m.from();
             let to = m.history_to_square();
             let val = self.main_history.get_mut(
@@ -75,7 +75,7 @@ impl ThreadData<'_> {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
             let capture = caphist_piece_type(pos, m);
-            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos}");
+            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos:X}");
             let to = m.to();
             let val = self.tactical_history.get_mut(piece_moved.unwrap(), to, capture);
             update_history(val, depth, m == best_move);

@@ -602,7 +602,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 Ok(())
             }
             "show" => {
-                println!("{pos}");
+                println!("{pos:X}");
                 Ok(())
             }
             "nnuebench" => {

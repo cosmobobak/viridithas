@@ -395,7 +395,7 @@ fn generate_on_thread(
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
-                println!("[WARNING!] this occurred in position {}", board.fen());
+                println!("[WARNING!] this occurred in position {board}");
                 continue 'generation_main_loop;
             };
 
@@ -762,7 +762,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
     while let Ok(game) = dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer)) {
         let outcome = game.outcome();
         let mut board = game.initial_position();
-        let header = make_header(outcome, board.fen());
+        let header = make_header(outcome, board.to_string());
         writeln!(output_buffer, "{header}\n").unwrap();
         let mut fullmoves = 0;
         for mv in game.moves() {
@@ -770,7 +770,7 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
                 writeln!(output_buffer).unwrap();
             }
             let san =
-                board.san(mv).with_context(|| format!("Failed to create SAN for move {mv} in position {board}."))?;
+                board.san(mv).with_context(|| format!("Failed to create SAN for move {mv} in position {board:X}."))?;
             if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
             } else {

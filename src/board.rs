@@ -581,13 +581,6 @@ impl Board {
         out
     }
 
-    pub fn fen(&self) -> String {
-        let mut out = Vec::with_capacity(60);
-        self.write_fen_into(&mut out).expect("something terrible happened while writing FEN");
-        // SAFETY: we know that the string is valid UTF-8, because we only write ASCII characters.
-        unsafe { String::from_utf8_unchecked(out) }
-    }
-
     fn set_side(&mut self, side_part: Option<&[u8]>) -> anyhow::Result<()> {
         self.side = match side_part {
             Some([b'w']) => Colour::White,
@@ -1594,84 +1587,6 @@ impl Board {
         true
     }
 
-    pub fn write_fen_into(&self, mut f: impl std::io::Write) -> std::io::Result<usize> {
-        #![allow(clippy::cast_possible_truncation)]
-        let mut bytes_written = 0;
-        let mut counter = 0;
-        for rank in Rank::ALL.into_iter().rev() {
-            for file in File::ALL {
-                let sq = Square::from_rank_file(rank, file);
-                let piece = self.piece_at(sq);
-                if let Some(piece) = piece {
-                    if counter != 0 {
-                        bytes_written += f.write(&[counter + b'0'])?;
-                    }
-                    counter = 0;
-                    let char = piece.byte_char();
-                    bytes_written += f.write(&[char])?;
-                } else {
-                    counter += 1;
-                }
-            }
-            if counter != 0 {
-                bytes_written += f.write(&[counter + b'0'])?;
-            }
-            counter = 0;
-            if rank != Rank::One {
-                bytes_written += f.write(b"/")?;
-            }
-        }
-
-        bytes_written += f.write(b" ")?;
-        if self.side == Colour::White {
-            bytes_written += f.write(b"w")?;
-        } else {
-            bytes_written += f.write(b"b")?;
-        }
-        bytes_written += f.write(b" ")?;
-        if self.castle_perm == CastlingRights::NONE {
-            bytes_written += f.write(b"-")?;
-        } else {
-            bytes_written += [self.castle_perm.wk, self.castle_perm.wq, self.castle_perm.bk, self.castle_perm.bq]
-                .into_iter()
-                .zip(b"KQkq")
-                .filter(|(m, _)| m.is_some())
-                .try_fold(0, |acc, (_, &ch)| f.write(&[ch]).map(|n| acc + n))?;
-        }
-        bytes_written += f.write(b" ")?;
-        if let Some(ep_sq) = self.ep_sq {
-            bytes_written += f.write(ep_sq.name().as_bytes())?;
-        } else {
-            bytes_written += f.write(b"-")?;
-        }
-        let hc = self.fifty_move_counter;
-        let hundreds = hc / 100;
-        let tens = (hc % 100) / 10;
-        let ones = hc % 10;
-        bytes_written += f.write(b" ")?;
-        if hundreds != 0 {
-            bytes_written += f.write(&[hundreds + b'0'])?;
-        }
-        if tens != 0 || hundreds != 0 {
-            bytes_written += f.write(&[tens + b'0'])?;
-        }
-        bytes_written += f.write(&[ones + b'0'])?;
-        let ply = self.ply / 2 + 1;
-        let hundreds = (ply / 100) as u8;
-        let tens = ((ply % 100) / 10) as u8;
-        let ones = (ply % 10) as u8;
-        bytes_written += f.write(b" ")?;
-        if hundreds != 0 {
-            bytes_written += f.write(&[hundreds + b'0'])?;
-        }
-        if tens != 0 || hundreds != 0 {
-            bytes_written += f.write(&[tens + b'0'])?;
-        }
-        bytes_written += f.write(&[ones + b'0'])?;
-
-        Ok(bytes_written)
-    }
-
     #[allow(dead_code)]
     pub const fn full_move_number(&self) -> usize {
         self.ply / 2 + 1
@@ -1848,6 +1763,61 @@ impl Default for Board {
 }
 
 impl Display for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let mut counter = 0;
+        for rank in Rank::ALL.into_iter().rev() {
+            for file in File::ALL {
+                let sq = Square::from_rank_file(rank, file);
+                let piece = self.piece_at(sq);
+                if let Some(piece) = piece {
+                    if counter != 0 {
+                        write!(f, "{counter}")?;
+                    }
+                    counter = 0;
+                    write!(f, "{piece}")?;
+                } else {
+                    counter += 1;
+                }
+            }
+            if counter != 0 {
+                write!(f, "{counter}")?;
+            }
+            counter = 0;
+            if rank != Rank::One {
+                write!(f, "/")?;
+            }
+        }
+
+        if self.side == Colour::White {
+            write!(f, " w")?;
+        } else {
+            write!(f, " b")?;
+        }
+        write!(f, " ")?;
+        if self.castle_perm == CastlingRights::NONE {
+            write!(f, "-")?;
+        } else {
+            for (_, ch) in [self.castle_perm.wk, self.castle_perm.wq, self.castle_perm.bk, self.castle_perm.bq]
+                .into_iter()
+                .zip("KQkq".chars())
+                .filter(|(m, _)| m.is_some())
+            {
+                write!(f, "{ch}")?;
+            }
+        }
+        if let Some(ep_sq) = self.ep_sq {
+            write!(f, " {ep_sq}")?;
+        } else {
+            write!(f, " -")?;
+        }
+        write!(f, " {}", self.fifty_move_counter)?;
+        write!(f, " {}", self.ply / 2 + 1)?;
+
+        Ok(())
+    }
+}
+
+impl std::fmt::UpperHex for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         for rank in Rank::ALL.into_iter().rev() {
             write!(f, "{} ", rank as u8 + 1)?;
@@ -1863,7 +1833,7 @@ impl Display for Board {
         }
 
         writeln!(f, "  a b c d e f g h")?;
-        writeln!(f, "FEN: {}", self.fen())?;
+        writeln!(f, "FEN: {self}")?;
 
         Ok(())
     }
@@ -1931,7 +1901,7 @@ mod tests {
         let mut board = Board::new();
         for fen in fens {
             board.set_from_fen(&fen).expect("setfen failed.");
-            let fen_2 = board.fen();
+            let fen_2 = board.to_string();
             assert_eq!(fen, fen_2);
         }
     }

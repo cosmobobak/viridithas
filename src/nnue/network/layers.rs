@@ -34,7 +34,8 @@ mod generic {
         for i in 0..L1_SIZE {
             for j in 0..L2_SIZE {
                 // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
-                // and `weights` is `L1_SIZE * L2_SIZE` long.
+                // and `weights` is `L1_SIZE * L2_SIZE` long. As such, the
+                // indices that we construct are valid.
                 unsafe {
                     *sums.get_unchecked_mut(j) +=
                         i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
@@ -45,6 +46,7 @@ mod generic {
         for i in 0..L2_SIZE {
             // convert to f32 and activate L1
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
+            // As such, the indices that we construct are valid.
             unsafe {
                 let clipped =
                     f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
@@ -79,7 +81,8 @@ mod generic {
         for i in 0..L2_SIZE {
             for j in 0..L3_SIZE {
                 // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
-                // and `weights` is `L2_SIZE * L3_SIZE` long.
+                // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
+                // indices that we construct are valid.
                 unsafe {
                     *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
                 }
@@ -89,6 +92,7 @@ mod generic {
         // activate l2
         for i in 0..L3_SIZE {
             // SAFETY: `sums` is `L3_SIZE` long, and `output` is `L3_SIZE` long.
+            // As such, the indices that we construct are valid.
             unsafe {
                 let clipped = f32::clamp(*sums.get_unchecked(i), 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
@@ -222,7 +226,16 @@ mod x86simd {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
         const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA * QA * QB) as f32;
 
-        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut]: We only ever index at most
+        // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK_SIZE * 2) + I16_CHUNK_SIZE + L1_PAIR_COUNT
+        // into the `acc` array. This is in bounds, as `acc` has length L1_PAIR_COUNT * 2.
+        // Additionally, we only ever indexx at most div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK_SIZE * 2) + L1_PAIR_COUNT
+        // into the `ft_outputs` array. This is in bounds, as `ft_outputs` has length L1_PAIR_COUNT * 2.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
+        // 3. Use of MaybeUninit: We always store into the entirety of `ft_outputs`, before
+        // reading from it. Additionally, find_nnz returns a slice into `nnz` that it has
+        // initialised, so we can soundly read from it.
         unsafe {
             let ft_zero = simd::zero_i16();
             let ft_one = simd::splat_i16(QA as i16);
@@ -316,7 +329,15 @@ mod x86simd {
         biases: &Align64<[f32; L3_SIZE]>,
         output: &mut Align64<[f32; L3_SIZE]>,
     ) {
-        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut]: We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `sums` and `biases` arrays. This is in bounds, as `sums` has length L3_SIZE and
+        // `biases` has length L3_SIZE. We only ever index at most
+        // (L2_SIZE - 1) * L3_SIZE + (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `weights` array. This is in bounds, as `weights` has length L2_SIZE * L3_SIZE.
+        // We only ever index at most L2_SIZE - 1 into the `inputs` array. This is in bounds, as `inputs`
+        // has length L2_SIZE.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
             let mut sums = [0.0; L3_SIZE];
 
@@ -360,7 +381,11 @@ mod x86simd {
         bias: f32,
         output: &mut f32,
     ) {
-        // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
+        // SAFETY: Breaking it down by unsafe operations:
+        // 1. get_unchecked[_mut]: We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
+        // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
+        // `inputs` has length L3_SIZE.
+        // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
             let mut sum_vec = simd::zero_f32();
 
