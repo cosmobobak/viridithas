@@ -627,6 +627,7 @@ impl Board {
 
 #[cfg(test)]
 pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
+    #![allow(clippy::to_string_in_format_args)]
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
 
@@ -648,7 +649,7 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     assert!(
         eq,
         "full and staged move lists differ in {}, \nfull list: \n[{}], \nstaged list: \n[{}]",
-        pos.fen(),
+        pos.to_string(),
         {
             let mut mvs = Vec::new();
             for m in full_moves_vec {

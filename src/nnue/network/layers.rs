@@ -227,7 +227,7 @@ mod x86simd {
         const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA * QA * QB) as f32;
 
         // SAFETY: Breaking it down by unsafe operations:
-        // 1. get_unchecked[_mut]: We only ever index at most 
+        // 1. get_unchecked[_mut]: We only ever index at most
         // div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK_SIZE * 2) + I16_CHUNK_SIZE + L1_PAIR_COUNT
         // into the `acc` array. This is in bounds, as `acc` has length L1_PAIR_COUNT * 2.
         // Additionally, we only ever indexx at most div_ceil(L1_PAIR_COUNT - 1, I16_CHUNK_SIZE * 2) + L1_PAIR_COUNT
