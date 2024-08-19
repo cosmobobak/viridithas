@@ -21,7 +21,7 @@ mod marlinformat;
 #[serde(default)]
 pub struct Filter {
     /// Filter out positions that have a ply count less than this value.
-    min_ply: usize,
+    min_ply: u32,
     /// Filter out positions that have fewer pieces on the board than this value.
     min_pieces: u32,
     /// Filter out positions that have an absolute evaluation above this value.
@@ -35,7 +35,7 @@ pub struct Filter {
     /// Filter out positions where eval diverges from WDL by more than this value.
     max_eval_incorrectness: u32,
     /// Take this many positions per game.
-    sample_size: usize,
+    sample_size: u32,
 }
 
 impl Default for Filter {
@@ -48,7 +48,7 @@ impl Default for Filter {
             filter_check: true,
             filter_castling: false,
             max_eval_incorrectness: u32::MAX,
-            sample_size: usize::MAX,
+            sample_size: u32::MAX,
         }
     }
 }
@@ -62,11 +62,11 @@ impl Filter {
         filter_check: false,
         filter_castling: false,
         max_eval_incorrectness: u32::MAX,
-        sample_size: usize::MAX,
+        sample_size: u32::MAX,
     };
 
     pub fn should_filter(&self, mv: Move, eval: i32, board: &Board, wdl: WDL) -> bool {
-        if board.ply() < self.min_ply {
+        if board.ply() < self.min_ply as usize {
             return true;
         }
         if eval.unsigned_abs() >= self.max_eval {
@@ -287,7 +287,7 @@ impl Game {
         }
 
         // sample down to the requested number of positions.
-        let samples_to_take = filter.sample_size.min(sample_buffer.len());
+        let samples_to_take = (filter.sample_size as usize).min(sample_buffer.len());
         let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
         for board in selected {
             callback(*board)?;
@@ -341,7 +341,7 @@ impl Game {
         }
 
         // sample down to the requested number of positions.
-        let samples_to_take = filter.sample_size.min(sample_buffer.len());
+        let samples_to_take = (filter.sample_size as usize).min(sample_buffer.len());
         let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
         for board in selected {
             callback(*board)?;
