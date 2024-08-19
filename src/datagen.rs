@@ -29,7 +29,6 @@ use crate::{
         evaluation::{is_game_theoretic_score, is_mate_score},
         Board, GameOutcome,
     },
-    chessmove::Move,
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
     piece::{Colour, PieceType},
@@ -652,17 +651,8 @@ pub fn run_splat(
         bail!("Output file already exists.");
     }
 
-    let filter_state = if let Some(path) = cfg_path {
-        let text =
-            std::fs::read_to_string(path).with_context(|| format!("Failed to read filter config file at {path:?}"))?;
-        toml::from_str(&text).with_context(|| {
-            let default = toml::to_string_pretty(&Filter::default()).unwrap();
-            format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
-        })?
-    } else {
-        Filter::default()
-    };
-    let filter_fn = |mv: Move, eval: i32, board: &Board, wdl: WDL| !filter_state.should_filter(mv, eval, board, wdl);
+    let filter = cfg_path.map_or_else(|| Ok(Filter::default()), Filter::from_path)?;
+    let mut rng = rand::thread_rng();
 
     // open the input file
     let input_file = File::open(input).with_context(|| "Failed to create input file")?;
@@ -684,7 +674,8 @@ pub fn run_splat(
                         .write_all(&packed_board.as_bytes())
                         .with_context(|| "Failed to write PackedBoard into buffered writer.")
                 },
-                filter_fn,
+                &filter,
+                &mut rng,
             )?;
         } else {
             game.splat_to_bulletformat(
@@ -695,7 +686,8 @@ pub fn run_splat(
                         .write_all(&bytes)
                         .with_context(|| "Failed to write bulletformat::ChessBoard into buffered writer.")
                 },
-                filter_fn,
+                &filter,
+                &mut rng,
             )?;
         }
         move_buffer = game.into_move_buffer();
@@ -1006,22 +998,26 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     let stdout_lock = Mutex::new(());
     let stdout_lock = &stdout_lock;
 
-    let filter_state = Filter::default();
-    let (total_count, filtered_count) = std::thread::scope(|s| -> anyhow::Result<(u64, u64)> {
-        let mut thread_handles = Vec::new();
-        for path in paths {
-            thread_handles.push(s.spawn(move || -> anyhow::Result<(u64, u64)> {
+    let filter = &Filter::default();
+    let (total_count, filtered_count, pass_count_buckets) = std::thread::scope(
+        |s| -> anyhow::Result<(u64, u64, Vec<u64>)> {
+            let mut thread_handles = Vec::new();
+            for path in paths {
+                thread_handles.push(s.spawn(move || -> anyhow::Result<(u64, u64, Vec<u64>)> {
                 let file = File::open(&path)?;
                 let len = file.metadata().with_context(|| "Failed to get file metadata!")?.len();
                 let mut reader = BufReader::new(file);
                 let mut count = 0u64;
                 let mut filtered = 0u64;
+                let mut pass_count_buckets = vec![0u64; Game::MAX_SPLATTABLE_GAME_SIZE];
                 let mut move_buffer = Vec::new();
                 loop {
                     match dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
                         Ok(game) => {
                             count += game.len() as u64;
-                            filtered += game.filter_pass_count(|mv, eval, board, wdl| !filter_state.should_filter(mv, eval, board, wdl));
+                            let pass_count = game.filter_pass_count(filter);
+                            filtered += pass_count;
+                            pass_count_buckets[usize::try_from(pass_count).unwrap().min(Game::MAX_SPLATTABLE_GAME_SIZE - 1)] += 1;
                             move_buffer = game.into_move_buffer();
                         }
                         Err(error) => {
@@ -1036,25 +1032,33 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
                 let lock = stdout_lock.lock().map_err(|_| anyhow!("Failed to lock mutex."))?;
                 println!("{:mpl$}: {} | {}", path.display(), count, filtered);
                 std::mem::drop(lock);
-                Ok((count, filtered))
+                Ok((count, filtered, pass_count_buckets))
             }));
-        }
-        let (mut total_count, mut filtered_count) = (0, 0);
-        for handle in thread_handles {
-            let (count, filtered) = handle
-                .join()
-                .map_err(|_| anyhow!("Thread panicked."))
-                .with_context(|| "Failed to join processing thread")?
-                .with_context(|| "A processing job failed")?;
-            total_count += count;
-            filtered_count += filtered;
-        }
-        Ok((total_count, filtered_count))
-    })?;
+            }
+            let (mut total_count, mut filtered_count) = (0, 0);
+            let mut total_pass_count_buckets = vec![0u64; Game::MAX_SPLATTABLE_GAME_SIZE];
+            for handle in thread_handles {
+                let (count, filtered, pass_count_buckets) = handle
+                    .join()
+                    .map_err(|_| anyhow!("Thread panicked."))
+                    .with_context(|| "Failed to join processing thread")?
+                    .with_context(|| "A processing job failed")?;
+                total_count += count;
+                filtered_count += filtered;
+                for (i, count) in pass_count_buckets.into_iter().enumerate() {
+                    total_pass_count_buckets[i] += count;
+                }
+            }
+            Ok((total_count, filtered_count, total_pass_count_buckets))
+        },
+    )?;
 
     println!();
     println!("Total: {total_count}");
     println!("Total that pass the filter: {filtered_count}");
+    for (i, c) in pass_count_buckets.chunks(16).enumerate() {
+        println!("Games with {:3} to {:3} filtered positions: {}", i * 16, i * 16 + 15, c.iter().sum::<u64>());
+    }
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
     chessmove::Move,
@@ -7,12 +9,14 @@ use crate::{
 
 use self::marlinformat::{util::I16Le, PackedBoard};
 use anyhow::{anyhow, Context};
+use arrayvec::ArrayVec;
+use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 mod marlinformat;
 
 /// The configuration for a filter that can be applied to a game during unpacking.
-#[derive(Clone, Copy, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
 #[serde(default)]
 pub struct Filter {
@@ -30,6 +34,8 @@ pub struct Filter {
     filter_castling: bool,
     /// Filter out positions where eval diverges from WDL by more than this value.
     max_eval_incorrectness: u32,
+    /// Take this many positions per game.
+    sample_size: usize,
 }
 
 impl Default for Filter {
@@ -42,11 +48,23 @@ impl Default for Filter {
             filter_check: true,
             filter_castling: false,
             max_eval_incorrectness: u32::MAX,
+            sample_size: usize::MAX,
         }
     }
 }
 
 impl Filter {
+    const UNRESTRICTED: Self = Self {
+        min_ply: 0,
+        min_pieces: 0,
+        max_eval: u32::MAX,
+        filter_tactical: false,
+        filter_check: false,
+        filter_castling: false,
+        max_eval_incorrectness: u32::MAX,
+        sample_size: usize::MAX,
+    };
+
     pub fn should_filter(&self, mv: Move, eval: i32, board: &Board, wdl: WDL) -> bool {
         if board.ply() < self.min_ply {
             return true;
@@ -87,6 +105,15 @@ impl Filter {
         }
         false
     }
+
+    pub fn from_path(path: &Path) -> Result<Self, anyhow::Error> {
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("Failed to read filter config file at {path:?}"))?;
+        toml::from_str(&text).with_context(|| {
+            let default = toml::to_string_pretty(&Self::default()).unwrap();
+            format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
+        })
+    }
 }
 
 /// A game annotated with evaluations starting from a potentially custom position, with support for efficent binary serialisation and deserialisation.
@@ -112,6 +139,8 @@ impl WDL {
 }
 
 impl Game {
+    pub const MAX_SPLATTABLE_GAME_SIZE: usize = 512;
+
     pub fn new(initial_position: &Board) -> Self {
         Self { initial_position: initial_position.pack(0, 0, 0), moves: Vec::new() }
     }
@@ -217,13 +246,13 @@ impl Game {
     }
 
     /// Internally counts how many positions would pass the filter in this game.
-    pub fn filter_pass_count(&self, filter: impl Fn(Move, i32, &Board, WDL) -> bool) -> u64 {
+    pub fn filter_pass_count(&self, filter: &Filter) -> u64 {
         let mut cnt = 0;
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board, outcome) {
+            if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 cnt += 1;
             }
             board.make_move_simple(*mv);
@@ -236,16 +265,32 @@ impl Game {
     pub fn splat_to_marlinformat(
         &self,
         mut callback: impl FnMut(marlinformat::PackedBoard) -> anyhow::Result<()>,
-        filter: impl Fn(Move, i32, &Board, WDL) -> bool,
+        filter: &Filter,
+        rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
+        // we don't allow buffers of more than this size.
+        if self.moves.len() > Self::MAX_SPLATTABLE_GAME_SIZE {
+            return Ok(());
+        }
+
+        let mut sample_buffer = ArrayVec::<marlinformat::PackedBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
+
+        // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board, outcome) {
-                callback(board.pack(eval, wdl, 0))?;
+            if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
+                sample_buffer.push(board.pack(eval, wdl, 0));
             }
             board.make_move_simple(*mv);
+        }
+
+        // sample down to the requested number of positions.
+        let samples_to_take = filter.sample_size.min(sample_buffer.len());
+        let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
+        for board in selected {
+            callback(*board)?;
         }
 
         Ok(())
@@ -255,13 +300,22 @@ impl Game {
     pub fn splat_to_bulletformat(
         &self,
         mut callback: impl FnMut(bulletformat::ChessBoard) -> anyhow::Result<()>,
-        filter: impl Fn(Move, i32, &Board, WDL) -> bool,
+        filter: &Filter,
+        rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
+        // we don't allow buffers of more than this size.
+        if self.moves.len() > Self::MAX_SPLATTABLE_GAME_SIZE {
+            return Ok(());
+        }
+
+        let mut sample_buffer = ArrayVec::<bulletformat::ChessBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
+
+        // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
             let eval = eval.get();
-            if filter(*mv, i32::from(eval), &board, outcome) {
+            if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
                 let piece_layout = &board.pieces;
                 bbs[0] = piece_layout.occupied_co(Colour::White).inner();
@@ -272,7 +326,7 @@ impl Game {
                 bbs[5] = piece_layout.of_type(PieceType::Rook).inner();
                 bbs[6] = piece_layout.of_type(PieceType::Queen).inner();
                 bbs[7] = piece_layout.of_type(PieceType::King).inner();
-                callback(
+                sample_buffer.push(
                     bulletformat::ChessBoard::from_raw(
                         bbs,
                         (board.turn() != Colour::White).into(),
@@ -281,9 +335,16 @@ impl Game {
                     )
                     .map_err(|e| anyhow!(e))
                     .with_context(|| "Failed to convert raw components into bulletformat::ChessBoard.")?,
-                )?;
+                );
             }
             board.make_move_simple(*mv);
+        }
+
+        // sample down to the requested number of positions.
+        let samples_to_take = filter.sample_size.min(sample_buffer.len());
+        let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
+        for board in selected {
+            callback(*board)?;
         }
 
         Ok(())
@@ -339,12 +400,15 @@ mod tests {
         game.add_move(Move::new(Square::G1, Square::F3), 200);
 
         let mut boards = Vec::new();
+        let filter = Filter::UNRESTRICTED;
+        let mut rng = rand::thread_rng();
         game.splat_to_marlinformat(
             |board| {
                 boards.push(board);
                 Ok(())
             },
-            |_, _, _, _| true,
+            &filter,
+            &mut rng,
         )
         .unwrap();
         assert_eq!(boards.len(), 3);
