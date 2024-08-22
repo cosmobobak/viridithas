@@ -11,12 +11,12 @@
   
 </div>
 
-Viridithas is a free and open source chess engine, that as of 2024-03-11 is the strongest chess program written in Rust, and the strongest chess program by a UK author.
-These claims are based on my own personal tests and aggregate results from multiple public rating lists. If these claims are no longer true, it's likely due to the hard work of some of my friends in the chess-programming community, most likely the authors of [Stormphrax](https://github.com/Ciekce/Stormphrax) & [Black Marlin](https://github.com/jnlt3/blackmarlin).
+Viridithas is a free and open source chess engine, that as of 2024-08-22 is the strongest chess program written in Rust, and the strongest chess program by a UK author.
+These claims are based on my own personal tests and aggregate results from multiple public rating lists. If these claims are no longer true, it's likely due to the hard work of some of my friends in the chess-programming community, most likely the authors of [Stormphrax](https://github.com/Ciekce/Stormphrax) & [Black Marlin](https://github.com/jnlt3/blackmarlin). The Viridithas project prides itself on using original training data for its neural networks.
 
 Viridithas is a command-line program that can be used from the terminal or can communicate with a graphical user interface over the UCI protocol.
 
-For an overview of the features of Viridithas, see the [viri-wiki](wiki.md).
+For an overview of the features of Viridithas, see the [viri-wiki](https://cosmo.tardis.ac/2023/02/20/viri-wiki/).
 
 ## Building Viridithas
 
@@ -28,7 +28,7 @@ If you just want one of the official releases of Viridithas, check out the **Rel
 3. (optional, likely unnecessary) select the branch you'd like to compile via `git checkout <BRANCH_NAME>`.
 4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
 
-    **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue`.
+    **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue.zst`.
 
 5. Build Viridithas.
    
