@@ -125,7 +125,7 @@ mod x86simd {
     };
     use std::mem::MaybeUninit;
 
-    const FT_SHIFT: u32 = 10;
+    const FT_SHIFT: u32 = 9;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
