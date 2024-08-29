@@ -394,7 +394,7 @@ mod x86simd {
         bias: f32,
         output: &mut f32,
     ) {
-        const NUM_SUMS: usize = AVX512CHUNK / (size_of::<VecF32>() / size_of::<f32>());
+        const NUM_SUMS: usize = AVX512CHUNK / (std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>());
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
         // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and

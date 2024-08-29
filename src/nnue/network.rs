@@ -122,7 +122,7 @@ struct QuantisedNetwork {
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
     pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
     pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
