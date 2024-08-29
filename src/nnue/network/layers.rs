@@ -258,7 +258,7 @@ mod x86simd {
         // initialised, so we can soundly read from it.
         unsafe {
             let ft_zero = simd::zero_i16();
-            let ft_one = simd::splat_i16(QA as i16);
+            let ft_one = simd::splat_i16(QA);
 
             let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> = MaybeUninit::uninit().assume_init();
 
@@ -302,7 +302,7 @@ mod x86simd {
             let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> = MaybeUninit::uninit().assume_init();
             let nnz_slice = find_nnz(input32, &mut nnz);
 
-            let mut sums = [0; L2_SIZE];
+            let mut sums = Align64([0; L2_SIZE]);
 
             for &i in nnz_slice {
                 // load the non-zero activation, and splat it into a SIMD register.
@@ -401,17 +401,23 @@ mod x86simd {
         // `inputs` has length L3_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            // let mut sum_vec = simd::zero_f32();
-            let mut sums = [simd::zero_f32(); NUM_SUMS];
+            let mut sums = Align64([0.0; AVX512CHUNK]);
 
             // Affine transform for L3
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
-                *sums.get_unchecked_mut(i % NUM_SUMS) = simd::mul_add_f32(input_vec, weight_vec, *sums.get_unchecked(i % NUM_SUMS));
+                simd::store_f32(
+                    sums.get_unchecked_mut(i % NUM_SUMS * F32_CHUNK_SIZE),
+                    simd::mul_add_f32(
+                        input_vec,
+                        weight_vec,
+                        simd::load_f32(sums.get_unchecked(i % NUM_SUMS * F32_CHUNK_SIZE)),
+                    ),
+                );
             }
 
-            *output = simd::reduce_add_f32s(sums) + bias;
+            *output = simd::reduce_add_f32s(&sums) + bias;
         }
     }
 }
