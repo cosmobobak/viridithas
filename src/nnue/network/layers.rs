@@ -401,23 +401,21 @@ mod x86simd {
         // `inputs` has length L3_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            let mut sums = Align64([0.0; AVX512CHUNK]);
+            let mut sum = simd::zero_f32();
 
             // Affine transform for L3
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
-                simd::store_f32(
-                    sums.get_unchecked_mut(i % NUM_SUMS * F32_CHUNK_SIZE),
+                sum = 
                     simd::mul_add_f32(
                         input_vec,
                         weight_vec,
-                        simd::load_f32(sums.get_unchecked(i % NUM_SUMS * F32_CHUNK_SIZE)),
-                    ),
-                );
+                        sum,
+                    );
             }
 
-            *output = simd::reduce_add_f32s(&sums) + bias;
+            *output = simd::sum_f32(sum) + bias;
         }
     }
 }
