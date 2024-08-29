@@ -167,9 +167,10 @@ mod avx512 {
         return _mm512_cmpgt_epi32_mask(vec.inner(), _mm512_setzero_si512()) as u16;
     }
     #[inline]
-    pub unsafe fn pack_i16_to_unsigned_and_permute(vec0: VecI16, vec1: VecI16) -> VecI8 {
+    pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
         let packed = _mm512_packus_epi16(vec0.inner(), vec1.inner());
-        return VecI8::from_raw(_mm512_permutexvar_epi64(_mm512_setr_epi64(0, 2, 4, 6, 1, 3, 5, 7), packed));
+        // return VecI8::from_raw(_mm512_permutexvar_epi64(_mm512_setr_epi64(0, 2, 4, 6, 1, 3, 5, 7), packed));
+        return VecI8::from_raw(packed);
     }
     #[inline]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
@@ -237,6 +238,10 @@ mod avx512 {
     #[inline]
     pub unsafe fn sum_f32(vec: VecF32) -> f32 {
         return _mm512_reduce_add_ps(vec.inner());
+    }
+    #[inline]
+    pub unsafe fn reduce_add_f32s(vec: [VecF32; 1]) -> f32 {
+        return _mm512_reduce_add_ps(vec[0].inner());
     }
 
     pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
@@ -362,9 +367,10 @@ mod avx2 {
         return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(vec.inner(), _mm256_setzero_si256()))) as u16;
     }
     #[inline]
-    pub unsafe fn pack_i16_to_unsigned_and_permute(vec0: VecI16, vec1: VecI16) -> VecI8 {
+    pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
         let packed = _mm256_packus_epi16(vec0.inner(), vec1.inner());
-        return VecI8::from_raw(_mm256_permute4x64_epi64(packed, super::mm_shuffle(3, 1, 2, 0)));
+        // return VecI8::from_raw(_mm256_permute4x64_epi64(packed, super::mm_shuffle(3, 1, 2, 0)));
+        return VecI8::from_raw(packed);
     }
 
     #[inline]
@@ -427,6 +433,22 @@ mod avx2 {
     pub unsafe fn sum_f32(vec: VecF32) -> f32 {
         let upper_128 = _mm256_extractf128_ps(vec.inner(), 1);
         let lower_128 = _mm256_castps256_ps128(vec.inner());
+        let sum_128 = _mm_add_ps(upper_128, lower_128);
+
+        let upper_64 = _mm_movehl_ps(sum_128, sum_128);
+        let sum_64 = _mm_add_ps(upper_64, sum_128);
+
+        let upper_32 = _mm_shuffle_ps(sum_64, sum_64, 1);
+        let sum_32 = _mm_add_ss(upper_32, sum_64);
+
+        return _mm_cvtss_f32(sum_32);
+    }
+    #[inline]
+    pub unsafe fn reduce_add_f32s(vec: [VecF32; 2]) -> f32 {
+        let vec = _mm256_add_ps(vec[0].inner(), vec[1].inner());
+
+        let upper_128 = _mm256_extractf128_ps(vec, 1);
+        let lower_128 = _mm256_castps256_ps128(vec);
         let sum_128 = _mm_add_ps(upper_128, lower_128);
 
         let upper_64 = _mm_movehl_ps(sum_128, sum_128);
@@ -561,10 +583,9 @@ mod ssse3 {
         return _mm_movemask_ps(_mm_castsi128_ps(_mm_cmpgt_epi32(vec.inner(), _mm_setzero_si128()))) as u16;
     }
     #[inline]
-    pub unsafe fn pack_i16_to_unsigned_and_permute(vec0: VecI16, vec1: VecI16) -> VecI8 {
-        // let packed = _mm_packus_epi16(vec0, vec1);
-        // return _mm_permute4x64_epi64(packed, super::mm_shuffle(3, 1, 2, 0));
-        return VecI8::from_raw(_mm_packus_epi16(vec0.inner(), vec1.inner()));
+    pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
+        let packed = _mm_packus_epi16(vec0.inner(), vec1.inner());
+        return VecI8::from_raw(packed);
     }
     #[inline]
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
@@ -626,6 +647,19 @@ mod ssse3 {
     pub unsafe fn sum_f32(vec: VecF32) -> f32 {
         let upper_64 = _mm_movehl_ps(vec.inner(), vec.inner());
         let sum_64 = _mm_add_ps(vec.inner(), upper_64);
+
+        let upper_32 = _mm_shuffle_ps(sum_64, sum_64, 1);
+        let sum_32 = _mm_add_ss(upper_32, sum_64);
+
+        return _mm_cvtss_f32(sum_32);
+    }
+    #[inline]
+    pub unsafe fn reduce_add_f32s(vec: [VecF32; 4]) -> f32 {
+        let vec_a = _mm_add_ps(vec[0].inner(), vec[2].inner());
+        let vec_b = _mm_add_ps(vec[1].inner(), vec[3].inner());
+        let vec = _mm_add_ps(vec_a, vec_b);
+        let upper_64 = _mm_movehl_ps(vec, vec);
+        let sum_64 = _mm_add_ps(vec, upper_64);
 
         let upper_32 = _mm_shuffle_ps(sum_64, sum_64, 1);
         let sum_32 = _mm_add_ss(upper_32, sum_64);

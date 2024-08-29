@@ -79,8 +79,8 @@ pub fn output_bucket(pos: &Board) -> usize {
     (pos.n_men() as usize - 2) / DIVISOR
 }
 
-const QA: i32 = 255;
-const QB: i32 = 64;
+const QA: i16 = 255;
+const QB: i16 = 64;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -130,7 +130,8 @@ impl UnquantisedNetwork {
         clippy::cast_possible_truncation,
         clippy::cast_precision_loss,
         clippy::cognitive_complexity,
-        clippy::needless_range_loop
+        clippy::needless_range_loop,
+        clippy::too_many_lines,
     )]
     fn process(&self, use_simd: bool) -> Box<NNUEParams> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
@@ -144,7 +145,7 @@ impl UnquantisedNetwork {
             // for repermuting the weights.
             let mut unsorted = vec![0i16; INPUT * L1_SIZE];
             for ((src, fac_src), tgt) in src_bucket.iter().zip(factoriser.iter()).zip(unsorted.iter_mut()) {
-                let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * QA as f32;
+                let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * f32::from(QA);
                 *tgt = scaled.round() as i16;
             }
             repermute_ft_bucket(tgt_bucket, &unsorted);
@@ -153,11 +154,61 @@ impl UnquantisedNetwork {
         // quantise the feature transformer biases
         let mut unsorted = vec![0i16; L1_SIZE];
         for (src, tgt) in self.ft_biases.iter().zip(unsorted.iter_mut()) {
-            let scaled = *src * QA as f32;
+            let scaled = *src * f32::from(QA);
             assert!(scaled.abs() <= QA_BOUND, "feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             *tgt = scaled.round() as i16;
         }
         repermute_ft_bias(&mut net.feature_bias, &unsorted);
+
+        // transpose FT weights and biases so that packus transposes it back to the intended order
+        if use_simd {
+            type PermChunk = [i16; 8];
+            // reinterpret as data of size __m128i
+            let mut weights: Vec<&mut PermChunk> = net.feature_weights.chunks_exact_mut(8).map(|a| a.try_into().unwrap()).collect();
+            let mut biases: Vec<&mut PermChunk> = net.feature_bias.chunks_exact_mut(8).map(|a| a.try_into().unwrap()).collect();
+            let num_chunks = std::mem::size_of::<PermChunk>() / std::mem::size_of::<i16>();
+
+            #[cfg(target_feature = "avx512f")]
+            let num_regs = 8;
+            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+            let num_regs = 4;
+            #[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
+            let num_regs = 2;
+            #[cfg(not(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f")))]
+            let num_regs = 1;
+            #[cfg(target_feature = "avx512f")]
+            let order = [0, 2, 4, 6, 1, 3, 5, 7];
+            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+            let order = [0, 2, 1, 3];
+            #[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
+            let order = [0, 1];
+            #[cfg(not(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f")))]
+            let order = [0];
+
+            let mut regs = vec![[0i16; 8]; num_regs];
+
+            // transpose weights
+            for i in (0..INPUT * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
+                for j in 0..num_regs {
+                    regs[j] = *weights[i + j];
+                }
+
+                for j in 0..num_regs {
+                    *weights[i + j] = regs[order[j]];
+                }
+            }
+
+            // transpose biases
+            for i in (0..L1_SIZE / num_chunks).step_by(num_regs) {
+                for j in 0..num_regs {
+                    regs[j] = *biases[i + j];
+                }
+
+                for j in 0..num_regs {
+                    *biases[i + j] = regs[order[j]];
+                }
+            }
+        }
 
         // transpose the L{1,2,3} weights and biases
         let mut sorted = vec![[[0f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
@@ -169,7 +220,7 @@ impl UnquantisedNetwork {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                     for j in 0..L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            let v = sorted[i * L1_CHUNK_PER_32 + k][bucket][j] * QB as f32;
+                            let v = sorted[i * L1_CHUNK_PER_32 + k][bucket][j] * f32::from(QB);
                             assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                             let v = v.round() as i8;
                             net.l1_weights[bucket][i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] = v;
@@ -179,7 +230,7 @@ impl UnquantisedNetwork {
             } else {
                 for i in 0..L1_SIZE {
                     for j in 0..L2_SIZE {
-                        let v = sorted[i][bucket][j] * QB as f32;
+                        let v = sorted[i][bucket][j] * f32::from(QB);
                         assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
                         let v = v.round() as i8;
                         net.l1_weights[bucket][j * L1_SIZE + i] = v;
@@ -224,17 +275,23 @@ impl UnquantisedNetwork {
         net
     }
 
-    fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
-        // SAFETY: NNUEParams can be zeroed.
+    fn zeroed() -> Box<Self> {
+        // SAFETY: UnquantisedNetwork can be zeroed.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
             let ptr = std::alloc::alloc_zeroed(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
-            #[allow(clippy::cast_ptr_alignment)]
-            let mut net = Box::from_raw(ptr.cast::<Self>());
-            let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), layout.size());
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    fn read(reader: &mut impl std::io::Read) -> anyhow::Result<Box<Self>> {
+        // SAFETY: NNUEParams can be zeroed.
+        unsafe {
+            let mut net = Self::zeroed();
+            let mem = std::slice::from_raw_parts_mut(std::ptr::from_mut(net.as_mut()).cast::<u8>(), std::mem::size_of::<Self>());
             reader.read_exact(mem)?;
             Ok(net)
         }
@@ -291,10 +348,10 @@ impl NNUEParams {
         // reinterpret it as bytes and write into it. We don't need to worry
         // about padding bytes, because the boxed NNUEParams is zeroed.
         unsafe {
-            let mut net = Self::zeroed();
+            let mut net = UnquantisedNetwork::zeroed();
             let mut mem = std::slice::from_raw_parts_mut(
                 std::ptr::from_mut(net.as_mut()).cast::<u8>(),
-                std::mem::size_of::<Self>(),
+                std::mem::size_of::<UnquantisedNetwork>(),
             );
             let expected_bytes = mem.len() as u64;
             let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
@@ -302,6 +359,8 @@ impl NNUEParams {
             let bytes_written =
                 std::io::copy(&mut decoder, &mut mem).with_context(|| "Failed to decompress NNUE weights.")?;
             anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+            let use_simd = cfg!(target_feature = "ssse3");
+            let net = net.process(use_simd);
             Ok(net)
         }
     }
