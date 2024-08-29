@@ -1,10 +1,18 @@
+#[allow(dead_code)]
+const AVX512CHUNK: usize = 512 / 32;
+const FT_SHIFT: u32 = 9;
+#[allow(clippy::cast_precision_loss)]
+const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
+
 #[cfg(not(target_feature = "ssse3"))]
 mod generic {
-    use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
+    use super::{
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
+    };
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
     fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
-        // this is just autovec'd for the moment.
         for (a, acc) in [us, them].into_iter().enumerate() {
             for i in 0..L1_SIZE / 2 {
                 // SAFETY: the largest index into `acc` that we construct is `L1_SIZE / 2 + (L1_SIZE / 2 - 1)`.
@@ -12,10 +20,10 @@ mod generic {
                 unsafe {
                     let l = *acc.get_unchecked(i);
                     let r = *acc.get_unchecked(L1_SIZE / 2 + i);
-                    let cl = i32::clamp(i32::from(l), 0, QA);
-                    let cr = i32::clamp(i32::from(r), 0, QA);
-                    let r = (cl * cr) / QA;
-                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) = r as u8;
+                    let cl = i16::clamp(l, 0, QA);
+                    let cr = i16::clamp(r, 0, QA);
+                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) =
+                        ((i32::from(cl) * i32::from(cr)) >> FT_SHIFT) as u8;
                 }
             }
         }
@@ -28,7 +36,6 @@ mod generic {
         biases: &Align64<[f32; L2_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
-        const SUM_DIV: f32 = (QA * QB) as f32;
         // this is just autovec'd for the moment.
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
@@ -49,7 +56,7 @@ mod generic {
             // As such, the indices that we construct are valid.
             unsafe {
                 let clipped =
-                    f32::clamp((*sums.get_unchecked(i) as f32) / SUM_DIV + *biases.get_unchecked(i), 0.0, 1.0);
+                    f32::clamp((*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)), 0.0, 1.0);
                 *output.get_unchecked_mut(i) = clipped * clipped;
             }
         }
@@ -79,12 +86,15 @@ mod generic {
 
         // affine transform for l2
         for i in 0..L2_SIZE {
-            for j in 0..L3_SIZE {
-                // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
-                // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
-                // indices that we construct are valid.
-                unsafe {
-                    *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
+            // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
+            // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
+            // indices that we construct are valid.
+            unsafe {
+                let input = *inputs.get_unchecked(i);
+                for j in 0..L3_SIZE {
+                    let sum = *sums.get_unchecked(j);
+                    let w = *weights.get_unchecked(i * L3_SIZE + j);
+                    *sums.get_unchecked_mut(j) = input.mul_add(w, sum);
                 }
             }
         }
@@ -100,32 +110,49 @@ mod generic {
         }
     }
 
+    /// Software implementation of the spec for simd stuff,
+    /// to retain order of operations.
+    #[inline]
+    fn reduce_add(sums: &mut [f32]) -> f32 {
+        let n = sums.len();
+        if n == 2 {
+            return sums[0] + sums[1];
+        }
+        for i in 0..n / 2 {
+            sums[i] += sums[i + n / 2];
+        }
+
+        reduce_add(&mut sums[..n / 2])
+    }
+
     pub fn propagate_l3(
         inputs: &Align64<[f32; L3_SIZE]>,
         weights: &Align64<[f32; L3_SIZE]>,
         bias: f32,
         output: &mut f32,
     ) {
-        let mut sum = bias;
+        const NUM_SUMS: usize = AVX512CHUNK;
+        let mut sums = [0f32; NUM_SUMS];
 
-        for (i, w) in inputs.iter().zip(weights.iter()) {
-            sum += *i * *w;
+        // Affine transform for L3
+        for (i, (v, w)) in inputs.iter().zip(weights.iter()).enumerate() {
+            sums[i % NUM_SUMS] = f32::mul_add(*v, *w, sums[i % NUM_SUMS]);
         }
 
-        *output = sum;
+        *output = reduce_add(&mut sums) + bias;
     }
 }
 
 #[cfg(target_feature = "ssse3")]
 mod x86simd {
-    use super::super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA, QB};
+    use super::{
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA}, FT_SHIFT, L1_MUL,
+    };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
         simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S, U8_CHUNK_SIZE},
     };
     use std::mem::MaybeUninit;
-
-    const FT_SHIFT: u32 = 9;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
@@ -224,7 +251,6 @@ mod x86simd {
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
-        const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA * QA * QB) as f32;
 
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most
@@ -238,7 +264,7 @@ mod x86simd {
         // initialised, so we can soundly read from it.
         unsafe {
             let ft_zero = simd::zero_i16();
-            let ft_one = simd::splat_i16(QA as i16);
+            let ft_one = simd::splat_i16(QA);
 
             let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> = MaybeUninit::uninit().assume_init();
 
@@ -259,7 +285,7 @@ mod x86simd {
                     let productb = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
                     simd::store_u8(
                         std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(),
-                        simd::pack_i16_to_unsigned_and_permute(producta, productb),
+                        simd::pack_i16_to_u8(producta, productb),
                     );
                 }
                 offset += L1_PAIR_COUNT;
@@ -282,7 +308,7 @@ mod x86simd {
             let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> = MaybeUninit::uninit().assume_init();
             let nnz_slice = find_nnz(input32, &mut nnz);
 
-            let mut sums = [0; L2_SIZE];
+            let mut sums = Align64([0; L2_SIZE]);
 
             for &i in nnz_slice {
                 // load the non-zero activation, and splat it into a SIMD register.
@@ -339,14 +365,7 @@ mod x86simd {
         // has length L2_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            let mut sums = [0.0; L3_SIZE];
-
-            for i in 0..L3_SIZE / F32_CHUNK_SIZE {
-                simd::store_f32(
-                    sums.get_unchecked_mut(i * F32_CHUNK_SIZE),
-                    simd::load_f32(biases.get_unchecked(i * F32_CHUNK_SIZE)),
-                );
-            }
+            let mut sums = biases.clone();
 
             for i in 0..L2_SIZE {
                 let input_vec = simd::splat_f32(*inputs.get_unchecked(i));
@@ -387,16 +406,16 @@ mod x86simd {
         // `inputs` has length L3_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            let mut sum_vec = simd::zero_f32();
+            let mut sum = simd::zero_f32();
 
             // Affine transform for L3
-            for i in (0..L3_SIZE).step_by(F32_CHUNK_SIZE) {
-                let weight_vec = simd::load_f32(weights.get_unchecked(i));
-                let input_vec = simd::load_f32(inputs.get_unchecked(i));
-                sum_vec = simd::mul_add_f32(input_vec, weight_vec, sum_vec);
+            for i in 0..L3_SIZE / F32_CHUNK_SIZE {
+                let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
+                let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
+                sum = simd::mul_add_f32(input_vec, weight_vec, sum);
             }
 
-            *output = bias + simd::sum_f32(sum_vec);
+            *output = simd::sum_f32(sum) + bias;
         }
     }
 }
@@ -406,6 +425,8 @@ pub use x86simd::*;
 
 #[cfg(not(target_feature = "ssse3"))]
 pub use generic::*;
+
+use super::{QA, QB};
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
