@@ -146,7 +146,8 @@ mod generic {
 #[cfg(target_feature = "ssse3")]
 mod x86simd {
     use super::{
-        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA}, FT_SHIFT, L1_MUL,
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
+        FT_SHIFT, L1_MUL,
     };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
