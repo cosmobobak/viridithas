@@ -87,7 +87,7 @@ mod generic {
                 // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
                 // indices that we construct are valid.
                 unsafe {
-                    *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(j * L2_SIZE + i);
+                    *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(i * L3_SIZE + j);
                 }
             }
         }
@@ -356,14 +356,7 @@ mod x86simd {
         // has length L2_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            let mut sums = [0.0; L3_SIZE];
-
-            for i in 0..L3_SIZE / F32_CHUNK_SIZE {
-                simd::store_f32(
-                    sums.get_unchecked_mut(i * F32_CHUNK_SIZE),
-                    simd::load_f32(biases.get_unchecked(i * F32_CHUNK_SIZE)),
-                );
-            }
+            let mut sums = biases.clone();
 
             for i in 0..L2_SIZE {
                 let input_vec = simd::splat_f32(*inputs.get_unchecked(i));

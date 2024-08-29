@@ -315,17 +315,9 @@ impl QuantisedNetwork {
             }
 
             // transpose the L2 weights
-            if use_simd {
-                for i in 0..L2_SIZE {
-                    for j in 0..L3_SIZE {
-                        net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
-                    }
-                }
-            } else {
-                for i in 0..L2_SIZE {
-                    for j in 0..L3_SIZE {
-                        net.l2_weights[bucket][j * L2_SIZE + i] = self.l2_weights[i][bucket][j];
-                    }
+            for i in 0..L2_SIZE {
+                for j in 0..L3_SIZE {
+                    net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
                 }
             }
 
@@ -930,7 +922,11 @@ impl NNUEState {
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
-        std::hint::black_box(state.evaluate(nnue_params, Colour::White, 0));
+        std::hint::black_box(std::hint::black_box(state).evaluate(
+            std::hint::black_box(nnue_params),
+            std::hint::black_box(Colour::White),
+            std::hint::black_box(0),
+        ));
     }
     let elapsed = start.elapsed();
     let nanos = elapsed.as_nanos();
