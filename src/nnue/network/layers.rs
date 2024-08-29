@@ -82,12 +82,15 @@ mod generic {
 
         // affine transform for l2
         for i in 0..L2_SIZE {
-            for j in 0..L3_SIZE {
-                // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
-                // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
-                // indices that we construct are valid.
-                unsafe {
-                    *sums.get_unchecked_mut(j) += *inputs.get_unchecked(i) * *weights.get_unchecked(i * L3_SIZE + j);
+            // SAFETY: `sums` is `L3_SIZE` long, `inputs` is `L2_SIZE` long,
+            // and `weights` is `L2_SIZE * L3_SIZE` long. As such, the
+            // indices that we construct are valid.
+            unsafe {
+                let input = *inputs.get_unchecked(i);
+                for j in 0..L3_SIZE {
+                    let sum = *sums.get_unchecked(j);
+                    let w = *weights.get_unchecked(i * L3_SIZE + j);
+                    *sums.get_unchecked_mut(j) = input.mul_add(w, sum);
                 }
             }
         }
@@ -129,7 +132,7 @@ mod generic {
 
         // Affine transform for L3
         for (i, (v, w)) in inputs.iter().zip(weights.iter()).enumerate() {
-            sums[i % NUM_SUMS] += *v * *w;
+            sums[i % NUM_SUMS] = f32::mul_add(*v, *w, sums[i % NUM_SUMS]);
         }
 
         *output = reduce_add(&mut sums) + bias;
