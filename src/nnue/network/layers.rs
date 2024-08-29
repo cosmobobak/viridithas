@@ -1,4 +1,4 @@
-
+#[allow(dead_code)]
 const AVX512CHUNK: usize = 512 / 32;
 const FT_SHIFT: u32 = 9;
 #[allow(clippy::cast_precision_loss)]
@@ -6,7 +6,10 @@ const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32)
 
 #[cfg(not(target_feature = "ssse3"))]
 mod generic {
-    use super::{super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA}, AVX512CHUNK, FT_SHIFT, L1_MUL};
+    use super::{
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
+    };
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
     fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
@@ -19,7 +22,8 @@ mod generic {
                     let r = *acc.get_unchecked(L1_SIZE / 2 + i);
                     let cl = i16::clamp(l, 0, QA);
                     let cr = i16::clamp(r, 0, QA);
-                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) = ((i32::from(cl) * i32::from(cr)) >> FT_SHIFT) as u8;
+                    *output.get_unchecked_mut(i + a * L1_SIZE / 2) =
+                        ((i32::from(cl) * i32::from(cr)) >> FT_SHIFT) as u8;
                 }
             }
         }
@@ -141,10 +145,12 @@ mod generic {
 
 #[cfg(target_feature = "ssse3")]
 mod x86simd {
-    use super::{super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA}, AVX512CHUNK, FT_SHIFT, L1_MUL};
+    use super::{
+        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA}, FT_SHIFT, L1_MUL,
+    };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
-        simd::{self, VecF32, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S, U8_CHUNK_SIZE},
+        simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S, U8_CHUNK_SIZE},
     };
     use std::mem::MaybeUninit;
 
@@ -394,7 +400,6 @@ mod x86simd {
         bias: f32,
         output: &mut f32,
     ) {
-        const NUM_SUMS: usize = AVX512CHUNK / (std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>());
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
         // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
@@ -407,12 +412,7 @@ mod x86simd {
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
-                sum = 
-                    simd::mul_add_f32(
-                        input_vec,
-                        weight_vec,
-                        sum,
-                    );
+                sum = simd::mul_add_f32(input_vec, weight_vec, sum);
             }
 
             *output = simd::sum_f32(sum) + bias;
