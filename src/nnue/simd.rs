@@ -700,3 +700,9 @@ pub use ssse3::*;
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
     VecI8::from_raw(vec.inner())
 }
+
+#[cfg(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f"))]
+#[inline]
+pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
+    VecI32::from_raw(vec.inner())
+}
