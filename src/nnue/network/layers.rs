@@ -151,14 +151,14 @@ mod x86simd {
     };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
-        simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, I32_CHUNK_SIZE, S, U8_CHUNK_SIZE},
+        simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
     };
-    use std::mem::MaybeUninit;
     use std::arch::x86_64::_mm_add_epi16 as vec128_add;
     use std::arch::x86_64::_mm_load_si128 as vec128_load;
     use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
     use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
     use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
+    use std::mem::MaybeUninit;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
@@ -222,7 +222,6 @@ mod x86simd {
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
 
-
         // somewhat annoying special casing for x86-64-v2
         #[cfg(not(target_feature = "avx2"))]
         const SSSE3_MULT: usize = 2;
@@ -267,10 +266,7 @@ mod x86simd {
 
                     let product = simd::pack_i16_to_u8(producta, productb);
 
-                    simd::store_u8(
-                        std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(),
-                        product,
-                    );
+                    simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product);
 
                     // somewhat annoying special casing for x86-64-v2
                     #[cfg(not(target_feature = "avx2"))]
@@ -285,8 +281,10 @@ mod x86simd {
                         let clipped1a = simd::min_i16(input1a, ft_one);
                         let clipped1b = simd::min_i16(input1b, ft_one);
 
-                        let producta = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a), clipped1a);
-                        let productb = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
+                        let producta =
+                            simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a), clipped1a);
+                        let productb =
+                            simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
 
                         let product = simd::pack_i16_to_u8(producta, productb);
 
@@ -303,11 +301,18 @@ mod x86simd {
                     let mut nnz_mask = 0;
                     nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product)));
                     #[cfg(not(target_feature = "avx2"))]
-                    { nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_two))) << NNZ_INPUT_SIMD_WIDTH; }
+                    {
+                        nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_two)))
+                            << NNZ_INPUT_SIMD_WIDTH;
+                    }
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
-                        let offsets = vec128_load(std::ptr::from_ref(NNZ_TABLE.table.get_unchecked(lookup as usize)).cast());
-                        vec128_storeu(std::ptr::from_mut(nnz.get_unchecked_mut(nnz_count)).cast(), vec128_add(base, offsets));
+                        let entry = NNZ_TABLE.table.get_unchecked(lookup as usize);
+                        let offsets = vec128_load(std::ptr::from_ref(entry).cast());
+                        vec128_storeu(
+                            std::ptr::from_mut(nnz.get_unchecked_mut(nnz_count)).cast(),
+                            vec128_add(base, offsets),
+                        );
                         nnz_count += u32::count_ones(lookup) as usize;
                         base = vec128_add(base, increment);
                     }
@@ -328,12 +333,8 @@ mod x86simd {
             // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
             let input32 = reinterpret_as_i32s(&ft_outputs);
 
-            // Compute the non-zero indices.
-            // let nnz_slice = find_nnz(input32, &mut nnz);
             let nnz_slice = std::slice::from_raw_parts(nnz.get_unchecked(0).as_ptr().cast::<u16>(), nnz_count);
-
             let mut sums = Align64([0; L2_SIZE]);
-
             for &i in nnz_slice {
                 // load the non-zero activation, and splat it into a SIMD register.
                 let input = simd::splat_i32(*input32.get_unchecked(i as usize));
