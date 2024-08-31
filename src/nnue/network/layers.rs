@@ -39,13 +39,17 @@ mod generic {
         // this is just autovec'd for the moment.
         let mut sums = [0; L2_SIZE];
         for i in 0..L1_SIZE {
-            for j in 0..L2_SIZE {
-                // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
-                // and `weights` is `L1_SIZE * L2_SIZE` long. As such, the
-                // indices that we construct are valid.
-                unsafe {
-                    *sums.get_unchecked_mut(j) +=
-                        i32::from(*inputs.get_unchecked(i)) * i32::from(*weights.get_unchecked(j * L1_SIZE + i));
+            // SAFETY: `sums` is `L2_SIZE` long, `inputs` is `L1_SIZE` long,
+            // and `weights` is `L1_SIZE * L2_SIZE` long. As such, the
+            // indices that we construct are valid.
+            unsafe {
+                let input = *inputs.get_unchecked(i);
+                if input == 0 {
+                    continue;
+                }
+                for j in 0..L2_SIZE {
+                    let weight = *weights.get_unchecked(j * L1_SIZE + i);
+                    *sums.get_unchecked_mut(j) += i32::from(input) * i32::from(weight);
                 }
             }
         }
@@ -281,7 +285,10 @@ mod x86simd {
 
                     // store to the ft output buffer
                     simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product_one);
-                    simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(), product_two);
+                    simd::store_u8(
+                        std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(),
+                        product_two,
+                    );
 
                     // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
                     let mut nnz_mask = 0;
