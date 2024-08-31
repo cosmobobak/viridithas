@@ -245,44 +245,51 @@ mod x86simd {
             let mut offset = 0;
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2 * 2) {
+                    // load the left-hand pair inputs
                     let input0a = simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + 0));
                     let input0b = simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + 0));
                     let input0c = simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + 0));
                     let input0d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + 0));
 
+                    // load the right-hand pair inputs
                     let input1a = simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
                     let input1b = simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
                     let input1c = simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
                     let input1d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
 
+                    // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);
                     let clipped0b = simd::min_i16(simd::max_i16(input0b, ft_zero), ft_one);
                     let clipped0c = simd::min_i16(simd::max_i16(input0c, ft_zero), ft_one);
                     let clipped0d = simd::min_i16(simd::max_i16(input0d, ft_zero), ft_one);
 
+                    // clip the right-hand inputs from above
                     let clipped1a = simd::min_i16(input1a, ft_one);
                     let clipped1b = simd::min_i16(input1b, ft_one);
                     let clipped1c = simd::min_i16(input1c, ft_one);
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
+                    // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
                     let producta = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a), clipped1a);
                     let productb = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
                     let productc = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0c), clipped1c);
                     let productd = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0d), clipped1d);
 
+                    // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
                     let product_two = simd::pack_i16_to_u8(productc, productd);
 
+                    // store to the ft output buffer
                     simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product_one);
                     simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(), product_two);
 
-                    // The code below stores all active (nonzero) indices in the `nnz` array
-                    // to allow us to do the L1 affine transform sparsely.
+                    // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
                     let mut nnz_mask = 0;
                     nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_one)));
                     nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_two)))
                         << NNZ_INPUT_SIMD_WIDTH;
 
+                    // store the non-zero indices into the nnz buffer
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
                         let entry = NNZ_TABLE.table.get_unchecked(lookup as usize);
@@ -330,9 +337,6 @@ mod x86simd {
         // into the `ft_outputs` array. This is in bounds, as `ft_outputs` has length L1_PAIR_COUNT * 2.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            // alignas(64) vepi32 sums[L2_SIZE / L2_CHUNK_SIZE] = {};
-            // const int32_t *inputs32 = reinterpret_cast<const int32_t*>(inputs);
-
             // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
             let input32 = reinterpret_as_i32s(ft_outputs);
             let mut sums = Align64([0; L2_SIZE]);
