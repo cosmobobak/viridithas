@@ -338,6 +338,7 @@ mod x86simd {
             let mut sums = Align64([0; L2_SIZE]);
             let nnz_count = nnz_slice.len();
 
+            // affine transform
             for i in (0..nnz_count - 1).step_by(2) {
                 // get the indices
                 let nnz_ia = *nnz_slice.get_unchecked(i) as usize;
@@ -383,17 +384,19 @@ mod x86simd {
                 }
             }
 
+            // squared clipped ReLU activation
             let zero = simd::zero_f32();
             let one = simd::splat_f32(1.0);
             let sum_mul = simd::splat_f32(L1_MUL);
             for i in 0..L2_SIZE / F32_CHUNK_SIZE {
-                // Convert into floats, and activate L1
+                // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.get_unchecked(i * F32_CHUNK_SIZE));
                 let sum = simd::mul_add_f32(
                     simd::i32_to_f32(simd::load_i32(sums.get_unchecked(i * F32_CHUNK_SIZE))),
                     sum_mul,
                     bias,
                 );
+                // activate
                 let clipped = simd::min_f32(simd::max_f32(sum, zero), one);
                 let squared = simd::mul_f32(clipped, clipped);
                 simd::store_f32(output.get_unchecked_mut(i * F32_CHUNK_SIZE), squared);
@@ -420,6 +423,7 @@ mod x86simd {
         unsafe {
             let mut sums = biases.clone();
 
+            // affine transform
             for i in 0..L2_SIZE {
                 let input_vec = simd::splat_f32(*inputs.get_unchecked(i));
                 for j in 0..L3_SIZE / F32_CHUNK_SIZE {
@@ -434,7 +438,7 @@ mod x86simd {
                 }
             }
 
-            // Activate L2
+            // squared clipped ReLU activation
             let one = simd::splat_f32(1.0);
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let clipped = simd::min_f32(
@@ -461,7 +465,7 @@ mod x86simd {
         unsafe {
             let mut sum = simd::zero_f32();
 
-            // Affine transform for L3
+            // affine transform
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
