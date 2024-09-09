@@ -790,6 +790,9 @@ impl Board {
         // clear out the next set of killer moves.
         t.killer_move_table[height + 1] = [None; 2];
 
+        let tt_move = tt_hit.and_then(|hit| hit.mov);
+        let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
+
         // whole-node pruning techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
             // razoring.
@@ -808,9 +811,12 @@ impl Board {
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
                 && depth <= info.conf.rfp_depth
-                && static_eval - Self::rfp_margin(info, depth, improving) > beta
+                && static_eval - Self::rfp_margin(info, depth, improving) >= beta
+                && (tt_move.is_none() || tt_capture)
+                && beta > -MINIMUM_TB_WIN_SCORE
+                && static_eval < MINIMUM_TB_WIN_SCORE
             {
-                return (static_eval + beta) / 2;
+                return beta + (static_eval - beta) / 3;
             }
 
             let last_move_was_null = self.last_move_was_nullmove();
@@ -862,9 +868,6 @@ impl Board {
                 }
             }
         }
-
-        let tt_move = tt_hit.and_then(|hit| hit.mov);
-        let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
         // TT-reduction (IIR).
         if NT::PV && tt_hit.map_or(true, |tte| tte.depth + 4 <= depth) {
