@@ -784,23 +784,23 @@ impl NNUEState {
         add: FeatureUpdate,
         sub: FeatureUpdate,
         update: PovUpdate,
-        source_acc: &Accumulator,
-        target_acc: &mut Accumulator,
+        src: &Accumulator,
+        tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
-        let (white_add, black_add) = feature::indices(white_king, black_king, add);
-        let (white_sub, black_sub) = feature::indices(white_king, black_king, sub);
+        let (w_add, b_add) = feature::indices(white_king, black_king, add);
+        let (w_sub, b_sub) = feature::indices(white_king, black_king, sub);
 
         let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
 
-        let white_bucket = nnue_params.select_feature_weights(white_bucket);
-        let black_bucket = nnue_params.select_feature_weights(black_bucket);
+        let w_bucket = nnue_params.select_feature_weights(white_bucket);
+        let b_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
-            accumulator::vector_add_sub(&source_acc.white, &mut target_acc.white, white_bucket, white_add, white_sub);
+            accumulator::vector_add_sub(&src.white, &mut tgt.white, w_bucket, w_add, w_sub);
         }
         if update.black {
-            accumulator::vector_add_sub(&source_acc.black, &mut target_acc.black, black_bucket, black_add, black_sub);
+            accumulator::vector_add_sub(&src.black, &mut tgt.black, b_bucket, b_add, b_sub);
         }
     }
 
@@ -813,8 +813,8 @@ impl NNUEState {
         sub1: FeatureUpdate,
         sub2: FeatureUpdate,
         update: PovUpdate,
-        source_acc: &Accumulator,
-        target_acc: &mut Accumulator,
+        src: &Accumulator,
+        tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
         let (white_add, black_add) = feature::indices(white_king, black_king, add);
@@ -827,24 +827,10 @@ impl NNUEState {
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
 
         if update.white {
-            accumulator::vector_add_sub2(
-                &source_acc.white,
-                &mut target_acc.white,
-                white_bucket,
-                white_add,
-                white_sub1,
-                white_sub2,
-            );
+            accumulator::vector_add_sub2(&src.white, &mut tgt.white, white_bucket, white_add, white_sub1, white_sub2);
         }
         if update.black {
-            accumulator::vector_add_sub2(
-                &source_acc.black,
-                &mut target_acc.black,
-                black_bucket,
-                black_add,
-                black_sub1,
-                black_sub2,
-            );
+            accumulator::vector_add_sub2(&src.black, &mut tgt.black, black_bucket, black_add, black_sub1, black_sub2);
         }
     }
 
@@ -858,8 +844,8 @@ impl NNUEState {
         sub1: FeatureUpdate,
         sub2: FeatureUpdate,
         update: PovUpdate,
-        source_acc: &Accumulator,
-        target_acc: &mut Accumulator,
+        src: &Accumulator,
+        tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
         let (white_add1, black_add1) = feature::indices(white_king, black_king, add1);
@@ -874,8 +860,8 @@ impl NNUEState {
 
         if update.white {
             accumulator::vector_add2_sub2(
-                &source_acc.white,
-                &mut target_acc.white,
+                &src.white,
+                &mut tgt.white,
                 white_bucket,
                 white_add1,
                 white_add2,
@@ -885,8 +871,8 @@ impl NNUEState {
         }
         if update.black {
             accumulator::vector_add2_sub2(
-                &source_acc.black,
-                &mut target_acc.black,
+                &src.black,
+                &mut tgt.black,
                 black_bucket,
                 black_add1,
                 black_add2,
