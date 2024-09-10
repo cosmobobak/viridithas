@@ -96,11 +96,11 @@ mod avx2 {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add: FeatureIndex,
-        feature_idx_sub: FeatureIndex,
+        add: FeatureIndex,
+        sub: FeatureIndex,
     ) {
-        let offset_add = feature_idx_add.index() * L1_SIZE;
-        let offset_sub = feature_idx_sub.index() * L1_SIZE;
+        let offset_add = add.index() * L1_SIZE;
+        let offset_sub = sub.index() * L1_SIZE;
         let s_block;
         let a_block;
         // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
@@ -128,13 +128,13 @@ mod avx2 {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add: FeatureIndex,
-        feature_idx_sub1: FeatureIndex,
-        feature_idx_sub2: FeatureIndex,
+        add: FeatureIndex,
+        sub1: FeatureIndex,
+        sub2: FeatureIndex,
     ) {
-        let offset_add = feature_idx_add.index() * L1_SIZE;
-        let offset_sub1 = feature_idx_sub1.index() * L1_SIZE;
-        let offset_sub2 = feature_idx_sub2.index() * L1_SIZE;
+        let offset_add = add.index() * L1_SIZE;
+        let offset_sub1 = sub1.index() * L1_SIZE;
+        let offset_sub2 = sub2.index() * L1_SIZE;
         let a_block;
         let s_block1;
         let s_block2;
@@ -166,15 +166,15 @@ mod avx2 {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add1: FeatureIndex,
-        feature_idx_add2: FeatureIndex,
-        feature_idx_sub1: FeatureIndex,
-        feature_idx_sub2: FeatureIndex,
+        add1: FeatureIndex,
+        add2: FeatureIndex,
+        sub1: FeatureIndex,
+        sub2: FeatureIndex,
     ) {
-        let offset_add1 = feature_idx_add1.index() * L1_SIZE;
-        let offset_add2 = feature_idx_add2.index() * L1_SIZE;
-        let offset_sub1 = feature_idx_sub1.index() * L1_SIZE;
-        let offset_sub2 = feature_idx_sub2.index() * L1_SIZE;
+        let offset_add1 = add1.index() * L1_SIZE;
+        let offset_add2 = add2.index() * L1_SIZE;
+        let offset_sub1 = sub1.index() * L1_SIZE;
+        let offset_sub2 = sub2.index() * L1_SIZE;
         let a_block1;
         let a_block2;
         let s_block1;
@@ -256,11 +256,11 @@ mod generic {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add: FeatureIndex,
-        feature_idx_sub: FeatureIndex,
+        add: FeatureIndex,
+        sub: FeatureIndex,
     ) {
-        let offset_add = feature_idx_add.index() * L1_SIZE;
-        let offset_sub = feature_idx_sub.index() * L1_SIZE;
+        let offset_add = add.index() * L1_SIZE;
+        let offset_sub = sub.index() * L1_SIZE;
         let s_block;
         let a_block;
         // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
@@ -288,13 +288,13 @@ mod generic {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add: FeatureIndex,
-        feature_idx_sub1: FeatureIndex,
-        feature_idx_sub2: FeatureIndex,
+        add: FeatureIndex,
+        sub1: FeatureIndex,
+        sub2: FeatureIndex,
     ) {
-        let offset_add = feature_idx_add.index() * L1_SIZE;
-        let offset_sub1 = feature_idx_sub1.index() * L1_SIZE;
-        let offset_sub2 = feature_idx_sub2.index() * L1_SIZE;
+        let offset_add = add.index() * L1_SIZE;
+        let offset_sub1 = sub1.index() * L1_SIZE;
+        let offset_sub2 = sub2.index() * L1_SIZE;
         let a_block;
         let s_block1;
         let s_block2;
@@ -326,15 +326,15 @@ mod generic {
         input: &Align64<[i16; L1_SIZE]>,
         output: &mut Align64<[i16; L1_SIZE]>,
         bucket: &Align64<[i16; INPUT * L1_SIZE]>,
-        feature_idx_add1: FeatureIndex,
-        feature_idx_add2: FeatureIndex,
-        feature_idx_sub1: FeatureIndex,
-        feature_idx_sub2: FeatureIndex,
+        add1: FeatureIndex,
+        add2: FeatureIndex,
+        sub1: FeatureIndex,
+        sub2: FeatureIndex,
     ) {
-        let offset_add1 = feature_idx_add1.index() * L1_SIZE;
-        let offset_add2 = feature_idx_add2.index() * L1_SIZE;
-        let offset_sub1 = feature_idx_sub1.index() * L1_SIZE;
-        let offset_sub2 = feature_idx_sub2.index() * L1_SIZE;
+        let offset_add1 = add1.index() * L1_SIZE;
+        let offset_add2 = add2.index() * L1_SIZE;
+        let offset_sub1 = sub1.index() * L1_SIZE;
+        let offset_sub2 = sub2.index() * L1_SIZE;
         let a_block1;
         let a_block2;
         let s_block1;

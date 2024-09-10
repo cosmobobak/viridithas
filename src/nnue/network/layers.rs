@@ -157,12 +157,15 @@ mod x86simd {
         network::L1_CHUNK_PER_32,
         simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
     };
-    use std::arch::x86_64::_mm_add_epi16 as vec128_add;
     use std::arch::x86_64::_mm_load_si128 as vec128_load;
     use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
     use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
     use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
     use std::mem::MaybeUninit;
+    use std::{
+        arch::x86_64::_mm_add_epi16 as vec128_add,
+        ptr::{from_mut, from_ref},
+    };
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
@@ -195,7 +198,7 @@ mod x86simd {
 
     // used in only one place, separate function for clarity.
     unsafe fn reinterpret_as_i32s(ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]> {
-        let ptr = std::ptr::from_ref(ptr);
+        let ptr = from_ref(ptr);
         // check that the reference is aligned to the register alignment
         debug_assert!((ptr as usize) % std::mem::align_of::<i32>() == 0);
         debug_assert!((ptr as usize) % std::mem::align_of::<Align64<[i32; L1_SIZE / 4]>>() == 0);
@@ -284,9 +287,9 @@ mod x86simd {
                     let product_two = simd::pack_i16_to_u8(productc, productd);
 
                     // store to the ft output buffer
-                    simd::store_u8(std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product_one);
+                    simd::store_u8(from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product_one);
                     simd::store_u8(
-                        std::ptr::from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(),
+                        from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(),
                         product_two,
                     );
 
@@ -300,11 +303,8 @@ mod x86simd {
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
                         let entry = NNZ_TABLE.table.get_unchecked(lookup as usize);
-                        let offsets = vec128_load(std::ptr::from_ref(entry).cast());
-                        vec128_storeu(
-                            std::ptr::from_mut(nnz.get_unchecked_mut(nnz_count)).cast(),
-                            vec128_add(base, offsets),
-                        );
+                        let offsets = vec128_load(from_ref(entry).cast());
+                        vec128_storeu(from_mut(nnz.get_unchecked_mut(nnz_count)).cast(), vec128_add(base, offsets));
                         nnz_count += u32::count_ones(lookup) as usize;
                         base = vec128_add(base, increment);
                     }

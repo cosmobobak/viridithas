@@ -191,7 +191,11 @@ mod avx512 {
     pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
         #[cfg(target_feature = "avx512vnni")]
         {
-            return _mm512_dpbusd_epi32(_mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner()), vec2.inner(), vec3.inner());
+            return _mm512_dpbusd_epi32(
+                _mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner()),
+                vec2.inner(),
+                vec3.inner(),
+            );
         }
         #[cfg(not(target_feature = "avx512vnni"))]
         {
@@ -401,7 +405,7 @@ mod avx2 {
     pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
         let product16a = _mm256_maddubs_epi16(vec0.inner(), vec1.inner());
         let product16b = _mm256_maddubs_epi16(vec2.inner(), vec3.inner());
-        let product32  = _mm256_madd_epi16(_mm256_add_epi16(product16a, product16b), _mm256_set1_epi16(1));
+        let product32 = _mm256_madd_epi16(_mm256_add_epi16(product16a, product16b), _mm256_set1_epi16(1));
         return VecI32::from_raw(_mm256_add_epi32(sum.inner(), product32));
     }
 
@@ -627,7 +631,7 @@ mod ssse3 {
     pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
         let product16a = _mm_maddubs_epi16(vec0.inner(), vec1.inner());
         let product16b = _mm_maddubs_epi16(vec2.inner(), vec3.inner());
-        let product32  = _mm_madd_epi16(_mm_add_epi16(product16a, product16b), _mm_set1_epi16(1));
+        let product32 = _mm_madd_epi16(_mm_add_epi16(product16a, product16b), _mm_set1_epi16(1));
         return VecI32::from_raw(_mm_add_epi32(sum.inner(), product32));
     }
 
