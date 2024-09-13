@@ -6,13 +6,8 @@ use crate::{
 
 const AGEING_DIVISOR: i16 = 2;
 
-const fn history_bonus(depth: Depth) -> i32 {
-    let depth = depth.round();
-    if depth > 13 {
-        32
-    } else {
-        16 * depth * depth + 128 * max!(depth - 1, 0)
-    }
+fn history_bonus(depth: Depth) -> i32 {
+    i32::min(200 * depth.round(), 1600)
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
