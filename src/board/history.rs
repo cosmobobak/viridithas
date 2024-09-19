@@ -250,8 +250,7 @@ impl ThreadData<'_> {
         let minor = self.minor_correction_history.get(pos.turn(), pos.minor_key());
         let major = self.major_correction_history.get(pos.turn(), pos.major_key());
         let material = self.material_correction_history.get(pos.turn(), pos.material_key());
-        let adjustment =
-            (98000 * pawn + 69000 * material + 55000 * major + 85000 * minor + 85000 * (white + black)) / 2_010_000;
+        let adjustment = pawn + material + major + minor + white + black;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
