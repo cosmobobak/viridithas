@@ -218,15 +218,24 @@ impl ThreadData<'_> {
     pub fn update_correction_history(&mut self, pos: &Board, depth: Depth, diff: i32) {
         fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
             let update = *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
-            *entry = i32::clamp(update / CORRECTION_HISTORY_WEIGHT_SCALE, -CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_MAX);
+            *entry =
+                i32::clamp(update / CORRECTION_HISTORY_WEIGHT_SCALE, -CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_MAX);
         }
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth.round());
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
 
         update(self.pawn_correction_history.get_mut(pos.turn(), pos.pawn_key()), new_weight, scaled_diff);
-        update(self.nonpawn_correction_history[Colour::White].get_mut(pos.turn(), pos.non_pawn_key(Colour::White)), new_weight, scaled_diff);
-        update(self.nonpawn_correction_history[Colour::Black].get_mut(pos.turn(), pos.non_pawn_key(Colour::Black)), new_weight, scaled_diff);
+        update(
+            self.nonpawn_correction_history[Colour::White].get_mut(pos.turn(), pos.non_pawn_key(Colour::White)),
+            new_weight,
+            scaled_diff,
+        );
+        update(
+            self.nonpawn_correction_history[Colour::Black].get_mut(pos.turn(), pos.non_pawn_key(Colour::Black)),
+            new_weight,
+            scaled_diff,
+        );
         update(self.minor_correction_history.get_mut(pos.turn(), pos.minor_key()), new_weight, scaled_diff);
         update(self.major_correction_history.get_mut(pos.turn(), pos.major_key()), new_weight, scaled_diff);
         update(self.material_correction_history.get_mut(pos.turn(), pos.material_key()), new_weight, scaled_diff);
@@ -241,7 +250,8 @@ impl ThreadData<'_> {
         let minor = self.minor_correction_history.get(pos.turn(), pos.minor_key());
         let major = self.major_correction_history.get(pos.turn(), pos.major_key());
         let material = self.material_correction_history.get(pos.turn(), pos.material_key());
-        let adjustment = (98000 * pawn + 69000 * material + 55000 * major + 85000 * minor + 85000 * (white + black)) / 2_010_000;
+        let adjustment =
+            (98000 * pawn + 69000 * material + 55000 * major + 85000 * minor + 85000 * (white + black)) / 2_010_000;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }

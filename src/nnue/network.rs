@@ -210,10 +210,8 @@ impl UnquantisedNetwork {
         // SAFETY: NNUEParams can be zeroed.
         unsafe {
             let mut net = Self::zeroed();
-            let mem = std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
-                std::mem::size_of::<Self>(),
-            );
+            let mem =
+                std::slice::from_raw_parts_mut(util::from_mut(net.as_mut()).cast::<u8>(), std::mem::size_of::<Self>());
             reader.read_exact(mem)?;
             Ok(net)
         }

@@ -621,7 +621,8 @@ impl<'a> BatchedAtomicCounter<'a> {
 #[inline]
 pub const fn from_ref<T>(r: &T) -> *const T
 where
-    T: ?Sized {
+    T: ?Sized,
+{
     r
 }
 
@@ -629,7 +630,8 @@ where
 #[inline]
 pub fn from_mut<T>(r: &mut T) -> *mut T
 where
-    T: ?Sized {
+    T: ?Sized,
+{
     r
 }
 

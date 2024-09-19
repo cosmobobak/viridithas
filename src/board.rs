@@ -185,14 +185,7 @@ impl Board {
     }
 
     pub const fn all_keys(&self) -> (u64, u64, [u64; 2], u64, u64, u64) {
-        (
-            self.key,
-            self.pawn_key,
-            self.non_pawn_key,
-            self.minor_key,
-            self.major_key,
-            self.material_key,
-        )
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key)
     }
 
     pub fn n_men(&self) -> u8 {
