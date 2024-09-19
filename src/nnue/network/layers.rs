@@ -157,15 +157,13 @@ mod x86simd {
         network::L1_CHUNK_PER_32,
         simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
     };
+    use crate::util::{from_mut, from_ref};
     use std::arch::x86_64::_mm_load_si128 as vec128_load;
     use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
     use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
     use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
     use std::mem::MaybeUninit;
-    use std::{
-        arch::x86_64::_mm_add_epi16 as vec128_add,
-        ptr::{from_mut, from_ref},
-    };
+    use std::arch::x86_64::_mm_add_epi16 as vec128_add;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]

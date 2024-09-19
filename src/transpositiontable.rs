@@ -6,7 +6,7 @@ use std::{
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
-    util::depth::{CompactDepthStorage, Depth},
+    util::{self, depth::{CompactDepthStorage, Depth}},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -416,7 +416,7 @@ impl<'a> TTView<'a> {
             let entry = &self.table[index];
 
             // prefetch the entry:
-            _mm_prefetch(std::ptr::from_ref::<TTClusterMemory>(entry).cast::<i8>(), _MM_HINT_T0);
+            _mm_prefetch(util::from_ref::<TTClusterMemory>(entry).cast::<i8>(), _MM_HINT_T0);
         }
     }
 

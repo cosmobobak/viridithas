@@ -603,6 +603,22 @@ impl<'a> BatchedAtomicCounter<'a> {
     }
 }
 
+/// Polyfill for backwards compatibility with old rust compilers.
+#[inline]
+pub const fn from_ref<T>(r: &T) -> *const T
+where
+    T: ?Sized {
+    r
+}
+
+/// Polyfill for backwards compatibility with old rust compilers.
+#[inline]
+pub fn from_mut<T>(r: &mut T) -> *mut T
+where
+    T: ?Sized {
+    r
+}
+
 mod tests {
     #[test]
     fn square_flipping() {

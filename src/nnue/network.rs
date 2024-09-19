@@ -12,7 +12,7 @@ use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
     piece::{Colour, Piece, PieceType},
-    util::{Square, MAX_DEPTH},
+    util::{self, Square, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -211,7 +211,7 @@ impl UnquantisedNetwork {
         unsafe {
             let mut net = Self::zeroed();
             let mem = std::slice::from_raw_parts_mut(
-                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
+                util::from_mut(net.as_mut()).cast::<u8>(),
                 std::mem::size_of::<Self>(),
             );
             reader.read_exact(mem)?;
@@ -351,7 +351,7 @@ impl QuantisedNetwork {
     }
 
     fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
-        let ptr = std::ptr::from_ref::<Self>(self).cast::<u8>();
+        let ptr = util::from_ref::<Self>(self).cast::<u8>();
         let len = std::mem::size_of::<Self>();
         // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
         writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
@@ -411,7 +411,7 @@ impl NNUEParams {
         unsafe {
             let mut net = QuantisedNetwork::zeroed();
             let mut mem = std::slice::from_raw_parts_mut(
-                std::ptr::from_mut(net.as_mut()).cast::<u8>(),
+                util::from_mut(net.as_mut()).cast::<u8>(),
                 std::mem::size_of::<QuantisedNetwork>(),
             );
             let expected_bytes = mem.len() as u64;
