@@ -375,8 +375,16 @@ mod tests {
             assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook square-sets {msg}");
             assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen square-sets {msg}");
             assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king square-sets {msg}");
-            assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white square-sets {msg}");
-            assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black square-sets {msg}");
+            assert_eq!(
+                lhs.pieces.occupied_co(Colour::White),
+                rhs.pieces.occupied_co(Colour::White),
+                "white square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.occupied_co(Colour::Black),
+                rhs.pieces.occupied_co(Colour::Black),
+                "black square-sets {msg}"
+            );
             for sq in Square::all() {
                 assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
             }

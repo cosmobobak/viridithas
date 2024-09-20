@@ -216,6 +216,7 @@ impl ThreadData<'_> {
 
     /// Update the correction history for a pawn pattern.
     pub fn update_correction_history(&mut self, pos: &Board, depth: Depth, diff: i32) {
+        use Colour::{Black, White};
         fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
             let update = *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
             *entry =
@@ -224,32 +225,25 @@ impl ThreadData<'_> {
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth.round());
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
+        let us = pos.turn();
 
-        update(self.pawn_correction_history.get_mut(pos.turn(), pos.pawn_key()), new_weight, scaled_diff);
-        update(
-            self.nonpawn_correction_history[Colour::White].get_mut(pos.turn(), pos.non_pawn_key(Colour::White)),
-            new_weight,
-            scaled_diff,
-        );
-        update(
-            self.nonpawn_correction_history[Colour::Black].get_mut(pos.turn(), pos.non_pawn_key(Colour::Black)),
-            new_weight,
-            scaled_diff,
-        );
-        update(self.minor_correction_history.get_mut(pos.turn(), pos.minor_key()), new_weight, scaled_diff);
-        update(self.major_correction_history.get_mut(pos.turn(), pos.major_key()), new_weight, scaled_diff);
-        update(self.material_correction_history.get_mut(pos.turn(), pos.material_key()), new_weight, scaled_diff);
+        update(self.pawn_corrhist.get_mut(us, pos.pawn_key()), new_weight, scaled_diff);
+        update(self.nonpawn_corrhist[White].get_mut(us, pos.non_pawn_key(White)), new_weight, scaled_diff);
+        update(self.nonpawn_corrhist[Black].get_mut(us, pos.non_pawn_key(Black)), new_weight, scaled_diff);
+        update(self.minor_corrhist.get_mut(us, pos.minor_key()), new_weight, scaled_diff);
+        update(self.major_corrhist.get_mut(us, pos.major_key()), new_weight, scaled_diff);
+        update(self.material_corrhist.get_mut(us, pos.material_key()), new_weight, scaled_diff);
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
     pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
-        let pawn = self.pawn_correction_history.get(pos.turn(), pos.pawn_key());
-        let white = self.nonpawn_correction_history[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
-        let black = self.nonpawn_correction_history[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
-        let minor = self.minor_correction_history.get(pos.turn(), pos.minor_key());
-        let major = self.major_correction_history.get(pos.turn(), pos.major_key());
-        let material = self.material_correction_history.get(pos.turn(), pos.material_key());
+        let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
+        let white = self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
+        let black = self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
+        let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
+        let major = self.major_corrhist.get(pos.turn(), pos.major_key());
+        let material = self.material_corrhist.get(pos.turn(), pos.material_key());
         let adjustment = pawn + material + major + minor + white + black;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
