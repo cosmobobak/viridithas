@@ -230,8 +230,8 @@ impl CorrectionHistoryTable {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn get(&self, side: Colour, key: u64) -> i32 {
-        self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize]
+    pub fn get(&self, side: Colour, key: u64) -> i64 {
+        i64::from(self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize])
     }
 
     #[allow(clippy::cast_possible_truncation)]

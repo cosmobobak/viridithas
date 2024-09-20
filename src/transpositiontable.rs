@@ -6,7 +6,10 @@ use std::{
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
-    util::{self, depth::{CompactDepthStorage, Depth}},
+    util::{
+        self,
+        depth::{CompactDepthStorage, Depth},
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

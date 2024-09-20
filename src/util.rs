@@ -383,8 +383,18 @@ pub struct Undo {
     pub cont_hist_index: Option<ContHistIndex>,
     pub piece_layout: PieceLayout,
     pub piece_array: [Option<Piece>; 64],
+    /// The Zobrist hash of the board.
     pub key: u64,
+    /// The Zobrist hash of the pawns on the board.
     pub pawn_key: u64,
+    /// The Zobrist hash of the non-pawns on the board, split by side.
+    pub non_pawn_key: [u64; 2],
+    /// The Zobrist hash of the minor pieces on the board.
+    pub minor_key: u64,
+    /// The Zobrist hash of the major pieces on the board.
+    pub major_key: u64,
+    /// The Zobrist hash of the counts of pieces on the board.
+    pub material_key: u64,
 }
 
 impl Default for Undo {
@@ -399,6 +409,10 @@ impl Default for Undo {
             piece_array: [None; 64],
             key: 0,
             pawn_key: 0,
+            non_pawn_key: [0; 2],
+            minor_key: 0,
+            major_key: 0,
+            material_key: 0,
         }
     }
 }
@@ -607,7 +621,8 @@ impl<'a> BatchedAtomicCounter<'a> {
 #[inline]
 pub const fn from_ref<T>(r: &T) -> *const T
 where
-    T: ?Sized {
+    T: ?Sized,
+{
     r
 }
 
@@ -615,7 +630,8 @@ where
 #[inline]
 pub fn from_mut<T>(r: &mut T) -> *mut T
 where
-    T: ?Sized {
+    T: ?Sized,
+{
     r
 }
 

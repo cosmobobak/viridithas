@@ -51,6 +51,14 @@ pub struct Board {
     key: u64,
     /// The Zobrist hash of the pawns on the board.
     pawn_key: u64,
+    /// The Zobrist hash of the non-pawns on the board, split by side.
+    non_pawn_key: [u64; 2],
+    /// The Zobrist hash of the minor pieces on the board.
+    minor_key: u64,
+    /// The Zobrist hash of the major pieces on the board.
+    major_key: u64,
+    /// The Zobrist hash of the counts of pieces on the board.
+    material_key: u64,
 
     /// Squares that the opponent attacks
     threats: Threats,
@@ -116,6 +124,10 @@ impl Board {
             ply: 0,
             key: 0,
             pawn_key: 0,
+            non_pawn_key: [0; 2],
+            minor_key: 0,
+            major_key: 0,
+            material_key: 0,
             threats: Threats::default(),
             castle_perm: CastlingRights::NONE,
             history: Vec::new(),
@@ -154,6 +166,26 @@ impl Board {
 
     pub const fn pawn_key(&self) -> u64 {
         self.pawn_key
+    }
+
+    pub fn non_pawn_key(&self, colour: Colour) -> u64 {
+        self.non_pawn_key[colour]
+    }
+
+    pub const fn minor_key(&self) -> u64 {
+        self.minor_key
+    }
+
+    pub const fn major_key(&self) -> u64 {
+        self.major_key
+    }
+
+    pub const fn material_key(&self) -> u64 {
+        self.material_key
+    }
+
+    pub const fn all_keys(&self) -> (u64, u64, [u64; 2], u64, u64, u64) {
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key)
     }
 
     pub fn n_men(&self) -> u8 {
@@ -207,16 +239,37 @@ impl Board {
         &mut self.castle_perm
     }
 
-    pub fn generate_pos_key(&self) -> (u64, u64) {
-        #![allow(clippy::cast_possible_truncation)]
+    pub fn generate_pos_keys(&self) -> (u64, u64, [u64; 2], u64, u64, u64) {
         let mut key = 0;
         let mut pawn_key = 0;
+        let mut non_pawn_key = [0; 2];
+        let mut minor_key = 0;
+        let mut major_key = 0;
+        let mut material_key = 0;
         self.pieces.visit_pieces(|sq, piece| {
             hash_piece(&mut key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut pawn_key, piece, sq);
+            } else {
+                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                if piece.piece_type() == PieceType::King {
+                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut minor_key, piece, sq);
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    hash_piece(&mut major_key, piece, sq);
+                } else {
+                    hash_piece(&mut minor_key, piece, sq);
+                }
             }
         });
+
+        for piece in Piece::all() {
+            // brutal disregard for type-based interfaces.
+            // (we're just re-using the PSQT hashkey table,
+            // but for a count rather than a square)
+            #[allow(clippy::cast_possible_truncation)]
+            hash_piece(&mut material_key, piece, Square::new_clamped(self.pieces.piece_bb(piece).count() as u8));
+        }
 
         if self.side == Colour::White {
             hash_side(&mut key);
@@ -230,12 +283,13 @@ impl Board {
 
         debug_assert!(self.fifty_move_counter <= 100);
 
-        (key, pawn_key)
+        (key, pawn_key, non_pawn_key, minor_key, major_key, material_key)
     }
 
     #[allow(dead_code)]
     pub fn regenerate_zobrist(&mut self) {
-        (self.key, self.pawn_key) = self.generate_pos_key();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key) =
+            self.generate_pos_keys();
     }
 
     #[allow(dead_code)]
@@ -347,7 +401,8 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(queenside_file as u8).unwrap())),
         };
-        (self.key, self.pawn_key) = self.generate_pos_key();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key) =
+            self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -406,7 +461,8 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_queenside_file as u8).unwrap())),
         };
-        (self.key, self.pawn_key) = self.generate_pos_key();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key) =
+            self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -549,7 +605,8 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        (self.key, self.pawn_key) = self.generate_pos_key();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key) =
+            self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
 
         Ok(())
@@ -1020,6 +1077,10 @@ impl Board {
             piece_array: self.piece_array,
             key: self.key,
             pawn_key: self.pawn_key,
+            non_pawn_key: self.non_pawn_key,
+            minor_key: self.minor_key,
+            major_key: self.major_key,
+            material_key: self.material_key,
         };
 
         // from, to, and piece are valid unless this is a castling move,
@@ -1126,6 +1187,10 @@ impl Board {
             self.side = self.side.flip();
             // self.key = key;
             // self.pawn_key = pawn_key;
+            // self.non_pawn_key = non_pawn_key;
+            // self.minor_key = minor_key;
+            // self.major_key = major_key;
+            // self.material_key = material_key;
             // self.castle_perm = castle_perm;
             self.ep_sq = ep_square;
             self.fifty_move_counter = fifty_move_counter;
@@ -1137,6 +1202,9 @@ impl Board {
 
         let mut key = self.key;
         let mut pawn_key = self.pawn_key;
+        let mut non_pawn_key = self.non_pawn_key;
+        let mut minor_key = self.minor_key;
+        let mut major_key = self.major_key;
 
         // remove a previous en passant square from the hash
         if let Some(ep_sq) = saved_state.ep_square {
@@ -1180,6 +1248,16 @@ impl Board {
             hash_piece(&mut key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut pawn_key, piece, sq);
+            } else {
+                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                if piece.piece_type() == PieceType::King {
+                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut minor_key, piece, sq);
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    hash_piece(&mut major_key, piece, sq);
+                } else {
+                    hash_piece(&mut minor_key, piece, sq);
+                }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
@@ -1187,12 +1265,33 @@ impl Board {
             hash_piece(&mut key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut pawn_key, piece, sq);
+            } else {
+                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                if piece.piece_type() == PieceType::King {
+                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut minor_key, piece, sq);
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    hash_piece(&mut major_key, piece, sq);
+                } else {
+                    hash_piece(&mut minor_key, piece, sq);
+                }
             }
         }
         // reinsert the castling rights
         hash_castling(&mut key, self.castle_perm);
         self.key = key;
         self.pawn_key = pawn_key;
+        self.non_pawn_key = non_pawn_key;
+        self.minor_key = minor_key;
+        self.major_key = major_key;
+        self.material_key = 0;
+        for piece in Piece::all() {
+            // brutal disregard for type-based interfaces.
+            // (we're just re-using the PSQT hashkey table,
+            // but for a count rather than a square)
+            #[allow(clippy::cast_possible_truncation)]
+            hash_piece(&mut self.material_key, piece, Square::new_clamped(self.pieces.piece_bb(piece).count() as u8));
+        }
 
         self.ply += 1;
         self.height += 1;
@@ -1219,7 +1318,19 @@ impl Board {
         let undo = self.history.last().expect("No move to unmake!");
 
         let Undo {
-            castle_perm, ep_square, fifty_move_counter, threats, piece_layout, piece_array, key, pawn_key, ..
+            castle_perm,
+            ep_square,
+            fifty_move_counter,
+            threats,
+            piece_layout,
+            piece_array,
+            key,
+            pawn_key,
+            non_pawn_key,
+            minor_key,
+            major_key,
+            material_key,
+            ..
         } = undo;
 
         self.height -= 1;
@@ -1227,6 +1338,10 @@ impl Board {
         self.side = self.side.flip();
         self.key = *key;
         self.pawn_key = *pawn_key;
+        self.non_pawn_key = *non_pawn_key;
+        self.minor_key = *minor_key;
+        self.major_key = *major_key;
+        self.material_key = *material_key;
         self.castle_perm = *castle_perm;
         self.ep_sq = *ep_square;
         self.fifty_move_counter = *fifty_move_counter;

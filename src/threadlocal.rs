@@ -27,7 +27,11 @@ pub struct ThreadData<'a> {
     pub continuation_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
-    pub correction_history: Box<CorrectionHistoryTable>,
+    pub pawn_correction_history: Box<CorrectionHistoryTable>,
+    pub nonpawn_correction_history: [Box<CorrectionHistoryTable>; 2],
+    pub major_correction_history: Box<CorrectionHistoryTable>,
+    pub minor_correction_history: Box<CorrectionHistoryTable>,
+    pub material_correction_history: Box<CorrectionHistoryTable>,
 
     pub thread_id: usize,
 
@@ -57,7 +61,11 @@ impl<'a> ThreadData<'a> {
             continuation_history: DoubleHistoryTable::boxed(),
             killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
-            correction_history: CorrectionHistoryTable::boxed(),
+            pawn_correction_history: CorrectionHistoryTable::boxed(),
+            nonpawn_correction_history: [CorrectionHistoryTable::boxed(), CorrectionHistoryTable::boxed()],
+            major_correction_history: CorrectionHistoryTable::boxed(),
+            minor_correction_history: CorrectionHistoryTable::boxed(),
+            material_correction_history: CorrectionHistoryTable::boxed(),
             thread_id,
             pvs: Self::EMPTY_PV_TABLE,
             completed: 0,
@@ -87,7 +95,12 @@ impl<'a> ThreadData<'a> {
         self.main_history.clear();
         self.tactical_history.clear();
         self.continuation_history.clear();
-        self.correction_history.clear();
+        self.pawn_correction_history.clear();
+        self.nonpawn_correction_history[Colour::White].clear();
+        self.nonpawn_correction_history[Colour::Black].clear();
+        self.major_correction_history.clear();
+        self.minor_correction_history.clear();
+        self.material_correction_history.clear();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
@@ -99,7 +112,12 @@ impl<'a> ThreadData<'a> {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
-        self.correction_history.age_entries();
+        self.pawn_correction_history.age_entries();
+        self.nonpawn_correction_history[Colour::White].age_entries();
+        self.nonpawn_correction_history[Colour::Black].age_entries();
+        self.major_correction_history.age_entries();
+        self.minor_correction_history.age_entries();
+        self.material_correction_history.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
