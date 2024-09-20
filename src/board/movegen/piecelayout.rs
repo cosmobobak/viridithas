@@ -110,14 +110,17 @@ impl PieceLayout {
         self.all_knights() & self.our_pieces::<C>()
     }
 
+    #[cfg(any(feature = "datagen", test))]
     pub fn rooks<C: Col>(&self) -> SquareSet {
         self.all_rooks() & self.our_pieces::<C>()
     }
 
+    #[cfg(any(feature = "datagen", test))]
     pub fn bishops<C: Col>(&self) -> SquareSet {
         self.all_bishops() & self.our_pieces::<C>()
     }
 
+    #[cfg(any(feature = "datagen", test))]
     pub fn queens<C: Col>(&self) -> SquareSet {
         self.all_queens() & self.our_pieces::<C>()
     }

@@ -368,13 +368,34 @@ mod tests {
     #[test]
     #[ignore]
     fn roundtrip() {
+        fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
+            assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn square-sets {msg}");
+            assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight square-sets {msg}");
+            assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop square-sets {msg}");
+            assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook square-sets {msg}");
+            assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen square-sets {msg}");
+            assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king square-sets {msg}");
+            assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white square-sets {msg}");
+            assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black square-sets {msg}");
+            for sq in Square::all() {
+                assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
+            }
+            assert_eq!(lhs.turn(), rhs.turn(), "side {msg}");
+            assert_eq!(lhs.ep_sq(), rhs.ep_sq(), "ep_sq {msg}");
+            assert_eq!(lhs.castling_rights(), rhs.castling_rights(), "castle_perm {msg}");
+            assert_eq!(lhs.fifty_move_counter(), rhs.fifty_move_counter(), "fifty_move_counter {msg}");
+            assert_eq!(lhs.ply(), rhs.ply(), "ply {msg}");
+            assert_eq!(lhs.all_keys(), rhs.all_keys(), "key {msg}");
+            assert_eq!(lhs.threats(), rhs.threats(), "threats {msg}");
+            assert_eq!(lhs.height(), rhs.height(), "height {msg}");
+        }
         CHESS960.store(true, std::sync::atomic::Ordering::SeqCst);
         // Grab `valid.sfens` from `cozy-chess` to run test
         for sfen in include_str!("valid.sfens").lines() {
             let board = Board::from_fen(sfen).unwrap();
             let packed = marlinformat::PackedBoard::pack(&board, 0, 0, 0);
             let (unpacked, _, _, _) = packed.unpack();
-            crate::board::check_eq(&board, &unpacked, sfen);
+            check_eq(&board, &unpacked, sfen);
         }
     }
 

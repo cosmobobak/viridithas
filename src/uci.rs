@@ -133,6 +133,20 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
         if !(matches!(moves, Some("moves") | None)) {
             bail!(UciError::InvalidFormat("Expected either \"moves\" or no content to follow \"startpos\".".into(),));
         }
+    } else if determiner == "frc" {
+        let Some(index) = parts.next() else {
+            bail!("Expected an index value to follow \"frc\"");
+        };
+        let index = index.parse().with_context(|| format!("Failed to parse {index} as FRC index"))?;
+        anyhow::ensure!(index < 960, "FRC index can be at most 959 but got {index}");
+        pos.set_frc_idx(index);
+    } else if determiner == "dfrc" {
+        let Some(index) = parts.next() else {
+            bail!("Expected an index value to follow \"dfrc\"");
+        };
+        let index = index.parse().with_context(|| format!("Failed to parse {index} as DFRC index"))?;
+        anyhow::ensure!(index < 960 * 960, "DFRC index can be at most 921599 but got {index}");
+        pos.set_dfrc_idx(index);
     } else {
         if determiner != "fen" {
             bail!(UciError::InvalidFormat(format!("Unknown term after \"position\": {determiner}")));

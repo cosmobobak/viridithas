@@ -67,32 +67,6 @@ pub struct Board {
     history: Vec<Undo>,
 }
 
-/// Check that two boards are equal.
-/// This is used for debugging.
-#[allow(dead_code, clippy::cognitive_complexity)]
-pub fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
-    assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn square-sets {msg}");
-    assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight square-sets {msg}");
-    assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop square-sets {msg}");
-    assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook square-sets {msg}");
-    assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen square-sets {msg}");
-    assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king square-sets {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::White), rhs.pieces.occupied_co(Colour::White), "white square-sets {msg}");
-    assert_eq!(lhs.pieces.occupied_co(Colour::Black), rhs.pieces.occupied_co(Colour::Black), "black square-sets {msg}");
-    for sq in Square::all() {
-        assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
-    }
-    assert_eq!(lhs.side, rhs.side, "side {msg}");
-    assert_eq!(lhs.ep_sq, rhs.ep_sq, "ep_sq {msg}");
-    assert_eq!(lhs.castle_perm, rhs.castle_perm, "castle_perm {msg}");
-    assert_eq!(lhs.fifty_move_counter, rhs.fifty_move_counter, "fifty_move_counter {msg}");
-    assert_eq!(lhs.ply, rhs.ply, "ply {msg}");
-    assert_eq!(lhs.key, rhs.key, "key {msg}");
-    assert_eq!(lhs.threats, rhs.threats, "threats {msg}");
-    assert_eq!(lhs.height, rhs.height, "height {msg}");
-    assert_eq!(lhs.history, rhs.history, "history {msg}");
-}
-
 impl Debug for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Board")
@@ -140,22 +114,22 @@ impl Board {
         self.ep_sq
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn ep_sq_mut(&mut self) -> &mut Option<Square> {
         &mut self.ep_sq
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn turn_mut(&mut self) -> &mut Colour {
         &mut self.side
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn halfmove_clock_mut(&mut self) -> &mut u8 {
         &mut self.fifty_move_counter
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
@@ -184,6 +158,7 @@ impl Board {
         self.material_key
     }
 
+    #[cfg(debug_assertions)]
     pub const fn all_keys(&self) -> (u64, u64, [u64; 2], u64, u64, u64) {
         (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key)
     }
@@ -234,7 +209,7 @@ impl Board {
         self.castle_perm
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn castling_rights_mut(&mut self) -> &mut CastlingRights {
         &mut self.castle_perm
     }
@@ -286,13 +261,13 @@ impl Board {
         (key, pawn_key, non_pawn_key, minor_key, major_key, material_key)
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn regenerate_zobrist(&mut self) {
         (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key, self.material_key) =
             self.generate_pos_keys();
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub fn regenerate_threats(&mut self) {
         self.threats = self.generate_threats(self.side.flip());
     }
@@ -367,7 +342,6 @@ impl Board {
         self.history.clear();
     }
 
-    #[cfg(test)]
     pub fn set_frc_idx(&mut self, scharnagl: usize) {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960, "scharnagl index out of range");
@@ -406,7 +380,6 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
-    #[allow(dead_code)]
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
         #![allow(clippy::cast_possible_truncation)]
         assert!(scharnagl < 960 * 960, "double scharnagl index out of range");
@@ -466,7 +439,6 @@ impl Board {
         self.threats = self.generate_threats(self.side.flip());
     }
 
-    #[allow(dead_code)]
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
         // White's starting array can be derived from its number N (0 ... 959) as follows (https://en.wikipedia.org/wiki/Fischer_random_chess_numbering_scheme#Direct_derivation):
         // A. Divide N by 4, yielding quotient N2 and remainder B1. Place a Bishop upon the bright square corresponding to B1 (0=b, 1=d, 2=f, 3=h).
@@ -1675,6 +1647,7 @@ impl Board {
         self.fifty_move_counter
     }
 
+    #[cfg(any(feature = "datagen", test))]
     pub fn has_insufficient_material<C: Col>(&self) -> bool {
         if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>()).non_empty() {
             return false;
@@ -1702,7 +1675,7 @@ impl Board {
         true
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "datagen")]
     pub const fn full_move_number(&self) -> usize {
         self.ply / 2 + 1
     }
@@ -1770,12 +1743,12 @@ impl Board {
         Some(*mov)
     }
 
-    #[allow(dead_code /* for datagen */)]
+    #[cfg(any(feature = "datagen", test))]
     pub fn is_insufficient_material(&self) -> bool {
         self.has_insufficient_material::<White>() && self.has_insufficient_material::<Black>()
     }
 
-    #[allow(dead_code /* for datagen */)]
+    #[cfg(any(feature = "datagen", test))]
     pub fn outcome(&mut self) -> GameOutcome {
         if self.fifty_move_counter >= 100 {
             return GameOutcome::DrawFiftyMoves;
@@ -1819,7 +1792,7 @@ impl Board {
     }
 }
 
-#[allow(dead_code /* for datagen */)]
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameOutcome {
     WhiteWinMate,
@@ -1837,22 +1810,8 @@ pub enum GameOutcome {
     Ongoing,
 }
 
-#[allow(dead_code /* for datagen */)]
+#[cfg(feature = "datagen")]
 impl GameOutcome {
-    pub const fn as_float_str(self) -> &'static str {
-        match self {
-            Self::WhiteWinMate | Self::WhiteWinTB | Self::WhiteWinAdjudication => "1.0",
-            Self::BlackWinMate | Self::BlackWinTB | Self::BlackWinAdjudication => "0.0",
-            Self::DrawFiftyMoves
-            | Self::DrawRepetition
-            | Self::DrawStalemate
-            | Self::DrawInsufficientMaterial
-            | Self::DrawTB
-            | Self::DrawAdjudication => "0.5",
-            Self::Ongoing => panic!("Game is not over!"),
-        }
-    }
-
     pub const fn as_packed_u8(self) -> u8 {
         // 0 for black win, 1 for draw, 2 for white win
         match self {
