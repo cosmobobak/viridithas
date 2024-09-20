@@ -760,6 +760,8 @@ impl Board {
             // we can set raw_eval to whatever we like, because we're not going to be saving it.
             raw_eval = VALUE_NONE;
             static_eval = t.ss[height].eval;
+
+            t.nnue.hint_common_access(self, t.nnue_params);
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
@@ -768,6 +770,9 @@ impl Board {
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
+                if NT::PV {
+                    t.nnue.hint_common_access(self, t.nnue_params);
+                }
             }
             static_eval = t.correct_evaluation(self, raw_eval);
         } else {
@@ -934,6 +939,8 @@ impl Board {
                     return value;
                 }
             }
+
+            t.nnue.hint_common_access(self, t.nnue_params);
         }
 
         let original_alpha = alpha;
