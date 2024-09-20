@@ -785,6 +785,7 @@ impl NNUEState {
                     break;
                 }
             }
+
             *self.accumulators[self.current_acc].select_mut(C::COLOUR) =
                 self.accumulators[source].select_mut(C::COLOUR).clone();
             accumulator::vector_update_inplace(
