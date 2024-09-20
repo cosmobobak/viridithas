@@ -19,7 +19,7 @@ impl FeatureIndex {
     }
 }
 
-pub fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (FeatureIndex, FeatureIndex) {
+pub fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> [FeatureIndex; 2] {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
@@ -34,5 +34,5 @@ pub fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> (Fea
 
     // SAFETY: important invariant being upheld here!!
     assert!(white_idx < INPUT && black_idx < INPUT, "attempt to construct illegal FeatureIndex.");
-    (FeatureIndex(white_idx), FeatureIndex(black_idx))
+    [FeatureIndex(white_idx), FeatureIndex(black_idx)]
 }
