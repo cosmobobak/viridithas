@@ -221,10 +221,6 @@ impl CorrectionHistoryTable {
         }
     }
 
-    pub fn age_entries(&mut self) {
-        self.table.iter_mut().flatten().for_each(|x| *x /= i32::from(AGEING_DIVISOR));
-    }
-
     pub fn clear(&mut self) {
         self.table.iter_mut().for_each(|t| t.fill(0));
     }

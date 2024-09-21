@@ -11,7 +11,7 @@ use arrayvec::ArrayVec;
 use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
-    piece::{Colour, Piece, PieceType},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
     util::{self, Square, MAX_DEPTH},
 };
 
@@ -65,10 +65,10 @@ const BUCKET_MAP: [usize; 64] = {
     map
 };
 /// Get indices into the feature transformer given king positions.
-pub fn get_bucket_indices(white_king: Square, black_king: Square) -> (usize, usize) {
+pub fn get_bucket_indices(white_king: Square, black_king: Square) -> [usize; 2] {
     let white_bucket = BUCKET_MAP[white_king];
     let black_bucket = BUCKET_MAP[black_king.flip_rank()];
-    (white_bucket, black_bucket)
+    [white_bucket, black_bucket]
 }
 /// The number of output buckets
 pub const OUTPUT_BUCKETS: usize = 8;
@@ -551,14 +551,14 @@ impl BucketAccumulatorCache {
         let side_we_care_about = if pov_update.white { Colour::White } else { Colour::Black };
         let wk = board_state.piece_bb(Piece::WK).first();
         let bk = board_state.piece_bb(Piece::BK).first();
-        let (white_bucket, black_bucket) = get_bucket_indices(wk, bk);
+        let [white_bucket, black_bucket] = get_bucket_indices(wk, bk);
         let bucket = if side_we_care_about == Colour::White { white_bucket } else { black_bucket };
         let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
         self.board_states[side_we_care_about][bucket].update_iter(board_state, |f, is_add| {
-            let (white_idx, black_idx) = feature::indices(wk, bk, f);
+            let [white_idx, black_idx] = feature::indices(wk, bk, f);
             let index = if side_we_care_about == Colour::White { white_idx } else { black_idx };
             if is_add {
                 adds.push(index);
@@ -745,6 +745,98 @@ impl NNUEState {
         }
     }
 
+    pub fn hint_common_access(&mut self, pos: &Board, nnue_params: &NNUEParams) {
+        self.hint_common_access_for_perspective::<White>(pos, nnue_params);
+        self.hint_common_access_for_perspective::<Black>(pos, nnue_params);
+    }
+
+    fn hint_common_access_for_perspective<C: Col>(&mut self, pos: &Board, nnue_params: &NNUEParams) {
+        if self.accumulators[self.current_acc].correct[C::COLOUR] {
+            return;
+        }
+
+        let oldest = self.try_find_computed_accumulator::<C>(pos);
+
+        if let Some(source) = oldest {
+            assert!(self.accumulators[source].correct[C::COLOUR]);
+            // directly construct the top accumulator from the last-known-good one
+            let mut curr_index = source;
+            let wk = pos.king_sq(Colour::White);
+            let bk = pos.king_sq(Colour::Black);
+            let [white_bucket, black_bucket] = get_bucket_indices(wk, bk);
+            let bucket = if C::COLOUR == Colour::White { white_bucket } else { black_bucket };
+            let weights = nnue_params.select_feature_weights(bucket);
+            let mut adds = ArrayVec::<_, 32>::new();
+            let mut subs = ArrayVec::<_, 32>::new();
+
+            loop {
+                for &add in self.accumulators[curr_index].update_buffer.adds() {
+                    let add = feature::indices(wk, bk, add)[C::COLOUR];
+                    adds.push(add);
+                }
+                for &sub in self.accumulators[curr_index].update_buffer.subs() {
+                    let sub = feature::indices(wk, bk, sub)[C::COLOUR];
+                    subs.push(sub);
+                }
+
+                curr_index += 1;
+
+                if curr_index == self.current_acc {
+                    break;
+                }
+            }
+
+            *self.accumulators[self.current_acc].select_mut(C::COLOUR) =
+                self.accumulators[source].select_mut(C::COLOUR).clone();
+            accumulator::vector_update_inplace(
+                self.accumulators[self.current_acc].select_mut(C::COLOUR),
+                weights,
+                &adds,
+                &subs,
+            );
+            self.accumulators[self.current_acc].correct[C::COLOUR] = true;
+        } else {
+            self.bucket_cache.load_accumulator_for_position(
+                nnue_params,
+                pos.pieces,
+                PovUpdate::colour(C::COLOUR),
+                &mut self.accumulators[self.current_acc],
+            );
+        }
+    }
+
+    /// Find the index of the first materialised accumulator, or nothing
+    /// if moving back that far would be too costly.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
+        let mut idx = self.current_acc;
+        let mut budget = pos.pieces.occupied().count() as i32;
+        while idx > 0 && !self.accumulators[idx].correct[C::COLOUR] {
+            let curr = &self.accumulators[idx - 1];
+            if curr.mv.piece.colour() == C::COLOUR
+                && Self::requires_refresh(
+                    curr.mv.piece,
+                    curr.mv.from.relative_to(C::COLOUR),
+                    curr.mv.to.relative_to(C::COLOUR),
+                )
+            {
+                break;
+            }
+            let adds = curr.update_buffer.adds().len() as i32;
+            let subs = curr.update_buffer.subs().len() as i32;
+            budget -= adds + subs + 1;
+            if budget < 0 {
+                break;
+            }
+            idx -= 1;
+        }
+        if self.accumulators[idx].correct[C::COLOUR] {
+            Some(idx)
+        } else {
+            None
+        }
+    }
+
     pub fn materialise_new_acc_from(
         &mut self,
         white_king: Square,
@@ -786,10 +878,10 @@ impl NNUEState {
         tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
-        let (w_add, b_add) = feature::indices(white_king, black_king, add);
-        let (w_sub, b_sub) = feature::indices(white_king, black_king, sub);
+        let [w_add, b_add] = feature::indices(white_king, black_king, add);
+        let [w_sub, b_sub] = feature::indices(white_king, black_king, sub);
 
-        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
 
         let w_bucket = nnue_params.select_feature_weights(white_bucket);
         let b_bucket = nnue_params.select_feature_weights(black_bucket);
@@ -815,11 +907,11 @@ impl NNUEState {
         tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
-        let (white_add, black_add) = feature::indices(white_king, black_king, add);
-        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
+        let [white_add, black_add] = feature::indices(white_king, black_king, add);
+        let [white_sub1, black_sub1] = feature::indices(white_king, black_king, sub1);
+        let [white_sub2, black_sub2] = feature::indices(white_king, black_king, sub2);
 
-        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
 
         let white_bucket = nnue_params.select_feature_weights(white_bucket);
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
@@ -846,12 +938,12 @@ impl NNUEState {
         tgt: &mut Accumulator,
         nnue_params: &NNUEParams,
     ) {
-        let (white_add1, black_add1) = feature::indices(white_king, black_king, add1);
-        let (white_add2, black_add2) = feature::indices(white_king, black_king, add2);
-        let (white_sub1, black_sub1) = feature::indices(white_king, black_king, sub1);
-        let (white_sub2, black_sub2) = feature::indices(white_king, black_king, sub2);
+        let [white_add1, black_add1] = feature::indices(white_king, black_king, add1);
+        let [white_add2, black_add2] = feature::indices(white_king, black_king, add2);
+        let [white_sub1, black_sub1] = feature::indices(white_king, black_king, sub1);
+        let [white_sub2, black_sub2] = feature::indices(white_king, black_king, sub2);
 
-        let (white_bucket, black_bucket) = get_bucket_indices(white_king, black_king);
+        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
 
         let white_bucket = nnue_params.select_feature_weights(white_bucket);
         let black_bucket = nnue_params.select_feature_weights(black_bucket);
@@ -947,7 +1039,7 @@ impl NNUEParams {
                         Square::H8,
                         FeatureUpdate { sq: square, piece: Piece::new(colour, piece_type) },
                     );
-                    let index = feature_indices.0.index() * L1_SIZE + starting_idx;
+                    let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
                     slice.push(self.feature_weights[index]);
                 }
             }

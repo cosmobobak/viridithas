@@ -112,12 +112,6 @@ impl<'a> ThreadData<'a> {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
-        self.pawn_corrhist.age_entries();
-        self.nonpawn_corrhist[Colour::White].age_entries();
-        self.nonpawn_corrhist[Colour::Black].age_entries();
-        self.major_corrhist.age_entries();
-        self.minor_corrhist.age_entries();
-        self.material_corrhist.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;
