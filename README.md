@@ -16,7 +16,7 @@ These claims are based on my own personal tests and aggregate results from multi
 
 Viridithas is a command-line program that can be used from the terminal or can communicate with a graphical user interface over the UCI protocol.
 
-For an overview of the features of Viridithas, see the [viri-wiki](https://cosmo.tardis.ac/2023/02/20/viri-wiki/).
+For an overview of the features of Viridithas, see the [viri-wiki](https://cosmo.tardis.ac/files/2023-02-20-viri-wiki.html).
 
 ## Building Viridithas
 
