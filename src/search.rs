@@ -787,7 +787,15 @@ impl Board {
         // but we should be less aggressive with alpha-reductions (eval is too low).
         // some engines gain by using improving to increase LMR, but this shouldn't work imo, given that LMR is
         // neutral with regards to the evaluation.
-        let improving = !in_check && height >= 2 && static_eval >= t.ss[height - 2].eval;
+        let improving = if in_check {
+            false
+        } else if height >= 2 && t.ss[height - 2].eval != VALUE_NONE {
+            static_eval > t.ss[height - 2].eval
+        } else if height >= 4 && t.ss[height - 4].eval != VALUE_NONE {
+            static_eval > t.ss[height - 4].eval
+        } else {
+            true
+        };
 
         t.ss[height].dextensions = if NT::ROOT { 0 } else { t.ss[height - 1].dextensions };
 
