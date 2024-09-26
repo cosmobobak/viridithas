@@ -721,7 +721,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-const BENCH_DEPTH: usize = 16;
+const BENCH_DEPTH: usize = 14;
 const BENCH_THREADS: usize = 1;
 fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
