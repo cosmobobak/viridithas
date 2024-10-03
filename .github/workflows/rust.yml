@@ -18,8 +18,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: fetch evalfile
       run: |
-        curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue
-        echo "EVALFILE=viridithas.nnue" >> $GITHUB_ENV
+        curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue.zst
+        echo "EVALFILE=viridithas.nnue.zst" >> $GITHUB_ENV
     - name: build and test
       run: cargo build --verbose
     - name: run tests
