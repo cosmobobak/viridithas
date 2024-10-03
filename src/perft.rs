@@ -75,7 +75,7 @@ pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u6
         return 1;
     }
 
-    let mut ml = MainMovePicker::new(None, [None, None], None, 0);
+    let mut ml = MainMovePicker::new(None, [None, None], None, 0, pos.in_check());
 
     let mut count = 0;
     while let Some(m) = ml.next(pos, t) {

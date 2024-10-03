@@ -403,7 +403,13 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
         let tt_move = t.tt.probe_for_provisional_info(self.zobrist_key()).and_then(|e| e.0);
-        let mut mp = MovePicker::<MainSearch>::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
+        let mut mp = MovePicker::<MainSearch>::new(
+            tt_move,
+            self.get_killer_set(t),
+            t.get_counter_move(self),
+            0,
+            self.in_check(),
+        );
         let mut m = None;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_simple(mov) {
@@ -418,7 +424,7 @@ impl Board {
     }
 
     /// Perform a tactical resolution search, searching only captures and promotions.
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn quiescence<NT: NodeType>(
         &mut self,
         pv: &mut PVariation,
@@ -489,7 +495,7 @@ impl Board {
 
         if in_check {
             // could be being mated!
-            raw_eval = -INFINITY;
+            raw_eval = VALUE_NONE;
             stand_pat = -INFINITY;
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             // if we have a TT hit, check the cached TT eval.
@@ -537,7 +543,8 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = CapturePicker::new(tt_hit.and_then(|e| e.mov), [None; 2], None, info.conf.qs_see_bound);
+        let mut move_picker =
+            CapturePicker::new(tt_hit.and_then(|e| e.mov), [None; 2], None, info.conf.qs_see_bound, in_check);
         if !in_check {
             move_picker.skip_quiets = true;
         }
@@ -555,6 +562,8 @@ impl Board {
             if !self.make_move(m, t) {
                 continue;
             }
+            // move found, we can start skipping quiets again:
+            move_picker.skip_quiets = true;
             info.nodes.increment();
             moves_made += 1;
 
@@ -579,7 +588,7 @@ impl Board {
         }
 
         if moves_made == 0 && in_check {
-            return -5000; // weird but works
+            return mated_in(height);
         }
 
         let flag = if best_score >= beta {
@@ -753,8 +762,8 @@ impl Board {
 
         if in_check {
             // when we're in check, it could be checkmate, so it's unsound to use evaluate().
-            raw_eval = -INFINITY;
-            static_eval = -INFINITY;
+            raw_eval = VALUE_NONE;
+            static_eval = VALUE_NONE;
         } else if excluded.is_some() {
             // if we're in a singular-verification search, we already have the static eval.
             // we can set raw_eval to whatever we like, because we're not going to be saving it.
@@ -915,7 +924,7 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, 0);
+            let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, 0, in_check);
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -960,7 +969,7 @@ impl Board {
 
         let killers = self.get_killer_set(t);
         let counter_move = t.get_counter_move(self);
-        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
+        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound, in_check);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1228,6 +1237,8 @@ impl Board {
 
                 // this heuristic is on the whole unmotivated, beyond mere empiricism.
                 // perhaps it's really important to know which quiet moves are good in "bad" positions?
+                // note: if in check, static_eval will be VALUE_NONE, but this probably doesn't cause
+                // any issues.
                 let history_depth_boost = i32::from(static_eval <= alpha);
                 self.update_quiet_history(t, quiets_tried.as_slice(), best_move, depth + history_depth_boost);
             }
