@@ -19,7 +19,7 @@ pub trait MovePickerMode {
 
 pub struct QSearch;
 impl MovePickerMode for QSearch {
-    const CAPTURES_ONLY: bool = false;
+    const CAPTURES_ONLY: bool = true;
 }
 pub struct MainSearch;
 impl MovePickerMode for MainSearch {
