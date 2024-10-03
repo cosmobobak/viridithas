@@ -48,6 +48,7 @@ pub struct MovePicker<MovePickerMode> {
     counter_move: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
+    in_check: bool,
     _mode: std::marker::PhantomData<MovePickerMode>,
 }
 
@@ -60,6 +61,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         killers: [Option<Move>; 2],
         counter_move: Option<Move>,
         see_threshold: i32,
+        in_check: bool,
     ) -> Self {
         debug_assert!(killers[0].is_none() || killers[0] != killers[1], "Killers are both {:?}", killers[0]);
         Self {
@@ -71,6 +73,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
             counter_move,
             skip_quiets: false,
             see_threshold,
+            in_check,
             _mode: std::marker::PhantomData,
         }
     }
@@ -82,6 +85,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
+    #[allow(clippy::cognitive_complexity)]
     pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
         if self.stage == Stage::Done {
             return None;
@@ -97,7 +101,12 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
             debug_assert_eq!(self.movelist.len(), 0, "movelist not empty before capture generation");
-            position.generate_captures::<Mode>(&mut self.movelist);
+            // when we're in check, we want to generate enough moves to prove we're not mated.
+            if self.in_check {
+                position.generate_captures::<MainSearch>(&mut self.movelist);
+            } else {
+                position.generate_captures::<Mode>(&mut self.movelist);
+            }
             Self::score_captures(t, position, &mut self.movelist);
         }
         if self.stage == Stage::YieldGoodCaptures {
@@ -110,7 +119,7 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
                 // the index so we can try this move again.
                 self.index -= 1;
             }
-            self.stage = if Mode::CAPTURES_ONLY { Stage::Done } else { Stage::YieldKiller1 };
+            self.stage = if Mode::CAPTURES_ONLY && !self.in_check { Stage::Done } else { Stage::YieldKiller1 };
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
