@@ -39,7 +39,7 @@ pub enum Stage {
     Done,
 }
 
-pub struct MovePicker<MovePickerMode> {
+pub struct MovePicker {
     movelist: MoveList,
     index: usize,
     pub stage: Stage,
@@ -48,13 +48,9 @@ pub struct MovePicker<MovePickerMode> {
     counter_move: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
-    _mode: std::marker::PhantomData<MovePickerMode>,
 }
 
-pub type MainMovePicker = MovePicker<MainSearch>;
-pub type CapturePicker = MovePicker<QSearch>;
-
-impl<Mode: MovePickerMode> MovePicker<Mode> {
+impl MovePicker {
     pub fn new(
         tt_move: Option<Move>,
         killers: [Option<Move>; 2],
@@ -71,7 +67,6 @@ impl<Mode: MovePickerMode> MovePicker<Mode> {
             counter_move,
             skip_quiets: false,
             see_threshold,
-            _mode: std::marker::PhantomData,
         }
     }
 
