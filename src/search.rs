@@ -18,7 +18,7 @@ use crate::{
         },
         movegen::{
             self,
-            movepicker::{CapturePicker, MainMovePicker, MainSearch, MovePicker, Stage, WINNING_CAPTURE_SCORE},
+            movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
             MoveListEntry, MAX_POSITION_MOVES,
         },
         Board,
@@ -403,13 +403,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData) -> Move {
         let tt_move = t.tt.probe_for_provisional_info(self.zobrist_key()).and_then(|e| e.0);
-        let mut mp = MovePicker::<MainSearch>::new(
-            tt_move,
-            self.get_killer_set(t),
-            t.get_counter_move(self),
-            0,
-            self.in_check(),
-        );
+        let mut mp = MovePicker::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = None;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
             if !self.make_move_simple(mov) {
@@ -543,11 +537,8 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker =
-            CapturePicker::new(tt_hit.and_then(|e| e.mov), [None; 2], None, info.conf.qs_see_bound, in_check);
-        if !in_check {
-            move_picker.skip_quiets = true;
-        }
+        let mut move_picker = MovePicker::new(tt_hit.and_then(|e| e.mov), [None; 2], None, info.conf.qs_see_bound);
+        move_picker.skip_quiets = !in_check;
 
         let futility = stand_pat + 150;
 
@@ -588,6 +579,8 @@ impl Board {
         }
 
         if moves_made == 0 && in_check {
+            #[cfg(debug_assertions)]
+            self.assert_mated();
             return mated_in(height);
         }
 
@@ -924,7 +917,8 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let mut move_picker = CapturePicker::new(tt_move, [None; 2], None, 0, in_check);
+            let mut move_picker = MovePicker::new(tt_move, [None; 2], None, 0);
+            move_picker.skip_quiets = true;
             while let Some(MoveListEntry { mov: m, score: ordering_score }) = move_picker.next(self, t) {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -969,7 +963,7 @@ impl Board {
 
         let killers = self.get_killer_set(t);
         let counter_move = t.get_counter_move(self);
-        let mut move_picker = MainMovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound, in_check);
+        let mut move_picker = MovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1212,6 +1206,8 @@ impl Board {
                 return alpha;
             }
             if in_check {
+                #[cfg(debug_assertions)]
+                self.assert_mated();
                 return mated_in(height);
             }
             return draw_score(t, info.nodes.get_local(), self.turn());

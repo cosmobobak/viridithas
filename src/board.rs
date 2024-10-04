@@ -1790,6 +1790,16 @@ impl Board {
             GameOutcome::DrawStalemate
         }
     }
+
+    #[cfg(debug_assertions)]
+    pub fn assert_mated(&mut self) {
+        assert!(self.in_check());
+        let mut move_list = MoveList::new();
+        self.generate_moves(&mut move_list);
+        for &mv in move_list.iter_moves() {
+            assert!(!self.make_move_simple(mv));
+        }
+    }
 }
 
 #[allow(dead_code)]
