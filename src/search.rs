@@ -1025,7 +1025,7 @@ impl Board {
                 && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] + stat_score / 32)
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score / 32)
             {
                 continue;
             }
