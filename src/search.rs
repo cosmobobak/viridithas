@@ -986,7 +986,7 @@ impl Board {
                 stat_score += t.get_continuation_history_score(self, m, 1);
                 // stat_score += t.get_continuation_history_score(self, m, 3);
             } else {
-                // stat_score += t.get_tactical_history_score(self, m);
+                stat_score += t.get_tactical_history_score(self, m);
             }
 
             // lmp & fp.
@@ -1025,7 +1025,7 @@ impl Board {
                 && depth <= info.conf.see_depth
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)])
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] + stat_score / 32)
             {
                 continue;
             }
