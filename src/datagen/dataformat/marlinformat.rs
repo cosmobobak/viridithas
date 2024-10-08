@@ -1,18 +1,9 @@
-use crate::piece::Piece;
-
-use crate::squareset::SquareSet;
-
-use crate::util::Square;
-
-use crate::util::Rank;
-
-use crate::piece::Colour;
-
-use crate::board::Board;
-
-use crate::board::GameOutcome;
-
-use crate::piece::PieceType;
+use crate::{
+    board::{Board, GameOutcome},
+    piece::{Colour, Piece, PieceType},
+    squareset::SquareSet,
+    util::{Rank, Square},
+};
 
 const UNMOVED_ROOK: u8 = 6; // one higher than the max piecetype enum value
 
