@@ -84,7 +84,7 @@ const LMR_BASE_MOVES: u32 = 2;
 const LMR_BASE: f64 = 75.0;
 const LMR_DIVISION: f64 = 231.0;
 const HISTORY_LMR_BOUND: i32 = 1;
-const HISTORY_LMR_DIVISOR: i32 = 8191;
+const HISTORY_LMR_DIVISOR: i32 = 12000;
 const QS_SEE_BOUND: i32 = -108;
 const MAIN_SEE_BOUND: i32 = 0;
 const DO_DEEPER_BASE_MARGIN: i32 = 64;
@@ -1120,11 +1120,7 @@ impl Board {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= i32::clamp(
-                            stat_score / info.conf.history_lmr_divisor,
-                            -info.conf.history_lmr_bound,
-                            info.conf.history_lmr_bound,
-                        );
+                        r -= stat_score / info.conf.history_lmr_divisor;
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter);
                         // reduce more on non-PV nodes
