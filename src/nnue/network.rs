@@ -27,7 +27,7 @@ pub const INPUT: usize = 768;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 256;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
@@ -357,7 +357,7 @@ impl QuantisedNetwork {
     }
 }
 
-fn repermute_l1_weights(sorted: &mut [[[i8; 16]; 8]], l1_weights: &[[[i8; 16]; 8]; 2048]) {
+fn repermute_l1_weights(sorted: &mut [[[i8; L2_SIZE]; OUTPUT_BUCKETS]], l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         sorted[tgt_index] = l1_weights[src_index];
     }
