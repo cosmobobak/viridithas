@@ -182,19 +182,19 @@
             |                                          | vs viri56.
 ------------|------------------------------------------|-----------------------------------------------
     hugenet | viri58 with 1024 neurons.                | ELO   | 20.20 +- 9.42 (95%)
-            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+         59 |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | 2.97 (-2.94, 2.94) [0.00, 5.00]
             |                                          | GAMES | N: 2600 W: 722 L: 571 D: 1307
             |                                          | vs viri58.
 ------------|------------------------------------------|-----------------------------------------------
    luminary | hugenet with 768 neurons, trained with   | ELO   | 1.12 +- 3.82 (95%)
-            | ~110M extra viri58 FENs, and ~270M extra | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+         60 | ~110M extra viri58 FENs, and ~270M extra | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             | hugenet FENs.                            | LLR   | 0.01 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 15488 W: 3808 L: 3758 D: 7922
             |                                          | vs hugenet. (did not merge)
 ------------|------------------------------------------|-----------------------------------------------
    gemstone | luminary with the dataset pruned down to | STC: 
-            | 963M positions from only non-bugged      | ELO   | 6.14 +- 3.85 (95%)
+         61 | 963M positions from only non-bugged      | ELO   | 6.14 +- 3.85 (95%)
             | datagen runs.                            | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             | no lichess, first net with DFRC data.    | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 15896 W: 4181 L: 3900 D: 7815
@@ -211,7 +211,7 @@
             |                                          | vs hugenet.
 ------------|------------------------------------------|-----------------------------------------------
      gemini | gemstone with ~250M extra DFRC FENs      | STC:
-            | generated with gemstone.                 | ELO   | -5.11 +- 4.22 (95%)
+         62 | generated with gemstone.                 | ELO   | -5.11 +- 4.22 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -3.01 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 12912 W: 3111 L: 3301 D: 6500
@@ -223,26 +223,26 @@
             |                                          | vs gemstone.
 ------------|------------------------------------------|-----------------------------------------------
    grimoire | gemini with 444M extra classical chess   | STC:
-            | FENs.                                    | ELO   | -0.37 +- 2.90 (95%)
+         63 | FENs.                                    | ELO   | -0.37 +- 2.90 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -1.51 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 27224 W: 6717 L: 6746 D: 13761
             |                                          | vs gemstone.
 ------------|------------------------------------------|-----------------------------------------------
     echelon | Proof-of-concept HalfKA network. Uses a  | est. -80 Elo vs gemstone.
-            | small 64x2 feature transformer, CReLU    | 
+         64 | small 64x2 feature transformer, CReLU    | 
             | activation, batch size 16384, and 35     | 
             | epochs. Trained on the gemini dataset to | 
             | maximise variety of king positioning.    | 
 ------------|------------------------------------------|-----------------------------------------------
   excalibur | echelon with 384x2 feature transformer,  | ELO   | -4.6 +- 4.9 (95%)
-            | and using SCReLU activation.             | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+         65 | and using SCReLU activation.             | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 10414 W: 2719 L: 2857 D: 4838
             |                                          | vs gemstone.
 ------------|------------------------------------------|-----------------------------------------------
      zhudun | excalibur with 768x2 feature transformer | STC:
-            | with 134M extra FENs generated using     | ELO   | -0.49 +- 2.23 (95%)
+         66 | with 134M extra FENs generated using     | ELO   | -0.49 +- 2.23 (95%)
             | excalibur. (using excalibur over         | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             | gemstone for the extra FENs because      | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
             | i want to get selfplay to reveal any     | GAMES | N: 48992 W: 12875 L: 12944 D: 23173
@@ -254,14 +254,14 @@
             |                                          | vs gemstone.
 ------------|------------------------------------------|-----------------------------------------------
     arcanum | zhudun retrained with exponentially      | STC:
-            | decreasing LR (10 epochs)                | ELO   | -15.84 +- 7.13 (95%)
+         67 | decreasing LR (10 epochs)                | ELO   | -15.84 +- 7.13 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 4720 W: 1113 L: 1328 D: 2279
             |                                          | vs zhudun
 ------------|------------------------------------------|-----------------------------------------------
   astralite | gemstone-arch, with 386M extra zhudun    | v2 STC:
-            | FENs. 20 epochs with lr 0.001, wdl 0.3,  | ELO   | 5.32 +- 3.55 (95%)
+         68 | FENs. 20 epochs with lr 0.001, wdl 0.3,  | ELO   | 5.32 +- 3.55 (95%)
             | then three different continuations:      | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             | v1: 5 epochs lr 0.0001, wdl 0.3          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
             | v2: 5 epochs lr 0.0001, wdl 0.4          | GAMES | N: 19464 W: 5304 L: 5006 D: 9154
@@ -286,42 +286,42 @@
             |                                          | vs astralite-v2.
 ------------|------------------------------------------|-----------------------------------------------
   alchemist | astralite but trained with wdl 0.4 the   | STC:
-            | whole time.                              | ELO   | -0.06 +- 1.87 (95%)
+         69 | whole time.                              | ELO   | -0.06 +- 1.87 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 66792 W: 16861 L: 16872 D: 33059
             |                                          | vs astralite-v2.
 ------------|------------------------------------------|-----------------------------------------------
     majesty | HalfKA + 768nn + 0.4 WDL + 15 epochs,    | STC:
-            | lr-drop 10, dataset of only 766M FRC     | ELO   | -106.16 +- 19.05 (95%)
+         70 | lr-drop 10, dataset of only 766M FRC     | ELO   | -106.16 +- 19.05 (95%)
             | positions generated using zhudun.        | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
             | Either dataset was too small or might    | GAMES | N: 776 W: 109 L: 339 D: 328
             | have been shuffled wrong.                | vs zhudun.
 ------------|------------------------------------------|-----------------------------------------------
          xi | alchemist using marlinflow's cuda boards | STC:
-            |                                          | ELO   | 0.00 +- 0.00 (95%)
+         71 |                                          | ELO   | 0.00 +- 0.00 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | 0.00 (-2.94, 2.94) [0.00, 3.00]
             | makes me think that it's broken.         | GAMES | N: 112 W: 0 L: 112 D: 0
             |                                          | vs astralite-v2.
 ------------|------------------------------------------|-----------------------------------------------
 marlineater | alchemist with WDL 1.0.                  | STC:
-            |                                          | ELO   | -35.43 +- 10.52 (95%)
+         72 |                                          | ELO   | -35.43 +- 10.52 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 2224 W: 474 L: 700 D: 1050
             |                                          | vs astralite-v2.
 ------------|------------------------------------------|-----------------------------------------------
     neutron | another uninspired alchemist variation   | STC:
-            |                                          | ELO   | -1.17 +- 2.63 (95%)
+         73 |                                          | ELO   | -1.17 +- 2.63 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 34544 W: 8869 L: 8985 D: 16690
             |                                          | vs astralite-v2.
 ------------|------------------------------------------|-----------------------------------------------
  piledriver | alchemist with a PSQT subnet!            | - test 1 was -196 elo
-            |                                          | - test 2 was -295 elo
+         74 |                                          | - test 2 was -295 elo
             |                                          | discovered that I had mis-implemented the
             |                                          | memory layout of the subnet weights.
             |                                          | STC:
@@ -332,7 +332,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             | but this is promising either way.        | vs zhudun.
 ------------|------------------------------------------|-----------------------------------------------
         cyc | 1024x2 relative network, lr 0.001        | STC (epoch 5)
-            | drop every 4 epochs, 15 epochs total,    | ELO   | -9.60 +- 6.46 (95%)
+         75 | drop every 4 epochs, 15 epochs total,    | ELO   | -9.60 +- 6.46 (95%)
             | lr-drop-gamma of 0.3, wdl 0.4.           | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.29 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 5792 W: 1433 L: 1593 D: 2766
@@ -358,7 +358,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs cyc-epoch11.
 ------------|------------------------------------------|-----------------------------------------------
       omega | 1536x2, otherwise identical to cyc.      | STC (epoch 14)
-            |                                          | ELO   | -2.51 +- 3.72 (95%)
+         76 |                                          | ELO   | -2.51 +- 3.72 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.25 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 16624 W: 4083 L: 4203 D: 8338
@@ -371,32 +371,32 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs cyc (epoch 15).
 ------------|------------------------------------------|-----------------------------------------------
    vanguard | replication of omega using JW's bullet   | STC regression
-            | trainer.                                 | ELO   | 0.2 +/- 2.2 (95%)
+         77 | trainer.                                 | ELO   | 0.2 +/- 2.2 (95%)
             |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | GAMES | N: 48792 W: 12720 L: 12687 D: 23385
             |                                          | vs omega.
 ------------|------------------------------------------|-----------------------------------------------
        elua | 1024x2 HalfKA network trained using JW's | Issues with the feature factoriser
-            | bullet trainer, with vanguard's          | resulted in bugs that are unclear to me.
+         78 | bullet trainer, with vanguard's          | resulted in bugs that are unclear to me.
             | hyperparameters.                         | 
 ------------|------------------------------------------|-----------------------------------------------
    callosum | 1024x2 HalfKA network trained using JW's | STC (epoch 15)
-            | bullet trainer, with vanguard's          | ELO   | -35.56 +- 12.24 (95%)
+         79 | bullet trainer, with vanguard's          | ELO   | -35.56 +- 12.24 (95%)
             | hyperparameters, but without a feature   | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             | factoriser.                              | LLR   | -2.26 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 1696 W: 375 L: 548 D: 773
             |                                          | vs omega.
 ------------|------------------------------------------|-----------------------------------------------
     artemis | same arch as omega / vanguard, with 497M | STC:
-            | additional positions generated using     | ELO   | 4.27 +- 3.04 (95%)
+         80 | additional positions generated using     | ELO   | 4.27 +- 3.04 (95%)
             | omega.                                   | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | 2.91 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 24752 W: 6288 L: 5984 D: 12480
             |                                          | vs omega.
 ------------|------------------------------------------|-----------------------------------------------
      lilith | 1024x2 net with four buckets, trained    | fixed-nodes:
-            | using JW's bullet trainer, with          | ELO   | -14.37 +- 8.14 (95%)
+         81 | using JW's bullet trainer, with          | ELO   | -14.37 +- 8.14 (95%)
             | artemis's hyperparameters.               | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | -2.29 (-2.25, 2.89) [0.00, 3.00]
             | STC test interrupted early, as f-nodes   | GAMES | N: 4208 W: 1177 L: 1351 D: 1680
@@ -409,14 +409,14 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs artemis.
 ------------|------------------------------------------|-----------------------------------------------
     jupiter | same as artemis, but starting LR was 10x | fixed-nodes:
-            | higher. (0.01)                           | ELO   | -180.47 +- 27.29 (95%)
+         82 | higher. (0.01)                           | ELO   | -180.47 +- 27.29 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | -3.09 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 528 W: 58 L: 310 D: 160
             |                                          | vs artemis.
 ------------|------------------------------------------|-----------------------------------------------
     newcomb | artemis with new lr schedule:            | fixed-nodes, epoch 25:
-            | initial LR : 0.01                        | ELO   | -170.74 +- 31.69 (95%)
+         83 | initial LR : 0.01                        | ELO   | -170.74 +- 31.69 (95%)
             | lr gamma   : 0.1                         | SPRT  | N=25000 Threads=1 Hash=16MB
             | lr step    : every 9 epochs              | LLR   | -2.31 (-2.25, 2.89) [0.00, 3.00]
             | epochs     : 25                          | GAMES | N: 448 W: 70 L: 274 D: 104
@@ -430,14 +430,14 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             | what a load of garbage.                  | vs artemis.
 ------------|------------------------------------------|-----------------------------------------------
    * qa-181 | not a new network, but a re-quantisation | STC:
-            | of artemis so that more optimal SIMD     | ELO   | 16.76 +- 6.68 (95%)
+         80 | of artemis so that more optimal SIMD     | ELO   | 16.76 +- 6.68 (95%)
             | can be used for inference.               | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
             |                                          | LLR   | 2.92 (-2.25, 2.89) [0.00, 3.00]
             |                                          | GAMES | N: 4896 W: 1271 L: 1035 D: 2590
             |                                          | vs artemis-qa-255.
 ------------|------------------------------------------|-----------------------------------------------
    signalis | four-buckets horizontally mirrored       | LTC:
-            | 1536x2 network, trained with artemis's   | ELO   | 5.47 +- 3.57 (95%)
+         84 | 1536x2 network, trained with artemis's   | ELO   | 5.47 +- 3.57 (95%)
             | hyperparameters.                         | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
             |                                          | LLR   | 2.89 (-2.25, 2.89) [0.00, 3.00]
             | initial run had a bug, so this is ID'd   | GAMES | N: 17672 W: 4452 L: 4174 D: 9046
@@ -447,7 +447,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             | network release.                         |
 ------------|------------------------------------------|-----------------------------------------------
     gestalt | nine-buckets horizontally mirrored       | fixed-nodes:
-            | 1536x2 network, with larger dataset.     | Elo   | 34.12 +- 9.08 (95%)
+         85 | 1536x2 network, with larger dataset.     | Elo   | 34.12 +- 9.08 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | 3.07 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 2564 W: 880 L: 629 D: 1055
@@ -465,7 +465,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. signalis
 ------------|------------------------------------------|-----------------------------------------------
    semiotic | gestalt with bigger dataset and eight    | fixed-nodes:
-            | material-count output buckets.           | Elo   | 19.76 +- 6.80 (95%)
+         86 | material-count output buckets.           | Elo   | 19.76 +- 6.80 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | 3.06 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 4348 W: 1365 L: 1118 D: 1865
@@ -483,7 +483,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. gestalt
 ------------|------------------------------------------|-----------------------------------------------
    skirmish | gestalt with the tweaks enumerated at    | fixed-nodes:
-            | end of the second ANNUEP blogpost        | Elo   | 14.81 +- 5.85 (95%)
+         87 | end of the second ANNUEP blogpost        | Elo   | 14.81 +- 5.85 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | 2.97 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 5492 W: 1663 L: 1429 D: 2400
@@ -512,7 +512,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | cosmo.tardis.ac/2024/07/15/nnue-research-02/
 ------------|------------------------------------------|-----------------------------------------------
     compact | semiotic with smaller dataset, much      | v1 (60sb, 5b fens) fixed-nodes:
-            | shorter training run, and cosine lr.     | Elo   | -107.30 +- 15.74 (95%)
+         88 | shorter training run, and cosine lr.     | Elo   | -107.30 +- 15.74 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | -3.11 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 952 W: 165 L: 450 D: 337
@@ -548,7 +548,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
    eternity | 13-buckets 2048x2 net, trained for 200   | fixed-nodes:
-            | superbatches with cosine lr.             | Elo   | -1.97 +- 2.72 (95%)
+         89 | superbatches with cosine lr.             | Elo   | -1.97 +- 2.72 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             | performance was sufficiently close to    | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
             | semiotic to make me think it was         | Games | N: 26234 W: 7280 L: 7429 D: 11525
@@ -557,7 +557,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
    everedge | semiotic but trained with WDL warmup to  | fixed-nodes:
-            | 0.5 over the course of 160 superbatches. | Elo   | -5.78 +- 4.10 (95%)
+         90 | 0.5 over the course of 160 superbatches. | Elo   | -5.78 +- 4.10 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             |                                          | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 11490 W: 3123 L: 3314 D: 5053
@@ -566,7 +566,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
   pendragon | 2048x2 net with an extra billion         | fixed-nodes v1:
-            | fens from semiotic injected.             | Elo   | 5.93 +- 3.53 (95%)
+         91 | fens from semiotic injected.             | Elo   | 5.93 +- 3.53 (95%)
             |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
             | first version had 13 buckets and trained | LLR   | 2.99 (-2.94, 2.94) [0.00, 3.00]
             | for 400 superbatches.                    | Games | N: 16004 W: 4664 L: 4391 D: 6949
@@ -602,7 +602,7 @@ marlineater | alchemist with WDL 1.0.                  | STC:
             |                                          | vs. semiotic
 ------------|------------------------------------------|-----------------------------------------------
 hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
-            | crelu/screlu/screlu activations.         | Elo   | 42.88 +- 10.08 (95%)
+         92 | crelu/screlu/screlu activations.         | Elo   | 42.88 +- 10.08 (95%)
             | trained under identical conditions to    | SPRT  | N=25000 Threads=1 Hash=16MB
             | pendragon.                               | LLR   | 3.09 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 2036 W: 718 L: 468 D: 850
@@ -618,4 +618,36 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Penta | [14, 760, 1772, 957, 11]
             |                                          | https://chess.swehosting.se/test/7788/
             |                                          | vs. pendragon
+------------|------------------------------------------|-----------------------------------------------
+       lila | the final hyperstition weight file,      | fixed-nodes:
+         93 | trained for 100 more superbatches with a | Elo   | 2.42 +- 1.89 (95%)
+            | 0.0005 -> 0.0005 * 0.3^3 lr cosine lr    | SPRT  | N=25000 Threads=1 Hash=16MB
+            | schedule, and including couple hundred   | LLR   | 3.00 (-2.94, 2.94) [0.00, 3.00]
+            | million datapoints generated using       | Games | N: 52732 W: 14703 L: 14336 D: 23693
+            | hyperstition. No other changes to the    | Penta | [1019, 6368, 11343, 6499, 1137]
+            | training setup.                          | https://chess.swehosting.se/test/8011/
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | 4.04 +- 2.52 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 17712 W: 3992 L: 3786 D: 9934
+            |                                          | Penta | [17, 1966, 4693, 2154, 26]
+            |                                          | https://chess.swehosting.se/test/8056/
+------------|------------------------------------------|-----------------------------------------------
+    voyager | the hyperstition arch, trained on the    | fixed-nodes:
+         94 | new bullet version with extra fens       | Elo   | 9.80 +- 4.68 (95%)
+            | generated using hyperstition & lila.     | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 8652 W: 2578 L: 2334 D: 3740
+            |                                          | Penta | [166, 956, 1869, 1138, 197]
+            |                                          | https://chess.swehosting.se/test/8717/
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | 8.73 +- 4.00 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 7724 W: 1854 L: 1660 D: 4210
+            |                                          | Penta | [26, 833, 1947, 1033, 23]
+            |                                          | https://chess.swehosting.se/test/8718/
 ------------|------------------------------------------|-----------------------------------------------

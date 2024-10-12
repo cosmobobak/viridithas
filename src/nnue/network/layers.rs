@@ -328,7 +328,7 @@ mod x86simd {
 
     #[allow(clippy::similar_names)]
     fn propagate_l1(
-        ft_outputs: &Align64<[MaybeUninit<u8>; 2048]>,
+        ft_outputs: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
         biases: &Align64<[f32; 16]>,
