@@ -1599,13 +1599,21 @@ impl Board {
 
     /// Has the current position occurred before in the current game?
     pub fn is_repetition(&self) -> bool {
-        for undo in self.history.iter().rev().skip(1).step_by(2) {
-            if undo.key == self.key {
-                return true;
-            }
-            // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
-            if undo.fifty_move_counter == 0 {
-                return false;
+        let mut counter = 0;
+        // distance to the last irreversible move
+        let moves_since_zeroing = self.fifty_move_counter() as usize;
+        // a repetition is first possible at four ply back:
+        for (dist_back, u) in self.history.iter().rev().enumerate().take(moves_since_zeroing).skip(3).step_by(2) {
+            if u.key == self.key {
+                // in-tree, can twofold:
+                if dist_back < self.height {
+                    return true;
+                }
+                // partially materialised, proper threefold:
+                counter += 1;
+                if counter >= 2 {
+                    return true;
+                }
             }
         }
         false
