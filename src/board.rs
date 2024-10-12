@@ -1609,7 +1609,7 @@ impl Board {
                 if dist_back < self.height {
                     return true;
                 }
-                // partially materialied, proper threefold:
+                // partially materialised, proper threefold:
                 counter += 1;
                 if counter >= 2 {
                     return true;
