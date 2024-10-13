@@ -200,7 +200,7 @@ mod avx512 {
         #[cfg(not(target_feature = "avx512vnni"))]
         {
             let product16a = _mm512_maddubs_epi16(vec0.inner(), vec1.inner());
-            let produce16b = _mm512_maddubs_epi16(vec2.inner(), vec3.inner());
+            let product16b = _mm512_maddubs_epi16(vec2.inner(), vec3.inner());
             let product32 = _mm512_madd_epi16(_mm512_add_epi16(product16a, product16b), _mm512_set1_epi16(1));
             return VecI32::from_raw(_mm512_add_epi32(sum.inner(), product32));
         }
