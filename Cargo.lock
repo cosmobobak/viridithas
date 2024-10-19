@@ -726,7 +726,7 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "viridithas"
-version = "15.0.0"
+version = "16.0.0"
 dependencies = [
  "anyhow",
  "arrayvec",

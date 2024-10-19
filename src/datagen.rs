@@ -528,16 +528,13 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
                 }
             }
             "tablebases_path" => {
-                if let Ok(tablebases_path) = value.parse::<PathBuf>() {
-                    if !tablebases_path.exists() {
-                        eprintln!("Warning: The specified tablebases path does not exist.");
-                    } else if !tablebases_path.is_dir() {
-                        eprintln!("Warning: The specified tablebases path is not a directory.");
-                    } else {
-                        options.tablebases_path = Some(tablebases_path);
-                    }
+                let Ok(tablebases_path) = value.parse::<PathBuf>();
+                if !tablebases_path.exists() {
+                    eprintln!("Warning: The specified tablebases path does not exist.");
+                } else if !tablebases_path.is_dir() {
+                    eprintln!("Warning: The specified tablebases path is not a directory.");
                 } else {
-                    eprintln!("Invalid value for tablebases_path, must be a valid path");
+                    options.tablebases_path = Some(tablebases_path);
                 }
             }
             "limit" => {
