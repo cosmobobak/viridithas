@@ -177,7 +177,7 @@ mod avx512 {
     pub unsafe fn mul_add_u8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8) -> VecI32 {
         #[cfg(target_feature = "avx512vnni")]
         {
-            return _mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner());
+            return VecI32::from_raw(_mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner()));
         }
         #[cfg(not(target_feature = "avx512vnni"))]
         {
@@ -191,11 +191,11 @@ mod avx512 {
     pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
         #[cfg(target_feature = "avx512vnni")]
         {
-            return _mm512_dpbusd_epi32(
+            return VecI32::from_raw(_mm512_dpbusd_epi32(
                 _mm512_dpbusd_epi32(sum.inner(), vec0.inner(), vec1.inner()),
                 vec2.inner(),
                 vec3.inner(),
-            );
+            ));
         }
         #[cfg(not(target_feature = "avx512vnni"))]
         {
