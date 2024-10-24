@@ -31,7 +31,6 @@ pub struct ThreadData<'a> {
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
-    pub material_corrhist: Box<CorrectionHistoryTable>,
 
     pub thread_id: usize,
 
@@ -65,7 +64,6 @@ impl<'a> ThreadData<'a> {
             nonpawn_corrhist: [CorrectionHistoryTable::boxed(), CorrectionHistoryTable::boxed()],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
-            material_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
             pvs: Self::EMPTY_PV_TABLE,
             completed: 0,
@@ -100,7 +98,6 @@ impl<'a> ThreadData<'a> {
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
-        self.material_corrhist.clear();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;

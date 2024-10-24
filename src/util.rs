@@ -393,8 +393,6 @@ pub struct Undo {
     pub minor_key: u64,
     /// The Zobrist hash of the major pieces on the board.
     pub major_key: u64,
-    /// The Zobrist hash of the counts of pieces on the board.
-    pub material_key: u64,
 }
 
 impl Default for Undo {
@@ -412,7 +410,6 @@ impl Default for Undo {
             non_pawn_key: [0; 2],
             minor_key: 0,
             major_key: 0,
-            material_key: 0,
         }
     }
 }

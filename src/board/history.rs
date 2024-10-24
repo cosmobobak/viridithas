@@ -232,7 +232,6 @@ impl ThreadData<'_> {
         update(self.nonpawn_corrhist[Black].get_mut(us, pos.non_pawn_key(Black)), new_weight, scaled_diff);
         update(self.minor_corrhist.get_mut(us, pos.minor_key()), new_weight, scaled_diff);
         update(self.major_corrhist.get_mut(us, pos.major_key()), new_weight, scaled_diff);
-        update(self.material_corrhist.get_mut(us, pos.material_key()), new_weight, scaled_diff);
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
@@ -243,8 +242,7 @@ impl ThreadData<'_> {
         let black = self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let material = self.material_corrhist.get(pos.turn(), pos.material_key());
-        let adjustment = pawn + material + major + minor + white + black;
+        let adjustment = pawn + major + minor + white + black;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
