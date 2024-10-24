@@ -11,7 +11,8 @@ perf record --call-graph dwarf target/release/viridithas bench
 perf script | inferno-collapse-perf | sed \
   -e 's/;viridithas::search::<impl viridithas::board::Board>::alpha_beta/;viridithas::search::<impl viridithas::board::Board>::absearch/' \
   -e 's/;viridithas::search::<impl viridithas::board::Board>::quiescence//g' \
-  -e 's/;viridithas::search::<impl viridithas::board::Board>::alpha_beta//g' > stacks.folded
+  -e 's/;viridithas::search::<impl viridithas::board::Board>::alpha_beta//g' \
+  -e 's/<impl viridithas::board::Board>/Board/g' > stacks.folded
 
 # create the flamegraph
 cat stacks.folded | inferno-flamegraph > flamegraph.svg
