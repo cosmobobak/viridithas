@@ -311,18 +311,17 @@ impl Game {
         // if we've been given a lambda, create a buffer and inject TD'd values:
         let mut moves = &*self.moves;
         if let Some(lambda) = filter.td_lambda {
-            td_lambda_buffer
-                .try_extend_from_slice(&moves[..Self::MAX_SPLATTABLE_GAME_SIZE.min(moves.len())])
-                .unwrap();
-                for i in (0..td_lambda_buffer.len()).rev().skip(1) {
-                    let prev = td_lambda_buffer[i + 1].1.get();
-                    if i32::from(prev).unsigned_abs() < filter.max_eval {
-                        let curr = td_lambda_buffer[i].1.get();
-                        let reward_sum = f64::from(prev).mul_add(lambda, f64::from(curr));
-                        let average = reward_sum / (1.0 + lambda);
-                        td_lambda_buffer[i].1 = I16Le::new(average as i16);
-                    }
+            td_lambda_buffer.try_extend_from_slice(&moves[..Self::MAX_SPLATTABLE_GAME_SIZE.min(moves.len())]).unwrap();
+            for i in (0..td_lambda_buffer.len()).rev().skip(1) {
+                let prev = td_lambda_buffer[i + 1].1.get();
+                let curr = td_lambda_buffer[i].1.get();
+                if i32::from(prev).unsigned_abs() < filter.max_eval && i32::from(curr).unsigned_abs() < filter.max_eval
+                {
+                    let reward_sum = f64::from(prev).mul_add(lambda, f64::from(curr));
+                    let average = reward_sum / (1.0 + lambda);
+                    td_lambda_buffer[i].1 = I16Le::new(average as i16);
                 }
+            }
             moves = &*td_lambda_buffer;
         }
         moves
