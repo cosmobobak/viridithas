@@ -303,6 +303,7 @@ impl Game {
         Ok(())
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     fn preprocess_evals<'a>(
         &'a self,
         filter: &UnpackConfig,
