@@ -21,7 +21,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context};
 use bulletformat::ChessBoard;
-use dataformat::Filter;
+use dataformat::UnpackConfig;
 use rand::Rng;
 
 use crate::{
@@ -648,7 +648,7 @@ pub fn run_splat(
         bail!("Output file already exists.");
     }
 
-    let filter = cfg_path.map_or_else(|| Ok(Filter::default()), Filter::from_path)?;
+    let filter = cfg_path.map_or_else(|| Ok(UnpackConfig::default()), UnpackConfig::from_path)?;
     let mut rng = rand::thread_rng();
 
     // open the input file
@@ -995,7 +995,7 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     let stdout_lock = Mutex::new(());
     let stdout_lock = &stdout_lock;
 
-    let filter = &Filter::default();
+    let filter = &UnpackConfig::default();
     let (total_count, filtered_count, pass_count_buckets) = std::thread::scope(
         |s| -> anyhow::Result<(u64, u64, Vec<u64>)> {
             let mut thread_handles = Vec::new();

@@ -19,7 +19,7 @@ mod marlinformat;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(clippy::struct_field_names)]
 #[serde(default)]
-pub struct Filter {
+pub struct UnpackConfig {
     /// Filter out positions that have a ply count less than this value.
     min_ply: u32,
     /// Filter out positions that have fewer pieces on the board than this value.
@@ -36,9 +36,11 @@ pub struct Filter {
     max_eval_incorrectness: u32,
     /// Take this many positions per game.
     sample_size: u32,
+    /// Modify scores using a TD lambda of this value.
+    td_lambda: Option<f64>,
 }
 
-impl Default for Filter {
+impl Default for UnpackConfig {
     fn default() -> Self {
         Self {
             min_ply: 16,
@@ -49,11 +51,12 @@ impl Default for Filter {
             filter_castling: false,
             max_eval_incorrectness: u32::MAX,
             sample_size: u32::MAX,
+            td_lambda: None,
         }
     }
 }
 
-impl Filter {
+impl UnpackConfig {
     const UNRESTRICTED: Self = Self {
         min_ply: 0,
         min_pieces: 0,
@@ -63,6 +66,7 @@ impl Filter {
         filter_castling: false,
         max_eval_incorrectness: u32::MAX,
         sample_size: u32::MAX,
+        td_lambda: None,
     };
 
     pub fn should_filter(&self, mv: Move, eval: i32, board: &Board, wdl: WDL) -> bool {
@@ -246,7 +250,7 @@ impl Game {
     }
 
     /// Internally counts how many positions would pass the filter in this game.
-    pub fn filter_pass_count(&self, filter: &Filter) -> u64 {
+    pub fn filter_pass_count(&self, filter: &UnpackConfig) -> u64 {
         let mut cnt = 0;
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
@@ -265,7 +269,7 @@ impl Game {
     pub fn splat_to_marlinformat(
         &self,
         mut callback: impl FnMut(marlinformat::PackedBoard) -> anyhow::Result<()>,
-        filter: &Filter,
+        filter: &UnpackConfig,
         rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
         // we don't allow buffers of more than this size.
@@ -277,8 +281,11 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
+        let mut td_lambda_buffer = ArrayVec::<_, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
+        let moves = self.preprocess_evals(filter, &mut td_lambda_buffer);
+
         // record all the positions that pass the filter.
-        for (mv, eval) in &self.moves {
+        for (mv, eval) in moves {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 sample_buffer.push(board.pack(eval, wdl, 0));
@@ -296,11 +303,36 @@ impl Game {
         Ok(())
     }
 
+    fn preprocess_evals<'a>(
+        &'a self,
+        filter: &UnpackConfig,
+        td_lambda_buffer: &'a mut ArrayVec<(Move, I16Le), { Self::MAX_SPLATTABLE_GAME_SIZE }>,
+    ) -> &'a [(Move, I16Le)] {
+        // if we've been given a lambda, create a buffer and inject TD'd values:
+        let mut moves = &*self.moves;
+        if let Some(lambda) = filter.td_lambda {
+            td_lambda_buffer
+                .try_extend_from_slice(&moves[..Self::MAX_SPLATTABLE_GAME_SIZE.min(moves.len())])
+                .unwrap();
+                for i in (0..td_lambda_buffer.len()).rev().skip(1) {
+                    let prev = td_lambda_buffer[i + 1].1.get();
+                    if i32::from(prev).unsigned_abs() < filter.max_eval {
+                        let curr = td_lambda_buffer[i].1.get();
+                        let reward_sum = f64::from(prev).mul_add(lambda, f64::from(curr));
+                        let average = reward_sum / (1.0 + lambda);
+                        td_lambda_buffer[i].1 = I16Le::new(average as i16);
+                    }
+                }
+            moves = &*td_lambda_buffer;
+        }
+        moves
+    }
+
     /// Converts the game into a sequence of bulletformat `ChessBoard` objects, yielding only those positions that pass the filter.
     pub fn splat_to_bulletformat(
         &self,
         mut callback: impl FnMut(bulletformat::ChessBoard) -> anyhow::Result<()>,
-        filter: &Filter,
+        filter: &UnpackConfig,
         rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
         // we don't allow buffers of more than this size.
@@ -312,8 +344,11 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
+        let mut td_lambda_buffer = ArrayVec::<_, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
+        let moves = self.preprocess_evals(filter, &mut td_lambda_buffer);
+
         // record all the positions that pass the filter.
-        for (mv, eval) in &self.moves {
+        for (mv, eval) in moves {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
@@ -429,7 +464,7 @@ mod tests {
         game.add_move(Move::new(Square::G1, Square::F3), 200);
 
         let mut boards = Vec::new();
-        let filter = Filter::UNRESTRICTED;
+        let filter = UnpackConfig::UNRESTRICTED;
         let mut rng = rand::thread_rng();
         game.splat_to_marlinformat(
             |board| {
