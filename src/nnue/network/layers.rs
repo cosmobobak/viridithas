@@ -150,7 +150,7 @@ mod generic {
 mod x86simd {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
-        FT_SHIFT, L1_MUL, AVX512CHUNK
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
     };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,

@@ -472,10 +472,7 @@ mod avx2 {
     }
     #[inline]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 2]) -> f32 {
-        let vec = _mm256_add_ps(
-            vec.get_unchecked(0).inner(),
-            vec.get_unchecked(1).inner(),
-        );
+        let vec = _mm256_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(1).inner());
 
         let upper_128 = _mm256_extractf128_ps(vec, 1);
         let lower_128 = _mm256_castps256_ps128(vec);
@@ -693,14 +690,8 @@ mod ssse3 {
     }
     #[inline]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {
-        let vec_a = _mm_add_ps(
-            vec.get_unchecked(0).inner(),
-            vec.get_unchecked(2).inner(),
-        );
-        let vec_b = _mm_add_ps(
-            vec.get_unchecked(1).inner(),
-            vec.get_unchecked(3).inner(),
-        );
+        let vec_a = _mm_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
+        let vec_b = _mm_add_ps(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
         let vec = _mm_add_ps(vec_a, vec_b);
         let upper_64 = _mm_movehl_ps(vec, vec);
         let sum_64 = _mm_add_ps(vec, upper_64);
