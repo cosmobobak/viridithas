@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 const AVX512CHUNK: usize = 512 / 32;
 const FT_SHIFT: u32 = 10;
 #[allow(clippy::cast_precision_loss)]
@@ -151,7 +150,7 @@ mod generic {
 mod x86simd {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
-        FT_SHIFT, L1_MUL,
+        AVX512CHUNK, FT_SHIFT, L1_MUL,
     };
     use crate::nnue::{
         network::L1_CHUNK_PER_32,
@@ -466,22 +465,26 @@ mod x86simd {
         bias: f32,
         output: &mut f32,
     ) {
+        // These weird multiple-sum shenanigans is to make sure we add the floats in the exact same manner
+        // and order on ALL architectures, so that behaviour is deterministic
+        // We multiply the weights by the inputs, and sum them up
+        const NUM_SUMS: usize = AVX512CHUNK / F32_CHUNK_SIZE;
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most (L3_SIZE / F32_CHUNK_SIZE - 1) * F32_CHUNK_SIZE
         // into the `weights` and `inputs` arrays. This is in bounds, as `weights` has length L3_SIZE and
         // `inputs` has length L3_SIZE.
         // 2. SIMD instructions: All of our loads and stores are aligned.
         unsafe {
-            let mut sum = simd::zero_f32();
+            let mut sum_vecs = [simd::zero_f32(); NUM_SUMS];
 
             // affine transform
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
-                sum = simd::mul_add_f32(input_vec, weight_vec, sum);
+                sum_vecs[i % NUM_SUMS] = simd::mul_add_f32(input_vec, weight_vec, sum_vecs[i % NUM_SUMS]);
             }
 
-            *output = simd::sum_f32(sum) + bias;
+            *output = simd::reduce_add_f32s(&sum_vecs) + bias;
         }
     }
 }

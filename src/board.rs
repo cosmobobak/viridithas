@@ -247,8 +247,7 @@ impl Board {
 
     #[cfg(feature = "datagen")]
     pub fn regenerate_zobrist(&mut self) {
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) =
-            self.generate_pos_keys();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
     }
 
     #[cfg(feature = "datagen")]
@@ -359,8 +358,7 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(queenside_file as u8).unwrap())),
         };
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) =
-            self.generate_pos_keys();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -418,8 +416,7 @@ impl Board {
             bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_kingside_file as u8).unwrap())),
             bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_queenside_file as u8).unwrap())),
         };
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) =
-            self.generate_pos_keys();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -561,8 +558,7 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) =
-            self.generate_pos_keys();
+        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
 
         Ok(())

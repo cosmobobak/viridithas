@@ -54,7 +54,6 @@ macro_rules! wrap_simd_register {
 #[cfg(target_feature = "avx512f")]
 mod avx512 {
     #![allow(non_camel_case_types)]
-    use crate::nnue::network::Align64;
     use std::arch::x86_64::*;
 
     wrap_simd_register!(__m512i, i8, VecI8);
@@ -260,8 +259,8 @@ mod avx512 {
         return _mm512_reduce_add_ps(vec.inner());
     }
     #[inline]
-    pub unsafe fn reduce_add_f32s(vec: &Align64<[f32; 1 * F32_CHUNK_SIZE]>) -> f32 {
-        return _mm512_reduce_add_ps(load_f32(vec.get_unchecked(0 * F32_CHUNK_SIZE)).inner());
+    pub unsafe fn reduce_add_f32s(vec: &[VecF32; 1]) -> f32 {
+        return _mm512_reduce_add_ps(vec.get_unchecked(0).inner());
     }
 
     pub const U8_CHUNK_SIZE: usize = std::mem::size_of::<VecI8>() / std::mem::size_of::<u8>();
@@ -274,7 +273,6 @@ mod avx512 {
 #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
 mod avx2 {
     #![allow(non_camel_case_types)]
-    use crate::nnue::network::Align64;
     use std::arch::x86_64::*;
 
     wrap_simd_register!(__m256i, i8, VecI8);
@@ -473,11 +471,8 @@ mod avx2 {
         return _mm_cvtss_f32(sum_32);
     }
     #[inline]
-    pub unsafe fn reduce_add_f32s(vec: &Align64<[f32; 2 * F32_CHUNK_SIZE]>) -> f32 {
-        let vec = _mm256_add_ps(
-            load_f32(vec.get_unchecked(0 * F32_CHUNK_SIZE)).inner(),
-            load_f32(vec.get_unchecked(1 * F32_CHUNK_SIZE)).inner(),
-        );
+    pub unsafe fn reduce_add_f32s(vec: &[VecF32; 2]) -> f32 {
+        let vec = _mm256_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(1).inner());
 
         let upper_128 = _mm256_extractf128_ps(vec, 1);
         let lower_128 = _mm256_castps256_ps128(vec);
@@ -502,7 +497,6 @@ mod avx2 {
 #[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
 mod ssse3 {
     #![allow(non_camel_case_types)]
-    use crate::nnue::network::Align64;
     use std::arch::x86_64::*;
 
     wrap_simd_register!(__m128i, i8, VecI8);
@@ -695,15 +689,9 @@ mod ssse3 {
         return _mm_cvtss_f32(sum_32);
     }
     #[inline]
-    pub unsafe fn reduce_add_f32s(vec: &Align64<[f32; 4 * F32_CHUNK_SIZE]>) -> f32 {
-        let vec_a = _mm_add_ps(
-            load_f32(vec.get_unchecked(0 * F32_CHUNK_SIZE)).inner(),
-            load_f32(vec.get_unchecked(2 * F32_CHUNK_SIZE)).inner(),
-        );
-        let vec_b = _mm_add_ps(
-            load_f32(vec.get_unchecked(1 * F32_CHUNK_SIZE)).inner(),
-            load_f32(vec.get_unchecked(3 * F32_CHUNK_SIZE)).inner(),
-        );
+    pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {
+        let vec_a = _mm_add_ps(vec.get_unchecked(0).inner(), vec.get_unchecked(2).inner());
+        let vec_b = _mm_add_ps(vec.get_unchecked(1).inner(), vec.get_unchecked(3).inner());
         let vec = _mm_add_ps(vec_a, vec_b);
         let upper_64 = _mm_movehl_ps(vec, vec);
         let sum_64 = _mm_add_ps(vec, upper_64);
