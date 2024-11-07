@@ -651,3 +651,19 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Penta | [26, 833, 1947, 1033, 23]
             |                                          | https://chess.swehosting.se/test/8718/
 ------------|------------------------------------------|-----------------------------------------------
+     helios | voyager fine-tuned on a dataset rescored | fixed-nodes:
+            | using TD with lambda = 0.05              | Elo   | -3.55 +- 3.31 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 16836 W: 4521 L: 4693 D: 7622
+            |                                          | Penta | [350, 2079, 3683, 2005, 301]
+            |                                          | https://chess.swehosting.se/test/8939/
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -4.05 +- 3.09 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 12526 W: 2730 L: 2876 D: 6920
+            |                                          | Penta | [31, 1563, 3219, 1421, 29]
+            |                                          | https://chess.swehosting.se/test/8940/#
+------------|------------------------------------------|-----------------------------------------------
