@@ -99,7 +99,8 @@ struct UnquantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
-    psqt:         [f32; INPUT * BUCKETS],
+    // extra bucket for the feature-factoriser.
+    psqt:         [f32; INPUT * (BUCKETS + 1)],
     psqt_bias:     f32,
 }
 
@@ -240,7 +241,12 @@ impl UnquantisedNetwork {
         net.l2_biases = self.l2_biases;
         net.l3_weights = self.l3_weights;
         net.l3_biases = self.l3_biases;
-        net.psqt = self.psqt;
+        // transfer the non-factoriser buckets:
+        net.psqt.copy_from_slice(&self.psqt[INPUT..]);
+        // add the factoriser:
+        for (fact, psqt) in self.psqt[..INPUT].iter().cycle().zip(&mut net.psqt) {
+            *psqt += *fact;
+        }
         // inference is such that the pqst bias can just be folded in
         // to the l3 biases:
         for b in &mut net.l3_biases {
