@@ -64,7 +64,7 @@ impl Board {
     pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
-        let v = t.nnue.evaluate(t.nnue_params, self.side, output_bucket);
+        let v = t.nnue.evaluate(t.nnue_params, self, output_bucket);
 
         // scale down the value estimate when there's not much
         // material left - this will incentivize keeping material

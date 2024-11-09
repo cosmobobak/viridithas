@@ -99,6 +99,8 @@ struct UnquantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
+    psqt:         [f32; INPUT],
+    psqt_bias:     f32,
 }
 
 /// A quantised network file, for compressed embedding.
@@ -113,6 +115,7 @@ struct QuantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
+    psqt:         [f32; INPUT],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -128,6 +131,7 @@ pub struct NNUEParams {
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub psqt:           [f32; INPUT],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -236,6 +240,12 @@ impl UnquantisedNetwork {
         net.l2_biases = self.l2_biases;
         net.l3_weights = self.l3_weights;
         net.l3_biases = self.l3_biases;
+        net.psqt = self.psqt;
+        // inference is such that the pqst bias can just be folded in
+        // to the l3 biases:
+        for b in &mut net.l3_biases {
+            *b += self.psqt_bias;
+        }
 
         net
     }
@@ -1023,12 +1033,12 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, pos: &Board, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
+        let (us, them) = if pos.turn() == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
@@ -1038,6 +1048,13 @@ impl NNUEState {
         layers::propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
         layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
 
+        let wk = pos.king_sq(Colour::White);
+        let bk = pos.king_sq(Colour::Black);
+        pos.pieces.visit_pieces(|sq, piece| {
+            let indices = feature::indices(wk, bk, FeatureUpdate { sq, piece, });
+            l3_output += nn.psqt[indices[pos.turn()].index()];
+        });
+
         (l3_output * SCALE as f32) as i32
     }
 }
@@ -1045,11 +1062,12 @@ impl NNUEState {
 /// Benchmark the inference portion of the NNUE evaluation.
 /// (everything after the feature extraction)
 pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
+    let board = Board::default();
     let start = std::time::Instant::now();
     for _ in 0..1_000_000 {
         std::hint::black_box(std::hint::black_box(state).evaluate(
             std::hint::black_box(nnue_params),
-            std::hint::black_box(Colour::White),
+            std::hint::black_box(&board),
             std::hint::black_box(0),
         ));
     }

@@ -610,7 +610,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                     0
                 } else {
                     let t1 = thread_data.first_mut().with_context(|| "the thread headers are empty.")?;
-                    t1.nnue.evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
+                    t1.nnue.evaluate(t1.nnue_params, &pos, network::output_bucket(&pos))
                 };
                 println!("{eval}");
                 Ok(())
