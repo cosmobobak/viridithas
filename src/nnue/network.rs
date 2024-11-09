@@ -99,7 +99,7 @@ struct UnquantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
-    psqt:         [f32; INPUT],
+    psqt:         [f32; INPUT * BUCKETS],
     psqt_bias:     f32,
 }
 
@@ -115,7 +115,7 @@ struct QuantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
-    psqt:         [f32; INPUT],
+    psqt:         [f32; INPUT * BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -131,7 +131,7 @@ pub struct NNUEParams {
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
-    pub psqt:           [f32; INPUT],
+    pub psqt:           [f32; INPUT * BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -389,6 +389,9 @@ impl QuantisedNetwork {
             net.l3_bias[bucket] = self.l3_biases[bucket];
         }
 
+        // transfer the psqt
+        net.psqt = self.psqt;
+
         net
     }
 
@@ -512,6 +515,20 @@ impl NNUEParams {
             // alignments are sensible, so we can safely cast.
             #[allow(clippy::cast_ptr_alignment)]
             &*ptr.cast()
+        }
+    }
+
+    pub fn select_psqt(&self, bucket: usize) -> &[f32; INPUT] {
+        // handle mirroring
+        let bucket = bucket % BUCKETS;
+        let start = bucket * INPUT;
+        let end = start + INPUT;
+        let slice = &self.psqt[start..end];
+        // SAFETY: The resulting slice is indeed INPUT long.
+        // additionally, we're generating the reference from our own data,
+        // so we know that the lifetime is valid.
+        unsafe {
+            &*slice.as_ptr().cast()
         }
     }
 }
@@ -1035,10 +1052,11 @@ impl NNUEState {
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, pos: &Board, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
+        let stm = pos.turn();
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
 
-        let (us, them) = if pos.turn() == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
+        let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
@@ -1050,12 +1068,17 @@ impl NNUEState {
 
         let wk = pos.king_sq(Colour::White);
         let bk = pos.king_sq(Colour::Black);
+        let buckets = get_bucket_indices(wk, bk);
+        let psqt = nn.select_psqt(buckets[stm]);
+        let mut psqt_output = 0.0;
         pos.pieces.visit_pieces(|sq, piece| {
             let indices = feature::indices(wk, bk, FeatureUpdate { sq, piece, });
-            l3_output += nn.psqt[indices[pos.turn()].index()];
+            psqt_output += psqt[indices[stm].index()];
         });
 
-        (l3_output * SCALE as f32) as i32
+        let output = l3_output + psqt_output;
+
+        (output * SCALE as f32) as i32
     }
 }
 
