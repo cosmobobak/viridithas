@@ -117,6 +117,7 @@ struct QuantisedNetwork {
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
     psqt:         [f32; INPUT * BUCKETS],
+    psqt_bias:     f32,
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -133,6 +134,7 @@ pub struct NNUEParams {
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
     pub psqt:           [f32; INPUT * BUCKETS],
+    pub psqt_bias:       f32,
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -241,17 +243,14 @@ impl UnquantisedNetwork {
         net.l2_biases = self.l2_biases;
         net.l3_weights = self.l3_weights;
         net.l3_biases = self.l3_biases;
-        // transfer the non-factoriser buckets:
-        net.psqt.copy_from_slice(&self.psqt[INPUT..]);
-        // add the factoriser:
-        for (fact, psqt) in self.psqt[..INPUT].iter().cycle().zip(&mut net.psqt) {
-            *psqt += *fact;
+        let mut psqt_buckets = self.psqt.chunks_exact(INPUT);
+        let psqt_factoriser = psqt_buckets.next().unwrap();
+        for (src, tgt) in psqt_buckets.zip(net.psqt.chunks_exact_mut(INPUT)) {
+            for ((src, fac), tgt) in src.iter().zip(psqt_factoriser).zip(tgt) {
+                *tgt = *src + *fac;
+            }
         }
-        // inference is such that the pqst bias can just be folded in
-        // to the l3 biases:
-        for b in &mut net.l3_biases {
-            *b += self.psqt_bias;
-        }
+        net.psqt_bias = self.psqt_bias;
 
         net
     }
@@ -397,6 +396,7 @@ impl QuantisedNetwork {
 
         // transfer the psqt
         net.psqt = self.psqt;
+        net.psqt_bias = self.psqt_bias;
 
         net
     }
@@ -1076,7 +1076,7 @@ impl NNUEState {
         let bk = pos.king_sq(Colour::Black);
         let buckets = get_bucket_indices(wk, bk);
         let psqt = nn.select_psqt(buckets[stm]);
-        let mut psqt_output = 0.0;
+        let mut psqt_output = nn.psqt_bias;
         pos.pieces.visit_pieces(|sq, piece| {
             let indices = feature::indices(wk, bk, FeatureUpdate { sq, piece, });
             psqt_output += psqt[indices[stm].index()];
