@@ -29,7 +29,7 @@ const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 15;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
@@ -91,17 +91,17 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:   [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
-    ft_biases:    [f32; L1_SIZE],
-    l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    ft_weights:    [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
+    ft_biases:     [f32; L1_SIZE],
+    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1s_weights: [[[f32;       1]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1s_biases:   [[f32;       1]; OUTPUT_BUCKETS],
+    l2_weights:  [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2_biases:    [[f32; L3_SIZE]; OUTPUT_BUCKETS],
+    l3_weights:   [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     // extra bucket for the feature-factoriser.
-    psqt:         [f32; INPUT * (BUCKETS + 1)],
-    psqt_bias:     f32,
+    psqt:         [[f32; OUTPUT_BUCKETS]; INPUT * (BUCKETS + 1)],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -110,14 +110,12 @@ struct UnquantisedNetwork {
 struct QuantisedNetwork {
     ft_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
     ft_biases:    [i16; L1_SIZE],
-    l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1_weights: [[[ i8; L2_SIZE + 1]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:   [[f32; L2_SIZE + 1]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
-    psqt:         [f32; INPUT * BUCKETS],
-    psqt_bias:     f32,
+    psqt:        [[f32; OUTPUT_BUCKETS]; INPUT * BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -127,14 +125,12 @@ struct QuantisedNetwork {
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
     pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_weights:     [Align64<[ i8; L1_SIZE * (L2_SIZE + 1)]>; OUTPUT_BUCKETS],
+    pub l1_bias:        [Align64<[f32; L2_SIZE + 1]>; OUTPUT_BUCKETS],
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:        [f32; OUTPUT_BUCKETS],
-    pub psqt:           [f32; INPUT * BUCKETS],
-    pub psqt_bias:       f32,
+    pub psqt:           [[f32; INPUT * BUCKETS]; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
@@ -234,23 +230,35 @@ impl UnquantisedNetwork {
                     let v = v.round() as i8;
                     net.l1_weights[i][bucket][j] = v;
                 }
+                {
+                    // skip connection:
+                    let v = self.l1s_weights[i][bucket][0] * f32::from(QB);
+                    assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                    let v = v.round() as i8;
+                    net.l1_weights[i][bucket][L2_SIZE] = v;
+                }
             }
         }
 
         // transfer the L1 biases
-        net.l1_biases = self.l1_biases;
+        for ((src, skip), dst) in self.l1_biases.iter().zip(&self.l1s_biases).zip(&mut net.l1_biases) {
+            dst[..L2_SIZE].copy_from_slice(src);
+            dst[L2_SIZE] = skip[0];
+        }
+
         net.l2_weights = self.l2_weights;
         net.l2_biases = self.l2_biases;
         net.l3_weights = self.l3_weights;
-        net.l3_biases = self.l3_biases;
+
         let mut psqt_buckets = self.psqt.chunks_exact(INPUT);
         let psqt_factoriser = psqt_buckets.next().unwrap();
         for (src, tgt) in psqt_buckets.zip(net.psqt.chunks_exact_mut(INPUT)) {
             for ((src, fac), tgt) in src.iter().zip(psqt_factoriser).zip(tgt) {
-                *tgt = *src + *fac;
+                for ((src, fac), tgt) in src.iter().zip(fac).zip(tgt) {
+                    *tgt = *src + *fac;
+                }
             }
         }
-        net.psqt_bias = self.psqt_bias;
 
         net
     }
@@ -347,29 +355,29 @@ impl QuantisedNetwork {
         }
 
         // transpose the L{1,2,3} weights and biases
-        let mut sorted = vec![[[0i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
+        let mut sorted = vec![[[0i8; L2_SIZE + 1]; OUTPUT_BUCKETS]; L1_SIZE];
         repermute_l1_weights(&mut sorted, &self.l1_weights);
         for bucket in 0..OUTPUT_BUCKETS {
             // quant the L1 weights
             if use_simd {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
-                    for j in 0..L2_SIZE {
+                    for j in 0..=L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            net.l1_weights[bucket][i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] =
+                            net.l1_weights[bucket][i * L1_CHUNK_PER_32 * (L2_SIZE + 1) + j * L1_CHUNK_PER_32 + k] =
                                 sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
                         }
                     }
                 }
             } else {
                 for i in 0..L1_SIZE {
-                    for j in 0..L2_SIZE {
+                    for j in 0..=L2_SIZE {
                         net.l1_weights[bucket][j * L1_SIZE + i] = sorted[i][bucket][j];
                     }
                 }
             }
 
             // transfer the L1 biases
-            for i in 0..L2_SIZE {
+            for i in 0..=L2_SIZE {
                 net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
             }
 
@@ -390,13 +398,11 @@ impl QuantisedNetwork {
                 net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
             }
 
-            // transfer the L3 biases
-            net.l3_bias[bucket] = self.l3_biases[bucket];
+            // transfer the pqst
+            for i in 0..INPUT * BUCKETS {
+                net.psqt[bucket][i] = self.psqt[i][bucket];
+            }
         }
-
-        // transfer the psqt
-        net.psqt = self.psqt;
-        net.psqt_bias = self.psqt_bias;
 
         net
     }
@@ -423,8 +429,8 @@ impl QuantisedNetwork {
 }
 
 fn repermute_l1_weights(
-    sorted: &mut [[[i8; L2_SIZE]; OUTPUT_BUCKETS]],
-    l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    sorted: &mut [[[i8; L2_SIZE + 1]; OUTPUT_BUCKETS]],
+    l1_weights: &[[[i8; L2_SIZE + 1]; OUTPUT_BUCKETS]; L1_SIZE],
 ) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         sorted[tgt_index] = l1_weights[src_index];
@@ -524,18 +530,16 @@ impl NNUEParams {
         }
     }
 
-    pub fn select_psqt(&self, bucket: usize) -> &[f32; INPUT] {
+    pub fn select_psqt(&self, bucket: usize, output_bucket: usize) -> &[f32; INPUT] {
         // handle mirroring
         let bucket = bucket % BUCKETS;
         let start = bucket * INPUT;
         let end = start + INPUT;
-        let slice = &self.psqt[start..end];
+        let slice = &self.psqt[output_bucket][start..end];
         // SAFETY: The resulting slice is indeed INPUT long.
         // additionally, we're generating the reference from our own data,
         // so we know that the lifetime is valid.
-        unsafe {
-            &*slice.as_ptr().cast()
-        }
+        unsafe { &*slice.as_ptr().cast() }
     }
 }
 
@@ -1054,6 +1058,19 @@ impl NNUEState {
         }
     }
 
+    fn propagate_psqt(pos: &Board, nn: &NNUEParams, stm: Colour, out: usize) -> f32 {
+        let wk = pos.king_sq(Colour::White);
+        let bk = pos.king_sq(Colour::Black);
+        let buckets = get_bucket_indices(wk, bk);
+        let psqt = nn.select_psqt(buckets[stm], out);
+        let mut psqt_output = nn.l1_bias[out][15];
+        pos.pieces.visit_pieces(|sq, piece| {
+            let indices = feature::indices(wk, bk, FeatureUpdate { sq, piece });
+            psqt_output += psqt[indices[stm].index()];
+        });
+        psqt_output
+    }
+
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn evaluate(&self, nn: &NNUEParams, pos: &Board, out: usize) -> i32 {
@@ -1064,25 +1081,17 @@ impl NNUEState {
 
         let (us, them) = if stm == Colour::White { (&acc.white, &acc.black) } else { (&acc.black, &acc.white) };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
+        let mut l1_outputs = Align64([0.0; L2_SIZE + 1]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
         layers::activate_ft_and_propagate_l1(us, them, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
         layers::propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
-        layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l3_bias[out], &mut l3_output);
+        layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l1_bias[out][15], &mut l3_output);
 
-        let wk = pos.king_sq(Colour::White);
-        let bk = pos.king_sq(Colour::Black);
-        let buckets = get_bucket_indices(wk, bk);
-        let psqt = nn.select_psqt(buckets[stm]);
-        let mut psqt_output = nn.psqt_bias;
-        pos.pieces.visit_pieces(|sq, piece| {
-            let indices = feature::indices(wk, bk, FeatureUpdate { sq, piece, });
-            psqt_output += psqt[indices[stm].index()];
-        });
+        let psqt_output = Self::propagate_psqt(pos, nn, stm, out);
 
-        let output = l3_output + psqt_output;
+        let output = l1_outputs[15] + l3_output + psqt_output;
 
         (output * SCALE as f32) as i32
     }
