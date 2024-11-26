@@ -27,7 +27,7 @@ use rand::Rng;
 use crate::{
     board::{
         evaluation::{is_game_theoretic_score, is_mate_score},
-        Board, GameOutcome,
+        Board, GameOutcome, WinType, DrawType,
     },
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
@@ -270,18 +270,18 @@ fn generate_on_thread(
     let mut output_buffer = BufWriter::new(&mut output_file);
 
     let mut counters = [
-        (GameOutcome::WhiteWinMate, 0),
-        (GameOutcome::BlackWinMate, 0),
-        (GameOutcome::WhiteWinTB, 0),
-        (GameOutcome::BlackWinTB, 0),
-        (GameOutcome::DrawFiftyMoves, 0),
-        (GameOutcome::DrawRepetition, 0),
-        (GameOutcome::DrawStalemate, 0),
-        (GameOutcome::DrawInsufficientMaterial, 0),
-        (GameOutcome::DrawTB, 0),
-        (GameOutcome::WhiteWinAdjudication, 0),
-        (GameOutcome::BlackWinAdjudication, 0),
-        (GameOutcome::DrawAdjudication, 0),
+        (GameOutcome::WhiteWin(WinType::Mate), 0),
+        (GameOutcome::WhiteWin(WinType::TB), 0),
+        (GameOutcome::WhiteWin(WinType::Adjudication), 0),
+        (GameOutcome::BlackWin(WinType::Mate), 0),
+        (GameOutcome::BlackWin(WinType::TB), 0),
+        (GameOutcome::BlackWin(WinType::Adjudication), 0),
+        (GameOutcome::Draw(DrawType::FiftyMoves), 0),
+        (GameOutcome::Draw(DrawType::Repetition), 0),
+        (GameOutcome::Draw(DrawType::Stalemate), 0),
+        (GameOutcome::Draw(DrawType::InsufficientMaterial), 0),
+        (GameOutcome::Draw(DrawType::TB), 0),
+        (GameOutcome::Draw(DrawType::Adjudication), 0),
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();
@@ -381,9 +381,9 @@ fn generate_on_thread(
             if options.tablebases_path.is_some() {
                 if let Some(wdl) = tablebases::probe::get_wdl_white(&board) {
                     break match wdl {
-                        WDL::Win => GameOutcome::WhiteWinTB,
-                        WDL::Loss => GameOutcome::BlackWinTB,
-                        WDL::Draw => GameOutcome::DrawTB,
+                        WDL::Win => GameOutcome::WhiteWin(WinType::TB),
+                        WDL::Loss => GameOutcome::BlackWin(WinType::TB),
+                        WDL::Draw => GameOutcome::Draw(DrawType::TB),
                     };
                 }
             }
@@ -414,20 +414,20 @@ fn generate_on_thread(
 
             if win_adj_counter >= 4 {
                 let outcome =
-                    if score > 0 { GameOutcome::WhiteWinAdjudication } else { GameOutcome::BlackWinAdjudication };
+                    if score > 0 { GameOutcome::WhiteWin(WinType::Adjudication) } else { GameOutcome::BlackWin(WinType::Adjudication) };
                 break outcome;
             }
             if draw_adj_counter >= 12 {
-                break GameOutcome::DrawAdjudication;
+                break GameOutcome::Draw(DrawType::Adjudication);
             }
             if is_game_theoretic_score(score) {
                 // if the score is game theoretic, we don't want to play out the rest of the game
                 let is_mate = is_mate_score(score);
                 break match (score.signum(), is_mate) {
-                    (1, false) => GameOutcome::WhiteWinTB,
-                    (-1, false) => GameOutcome::BlackWinTB,
-                    (1, true) => GameOutcome::WhiteWinMate,
-                    (-1, true) => GameOutcome::BlackWinMate,
+                    (1, false) => GameOutcome::WhiteWin(WinType::TB),
+                    (-1, false) => GameOutcome::BlackWin(WinType::TB),
+                    (1, true) => GameOutcome::WhiteWin(WinType::Mate),
+                    (-1, true) => GameOutcome::BlackWin(WinType::Mate),
                     _ => unreachable!(),
                 };
             }

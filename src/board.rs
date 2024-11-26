@@ -1728,14 +1728,14 @@ impl Board {
     #[cfg(any(feature = "datagen", test))]
     pub fn outcome(&mut self) -> GameOutcome {
         if self.fifty_move_counter >= 100 {
-            return GameOutcome::DrawFiftyMoves;
+            return GameOutcome::Draw(DrawType::FiftyMoves);
         }
         let mut reps = 1;
         for undo in self.history.iter().rev().skip(1).step_by(2) {
             if undo.key == self.key {
                 reps += 1;
                 if reps == 3 {
-                    return GameOutcome::DrawRepetition;
+                    return GameOutcome::Draw(DrawType::Repetition);
                 }
             }
             // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
@@ -1744,7 +1744,7 @@ impl Board {
             }
         }
         if self.is_insufficient_material() {
-            return GameOutcome::DrawInsufficientMaterial;
+            return GameOutcome::Draw(DrawType::InsufficientMaterial);
         }
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
@@ -1760,11 +1760,11 @@ impl Board {
             GameOutcome::Ongoing
         } else if self.in_check() {
             match self.side {
-                Colour::White => GameOutcome::BlackWinMate,
-                Colour::Black => GameOutcome::WhiteWinMate,
+                Colour::White => GameOutcome::BlackWin(WinType::Mate),
+                Colour::Black => GameOutcome::WhiteWin(WinType::Mate),
             }
         } else {
-            GameOutcome::DrawStalemate
+            GameOutcome::Draw(DrawType::Stalemate)
         }
     }
 
@@ -1782,19 +1782,23 @@ impl Board {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameOutcome {
-    WhiteWinMate,
-    BlackWinMate,
-    WhiteWinTB,
-    BlackWinTB,
-    DrawFiftyMoves,
-    DrawRepetition,
-    DrawStalemate,
-    DrawInsufficientMaterial,
-    DrawTB,
-    WhiteWinAdjudication,
-    BlackWinAdjudication,
-    DrawAdjudication,
+    WhiteWin(WinType),
+    BlackWin(WinType),
+    Draw(DrawType),
     Ongoing,
+}
+
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WinType {
+    Mate, TB, Adjudication,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DrawType {
+    TB, FiftyMoves, Repetition, Stalemate, InsufficientMaterial, Adjudication
 }
 
 #[cfg(feature = "datagen")]
@@ -1802,14 +1806,9 @@ impl GameOutcome {
     pub const fn as_packed_u8(self) -> u8 {
         // 0 for black win, 1 for draw, 2 for white win
         match self {
-            Self::WhiteWinMate | Self::WhiteWinTB | Self::WhiteWinAdjudication => 2,
-            Self::BlackWinMate | Self::BlackWinTB | Self::BlackWinAdjudication => 0,
-            Self::DrawFiftyMoves
-            | Self::DrawRepetition
-            | Self::DrawStalemate
-            | Self::DrawInsufficientMaterial
-            | Self::DrawTB
-            | Self::DrawAdjudication => 1,
+            Self::WhiteWin(_) => 2,
+            Self::BlackWin(_) => 0,
+            Self::Draw(_) => 1,
             Self::Ongoing => panic!("Game is not over!"),
         }
     }
@@ -1918,12 +1917,12 @@ mod tests {
     #[test]
     fn game_end_states() {
         use super::Board;
-        use super::GameOutcome;
+        use super::{GameOutcome, DrawType};
         use crate::{chessmove::Move, util::Square};
 
         let mut fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2").unwrap();
-        assert_eq!(fiftymove_draw.outcome(), GameOutcome::DrawFiftyMoves);
+        assert_eq!(fiftymove_draw.outcome(), GameOutcome::Draw(DrawType::FiftyMoves));
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
@@ -1937,11 +1936,11 @@ mod tests {
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::DrawRepetition);
+        assert_eq!(draw_repetition.outcome(), GameOutcome::Draw(DrawType::Repetition));
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
-        assert_eq!(stalemate.outcome(), GameOutcome::DrawStalemate);
+        assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
         let mut insufficient_material_bare_kings = Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
-        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::DrawInsufficientMaterial);
+        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::Draw(DrawType::InsufficientMaterial));
         let mut insufficient_material_knights = Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
         assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing);
         // using FIDE rules.
