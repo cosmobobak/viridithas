@@ -53,7 +53,11 @@ pub const SIDE_KEY: u64 = init_hash_keys().3;
 
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
-    let deltas = if IS_KNIGHT { &[17, 15, 10, 6, -17, -15, -10, -6] } else { &[9, 8, 7, 1, -9, -8, -7, -1] };
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
     cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
         let mut attacks_bb = 0;
         cfor!(let mut idx = 0; idx < 8; idx += 1; {
@@ -113,10 +117,22 @@ mod tests {
         use crate::util::Square;
         // testing that the attack squaresets match the ones in the python-chess library,
         // which are known to be correct.
-        assert_eq!(get_knight_attacks(Square::new(0).unwrap()), SquareSet::from_inner(132_096));
-        assert_eq!(get_knight_attacks(Square::new(63).unwrap()), SquareSet::from_inner(9_077_567_998_918_656));
+        assert_eq!(
+            get_knight_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(132_096)
+        );
+        assert_eq!(
+            get_knight_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(9_077_567_998_918_656)
+        );
 
-        assert_eq!(get_king_attacks(Square::new(0).unwrap()), SquareSet::from_inner(770));
-        assert_eq!(get_king_attacks(Square::new(63).unwrap()), SquareSet::from_inner(4_665_729_213_955_833_856));
+        assert_eq!(
+            get_king_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(770)
+        );
+        assert_eq!(
+            get_king_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(4_665_729_213_955_833_856)
+        );
     }
 }

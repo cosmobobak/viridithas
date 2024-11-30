@@ -2,7 +2,9 @@
 
 use crate::piece::Colour;
 
-use super::network::{feature::FeatureIndex, Align64, MovedPiece, PovUpdate, UpdateBuffer, INPUT, L1_SIZE};
+use super::network::{
+    feature::FeatureIndex, Align64, MovedPiece, PovUpdate, UpdateBuffer, INPUT, L1_SIZE,
+};
 
 /// Activations of the hidden layer.
 #[derive(Debug, Clone)]
@@ -66,26 +68,36 @@ mod avx2 {
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
-                    *reg = simd::load_i16(input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
+                    *reg =
+                        simd::load_i16(input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
                 }
                 for &sub_index in subs {
                     let sub_index = sub_index.index() * L1_SIZE;
-                    let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
+                    let sub_block =
+                        slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let sub = simd::load_i16(sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
+                        let sub = simd::load_i16(
+                            sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
+                        );
                         *reg = simd::sub_i16(*reg, sub);
                     }
                 }
                 for &add_index in adds {
                     let add_index = add_index.index() * L1_SIZE;
-                    let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
+                    let add_block =
+                        slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let add = simd::load_i16(add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
+                        let add = simd::load_i16(
+                            add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
+                        );
                         *reg = simd::add_i16(*reg, add);
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
-                    simd::store_i16(input.get_unchecked_mut(unroll_offset + r_idx * I16_CHUNK_SIZE), *reg);
+                    simd::store_i16(
+                        input.get_unchecked_mut(unroll_offset + r_idx * I16_CHUNK_SIZE),
+                        *reg,
+                    );
                 }
             }
         }
@@ -230,7 +242,8 @@ mod generic {
                 }
                 for &sub_index in subs {
                     let sub_index = sub_index.index() * L1_SIZE;
-                    let sub_block = slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
+                    let sub_block =
+                        slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let sub = *sub_block.get_unchecked(unroll_offset + r_idx);
                         *reg -= sub;
@@ -238,7 +251,8 @@ mod generic {
                 }
                 for &add_index in adds {
                     let add_index = add_index.index() * L1_SIZE;
-                    let add_block = slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
+                    let add_block =
+                        slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let add = *add_block.get_unchecked(unroll_offset + r_idx);
                         *reg += add;

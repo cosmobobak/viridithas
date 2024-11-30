@@ -10,8 +10,16 @@ mod generic {
         AVX512CHUNK, FT_SHIFT, L1_MUL,
     };
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
-    fn activate_ft(us: &Align64<[i16; L1_SIZE]>, them: &Align64<[i16; L1_SIZE]>, output: &mut Align64<[u8; L1_SIZE]>) {
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss
+    )]
+    fn activate_ft(
+        us: &Align64<[i16; L1_SIZE]>,
+        them: &Align64<[i16; L1_SIZE]>,
+        output: &mut Align64<[u8; L1_SIZE]>,
+    ) {
         for (a, acc) in [us, them].into_iter().enumerate() {
             for i in 0..L1_SIZE / 2 {
                 // SAFETY: the largest index into `acc` that we construct is `L1_SIZE / 2 + (L1_SIZE / 2 - 1)`.
@@ -58,8 +66,11 @@ mod generic {
             // SAFETY: `sums` is `L2_SIZE` long, and `output` is `L2_SIZE` long.
             // As such, the indices that we construct are valid.
             unsafe {
-                let clipped =
-                    f32::clamp((*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)), 0.0, 1.0);
+                let clipped = f32::clamp(
+                    (*sums.get_unchecked(i) as f32).mul_add(L1_MUL, *biases.get_unchecked(i)),
+                    0.0,
+                    1.0,
+                );
                 *output.get_unchecked_mut(i) = clipped * clipped;
             }
         }
@@ -194,7 +205,9 @@ mod x86simd {
     };
 
     // used in only one place, separate function for clarity.
-    unsafe fn reinterpret_as_i32s(ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]> {
+    unsafe fn reinterpret_as_i32s(
+        ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
+    ) -> &Align64<[i32; L1_SIZE / 4]> {
         let ptr = from_ref(ptr);
         // check that the reference is aligned to the register alignment
         debug_assert!((ptr as usize) % std::mem::align_of::<i32>() == 0);
@@ -222,7 +235,8 @@ mod x86simd {
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
-        const NNZ_INPUT_SIMD_WIDTH: usize = std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
+        const NNZ_INPUT_SIMD_WIDTH: usize =
+            std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH * 2, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
 
@@ -240,8 +254,10 @@ mod x86simd {
             let ft_zero = simd::zero_i16();
             let ft_one = simd::splat_i16(QA);
 
-            let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> = MaybeUninit::uninit().assume_init();
-            let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> = MaybeUninit::uninit().assume_init();
+            let mut ft_outputs: Align64<[MaybeUninit<u8>; L1_SIZE]> =
+                MaybeUninit::uninit().assume_init();
+            let mut nnz: Align64<[MaybeUninit<u16>; L1_SIZE / L1_CHUNK_PER_32]> =
+                MaybeUninit::uninit().assume_init();
             let mut nnz_count = 0;
             let mut base = vec128_zero();
             let increment = vec128_set_16(8);
@@ -256,10 +272,14 @@ mod x86simd {
                     let input0d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + 0));
 
                     // load the right-hand pair inputs
-                    let input1a = simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1b = simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1c = simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let input1a =
+                        simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let input1b =
+                        simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let input1c =
+                        simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let input1d =
+                        simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);
@@ -274,17 +294,32 @@ mod x86simd {
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
                     // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
-                    let producta = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a), clipped1a);
-                    let productb = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b), clipped1b);
-                    let productc = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0c), clipped1c);
-                    let productd = simd::mul_high_i16(simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0d), clipped1d);
+                    let producta = simd::mul_high_i16(
+                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a),
+                        clipped1a,
+                    );
+                    let productb = simd::mul_high_i16(
+                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b),
+                        clipped1b,
+                    );
+                    let productc = simd::mul_high_i16(
+                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0c),
+                        clipped1c,
+                    );
+                    let productd = simd::mul_high_i16(
+                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0d),
+                        clipped1d,
+                    );
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
                     let product_two = simd::pack_i16_to_u8(productc, productd);
 
                     // store to the ft output buffer
-                    simd::store_u8(from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(), product_one);
+                    simd::store_u8(
+                        from_mut(ft_outputs.get_unchecked_mut(offset + i)).cast(),
+                        product_one,
+                    );
                     simd::store_u8(
                         from_mut(ft_outputs.get_unchecked_mut(offset + i + U8_CHUNK_SIZE)).cast(),
                         product_two,
@@ -292,16 +327,22 @@ mod x86simd {
 
                     // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
                     let mut nnz_mask = 0;
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_one)));
-                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(product_two)))
-                        << NNZ_INPUT_SIMD_WIDTH;
+                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(
+                        product_one,
+                    )));
+                    nnz_mask |= u32::from(simd::nonzero_mask_i32(simd::reinterpret_i8s_as_i32s(
+                        product_two,
+                    ))) << NNZ_INPUT_SIMD_WIDTH;
 
                     // store the non-zero indices into the nnz buffer
                     for j in 0..NNZ_OUTPUTS_PER_CHUNK {
                         let lookup = (nnz_mask >> (j * 8)) & 0xFF;
                         let entry = NNZ_TABLE.table.get_unchecked(lookup as usize);
                         let offsets = vec128_load(from_ref(entry).cast());
-                        vec128_storeu(from_mut(nnz.get_unchecked_mut(nnz_count)).cast(), vec128_add(base, offsets));
+                        vec128_storeu(
+                            from_mut(nnz.get_unchecked_mut(nnz_count)).cast(),
+                            vec128_add(base, offsets),
+                        );
                         nnz_count += u32::count_ones(lookup) as usize;
                         base = vec128_add(base, increment);
                     }
@@ -309,7 +350,8 @@ mod x86simd {
                 offset += L1_PAIR_COUNT;
             }
 
-            let nnz_slice = std::slice::from_raw_parts(nnz.get_unchecked(0).as_ptr().cast::<u16>(), nnz_count);
+            let nnz_slice =
+                std::slice::from_raw_parts(nnz.get_unchecked(0).as_ptr().cast::<u16>(), nnz_count);
 
             // logging for permutation
             #[cfg(feature = "nnz-counts")]
@@ -352,8 +394,10 @@ mod x86simd {
                 let nnz_ia = *nnz_slice.get_unchecked(i) as usize;
                 let nnz_ib = *nnz_slice.get_unchecked(i + 1) as usize;
                 // load the non-zero activations, and splat them into SIMD registers.
-                let input32_a = simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_ia)));
-                let input32_b = simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_ib)));
+                let input32_a =
+                    simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_ia)));
+                let input32_b =
+                    simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_ib)));
                 // compute the indices into the weights matrix.
                 let w_offset_a = nnz_ia * L2_SIZE * L1_CHUNK_PER_32;
                 let w_offset_b = nnz_ib * L2_SIZE * L1_CHUNK_PER_32;
@@ -362,8 +406,10 @@ mod x86simd {
                 // weight, and add it to the accumulator.
                 for k in 0..L2_SIZE / F32_CHUNK_SIZE {
                     let sum = simd::load_i32(sums.get_unchecked(k * F32_CHUNK_SIZE));
-                    let weight_a = simd::load_i8(weights.get_unchecked(w_offset_a + k * U8_CHUNK_SIZE));
-                    let weight_b = simd::load_i8(weights.get_unchecked(w_offset_b + k * U8_CHUNK_SIZE));
+                    let weight_a =
+                        simd::load_i8(weights.get_unchecked(w_offset_a + k * U8_CHUNK_SIZE));
+                    let weight_b =
+                        simd::load_i8(weights.get_unchecked(w_offset_b + k * U8_CHUNK_SIZE));
                     simd::store_i32(
                         sums.get_unchecked_mut(k * F32_CHUNK_SIZE),
                         simd::mul_add_2xu8_to_i32(sum, input32_a, weight_a, input32_b, weight_b),
@@ -376,7 +422,8 @@ mod x86simd {
                 // get the index
                 let nnz_i = *nnz_slice.get_unchecked(nnz_count - 1) as usize;
                 // load the non-zero activation, and splat it into a SIMD register.
-                let input32 = simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_i)));
+                let input32 =
+                    simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_i)));
                 // compute the index into the weights matrix.
                 let w_offset = nnz_i * L2_SIZE * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
@@ -450,7 +497,10 @@ mod x86simd {
             let one = simd::splat_f32(1.0);
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let clipped = simd::min_f32(
-                    simd::max_f32(simd::load_f32(sums.get_unchecked(i * F32_CHUNK_SIZE)), simd::zero_f32()),
+                    simd::max_f32(
+                        simd::load_f32(sums.get_unchecked(i * F32_CHUNK_SIZE)),
+                        simd::zero_f32(),
+                    ),
                     one,
                 );
                 let squared = simd::mul_f32(clipped, clipped);
@@ -481,7 +531,8 @@ mod x86simd {
             for i in 0..L3_SIZE / F32_CHUNK_SIZE {
                 let weight_vec = simd::load_f32(weights.get_unchecked(i * F32_CHUNK_SIZE));
                 let input_vec = simd::load_f32(inputs.get_unchecked(i * F32_CHUNK_SIZE));
-                sum_vecs[i % NUM_SUMS] = simd::mul_add_f32(input_vec, weight_vec, sum_vecs[i % NUM_SUMS]);
+                sum_vecs[i % NUM_SUMS] =
+                    simd::mul_add_f32(input_vec, weight_vec, sum_vecs[i % NUM_SUMS]);
             }
 
             *output = simd::reduce_add_f32s(&sum_vecs) + bias;

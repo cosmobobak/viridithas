@@ -57,7 +57,11 @@ impl MovePicker {
         counter_move: Option<Move>,
         see_threshold: i32,
     ) -> Self {
-        debug_assert!(killers[0].is_none() || killers[0] != killers[1], "Killers are both {:?}", killers[0]);
+        debug_assert!(
+            killers[0].is_none() || killers[0] != killers[1],
+            "Killers are both {:?}",
+            killers[0]
+        );
         Self {
             movelist: MoveList::new(),
             index: 0,
@@ -86,13 +90,20 @@ impl MovePicker {
             self.stage = Stage::GenerateCaptures;
             if let Some(tt_move) = self.tt_move {
                 if position.is_pseudo_legal(tt_move) {
-                    return Some(MoveListEntry { mov: tt_move, score: TT_MOVE_SCORE });
+                    return Some(MoveListEntry {
+                        mov: tt_move,
+                        score: TT_MOVE_SCORE,
+                    });
                 }
             }
         }
         if self.stage == Stage::GenerateCaptures {
             self.stage = Stage::YieldGoodCaptures;
-            debug_assert_eq!(self.movelist.len(), 0, "movelist not empty before capture generation");
+            debug_assert_eq!(
+                self.movelist.len(),
+                0,
+                "movelist not empty before capture generation"
+            );
             // when we're in check, we want to generate enough moves to prove we're not mated.
             if self.skip_quiets {
                 position.generate_captures::<QSearch>(&mut self.movelist);
@@ -111,14 +122,21 @@ impl MovePicker {
                 // the index so we can try this move again.
                 self.index -= 1;
             }
-            self.stage = if self.skip_quiets { Stage::Done } else { Stage::YieldKiller1 };
+            self.stage = if self.skip_quiets {
+                Stage::Done
+            } else {
+                Stage::YieldKiller1
+            };
         }
         if self.stage == Stage::YieldKiller1 {
             self.stage = Stage::YieldKiller2;
             if !self.skip_quiets && self.killers[0] != self.tt_move {
                 if let Some(killer) = self.killers[0] {
                     if position.is_pseudo_legal(killer) {
-                        return Some(MoveListEntry { mov: killer, score: FIRST_KILLER_SCORE });
+                        return Some(MoveListEntry {
+                            mov: killer,
+                            score: FIRST_KILLER_SCORE,
+                        });
                     }
                 }
             }
@@ -128,7 +146,10 @@ impl MovePicker {
             if !self.skip_quiets && self.killers[1] != self.tt_move {
                 if let Some(killer) = self.killers[1] {
                     if position.is_pseudo_legal(killer) {
-                        return Some(MoveListEntry { mov: killer, score: SECOND_KILLER_SCORE });
+                        return Some(MoveListEntry {
+                            mov: killer,
+                            score: SECOND_KILLER_SCORE,
+                        });
                     }
                 }
             }
@@ -142,7 +163,10 @@ impl MovePicker {
             {
                 if let Some(counter) = self.counter_move {
                     if position.is_pseudo_legal(counter) {
-                        return Some(MoveListEntry { mov: counter, score: COUNTER_MOVE_SCORE });
+                        return Some(MoveListEntry {
+                            mov: counter,
+                            score: COUNTER_MOVE_SCORE,
+                        });
                     }
                 }
             }

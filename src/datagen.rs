@@ -27,7 +27,7 @@ use rand::Rng;
 use crate::{
     board::{
         evaluation::{is_game_theoretic_score, is_mate_score},
-        Board, GameOutcome, WinType, DrawType,
+        Board, DrawType, GameOutcome, WinType,
     },
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
@@ -91,7 +91,11 @@ impl DataGenOptionsBuilder {
             num_games: self.num_games,
             num_threads: self.num_threads,
             tablebases_path: self.tablebases_path,
-            limit: if self.use_depth { DataGenLimit::Depth(8) } else { DataGenLimit::Nodes(5000) },
+            limit: if self.use_depth {
+                DataGenLimit::Depth(8)
+            } else {
+                DataGenLimit::Nodes(5000)
+            },
             generate_dfrc: self.generate_dfrc,
             log_level: 1,
         }
@@ -122,7 +126,11 @@ impl DataGenOptions {
             } else {
                 "no_tb".into()
             },
-            if self.generate_dfrc { "dfrc" } else { "classical" },
+            if self.generate_dfrc {
+                "dfrc"
+            } else {
+                "classical"
+            },
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
@@ -153,8 +161,13 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
         println!("Starting data generation with the following configuration:");
         println!("{options}");
         if options.num_games % options.num_threads != 0 {
-            println!("Warning: The number of games is not evenly divisible by the number of threads,");
-            println!("this will result in {} games being omitted.", options.num_games % options.num_threads);
+            println!(
+                "Warning: The number of games is not evenly divisible by the number of threads,"
+            );
+            println!(
+                "this will result in {} games being omitted.",
+                options.num_games % options.num_threads
+            );
         }
     }
     if let Some(tb_path) = &options.tablebases_path {
@@ -176,7 +189,11 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     // and to name the data files.
     // the ID is formed by taking the current date and time,
     // plus a compressed representation of the options struct.
-    let run_id = format!("run_{}_{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"), options.summary());
+    let run_id = format!(
+        "run_{}_{}",
+        chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S"),
+        options.summary()
+    );
     if options.log_level > 0 {
         println!("This run will be saved to the directory \"data/{run_id}\"");
         println!("Each thread will save its data to a separate file in this directory.");
@@ -231,7 +248,10 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     let mut counters = counters.iter().collect::<Vec<_>>();
     counters.sort_unstable_by_key(|(_, &value)| Reverse(value));
     for (&key, &value) in counters {
-        eprintln!("{key:?}: {value} ({percentage}%)", percentage = (value as f64 / total as f64 * 100.0).round());
+        eprintln!(
+            "{key:?}: {value} ({percentage}%)",
+            percentage = (value as f64 / total as f64 * 100.0).round()
+        );
     }
 }
 
@@ -258,15 +278,22 @@ fn generate_on_thread(
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
-        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes { soft_limit: nodes, hard_limit: nodes * 8 },
+        DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
+            soft_limit: nodes,
+            hard_limit: nodes * 8,
+        },
     });
     let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo { time_manager, print_to_stdout: false, ..SearchInfo::new(&stopped, &nodes) };
+    let mut info = SearchInfo {
+        time_manager,
+        print_to_stdout: false,
+        ..SearchInfo::new(&stopped, &nodes)
+    };
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
-    let mut output_file =
-        File::create(data_dir.join(format!("thread_{id}.bin"))).with_context(|| "Failed to create output file.")?;
+    let mut output_file = File::create(data_dir.join(format!("thread_{id}.bin")))
+        .with_context(|| "Failed to create output file.")?;
     let mut output_buffer = BufWriter::new(&mut output_file);
 
     let mut counters = [
@@ -310,7 +337,9 @@ fn generate_on_thread(
                 .with_context(|| "failed to add remaining time to current time")?;
             let time_completion = est_completion_date.format("%Y-%m-%d %H:%M:%S");
             eprintln!(" |> Estimated completion time: {time_completion}");
-            std::io::stderr().flush().with_context(|| "Failed to flush stderr.")?;
+            std::io::stderr()
+                .flush()
+                .with_context(|| "Failed to flush stderr.")?;
             if game % 1024 == 0 {
                 eprintln!("Game stats for main thread:");
                 print_game_stats(&counters);
@@ -322,7 +351,9 @@ fn generate_on_thread(
         } else {
             board.set_startpos();
         }
-        thread_data.nnue.reinit_from(&board, thread_data.nnue_params);
+        thread_data
+            .nnue
+            .reinit_from(&board, thread_data.nnue_params);
         tt.clear(1);
         info.set_up_for_search();
         // generate game
@@ -356,8 +387,10 @@ fn generate_on_thread(
             eprintln!("Evaluating position...");
         }
         let temp_limit = info.time_manager.limit().clone();
-        info.time_manager.set_limit(SearchLimit::Depth(Depth::new(10)));
-        let (eval, _) = board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+        info.time_manager
+            .set_limit(SearchLimit::Depth(Depth::new(10)));
+        let (eval, _) =
+            board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             if options.log_level > 2 {
@@ -398,7 +431,12 @@ fn generate_on_thread(
                 continue 'generation_main_loop;
             };
 
-            game.add_move(best_move, score.try_into().with_context(|| "Failed to convert score into eval.")?);
+            game.add_move(
+                best_move,
+                score
+                    .try_into()
+                    .with_context(|| "Failed to convert score into eval.")?,
+            );
 
             let abs_score = score.abs();
             if abs_score >= 2000 {
@@ -413,8 +451,11 @@ fn generate_on_thread(
             }
 
             if win_adj_counter >= 4 {
-                let outcome =
-                    if score > 0 { GameOutcome::WhiteWin(WinType::Adjudication) } else { GameOutcome::BlackWin(WinType::Adjudication) };
+                let outcome = if score > 0 {
+                    GameOutcome::WhiteWin(WinType::Adjudication)
+                } else {
+                    GameOutcome::BlackWin(WinType::Adjudication)
+                };
                 break outcome;
             }
             if draw_adj_counter >= 12 {
@@ -447,7 +488,8 @@ fn generate_on_thread(
         game.set_outcome(outcome);
 
         // write to file
-        game.serialise_into(&mut output_buffer).with_context(|| "Failed to serialise game into output buffer.")?;
+        game.serialise_into(&mut output_buffer)
+            .with_context(|| "Failed to serialise game into output buffer.")?;
 
         // increment the counter
         FENS_GENERATED.fetch_add(count as u64, Ordering::SeqCst);
@@ -461,7 +503,9 @@ fn generate_on_thread(
         }
     }
 
-    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
+    output_buffer
+        .flush()
+        .with_context(|| "Failed to flush output buffer to file.")?;
 
     Ok(counters)
 }
@@ -470,7 +514,9 @@ fn show_boot_info(options: &DataGenOptions) {
     if options.log_level > 0 {
         println!("Welcome to Viri's data generation tool!");
         println!("This tool will generate self-play data for Viridithas.");
-        println!("You can configure the data generation process by setting the following parameters:");
+        println!(
+            "You can configure the data generation process by setting the following parameters:"
+        );
         println!("{options}");
         println!("you can also set positions_limit to limit the number of positions generated.");
         println!("It is recommended that you do not set the number of threads to more than the number of logical cores on your CPU, as performance will suffer.");
@@ -486,9 +532,13 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
     let mut user_input = String::new();
     loop {
         print!(">>> ");
-        std::io::stdout().flush().with_context(|| "Failed to flush stdout.")?;
+        std::io::stdout()
+            .flush()
+            .with_context(|| "Failed to flush stdout.")?;
         user_input.clear();
-        std::io::stdin().read_line(&mut user_input).with_context(|| "Failed to read line from stdin.")?;
+        std::io::stdin()
+            .read_line(&mut user_input)
+            .with_context(|| "Failed to read line from stdin.")?;
         let mut user_input = user_input.split_whitespace();
         let Some(command) = user_input.next() else {
             continue;
@@ -501,11 +551,15 @@ fn config_loop(mut options: DataGenOptions) -> anyhow::Result<DataGenOptions> {
             continue;
         }
         let Some(param) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            );
             continue;
         };
         let Some(value) = user_input.next() else {
-            eprintln!("Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\"");
+            eprintln!(
+                "Invalid command, supported commands are \"set <PARAM> <VALUE>\" and \"start\""
+            );
             continue;
         };
         match param {
@@ -588,7 +642,9 @@ impl Display for DataGenOptions {
         writeln!(
             f,
             " |> tablebases_path: {}",
-            self.tablebases_path.as_ref().map_or_else(|| "None".into(), |path| path.to_string_lossy())
+            self.tablebases_path
+                .as_ref()
+                .map_or_else(|| "None".into(), |path| path.to_string_lossy())
         )?;
         writeln!(
             f,
@@ -615,8 +671,12 @@ impl FromStr for DataGenLimit {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         #![allow(clippy::cast_possible_truncation)]
-        let (limit_type, limit_value) = s.split_once(' ').ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
-        let limit_value: u64 = limit_value.parse().map_err(|_| format!("Invalid limit value: {limit_value}"))?;
+        let (limit_type, limit_value) = s
+            .split_once(' ')
+            .ok_or_else(|| format!("Invalid limit, no space: {s}"))?;
+        let limit_value: u64 = limit_value
+            .parse()
+            .map_err(|_| format!("Invalid limit value: {limit_value}"))?;
         match limit_type {
             "depth" => {
                 if limit_value > i32::MAX as u64 {
@@ -663,7 +723,9 @@ pub fn run_splat(
     print!("0 games splatted");
     let mut game_count = 0;
     let mut move_buffer = Vec::new();
-    while let Ok(game) = dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer)) {
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
         if marlinformat {
             game.splat_to_marlinformat(
                 |packed_board| {
@@ -679,9 +741,9 @@ pub fn run_splat(
                 |chess_board| {
                     // SAFETY: ChessBoard is composed entirely of integer types, which are safe to transmute into bytes.
                     let bytes = unsafe { std::mem::transmute::<ChessBoard, [u8; 32]>(chess_board) };
-                    output_buffer
-                        .write_all(&bytes)
-                        .with_context(|| "Failed to write bulletformat::ChessBoard into buffered writer.")
+                    output_buffer.write_all(&bytes).with_context(|| {
+                        "Failed to write bulletformat::ChessBoard into buffered writer."
+                    })
                 },
                 &filter,
                 &mut rng,
@@ -691,7 +753,9 @@ pub fn run_splat(
         game_count += 1;
         if game_count % 2048 == 0 {
             print!("\r{game_count} games splatted");
-            std::io::stdout().flush().with_context(|| "Failed to flush stdout.")?;
+            std::io::stdout()
+                .flush()
+                .with_context(|| "Failed to flush stdout.")?;
         }
         if let Some(limit) = limit {
             if game_count >= limit {
@@ -701,7 +765,9 @@ pub fn run_splat(
     }
     println!("\r{game_count} games splatted.");
 
-    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
+    output_buffer
+        .flush()
+        .with_context(|| "Failed to flush output buffer to file.")?;
 
     Ok(())
 }
@@ -725,7 +791,10 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
     let output_file = File::create(output).with_context(|| "Failed to create output file")?;
     let mut output_buffer = BufWriter::new(output_file);
 
-    let file_name = input.file_name().with_context(|| "Failed to get filename.")?.to_string_lossy();
+    let file_name = input
+        .file_name()
+        .with_context(|| "Failed to get filename.")?
+        .to_string_lossy();
     let make_header = |outcome: WDL, fen: String| {
         format!(
             r#"[Event "datagen id {}"]
@@ -748,7 +817,9 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
     println!("Converting to PGN...");
     let mut move_buffer = Vec::new();
     let mut game_count = 0;
-    while let Ok(game) = dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer)) {
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut input_buffer, std::mem::take(&mut move_buffer))
+    {
         let outcome = game.outcome();
         let mut board = game.initial_position();
         let header = make_header(outcome, board.to_string());
@@ -758,8 +829,9 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
             if fullmoves % 12 == 0 && board.turn() == Colour::White {
                 writeln!(output_buffer).unwrap();
             }
-            let san =
-                board.san(mv).with_context(|| format!("Failed to create SAN for move {mv} in position {board:X}."))?;
+            let san = board.san(mv).with_context(|| {
+                format!("Failed to create SAN for move {mv} in position {board:X}.")
+            })?;
             if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
             } else {
@@ -789,7 +861,9 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
         }
     }
 
-    output_buffer.flush().with_context(|| "Failed to flush output buffer to file.")?;
+    output_buffer
+        .flush()
+        .with_context(|| "Failed to flush output buffer to file.")?;
 
     Ok(())
 }
@@ -841,7 +915,13 @@ impl From<&Board> for MaterialConfiguration {
         // normalize the counts so that the white side has more material than the black side
         let ordering_key = |subslice: &[u8]| -> u64 {
             let count = u64::from(subslice.iter().sum::<u8>());
-            let highest_piece = subslice.iter().enumerate().filter(|(_, v)| **v > 0).last().unwrap_or((0, &0)).0;
+            let highest_piece = subslice
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v > 0)
+                .last()
+                .unwrap_or((0, &0))
+                .0;
             count * 10 + highest_piece as u64
         };
         let (white, black) = mc.counts.split_at_mut(5);
@@ -875,16 +955,26 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     // because the format is variable-length, we can't know exactly our progress in terms of game-count.
     // we *can*, however, know how far we are through the file, so we use that as a progress indicator:
     print!("Progress: 0%");
-    std::io::stdout().flush().with_context(|| "Failed to flush stdout!")?;
+    std::io::stdout()
+        .flush()
+        .with_context(|| "Failed to flush stdout!")?;
     // get the file size
     let file_size = dataset_path
         .metadata()
-        .with_context(|| format!("Failed to get metadata for {}", dataset_path.to_string_lossy()))?
+        .with_context(|| {
+            format!(
+                "Failed to get metadata for {}",
+                dataset_path.to_string_lossy()
+            )
+        })?
         .len();
 
-    let mut reader = BufReader::new(File::open(dataset_path).with_context(|| "Failed to open dataset.")?);
+    let mut reader =
+        BufReader::new(File::open(dataset_path).with_context(|| "Failed to open dataset.")?);
 
-    while let Ok(game) = dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer)) {
+    while let Ok(game) =
+        dataformat::Game::deserialise_from(&mut reader, std::mem::take(&mut move_buffer))
+    {
         stats.games += 1;
         *stats.length_counts.entry(game.len()).or_default() += 1;
         game.visit_positions(|position, evaluation| {
@@ -893,18 +983,31 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
                 .piece_counts
                 .entry(u8::try_from(position.pieces.occupied().count()).unwrap_or(u8::MAX))
                 .or_default() += 1;
-            *stats.material_counts.entry(MaterialConfiguration::from(position)).or_default() += 1;
-            *stats.pov_king_positions.entry(position.king_sq(Colour::White)).or_default() += 1;
-            *stats.pov_king_positions.entry(position.king_sq(Colour::Black).flip_rank()).or_default() += 1;
+            *stats
+                .material_counts
+                .entry(MaterialConfiguration::from(position))
+                .or_default() += 1;
+            *stats
+                .pov_king_positions
+                .entry(position.king_sq(Colour::White))
+                .or_default() += 1;
+            *stats
+                .pov_king_positions
+                .entry(position.king_sq(Colour::Black).flip_rank())
+                .or_default() += 1;
         });
         move_buffer = game.into_move_buffer();
 
         // print progress
         if stats.games % 1024 == 0 {
-            let progress = reader.stream_position().with_context(|| "Failed to get stream position.")?;
+            let progress = reader
+                .stream_position()
+                .with_context(|| "Failed to get stream position.")?;
             let percentage = progress * 100 / file_size;
             print!("\rProgress: {percentage}%");
-            std::io::stdout().flush().with_context(|| "Failed to flush stdout!")?;
+            std::io::stdout()
+                .flush()
+                .with_context(|| "Failed to flush stdout!")?;
         }
     }
     println!("\rProgress: 100%");
@@ -956,7 +1059,12 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     pov_king_positions_file.flush()?;
 
     #[allow(clippy::cast_precision_loss)]
-    let mean_game_len = ((stats.length_counts.iter().map(|(k, v)| k * v).sum::<usize>() as u128 * 1000)
+    let mean_game_len = ((stats
+        .length_counts
+        .iter()
+        .map(|(k, v)| k * v)
+        .sum::<usize>() as u128
+        * 1000)
         / stats.games as u128) as f64
         / 1000.0;
     println!("Mean game length: {mean_game_len}");
@@ -991,7 +1099,11 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
         bail!("No files found at {}", path.display());
     }
 
-    let mpl = paths.iter().map(|path| path.display().to_string().len()).max().unwrap();
+    let mpl = paths
+        .iter()
+        .map(|path| path.display().to_string().len())
+        .max()
+        .unwrap();
     let stdout_lock = Mutex::new(());
     let stdout_lock = &stdout_lock;
 
@@ -1054,7 +1166,12 @@ pub fn dataset_count(path: &Path) -> anyhow::Result<()> {
     println!("Total: {total_count}");
     println!("Total that pass the filter: {filtered_count}");
     for (i, c) in pass_count_buckets.chunks(16).enumerate() {
-        println!("Games with {:3} to {:3} filtered positions: {}", i * 16, i * 16 + 15, c.iter().sum::<u64>());
+        println!(
+            "Games with {:3} to {:3} filtered positions: {}",
+            i * 16,
+            i * 16 + 15,
+            c.iter().sum::<u64>()
+        );
     }
 
     Ok(())

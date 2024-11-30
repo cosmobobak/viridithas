@@ -49,7 +49,9 @@ pub struct PackedInfo {
 
 impl PackedInfo {
     const fn new(age: u8, flag: Bound, pv: bool) -> Self {
-        Self { data: (age << 3) | (pv as u8) << 2 | flag as u8 }
+        Self {
+            data: (age << 3) | (pv as u8) << 2 | flag as u8,
+        }
     }
 
     const fn age(self) -> u8 {
@@ -167,16 +169,20 @@ impl TTClusterMemory {
             // (the memory-layout-second entry requires three atomic operations, because of address alignment)
             0 => {
                 self.entry1_block1.store(bytes as u64, Ordering::Relaxed);
-                self.entry1_block2.store((bytes >> 64) as u16, Ordering::Relaxed);
+                self.entry1_block2
+                    .store((bytes >> 64) as u16, Ordering::Relaxed);
             }
             2 => {
                 self.entry2_block1.store(bytes as u16, Ordering::Relaxed);
-                self.entry2_block2.store((bytes >> 16) as u32, Ordering::Relaxed);
-                self.entry2_block3.store((bytes >> 48) as u32, Ordering::Relaxed);
+                self.entry2_block2
+                    .store((bytes >> 16) as u32, Ordering::Relaxed);
+                self.entry2_block3
+                    .store((bytes >> 48) as u32, Ordering::Relaxed);
             }
             1 => {
                 self.entry3_block1.store(bytes as u32, Ordering::Relaxed);
-                self.entry3_block2.store((bytes >> 32) as u64, Ordering::Relaxed);
+                self.entry3_block2
+                    .store((bytes >> 32) as u64, Ordering::Relaxed);
             }
             _ => panic!("Index out of bounds!"),
         }
@@ -193,7 +199,10 @@ impl TTClusterMemory {
     }
 }
 
-const _CLUSTER_SIZE: () = assert!(size_of::<TTClusterMemory>() == 32, "TT Cluster size is suboptimal.");
+const _CLUSTER_SIZE: () = assert!(
+    size_of::<TTClusterMemory>() == 32,
+    "TT Cluster size is suboptimal."
+);
 
 #[derive(Debug)]
 pub struct TT {
@@ -219,7 +228,10 @@ pub struct TTHit {
 
 impl TT {
     pub const fn new() -> Self {
-        Self { table: Vec::new(), age: AtomicU8::new(0) }
+        Self {
+            table: Vec::new(),
+            age: AtomicU8::new(0),
+        }
     }
 
     pub fn resize(&mut self, bytes: usize) {
@@ -259,7 +271,10 @@ impl TT {
     }
 
     pub fn view(&self) -> TTView {
-        TTView { table: &self.table, age: self.age.load(Ordering::Relaxed) }
+        TTView {
+            table: &self.table,
+            age: self.age.load(Ordering::Relaxed),
+        }
     }
 
     pub fn increase_age(&self) {
@@ -316,8 +331,10 @@ impl TTView<'_> {
                     break;
                 }
 
-                if i32::from(tte.depth.inner()) - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
-                    > i32::from(entry.depth.inner()) - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                if i32::from(tte.depth.inner())
+                    - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                    > i32::from(entry.depth.inner())
+                        - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
                 {
                     tte = entry;
                     idx = i;
@@ -344,7 +361,8 @@ impl TTView<'_> {
 
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
-        let insert_priority = depth + insert_flag_bonus + (age_differential * age_differential) / 4 + Depth::from(pv);
+        let insert_priority =
+            depth + insert_flag_bonus + (age_differential * age_differential) / 4 + Depth::from(pv);
         let record_prority = Depth::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
@@ -419,12 +437,16 @@ impl TTView<'_> {
             let entry = &self.table[index];
 
             // prefetch the entry:
-            _mm_prefetch(util::from_ref::<TTClusterMemory>(entry).cast::<i8>(), _MM_HINT_T0);
+            _mm_prefetch(
+                util::from_ref::<TTClusterMemory>(entry).cast::<i8>(),
+                _MM_HINT_T0,
+            );
         }
     }
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Option<Move>, i32)> {
-        self.probe(key, 0).map(|TTHit { mov, value, .. }| (mov, value))
+        self.probe(key, 0)
+            .map(|TTHit { mov, value, .. }| (mov, value))
     }
 
     pub fn hashfull(&self) -> usize {
@@ -481,7 +503,10 @@ mod tests {
         }
         let entry = TTEntry {
             key: 0x1234,
-            m: Some(Move::new(Square::new_clamped(0x1A), Square::new_clamped(0x1B))),
+            m: Some(Move::new(
+                Square::new_clamped(0x1A),
+                Square::new_clamped(0x1B),
+            )),
             score: 0xAB,
             depth: Depth::new(0x13).try_into().unwrap(),
             info: PackedInfo::new(31, Bound::Exact, true),
@@ -494,7 +519,11 @@ mod tests {
             println!("Slot {i}");
             println!(" Stored: {}", format_slice_hex(&entry.to_ne_bytes()));
             println!(" Loaded: {}", format_slice_hex(&loaded.to_ne_bytes()));
-            assert_eq!(entry.to_ne_bytes(), loaded.to_ne_bytes(), "Assertion failed for slot {i}!");
+            assert_eq!(
+                entry.to_ne_bytes(),
+                loaded.to_ne_bytes(),
+                "Assertion failed for slot {i}!"
+            );
         }
     }
 }

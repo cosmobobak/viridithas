@@ -2,20 +2,23 @@ use std::fmt::Display;
 
 use crate::{
     timemgmt::{
-        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC, NODE_TM_SUBTREE_MULTIPLIER,
-        OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
+        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
+        NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC,
+        WEAK_FORCED_TM_FRAC,
     },
     util::depth::Depth,
 };
 
 use super::{
-    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN, FUTILITY_COEFF_0,
-    FUTILITY_COEFF_1, FUTILITY_DEPTH, HISTORY_LMR_BOUND, HISTORY_LMR_DIVISOR, HISTORY_PRUNING_DEPTH,
-    HISTORY_PRUNING_MARGIN, LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE, LMR_BASE_MOVES, LMR_DIVISION, MAIN_SEE_BOUND,
-    MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION, NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR,
-    NMP_REDUCTION_EVAL_DIVISOR, NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
-    PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH, RFP_IMPROVING_MARGIN, RFP_MARGIN,
-    SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, SINGULARITY_DEPTH, TT_EXTENSION_DEPTH, TT_REDUCTION_DEPTH,
+    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN,
+    FUTILITY_COEFF_0, FUTILITY_COEFF_1, FUTILITY_DEPTH, HISTORY_LMR_BOUND, HISTORY_LMR_DIVISOR,
+    HISTORY_PRUNING_DEPTH, HISTORY_PRUNING_MARGIN, LMP_BASE_MOVES, LMP_DEPTH, LMR_BASE,
+    LMR_BASE_MOVES, LMR_DIVISION, MAIN_SEE_BOUND, MAX_NMP_EVAL_REDUCTION, NMP_BASE_REDUCTION,
+    NMP_IMPROVING_MARGIN, NMP_REDUCTION_DEPTH_DIVISOR, NMP_REDUCTION_EVAL_DIVISOR,
+    NMP_VERIFICATION_DEPTH, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, PROBCUT_MIN_DEPTH,
+    PROBCUT_REDUCTION, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_DEPTH,
+    RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_DEPTH, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
+    SINGULARITY_DEPTH, TT_EXTENSION_DEPTH, TT_REDUCTION_DEPTH,
 };
 
 #[derive(Clone, Debug)]
@@ -298,7 +301,9 @@ impl Config {
         let mut csv = String::new();
         let mut tunegroups = Vec::new();
         for (id, value, min, max, step) in self.base_config() {
-            tunegroups.push(format!("{id}, int, {value:.1}, {min:.1}, {max:.1}, {step:.1}, 0.002"));
+            tunegroups.push(format!(
+                "{id}, int, {value:.1}, {min:.1}, {max:.1}, {step:.1}, 0.002"
+            ));
         }
         csv.push_str(&tunegroups.join("\n"));
         csv
@@ -319,12 +324,27 @@ mod tests {
         use crate::search::PROBCUT_MIN_DEPTH;
 
         let mut sp = super::Config::default();
-        let probcut_min_depth = sp.ids_with_values().iter().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1;
+        let probcut_min_depth = sp
+            .ids_with_values()
+            .iter()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1;
         assert!((probcut_min_depth - f64::from(PROBCUT_MIN_DEPTH)).abs() < f64::EPSILON);
         // set using the parser:
-        sp.ids_with_parsers().iter_mut().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1("10").unwrap();
+        sp.ids_with_parsers()
+            .iter_mut()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1("10")
+        .unwrap();
         // re-extract:
-        let probcut_min_depth = sp.ids_with_values().iter().find(|(id, _)| *id == "PROBCUT_MIN_DEPTH").unwrap().1;
+        let probcut_min_depth = sp
+            .ids_with_values()
+            .iter()
+            .find(|(id, _)| *id == "PROBCUT_MIN_DEPTH")
+            .unwrap()
+            .1;
         assert!((probcut_min_depth - 10.0).abs() < f64::EPSILON);
     }
 }

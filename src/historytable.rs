@@ -19,7 +19,11 @@ pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
     const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
-    let delta = if is_good { history_bonus(depth) } else { -history_bonus(depth) };
+    let delta = if is_good {
+        history_bonus(depth)
+    } else {
+        -history_bonus(depth)
+    };
     let curr = i32::from(*val);
     *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
@@ -32,7 +36,9 @@ pub struct HistoryTable {
 
 impl HistoryTable {
     pub const fn new() -> Self {
-        Self { table: [[0; BOARD_N_SQUARES]; 12] }
+        Self {
+            table: [[0; BOARD_N_SQUARES]; 12],
+        }
     }
 
     pub fn clear(&mut self) {
@@ -45,7 +51,10 @@ impl HistoryTable {
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(|x| *x /= AGEING_DIVISOR);
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> i16 {
@@ -72,19 +81,31 @@ impl ThreatsHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
 
     pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
     }
 
-    pub fn get_mut(&mut self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> &mut i16 {
+    pub fn get_mut(
+        &mut self,
+        piece: Piece,
+        sq: Square,
+        threat_from: bool,
+        threat_to: bool,
+    ) -> &mut i16 {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
     }
 }
@@ -159,12 +180,18 @@ impl DoubleHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
@@ -183,7 +210,9 @@ pub struct MoveTable {
 
 impl MoveTable {
     pub fn new() -> Self {
-        Self { table: Box::new([[None; BOARD_N_SQUARES]; 12]) }
+        Self {
+            table: Box::new([[None; BOARD_N_SQUARES]; 12]),
+        }
     }
 
     pub fn clear(&mut self) {

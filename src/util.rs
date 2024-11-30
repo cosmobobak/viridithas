@@ -42,7 +42,16 @@ pub enum File {
 const _FILE_ASSERT: () = assert!(size_of::<File>() == size_of::<Option<File>>());
 
 impl File {
-    pub const ALL: [Self; 8] = [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H];
+    pub const ALL: [Self; 8] = [
+        Self::A,
+        Self::B,
+        Self::C,
+        Self::D,
+        Self::E,
+        Self::F,
+        Self::G,
+        Self::H,
+    ];
 
     pub const fn abs_diff(self, other: Self) -> u8 {
         (self as u8).abs_diff(other as u8)
@@ -99,8 +108,16 @@ pub enum Rank {
 const _RANK_ASSERT: () = assert!(size_of::<Rank>() == size_of::<Option<Rank>>());
 
 impl Rank {
-    pub const ALL: [Self; 8] =
-        [Self::One, Self::Two, Self::Three, Self::Four, Self::Five, Self::Six, Self::Seven, Self::Eight];
+    pub const ALL: [Self; 8] = [
+        Self::One,
+        Self::Two,
+        Self::Three,
+        Self::Four,
+        Self::Five,
+        Self::Six,
+        Self::Seven,
+        Self::Eight,
+    ];
 
     pub const fn abs_diff(self, other: Self) -> u8 {
         (self as u8).abs_diff(other as u8)
@@ -174,10 +191,10 @@ impl<T> IndexMut<Square> for [T; 64] {
 }
 
 static SQUARE_NAMES: [&str; 64] = [
-    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a3", "b3", "c3",
-    "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a5", "b5", "c5", "d5", "e5", "f5",
-    "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8",
-    "b8", "c8", "d8", "e8", "f8", "g8", "h8",
+    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
+    "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
+    "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
+    "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
 
 #[allow(clippy::unusual_byte_groupings)]
@@ -265,13 +282,21 @@ impl Square {
     }
 
     pub const fn add(self, offset: u8) -> Option<Self> {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self as u8 + offset;
         Self::new(res)
     }
 
     pub const fn saturating_add(self, offset: u8) -> Self {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self as u8 + offset;
         let inner = min!(res, 63);
         let maybe_square = Self::new(inner);
@@ -285,7 +310,11 @@ impl Square {
     /// SAFETY: You may not call this function with a square and offset such that
     /// `square as u8 + offset` is outwith `0..64`.
     pub const unsafe fn add_unchecked(self, offset: u8) -> Self {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self as u8 + offset;
         Self::new_unchecked(res)
     }
@@ -293,7 +322,11 @@ impl Square {
     /// SAFETY: You may not call this function with a square and offset such that
     /// `square as u8 - offset` is outwith `0..64`.
     pub const fn sub(self, offset: u8) -> Option<Self> {
-        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         let res = self as u8 - offset;
         Self::new(res)
     }
@@ -401,7 +434,10 @@ impl Default for Undo {
             castle_perm: CastlingRights::NONE,
             ep_square: None,
             fifty_move_counter: 0,
-            threats: Threats { all: SquareSet::EMPTY, checkers: SquareSet::EMPTY },
+            threats: Threats {
+                all: SquareSet::EMPTY,
+                checkers: SquareSet::EMPTY,
+            },
             cont_hist_index: None,
             piece_layout: PieceLayout::NULL,
             piece_array: [None; 64],
@@ -429,7 +465,12 @@ pub struct CastlingRights {
 }
 
 impl CastlingRights {
-    pub const NONE: Self = Self { wk: None, wq: None, bk: None, bq: None };
+    pub const NONE: Self = Self {
+        wk: None,
+        wq: None,
+        bk: None,
+        bq: None,
+    };
 
     pub const fn hashkey_index(self) -> usize {
         let mut index = 0;
@@ -501,10 +542,18 @@ impl Display for CastlingRights {
         const FILE_NAMES: [u8; 8] = *b"abcdefgh";
         if CHESS960.load(Ordering::Relaxed) {
             if let Some(right) = self.wk {
-                write!(f, "{}", FILE_NAMES[right.file()].to_ascii_uppercase() as char)?;
+                write!(
+                    f,
+                    "{}",
+                    FILE_NAMES[right.file()].to_ascii_uppercase() as char
+                )?;
             }
             if let Some(right) = self.wq {
-                write!(f, "{}", FILE_NAMES[right.file()].to_ascii_uppercase() as char)?;
+                write!(
+                    f,
+                    "{}",
+                    FILE_NAMES[right.file()].to_ascii_uppercase() as char
+                )?;
             }
             if let Some(right) = self.bk {
                 write!(f, "{}", FILE_NAMES[right.file()] as char)?;
@@ -579,7 +628,11 @@ impl<'a> BatchedAtomicCounter<'a> {
     const GRANULARITY: u64 = 1024;
 
     pub const fn new(global: &'a AtomicU64) -> Self {
-        Self { buffer: 0, global, local: 0 }
+        Self {
+            buffer: 0,
+            global,
+            local: 0,
+        }
     }
 
     pub fn increment(&mut self) {
@@ -655,7 +708,10 @@ mod tests {
         assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::C1], Square::B1.as_set());
-        assert_eq!(RAY_BETWEEN[Square::A1][Square::D1], Square::B1.as_set() | Square::C1.as_set());
+        assert_eq!(
+            RAY_BETWEEN[Square::A1][Square::D1],
+            Square::B1.as_set() | Square::C1.as_set()
+        );
         assert_eq!(RAY_BETWEEN[Square::B1][Square::D1], Square::C1.as_set());
         assert_eq!(RAY_BETWEEN[Square::D1][Square::B1], Square::C1.as_set());
 

@@ -158,7 +158,10 @@ impl PieceType {
 
     pub fn from_symbol(c: u8) -> Option<Self> {
         const SYMBOLS: [u8; 7] = *b"PNBRQK.";
-        SYMBOLS.iter().position(|&x| x == c).and_then(|x| Self::new(x.try_into().ok()?))
+        SYMBOLS
+            .iter()
+            .position(|&x| x == c)
+            .and_then(|x| Self::new(x.try_into().ok()?))
     }
 
     pub fn see_value(self) -> i32 {

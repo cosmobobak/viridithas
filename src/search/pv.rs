@@ -19,7 +19,10 @@ impl Default for PVariation {
 }
 
 impl PVariation {
-    const EMPTY: Self = Self { score: 0, moves: ArrayVec::new_const() };
+    const EMPTY: Self = Self {
+        score: 0,
+        moves: ArrayVec::new_const(),
+    };
 
     pub fn moves(&self) -> &[Move] {
         &self.moves
@@ -36,7 +39,9 @@ impl PVariation {
     pub(crate) fn load_from(&mut self, m: Move, rest: &Self) {
         self.moves.clear();
         self.moves.push(m);
-        self.moves.try_extend_from_slice(&rest.moves).expect("attempted to construct a PV longer than MAX_PLY.");
+        self.moves
+            .try_extend_from_slice(&rest.moves)
+            .expect("attempted to construct a PV longer than MAX_PLY.");
     }
 }
 

@@ -14,7 +14,9 @@ use anyhow::{bail, Context};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
-    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList},
+    board::movegen::{
+        bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
+    },
     chessmove::Move,
     cuckoo,
     historytable::ContHistIndex,
@@ -82,8 +84,10 @@ impl Debug for Board {
 }
 
 impl Board {
-    pub const STARTING_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    pub const STARTING_FEN_960: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
+    pub const STARTING_FEN: &'static str =
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    pub const STARTING_FEN_960: &'static str =
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah - 0 1";
 
     pub fn new() -> Self {
         let mut out = Self {
@@ -153,7 +157,13 @@ impl Board {
 
     #[cfg(debug_assertions)]
     pub const fn all_keys(&self) -> (u64, u64, [u64; 2], u64, u64) {
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key)
+        (
+            self.key,
+            self.pawn_key,
+            self.non_pawn_key,
+            self.minor_key,
+            self.major_key,
+        )
     }
 
     pub fn n_men(&self) -> u8 {
@@ -178,7 +188,10 @@ impl Board {
             Colour::Black => self.pieces.king::<Black>().first(),
         };
         debug_assert_eq!(self.pieces.piece_at(sq).unwrap().colour(), side);
-        debug_assert_eq!(self.pieces.piece_at(sq).unwrap().piece_type(), PieceType::King);
+        debug_assert_eq!(
+            self.pieces.piece_at(sq).unwrap().piece_type(),
+            PieceType::King
+        );
         sq
     }
 
@@ -247,7 +260,13 @@ impl Board {
 
     #[cfg(feature = "datagen")]
     pub fn regenerate_zobrist(&mut self) {
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
+        (
+            self.key,
+            self.pawn_key,
+            self.non_pawn_key,
+            self.minor_key,
+            self.major_key,
+        ) = self.generate_pos_keys();
     }
 
     #[cfg(feature = "datagen")]
@@ -307,7 +326,10 @@ impl Board {
 
         checkers |= ortho_attacks & their_orthos;
 
-        Threats { all: threats, /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers }
+        Threats {
+            all: threats,
+            /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -348,17 +370,40 @@ impl Board {
             let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
-        let mut rook_indices =
-            backrank.iter().enumerate().filter_map(|(i, &piece)| if piece == PieceType::Rook { Some(i) } else { None });
+        let mut rook_indices = backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::Rook {
+                Some(i)
+            } else {
+                None
+            }
+        });
         let queenside_file = rook_indices.next().unwrap();
         let kingside_file = rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
-            wk: Some(Square::from_rank_file(Rank::One, File::from_index(kingside_file as u8).unwrap())),
-            wq: Some(Square::from_rank_file(Rank::One, File::from_index(queenside_file as u8).unwrap())),
-            bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(kingside_file as u8).unwrap())),
-            bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(queenside_file as u8).unwrap())),
+            wk: Some(Square::from_rank_file(
+                Rank::One,
+                File::from_index(kingside_file as u8).unwrap(),
+            )),
+            wq: Some(Square::from_rank_file(
+                Rank::One,
+                File::from_index(queenside_file as u8).unwrap(),
+            )),
+            bk: Some(Square::from_rank_file(
+                Rank::Eight,
+                File::from_index(kingside_file as u8).unwrap(),
+            )),
+            bq: Some(Square::from_rank_file(
+                Rank::Eight,
+                File::from_index(queenside_file as u8).unwrap(),
+            )),
         };
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
+        (
+            self.key,
+            self.pawn_key,
+            self.non_pawn_key,
+            self.minor_key,
+            self.major_key,
+        ) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -386,37 +431,49 @@ impl Board {
             let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
         }
-        let mut white_rook_indices =
-            white_backrank.iter().enumerate().filter_map(
-                |(i, &piece)| {
-                    if piece == PieceType::Rook {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                },
-            );
+        let mut white_rook_indices = white_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::Rook {
+                Some(i)
+            } else {
+                None
+            }
+        });
         let white_queenside_file = white_rook_indices.next().unwrap();
         let white_kingside_file = white_rook_indices.next().unwrap();
-        let mut black_rook_indices =
-            black_backrank.iter().enumerate().filter_map(
-                |(i, &piece)| {
-                    if piece == PieceType::Rook {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                },
-            );
+        let mut black_rook_indices = black_backrank.iter().enumerate().filter_map(|(i, &piece)| {
+            if piece == PieceType::Rook {
+                Some(i)
+            } else {
+                None
+            }
+        });
         let black_queenside_file = black_rook_indices.next().unwrap();
         let black_kingside_file = black_rook_indices.next().unwrap();
         self.castle_perm = CastlingRights {
-            wk: Some(Square::from_rank_file(Rank::One, File::from_index(white_kingside_file as u8).unwrap())),
-            wq: Some(Square::from_rank_file(Rank::One, File::from_index(white_queenside_file as u8).unwrap())),
-            bk: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_kingside_file as u8).unwrap())),
-            bq: Some(Square::from_rank_file(Rank::Eight, File::from_index(black_queenside_file as u8).unwrap())),
+            wk: Some(Square::from_rank_file(
+                Rank::One,
+                File::from_index(white_kingside_file as u8).unwrap(),
+            )),
+            wq: Some(Square::from_rank_file(
+                Rank::One,
+                File::from_index(white_queenside_file as u8).unwrap(),
+            )),
+            bk: Some(Square::from_rank_file(
+                Rank::Eight,
+                File::from_index(black_kingside_file as u8).unwrap(),
+            )),
+            bq: Some(Square::from_rank_file(
+                Rank::Eight,
+                File::from_index(black_queenside_file as u8).unwrap(),
+            )),
         };
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
+        (
+            self.key,
+            self.pawn_key,
+            self.non_pawn_key,
+            self.minor_key,
+            self.major_key,
+        ) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
     }
 
@@ -506,8 +563,10 @@ impl Board {
         self.reset();
 
         let fen_chars = fen.as_bytes();
-        let split_idx =
-            fen_chars.iter().position(|&c| c == b' ').with_context(|| format!("FEN string is missing space: {fen}"))?;
+        let split_idx = fen_chars
+            .iter()
+            .position(|&c| c == b' ')
+            .with_context(|| format!("FEN string is missing space: {fen}"))?;
         let (board_part, info_part) = fen_chars.split_at(split_idx);
 
         for &c in board_part {
@@ -536,7 +595,10 @@ impl Board {
                     continue;
                 }
                 c => {
-                    bail!("FEN string is invalid, got unexpected character: \"{}\"", c as char);
+                    bail!(
+                        "FEN string is invalid, got unexpected character: \"{}\"",
+                        c as char
+                    );
                 }
             }
 
@@ -558,15 +620,26 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        (self.key, self.pawn_key, self.non_pawn_key, self.minor_key, self.major_key) = self.generate_pos_keys();
+        (
+            self.key,
+            self.pawn_key,
+            self.non_pawn_key,
+            self.minor_key,
+            self.major_key,
+        ) = self.generate_pos_keys();
         self.threats = self.generate_threats(self.side.flip());
 
         Ok(())
     }
 
     pub fn set_startpos(&mut self) {
-        let starting_fen = if CHESS960.load(Ordering::SeqCst) { Self::STARTING_FEN_960 } else { Self::STARTING_FEN };
-        self.set_from_fen(starting_fen).expect("for some reason, STARTING_FEN is now broken.");
+        let starting_fen = if CHESS960.load(Ordering::SeqCst) {
+            Self::STARTING_FEN_960
+        } else {
+            Self::STARTING_FEN
+        };
+        self.set_from_fen(starting_fen)
+            .expect("for some reason, STARTING_FEN is now broken.");
     }
 
     #[cfg(test)]
@@ -629,10 +702,14 @@ impl Board {
                 // valid shredder castling strings are of the form "AHah", "Bd"
                 let white_king = self.king_sq(Colour::White);
                 let black_king = self.king_sq(Colour::Black);
-                if white_king.rank() != Rank::One && shredder_castling.iter().any(u8::is_ascii_uppercase) {
+                if white_king.rank() != Rank::One
+                    && shredder_castling.iter().any(u8::is_ascii_uppercase)
+                {
                     bail!(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
-                if black_king.rank() != Rank::Eight && shredder_castling.iter().any(u8::is_ascii_lowercase) {
+                if black_king.rank() != Rank::Eight
+                    && shredder_castling.iter().any(u8::is_ascii_lowercase)
+                {
                     bail!(format!("FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                 }
                 for &c in shredder_castling {
@@ -730,9 +807,13 @@ impl Board {
             None => bail!("FEN string is invalid, expected fullmove number part.".to_string()),
             Some(fullmove_number) => {
                 let fullmove_number = std::str::from_utf8(fullmove_number)
-                    .with_context(|| "FEN string is invalid, expected fullmove number part to be valid UTF-8")?
+                    .with_context(|| {
+                        "FEN string is invalid, expected fullmove number part to be valid UTF-8"
+                    })?
                     .parse::<usize>()
-                    .with_context(|| "FEN string is invalid, expected fullmove number part to be a number")?;
+                    .with_context(|| {
+                        "FEN string is invalid, expected fullmove number part to be a number"
+                    })?;
                 self.ply = (fullmove_number - 1) * 2;
                 if self.side == Colour::Black {
                     self.ply += 1;
@@ -813,7 +894,11 @@ impl Board {
         let to = m.to();
 
         let moved_piece = self.piece_at(from);
-        let captured_piece = if m.is_castle() { None } else { self.piece_at(to) };
+        let captured_piece = if m.is_castle() {
+            None
+        } else {
+            self.piece_at(to)
+        };
         let is_pawn_double_push = self.is_double_pawn_push(m);
 
         let Some(moved_piece) = moved_piece else {
@@ -830,7 +915,9 @@ impl Board {
             }
         }
 
-        if moved_piece.piece_type() != PieceType::Pawn && (is_pawn_double_push || m.is_ep() || m.is_promo()) {
+        if moved_piece.piece_type() != PieceType::Pawn
+            && (is_pawn_double_push || m.is_ep() || m.is_promo())
+        {
             return false;
         }
 
@@ -860,7 +947,8 @@ impl Board {
                 let Some(one_forward) = from.pawn_push(self.side) else {
                     return false;
                 };
-                return self.piece_at(one_forward).is_none() && Some(to) == one_forward.pawn_push(self.side);
+                return self.piece_at(one_forward).is_none()
+                    && Some(to) == one_forward.pawn_push(self.side);
             } else if captured_piece.is_none() {
                 return Some(to) == from.pawn_push(self.side);
             }
@@ -871,7 +959,9 @@ impl Board {
             return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
         }
 
-        (to.as_set() & movegen::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied())).non_empty()
+        (to.as_set()
+            & movegen::attacks_by_type(moved_piece.piece_type(), from, self.pieces.occupied()))
+        .non_empty()
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -889,7 +979,11 @@ impl Board {
         if moved.piece_type() != PieceType::King {
             return false;
         }
-        let home_rank = if self.side == Colour::White { SquareSet::RANK_1 } else { SquareSet::RANK_8 };
+        let home_rank = if self.side == Colour::White {
+            SquareSet::RANK_1
+        } else {
+            SquareSet::RANK_8
+        };
         if (m.to().as_set() & home_rank).is_empty() {
             return false;
         }
@@ -898,7 +992,13 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to()) != (if self.side == Colour::Black { self.castle_perm.bk } else { self.castle_perm.wk }) {
+            if Some(m.to())
+                != (if self.side == Colour::Black {
+                    self.castle_perm.bk
+                } else {
+                    self.castle_perm.wk
+                })
+            {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -910,7 +1010,13 @@ impl Board {
             }
         } else {
             // queenside castling.
-            if Some(m.to()) != (if self.side == Colour::Black { self.castle_perm.bq } else { self.castle_perm.wq }) {
+            if Some(m.to())
+                != (if self.side == Colour::Black {
+                    self.castle_perm.bq
+                } else {
+                    self.castle_perm.wq
+                })
+            {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -1024,7 +1130,10 @@ impl Board {
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
             threats: self.threats,
-            cont_hist_index: Some(ContHistIndex { piece, square: m.history_to_square() }),
+            cont_hist_index: Some(ContHistIndex {
+                piece,
+                square: m.history_to_square(),
+            }),
             piece_layout: self.pieces,
             piece_array: self.piece_array,
             key: self.key,
@@ -1047,7 +1156,12 @@ impl Board {
         }
 
         if m.is_ep() {
-            let clear_at = if side == Colour::White { to.sub(8) } else { to.add(8) }.unwrap();
+            let clear_at = if side == Colour::White {
+                to.sub(8)
+            } else {
+                to.add(8)
+            }
+            .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
             self.pieces.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
@@ -1071,7 +1185,10 @@ impl Board {
                     (self.castle_perm.bq.unwrap(), Square::D8)
                 }
                 _ => {
-                    panic!("Invalid castle move, to: {}, castle_perm: {}", to, self.castle_perm);
+                    panic!(
+                        "Invalid castle move, to: {}, castle_perm: {}",
+                        to, self.castle_perm
+                    );
                 }
             };
             if from != to {
@@ -1131,7 +1248,12 @@ impl Board {
             // this would be a function but we run into borrow checker issues
             // because it's currently not smart enough to realize that we're
             // borrowing disjoint parts of the board.
-            let Undo { ep_square, fifty_move_counter, piece_layout, .. } = saved_state;
+            let Undo {
+                ep_square,
+                fifty_move_counter,
+                piece_layout,
+                ..
+            } = saved_state;
 
             // self.height -= 1;
             // self.ply -= 1;
@@ -1301,7 +1423,12 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        self.history.push(Undo { ep_square: self.ep_sq, threats: self.threats, key: self.key, ..Default::default() });
+        self.history.push(Undo {
+            ep_square: self.ep_sq,
+            threats: self.threats,
+            key: self.key,
+            ..Default::default()
+        });
 
         let mut key = self.key;
         if let Some(ep_sq) = self.ep_sq {
@@ -1329,7 +1456,12 @@ impl Board {
         self.ply -= 1;
         self.side = self.side.flip();
 
-        let Undo { ep_square, threats, key, .. } = self.history.last().expect("No move to unmake!");
+        let Undo {
+            ep_square,
+            threats,
+            key,
+            ..
+        } = self.history.last().expect("No move to unmake!");
 
         self.ep_sq = *ep_square;
         self.threats = *threats;
@@ -1351,7 +1483,11 @@ impl Board {
             return false;
         }
 
-        t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece { from: m.from(), to: m.to(), piece };
+        t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece {
+            from: m.from(),
+            to: m.to(),
+            piece,
+        };
         t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
 
         t.nnue.current_acc += 1;
@@ -1411,8 +1547,8 @@ impl Board {
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
     pub fn parse_uci(&self, uci: &str) -> anyhow::Result<Move> {
         use crate::errors::MoveParseError::{
-            IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength, InvalidPromotionPiece,
-            InvalidToSquareFile, InvalidToSquareRank, Unknown,
+            IllegalMove, InvalidFromSquareFile, InvalidFromSquareRank, InvalidLength,
+            InvalidPromotionPiece, InvalidToSquareFile, InvalidToSquareRank, Unknown,
         };
         let san_bytes = uci.as_bytes();
         if !(4..=5).contains(&san_bytes.len()) {
@@ -1467,7 +1603,8 @@ impl Board {
                 m.from() == from
                     && m_to == to
                     && (san_bytes.len() == 4
-                        || m.promotion_type().and_then(PieceType::promo_char).unwrap() == san_bytes[4] as char)
+                        || m.promotion_type().and_then(PieceType::promo_char).unwrap()
+                            == san_bytes[4] as char)
             })
             .with_context(|| IllegalMove(uci.to_string()));
 
@@ -1489,8 +1626,8 @@ impl Board {
         }
         let to_sq = m.to();
         let moved_piece = self.piece_at(m.from())?;
-        let is_capture =
-            self.is_capture(m) || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.ep_sq);
+        let is_capture = self.is_capture(m)
+            || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.ep_sq);
         let piece_prefix = match moved_piece.piece_type() {
             PieceType::Pawn if !is_capture => "",
             PieceType::Pawn => &"abcdefgh"[m.from().file() as usize..=m.from().file() as usize],
@@ -1572,7 +1709,15 @@ impl Board {
         // distance to the last irreversible move
         let moves_since_zeroing = self.fifty_move_counter() as usize;
         // a repetition is first possible at four ply back:
-        for (dist_back, u) in self.history.iter().rev().enumerate().take(moves_since_zeroing).skip(3).step_by(2) {
+        for (dist_back, u) in self
+            .history
+            .iter()
+            .rev()
+            .enumerate()
+            .take(moves_since_zeroing)
+            .skip(3)
+            .step_by(2)
+        {
             if u.key == self.key {
                 // in-tree, can twofold:
                 if dist_back < self.height {
@@ -1626,7 +1771,9 @@ impl Board {
 
     #[cfg(any(feature = "datagen", test))]
     pub fn has_insufficient_material<C: Col>(&self) -> bool {
-        if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>()).non_empty() {
+        if (self.pieces.pawns::<C>() | self.pieces.rooks::<C>() | self.pieces.queens::<C>())
+            .non_empty()
+        {
             return false;
         }
 
@@ -1642,8 +1789,8 @@ impl Board {
 
         if self.pieces.bishops::<C>().non_empty() {
             let bishops = self.pieces.all_bishops();
-            let same_color =
-                (bishops & SquareSet::DARK_SQUARES).is_empty() || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
+            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty()
+                || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
             let pawns = self.pieces.all_pawns();
             let knights = self.pieces.all_knights();
             return same_color && pawns.is_empty() && knights.is_empty();
@@ -1788,17 +1935,23 @@ pub enum GameOutcome {
     Ongoing,
 }
 
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WinType {
-    Mate, TB, Adjudication,
+    Mate,
+    TB,
+    Adjudication,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DrawType {
-    TB, FiftyMoves, Repetition, Stalemate, InsufficientMaterial, Adjudication
+    TB,
+    FiftyMoves,
+    Repetition,
+    Stalemate,
+    InsufficientMaterial,
+    Adjudication,
 }
 
 #[cfg(feature = "datagen")]
@@ -1857,10 +2010,15 @@ impl Display for Board {
         if self.castle_perm == CastlingRights::NONE {
             write!(f, "-")?;
         } else {
-            for (_, ch) in [self.castle_perm.wk, self.castle_perm.wq, self.castle_perm.bk, self.castle_perm.bq]
-                .into_iter()
-                .zip("KQkq".chars())
-                .filter(|(m, _)| m.is_some())
+            for (_, ch) in [
+                self.castle_perm.wk,
+                self.castle_perm.wq,
+                self.castle_perm.bk,
+                self.castle_perm.bq,
+            ]
+            .into_iter()
+            .zip("KQkq".chars())
+            .filter(|(m, _)| m.is_some())
             {
                 write!(f, "{ch}")?;
             }
@@ -1905,7 +2063,9 @@ mod tests {
         use super::Board;
 
         let mut board_1 = Board::new();
-        board_1.set_from_fen(Board::STARTING_FEN).expect("setfen failed.");
+        board_1
+            .set_from_fen(Board::STARTING_FEN)
+            .expect("setfen failed.");
         board_1.check_validity().unwrap();
 
         let board_2 = Board::from_fen(Board::STARTING_FEN).expect("setfen failed.");
@@ -1917,12 +2077,16 @@ mod tests {
     #[test]
     fn game_end_states() {
         use super::Board;
-        use super::{GameOutcome, DrawType};
+        use super::{DrawType, GameOutcome};
         use crate::{chessmove::Move, util::Square};
 
         let mut fiftymove_draw =
-            Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2").unwrap();
-        assert_eq!(fiftymove_draw.outcome(), GameOutcome::Draw(DrawType::FiftyMoves));
+            Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
+                .unwrap();
+        assert_eq!(
+            fiftymove_draw.outcome(),
+            GameOutcome::Draw(DrawType::FiftyMoves)
+        );
         let mut draw_repetition = Board::default();
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
@@ -1936,13 +2100,24 @@ mod tests {
         assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Draw(DrawType::Repetition));
+        assert_eq!(
+            draw_repetition.outcome(),
+            GameOutcome::Draw(DrawType::Repetition)
+        );
         let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
-        let mut insufficient_material_bare_kings = Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
-        assert_eq!(insufficient_material_bare_kings.outcome(), GameOutcome::Draw(DrawType::InsufficientMaterial));
-        let mut insufficient_material_knights = Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
-        assert_eq!(insufficient_material_knights.outcome(), GameOutcome::Ongoing);
+        let mut insufficient_material_bare_kings =
+            Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
+        assert_eq!(
+            insufficient_material_bare_kings.outcome(),
+            GameOutcome::Draw(DrawType::InsufficientMaterial)
+        );
+        let mut insufficient_material_knights =
+            Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
+        assert_eq!(
+            insufficient_material_knights.outcome(),
+            GameOutcome::Ongoing
+        );
         // using FIDE rules.
     }
 
@@ -2002,7 +2177,9 @@ mod tests {
         use super::Board;
         use crate::chessmove::{Move, MoveFlags};
         use crate::util::Square;
-        let board = Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20").unwrap();
+        let board =
+            Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
+                .unwrap();
         let kingside_castle = Move::new_with_flags(Square::E1, Square::H1, MoveFlags::Castle);
         assert!(!board.is_pseudo_legal(kingside_castle));
     }
@@ -2013,7 +2190,10 @@ mod tests {
         use crate::squareset::SquareSet;
 
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
-        assert_eq!(board.threats.all, SquareSet::from_inner(0x1454_9d56_bddd_5f3f));
+        assert_eq!(
+            board.threats.all,
+            SquareSet::from_inner(0x1454_9d56_bddd_5f3f)
+        );
     }
 
     #[test]
@@ -2022,7 +2202,10 @@ mod tests {
         use crate::squareset::SquareSet;
 
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
-        assert_eq!(board.threats.all, SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28));
+        assert_eq!(
+            board.threats.all,
+            SquareSet::from_inner(0xfcfa_bbbd_6ab9_2a28)
+        );
     }
 
     #[test]
@@ -2042,7 +2225,9 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board = Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6").unwrap();
+        let mut board =
+            Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6")
+                .unwrap();
         // Nxf7!!
         let mv = Move::new(Square::G5, Square::F7);
         let key = board.key_after(mv);
@@ -2067,8 +2252,10 @@ mod tests {
         use crate::piece::Piece;
         use crate::util::Square;
         let mut not_ep_capturable =
-            Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2").unwrap();
-        let mut ep_capturable = Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
+            Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
+                .unwrap();
+        let mut ep_capturable =
+            Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
         let d5 = Move::new(Square::D7, Square::D5);
         let mut not_ep_capturable_key = not_ep_capturable.key;
         let mut ep_capturable_key = ep_capturable.key;
@@ -2096,7 +2283,8 @@ mod tests {
         use super::Board;
         use crate::chessmove::Move;
         use crate::util::Square;
-        let mut board = Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
+        let mut board =
+            Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
         assert_eq!(board.ep_sq, Some(Square::B6));
     }

@@ -1,4 +1,10 @@
-#![deny(clippy::panic, clippy::unwrap_used, clippy::expect_used, clippy::todo, clippy::unimplemented)]
+#![deny(
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::todo,
+    clippy::unimplemented
+)]
 
 use std::{
     error::Error,
@@ -119,37 +125,49 @@ impl Display for UciError {
 // ... moves e2e4 e7e5 b7b8q
 fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
     let mut parts = text.split_ascii_whitespace();
-    let command =
-        parts.next().with_context(|| UciError::UnexpectedCommandTermination("No command in parse_position".into()))?;
+    let command = parts.next().with_context(|| {
+        UciError::UnexpectedCommandTermination("No command in parse_position".into())
+    })?;
     if command != "position" {
         bail!(UciError::InvalidFormat("Expected 'position'".into()));
     }
-    let determiner = parts
-        .next()
-        .with_context(|| UciError::UnexpectedCommandTermination("No determiner after \"position\"".into()))?;
+    let determiner = parts.next().with_context(|| {
+        UciError::UnexpectedCommandTermination("No determiner after \"position\"".into())
+    })?;
     if determiner == "startpos" {
         pos.set_startpos();
         let moves = parts.next(); // skip "moves"
         if !(matches!(moves, Some("moves") | None)) {
-            bail!(UciError::InvalidFormat("Expected either \"moves\" or no content to follow \"startpos\".".into(),));
+            bail!(UciError::InvalidFormat(
+                "Expected either \"moves\" or no content to follow \"startpos\".".into(),
+            ));
         }
     } else if determiner == "frc" {
         let Some(index) = parts.next() else {
             bail!("Expected an index value to follow \"frc\"");
         };
-        let index = index.parse().with_context(|| format!("Failed to parse {index} as FRC index"))?;
+        let index = index
+            .parse()
+            .with_context(|| format!("Failed to parse {index} as FRC index"))?;
         anyhow::ensure!(index < 960, "FRC index can be at most 959 but got {index}");
         pos.set_frc_idx(index);
     } else if determiner == "dfrc" {
         let Some(index) = parts.next() else {
             bail!("Expected an index value to follow \"dfrc\"");
         };
-        let index = index.parse().with_context(|| format!("Failed to parse {index} as DFRC index"))?;
-        anyhow::ensure!(index < 960 * 960, "DFRC index can be at most 921599 but got {index}");
+        let index = index
+            .parse()
+            .with_context(|| format!("Failed to parse {index} as DFRC index"))?;
+        anyhow::ensure!(
+            index < 960 * 960,
+            "DFRC index can be at most 921599 but got {index}"
+        );
         pos.set_dfrc_idx(index);
     } else {
         if determiner != "fen" {
-            bail!(UciError::InvalidFormat(format!("Unknown term after \"position\": {determiner}")));
+            bail!(UciError::InvalidFormat(format!(
+                "Unknown term after \"position\": {determiner}"
+            )));
         }
         let mut fen = String::new();
         for part in &mut parts {
@@ -159,7 +177,8 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
             fen.push_str(part);
             fen.push(' ');
         }
-        pos.set_from_fen(&fen).with_context(|| format!("Failed to set fen {fen}"))?;
+        pos.set_from_fen(&fen)
+            .with_context(|| format!("Failed to set fen {fen}"))?;
     }
     for san in parts {
         pos.zero_height(); // stuff breaks really hard without this lmao
@@ -183,15 +202,21 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
     let mut ponder = false;
 
     let mut parts = text.split_ascii_whitespace();
-    let command =
-        parts.next().with_context(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
+    let command = parts
+        .next()
+        .with_context(|| UciError::UnexpectedCommandTermination("No command in parse_go".into()))?;
     if command != "go" {
         bail!(UciError::InvalidFormat("Expected \"go\"".into()));
     }
 
     while let Some(part) = parts.next() {
         match part {
-            "depth" => depth = Some(part_parse("depth", parts.next()).with_context(|| "Failed to parse depth part.")?),
+            "depth" => {
+                depth = Some(
+                    part_parse("depth", parts.next())
+                        .with_context(|| "Failed to parse depth part.")?,
+                )
+            }
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
             "wtime" => clocks[pos.turn()] = Some(part_parse("wtime", parts.next())?),
@@ -227,9 +252,17 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
         let their_clock: u64 = their_clock.try_into().unwrap_or(0);
         let our_inc: u64 = our_inc.try_into().unwrap_or(0);
         let their_inc: u64 = their_inc.try_into().unwrap_or(0);
-        limit = SearchLimit::Dynamic { our_clock, their_clock, our_inc, their_inc, moves_to_go };
+        limit = SearchLimit::Dynamic {
+            our_clock,
+            their_clock,
+            our_inc,
+            their_inc,
+            moves_to_go,
+        };
     } else if clocks.iter().chain(incs.iter()).any(Option::is_some) {
-        bail!(UciError::InvalidFormat("at least one of [wtime, btime, winc, binc] provided, but not all.".into(),));
+        bail!(UciError::InvalidFormat(
+            "at least one of [wtime, btime, winc, binc] provided, but not all.".into(),
+        ));
     }
 
     if let Some(nodes) = nodes {
@@ -248,10 +281,13 @@ where
     T: FromStr,
     <T as FromStr>::Err: Display + Send + Sync + Error + 'static,
 {
-    let next_part = next_part.with_context(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
+    let next_part = next_part
+        .with_context(|| UciError::InvalidFormat(format!("nothing after \"{target}\"")))?;
     let value = next_part.parse();
     value.with_context(|| {
-        UciError::InvalidFormat(format!("value for {target} is not a number, tried to parse {next_part}"))
+        UciError::InvalidFormat(format!(
+            "value for {target} is not a number, tried to parse {next_part}"
+        ))
     })
 }
 
@@ -266,21 +302,27 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
     use UciError::UnexpectedCommandTermination;
     let mut parts = text.split_ascii_whitespace();
     let Some(_) = parts.next() else {
-        bail!(UnexpectedCommandTermination("no \"setoption\" found".into()));
+        bail!(UnexpectedCommandTermination(
+            "no \"setoption\" found".into()
+        ));
     };
     let Some(name_part) = parts.next() else {
-        bail!(UciError::InvalidFormat("no \"name\" after \"setoption\"".into()));
+        bail!(UciError::InvalidFormat(
+            "no \"name\" after \"setoption\"".into()
+        ));
     };
     if name_part != "name" {
         bail!(UciError::InvalidFormat(format!(
             "unexpected character after \"setoption\", expected \"name\", got \"{name_part}\". Did you mean \"setoption name {name_part}\"?"
         )));
     }
-    let opt_name = parts
-        .next()
-        .with_context(|| UnexpectedCommandTermination("no option name given after \"setoption name\"".into()))?;
+    let opt_name = parts.next().with_context(|| {
+        UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
+    })?;
     let Some(value_part) = parts.next() else {
-        bail!(UciError::InvalidFormat("no \"value\" after \"setoption name {opt_name}\"".into()));
+        bail!(UciError::InvalidFormat(
+            "no \"value\" after \"setoption name {opt_name}\"".into()
+        ));
     };
     if value_part != "value" {
         bail!(UciError::InvalidFormat(format!(
@@ -288,7 +330,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         )));
     }
     let opt_value = parts.next().with_context(|| {
-        UnexpectedCommandTermination(format!("no option value given after \"setoption name {opt_name} value\""))
+        UnexpectedCommandTermination(format!(
+            "no option value given after \"setoption name {opt_name} value\""
+        ))
     })?;
     let mut out = pre_config;
     let id_parser_pairs = out.search_config.ids_with_parsers();
@@ -311,7 +355,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_HASH_MEGABYTES) {
                 // "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
-                bail!(UciError::IllegalValue(format!("Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}")));
+                bail!(UciError::IllegalValue(format!(
+                    "Hash value must be between 1 and {UCI_MAX_HASH_MEGABYTES}"
+                )));
             }
             out.hash_mb = value;
         }
@@ -319,7 +365,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
             let value: usize = opt_value.parse()?;
             if !(value > 0 && value <= UCI_MAX_THREADS) {
                 // "Threads value must be between 1 and {UCI_MAX_THREADS}"
-                bail!(UciError::IllegalValue(format!("Threads value must be between 1 and {UCI_MAX_THREADS}")));
+                bail!(UciError::IllegalValue(format!(
+                    "Threads value must be between 1 and {UCI_MAX_THREADS}"
+                )));
             }
             out.threads = value;
         }
@@ -334,27 +382,35 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
                 *lock = path;
                 SYZYGY_ENABLED.store(true, Ordering::SeqCst);
             } else {
-                bail!(UciError::InternalError("failed to take lock on SyzygyPath".into()));
+                bail!(UciError::InternalError(
+                    "failed to take lock on SyzygyPath".into()
+                ));
             }
         }
         "SyzygyProbeLimit" => {
             let value: u8 = opt_value.parse()?;
             if value > 6 {
-                bail!(UciError::IllegalValue("SyzygyProbeLimit value must be between 0 and 6".to_string()));
+                bail!(UciError::IllegalValue(
+                    "SyzygyProbeLimit value must be between 0 and 6".to_string()
+                ));
             }
             SYZYGY_PROBE_LIMIT.store(value, Ordering::SeqCst);
         }
         "SyzygyProbeDepth" => {
             let value: i32 = opt_value.parse()?;
             if !(1..=100).contains(&value) {
-                bail!(UciError::IllegalValue("SyzygyProbeDepth value must be between 0 and 100".to_string()));
+                bail!(UciError::IllegalValue(
+                    "SyzygyProbeDepth value must be between 0 and 100".to_string()
+                ));
             }
             SYZYGY_PROBE_DEPTH.store(value, Ordering::SeqCst);
         }
         "Contempt" => {
             let value: i32 = opt_value.parse()?;
             if !(-10000..=10000).contains(&value) {
-                bail!(UciError::IllegalValue("Contempt value must be between -10000 and 10000".to_string()));
+                bail!(UciError::IllegalValue(
+                    "Contempt value must be between -10000 and 10000".to_string()
+                ));
             }
             CONTEMPT.store(value, Ordering::SeqCst);
         }
@@ -369,7 +425,10 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
     Ok(out)
 }
 
-fn stdin_reader() -> anyhow::Result<(mpsc::Receiver<String>, std::thread::JoinHandle<anyhow::Result<()>>)> {
+fn stdin_reader() -> anyhow::Result<(
+    mpsc::Receiver<String>,
+    std::thread::JoinHandle<anyhow::Result<()>>,
+)> {
     let (sender, receiver) = mpsc::channel();
     let handle = std::thread::Builder::new()
         .name("stdin-reader".into())
@@ -383,7 +442,9 @@ fn stdin_reader_worker(sender: mpsc::Sender<String>) -> anyhow::Result<()> {
     while let Ok(bytes) = std::io::stdin().read_line(&mut linebuf) {
         if bytes == 0 {
             // EOF
-            sender.send("quit".into()).with_context(|| "couldn't send quit command to main thread")?;
+            sender
+                .send("quit".into())
+                .with_context(|| "couldn't send quit command to main thread")?;
             QUIT.store(true, Ordering::SeqCst);
             break;
         }
@@ -431,15 +492,19 @@ pub struct PrettyScoreFormatWrapper(i32, Colour);
 impl Display for PrettyScoreFormatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            -20..=20 => write!(f, "\u{001b}[0m")?,           // drawish, no colour.
-            21..=100 => write!(f, "\u{001b}[38;5;10m")?,     // slightly better for us, light green.
-            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?,    // slightly better for them, light red.
-            101..=500 => write!(f, "\u{001b}[38;5;2m")?,     // clearly better for us, green.
+            -20..=20 => write!(f, "\u{001b}[0m")?, // drawish, no colour.
+            21..=100 => write!(f, "\u{001b}[38;5;10m")?, // slightly better for us, light green.
+            -100..=-21 => write!(f, "\u{001b}[38;5;9m")?, // slightly better for them, light red.
+            101..=500 => write!(f, "\u{001b}[38;5;2m")?, // clearly better for us, green.
             -10000..=-101 => write!(f, "\u{001b}[38;5;1m")?, // clearly/much better for them, red.
-            501..=10000 => write!(f, "\u{001b}[38;5;4m")?,   // much better for us, blue.
-            _ => write!(f, "\u{001b}[38;5;219m")?,           // probably a mate score, pink.
+            501..=10000 => write!(f, "\u{001b}[38;5;4m")?, // much better for us, blue.
+            _ => write!(f, "\u{001b}[38;5;219m")?, // probably a mate score, pink.
         }
-        let white_pov = if self.1 == Colour::White { self.0 } else { -self.0 };
+        let white_pov = if self.1 == Colour::White {
+            self.0
+        } else {
+            -self.0
+        };
         if is_mate_score(white_pov) {
             let plies_to_mate = MATE_SCORE - white_pov.abs();
             let moves_to_mate = (plies_to_mate + 1) / 2;
@@ -490,7 +555,11 @@ impl Display for HumanTimeFormatWrapper {
         } else if minutes > 0 {
             write!(f, "{minutes:2}m{r_seconds:02}s", r_seconds = seconds % 60)
         } else if seconds > 0 {
-            write!(f, "{seconds:2}.{r_millis:02}s", r_millis = millis % 1000 / 10)
+            write!(
+                f,
+                "{seconds:2}.{r_millis:02}s",
+                r_millis = millis % 1000 / 10
+            )
         } else {
             write!(f, "{millis:4}ms")
         }
@@ -501,7 +570,11 @@ pub const fn format_time(millis: u128) -> HumanTimeFormatWrapper {
 }
 
 fn print_uci_response(info: &SearchInfo, full: bool) {
-    let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
     println!("id name {NAME} {VERSION}{version_extension}");
     println!("id author Cosmo");
     println!("option name Hash type spin default {UCI_DEFAULT_HASH_MEGABYTES} min 1 max {UCI_MAX_HASH_MEGABYTES}");
@@ -541,7 +614,11 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
 
     let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), &nnue_params)];
 
-    let version_extension = if cfg!(feature = "final-release") { "" } else { "-dev" };
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
@@ -550,8 +627,14 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     }
 
     loop {
-        std::io::stdout().flush().with_context(|| "couldn't flush stdout")?;
-        let Ok(line) = stdin.lock().map_err(|_| anyhow!("failed to take lock on stdin"))?.recv() else {
+        std::io::stdout()
+            .flush()
+            .with_context(|| "couldn't flush stdout")?;
+        let Ok(line) = stdin
+            .lock()
+            .map_err(|_| anyhow!("failed to take lock on stdin"))?
+            .recv()
+        else {
             break;
         };
         let input = line.trim();
@@ -576,9 +659,20 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 println!("Hash: {}", tt.size() / MEGABYTE);
                 println!("Threads: {}", thread_data.len());
                 println!("PrettyPrint: {}", PRETTY_PRINT.load(Ordering::SeqCst));
-                println!("SyzygyPath: {}", SYZYGY_PATH.lock().map_err(|_| anyhow!("failed to lock syzygy path"))?);
-                println!("SyzygyProbeLimit: {}", SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst));
-                println!("SyzygyProbeDepth: {}", SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst));
+                println!(
+                    "SyzygyPath: {}",
+                    SYZYGY_PATH
+                        .lock()
+                        .map_err(|_| anyhow!("failed to lock syzygy path"))?
+                );
+                println!(
+                    "SyzygyProbeLimit: {}",
+                    SYZYGY_PROBE_LIMIT.load(Ordering::SeqCst)
+                );
+                println!(
+                    "SyzygyProbeDepth: {}",
+                    SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
+                );
                 println!("Contempt: {}", CONTEMPT.load(Ordering::SeqCst));
                 if arg == "ucidumpfull" {
                     for (id, default) in Config::default().ids_with_values() {
@@ -600,7 +694,12 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    pos.evaluate(thread_data.first_mut().with_context(|| "the thread headers are empty.")?, 0)
+                    pos.evaluate(
+                        thread_data
+                            .first_mut()
+                            .with_context(|| "the thread headers are empty.")?,
+                        0,
+                    )
                 };
                 println!("{eval}");
                 Ok(())
@@ -609,8 +708,11 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    let t1 = thread_data.first_mut().with_context(|| "the thread headers are empty.")?;
-                    t1.nnue.evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
+                    let t1 = thread_data
+                        .first_mut()
+                        .with_context(|| "the thread headers are empty.")?;
+                    t1.nnue
+                        .evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
                 };
                 println!("{eval}");
                 Ok(())
@@ -620,7 +722,10 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 Ok(())
             }
             "nnuebench" => {
-                nnue::network::inference_benchmark(&thread_data[0].nnue, thread_data[0].nnue_params);
+                nnue::network::inference_benchmark(
+                    &thread_data[0].nnue,
+                    thread_data[0].nnue_params,
+                );
                 Ok(())
             }
             "gobench" => go_benchmark(),
@@ -660,20 +765,32 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 res
             }
             input if input.starts_with("go perft") || input.starts_with("perft") => {
-                let tail = input.trim_start_matches("go perft ").trim_start_matches("perft ");
+                let tail = input
+                    .trim_start_matches("go perft ")
+                    .trim_start_matches("perft ");
                 match tail.split_whitespace().next() {
                     Some("divide" | "split") => {
-                        let depth = tail.trim_start_matches("divide ").trim_start_matches("split ");
+                        let depth = tail
+                            .trim_start_matches("divide ")
+                            .trim_start_matches("split ");
                         depth
                             .parse::<usize>()
-                            .with_context(|| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                            .with_context(|| {
+                                UciError::InvalidFormat(format!(
+                                    "cannot parse \"{depth}\" as usize"
+                                ))
+                            })
                             .map(|depth| divide_perft(depth, &mut pos))
                     }
                     Some(depth) => depth
                         .parse::<usize>()
-                        .with_context(|| UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize")))
+                        .with_context(|| {
+                            UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize"))
+                        })
                         .map(|depth| block_perft(depth, &mut pos)),
-                    None => Err(anyhow!(UciError::InvalidFormat("expected a depth after 'go perft'".to_string()))),
+                    None => Err(anyhow!(UciError::InvalidFormat(
+                        "expected a depth after 'go perft'".to_string()
+                    ))),
                 }
             }
             input if input.starts_with("go") => {
@@ -716,7 +833,9 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     }
     STDIN_READER_THREAD_KEEP_RUNNING.store(false, atomic::Ordering::SeqCst);
     if stdin_reader_handle.is_finished() {
-        stdin_reader_handle.join().map_err(|_| anyhow!("Thread panicked!"))??;
+        stdin_reader_handle
+            .join()
+            .map_err(|_| anyhow!("Thread panicked!"))??;
     }
     Ok(())
 }
@@ -739,7 +858,11 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
-    let max_fen_len = BENCH_POSITIONS.iter().map(|s| s.len()).max().with_context(|| "this array is nonempty.")?;
+    let max_fen_len = BENCH_POSITIONS
+        .iter()
+        .map(|s| s.len())
+        .max()
+        .with_context(|| "this array is nonempty.")?;
     for fen in BENCH_POSITIONS {
         let res = do_newgame(&mut pos, &tt, &mut thread_data);
         if let Err(e) = res {
@@ -776,7 +899,10 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     if benchcmd == "openbench" {
         println!("{node_sum} nodes {nps:.0} nps");
     } else {
-        println!("{node_sum} nodes in {time:.3}s ({nps:.0} nps)", time = time.as_secs_f64());
+        println!(
+            "{node_sum} nodes in {time:.3}s ({nps:.0} nps)",
+            time = time.as_secs_f64()
+        );
     }
     info.print_to_stdout = true;
 
@@ -784,7 +910,10 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     #[cfg(feature = "nnz-counts")]
     println!(
         "NNZ counts: {:?}",
-        network::layers::NNZ_COUNTS.iter().map(|c| c.load(Ordering::Relaxed)).collect::<Vec<u64>>()
+        network::layers::NNZ_COUNTS
+            .iter()
+            .map(|c| c.load(Ordering::Relaxed))
+            .collect::<Vec<u64>>()
     );
 
     Ok(())
@@ -810,7 +939,10 @@ pub fn go_benchmark() -> anyhow::Result<()> {
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
         info.time_manager.start();
-        let limit = parse_go(std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"), &pos)?;
+        let limit = parse_go(
+            std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
+            &pos,
+        )?;
         info.time_manager.set_limit(limit);
         tt.increase_age();
         std::hint::black_box(pos.search_position(&mut info, &mut thread_data, tt.view()));
@@ -827,7 +959,10 @@ fn block_perft(depth: usize, pos: &mut Board) {
     let nodes = perft::perft(pos, depth);
     let elapsed = start_time.elapsed();
     let nps = nodes as f64 / elapsed.as_secs_f64();
-    println!("info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}", elapsed = elapsed.as_millis());
+    println!(
+        "info depth {depth} nodes {nodes} time {elapsed} nps {nps:.0}",
+        elapsed = elapsed.as_millis()
+    );
 }
 
 fn divide_perft(depth: usize, pos: &mut Board) {
@@ -914,7 +1049,10 @@ impl Display for PrettyUciWdlFormat {
         let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
         let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
-        write!(f, "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",)
+        write!(
+            f,
+            "\u{001b}[38;5;243m{wdl_w:3.0}%W {wdl_d:3.0}%D {wdl_l:3.0}%L\u{001b}[0m",
+        )
     }
 }
 

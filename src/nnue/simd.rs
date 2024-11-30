@@ -187,7 +187,13 @@ mod avx512 {
     }
 
     #[inline]
-    pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
+    pub unsafe fn mul_add_2xu8_to_i32(
+        sum: VecI32,
+        vec0: VecI8,
+        vec1: VecI8,
+        vec2: VecI8,
+        vec3: VecI8,
+    ) -> VecI32 {
         #[cfg(target_feature = "avx512vnni")]
         {
             return VecI32::from_raw(_mm512_dpbusd_epi32(
@@ -200,7 +206,10 @@ mod avx512 {
         {
             let product16a = _mm512_maddubs_epi16(vec0.inner(), vec1.inner());
             let product16b = _mm512_maddubs_epi16(vec2.inner(), vec3.inner());
-            let product32 = _mm512_madd_epi16(_mm512_add_epi16(product16a, product16b), _mm512_set1_epi16(1));
+            let product32 = _mm512_madd_epi16(
+                _mm512_add_epi16(product16a, product16b),
+                _mm512_set1_epi16(1),
+            );
             return VecI32::from_raw(_mm512_add_epi32(sum.inner(), product32));
         }
     }
@@ -383,7 +392,10 @@ mod avx2 {
     }
     #[inline]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
-        return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(vec.inner(), _mm256_setzero_si256()))) as u16;
+        return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(
+            vec.inner(),
+            _mm256_setzero_si256(),
+        ))) as u16;
     }
     #[inline]
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
@@ -400,10 +412,19 @@ mod avx2 {
     }
 
     #[inline]
-    pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
+    pub unsafe fn mul_add_2xu8_to_i32(
+        sum: VecI32,
+        vec0: VecI8,
+        vec1: VecI8,
+        vec2: VecI8,
+        vec3: VecI8,
+    ) -> VecI32 {
         let product16a = _mm256_maddubs_epi16(vec0.inner(), vec1.inner());
         let product16b = _mm256_maddubs_epi16(vec2.inner(), vec3.inner());
-        let product32 = _mm256_madd_epi16(_mm256_add_epi16(product16a, product16b), _mm256_set1_epi16(1));
+        let product32 = _mm256_madd_epi16(
+            _mm256_add_epi16(product16a, product16b),
+            _mm256_set1_epi16(1),
+        );
         return VecI32::from_raw(_mm256_add_epi32(sum.inner(), product32));
     }
 
@@ -494,7 +515,11 @@ mod avx2 {
     pub const F32_CHUNK_SIZE: usize = std::mem::size_of::<VecF32>() / std::mem::size_of::<f32>();
 }
 
-#[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
+#[cfg(all(
+    target_feature = "ssse3",
+    not(target_feature = "avx2"),
+    not(target_feature = "avx512f")
+))]
 mod ssse3 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
@@ -607,7 +632,10 @@ mod ssse3 {
     }
     #[inline]
     pub unsafe fn nonzero_mask_i32(vec: VecI32) -> u16 {
-        return _mm_movemask_ps(_mm_castsi128_ps(_mm_cmpgt_epi32(vec.inner(), _mm_setzero_si128()))) as u16;
+        return _mm_movemask_ps(_mm_castsi128_ps(_mm_cmpgt_epi32(
+            vec.inner(),
+            _mm_setzero_si128(),
+        ))) as u16;
     }
     #[inline]
     pub unsafe fn pack_i16_to_u8(vec0: VecI16, vec1: VecI16) -> VecI8 {
@@ -622,7 +650,13 @@ mod ssse3 {
     }
 
     #[inline]
-    pub unsafe fn mul_add_2xu8_to_i32(sum: VecI32, vec0: VecI8, vec1: VecI8, vec2: VecI8, vec3: VecI8) -> VecI32 {
+    pub unsafe fn mul_add_2xu8_to_i32(
+        sum: VecI32,
+        vec0: VecI8,
+        vec1: VecI8,
+        vec2: VecI8,
+        vec3: VecI8,
+    ) -> VecI32 {
         let product16a = _mm_maddubs_epi16(vec0.inner(), vec1.inner());
         let product16b = _mm_maddubs_epi16(vec2.inner(), vec3.inner());
         let product32 = _mm_madd_epi16(_mm_add_epi16(product16a, product16b), _mm_set1_epi16(1));
@@ -715,16 +749,28 @@ pub use avx512::*;
 #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
 pub use avx2::*;
 
-#[cfg(all(target_feature = "ssse3", not(target_feature = "avx2"), not(target_feature = "avx512f")))]
+#[cfg(all(
+    target_feature = "ssse3",
+    not(target_feature = "avx2"),
+    not(target_feature = "avx512f")
+))]
 pub use ssse3::*;
 
-#[cfg(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f"))]
+#[cfg(any(
+    target_feature = "ssse3",
+    target_feature = "avx2",
+    target_feature = "avx512f"
+))]
 #[inline]
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
     VecI8::from_raw(vec.inner())
 }
 
-#[cfg(any(target_feature = "ssse3", target_feature = "avx2", target_feature = "avx512f"))]
+#[cfg(any(
+    target_feature = "ssse3",
+    target_feature = "avx2",
+    target_feature = "avx512f"
+))]
 #[inline]
 pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
     VecI32::from_raw(vec.inner())

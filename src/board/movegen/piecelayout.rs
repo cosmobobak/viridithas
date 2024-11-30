@@ -67,7 +67,10 @@ impl PieceLayout {
         white: SquareSet,
         black: SquareSet,
     ) -> Self {
-        Self { pieces: [p, n, b, r, q, k], colours: [white, black] }
+        Self {
+            pieces: [p, n, b, r, q, k],
+            colours: [white, black],
+        }
     }
 
     pub fn king<C: Col>(&self) -> SquareSet {
@@ -176,7 +179,10 @@ impl PieceLayout {
     }
 
     pub fn piece_bb(&self, piece: Piece) -> SquareSet {
-        SquareSet::intersection(self.pieces[piece.piece_type()], self.colours[piece.colour()])
+        SquareSet::intersection(
+            self.pieces[piece.piece_type()],
+            self.colours[piece.colour()],
+        )
     }
 
     pub fn of_type(&self, piece_type: PieceType) -> SquareSet {
@@ -188,7 +194,8 @@ impl PieceLayout {
         let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();
         let white_pawn_attackers = pawn_attacks::<Black>(sq_bb) & self.pawns::<White>();
         let knight_attackers = knight_attacks(sq) & (self.all_knights());
-        let diag_attackers = bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
+        let diag_attackers =
+            bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
         let orth_attackers = rook_attacks(sq, occupied) & (self.all_rooks() | self.all_queens());
         let king_attackers = king_attacks(sq) & (self.all_kings());
         black_pawn_attackers
@@ -270,31 +277,43 @@ impl PieceLayout {
                     return true;
                 }
             } else if (self.of_type(PieceType::Knight).is_empty()
-                && self.piece_bb(Piece::WB).count().abs_diff(self.piece_bb(Piece::BB).count()) < 2)
+                && self
+                    .piece_bb(Piece::WB)
+                    .count()
+                    .abs_diff(self.piece_bb(Piece::BB).count())
+                    < 2)
                 || SquareSet::union(self.piece_bb(Piece::WB), self.piece_bb(Piece::WN)).count() == 1
-                    && SquareSet::union(self.piece_bb(Piece::BB), self.piece_bb(Piece::BN)).count() == 1
+                    && SquareSet::union(self.piece_bb(Piece::BB), self.piece_bb(Piece::BN)).count()
+                        == 1
             {
                 return true;
             }
         } else if self.of_type(PieceType::Queen).is_empty() {
             if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).count() == 1 {
                 if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() < 2
-                    && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count() < 2
+                    && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count()
+                        < 2
                 {
                     return true;
                 }
             } else if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).is_empty() {
                 if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).is_empty()
-                    && (SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count() == 1
-                        || SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count() == 2)
+                    && (SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
+                        .count()
+                        == 1
+                        || SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
+                            .count()
+                            == 2)
                 {
                     return true;
                 }
             } else if self.piece_bb(Piece::WR).is_empty()
                 && self.piece_bb(Piece::BR).count() == 1
                 && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).is_empty()
-                && (SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() == 1
-                    || SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() == 2)
+                && (SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
+                    == 1
+                    || SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
+                        == 2)
             {
                 return true;
             }

@@ -110,7 +110,9 @@ impl Board {
 
     pub fn estimated_see(&self, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = self.piece_at(m.to()).map_or(0, |p| PieceType::see_value(Piece::piece_type(p)));
+        let mut value = self
+            .piece_at(m.to())
+            .map_or(0, |p| PieceType::see_value(Piece::piece_type(p)));
 
         if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type

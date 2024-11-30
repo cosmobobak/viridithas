@@ -1,6 +1,9 @@
 use crate::{
     chessmove::Move,
-    historytable::{update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE},
+    historytable::{
+        update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
+        CORRECTION_HISTORY_WEIGHT_SCALE,
+    },
     piece::{Colour, PieceType},
     threadlocal::ThreadData,
     util::{depth::Depth, Undo, MAX_DEPTH},
@@ -10,10 +13,19 @@ use super::{movegen::MoveListEntry, Board};
 
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
-    pub fn update_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+    pub fn update_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
-            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos:X}");
+            debug_assert!(
+                piece_moved.is_some(),
+                "Invalid piece moved by move {m} in position \n{pos:X}"
+            );
             let from = m.from();
             let to = m.history_to_square();
             let val = self.main_history.get_mut(
@@ -71,13 +83,24 @@ impl ThreadData<'_> {
     }
 
     /// Update the tactical history counters of a batch of moves.
-    pub fn update_tactical_history(&mut self, pos: &Board, moves_to_adjust: &[Move], best_move: Move, depth: Depth) {
+    pub fn update_tactical_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: Depth,
+    ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
             let capture = caphist_piece_type(pos, m);
-            debug_assert!(piece_moved.is_some(), "Invalid piece moved by move {m} in position \n{pos:X}");
+            debug_assert!(
+                piece_moved.is_some(),
+                "Invalid piece moved by move {m} in position \n{pos:X}"
+            );
             let to = m.to();
-            let val = self.tactical_history.get_mut(piece_moved.unwrap(), to, capture);
+            let val = self
+                .tactical_history
+                .get_mut(piece_moved.unwrap(), to, capture);
             update_history(val, depth, m == best_move);
         }
     }
@@ -111,11 +134,23 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
+        if let Some(Undo {
+            cont_hist_index: None,
+            ..
+        }) = pos.history.last()
+        {
             return;
         }
-        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-            Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
+        let conthist_index = match pos
+            .history
+            .len()
+            .checked_sub(index + 1)
+            .and_then(|i| pos.history.get(i))
+        {
+            Some(Undo {
+                cont_hist_index: Some(cont_hist_index),
+                ..
+            }) => *cont_hist_index,
             _ => return,
         };
         let cmh_block = self.continuation_history.get_index_mut(conthist_index);
@@ -127,17 +162,35 @@ impl ThreadData<'_> {
     }
 
     /// Update the continuation history counter for a single move.
-    pub fn update_continuation_history_single(&mut self, pos: &Board, m: Move, depth: Depth, index: usize) {
+    pub fn update_continuation_history_single(
+        &mut self,
+        pos: &Board,
+        m: Move,
+        depth: Depth,
+        index: usize,
+    ) {
         let Some(piece) = pos.moved_piece(m) else {
             return;
         };
         let to = m.history_to_square();
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
+        if let Some(Undo {
+            cont_hist_index: None,
+            ..
+        }) = pos.history.last()
+        {
             return;
         }
-        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-            Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
+        let conthist_index = match pos
+            .history
+            .len()
+            .checked_sub(index + 1)
+            .and_then(|i| pos.history.get(i))
+        {
+            Some(Undo {
+                cont_hist_index: Some(cont_hist_index),
+                ..
+            }) => *cont_hist_index,
             _ => return,
         };
         let cmh_block = self.continuation_history.get_index_mut(conthist_index);
@@ -145,13 +198,30 @@ impl ThreadData<'_> {
     }
 
     /// Get the continuation history scores for a batch of moves.
-    pub(super) fn get_continuation_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry], index: usize) {
+    pub(super) fn get_continuation_history_scores(
+        &self,
+        pos: &Board,
+        ms: &mut [MoveListEntry],
+        index: usize,
+    ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
+        if let Some(Undo {
+            cont_hist_index: None,
+            ..
+        }) = pos.history.last()
+        {
             return;
         }
-        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-            Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
+        let conthist_index = match pos
+            .history
+            .len()
+            .checked_sub(index + 1)
+            .and_then(|i| pos.history.get(i))
+        {
+            Some(Undo {
+                cont_hist_index: Some(cont_hist_index),
+                ..
+            }) => *cont_hist_index,
             _ => return,
         };
         let cmh_block = self.continuation_history.get_index(conthist_index);
@@ -165,11 +235,23 @@ impl ThreadData<'_> {
     /// Get the continuation history score for a single move.
     pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo { cont_hist_index: None, .. }) = pos.history.last() {
+        if let Some(Undo {
+            cont_hist_index: None,
+            ..
+        }) = pos.history.last()
+        {
             return 0;
         }
-        let conthist_index = match pos.history.len().checked_sub(index + 1).and_then(|i| pos.history.get(i)) {
-            Some(Undo { cont_hist_index: Some(cont_hist_index), .. }) => *cont_hist_index,
+        let conthist_index = match pos
+            .history
+            .len()
+            .checked_sub(index + 1)
+            .and_then(|i| pos.history.get(i))
+        {
+            Some(Undo {
+                cont_hist_index: Some(cont_hist_index),
+                ..
+            }) => *cont_hist_index,
             _ => return 0,
         };
         let cmh_block = self.continuation_history.get_index(conthist_index);
@@ -192,7 +274,11 @@ impl ThreadData<'_> {
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
-        let Some(&Undo { cont_hist_index: Some(cont_hist_index), .. }) = pos.history.last() else {
+        let Some(&Undo {
+            cont_hist_index: Some(cont_hist_index),
+            ..
+        }) = pos.history.last()
+        else {
             return;
         };
 
@@ -204,7 +290,11 @@ impl ThreadData<'_> {
 
     /// Returns the counter move for this position.
     pub fn get_counter_move(&self, pos: &Board) -> Option<Move> {
-        let Some(&Undo { cont_hist_index: Some(cont_hist_index), .. }) = pos.history.last() else {
+        let Some(&Undo {
+            cont_hist_index: Some(cont_hist_index),
+            ..
+        }) = pos.history.last()
+        else {
             return None;
         };
 
@@ -218,28 +308,54 @@ impl ThreadData<'_> {
     pub fn update_correction_history(&mut self, pos: &Board, depth: Depth, diff: i32) {
         use Colour::{Black, White};
         fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
-            let update = *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
-            *entry =
-                i32::clamp(update / CORRECTION_HISTORY_WEIGHT_SCALE, -CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_MAX);
+            let update =
+                *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
+            *entry = i32::clamp(
+                update / CORRECTION_HISTORY_WEIGHT_SCALE,
+                -CORRECTION_HISTORY_MAX,
+                CORRECTION_HISTORY_MAX,
+            );
         }
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth.round());
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = pos.turn();
 
-        update(self.pawn_corrhist.get_mut(us, pos.pawn_key()), new_weight, scaled_diff);
-        update(self.nonpawn_corrhist[White].get_mut(us, pos.non_pawn_key(White)), new_weight, scaled_diff);
-        update(self.nonpawn_corrhist[Black].get_mut(us, pos.non_pawn_key(Black)), new_weight, scaled_diff);
-        update(self.minor_corrhist.get_mut(us, pos.minor_key()), new_weight, scaled_diff);
-        update(self.major_corrhist.get_mut(us, pos.major_key()), new_weight, scaled_diff);
+        update(
+            self.pawn_corrhist.get_mut(us, pos.pawn_key()),
+            new_weight,
+            scaled_diff,
+        );
+        update(
+            self.nonpawn_corrhist[White].get_mut(us, pos.non_pawn_key(White)),
+            new_weight,
+            scaled_diff,
+        );
+        update(
+            self.nonpawn_corrhist[Black].get_mut(us, pos.non_pawn_key(Black)),
+            new_weight,
+            scaled_diff,
+        );
+        update(
+            self.minor_corrhist.get_mut(us, pos.minor_key()),
+            new_weight,
+            scaled_diff,
+        );
+        update(
+            self.major_corrhist.get_mut(us, pos.major_key()),
+            new_weight,
+            scaled_diff,
+        );
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
     pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
         let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
-        let white = self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
-        let black = self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
+        let white =
+            self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
+        let black =
+            self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
         let adjustment = pawn + major + minor + white + black;
@@ -255,6 +371,8 @@ pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {
         // the capture history table.
         PieceType::Pawn
     } else {
-        pos.captured_piece(mv).expect("you weren't capturing anything!").piece_type()
+        pos.captured_piece(mv)
+            .expect("you weren't capturing anything!")
+            .piece_type()
     }
 }
