@@ -75,7 +75,7 @@ pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
-    const DIVISOR: usize = (32 + OUTPUT_BUCKETS - 1) / OUTPUT_BUCKETS;
+    const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
     (pos.n_men() as usize - 2) / DIVISOR
 }
 

@@ -273,7 +273,7 @@ impl TT {
     }
 }
 
-impl<'a> TTView<'a> {
+impl TTView<'_> {
     fn wrap_key(&self, key: u64) -> usize {
         #![allow(clippy::cast_possible_truncation)]
         let key = u128::from(key);
