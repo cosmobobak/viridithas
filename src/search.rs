@@ -640,7 +640,13 @@ impl Board {
         let futility = stand_pat + 150;
 
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
-            if !in_check && futility <= alpha && !self.static_exchange_eval(m, 1) {
+            let is_tactical = self.is_tactical(m);
+            if best_score > -MINIMUM_TB_WIN_SCORE
+                && is_tactical
+                && !in_check
+                && futility <= alpha
+                && !self.static_exchange_eval(m, 1)
+            {
                 if best_score < futility {
                     best_score = futility;
                 }

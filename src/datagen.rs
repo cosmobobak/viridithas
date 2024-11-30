@@ -946,6 +946,7 @@ struct DataSetStats {
 }
 
 /// Scans a variable-length game format file and prints statistics about it.
+#[allow(clippy::too_many_lines)]
 pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mut move_buffer = Vec::new();
     let mut stats = DataSetStats::default();

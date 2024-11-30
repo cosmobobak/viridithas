@@ -289,7 +289,7 @@ impl UnquantisedNetwork {
 
 impl QuantisedNetwork {
     /// Convert the network parameters into a format optimal for inference.
-    #[allow(clippy::cognitive_complexity, clippy::needless_range_loop)]
+    #[allow(clippy::cognitive_complexity, clippy::needless_range_loop, clippy::too_many_lines)]
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
