@@ -8,7 +8,7 @@ use crate::{
     chessmove::Move,
     util::{
         self,
-        depth::{CompactDepthStorage, Depth},
+        depth::CompactDepthStorage,
     },
 };
 
@@ -219,7 +219,7 @@ pub struct TTView<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct TTHit {
     pub mov: Option<Move>,
-    pub depth: Depth,
+    pub depth: i32,
     pub bound: Bound,
     pub value: i32,
     pub eval: i32,
@@ -306,7 +306,7 @@ impl TTView<'_> {
         score: i32,
         eval: i32,
         flag: Bound,
-        depth: Depth,
+        depth: i32,
         pv: bool,
     ) {
         // get index into the table:
@@ -362,8 +362,8 @@ impl TTView<'_> {
         // we use quadratic scaling of the age to allow entries that aren't too old to be kept,
         // but to ensure that *really* old entries are overwritten even if they are of high depth.
         let insert_priority =
-            depth + insert_flag_bonus + (age_differential * age_differential) / 4 + Depth::from(pv);
-        let record_prority = Depth::from(tte.depth) + record_flag_bonus;
+            depth + insert_flag_bonus + (age_differential * age_differential) / 4 + i32::from(pv);
+        let record_prority = i32::from(tte.depth) + record_flag_bonus;
 
         // replace the entry:
         // 1. unconditionally if we're in the root node (holdover from TT-pv probing)
@@ -488,7 +488,7 @@ mod tests {
     #![allow(unused_imports)]
     use crate::{
         piece::PieceType,
-        util::{depth::ZERO_PLY, Square},
+        util::Square,
     };
 
     use super::*;
@@ -508,7 +508,7 @@ mod tests {
                 Square::new_clamped(0x1B),
             )),
             score: 0xAB,
-            depth: Depth::new(0x13).try_into().unwrap(),
+            depth: 0x13.try_into().unwrap(),
             info: PackedInfo::new(31, Bound::Exact, true),
             evaluation: 0xCDEFu16 as i16,
         };

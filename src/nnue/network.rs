@@ -12,7 +12,7 @@ use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
     piece::{Black, Col, Colour, Piece, PieceType, White},
-    util::{self, Square, MAX_DEPTH},
+    util::{self, Square, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -562,7 +562,7 @@ pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Re
 }
 
 /// The size of the stack used to store the activations of the hidden layer.
-const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
+const ACC_STACK_SIZE: usize = MAX_PLY + 1;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PovUpdate {

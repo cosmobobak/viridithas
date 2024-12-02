@@ -7,10 +7,7 @@ use crate::{
     search::{parameters::Config, LMTable},
     timemgmt::{SearchLimit, TimeManager},
     uci,
-    util::{
-        depth::{Depth, ZERO_PLY},
-        BatchedAtomicCounter,
-    },
+    util::BatchedAtomicCounter,
 };
 
 #[cfg(feature = "stats")]
@@ -27,7 +24,7 @@ pub struct SearchInfo<'a> {
     /// Signal to stop the search.
     pub stopped: &'a AtomicBool,
     /// The highest depth reached (selective depth).
-    pub seldepth: Depth,
+    pub seldepth: i32,
     /// A handle to a receiver for stdin.
     pub stdin_rx: Option<&'a Mutex<mpsc::Receiver<String>>>,
     /// Whether to print the search info to stdout.
@@ -63,7 +60,7 @@ impl<'a> SearchInfo<'a> {
             nodes: BatchedAtomicCounter::new(nodes),
             root_move_nodes: [[0; 64]; 64],
             stopped,
-            seldepth: ZERO_PLY,
+            seldepth: 0,
             stdin_rx: None,
             print_to_stdout: true,
             conf: Config::default(),

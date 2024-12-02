@@ -9,7 +9,6 @@ use crate::{
     chessmove::Move,
     search::{parameters::Config, pv::PVariation, SmpThreadType},
     transpositiontable::Bound,
-    util::depth::Depth,
 };
 
 const MOVE_OVERHEAD: u64 = 30;
@@ -45,7 +44,7 @@ impl ForcedMoveType {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
-    Depth(Depth),
+    Depth(i32),
     Time(u64),
     Nodes(u64),
     Mate {
@@ -90,7 +89,7 @@ impl SearchLimit {
         }
     }
 
-    pub const fn depth(&self) -> Option<Depth> {
+    pub const fn depth(&self) -> Option<i32> {
         match self {
             Self::Depth(d) => Some(*d),
             _ => None,
@@ -339,9 +338,9 @@ impl TimeManager {
     pub fn mate_found_breaker<ThTy: SmpThreadType>(
         &mut self,
         pv: &PVariation,
-        depth: Depth,
+        depth: i32,
     ) -> ControlFlow<()> {
-        const MINIMUM_MATE_BREAK_DEPTH: Depth = Depth::new(10);
+        const MINIMUM_MATE_BREAK_DEPTH: i32 = 10;
         if ThTy::MAIN_THREAD
             && self.is_dynamic()
             && is_mate_score(pv.score())
@@ -357,9 +356,9 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    const SLIGHTLY_FORCED: Depth = Depth::new(12);
-    const VERY_FORCED: Depth = Depth::new(8);
-    pub fn report_forced_move(&mut self, depth: Depth, conf: &Config) {
+    const SLIGHTLY_FORCED: i32 = 12;
+    const VERY_FORCED: i32 = 8;
+    pub fn report_forced_move(&mut self, depth: i32, conf: &Config) {
         assert_eq!(self.found_forced_move, ForcedMoveType::None);
         if depth >= Self::SLIGHTLY_FORCED {
             // reduce thinking time by conf.weak_forced_tm_frac
@@ -375,7 +374,7 @@ impl TimeManager {
         }
     }
 
-    pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
+    pub fn check_for_forced_move(&self, depth: i32) -> Option<i32> {
         if self.found_forced_move == ForcedMoveType::None && self.is_dynamic() {
             if depth >= Self::SLIGHTLY_FORCED {
                 Some(170)
@@ -411,7 +410,7 @@ impl TimeManager {
 
     pub fn report_completed_depth(
         &mut self,
-        _depth: Depth,
+        _depth: i32,
         eval: i32,
         best_move: Move,
         best_move_nodes_fraction: Option<f64>,
@@ -464,8 +463,8 @@ impl TimeManager {
         self.prev_score = eval;
     }
 
-    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound, conf: &Config) {
-        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
+    pub fn report_aspiration_fail(&mut self, depth: i32, bound: Bound, conf: &Config) {
+        const FAIL_LOW_UPDATE_THRESHOLD: i32 = 0;
         let SearchLimit::Dynamic {
             our_clock,
             our_inc,

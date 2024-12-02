@@ -1,13 +1,13 @@
 use crate::{
     chessmove::Move,
     piece::{Colour, Piece, PieceType},
-    util::{depth::Depth, Square, BOARD_N_SQUARES},
+    util::{Square, BOARD_N_SQUARES},
 };
 
 const AGEING_DIVISOR: i16 = 2;
 
-fn history_bonus(depth: Depth) -> i32 {
-    i32::min(200 * depth.round(), 1600)
+fn history_bonus(depth: i32) -> i32 {
+    i32::min(200 * depth, 1600)
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
@@ -16,7 +16,7 @@ pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
 pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 
-pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
+pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
     const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let delta = if is_good {

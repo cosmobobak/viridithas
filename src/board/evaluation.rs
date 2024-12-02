@@ -7,7 +7,7 @@ use crate::{
     piece::{Colour, Piece, PieceType},
     search::draw_score,
     threadlocal::ThreadData,
-    util::MAX_DEPTH,
+    util::{MAX_DEPTH, MAX_PLY},
 };
 
 /// The value of checkmate.
@@ -17,32 +17,32 @@ use crate::{
 pub const MATE_SCORE: i32 = i16::MAX as i32 - 300;
 pub const fn mate_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_PLY);
     MATE_SCORE - ply as i32
 }
 pub const fn mated_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_PLY);
     -MATE_SCORE + ply as i32
 }
 pub const TB_WIN_SCORE: i32 = MATE_SCORE - 1000;
 pub const fn tb_win_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_PLY);
     TB_WIN_SCORE - ply as i32
 }
 pub const fn tb_loss_in(ply: usize) -> i32 {
     #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    debug_assert!(ply <= MAX_DEPTH.ply_to_horizon());
+    debug_assert!(ply <= MAX_PLY);
     -TB_WIN_SCORE + ply as i32
 }
 
 /// A threshold over which scores must be mate.
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
+const MINIMUM_MATE_SCORE: i32 = MATE_SCORE - MAX_DEPTH;
 /// A threshold over which scores must be a TB win (or mate).
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH.ply_to_horizon() as i32;
+pub const MINIMUM_TB_WIN_SCORE: i32 = TB_WIN_SCORE - MAX_DEPTH;
 
 pub const fn is_mate_score(score: i32) -> bool {
     score.abs() >= MINIMUM_MATE_SCORE

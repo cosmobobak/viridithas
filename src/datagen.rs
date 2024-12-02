@@ -38,7 +38,7 @@ use crate::{
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{depth::Depth, Square, MEGABYTE},
+    util::{Square, MEGABYTE},
 };
 
 const MIN_SAVE_PLY: usize = 16;
@@ -277,7 +277,7 @@ fn generate_on_thread(
     let mut thread_data = ThreadData::new(0, &board, tt.view(), nnue_params);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
-        DataGenLimit::Depth(depth) => SearchLimit::Depth(Depth::new(depth)),
+        DataGenLimit::Depth(depth) => SearchLimit::Depth(depth),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
             soft_limit: nodes,
             hard_limit: nodes * 8,
@@ -388,7 +388,7 @@ fn generate_on_thread(
         }
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager
-            .set_limit(SearchLimit::Depth(Depth::new(10)));
+            .set_limit(SearchLimit::Depth(10));
         let (eval, _) =
             board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
