@@ -215,7 +215,7 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
                 depth = Some(
                     part_parse("depth", parts.next())
                         .with_context(|| "Failed to parse depth part.")?,
-                )
+                );
             }
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
