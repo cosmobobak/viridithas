@@ -503,8 +503,6 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        println!("qs: ply = {}", self.height());
-
         if info.nodes.just_ticked_over() && info.check_up() {
             return 0;
         }
@@ -727,8 +725,6 @@ impl Board {
     ) -> i32 {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-
-        println!("ab: depth = {depth}, ply = {}", self.height());
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -1326,7 +1322,7 @@ impl Board {
                         // reduce winning captures less
                         r -= 1;
                     }
-                    (r).clamp(1, depth - 1)
+                    r.clamp(1, depth - 1)
                 } else {
                     1
                 };

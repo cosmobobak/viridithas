@@ -16,7 +16,7 @@ impl TryFrom<i32> for CompactDepthStorage {
     type Error = <u8 as std::convert::TryFrom<i32>>::Error;
     fn try_from(depth: i32) -> Result<Self, Self::Error> {
         let inner = depth.try_into()?;
-        Ok(inner)
+        Ok(Self(inner))
     }
 }
 

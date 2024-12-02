@@ -634,8 +634,6 @@ impl UpdateBuffer {
 /// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
 /// having to completely recompute the accumulator for a position, instead
 /// partially reconstructing it from the last-seen accumulator.
-#[allow(clippy::large_stack_frames)]
-#[derive(Clone)]
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
@@ -718,8 +716,7 @@ pub struct MovedPiece {
 }
 
 /// State of the partial activations of the NNUE network.
-#[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
-#[derive(Clone)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct NNUEState {
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],

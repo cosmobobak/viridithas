@@ -28,7 +28,6 @@ pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
     *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
@@ -66,7 +65,6 @@ impl HistoryTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct ThreatsHistoryTable {
     table: [[HistoryTable; 2]; 2],
@@ -110,7 +108,6 @@ impl ThreatsHistoryTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
     table: [HistoryTable; 6],
@@ -156,8 +153,6 @@ pub struct ContHistIndex {
     pub square: Square,
 }
 
-#[allow(clippy::large_stack_frames)]
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
     table: [[HistoryTable; BOARD_N_SQUARES]; 12],
@@ -203,7 +198,6 @@ impl DoubleHistoryTable {
     }
 }
 
-#[derive(Clone)]
 pub struct MoveTable {
     table: Box<[[Option<Move>; BOARD_N_SQUARES]; 12]>,
 }
@@ -228,7 +222,6 @@ impl MoveTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
     table: [[i32; CORRECTION_HISTORY_SIZE]; 2],
