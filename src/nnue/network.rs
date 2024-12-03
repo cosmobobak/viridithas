@@ -254,7 +254,10 @@ impl UnquantisedNetwork {
                 {
                     // skip connection:
                     let v = self.l1s_weights[i][bucket][0] * f32::from(QB);
-                    assert!(v.abs() <= QB_BOUND, "L1 weight {v} is too large (max = {QB_BOUND})");
+                    assert!(
+                        v.abs() <= QB_BOUND,
+                        "L1 weight {v} is too large (max = {QB_BOUND})"
+                    );
                     let v = v.round() as i8;
                     net.l1_weights[i][bucket][L2_SIZE] = v;
                 }
@@ -262,7 +265,12 @@ impl UnquantisedNetwork {
         }
 
         // transfer the L1 biases
-        for ((src, skip), dst) in self.l1_biases.iter().zip(&self.l1s_biases).zip(&mut net.l1_biases) {
+        for ((src, skip), dst) in self
+            .l1_biases
+            .iter()
+            .zip(&self.l1s_biases)
+            .zip(&mut net.l1_biases)
+        {
             dst[..L2_SIZE].copy_from_slice(src);
             dst[L2_SIZE] = skip[0];
         }
@@ -312,7 +320,11 @@ impl UnquantisedNetwork {
 
 impl QuantisedNetwork {
     /// Convert the network parameters into a format optimal for inference.
-    #[allow(clippy::cognitive_complexity, clippy::needless_range_loop, clippy::too_many_lines)]
+    #[allow(
+        clippy::cognitive_complexity,
+        clippy::needless_range_loop,
+        clippy::too_many_lines
+    )]
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
@@ -408,7 +420,8 @@ impl QuantisedNetwork {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
                     for j in 0..=L2_SIZE {
                         for k in 0..L1_CHUNK_PER_32 {
-                            net.l1_weights[bucket][i * L1_CHUNK_PER_32 * (L2_SIZE + 1) + j * L1_CHUNK_PER_32 + k] =
+                            net.l1_weights[bucket]
+                                [i * L1_CHUNK_PER_32 * (L2_SIZE + 1) + j * L1_CHUNK_PER_32 + k] =
                                 sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
                         }
                     }
@@ -1220,9 +1233,25 @@ impl NNUEState {
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
         let mut l3_output = 0.0;
 
-        layers::activate_ft_and_propagate_l1(us, them, &nn.l1_weights[out], &nn.l1_bias[out], &mut l1_outputs);
-        layers::propagate_l2(&l1_outputs, &nn.l2_weights[out], &nn.l2_bias[out], &mut l2_outputs);
-        layers::propagate_l3(&l2_outputs, &nn.l3_weights[out], nn.l1_bias[out][15], &mut l3_output);
+        layers::activate_ft_and_propagate_l1(
+            us,
+            them,
+            &nn.l1_weights[out],
+            &nn.l1_bias[out],
+            &mut l1_outputs,
+        );
+        layers::propagate_l2(
+            &l1_outputs,
+            &nn.l2_weights[out],
+            &nn.l2_bias[out],
+            &mut l2_outputs,
+        );
+        layers::propagate_l3(
+            &l2_outputs,
+            &nn.l3_weights[out],
+            nn.l1_bias[out][15],
+            &mut l3_output,
+        );
 
         let psqt_output = Self::propagate_psqt(pos, nn, stm, out);
 

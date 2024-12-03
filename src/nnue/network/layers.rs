@@ -77,7 +77,8 @@ mod generic {
         // passthrough the last one:
         // SAFETY: We have one extra padding value because of the skip connection.
         unsafe {
-            let skip = (*sums.get_unchecked(L2_SIZE) as f32).mul_add(L1_MUL, *biases.get_unchecked(L2_SIZE));
+            let skip = (*sums.get_unchecked(L2_SIZE) as f32)
+                .mul_add(L1_MUL, *biases.get_unchecked(L2_SIZE));
             *output.get_unchecked_mut(L2_SIZE) = skip;
         }
     }

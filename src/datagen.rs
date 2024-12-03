@@ -387,8 +387,7 @@ fn generate_on_thread(
             eprintln!("Evaluating position...");
         }
         let temp_limit = info.time_manager.limit().clone();
-        info.time_manager
-            .set_limit(SearchLimit::Depth(10));
+        info.time_manager.set_limit(SearchLimit::Depth(10));
         let (eval, _) =
             board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
