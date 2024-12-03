@@ -12,7 +12,7 @@ use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
     piece::{Black, Col, Colour, Piece, PieceType, White},
-    util::{self, Square, MAX_DEPTH},
+    util::{self, Square, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -562,7 +562,7 @@ pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Re
 }
 
 /// The size of the stack used to store the activations of the hidden layer.
-const ACC_STACK_SIZE: usize = MAX_DEPTH.ply_to_horizon() + 1;
+const ACC_STACK_SIZE: usize = MAX_PLY + 1;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PovUpdate {
@@ -634,8 +634,6 @@ impl UpdateBuffer {
 /// Stores last-seen accumulators for each bucket, so that we can hopefully avoid
 /// having to completely recompute the accumulator for a position, instead
 /// partially reconstructing it from the last-seen accumulator.
-#[allow(clippy::large_stack_frames)]
-#[derive(Clone)]
 pub struct BucketAccumulatorCache {
     // both of these are BUCKETS * 2, rather than just BUCKETS,
     // because we use a horizontally-mirrored architecture.
@@ -718,8 +716,7 @@ pub struct MovedPiece {
 }
 
 /// State of the partial activations of the NNUE network.
-#[allow(clippy::upper_case_acronyms, clippy::large_stack_frames)]
-#[derive(Clone)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct NNUEState {
     /// Accumulators for the first layer.
     pub accumulators: [Accumulator; ACC_STACK_SIZE],

@@ -1,13 +1,13 @@
 use crate::{
     chessmove::Move,
     piece::{Colour, Piece, PieceType},
-    util::{depth::Depth, Square, BOARD_N_SQUARES},
+    util::{Square, BOARD_N_SQUARES},
 };
 
 const AGEING_DIVISOR: i16 = 2;
 
-fn history_bonus(depth: Depth) -> i32 {
-    i32::min(200 * depth.round(), 1600)
+fn history_bonus(depth: i32) -> i32 {
+    i32::min(200 * depth, 1600)
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
@@ -16,7 +16,7 @@ pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
 pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 
-pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
+pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
     const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
     let delta = if is_good {
@@ -28,7 +28,6 @@ pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
     *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
@@ -66,7 +65,6 @@ impl HistoryTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct ThreatsHistoryTable {
     table: [[HistoryTable; 2]; 2],
@@ -110,7 +108,6 @@ impl ThreatsHistoryTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
     table: [HistoryTable; 6],
@@ -156,8 +153,6 @@ pub struct ContHistIndex {
     pub square: Square,
 }
 
-#[allow(clippy::large_stack_frames)]
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
     table: [[HistoryTable; BOARD_N_SQUARES]; 12],
@@ -203,7 +198,6 @@ impl DoubleHistoryTable {
     }
 }
 
-#[derive(Clone)]
 pub struct MoveTable {
     table: Box<[[Option<Move>; BOARD_N_SQUARES]; 12]>,
 }
@@ -228,7 +222,6 @@ impl MoveTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
     table: [[i32; CORRECTION_HISTORY_SIZE]; 2],

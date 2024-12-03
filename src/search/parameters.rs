@@ -1,12 +1,8 @@
 use std::fmt::Display;
 
-use crate::{
-    timemgmt::{
-        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
-        NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC,
-        WEAK_FORCED_TM_FRAC,
-    },
-    util::depth::Depth,
+use crate::timemgmt::{
+    DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
+    NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
 };
 
 use super::{
@@ -37,22 +33,22 @@ pub struct Config {
     pub futility_coeff_1: i32,
     pub razoring_coeff_0: i32,
     pub razoring_coeff_1: i32,
-    pub rfp_depth: Depth,
-    pub nmp_base_reduction: Depth,
-    pub nmp_verification_depth: Depth,
-    pub lmp_depth: Depth,
-    pub tt_reduction_depth: Depth,
-    pub tt_extension_depth: Depth,
-    pub futility_depth: Depth,
-    pub singularity_depth: Depth,
+    pub rfp_depth: i32,
+    pub nmp_base_reduction: i32,
+    pub nmp_verification_depth: i32,
+    pub lmp_depth: i32,
+    pub tt_reduction_depth: i32,
+    pub tt_extension_depth: i32,
+    pub futility_depth: i32,
+    pub singularity_depth: i32,
     pub dext_margin: i32,
-    pub see_depth: Depth,
+    pub see_depth: i32,
     pub lmr_base: f64,
     pub lmr_division: f64,
     pub probcut_margin: i32,
     pub probcut_improving_margin: i32,
-    pub probcut_reduction: Depth,
-    pub probcut_min_depth: Depth,
+    pub probcut_reduction: i32,
+    pub probcut_min_depth: i32,
     pub strong_forced_tm_frac: u32,
     pub weak_forced_tm_frac: u32,
     pub default_moves_to_go: u32,
@@ -68,7 +64,7 @@ pub struct Config {
     pub main_see_bound: i32,
     pub do_deeper_base_margin: i32,
     pub do_deeper_depth_margin: i32,
-    pub history_pruning_depth: Depth,
+    pub history_pruning_depth: i32,
     pub history_pruning_margin: i32,
 }
 

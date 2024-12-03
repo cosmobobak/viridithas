@@ -33,10 +33,7 @@ use crate::{
     threadlocal::ThreadData,
     transpositiontable::{Bound, TTHit, TTView},
     uci,
-    util::{
-        depth::{Depth, ONE_PLY, ZERO_PLY},
-        INFINITY, MAX_DEPTH, VALUE_NONE,
-    },
+    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -53,7 +50,7 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_WINDOW: i32 = 6;
-const ASPIRATION_WINDOW_MIN_DEPTH: Depth = Depth::new(5);
+const ASPIRATION_WINDOW_MIN_DEPTH: i32 = 5;
 const RFP_MARGIN: i32 = 73;
 const RFP_IMPROVING_MARGIN: i32 = 58;
 const NMP_IMPROVING_MARGIN: i32 = 73;
@@ -69,18 +66,18 @@ const RAZORING_COEFF_0: i32 = 392;
 const RAZORING_COEFF_1: i32 = 267;
 const PROBCUT_MARGIN: i32 = 203;
 const PROBCUT_IMPROVING_MARGIN: i32 = 53;
-const RFP_DEPTH: Depth = Depth::new(8);
-const NMP_BASE_REDUCTION: Depth = Depth::new(4);
-const NMP_VERIFICATION_DEPTH: Depth = Depth::new(12);
-const LMP_DEPTH: Depth = Depth::new(8);
-const TT_REDUCTION_DEPTH: Depth = Depth::new(4);
-const TT_EXTENSION_DEPTH: Depth = Depth::new(7);
-const FUTILITY_DEPTH: Depth = Depth::new(6);
-const SINGULARITY_DEPTH: Depth = Depth::new(8);
+const RFP_DEPTH: i32 = 8;
+const NMP_BASE_REDUCTION: i32 = 4;
+const NMP_VERIFICATION_DEPTH: i32 = 12;
+const LMP_DEPTH: i32 = 8;
+const TT_REDUCTION_DEPTH: i32 = 4;
+const TT_EXTENSION_DEPTH: i32 = 7;
+const FUTILITY_DEPTH: i32 = 6;
+const SINGULARITY_DEPTH: i32 = 8;
 const DOUBLE_EXTENSION_MARGIN: i32 = 15;
-const SEE_DEPTH: Depth = Depth::new(9);
-const PROBCUT_MIN_DEPTH: Depth = Depth::new(5);
-const PROBCUT_REDUCTION: Depth = Depth::new(3);
+const SEE_DEPTH: i32 = 9;
+const PROBCUT_MIN_DEPTH: i32 = 5;
+const PROBCUT_REDUCTION: i32 = 3;
 const LMR_BASE_MOVES: u32 = 2;
 const LMR_BASE: f64 = 75.0;
 const LMR_DIVISION: f64 = 231.0;
@@ -90,10 +87,10 @@ const QS_SEE_BOUND: i32 = -108;
 const MAIN_SEE_BOUND: i32 = 0;
 const DO_DEEPER_BASE_MARGIN: i32 = 64;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
-const HISTORY_PRUNING_DEPTH: Depth = Depth::new(7);
+const HISTORY_PRUNING_DEPTH: i32 = 7;
 const HISTORY_PRUNING_MARGIN: i32 = -2500;
 
-const TIME_MANAGER_UPDATE_MIN_DEPTH: Depth = Depth::new(4);
+const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
@@ -291,7 +288,8 @@ impl Board {
             .limit()
             .depth()
             .unwrap_or(MAX_DEPTH - 1)
-            .ply_to_horizon();
+            .try_into()
+            .unwrap_or_default();
         let starting_depth = 1 + t.thread_id % 10;
         let mut average_value = VALUE_NONE;
         'deepening: for d in starting_depth..=max_depth {
@@ -304,13 +302,13 @@ impl Board {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
                 }
-                if info
+                if d > info
                     .time_manager
                     .limit()
                     .depth()
                     .unwrap_or(MAX_DEPTH - 1)
-                    .ply_to_horizon()
-                    < d
+                    .try_into()
+                    .unwrap_or_default()
                 {
                     info.stopped.store(true, Ordering::SeqCst);
                     break 'deepening;
@@ -365,9 +363,9 @@ impl Board {
         aw: &mut AspirationWindow,
         d: usize,
         average_value: &mut i32,
-    ) -> ControlFlow<(), Depth> {
-        let mut depth = Depth::new(d.try_into().unwrap());
-        let min_depth = (depth / 2).max(ONE_PLY);
+    ) -> ControlFlow<(), i32> {
+        let mut depth = i32::try_from(d).unwrap();
+        let min_depth = (depth / 2).max(1);
         loop {
             pv.score = self.alpha_beta::<Root>(pv, info, t, depth, aw.alpha, aw.beta, false);
             if info.check_up() {
@@ -517,9 +515,7 @@ impl Board {
         pv.moves.clear();
 
         let height = self.height();
-        info.seldepth = info
-            .seldepth
-            .max(Depth::from(i32::try_from(height).unwrap()));
+        info.seldepth = info.seldepth.max(i32::try_from(height).unwrap());
 
         // check draw
         if self.is_draw() {
@@ -529,7 +525,7 @@ impl Board {
         let in_check = self.in_check();
 
         // are we too deep?
-        if height > (MAX_DEPTH - 1).ply_to_horizon() {
+        if height > MAX_PLY - 1 {
             return if in_check {
                 0
             } else {
@@ -609,7 +605,7 @@ impl Board {
                 VALUE_NONE,
                 raw_eval,
                 Bound::None,
-                ZERO_PLY,
+                0,
                 t.ss[height].ttpv,
             );
             stand_pat = t.correct_evaluation(self, raw_eval);
@@ -702,7 +698,7 @@ impl Board {
             best_score,
             raw_eval,
             flag,
-            ZERO_PLY,
+            0,
             t.ss[height].ttpv,
         );
 
@@ -722,7 +718,7 @@ impl Board {
         pv: &mut PVariation,
         info: &mut SearchInfo,
         t: &mut ThreadData,
-        mut depth: Depth,
+        mut depth: i32,
         mut alpha: i32,
         mut beta: i32,
         cut_node: bool,
@@ -736,11 +732,11 @@ impl Board {
         let key = self.zobrist_key();
 
         let in_check = self.in_check();
-        if depth <= ZERO_PLY && !in_check {
+        if depth <= 0 && !in_check {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
         }
 
-        depth = depth.max(ZERO_PLY);
+        depth = depth.max(0);
 
         pv.moves.clear();
 
@@ -755,10 +751,9 @@ impl Board {
         debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
 
         info.seldepth = if NT::ROOT {
-            ZERO_PLY
+            0
         } else {
-            info.seldepth
-                .max(Depth::from(i32::try_from(height).unwrap()))
+            info.seldepth.max(i32::try_from(height).unwrap())
         };
 
         if !NT::ROOT {
@@ -768,9 +763,7 @@ impl Board {
             }
 
             // are we too deep?
-            let max_height = MAX_DEPTH
-                .ply_to_horizon()
-                .min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+            let max_height = MAX_PLY.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
             if height >= max_height {
                 return if in_check {
                     0
@@ -834,7 +827,7 @@ impl Board {
         if !NT::ROOT
             && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
-            && (depth >= Depth::new(uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst))
+            && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
                 || self.n_men() < cardinality)
             && self.n_men() <= cardinality
         {
@@ -976,7 +969,7 @@ impl Board {
             // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
             if !last_move_was_null
-                && depth >= Depth::new(3)
+                && depth >= 3
                 && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
@@ -1037,8 +1030,8 @@ impl Board {
 
         // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
         let see_table = [
-            info.conf.see_tactical_margin * depth.squared(),
-            info.conf.see_quiet_margin * depth.round(),
+            info.conf.see_tactical_margin * depth * depth,
+            info.conf.see_quiet_margin * depth,
         ];
 
         // store the eval into the TT if we won't overwrite anything:
@@ -1050,7 +1043,7 @@ impl Board {
                 VALUE_NONE,
                 raw_eval,
                 Bound::None,
-                ZERO_PLY,
+                0,
                 t.ss[height].ttpv,
             );
         }
@@ -1155,7 +1148,7 @@ impl Board {
             }
 
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
-            let lmr_depth = std::cmp::max(depth - lmr_reduction, ZERO_PLY);
+            let lmr_depth = std::cmp::max(depth - lmr_reduction, 0);
             let is_quiet = !self.is_tactical(m);
             let is_winning_capture = movepick_score > WINNING_CAPTURE_SCORE;
 
@@ -1193,8 +1186,7 @@ impl Board {
 
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
-                let fp_margin =
-                    lmr_depth.round() * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
+                let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
                 if is_quiet
                     && lmr_depth < info.conf.futility_depth
                     && static_eval + fp_margin <= alpha
@@ -1309,7 +1301,7 @@ impl Board {
                     -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= Depth::new(3)
+                let r = if depth >= 3
                     && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
@@ -1330,9 +1322,9 @@ impl Board {
                         // reduce winning captures less
                         r -= 1;
                     }
-                    Depth::new(r).clamp(ONE_PLY, depth - 1)
+                    r.clamp(1, depth - 1)
                 } else {
-                    ONE_PLY
+                    1
                 };
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
@@ -1348,15 +1340,15 @@ impl Board {
                 );
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
-                if score > alpha && r > ONE_PLY {
+                if score > alpha && r > 1 {
                     let do_deeper_search = score
                         > (best_score
                             + info.conf.do_deeper_base_margin
                             + info.conf.do_deeper_depth_margin * r);
-                    let do_shallower_search = score < best_score + new_depth.round();
+                    let do_shallower_search = score < best_score + new_depth;
                     // depending on the value that the reduced search kicked out,
                     // we might want to do a deeper search, or a shallower search.
-                    new_depth += Depth::from(do_deeper_search) - Depth::from(do_shallower_search);
+                    new_depth += i32::from(do_deeper_search) - i32::from(do_shallower_search);
                     // check if we're actually going to do a deeper search than before
                     // (no point if the re-search is the same as the normal one lol)
                     if new_depth - 1 > reduced_depth {
@@ -1500,7 +1492,7 @@ impl Board {
     }
 
     /// The margin for Reverse Futility Pruning.
-    fn rfp_margin(info: &SearchInfo, depth: Depth, improving: bool) -> i32 {
+    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool) -> i32 {
         info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
     }
 
@@ -1510,7 +1502,7 @@ impl Board {
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
         best_move: Move,
-        depth: Depth,
+        depth: i32,
     ) {
         t.update_history(self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
@@ -1519,7 +1511,7 @@ impl Board {
     }
 
     /// Update the main and continuation history tables for a single move.
-    fn update_quiet_history_single(&self, t: &mut ThreadData, move_to_adjust: Move, depth: Depth) {
+    fn update_quiet_history_single(&self, t: &mut ThreadData, move_to_adjust: Move, depth: i32) {
         t.update_history_single(self, move_to_adjust, depth);
         t.update_continuation_history_single(self, move_to_adjust, depth, 0);
         t.update_continuation_history_single(self, move_to_adjust, depth, 1);
@@ -1532,14 +1524,14 @@ impl Board {
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
         best_move: Move,
-        depth: Depth,
+        depth: i32,
     ) {
         t.update_tactical_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.
-    fn singularity_margin(tt_value: i32, depth: Depth) -> i32 {
-        (tt_value - (depth * 3 / 4).round()).max(-MATE_SCORE)
+    fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
+        (tt_value - (depth * 3 / 4)).max(-MATE_SCORE)
     }
 
     /// Test if a move is *forced* - that is, if it is a move that is
@@ -1552,7 +1544,7 @@ impl Board {
         t: &mut ThreadData,
         m: Move,
         value: i32,
-        depth: Depth,
+        depth: i32,
     ) -> bool {
         let r_beta = (value - margin).max(-MATE_SCORE);
         let r_depth = (depth - 1) / 2;
@@ -1746,7 +1738,7 @@ fn readout_info(
     if normal_uci_output {
         println!(
             "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} {pv}",
-            info.seldepth.ply_to_horizon(),
+            info.seldepth as usize,
             info.time_manager.elapsed().as_millis(),
             hashfull = tt.hashfull(),
             tbhits = TB_HITS.load(Ordering::SeqCst),
@@ -1772,7 +1764,7 @@ fn readout_info(
         };
         eprint!(
             " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
-            info.seldepth.ply_to_horizon(),
+            info.seldepth as usize,
             t = uci::format_time(info.time_manager.elapsed().as_millis()),
             knps = nps / 1_000,
             knodes = nodes / 1_000,
@@ -1833,14 +1825,14 @@ impl LMTable {
         out
     }
 
-    pub fn lm_reduction(&self, depth: Depth, moves_made: usize) -> i32 {
-        let depth = depth.ply_to_horizon().min(63);
+    pub fn lm_reduction(&self, depth: i32, moves_made: usize) -> i32 {
+        let depth: usize = depth.clamp(0, 63).try_into().unwrap_or_default();
         let played = moves_made.min(63);
         self.lm_reduction_table[depth][played]
     }
 
-    pub fn lmp_movecount(&self, depth: Depth, improving: bool) -> usize {
-        let depth = depth.ply_to_horizon().min(11);
+    pub fn lmp_movecount(&self, depth: i32, improving: bool) -> usize {
+        let depth: usize = depth.clamp(0, 11).try_into().unwrap_or_default();
         self.lmp_movecount_table[usize::from(improving)][depth]
     }
 }
@@ -1859,8 +1851,8 @@ pub struct AspirationWindow {
     pub beta_fails: i32,
 }
 
-pub fn asp_window(depth: Depth) -> i32 {
-    (ASPIRATION_WINDOW + (50 / depth.round() - 3)).max(10)
+pub fn asp_window(depth: i32) -> i32 {
+    (ASPIRATION_WINDOW + (50 / depth - 3)).max(10)
 }
 
 impl AspirationWindow {
@@ -1874,7 +1866,7 @@ impl AspirationWindow {
         }
     }
 
-    pub fn around_value(value: i32, depth: Depth) -> Self {
+    pub fn around_value(value: i32, depth: i32) -> Self {
         if is_game_theoretic_score(value) {
             // for mates / tbwins we expect a lot of fluctuation, so aspiration
             // windows are not useful.
@@ -1896,7 +1888,7 @@ impl AspirationWindow {
         }
     }
 
-    pub fn widen_down(&mut self, value: i32, depth: Depth) {
+    pub fn widen_down(&mut self, value: i32, depth: i32) {
         self.midpoint = value;
         let margin = asp_window(depth) << (self.alpha_fails + 1);
         if margin > 1369 {
@@ -1908,7 +1900,7 @@ impl AspirationWindow {
         self.alpha_fails += 1;
     }
 
-    pub fn widen_up(&mut self, value: i32, depth: Depth) {
+    pub fn widen_up(&mut self, value: i32, depth: i32) {
         self.midpoint = value;
         let margin = asp_window(depth) << (self.beta_fails + 1);
         if margin > 1369 {

@@ -6,7 +6,7 @@ use crate::{
     },
     piece::{Colour, PieceType},
     threadlocal::ThreadData,
-    util::{depth::Depth, Undo, MAX_DEPTH},
+    util::{Undo, MAX_PLY},
 };
 
 use super::{movegen::MoveListEntry, Board};
@@ -18,7 +18,7 @@ impl ThreadData<'_> {
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
-        depth: Depth,
+        depth: i32,
     ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
@@ -39,7 +39,7 @@ impl ThreadData<'_> {
     }
 
     /// Update the history counters for a single move.
-    pub fn update_history_single(&mut self, pos: &Board, m: Move, depth: Depth) {
+    pub fn update_history_single(&mut self, pos: &Board, m: Move, depth: i32) {
         let Some(piece_moved) = pos.moved_piece(m) else {
             return;
         };
@@ -88,7 +88,7 @@ impl ThreadData<'_> {
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
-        depth: Depth,
+        depth: i32,
     ) {
         for &m in moves_to_adjust {
             let piece_moved = pos.moved_piece(m);
@@ -130,7 +130,7 @@ impl ThreadData<'_> {
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
-        depth: Depth,
+        depth: i32,
         index: usize,
     ) {
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
@@ -166,7 +166,7 @@ impl ThreadData<'_> {
         &mut self,
         pos: &Board,
         m: Move,
-        depth: Depth,
+        depth: i32,
         index: usize,
     ) {
         let Some(piece) = pos.moved_piece(m) else {
@@ -262,7 +262,7 @@ impl ThreadData<'_> {
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        debug_assert!(pos.height < MAX_PLY);
         let idx = pos.height;
         if self.killer_move_table[idx][0] == Some(m) {
             return;
@@ -273,7 +273,7 @@ impl ThreadData<'_> {
 
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height < MAX_DEPTH.ply_to_horizon());
+        debug_assert!(pos.height < MAX_PLY);
         let Some(&Undo {
             cont_hist_index: Some(cont_hist_index),
             ..
@@ -305,7 +305,7 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, pos: &Board, depth: Depth, diff: i32) {
+    pub fn update_correction_history(&mut self, pos: &Board, depth: i32, diff: i32) {
         use Colour::{Black, White};
         fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
             let update =
@@ -317,7 +317,7 @@ impl ThreadData<'_> {
             );
         }
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
-        let new_weight = 16.min(1 + depth.round());
+        let new_weight = 16.min(1 + depth);
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = pos.turn();
 

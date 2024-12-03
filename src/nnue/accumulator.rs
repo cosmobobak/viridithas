@@ -7,7 +7,6 @@ use super::network::{
 };
 
 /// Activations of the hidden layer.
-#[derive(Debug, Clone)]
 pub struct Accumulator {
     pub white: Align64<[i16; L1_SIZE]>,
     pub black: Align64<[i16; L1_SIZE]>,

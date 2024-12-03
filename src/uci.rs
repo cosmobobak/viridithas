@@ -42,7 +42,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::SearchLimit,
     transpositiontable::TT,
-    util::{MAX_DEPTH, MEGABYTE},
+    util::{MAX_PLY, MEGABYTE},
     NAME, VERSION,
 };
 
@@ -52,7 +52,7 @@ const UCI_MAX_THREADS: usize = 512;
 
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
-pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH.ply_to_horizon());
+pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_PLY);
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
@@ -236,14 +236,14 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
-        GO_MATE_MAX_DEPTH.store(MAX_DEPTH.ply_to_horizon(), Ordering::SeqCst);
+        GO_MATE_MAX_DEPTH.store(MAX_PLY, Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
         limit = SearchLimit::Time(movetime);
     }
     if let Some(depth) = depth {
-        limit = SearchLimit::Depth(depth.into());
+        limit = SearchLimit::Depth(depth);
     }
 
     if let [Some(our_clock), Some(their_clock)] = clocks {
