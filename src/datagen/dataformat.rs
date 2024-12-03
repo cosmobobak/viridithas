@@ -107,8 +107,8 @@ impl Filter {
     }
 
     pub fn from_path(path: &Path) -> Result<Self, anyhow::Error> {
-        let text =
-            std::fs::read_to_string(path).with_context(|| format!("Failed to read filter config file at {path:?}"))?;
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read filter config file at {path:?}"))?;
         toml::from_str(&text).with_context(|| {
             let default = toml::to_string_pretty(&Self::default()).unwrap();
             format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
@@ -124,7 +124,8 @@ pub struct Game {
     moves: Vec<(Move, marlinformat::util::I16Le)>,
 }
 
-const SEQUENCE_ELEM_SIZE: usize = std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
+const SEQUENCE_ELEM_SIZE: usize =
+    std::mem::size_of::<Move>() + std::mem::size_of::<marlinformat::util::I16Le>();
 const NULL_TERMINATOR: [u8; SEQUENCE_ELEM_SIZE] = [0; SEQUENCE_ELEM_SIZE];
 
 impl WDL {
@@ -142,7 +143,10 @@ impl Game {
     pub const MAX_SPLATTABLE_GAME_SIZE: usize = 512;
 
     pub fn new(initial_position: &Board) -> Self {
-        Self { initial_position: initial_position.pack(0, 0, 0), moves: Vec::new() }
+        Self {
+            initial_position: initial_position.pack(0, 0, 0),
+            moves: Vec::new(),
+        }
     }
 
     pub fn initial_position(&self) -> Board {
@@ -232,7 +236,10 @@ impl Game {
             #[cfg(debug_assertions)]
             real_board.make_move_simple(mv);
         }
-        Ok(Self { initial_position, moves })
+        Ok(Self {
+            initial_position,
+            moves,
+        })
     }
 
     /// Exposes a reference to each position and associated evaluation in the game sequentially, via a callback.
@@ -273,7 +280,8 @@ impl Game {
             return Ok(());
         }
 
-        let mut sample_buffer = ArrayVec::<marlinformat::PackedBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
+        let mut sample_buffer =
+            ArrayVec::<marlinformat::PackedBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
@@ -308,7 +316,8 @@ impl Game {
             return Ok(());
         }
 
-        let mut sample_buffer = ArrayVec::<bulletformat::ChessBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
+        let mut sample_buffer =
+            ArrayVec::<bulletformat::ChessBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
@@ -334,7 +343,9 @@ impl Game {
                         f32::from(wdl) / 2.0,
                     )
                     .map_err(|e| anyhow!(e))
-                    .with_context(|| "Failed to convert raw components into bulletformat::ChessBoard.")?,
+                    .with_context(|| {
+                        "Failed to convert raw components into bulletformat::ChessBoard."
+                    })?,
                 );
             }
             board.make_move_simple(*mv);
@@ -369,12 +380,36 @@ mod tests {
     #[ignore]
     fn roundtrip() {
         fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
-            assert_eq!(lhs.pieces.all_pawns(), rhs.pieces.all_pawns(), "pawn square-sets {msg}");
-            assert_eq!(lhs.pieces.all_knights(), rhs.pieces.all_knights(), "knight square-sets {msg}");
-            assert_eq!(lhs.pieces.all_bishops(), rhs.pieces.all_bishops(), "bishop square-sets {msg}");
-            assert_eq!(lhs.pieces.all_rooks(), rhs.pieces.all_rooks(), "rook square-sets {msg}");
-            assert_eq!(lhs.pieces.all_queens(), rhs.pieces.all_queens(), "queen square-sets {msg}");
-            assert_eq!(lhs.pieces.all_kings(), rhs.pieces.all_kings(), "king square-sets {msg}");
+            assert_eq!(
+                lhs.pieces.all_pawns(),
+                rhs.pieces.all_pawns(),
+                "pawn square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.all_knights(),
+                rhs.pieces.all_knights(),
+                "knight square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.all_bishops(),
+                rhs.pieces.all_bishops(),
+                "bishop square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.all_rooks(),
+                rhs.pieces.all_rooks(),
+                "rook square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.all_queens(),
+                rhs.pieces.all_queens(),
+                "queen square-sets {msg}"
+            );
+            assert_eq!(
+                lhs.pieces.all_kings(),
+                rhs.pieces.all_kings(),
+                "king square-sets {msg}"
+            );
             assert_eq!(
                 lhs.pieces.occupied_co(Colour::White),
                 rhs.pieces.occupied_co(Colour::White),
@@ -390,8 +425,16 @@ mod tests {
             }
             assert_eq!(lhs.turn(), rhs.turn(), "side {msg}");
             assert_eq!(lhs.ep_sq(), rhs.ep_sq(), "ep_sq {msg}");
-            assert_eq!(lhs.castling_rights(), rhs.castling_rights(), "castle_perm {msg}");
-            assert_eq!(lhs.fifty_move_counter(), rhs.fifty_move_counter(), "fifty_move_counter {msg}");
+            assert_eq!(
+                lhs.castling_rights(),
+                rhs.castling_rights(),
+                "castle_perm {msg}"
+            );
+            assert_eq!(
+                lhs.fifty_move_counter(),
+                rhs.fifty_move_counter(),
+                "fifty_move_counter {msg}"
+            );
             assert_eq!(lhs.ply(), rhs.ply(), "ply {msg}");
             assert_eq!(lhs.all_keys(), rhs.all_keys(), "key {msg}");
             assert_eq!(lhs.threats(), rhs.threats(), "threats {msg}");

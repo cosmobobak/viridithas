@@ -7,8 +7,10 @@ use crate::{
     util::Square,
 };
 
-pub const KEYS: [u64; 8192] = unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
-pub const MOVES: [Option<Move>; 8192] = unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
+pub const KEYS: [u64; 8192] =
+    unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
+pub const MOVES: [Option<Move>; 8192] =
+    unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
 
 pub const fn h1(key: u64) -> usize {
     (key & 0x1FFF) as usize
@@ -33,7 +35,8 @@ pub fn init() -> anyhow::Result<()> {
         for square0 in Square::all() {
             for square1 in Square::all().filter(|&s1| s1 > square0) {
                 // check if a piece of this type standing on square0 could attack square1
-                let attack_overlap = attacks_by_type(piece.piece_type(), square0, SquareSet::EMPTY) & square1.as_set();
+                let attack_overlap = attacks_by_type(piece.piece_type(), square0, SquareSet::EMPTY)
+                    & square1.as_set();
                 if attack_overlap == SquareSet::EMPTY {
                     continue;
                 }

@@ -220,7 +220,11 @@ fn find_magic(square: Square, relevant_bits: i32, is_bishop: bool) -> u64 {
     let mut used_indices = [SquareSet::EMPTY; 4096];
 
     // mask piece attack
-    let mask_attack = if is_bishop { mask_bishop_attacks(square) } else { mask_rook_attacks(square) };
+    let mask_attack = if is_bishop {
+        mask_bishop_attacks(square)
+    } else {
+        mask_rook_attacks(square)
+    };
 
     // occupancy variations
     let occupancy_variations = 1 << relevant_bits;
@@ -281,7 +285,11 @@ fn find_magic(square: Square, relevant_bits: i32, is_bishop: bool) -> u64 {
     panic!("magic number failed");
 }
 
-#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+#[allow(
+    dead_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub fn init_magics() {
     println!("Generating bishop magics...");
     println!("static BISHOP_MAGICS: [u64; 64] = [");
@@ -290,8 +298,11 @@ pub fn init_magics() {
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
-        let magic_str =
-            magic_str.chunks(4).map(|chunk| chunk.iter().collect::<String>()).collect::<Vec<String>>().join("_");
+        let magic_str = magic_str
+            .chunks(4)
+            .map(|chunk| chunk.iter().collect::<String>())
+            .collect::<Vec<String>>()
+            .join("_");
         println!("    0x{magic_str},");
     }
     println!("];");
@@ -303,8 +314,11 @@ pub fn init_magics() {
         let magic_str = format!("{magic:016X}");
         // split into blocks of four
         let magic_str = magic_str.chars().collect::<Vec<char>>();
-        let magic_str =
-            magic_str.chunks(4).map(|chunk| chunk.iter().collect::<String>()).collect::<Vec<String>>().join("_");
+        let magic_str = magic_str
+            .chunks(4)
+            .map(|chunk| chunk.iter().collect::<String>())
+            .collect::<Vec<String>>()
+            .join("_");
         println!("    0x{magic_str},");
     }
     println!("];");

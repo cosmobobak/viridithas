@@ -37,10 +37,17 @@ impl Board {
         }
 
         if !(self.side == Colour::White || self.side == Colour::Black) {
-            return Err(format!("side is corrupt: expected WHITE or BLACK, got {:?}", self.side));
+            return Err(format!(
+                "side is corrupt: expected WHITE or BLACK, got {:?}",
+                self.side
+            ));
         }
         if self.generate_pos_keys() != self.all_keys() {
-            return Err(format!("key is corrupt: expected {:?}, got {:?}", self.generate_pos_keys(), self.all_keys()));
+            return Err(format!(
+                "key is corrupt: expected {:?}, got {:?}",
+                self.generate_pos_keys(),
+                self.all_keys()
+            ));
         }
 
         if !(self.ep_sq.is_none()
@@ -57,7 +64,10 @@ impl Board {
         // the fifty-move counter is allowed to be *exactly* 100, to allow a finished game to be
         // created.
         if self.fifty_move_counter > 100 {
-            return Err(format!("fifty move counter is corrupt: expected 0-100, got {}", self.fifty_move_counter));
+            return Err(format!(
+                "fifty move counter is corrupt: expected 0-100, got {}",
+                self.fifty_move_counter
+            ));
         }
 
         // check there are the correct number of kings for each side

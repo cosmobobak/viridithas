@@ -38,8 +38,16 @@ impl Move {
     pub fn new_with_promo(from: Square, to: Square, promotion: PieceType) -> Self {
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
-        debug_assert_ne!(promotion, PieceType::Pawn, "attempted to construct promotion to pawn");
-        debug_assert_ne!(promotion, PieceType::King, "attempted to construct promotion to king");
+        debug_assert_ne!(
+            promotion,
+            PieceType::Pawn,
+            "attempted to construct promotion to pawn"
+        );
+        debug_assert_ne!(
+            promotion,
+            PieceType::King,
+            "attempted to construct promotion to king"
+        );
         let promotion = u16::from(promotion.inner()).wrapping_sub(1) & Self::PROMO_MASK; // can't promote to NO_PIECE or PAWN
         let data = u16::from(from)
             | (u16::from(to) << Self::TO_SHIFT)
@@ -51,7 +59,11 @@ impl Move {
     }
 
     pub fn new_with_flags(from: Square, to: Square, flags: MoveFlags) -> Self {
-        debug_assert_ne!(flags, MoveFlags::Promotion, "promotion flag set without piece type");
+        debug_assert_ne!(
+            flags,
+            MoveFlags::Promotion,
+            "promotion flag set without piece type"
+        );
         debug_assert!(u16::from(from) & Self::SQ_MASK == u16::from(from));
         debug_assert!(u16::from(to) & Self::SQ_MASK == u16::from(to));
         debug_assert_ne!(from, to);
@@ -80,14 +92,18 @@ impl Move {
 
     pub const fn to(self) -> Square {
         // SAFETY: SQ_MASK guarantees that this is in bounds.
-        unsafe { Square::new_unchecked(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8) }
+        unsafe {
+            Square::new_unchecked(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8)
+        }
     }
 
     pub fn promotion_type(self) -> Option<PieceType> {
         if self.is_promo() {
             // SAFETY: out-of-range values are made impossible by the mask.
             let output = unsafe {
-                PieceType::from_index_unchecked(((self.data.get() >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1)
+                PieceType::from_index_unchecked(
+                    ((self.data.get() >> Self::PROMO_SHIFT) & Self::PROMO_MASK) as u8 + 1,
+                )
             };
             debug_assert!(output.legal_promo());
             Some(output)
@@ -186,7 +202,9 @@ impl Debug for Move {
             self.from(),
             self.to(),
             self.to(),
-            self.promotion_type().and_then(PieceType::promo_char).unwrap_or('X'),
+            self.promotion_type()
+                .and_then(PieceType::promo_char)
+                .unwrap_or('X'),
             self.is_promo(),
             self.is_ep(),
             self.is_castle()

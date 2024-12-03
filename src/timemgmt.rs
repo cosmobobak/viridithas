@@ -9,7 +9,6 @@ use crate::{
     chessmove::Move,
     search::{parameters::Config, pv::PVariation, SmpThreadType},
     transpositiontable::Bound,
-    util::depth::Depth,
 };
 
 const MOVE_OVERHEAD: u64 = 30;
@@ -45,7 +44,7 @@ impl ForcedMoveType {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
-    Depth(Depth),
+    Depth(i32),
     Time(u64),
     Nodes(u64),
     Mate {
@@ -77,7 +76,9 @@ impl Default for SearchLimit {
 impl SearchLimit {
     #[allow(clippy::wrong_self_convention)]
     pub fn to_pondering(self) -> Self {
-        Self::Pondering { saved_limit: Box::new(self) }
+        Self::Pondering {
+            saved_limit: Box::new(self),
+        }
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -88,7 +89,7 @@ impl SearchLimit {
         }
     }
 
-    pub const fn depth(&self) -> Option<Depth> {
+    pub const fn depth(&self) -> Option<i32> {
         match self {
             Self::Depth(d) => Some(*d),
             _ => None,
@@ -105,15 +106,17 @@ impl SearchLimit {
         let absolute_maximum = our_clock.saturating_sub(MOVE_OVERHEAD);
 
         // The maximum time we can spend searching before forcibly stopping:
-        let hard_time_window = (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
+        let hard_time_window =
+            (our_clock * u64::from(conf.hard_window_frac) / 100).min(absolute_maximum);
 
         // If we have a moves to go, we can use that to compute a time window.
         if let Some(moves_to_go) = moves_to_go {
             // Use more time if we have fewer moves to go, but not more than default_moves_to_go.
             let divisor = moves_to_go.clamp(2, u64::from(conf.default_moves_to_go));
             let computed_time_window = our_clock / divisor;
-            let optimal_time_window =
-                computed_time_window.min(absolute_maximum) * u64::from(conf.optimal_window_frac) / 100;
+            let optimal_time_window = computed_time_window.min(absolute_maximum)
+                * u64::from(conf.optimal_window_frac)
+                / 100;
             return (optimal_time_window, hard_time_window, absolute_maximum);
         }
 
@@ -121,7 +124,8 @@ impl SearchLimit {
         let computed_time_window = our_clock / u64::from(conf.default_moves_to_go)
             + our_inc * u64::from(conf.increment_frac) / 100
             - MOVE_OVERHEAD;
-        let optimal_time_window = (computed_time_window.min(absolute_maximum) * u64::from(conf.optimal_window_frac)
+        let optimal_time_window = (computed_time_window.min(absolute_maximum)
+            * u64::from(conf.optimal_window_frac)
             / 100)
             .min(hard_time_window);
         (optimal_time_window, hard_time_window, absolute_maximum)
@@ -202,7 +206,10 @@ impl TimeManager {
 
     #[allow(dead_code)]
     pub fn default_with_limit(limit: SearchLimit) -> Self {
-        Self { limit, ..Default::default() }
+        Self {
+            limit,
+            ..Default::default()
+        }
     }
 
     pub fn reset_for_id(&mut self, conf: &Config) {
@@ -215,7 +222,13 @@ impl TimeManager {
         self.last_factors = [1.0, 1.0];
         self.best_move_nodes_fraction = None;
 
-        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit.clone().from_pondering() {
+        if let SearchLimit::Dynamic {
+            our_clock,
+            our_inc,
+            moves_to_go,
+            ..
+        } = self.limit.clone().from_pondering()
+        {
             let (opt_time, mut hard_time, max_time) =
                 SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
             // deal with "ponderhit" arriving while we're stuck on a depth:
@@ -230,7 +243,9 @@ impl TimeManager {
 
     pub fn check_up(&self, stopped: &AtomicBool, nodes_so_far: u64) -> bool {
         match self.limit {
-            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => stopped.load(Ordering::SeqCst),
+            SearchLimit::Depth(_) | SearchLimit::Mate { .. } | SearchLimit::Infinite => {
+                stopped.load(Ordering::SeqCst)
+            }
             SearchLimit::Nodes(nodes) => {
                 let past_limit = nodes_so_far >= nodes;
                 if past_limit {
@@ -298,7 +313,11 @@ impl TimeManager {
         false
     }
 
-    pub const fn solved_breaker<ThTy: SmpThreadType>(&self, value: i32, depth: usize) -> ControlFlow<()> {
+    pub const fn solved_breaker<ThTy: SmpThreadType>(
+        &self,
+        value: i32,
+        depth: usize,
+    ) -> ControlFlow<()> {
         if !ThTy::MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
         }
@@ -316,9 +335,17 @@ impl TimeManager {
         }
     }
 
-    pub fn mate_found_breaker<ThTy: SmpThreadType>(&mut self, pv: &PVariation, depth: Depth) -> ControlFlow<()> {
-        const MINIMUM_MATE_BREAK_DEPTH: Depth = Depth::new(10);
-        if ThTy::MAIN_THREAD && self.is_dynamic() && is_mate_score(pv.score()) && depth > MINIMUM_MATE_BREAK_DEPTH {
+    pub fn mate_found_breaker<ThTy: SmpThreadType>(
+        &mut self,
+        pv: &PVariation,
+        depth: i32,
+    ) -> ControlFlow<()> {
+        const MINIMUM_MATE_BREAK_DEPTH: i32 = 10;
+        if ThTy::MAIN_THREAD
+            && self.is_dynamic()
+            && is_mate_score(pv.score())
+            && depth > MINIMUM_MATE_BREAK_DEPTH
+        {
             self.mate_counter += 1;
             if self.mate_counter >= 3 {
                 return ControlFlow::Break(());
@@ -329,9 +356,9 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    const SLIGHTLY_FORCED: Depth = Depth::new(12);
-    const VERY_FORCED: Depth = Depth::new(8);
-    pub fn report_forced_move(&mut self, depth: Depth, conf: &Config) {
+    const SLIGHTLY_FORCED: i32 = 12;
+    const VERY_FORCED: i32 = 8;
+    pub fn report_forced_move(&mut self, depth: i32, conf: &Config) {
         assert_eq!(self.found_forced_move, ForcedMoveType::None);
         if depth >= Self::SLIGHTLY_FORCED {
             // reduce thinking time by conf.weak_forced_tm_frac
@@ -347,7 +374,7 @@ impl TimeManager {
         }
     }
 
-    pub fn check_for_forced_move(&self, depth: Depth) -> Option<i32> {
+    pub fn check_for_forced_move(&self, depth: i32) -> Option<i32> {
         if self.found_forced_move == ForcedMoveType::None && self.is_dynamic() {
             if depth >= Self::SLIGHTLY_FORCED {
                 Some(170)
@@ -383,13 +410,19 @@ impl TimeManager {
 
     pub fn report_completed_depth(
         &mut self,
-        _depth: Depth,
+        _depth: i32,
         eval: i32,
         best_move: Move,
         best_move_nodes_fraction: Option<f64>,
         conf: &Config,
     ) {
-        if let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit {
+        if let SearchLimit::Dynamic {
+            our_clock,
+            our_inc,
+            moves_to_go,
+            ..
+        } = self.limit
+        {
             let (opt_time, hard_time, max_time) =
                 SearchLimit::compute_time_windows(our_clock, moves_to_go, our_inc, conf);
             let max_time = Duration::from_millis(max_time);
@@ -408,11 +441,14 @@ impl TimeManager {
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
-            let subtree_size_multiplier =
-                self.best_move_nodes_fraction.map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
+            let subtree_size_multiplier = self.best_move_nodes_fraction.map_or(1.0, |frac| {
+                Self::best_move_subtree_size_multiplier(frac, conf)
+            });
 
-            let multiplier =
-                stability_multiplier * failed_low_multiplier * forced_move_multiplier * subtree_size_multiplier;
+            let multiplier = stability_multiplier
+                * failed_low_multiplier
+                * forced_move_multiplier
+                * subtree_size_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);
@@ -427,9 +463,15 @@ impl TimeManager {
         self.prev_score = eval;
     }
 
-    pub fn report_aspiration_fail(&mut self, depth: Depth, bound: Bound, conf: &Config) {
-        const FAIL_LOW_UPDATE_THRESHOLD: Depth = Depth::new(0);
-        let SearchLimit::Dynamic { our_clock, our_inc, moves_to_go, .. } = self.limit else {
+    pub fn report_aspiration_fail(&mut self, depth: i32, bound: Bound, conf: &Config) {
+        const FAIL_LOW_UPDATE_THRESHOLD: i32 = 0;
+        let SearchLimit::Dynamic {
+            our_clock,
+            our_inc,
+            moves_to_go,
+            ..
+        } = self.limit
+        else {
             return;
         };
         if depth >= FAIL_LOW_UPDATE_THRESHOLD && bound == Bound::Upper && self.failed_low < 2 {
@@ -446,11 +488,14 @@ impl TimeManager {
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
             let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
-            let subtree_size_multiplier =
-                self.best_move_nodes_fraction.map_or(1.0, |frac| Self::best_move_subtree_size_multiplier(frac, conf));
+            let subtree_size_multiplier = self.best_move_nodes_fraction.map_or(1.0, |frac| {
+                Self::best_move_subtree_size_multiplier(frac, conf)
+            });
 
-            let multiplier =
-                stability_multiplier * failed_low_multiplier * forced_move_multiplier * subtree_size_multiplier;
+            let multiplier = stability_multiplier
+                * failed_low_multiplier
+                * forced_move_multiplier
+                * subtree_size_multiplier;
 
             let hard_time = Duration::from_secs_f64(hard_time.as_secs_f64() * multiplier);
             let opt_time = Duration::from_secs_f64(opt_time.as_secs_f64() * multiplier);

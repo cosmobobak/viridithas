@@ -96,12 +96,16 @@ pub fn gamut() -> anyhow::Result<()> {
     const NODES_LIMIT: u64 = 60_000_000;
     // open perftsuite.epd
     println!("running perft on perftsuite.epd");
-    let f = File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
+    let f =
+        File::open("epds/perftsuite.epd").with_context(|| "Failed to open epds/perftsuite.epd")?;
     let mut pos = Board::new();
     for line in BufReader::new(f).lines() {
         let line = line?;
         let mut parts = line.split(';');
-        let fen = parts.next().with_context(|| "Failed to find fen in line.")?.trim();
+        let fen = parts
+            .next()
+            .with_context(|| "Failed to find fen in line.")?
+            .trim();
         pos.set_from_fen(fen)?;
         for depth_part in parts {
             let depth_part = depth_part.trim();
@@ -166,13 +170,18 @@ mod tests {
     #[test]
     fn perft_hard_position() {
         use super::*;
-        const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        const TEST_FEN: &str =
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 2_039);
         // assert_eq!(perft(&mut pos, 3), 97_862);
@@ -187,7 +196,11 @@ mod tests {
         std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
         assert_eq!(perft(&mut pos, 2), 400);
         assert_eq!(perft(&mut pos, 3), 8_902);
@@ -204,7 +217,11 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
         assert_eq!(nnue_perft(&mut pos, &mut t, 2), 400);
         assert_eq!(nnue_perft(&mut pos, &mut t, 3), 8_902);
@@ -221,7 +238,11 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
         assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 400);
         assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 8_902);
@@ -231,7 +252,8 @@ mod tests {
     #[test]
     fn perft_movepicker_hard_position() {
         use super::*;
-        const TEST_FEN: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+        const TEST_FEN: &str =
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
@@ -241,7 +263,11 @@ mod tests {
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), &nnue_params);
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
         assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 2_039);
         // assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 97_862);
@@ -255,7 +281,11 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen("8/8/8/8/8/8/1k6/R2K4 b - - 1 1").unwrap();
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
-            pos.legal_moves().into_iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         });
     }
 
@@ -284,7 +314,8 @@ mod tests {
         use super::*;
 
         let mut pos = Board::new();
-        pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2").unwrap();
+        pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+            .unwrap();
         let exd5 = Move::new(Square::E4, Square::D5);
         let piece_layout_before = pos.pieces;
         println!("{piece_layout_before}");

@@ -53,5 +53,7 @@ fn generate_fathom_bindings() {
         .generate()
         .unwrap();
 
-    bindings.write_to_file("./src/tablebases/bindings.rs").unwrap();
+    bindings
+        .write_to_file("./src/tablebases/bindings.rs")
+        .unwrap();
 }

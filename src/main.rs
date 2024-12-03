@@ -67,14 +67,27 @@ fn main() -> anyhow::Result<()> {
         Some(CountPositions { input }) => datagen::dataset_count(&input),
         Some(Spsa { json }) => {
             if json {
-                println!("{}", search::parameters::Config::default().emit_json_for_spsa());
+                println!(
+                    "{}",
+                    search::parameters::Config::default().emit_json_for_spsa()
+                );
             } else {
-                println!("{}", search::parameters::Config::default().emit_csv_for_spsa());
+                println!(
+                    "{}",
+                    search::parameters::Config::default().emit_csv_for_spsa()
+                );
             }
             Ok(())
         }
         #[cfg(feature = "datagen")]
-        Some(Splat { input, marlinformat, pgn, output, limit, cfg_path }) => {
+        Some(Splat {
+            input,
+            marlinformat,
+            pgn,
+            output,
+            limit,
+            cfg_path,
+        }) => {
             if pgn {
                 datagen::run_topgn(&input, &output, limit)
             } else {
@@ -82,15 +95,19 @@ fn main() -> anyhow::Result<()> {
             }
         }
         #[cfg(feature = "datagen")]
-        Some(Datagen { games, threads, tbs, depth_limit, dfrc }) => {
-            datagen::gen_data_main(datagen::DataGenOptionsBuilder {
-                num_games: games,
-                num_threads: threads,
-                tablebases_path: tbs,
-                use_depth: depth_limit,
-                generate_dfrc: dfrc,
-            })
-        }
+        Some(Datagen {
+            games,
+            threads,
+            tbs,
+            depth_limit,
+            dfrc,
+        }) => datagen::gen_data_main(datagen::DataGenOptionsBuilder {
+            num_games: games,
+            num_threads: threads,
+            tablebases_path: tbs,
+            use_depth: depth_limit,
+            generate_dfrc: dfrc,
+        }),
         Some(Bench) => uci::main_loop(true),
         None => uci::main_loop(false),
     }

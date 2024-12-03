@@ -1,13 +1,13 @@
 use crate::{
     chessmove::Move,
     piece::{Colour, Piece, PieceType},
-    util::{depth::Depth, Square, BOARD_N_SQUARES},
+    util::{Square, BOARD_N_SQUARES},
 };
 
 const AGEING_DIVISOR: i16 = 2;
 
-fn history_bonus(depth: Depth) -> i32 {
-    i32::min(200 * depth.round(), 1600)
+fn history_bonus(depth: i32) -> i32 {
+    i32::min(200 * depth, 1600)
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
@@ -16,15 +16,18 @@ pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
 pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
 
-pub fn update_history(val: &mut i16, depth: Depth, is_good: bool) {
+pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
     #![allow(clippy::cast_possible_truncation)]
     const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
-    let delta = if is_good { history_bonus(depth) } else { -history_bonus(depth) };
+    let delta = if is_good {
+        history_bonus(depth)
+    } else {
+        -history_bonus(depth)
+    };
     let curr = i32::from(*val);
     *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
@@ -32,7 +35,9 @@ pub struct HistoryTable {
 
 impl HistoryTable {
     pub const fn new() -> Self {
-        Self { table: [[0; BOARD_N_SQUARES]; 12] }
+        Self {
+            table: [[0; BOARD_N_SQUARES]; 12],
+        }
     }
 
     pub fn clear(&mut self) {
@@ -45,7 +50,10 @@ impl HistoryTable {
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(|x| *x /= AGEING_DIVISOR);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(|x| *x /= AGEING_DIVISOR);
     }
 
     pub fn get(&self, piece: Piece, sq: Square) -> i16 {
@@ -57,7 +65,6 @@ impl HistoryTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct ThreatsHistoryTable {
     table: [[HistoryTable; 2]; 2],
@@ -72,24 +79,35 @@ impl ThreatsHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
 
     pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
     }
 
-    pub fn get_mut(&mut self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> &mut i16 {
+    pub fn get_mut(
+        &mut self,
+        piece: Piece,
+        sq: Square,
+        threat_from: bool,
+        threat_to: bool,
+    ) -> &mut i16 {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
     table: [HistoryTable; 6],
@@ -135,8 +153,6 @@ pub struct ContHistIndex {
     pub square: Square,
 }
 
-#[allow(clippy::large_stack_frames)]
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct DoubleHistoryTable {
     table: [[HistoryTable; BOARD_N_SQUARES]; 12],
@@ -159,12 +175,18 @@ impl DoubleHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().flatten().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().flatten().for_each(HistoryTable::age_entries);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
@@ -176,14 +198,15 @@ impl DoubleHistoryTable {
     }
 }
 
-#[derive(Clone)]
 pub struct MoveTable {
     table: Box<[[Option<Move>; BOARD_N_SQUARES]; 12]>,
 }
 
 impl MoveTable {
     pub fn new() -> Self {
-        Self { table: Box::new([[None; BOARD_N_SQUARES]; 12]) }
+        Self {
+            table: Box::new([[None; BOARD_N_SQUARES]; 12]),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -199,7 +222,6 @@ impl MoveTable {
     }
 }
 
-#[derive(Clone)]
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
     table: [[i32; CORRECTION_HISTORY_SIZE]; 2],

@@ -1,4 +1,6 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign};
+use std::ops::{
+    BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
+};
 
 use crate::{board::movegen::SquareIter, util::Square};
 
@@ -14,24 +16,60 @@ impl SquareSet {
     pub const EMPTY: Self = Self { inner: 0 };
     pub const FULL: Self = Self { inner: !0 };
 
-    pub const RANK_1: Self = Self { inner: 0x0000_0000_0000_00FF };
-    pub const RANK_2: Self = Self { inner: 0x0000_0000_0000_FF00 };
-    pub const RANK_3: Self = Self { inner: 0x0000_0000_00FF_0000 };
-    pub const RANK_4: Self = Self { inner: 0x0000_0000_FF00_0000 };
-    pub const RANK_5: Self = Self { inner: 0x0000_00FF_0000_0000 };
-    pub const RANK_6: Self = Self { inner: 0x0000_FF00_0000_0000 };
-    pub const RANK_7: Self = Self { inner: 0x00FF_0000_0000_0000 };
-    pub const RANK_8: Self = Self { inner: 0xFF00_0000_0000_0000 };
-    pub const FILE_A: Self = Self { inner: 0x0101_0101_0101_0101 };
-    pub const FILE_B: Self = Self { inner: 0x0202_0202_0202_0202 };
-    pub const FILE_C: Self = Self { inner: 0x0404_0404_0404_0404 };
-    pub const FILE_D: Self = Self { inner: 0x0808_0808_0808_0808 };
-    pub const FILE_E: Self = Self { inner: 0x1010_1010_1010_1010 };
-    pub const FILE_F: Self = Self { inner: 0x2020_2020_2020_2020 };
-    pub const FILE_G: Self = Self { inner: 0x4040_4040_4040_4040 };
-    pub const FILE_H: Self = Self { inner: 0x8080_8080_8080_8080 };
-    pub const LIGHT_SQUARES: Self = Self { inner: 0x55AA_55AA_55AA_55AA };
-    pub const DARK_SQUARES: Self = Self { inner: 0xAA55_AA55_AA55_AA55 };
+    pub const RANK_1: Self = Self {
+        inner: 0x0000_0000_0000_00FF,
+    };
+    pub const RANK_2: Self = Self {
+        inner: 0x0000_0000_0000_FF00,
+    };
+    pub const RANK_3: Self = Self {
+        inner: 0x0000_0000_00FF_0000,
+    };
+    pub const RANK_4: Self = Self {
+        inner: 0x0000_0000_FF00_0000,
+    };
+    pub const RANK_5: Self = Self {
+        inner: 0x0000_00FF_0000_0000,
+    };
+    pub const RANK_6: Self = Self {
+        inner: 0x0000_FF00_0000_0000,
+    };
+    pub const RANK_7: Self = Self {
+        inner: 0x00FF_0000_0000_0000,
+    };
+    pub const RANK_8: Self = Self {
+        inner: 0xFF00_0000_0000_0000,
+    };
+    pub const FILE_A: Self = Self {
+        inner: 0x0101_0101_0101_0101,
+    };
+    pub const FILE_B: Self = Self {
+        inner: 0x0202_0202_0202_0202,
+    };
+    pub const FILE_C: Self = Self {
+        inner: 0x0404_0404_0404_0404,
+    };
+    pub const FILE_D: Self = Self {
+        inner: 0x0808_0808_0808_0808,
+    };
+    pub const FILE_E: Self = Self {
+        inner: 0x1010_1010_1010_1010,
+    };
+    pub const FILE_F: Self = Self {
+        inner: 0x2020_2020_2020_2020,
+    };
+    pub const FILE_G: Self = Self {
+        inner: 0x4040_4040_4040_4040,
+    };
+    pub const FILE_H: Self = Self {
+        inner: 0x8080_8080_8080_8080,
+    };
+    pub const LIGHT_SQUARES: Self = Self {
+        inner: 0x55AA_55AA_55AA_55AA,
+    };
+    pub const DARK_SQUARES: Self = Self {
+        inner: 0xAA55_AA55_AA55_AA55,
+    };
 
     pub const RANKS: [Self; 8] = [
         Self::RANK_1,
@@ -80,7 +118,9 @@ impl SquareSet {
     }
 
     pub const fn intersection(self, other: Self) -> Self {
-        Self { inner: self.inner & other.inner }
+        Self {
+            inner: self.inner & other.inner,
+        }
     }
 
     pub const fn contains(self, other: Self) -> bool {
@@ -92,27 +132,39 @@ impl SquareSet {
     }
 
     pub const fn union(self, other: Self) -> Self {
-        Self { inner: self.inner | other.inner }
+        Self {
+            inner: self.inner | other.inner,
+        }
     }
 
     pub const fn add_square(self, square: Square) -> Self {
-        Self { inner: self.inner | (1 << square.index()) }
+        Self {
+            inner: self.inner | (1 << square.index()),
+        }
     }
 
     pub const fn remove(self, other: Self) -> Self {
-        Self { inner: self.inner & !other.inner }
+        Self {
+            inner: self.inner & !other.inner,
+        }
     }
 
     pub const fn remove_square(self, square: Square) -> Self {
-        Self { inner: self.inner & !(1 << square.index()) }
+        Self {
+            inner: self.inner & !(1 << square.index()),
+        }
     }
 
     pub const fn toggle(self, other: Self) -> Self {
-        Self { inner: self.inner ^ other.inner }
+        Self {
+            inner: self.inner ^ other.inner,
+        }
     }
 
     pub const fn toggle_square(self, square: Square) -> Self {
-        Self { inner: self.inner ^ (1 << square.index()) }
+        Self {
+            inner: self.inner ^ (1 << square.index()),
+        }
     }
 
     #[allow(clippy::missing_const_for_fn)]
@@ -122,14 +174,19 @@ impl SquareSet {
 
     #[allow(clippy::cast_possible_truncation)]
     pub const fn first(self) -> Square {
-        debug_assert!(self.inner != 0, "Tried to get first square of empty square-set");
+        debug_assert!(
+            self.inner != 0,
+            "Tried to get first square of empty square-set"
+        );
         // SAFETY: u64::trailing_zeros can only return values within `0..64`,
         // all of which correspond to valid enum variants of Square.
         unsafe { Square::new_unchecked(self.inner.trailing_zeros() as u8) }
     }
 
     pub const fn from_square(square: Square) -> Self {
-        Self { inner: 1 << square.index() }
+        Self {
+            inner: 1 << square.index(),
+        }
     }
 
     pub fn north_east_one(self) -> Self {
@@ -171,7 +228,9 @@ impl BitOr for SquareSet {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        Self { inner: self.inner | rhs.inner }
+        Self {
+            inner: self.inner | rhs.inner,
+        }
     }
 }
 
@@ -185,7 +244,9 @@ impl BitAnd for SquareSet {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
-        Self { inner: self.inner & rhs.inner }
+        Self {
+            inner: self.inner & rhs.inner,
+        }
     }
 }
 
@@ -199,7 +260,9 @@ impl BitXor for SquareSet {
     type Output = Self;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
-        Self { inner: self.inner ^ rhs.inner }
+        Self {
+            inner: self.inner ^ rhs.inner,
+        }
     }
 }
 
@@ -213,7 +276,9 @@ impl Sub for SquareSet {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Self { inner: self.inner & !rhs.inner }
+        Self {
+            inner: self.inner & !rhs.inner,
+        }
     }
 }
 
@@ -235,7 +300,9 @@ impl Shr<u8> for SquareSet {
     type Output = Self;
 
     fn shr(self, rhs: u8) -> Self::Output {
-        Self { inner: self.inner >> rhs }
+        Self {
+            inner: self.inner >> rhs,
+        }
     }
 }
 
@@ -243,6 +310,8 @@ impl Shl<u8> for SquareSet {
     type Output = Self;
 
     fn shl(self, rhs: u8) -> Self::Output {
-        Self { inner: self.inner << rhs }
+        Self {
+            inner: self.inner << rhs,
+        }
     }
 }

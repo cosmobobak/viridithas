@@ -39,7 +39,11 @@ impl PackedBoard {
             let colour = piece.colour();
 
             let mut piece_code = piece_type.inner();
-            let rank1 = if colour == Colour::White { Rank::One } else { Rank::Eight };
+            let rank1 = if colour == Colour::White {
+                Rank::One
+            } else {
+                Rank::Eight
+            };
             if piece_type == PieceType::Rook && sq.rank() == rank1 {
                 let castling_sq = if board.king_sq(colour) < sq {
                     board.castling_rights().kingside(colour)
@@ -73,7 +77,10 @@ impl PackedBoard {
         let mut builder = Board::new();
 
         let mut seen_king = [false; 2];
-        for (i, sq) in SquareSet::from_inner(self.occupancy.get()).iter().enumerate() {
+        for (i, sq) in SquareSet::from_inner(self.occupancy.get())
+            .iter()
+            .enumerate()
+        {
             let colour = Colour::new(self.pieces.get(i) >> 3 != 0);
             let piece_code = self.pieces.get(i) & 0b0111;
             let piece_type = match piece_code {

@@ -3,7 +3,10 @@ use std::array;
 use crate::{
     board::Board,
     chessmove::Move,
-    historytable::{CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable, ThreatsHistoryTable},
+    historytable::{
+        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
+        ThreatsHistoryTable,
+    },
     nnue::{self, network::NNUEParams},
     piece::Colour,
     search::pv::PVariation,
@@ -12,7 +15,6 @@ use crate::{
     util::MAX_PLY,
 };
 
-#[derive(Clone)]
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
@@ -49,7 +51,12 @@ impl<'a> ThreadData<'a> {
     const ARRAY_REPEAT_VALUE: PVariation = PVariation::default_const();
     const EMPTY_PV_TABLE: [PVariation; MAX_PLY] = [Self::ARRAY_REPEAT_VALUE; MAX_PLY];
 
-    pub fn new(thread_id: usize, board: &Board, tt: TTView<'a>, nnue_params: &'a NNUEParams) -> Self {
+    pub fn new(
+        thread_id: usize,
+        board: &Board,
+        tt: TTView<'a>,
+        nnue_params: &'a NNUEParams,
+    ) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
@@ -61,7 +68,10 @@ impl<'a> ThreadData<'a> {
             killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             pawn_corrhist: CorrectionHistoryTable::boxed(),
-            nonpawn_corrhist: [CorrectionHistoryTable::boxed(), CorrectionHistoryTable::boxed()],
+            nonpawn_corrhist: [
+                CorrectionHistoryTable::boxed(),
+                CorrectionHistoryTable::boxed(),
+            ],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
@@ -78,15 +88,29 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn ban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp |= if colour == Colour::White { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP };
+        self.banned_nmp |= if colour == Colour::White {
+            Self::WHITE_BANNED_NMP
+        } else {
+            Self::BLACK_BANNED_NMP
+        };
     }
 
     pub fn unban_nmp_for(&mut self, colour: Colour) {
-        self.banned_nmp &= if colour == Colour::White { !Self::WHITE_BANNED_NMP } else { !Self::BLACK_BANNED_NMP };
+        self.banned_nmp &= if colour == Colour::White {
+            !Self::WHITE_BANNED_NMP
+        } else {
+            !Self::BLACK_BANNED_NMP
+        };
     }
 
     pub fn nmp_banned_for(&self, colour: Colour) -> bool {
-        self.banned_nmp & if colour == Colour::White { Self::WHITE_BANNED_NMP } else { Self::BLACK_BANNED_NMP } != 0
+        self.banned_nmp
+            & if colour == Colour::White {
+                Self::WHITE_BANNED_NMP
+            } else {
+                Self::BLACK_BANNED_NMP
+            }
+            != 0
     }
 
     pub fn clear_tables(&mut self) {
