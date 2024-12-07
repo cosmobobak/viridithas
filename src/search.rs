@@ -1138,11 +1138,7 @@ impl Board {
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-        while let Some(MoveListEntry {
-            mov: m,
-            score: movepick_score,
-        }) = move_picker.next(self, t)
-        {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             if excluded == Some(m) {
                 continue;
             }
@@ -1150,7 +1146,6 @@ impl Board {
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
             let lmr_depth = std::cmp::max(depth - lmr_reduction, 0);
             let is_quiet = !self.is_tactical(m);
-            let is_winning_capture = movepick_score > WINNING_CAPTURE_SCORE;
 
             let mut stat_score = 0;
 
@@ -1285,7 +1280,7 @@ impl Board {
             } else if self.in_check() {
                 // self.in_check() determines if the opponent is in check,
                 // because we have already made the move.
-                extension = i32::from(is_quiet || is_winning_capture);
+                extension = i32::from(is_quiet);
             } else {
                 extension = 0;
             }
@@ -1318,9 +1313,6 @@ impl Board {
                         r += i32::from(!improving);
                         // reduce more if the move from the transposition table is tactical
                         r += i32::from(tt_capture);
-                    } else if is_winning_capture {
-                        // reduce winning captures less
-                        r -= 1;
                     }
                     r.clamp(1, depth - 1)
                 } else {
