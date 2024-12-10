@@ -529,7 +529,7 @@ impl Board {
             return if in_check {
                 0
             } else {
-                self.evaluate(t, info.nodes.get_local())
+                self.evaluate(t, info.nodes.get_local()).0
             };
         }
 
@@ -563,6 +563,7 @@ impl Board {
 
         let raw_eval;
         let stand_pat;
+        let mut eval_hash = 0;
 
         if in_check {
             // could be being mated!
@@ -573,12 +574,12 @@ impl Board {
             let v = *tt_eval;
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                (raw_eval, eval_hash) = self.evaluate(t, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = t.correct_evaluation(self, raw_eval);
+            let adj_eval = t.correct_evaluation(self, raw_eval, eval_hash);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -595,7 +596,7 @@ impl Board {
             }
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
+            (raw_eval, eval_hash) = self.evaluate(t, info.nodes.get_local());
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
             t.tt.store(
@@ -608,7 +609,7 @@ impl Board {
                 0,
                 t.ss[height].ttpv,
             );
-            stand_pat = t.correct_evaluation(self, raw_eval);
+            stand_pat = t.correct_evaluation(self, raw_eval, eval_hash);
         };
 
         if stand_pat >= beta {
@@ -768,7 +769,7 @@ impl Board {
                 return if in_check {
                     0
                 } else {
-                    self.evaluate(t, info.nodes.get_local())
+                    self.evaluate(t, info.nodes.get_local()).0
                 };
             }
 
@@ -876,6 +877,7 @@ impl Board {
 
         let raw_eval;
         let static_eval;
+        let mut eval_hash = 0;
 
         if in_check {
             // when we're in check, it could be checkmate, so it's unsound to use evaluate().
@@ -891,7 +893,7 @@ impl Board {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                (raw_eval, eval_hash) = self.evaluate(t, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
@@ -899,11 +901,11 @@ impl Board {
                     t.nnue.hint_common_access(self, t.nnue_params);
                 }
             }
-            static_eval = t.correct_evaluation(self, raw_eval);
+            static_eval = t.correct_evaluation(self, raw_eval, eval_hash);
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
-            static_eval = t.correct_evaluation(self, raw_eval);
+            (raw_eval, eval_hash) = self.evaluate(t, info.nodes.get_local());
+            static_eval = t.correct_evaluation(self, raw_eval, eval_hash);
         };
 
         t.ss[height].eval = static_eval;
@@ -1464,7 +1466,7 @@ impl Board {
                 || flag == Bound::Lower && best_score <= static_eval
                 || flag == Bound::Upper && best_score >= static_eval)
             {
-                t.update_correction_history(self, depth, best_score - static_eval);
+                t.update_correction_history(eval_hash, self, depth, best_score - static_eval);
             }
             t.tt.store(
                 key,

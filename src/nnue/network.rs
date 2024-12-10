@@ -11,6 +11,7 @@ use arrayvec::ArrayVec;
 use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
+    lookups::PIECE_KEYS,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     util::{self, Square, MAX_PLY},
 };
@@ -289,7 +290,11 @@ impl UnquantisedNetwork {
 
 impl QuantisedNetwork {
     /// Convert the network parameters into a format optimal for inference.
-    #[allow(clippy::cognitive_complexity, clippy::needless_range_loop, clippy::too_many_lines)]
+    #[allow(
+        clippy::cognitive_complexity,
+        clippy::needless_range_loop,
+        clippy::too_many_lines
+    )]
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
@@ -1155,7 +1160,7 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> (i32, u64) {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
@@ -1190,7 +1195,24 @@ impl NNUEState {
             &mut l3_output,
         );
 
-        (l3_output * SCALE as f32) as i32
+        let eval = (l3_output * SCALE as f32) as i32;
+
+        let hash =
+            l2_outputs
+                .iter()
+                .zip(&PIECE_KEYS[Piece::WP])
+                .fold(
+                    0,
+                    |hash, (activation, key)| {
+                        if *activation > 0.0 {
+                            hash ^ key
+                        } else {
+                            hash
+                        }
+                    },
+                );
+
+        (eval, hash)
     }
 }
 

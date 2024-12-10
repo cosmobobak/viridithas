@@ -61,10 +61,10 @@ impl Board {
             / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
+    pub fn evaluate_nnue(&self, t: &ThreadData) -> (i32, u64) {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
-        let v = t.nnue.evaluate(t.nnue_params, self.side, output_bucket);
+        let (v, hash) = t.nnue.evaluate(t.nnue_params, self.side, output_bucket);
 
         // scale down the value estimate when there's not much
         // material left - this will incentivize keeping material
@@ -81,16 +81,18 @@ impl Board {
         // this basically never comes up, but the network will
         // occasionally output OOB values in crazy positions with
         // massive material imbalances.
-        v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
+        let v = v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
+
+        (v, hash)
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> (i32, u64) {
         // detect draw by insufficient material
         if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
             return if self.side == Colour::White {
-                draw_score(t, nodes, self.turn())
+                (draw_score(t, nodes, self.turn()), 0)
             } else {
-                -draw_score(t, nodes, self.turn())
+                (-draw_score(t, nodes, self.turn()), 0)
             };
         }
         // apply all in-waiting updates to generate a valid

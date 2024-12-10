@@ -305,7 +305,7 @@ impl ThreadData<'_> {
     }
 
     /// Update the correction history for a pawn pattern.
-    pub fn update_correction_history(&mut self, pos: &Board, depth: i32, diff: i32) {
+    pub fn update_correction_history(&mut self, eval_hash: u64, pos: &Board, depth: i32, diff: i32) {
         use Colour::{Black, White};
         fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
             let update =
@@ -346,11 +346,16 @@ impl ThreadData<'_> {
             new_weight,
             scaled_diff,
         );
+        update(
+            self.eval_corrhist.get_mut(us, eval_hash),
+            new_weight,
+            scaled_diff,
+        );
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
+    pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32, eval_hash: u64) -> i32 {
         let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
         let white =
             self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
@@ -358,7 +363,8 @@ impl ThreadData<'_> {
             self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let adjustment = pawn + major + minor + white + black;
+        let eval = self.eval_corrhist.get(pos.turn(), eval_hash);
+        let adjustment = pawn + major + minor + white + black + eval;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
