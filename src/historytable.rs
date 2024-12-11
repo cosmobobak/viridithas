@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicU64;
-
 use crate::{
     chessmove::Move,
     piece::{Colour, Piece, PieceType},
@@ -37,8 +35,6 @@ pub struct AdaptiveHistoryValue {
     variance: f32,
 }
 
-pub static MSE: AtomicU64 = AtomicU64::new(0.0f64.to_bits());
-
 impl AdaptiveHistoryValue {
     pub const ZERO: Self = Self {
         score: 0,
@@ -57,18 +53,10 @@ impl AdaptiveHistoryValue {
 
         let delta = delta as f32;
 
-        self.momentum = self.momentum.mul_add(0.5, delta * 0.5);
-        self.variance = self.variance.mul_add(0.9, delta * delta * 0.1);
+        self.momentum = self.momentum.mul_add(0.9, delta * 0.1);
+        self.variance = self.variance.mul_add(0.999, delta * delta * 0.001);
         let update = self.momentum / (self.variance + 1e-8).sqrt() * 1000.0;
-        // println!("{delta} {update} {} {}", self.momentum, self.variance);
-        // println!("{}, {delta} {update}", (delta - update).powi(2));
-        // MSE.store(
-        //     f64::from_bits(MSE.load(std::sync::atomic::Ordering::Relaxed))
-        //         .mul_add(0.999, 0.001 * f64::from((delta - update).powi(2)))
-        //         .to_bits(),
-        //     std::sync::atomic::Ordering::Relaxed,
-        // );
-        let update = update as i32;
+        let update = ((delta + update) / 2.0) as i32;
         self.score += update - (self.score * update.abs() / MAX_HISTORY);
         debug_assert!(TryInto::<i16>::try_into(self.score).is_ok());
     }
