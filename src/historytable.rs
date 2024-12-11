@@ -36,6 +36,9 @@ pub struct AdaptiveHistoryValue {
 }
 
 impl AdaptiveHistoryValue {
+    const INV_BETA_1: i32 = 9;
+    const INV_BETA_2: i32 = 999;
+
     pub const ZERO: Self = Self {
         score: 0,
         momentum: 0,
@@ -51,8 +54,8 @@ impl AdaptiveHistoryValue {
             -history_bonus(depth)
         };
 
-        self.momentum = (self.momentum * 9 + delta) / 10;
-        self.variance = (self.variance * 999 + delta * delta) / 1000;
+        self.momentum = (self.momentum * Self::INV_BETA_1 + delta) / 10;
+        self.variance = (self.variance * Self::INV_BETA_2 + delta * delta) / 1000;
         let abs_delta = delta.abs();
         let update = (delta * self.momentum)
             // stupid cast
