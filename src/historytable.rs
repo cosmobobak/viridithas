@@ -52,7 +52,6 @@ impl AdaptiveHistoryValue {
         };
 
         let delta = delta as f32;
-
         self.momentum = self.momentum.mul_add(0.9, delta * 0.1);
         self.variance = self.variance.mul_add(0.999, delta * delta * 0.001);
         let update = self.momentum / (self.variance + 1e-8).sqrt() * 1000.0;
