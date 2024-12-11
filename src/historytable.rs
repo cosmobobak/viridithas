@@ -31,22 +31,19 @@ pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
 #[derive(Clone, Copy, Default)]
 pub struct AdaptiveHistoryValue {
     score: i32,
-    momentum: i32,
-    variance: i32,
+    momentum: f32,
+    variance: f32,
 }
 
 impl AdaptiveHistoryValue {
-    const INV_BETA_1: i32 = 9;
-    const INV_BETA_2: i32 = 999;
-
     pub const ZERO: Self = Self {
         score: 0,
-        momentum: 0,
-        variance: 0,
+        momentum: 0.0,
+        variance: 0.0,
     };
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn update_history(&mut self, depth: i32, is_good: bool) {
-        #![allow(clippy::cast_possible_truncation)]
         const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
         let delta = if is_good {
             history_bonus(depth)
@@ -54,14 +51,11 @@ impl AdaptiveHistoryValue {
             -history_bonus(depth)
         };
 
-        self.momentum = (self.momentum * Self::INV_BETA_1 + delta) / 10;
-        self.variance = (self.variance * Self::INV_BETA_2 + delta * delta) / 1000;
-        let abs_delta = delta.abs();
-        let update = (delta * self.momentum)
-            // stupid cast
-            .checked_div(f64::from(self.variance).sqrt() as i32)
-            .unwrap_or(delta * self.momentum)
-            .clamp(-abs_delta * 16, abs_delta * 16);
+        let delta = delta as f32;
+
+        self.momentum = self.momentum.mul_add(0.9, delta * 0.1);
+        self.variance = self.variance.mul_add(0.999, delta * delta * 0.001);
+        let update = ((delta * self.momentum) / (self.variance + 1e-8).sqrt()) as i32;
         self.score += update - (self.score * update.abs() / MAX_HISTORY);
         debug_assert!(TryInto::<i16>::try_into(self.score).is_ok());
     }
