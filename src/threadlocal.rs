@@ -130,7 +130,7 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn set_up_for_search(&mut self, board: &Board) {
-        self.main_history.age_entries();
+        self.main_history.clear();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
         self.killer_move_table.fill([None; 2]);

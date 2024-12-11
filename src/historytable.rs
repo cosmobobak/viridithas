@@ -28,28 +28,81 @@ pub fn update_history(val: &mut i16, depth: i32, is_good: bool) {
     *val += delta as i16 - (curr * delta.abs() / MAX_HISTORY) as i16;
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct AdaptiveHistoryValue {
+    score: i32,
+    momentum: i32,
+    variance: i32,
+}
+
+impl AdaptiveHistoryValue {
+    pub const ZERO: Self = Self {
+        score: 0,
+        momentum: 0,
+        variance: 0,
+    };
+
+    pub fn update_history(&mut self, depth: i32, is_good: bool) {
+        #![allow(clippy::cast_possible_truncation)]
+        const MAX_HISTORY: i32 = crate::historytable::MAX_HISTORY as i32;
+        let delta = if is_good {
+            history_bonus(depth)
+        } else {
+            -history_bonus(depth)
+        };
+
+        self.momentum = (self.momentum * 9 + delta) / 10;
+        self.variance = (self.variance * 99 + delta * delta) / 100;
+        let abs_delta = delta.abs();
+        let update = (delta * self.momentum)
+            // stupid cast
+            .checked_div(f64::from(self.variance).sqrt() as i32)
+            .unwrap_or(delta * self.momentum)
+            .clamp(-abs_delta * 16, abs_delta * 16);
+        self.score += update - (self.score * update.abs() / MAX_HISTORY);
+        debug_assert!(TryInto::<i16>::try_into(self.score).is_ok());
+    }
+}
+
+#[repr(transparent)]
+pub struct AdaptiveHistoryTable {
+    table: [[AdaptiveHistoryValue; BOARD_N_SQUARES]; 12],
+}
+
+impl AdaptiveHistoryTable {
+    pub const fn new() -> Self {
+        Self {
+            table: [[AdaptiveHistoryValue::ZERO; BOARD_N_SQUARES]; 12],
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(|x| *x = AdaptiveHistoryValue::ZERO);
+    }
+
+    pub fn get(&self, piece: Piece, sq: Square) -> AdaptiveHistoryValue {
+        self.table[piece][sq]
+    }
+
+    pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut AdaptiveHistoryValue {
+        &mut self.table[piece][sq]
+    }
+}
+
 #[repr(transparent)]
 pub struct HistoryTable {
     table: [[i16; BOARD_N_SQUARES]; 12],
 }
 
 impl HistoryTable {
-    pub const fn new() -> Self {
-        Self {
-            table: [[0; BOARD_N_SQUARES]; 12],
-        }
-    }
-
     pub fn clear(&mut self) {
-        if self.table.is_empty() {
-            self.table = [[0; BOARD_N_SQUARES]; 12];
-        } else {
-            self.table.iter_mut().flatten().for_each(|x| *x = 0);
-        }
+        self.table.iter_mut().flatten().for_each(|x| *x = 0);
     }
 
     pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
         self.table
             .iter_mut()
             .flatten()
@@ -67,14 +120,14 @@ impl HistoryTable {
 
 #[repr(transparent)]
 pub struct ThreatsHistoryTable {
-    table: [[HistoryTable; 2]; 2],
+    table: [[AdaptiveHistoryTable; 2]; 2],
 }
 
 impl ThreatsHistoryTable {
     pub const fn new() -> Self {
-        const ELEM: HistoryTable = HistoryTable::new();
-        const SLICE: [HistoryTable; 2] = [ELEM; 2];
-        const ARRAY: [[HistoryTable; 2]; 2] = [SLICE; 2];
+        const ELEM: AdaptiveHistoryTable = AdaptiveHistoryTable::new();
+        const SLICE: [AdaptiveHistoryTable; 2] = [ELEM; 2];
+        const ARRAY: [[AdaptiveHistoryTable; 2]; 2] = [SLICE; 2];
         Self { table: ARRAY }
     }
 
@@ -82,19 +135,14 @@ impl ThreatsHistoryTable {
         self.table
             .iter_mut()
             .flatten()
-            .for_each(HistoryTable::clear);
+            .for_each(AdaptiveHistoryTable::clear);
     }
 
-    pub fn age_entries(&mut self) {
-        debug_assert!(!self.table.is_empty());
-        self.table
-            .iter_mut()
-            .flatten()
-            .for_each(HistoryTable::age_entries);
-    }
-
+    #[allow(clippy::cast_possible_truncation)]
     pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
-        self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
+        self.table[usize::from(threat_from)][usize::from(threat_to)]
+            .get(piece, sq)
+            .score as i16
     }
 
     pub fn get_mut(
@@ -103,7 +151,7 @@ impl ThreatsHistoryTable {
         sq: Square,
         threat_from: bool,
         threat_to: bool,
-    ) -> &mut i16 {
+    ) -> &mut AdaptiveHistoryValue {
         self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     chessmove::Move,
     historytable::{
-        update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
+        update_history, AdaptiveHistoryValue, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
     },
     piece::{Colour, PieceType},
@@ -34,7 +34,7 @@ impl ThreadData<'_> {
                 pos.threats.all.contains_square(from),
                 pos.threats.all.contains_square(to),
             );
-            update_history(val, depth, m == best_move);
+            AdaptiveHistoryValue::update_history(val, depth, m == best_move);
         }
     }
 
@@ -51,7 +51,7 @@ impl ThreadData<'_> {
             pos.threats.all.contains_square(from),
             pos.threats.all.contains_square(to),
         );
-        update_history(val, depth, true);
+        AdaptiveHistoryValue::update_history(val, depth, true);
     }
 
     /// Get the history scores for a batch of moves.
