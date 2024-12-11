@@ -55,7 +55,7 @@ impl AdaptiveHistoryValue {
 
         self.momentum = self.momentum.mul_add(0.9, delta * 0.1);
         self.variance = self.variance.mul_add(0.999, delta * delta * 0.001);
-        let update = ((delta * self.momentum) / (self.variance + 1e-8).sqrt()) as i32;
+        let update = (self.momentum / (self.variance + 1e-8).sqrt()) as i32;
         self.score += update - (self.score * update.abs() / MAX_HISTORY);
         debug_assert!(TryInto::<i16>::try_into(self.score).is_ok());
     }
