@@ -52,7 +52,7 @@ impl AdaptiveHistoryValue {
         };
 
         self.momentum = (self.momentum * 9 + delta) / 10;
-        self.variance = (self.variance * 99 + delta * delta) / 100;
+        self.variance = (self.variance * 999 + delta * delta) / 1000;
         let abs_delta = delta.abs();
         let update = (delta * self.momentum)
             // stupid cast
