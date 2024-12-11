@@ -358,7 +358,7 @@ impl ThreadData<'_> {
             self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let adjustment = pawn + major + minor + white + black;
+        let adjustment = pawn + major / 2 + minor / 2 + white + black;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
