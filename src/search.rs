@@ -788,6 +788,8 @@ impl Board {
             }
         }
 
+        t.ss[height].stat_score = 0;
+
         let excluded = t.ss[height].excluded;
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
@@ -955,7 +957,7 @@ impl Board {
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
                 && depth <= info.conf.rfp_depth
-                && static_eval - Self::rfp_margin(info, depth, improving) >= beta
+                && static_eval - Self::rfp_margin(info, depth, improving) - t.ss[height - 1].stat_score / 256 >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
                 && static_eval < MINIMUM_TB_WIN_SCORE
@@ -1157,6 +1159,8 @@ impl Board {
             } else {
                 stat_score += t.get_tactical_history_score(self, m);
             }
+
+            t.ss[height].stat_score = stat_score;
 
             // lmp & fp.
             let killer_or_counter =

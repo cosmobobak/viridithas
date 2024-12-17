@@ -8,4 +8,5 @@ pub struct StackEntry {
     pub best_move: Option<Move>,
     pub dextensions: i32,
     pub ttpv: bool,
+    pub stat_score: i32,
 }
