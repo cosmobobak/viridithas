@@ -4,11 +4,11 @@ use crate::{
     board::Board,
     chessmove::Move,
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
-        ThreatsHistoryTable,
+        CaptureHistoryTable, ContinuationCorrectionHistoryTable, CorrectionHistoryTable,
+        DoubleHistoryTable, MoveTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
-    piece::Colour,
+    piece::{Colour, PieceType},
     search::pv::PVariation,
     stack::StackEntry,
     transpositiontable::TTView,
@@ -33,6 +33,7 @@ pub struct ThreadData<'a> {
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
     pub minor_corrhist: Box<CorrectionHistoryTable>,
+    pub cont_corrhist: Box<ContinuationCorrectionHistoryTable>,
 
     pub thread_id: usize,
 
@@ -74,6 +75,7 @@ impl<'a> ThreadData<'a> {
             ],
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
+            cont_corrhist: ContinuationCorrectionHistoryTable::boxed(),
             thread_id,
             pvs: Self::EMPTY_PV_TABLE,
             completed: 0,
@@ -85,6 +87,17 @@ impl<'a> ThreadData<'a> {
         td.clear_tables();
 
         td
+    }
+
+    pub fn prevs(&self, pos: &Board) -> Option<((PieceType, Move), (PieceType, Move))> {
+        if pos.height() < 2 {
+            return None;
+        }
+
+        let a = self.ss[pos.height() - 1].played;
+        let b = self.ss[pos.height() - 2].played;
+
+        Option::zip(a, b)
     }
 
     pub fn ban_nmp_for(&mut self, colour: Colour) {
@@ -122,6 +135,7 @@ impl<'a> ThreadData<'a> {
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
+        self.cont_corrhist.clear();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;

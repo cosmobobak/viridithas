@@ -346,6 +346,13 @@ impl ThreadData<'_> {
             new_weight,
             scaled_diff,
         );
+        if let Some((a, b)) = self.prevs(pos) {
+            update(
+                self.cont_corrhist.get_mut(pos.turn(), a, b),
+                new_weight,
+                scaled_diff,
+            );
+        }
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.
@@ -358,7 +365,11 @@ impl ThreadData<'_> {
             self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let adjustment = pawn + major + minor + white + black;
+        let cont = match self.prevs(pos) {
+            Some((a, b)) => self.cont_corrhist.get(pos.turn(), a, b),
+            None => 0,
+        };
+        let adjustment = pawn + major / 2 + minor / 2 + white + black + cont;
         raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
     }
 }

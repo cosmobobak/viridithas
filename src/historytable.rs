@@ -231,7 +231,7 @@ impl CorrectionHistoryTable {
     pub fn boxed() -> Box<Self> {
         #![allow(clippy::cast_ptr_alignment)]
         // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
-        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // this is fine! because `CorrectionHistoryTable` is just a bunch of i16s
         // at base, which are fine to zero-out.
         unsafe {
             let layout = std::alloc::Layout::new::<Self>();
@@ -244,7 +244,11 @@ impl CorrectionHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(|t| t.fill(0));
+        // SAFETY: this is fine! because `CorrectionHistoryTable`
+        // is just a bunch of i32s at base, which are fine to zero-out.
+        unsafe {
+            std::ptr::write_bytes(self, 0, 1);
+        }
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -255,5 +259,55 @@ impl CorrectionHistoryTable {
     #[allow(clippy::cast_possible_truncation)]
     pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
         &mut self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize]
+    }
+}
+
+#[repr(transparent)]
+pub struct ContinuationCorrectionHistoryTable {
+    table: [[[[[i32; 64]; 6]; 64]; 6]; 2],
+}
+
+impl ContinuationCorrectionHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because `ContinuationCorrectionHistoryTable` is just a bunch of i32s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        // SAFETY: this is fine! because `ContinuationCorrectionHistoryTable`
+        // is just a bunch of i32s at base, which are fine to zero-out.
+        unsafe {
+            std::ptr::write_bytes(self, 0, 1);
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get(
+        &self,
+        side: Colour,
+        (p1, mv1): (PieceType, Move),
+        (p2, mv2): (PieceType, Move),
+    ) -> i64 {
+        i64::from(self.table[side][p1][mv1.to()][p2][mv2.to()])
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_mut(
+        &mut self,
+        side: Colour,
+        (p1, mv1): (PieceType, Move),
+        (p2, mv2): (PieceType, Move),
+    ) -> &mut i32 {
+        &mut self.table[side][p1][mv1.to()][p2][mv2.to()]
     }
 }

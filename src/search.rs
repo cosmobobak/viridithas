@@ -652,6 +652,7 @@ impl Board {
             if !self.make_move(m, t) {
                 continue;
             }
+            t.ss[height].played = Some((self.piece_at(m.history_to_square()).unwrap().piece_type(), m));
             // move found, we can start skipping quiets again:
             move_picker.skip_quiets = true;
             info.nodes.increment();
@@ -983,6 +984,7 @@ impl Board {
                     );
                 let nm_depth = depth - r;
                 t.tt.prefetch(self.key_after_null_move());
+                t.ss[height].played = None;
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -1086,6 +1088,8 @@ impl Board {
                     // illegal move
                     continue;
                 }
+
+                t.ss[height].played = Some((self.piece_at(m.history_to_square()).unwrap().piece_type(), m));
 
                 let mut value = -self.quiescence::<OffPV>(l_pv, info, t, -pc_beta, -pc_beta + 1);
 
@@ -1288,6 +1292,8 @@ impl Board {
                 t.ss[height].dextensions += 1;
             }
 
+            t.ss[height].played = Some((self.piece_at(m.history_to_square()).unwrap().piece_type(), m));
+
             let mut score;
             if moves_made == 1 {
                 // first move (presumably the PV-move)
@@ -1477,8 +1483,6 @@ impl Board {
                 t.ss[height].ttpv,
             );
         }
-
-        t.ss[height].best_move = best_move;
 
         best_score
     }
