@@ -1247,10 +1247,10 @@ impl Board {
                     cut_node,
                 );
                 t.ss[self.height()].excluded = None;
-                if value >= r_beta && r_beta >= beta {
+                if value >= r_beta && r_beta >= beta && !is_game_theoretic_score(value) {
                     // multi-cut: if a move other than the best one beats beta,
                     // then we can cut with relatively high confidence.
-                    return Self::singularity_margin(tt_value, depth);
+                    return value;
                 }
                 // re-make the singular move.
                 self.make_move(m, t);
