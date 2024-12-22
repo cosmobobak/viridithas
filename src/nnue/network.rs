@@ -516,7 +516,7 @@ impl NNUEParams {
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
         let weights_path = format!(
-            "viridithas-shared-nnue-weights-{}-{}-{}.bin",
+            "viridithas-shared-network-weights-{}-{}-{}.bin",
             std::env::consts::ARCH,
             std::env::consts::OS,
             // target cpu
@@ -527,40 +527,7 @@ impl NNUEParams {
 
         // Try to open existing weights file
         if std::fs::exists(&weights_path)? {
-            let file = File::open(&weights_path)?;
-
-            // SAFETY: This file must not be modified while we have a reference to it.
-            // we avoid doing this ourselves, but we can't defend against other processes.
-            let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
-
-            // check that the file is the right size.
-            anyhow::ensure!(
-                mmap.len() == std::mem::size_of::<Self>(),
-                "Wrong number of bytes: expected {}, got {}",
-                std::mem::size_of::<Self>(),
-                mmap.len()
-            );
-
-            // check pointer alignment.
-            anyhow::ensure!(
-                mmap.as_ptr().align_offset(64) == 0,
-                "Pointer is not aligned to 64 bytes"
-            );
-
-            // cast the mmap to a NNUEParams
-            // SAFETY: We just checked that the mmap is the right size and alignment.
-            #[allow(clippy::cast_ptr_alignment)]
-            let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
-
-            #[cfg(debug_assertions)]
-            {
-                // log the address of the mmap with pointer formatting
-                println!(
-                    "Re-used NNUE weights from mmap at {params:p} from file {weights_path:#?}"
-                );
-            }
-
-            return Ok(MappedWeights { mmap, params });
+            return Self::use_weight_file(&weights_path);
         }
 
         let mut net = QuantisedNetwork::zeroed();
@@ -586,7 +553,9 @@ impl NNUEParams {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&weights_path)?;
+            // .open(&weights_path)?;
+            // use a temporary path to avoid race conditions
+            .open(weights_path.with_extension("tmp"))?;
 
         // Allocate the file to the right size
         let size = std::mem::size_of::<Self>();
@@ -610,20 +579,50 @@ impl NNUEParams {
             std::ptr::copy_nonoverlapping(net.as_ref(), ptr, 1);
         }
 
-        // retype as immutable
-        let mmap = mmap.make_read_only()?;
-
-        // SAFETY: We just wrote a valid NNUEParams structure to the mmap,
-        // and we know that the pointer is aligned to 64 bytes.
-        #[allow(clippy::cast_ptr_alignment)]
-        let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
+        // move the file to the correct path
+        std::fs::rename(weights_path.with_extension("tmp"), &weights_path)?;
 
         #[cfg(debug_assertions)]
         {
-            // log the address of the mmap with pointer formatting
-            println!("Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}");
+            // log that we've created the file freshly
+            println!(
+                "Created NNUE weights file at {weights_path:#?} from decompressed data"
+            );
         }
 
+        // file created, return the mapped weights
+        Self::use_weight_file(&weights_path)
+    }
+
+    fn use_weight_file(weights_path: &Path) -> anyhow::Result<MappedWeights> {
+        let file = File::open(weights_path)?;
+        // SAFETY: This file must not be modified while we have a reference to it.
+        // we avoid doing this ourselves, but we can't defend against other processes.
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+
+        anyhow::ensure!(
+            mmap.len() == std::mem::size_of::<Self>(),
+            "Wrong number of bytes: expected {}, got {}",
+            std::mem::size_of::<Self>(),
+            mmap.len()
+        );
+        anyhow::ensure!(
+            mmap.as_ptr().align_offset(64) == 0,
+            "Pointer is not aligned to 64 bytes"
+        );
+
+        // cast the mmap to a NNUEParams
+        // SAFETY: We just checked that the mmap is the right size and alignment.
+        #[allow(clippy::cast_ptr_alignment)]
+        let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
+        #[cfg(debug_assertions)]
+        {
+            // log the address of the mmap with pointer formatting
+            println!(
+                "Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}"
+            );
+        }
+        
         Ok(MappedWeights { mmap, params })
     }
 
