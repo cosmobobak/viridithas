@@ -44,6 +44,7 @@ ruzstd = "0.7.0"
 
 # full-fat zstd for release builds
 zstd = { version = "0.13.2", optional = true }
+memmap2 = "0.9.5"
 
 # for coloured terminal output
 [dependencies.windows-sys]

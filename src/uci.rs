@@ -622,7 +622,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
-        bench("openbench", &info.conf).with_context(|| "bench failed")?;
+        bench("openbench", &info.conf, &nnue_params).with_context(|| "bench failed")?;
         return Ok(());
     }
 
@@ -728,7 +728,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 );
                 Ok(())
             }
-            "gobench" => go_benchmark(),
+            "gobench" => go_benchmark(&nnue_params),
             "initcuckoo" => cuckoo::init(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
@@ -818,7 +818,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 println!("info error ponderhit given while not searching.");
                 Ok(())
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf),
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, &nnue_params),
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
 
@@ -842,7 +842,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
 
 const BENCH_DEPTH: usize = 14;
 const BENCH_THREADS: usize = 1;
-fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
+fn bench(benchcmd: &str, search_params: &Config, nnue_params: &NNUEParams) -> anyhow::Result<()> {
     let bench_string = format!("go depth {BENCH_DEPTH}\n");
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
@@ -851,10 +851,9 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
     let mut thread_data = (0..BENCH_THREADS)
         .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
+        .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
         .collect::<Vec<_>>();
     let mut node_sum = 0u64;
     let start = Instant::now();
@@ -875,7 +874,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
             return Err(e);
         }
         for t in &mut thread_data {
-            t.nnue.reinit_from(&pos, &nnue_params);
+            t.nnue.reinit_from(&pos, nnue_params);
         }
         info.time_manager.start();
         let res = parse_go(&bench_string, &pos);
@@ -920,7 +919,7 @@ fn bench(benchcmd: &str, search_params: &Config) -> anyhow::Result<()> {
 }
 
 /// Benchmark the go UCI command.
-pub fn go_benchmark() -> anyhow::Result<()> {
+pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
     #![allow(clippy::cast_precision_loss)]
     const COUNT: usize = 1000;
     const THREADS: usize = 250;
@@ -931,10 +930,9 @@ pub fn go_benchmark() -> anyhow::Result<()> {
     let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
     let mut thread_data = (0..THREADS)
         .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
+        .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
         .collect::<Vec<_>>();
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
