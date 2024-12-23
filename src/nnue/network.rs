@@ -3,7 +3,8 @@ use std::{
     fs::{File, OpenOptions},
     io::BufReader,
     ops::{Deref, DerefMut},
-    path::Path, time::Duration,
+    path::Path,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -597,24 +598,30 @@ impl NNUEParams {
             println!("Created NNUE weights file at {weights_path:#?} from decompressed data");
         }
 
-        // wait until there are no temporary files left
-        //
-        // this is a bit of a hack, but it's the best way to ensure that the file is
-        // fully written before we try to use it.
-        let without_full_ext = weights_path.with_extension("tmp");
-        let without_full_ext = without_full_ext.as_os_str().to_string_lossy();
-        while std::fs::read_dir(std::env::temp_dir())?
-            .filter_map(Result::ok)
-            .any(|entry| entry.file_name().to_string_lossy().contains(&*without_full_ext))
-        {
-            std::thread::sleep(Duration::from_millis(100));
-        }
-
         // file created, return the mapped weights
         Self::use_weight_file(&weights_path)
     }
 
     fn use_weight_file(weights_path: &Path) -> anyhow::Result<MappedWeights> {
+        let without_full_ext = weights_path.with_extension("tmp");
+        let without_full_ext = without_full_ext.as_os_str().to_string_lossy();
+
+        // wait until there are no temporary files left
+        //
+        // this is a bit of a hack, but it's the best way to ensure that the file is
+        // fully written before we try to use it.
+        while std::fs::read_dir(std::env::temp_dir())?
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(&*without_full_ext)
+            })
+        {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
         let file = File::open(weights_path)?;
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
