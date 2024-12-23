@@ -3,7 +3,7 @@ use std::{
     fs::{File, OpenOptions},
     io::BufReader,
     ops::{Deref, DerefMut},
-    path::Path,
+    path::Path, time::Duration,
 };
 
 use anyhow::Context;
@@ -11,7 +11,11 @@ use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
 use crate::{
-    board::{movegen::piecelayout::PieceLayout, Board}, image::{self, Image}, nnue, piece::{Black, Col, Colour, Piece, PieceType, White}, util::{self, Square, MAX_PLY}
+    board::{movegen::piecelayout::PieceLayout, Board},
+    image::{self, Image},
+    nnue,
+    piece::{Black, Col, Colour, Piece, PieceType, White},
+    util::{self, Square, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -547,15 +551,20 @@ impl NNUEParams {
         let use_simd = cfg!(target_feature = "ssse3");
         let net = net.permute(use_simd);
 
+        // create a temporary file to store the weights
+        // uses a path unique to our process to avoid
+        // a race condition where one process is quicker at
+        // writing the file than another.
+        let temp_path = weights_path.with_extension(format!("tmp.{}", std::process::id()));
+
         // If we get here, we need to create and populate the weights file
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
-            // .open(&weights_path)?;
             // use a temporary path to avoid race conditions
-            .open(weights_path.with_extension("tmp"))?;
+            .open(&temp_path)?;
 
         // Allocate the file to the right size
         let size = std::mem::size_of::<Self>();
@@ -580,14 +589,25 @@ impl NNUEParams {
         }
 
         // move the file to the correct path
-        std::fs::rename(weights_path.with_extension("tmp"), &weights_path)?;
+        std::fs::rename(&temp_path, &weights_path)?;
 
         #[cfg(debug_assertions)]
         {
             // log that we've created the file freshly
-            println!(
-                "Created NNUE weights file at {weights_path:#?} from decompressed data"
-            );
+            println!("Created NNUE weights file at {weights_path:#?} from decompressed data");
+        }
+
+        // wait until there are no temporary files left
+        //
+        // this is a bit of a hack, but it's the best way to ensure that the file is
+        // fully written before we try to use it.
+        let without_full_ext = weights_path.with_extension("tmp");
+        let without_full_ext = without_full_ext.as_os_str().to_string_lossy();
+        while std::fs::read_dir(std::env::temp_dir())?
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().contains(&*without_full_ext))
+        {
+            std::thread::sleep(Duration::from_millis(100));
         }
 
         // file created, return the mapped weights
@@ -618,11 +638,9 @@ impl NNUEParams {
         #[cfg(debug_assertions)]
         {
             // log the address of the mmap with pointer formatting
-            println!(
-                "Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}"
-            );
+            println!("Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}");
         }
-        
+
         Ok(MappedWeights { mmap, params })
     }
 
