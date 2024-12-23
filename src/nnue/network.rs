@@ -589,6 +589,9 @@ impl NNUEParams {
             std::ptr::copy_nonoverlapping(net.as_ref(), ptr, 1);
         }
 
+        // sync the file to disk
+        mmap.flush()?;
+
         // move the file to the correct path
         std::fs::rename(&temp_path, &weights_path)?;
 
