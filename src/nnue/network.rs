@@ -520,15 +520,16 @@ impl NNUEParams {
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
-        let weights_path = format!(
+        let weights_file_name = format!(
             "viridithas-shared-network-weights-{}-{}-{}.bin",
             std::env::consts::ARCH,
             std::env::consts::OS,
             // target cpu
             nnue::simd::ARCH,
         );
-        let weights_path = Path::new(&weights_path);
-        let weights_path = std::env::temp_dir().join(weights_path);
+
+        let temp_dir = std::env::temp_dir();
+        let weights_path = temp_dir.join(&weights_file_name);
 
         // Try to open existing weights file
         let exists = std::fs::exists(&weights_path)
@@ -606,9 +607,24 @@ impl NNUEParams {
             .with_context(|| format!("Failed to flush mmaped temporary file at {temp_path:#?}"))?;
 
         // move the file to the correct path
-        std::fs::rename(&temp_path, &weights_path).with_context(|| {
-            format!("Failed to move file from {temp_path:#?} to {weights_path:#?}")
-        })?;
+        let rename_result = std::fs::rename(&temp_path, &weights_path);
+
+        // if the file now exists, either we succeeded or got beaten to the punch:
+        let exists = std::fs::exists(&weights_path)
+            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+
+        if !exists {
+            let tfile = temp_path.file_name().unwrap_or_else(|| "<empty>".as_ref());
+            let wfile = weights_path
+                .file_name()
+                .unwrap_or_else(|| "<empty>".as_ref());
+
+            rename_result.with_context(|| {
+                format!("Failed to rename temp file from {tfile:#?} to {wfile:#?} in {temp_dir:#?}")
+            })?;
+
+            panic!("Somehow rename succeeded but the file doesn't exist!");
+        }
 
         #[cfg(debug_assertions)]
         {
@@ -630,8 +646,10 @@ impl NNUEParams {
         //
         // this is a bit of a hack, but it's the best way to ensure that the file is
         // fully written before we try to use it.
-        let temp_dir_path = std::env::temp_dir();
-        while std::fs::read_dir(&temp_dir_path)
+        let temp_dir_path = weights_path
+            .parent()
+            .with_context(|| format!("Weights path ({weights_path:#?}) is not in a directory!"))?;
+        while std::fs::read_dir(temp_dir_path)
             .with_context(|| format!("Failed to read temporary directory at {temp_dir_path:#?}"))?
             .filter_map(Result::ok)
             .any(|entry| {
