@@ -1,16 +1,20 @@
 use std::{
     fmt::{Debug, Display},
-    fs::File,
+    fs::{File, OpenOptions},
     io::BufReader,
     ops::{Deref, DerefMut},
+    path::Path,
+    time::Duration,
 };
 
 use anyhow::Context;
 use arrayvec::ArrayVec;
+use memmap2::Mmap;
 
 use crate::{
     board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
+    nnue,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     util::{self, Square, MAX_PLY},
 };
@@ -289,7 +293,11 @@ impl UnquantisedNetwork {
 
 impl QuantisedNetwork {
     /// Convert the network parameters into a format optimal for inference.
-    #[allow(clippy::cognitive_complexity, clippy::needless_range_loop, clippy::too_many_lines)]
+    #[allow(
+        clippy::cognitive_complexity,
+        clippy::needless_range_loop,
+        clippy::too_many_lines
+    )]
     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
         let mut net = NNUEParams::zeroed();
         // permute the feature transformer weights
@@ -491,32 +499,203 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     }
 }
 
+pub struct MappedWeights {
+    #[allow(dead_code)]
+    mmap: Mmap,
+    params: &'static NNUEParams,
+}
+
+impl Deref for MappedWeights {
+    type Target = NNUEParams;
+
+    fn deref(&self) -> &Self::Target {
+        self.params
+    }
+}
+
 impl NNUEParams {
-    pub fn decompress_and_alloc() -> anyhow::Result<Box<Self>> {
+    pub fn decompress_and_alloc() -> anyhow::Result<MappedWeights> {
         #[cfg(not(feature = "zstd"))]
         type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
-        // SAFETY: NNUEParams is composed entiredly of POD types, so we can
-        // reinterpret it as bytes and write into it. We don't need to worry
-        // about padding bytes, because the boxed NNUEParams is zeroed.
-        unsafe {
-            let mut net = QuantisedNetwork::zeroed();
-            let mut mem = std::slice::from_raw_parts_mut(
+        let weights_file_name = format!(
+            "viridithas-shared-network-weights-{}-{}-{}.bin",
+            std::env::consts::ARCH,
+            std::env::consts::OS,
+            // target cpu
+            nnue::simd::ARCH,
+        );
+
+        let temp_dir = std::env::temp_dir();
+        let weights_path = temp_dir.join(&weights_file_name);
+
+        // Try to open existing weights file
+        let exists = std::fs::exists(&weights_path)
+            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+        if exists {
+            return Self::use_weight_file(&weights_path).with_context(|| {
+                format!(
+                    "Failed while attempting to load pre-existing weight file at {weights_path:#?}"
+                )
+            });
+        }
+
+        let mut net = QuantisedNetwork::zeroed();
+        // SAFETY: QN is POD and we only write to it.
+        let mut mem = unsafe {
+            std::slice::from_raw_parts_mut(
                 util::from_mut(net.as_mut()).cast::<u8>(),
                 std::mem::size_of::<QuantisedNetwork>(),
-            );
-            let expected_bytes = mem.len() as u64;
-            let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
-                .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
-            let bytes_written = std::io::copy(&mut decoder, &mut mem)
-                .with_context(|| "Failed to decompress NNUE weights.")?;
-            anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
-            let use_simd = cfg!(target_feature = "ssse3");
-            let net = net.permute(use_simd);
-            Ok(net)
+            )
+        };
+        let expected_bytes = mem.len() as u64;
+        let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
+            .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+        let bytes_written = std::io::copy(&mut decoder, &mut mem)
+            .with_context(|| "Failed to decompress NNUE weights.")?;
+        anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+        let use_simd = cfg!(target_feature = "ssse3");
+        let net = net.permute(use_simd);
+
+        // create a temporary file to store the weights
+        // uses a path unique to our process to avoid
+        // a race condition where one process is quicker at
+        // writing the file than another.
+        let temp_path = weights_path.with_extension(format!("tmp.{}", std::process::id()));
+
+        // If we get here, we need to create and populate the weights file
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            // use a temporary path to avoid race conditions
+            .open(&temp_path)
+            .with_context(|| format!("Failed to open temporary file at {temp_path:#?}"))?;
+
+        // Allocate the file to the right size
+        let size = std::mem::size_of::<Self>();
+        file.set_len(size as u64)
+            .with_context(|| format!("Failed to set length of file at {temp_path:#?} to {size}"))?;
+
+        // SAFETY: This file must not be modified while we have a reference to it.
+        // we avoid doing this ourselves, but we can't defend against other processes.
+        let mut mmap = unsafe {
+            memmap2::MmapOptions::new()
+                .map_mut(&file)
+                .with_context(|| format!("Failed to map temp file at {temp_path:#?}"))?
+        };
+
+        // Verify that the pointer is aligned to 64 bytes
+        anyhow::ensure!(
+            mmap.as_ptr().align_offset(64) == 0,
+            "Temporary file mmap pointer is not aligned to 64 bytes"
+        );
+
+        // write the NNUEParams to the mmap
+        #[allow(clippy::cast_ptr_alignment)]
+        let ptr = mmap.as_mut_ptr().cast::<Self>();
+        // SAFETY: We just allocated the mmap, and we know that the pointer is aligned to 64 bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(net.as_ref(), ptr, 1);
         }
+
+        // sync the file to disk
+        mmap.flush()
+            .with_context(|| format!("Failed to flush mmaped temporary file at {temp_path:#?}"))?;
+
+        // move the file to the correct path
+        let rename_result = std::fs::rename(&temp_path, &weights_path);
+
+        // if the file now exists, either we succeeded or got beaten to the punch:
+        let exists = std::fs::exists(&weights_path)
+            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+
+        if !exists {
+            let tfile = temp_path.file_name().unwrap_or_else(|| "<empty>".as_ref());
+            let wfile = weights_path
+                .file_name()
+                .unwrap_or_else(|| "<empty>".as_ref());
+
+            rename_result.with_context(|| {
+                format!("Failed to rename temp file from {tfile:#?} to {wfile:#?} in {temp_dir:#?}")
+            })?;
+
+            panic!("Somehow rename succeeded but the file doesn't exist!");
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            // log that we've created the file freshly
+            println!("Created NNUE weights file at {weights_path:#?} from decompressed data");
+        }
+
+        // file created, return the mapped weights
+        Self::use_weight_file(&weights_path).with_context(|| {
+            format!("Failed while attempting to load just-created weight file at {weights_path:#?}")
+        })
+    }
+
+    fn use_weight_file(weights_path: &Path) -> anyhow::Result<MappedWeights> {
+        let without_full_ext = weights_path.with_extension("tmp");
+        let without_full_ext = without_full_ext.as_os_str().to_string_lossy();
+
+        // wait until there are no temporary files left
+        //
+        // this is a bit of a hack, but it's the best way to ensure that the file is
+        // fully written before we try to use it.
+        let temp_dir_path = weights_path
+            .parent()
+            .with_context(|| format!("Weights path ({weights_path:#?}) is not in a directory!"))?;
+        while std::fs::read_dir(temp_dir_path)
+            .with_context(|| format!("Failed to read temporary directory at {temp_dir_path:#?}"))?
+            .filter_map(Result::ok)
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(&*without_full_ext)
+            })
+        {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        let file = File::open(weights_path)
+            .with_context(|| format!("Failed to open weights file at {weights_path:#?}"))?;
+        // SAFETY: This file must not be modified while we have a reference to it.
+        // we avoid doing this ourselves, but we can't defend against other processes.
+        let mmap = unsafe {
+            memmap2::MmapOptions::new()
+                .map(&file)
+                .with_context(|| format!("Failed to map weights file at {weights_path:#?}"))?
+        };
+
+        anyhow::ensure!(
+            mmap.len() == std::mem::size_of::<Self>(),
+            "Wrong number of bytes: expected {}, got {}",
+            std::mem::size_of::<Self>(),
+            mmap.len()
+        );
+
+        anyhow::ensure!(
+            mmap.as_ptr().align_offset(64) == 0,
+            "Pointer is not aligned to 64 bytes"
+        );
+
+        // cast the mmap to a NNUEParams
+        // SAFETY: We just checked that the mmap is the right size and alignment.
+        #[allow(clippy::cast_ptr_alignment)]
+        let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
+
+        #[cfg(debug_assertions)]
+        {
+            // log the address of the mmap with pointer formatting
+            println!("Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}");
+        }
+
+        Ok(MappedWeights { mmap, params })
     }
 
     fn zeroed() -> Box<Self> {

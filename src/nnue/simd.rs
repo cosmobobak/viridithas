@@ -56,6 +56,8 @@ mod avx512 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
 
+    pub const INNER_ARCH: &str = "avx512";
+
     wrap_simd_register!(__m512i, i8, VecI8);
     wrap_simd_register!(__m512i, i16, VecI16);
     wrap_simd_register!(__m512i, i32, VecI32);
@@ -283,6 +285,8 @@ mod avx512 {
 mod avx2 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
+
+    pub const INNER_ARCH: &str = "avx2";
 
     wrap_simd_register!(__m256i, i8, VecI8);
     wrap_simd_register!(__m256i, i16, VecI16);
@@ -523,6 +527,8 @@ mod avx2 {
 mod ssse3 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
+
+    pub const INNER_ARCH: &str = "ssse3";
 
     wrap_simd_register!(__m128i, i8, VecI8);
     wrap_simd_register!(__m128i, i16, VecI16);
@@ -775,3 +781,16 @@ pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
 pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
     VecI32::from_raw(vec.inner())
 }
+
+#[cfg(any(
+    target_feature = "ssse3",
+    target_feature = "avx2",
+    target_feature = "avx512f"
+))]
+pub const ARCH: &str = INNER_ARCH;
+#[cfg(not(any(
+    target_feature = "ssse3",
+    target_feature = "avx2",
+    target_feature = "avx512f"
+)))]
+pub const ARCH: &str = "generic";
