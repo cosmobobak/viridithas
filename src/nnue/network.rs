@@ -1,5 +1,11 @@
 use std::{
-    fmt::{Debug, Display}, fs::{File, OpenOptions}, hash::Hash, io::BufReader, ops::{Deref, DerefMut}, path::Path, sync::LazyLock, time::Duration
+    fmt::{Debug, Display},
+    fs::{File, OpenOptions},
+    io::BufReader,
+    ops::{Deref, DerefMut},
+    path::Path,
+    sync::LazyLock,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -87,7 +93,7 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 pub static COMPRESSED_NNUE_HASH: LazyLock<u64> = LazyLock::new(|| {
     let mut hasher = fxhash::FxHasher::default();
-    std::hash::Hasher::write(&mut hasher, COMPRESSED_NNUE);
+    std::hash::Hasher::write(&mut hasher, &COMPRESSED_NNUE[..4096]);
     std::hash::Hasher::finish(&hasher)
 });
 
