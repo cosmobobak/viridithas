@@ -531,8 +531,14 @@ impl NNUEParams {
         let weights_path = std::env::temp_dir().join(weights_path);
 
         // Try to open existing weights file
-        if std::fs::exists(&weights_path)? {
-            return Self::use_weight_file(&weights_path);
+        let exists = std::fs::exists(&weights_path)
+            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+        if exists {
+            return Self::use_weight_file(&weights_path).with_context(|| {
+                format!(
+                    "Failed while attempting to load pre-existing weight file at {weights_path:#?}"
+                )
+            });
         }
 
         let mut net = QuantisedNetwork::zeroed();
@@ -565,20 +571,26 @@ impl NNUEParams {
             .create(true)
             .truncate(true)
             // use a temporary path to avoid race conditions
-            .open(&temp_path)?;
+            .open(&temp_path)
+            .with_context(|| format!("Failed to open temporary file at {temp_path:#?}"))?;
 
         // Allocate the file to the right size
         let size = std::mem::size_of::<Self>();
-        file.set_len(size as u64)?;
+        file.set_len(size as u64)
+            .with_context(|| format!("Failed to set length of file at {temp_path:#?} to {size}"))?;
 
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
-        let mut mmap = unsafe { memmap2::MmapOptions::new().map_mut(&file)? };
+        let mut mmap = unsafe {
+            memmap2::MmapOptions::new()
+                .map_mut(&file)
+                .with_context(|| format!("Failed to map temp file at {temp_path:#?}"))?
+        };
 
         // Verify that the pointer is aligned to 64 bytes
         anyhow::ensure!(
             mmap.as_ptr().align_offset(64) == 0,
-            "Pointer is not aligned to 64 bytes"
+            "Temporary file mmap pointer is not aligned to 64 bytes"
         );
 
         // write the NNUEParams to the mmap
@@ -590,10 +602,13 @@ impl NNUEParams {
         }
 
         // sync the file to disk
-        mmap.flush()?;
+        mmap.flush()
+            .with_context(|| format!("Failed to flush mmaped temporary file at {temp_path:#?}"))?;
 
         // move the file to the correct path
-        std::fs::rename(&temp_path, &weights_path)?;
+        std::fs::rename(&temp_path, &weights_path).with_context(|| {
+            format!("Failed to move file from {temp_path:#?} to {weights_path:#?}")
+        })?;
 
         #[cfg(debug_assertions)]
         {
@@ -602,7 +617,9 @@ impl NNUEParams {
         }
 
         // file created, return the mapped weights
-        Self::use_weight_file(&weights_path)
+        Self::use_weight_file(&weights_path).with_context(|| {
+            format!("Failed while attempting to load just-created weight file at {weights_path:#?}")
+        })
     }
 
     fn use_weight_file(weights_path: &Path) -> anyhow::Result<MappedWeights> {
@@ -613,7 +630,9 @@ impl NNUEParams {
         //
         // this is a bit of a hack, but it's the best way to ensure that the file is
         // fully written before we try to use it.
-        while std::fs::read_dir(std::env::temp_dir())?
+        let temp_dir_path = std::env::temp_dir();
+        while std::fs::read_dir(&temp_dir_path)
+            .with_context(|| format!("Failed to read temporary directory at {temp_dir_path:#?}"))?
             .filter_map(Result::ok)
             .any(|entry| {
                 entry
@@ -625,10 +644,15 @@ impl NNUEParams {
             std::thread::sleep(Duration::from_millis(100));
         }
 
-        let file = File::open(weights_path)?;
+        let file = File::open(weights_path)
+            .with_context(|| format!("Failed to open weights file at {weights_path:#?}"))?;
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
-        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+        let mmap = unsafe {
+            memmap2::MmapOptions::new()
+                .map(&file)
+                .with_context(|| format!("Failed to map weights file at {weights_path:#?}"))?
+        };
 
         anyhow::ensure!(
             mmap.len() == std::mem::size_of::<Self>(),
@@ -636,6 +660,7 @@ impl NNUEParams {
             std::mem::size_of::<Self>(),
             mmap.len()
         );
+
         anyhow::ensure!(
             mmap.as_ptr().align_offset(64) == 0,
             "Pointer is not aligned to 64 bytes"
@@ -645,6 +670,7 @@ impl NNUEParams {
         // SAFETY: We just checked that the mmap is the right size and alignment.
         #[allow(clippy::cast_ptr_alignment)]
         let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
+
         #[cfg(debug_assertions)]
         {
             // log the address of the mmap with pointer formatting
