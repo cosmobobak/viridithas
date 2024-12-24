@@ -1,10 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    fs::{File, OpenOptions},
-    io::BufReader,
-    ops::{Deref, DerefMut},
-    path::Path,
-    time::Duration,
+    fmt::{Debug, Display}, fs::{File, OpenOptions}, hash::Hash, io::BufReader, ops::{Deref, DerefMut}, path::Path, sync::LazyLock, time::Duration
 };
 
 use anyhow::Context;
@@ -89,6 +84,12 @@ const QB: i16 = 64;
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
 pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
+
+pub static COMPRESSED_NNUE_HASH: LazyLock<u64> = LazyLock::new(|| {
+    let mut hasher = fxhash::FxHasher::default();
+    std::hash::Hasher::write(&mut hasher, COMPRESSED_NNUE);
+    std::hash::Hasher::finish(&hasher)
+});
 
 /// Struct representing the floating-point parameter file emmitted by bullet.
 #[rustfmt::skip]
@@ -554,11 +555,13 @@ impl NNUEParams {
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
 
         let weights_file_name = format!(
-            "viridithas-shared-network-weights-{}-{}-{}.bin",
+            "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
             std::env::consts::ARCH,
             std::env::consts::OS,
             // target cpu
             nnue::simd::ARCH,
+            // avoid clashing with other versions
+            *COMPRESSED_NNUE_HASH,
         );
 
         let temp_dir = std::env::temp_dir();

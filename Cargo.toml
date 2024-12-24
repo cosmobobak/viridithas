@@ -44,7 +44,12 @@ ruzstd = "0.7.0"
 
 # full-fat zstd for release builds
 zstd = { version = "0.13.2", optional = true }
+
+# for sharing network weights between processes
 memmap2 = "0.9.5"
+
+# for deconflicting shared weights
+fxhash = "0.2.1"
 
 # for coloured terminal output
 [dependencies.windows-sys]
