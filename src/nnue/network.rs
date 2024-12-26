@@ -883,6 +883,7 @@ pub struct BucketAccumulatorCache {
 
 impl BucketAccumulatorCache {
     #[allow(clippy::too_many_lines)]
+    #[inline(never)]
     pub fn load_accumulator_for_position(
         &mut self,
         nnue_params: &NNUEParams,
@@ -1060,6 +1061,7 @@ impl NNUEState {
         }
     }
 
+    #[inline(never)]
     fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, view: Colour) {
         let mut curr_index = self.current_acc;
         loop {
@@ -1093,6 +1095,7 @@ impl NNUEState {
     }
 
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
+    #[inline(never)]
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
             if !self.accumulators[self.current_acc].correct[colour] {
@@ -1226,175 +1229,93 @@ impl NNUEState {
         let src = front.last().unwrap();
         let tgt = back.first_mut().unwrap();
 
-        match (src.update_buffer.adds(), src.update_buffer.subs()) {
-            // quiet or promotion
-            (&[add], &[sub]) => {
-                Self::apply_quiet(
-                    white_king,
-                    black_king,
-                    add,
-                    sub,
-                    pov_update,
-                    src,
-                    tgt,
-                    nnue_params,
-                );
-            }
-            // capture
-            (&[add], &[sub1, sub2]) => {
-                Self::apply_capture(
-                    white_king,
-                    black_king,
-                    add,
-                    sub1,
-                    sub2,
-                    pov_update,
-                    src,
-                    tgt,
-                    nnue_params,
-                );
-            }
-            // castling
-            (&[add1, add2], &[sub1, sub2]) => {
-                Self::apply_castling(
-                    white_king,
-                    black_king,
-                    add1,
-                    add2,
-                    sub1,
-                    sub2,
-                    pov_update,
-                    src,
-                    tgt,
-                    nnue_params,
-                );
-            }
-            (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
-        }
-    }
-
-    /// Move a single piece on the board.
-    #[allow(clippy::too_many_arguments)]
-    pub fn apply_quiet(
-        white_king: Square,
-        black_king: Square,
-        add: FeatureUpdate,
-        sub: FeatureUpdate,
-        update: PovUpdate,
-        src: &Accumulator,
-        tgt: &mut Accumulator,
-        nnue_params: &NNUEParams,
-    ) {
-        let [w_add, b_add] = feature::indices(white_king, black_king, add);
-        let [w_sub, b_sub] = feature::indices(white_king, black_king, sub);
-
         let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
 
         let w_bucket = nnue_params.select_feature_weights(white_bucket);
         let b_bucket = nnue_params.select_feature_weights(black_bucket);
 
-        if update.white {
-            accumulator::vector_add_sub(&src.white, &mut tgt.white, w_bucket, w_add, w_sub);
+        if pov_update.white {
+            match (src.update_buffer.adds(), src.update_buffer.subs()) {
+                // quiet or promotion
+                (&[add], &[sub]) => {
+                    accumulator::vector_add_sub(
+                        &src.white,
+                        &mut tgt.white,
+                        w_bucket,
+                        feature::index::<White>(white_king, add),
+                        feature::index::<White>(white_king, sub),
+                    );
+                }
+                // capture
+                (&[add], &[sub1, sub2]) => {
+                    accumulator::vector_add_sub2(
+                        &src.white,
+                        &mut tgt.white,
+                        w_bucket,
+                        feature::index::<White>(white_king, add),
+                        feature::index::<White>(white_king, sub1),
+                        feature::index::<White>(white_king, sub2),
+                    );
+                }
+                // castling
+                (&[add1, add2], &[sub1, sub2]) => {
+                    accumulator::vector_add2_sub2(
+                        &src.white,
+                        &mut tgt.white,
+                        w_bucket,
+                        feature::index::<White>(white_king, add1),
+                        feature::index::<White>(white_king, add2),
+                        feature::index::<White>(white_king, sub1),
+                        feature::index::<White>(white_king, sub2),
+                    );
+                }
+                (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
+            }
         }
-        if update.black {
-            accumulator::vector_add_sub(&src.black, &mut tgt.black, b_bucket, b_add, b_sub);
-        }
-    }
 
-    /// Make a capture on the board.
-    #[allow(clippy::too_many_arguments)]
-    pub fn apply_capture(
-        white_king: Square,
-        black_king: Square,
-        add: FeatureUpdate,
-        sub1: FeatureUpdate,
-        sub2: FeatureUpdate,
-        update: PovUpdate,
-        src: &Accumulator,
-        tgt: &mut Accumulator,
-        nnue_params: &NNUEParams,
-    ) {
-        let [white_add, black_add] = feature::indices(white_king, black_king, add);
-        let [white_sub1, black_sub1] = feature::indices(white_king, black_king, sub1);
-        let [white_sub2, black_sub2] = feature::indices(white_king, black_king, sub2);
-
-        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
-
-        let white_bucket = nnue_params.select_feature_weights(white_bucket);
-        let black_bucket = nnue_params.select_feature_weights(black_bucket);
-
-        if update.white {
-            accumulator::vector_add_sub2(
-                &src.white,
-                &mut tgt.white,
-                white_bucket,
-                white_add,
-                white_sub1,
-                white_sub2,
-            );
-        }
-        if update.black {
-            accumulator::vector_add_sub2(
-                &src.black,
-                &mut tgt.black,
-                black_bucket,
-                black_add,
-                black_sub1,
-                black_sub2,
-            );
-        }
-    }
-
-    /// Make a castling move on the board.
-    #[allow(clippy::too_many_arguments)]
-    pub fn apply_castling(
-        white_king: Square,
-        black_king: Square,
-        add1: FeatureUpdate,
-        add2: FeatureUpdate,
-        sub1: FeatureUpdate,
-        sub2: FeatureUpdate,
-        update: PovUpdate,
-        src: &Accumulator,
-        tgt: &mut Accumulator,
-        nnue_params: &NNUEParams,
-    ) {
-        let [white_add1, black_add1] = feature::indices(white_king, black_king, add1);
-        let [white_add2, black_add2] = feature::indices(white_king, black_king, add2);
-        let [white_sub1, black_sub1] = feature::indices(white_king, black_king, sub1);
-        let [white_sub2, black_sub2] = feature::indices(white_king, black_king, sub2);
-
-        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
-
-        let white_bucket = nnue_params.select_feature_weights(white_bucket);
-        let black_bucket = nnue_params.select_feature_weights(black_bucket);
-
-        if update.white {
-            accumulator::vector_add2_sub2(
-                &src.white,
-                &mut tgt.white,
-                white_bucket,
-                white_add1,
-                white_add2,
-                white_sub1,
-                white_sub2,
-            );
-        }
-        if update.black {
-            accumulator::vector_add2_sub2(
-                &src.black,
-                &mut tgt.black,
-                black_bucket,
-                black_add1,
-                black_add2,
-                black_sub1,
-                black_sub2,
-            );
+        if pov_update.black {
+            match (src.update_buffer.adds(), src.update_buffer.subs()) {
+                // quiet or promotion
+                (&[add], &[sub]) => {
+                    accumulator::vector_add_sub(
+                        &src.black,
+                        &mut tgt.black,
+                        b_bucket,
+                        feature::index::<Black>(black_king, add),
+                        feature::index::<Black>(black_king, sub),
+                    );
+                }
+                // capture
+                (&[add], &[sub1, sub2]) => {
+                    accumulator::vector_add_sub2(
+                        &src.black,
+                        &mut tgt.black,
+                        b_bucket,
+                        feature::index::<Black>(black_king, add),
+                        feature::index::<Black>(black_king, sub1),
+                        feature::index::<Black>(black_king, sub2),
+                    );
+                }
+                // castling
+                (&[add1, add2], &[sub1, sub2]) => {
+                    accumulator::vector_add2_sub2(
+                        &src.black,
+                        &mut tgt.black,
+                        b_bucket,
+                        feature::index::<Black>(black_king, add1),
+                        feature::index::<Black>(black_king, add2),
+                        feature::index::<Black>(black_king, sub1),
+                        feature::index::<Black>(black_king, sub2),
+                    );
+                }
+                (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
+            }
         }
     }
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    #[inline(never)]
     pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
