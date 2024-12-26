@@ -883,7 +883,6 @@ pub struct BucketAccumulatorCache {
 
 impl BucketAccumulatorCache {
     #[allow(clippy::too_many_lines)]
-    #[inline(never)]
     pub fn load_accumulator_for_position(
         &mut self,
         nnue_params: &NNUEParams,
@@ -1061,7 +1060,6 @@ impl NNUEState {
         }
     }
 
-    #[inline(never)]
     fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, view: Colour) {
         let mut curr_index = self.current_acc;
         loop {
@@ -1095,7 +1093,6 @@ impl NNUEState {
     }
 
     /// Apply all in-flight updates, generating all the accumulators up to the current one.
-    #[inline(never)]
     pub fn force(&mut self, board: &Board, nnue_params: &NNUEParams) {
         for colour in Colour::all() {
             if !self.accumulators[self.current_acc].correct[colour] {
@@ -1315,7 +1312,6 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    #[inline(never)]
     pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
         let acc = &self.accumulators[self.current_acc];
 
