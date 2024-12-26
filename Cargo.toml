@@ -61,6 +61,7 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Storage",
     "Win32_Storage_FileSystem",
+    "Win32_System_Console",
 ]
 
 [profile.release]
