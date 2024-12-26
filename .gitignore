@@ -28,3 +28,4 @@ perf.data*
 flamegraph.svg
 profdir/*
 stacks.folded
+Cargo.lock
