@@ -4,7 +4,7 @@ use std::{
     io::BufReader,
     ops::{Deref, DerefMut},
     path::Path,
-    sync::LazyLock,
+    sync::{LazyLock, Mutex, OnceLock},
     time::Duration,
 };
 
@@ -539,26 +539,27 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
     }
 }
 
-pub struct MappedWeights {
-    #[allow(dead_code)]
-    mmap: Mmap,
-    params: &'static NNUEParams,
-}
-
-impl Deref for MappedWeights {
-    type Target = NNUEParams;
-
-    fn deref(&self) -> &Self::Target {
-        self.params
-    }
-}
-
 impl NNUEParams {
-    pub fn decompress_and_alloc() -> anyhow::Result<MappedWeights> {
+    pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
         type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
         #[cfg(feature = "zstd")]
         type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
+
+        // this function is not particularly happy about running in parallel.
+        static LOCK: Mutex<()> = Mutex::new(());
+        // additionally, we'd quite like to cache the results of this function.
+        static CACHED: OnceLock<Mmap> = OnceLock::new();
+        let _guard = LOCK.lock().unwrap();
+        // check if we've already loaded the weights
+        if let Some(cached) = CACHED.get() {
+            // cast the mmap to a NNUEParams
+            // SAFETY: We check that the mmap is the right size and alignment.
+            #[allow(clippy::cast_ptr_alignment)]
+            let params: &'static Self = unsafe { &*cached.as_ptr().cast::<Self>() };
+
+            return Ok(params);
+        }
 
         let weights_file_name = format!(
             "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
@@ -577,11 +578,21 @@ impl NNUEParams {
         let exists = std::fs::exists(&weights_path)
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
         if exists {
-            return Self::use_weight_file(&weights_path).with_context(|| {
+            let mmap = Self::map_weight_file(&weights_path).with_context(|| {
                 format!(
                     "Failed while attempting to load pre-existing weight file at {weights_path:#?}"
                 )
-            });
+            })?;
+
+            // store the mmap in the cache
+            CACHED.set(mmap).unwrap();
+
+            // cast the mmap to a NNUEParams
+            // SAFETY: We check that the mmap is the right size and alignment.
+            #[allow(clippy::cast_ptr_alignment)]
+            let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
+
+            return Ok(params);
         }
 
         let mut net = QuantisedNetwork::zeroed();
@@ -675,12 +686,22 @@ impl NNUEParams {
         }
 
         // file created, return the mapped weights
-        Self::use_weight_file(&weights_path).with_context(|| {
+        let mmap = Self::map_weight_file(&weights_path).with_context(|| {
             format!("Failed while attempting to load just-created weight file at {weights_path:#?}")
-        })
+        })?;
+
+        // store the mmap in the cache
+        CACHED.set(mmap).unwrap();
+
+        // cast the mmap to a NNUEParams
+        // SAFETY: We check that the mmap is the right size and alignment.
+        #[allow(clippy::cast_ptr_alignment)]
+        let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
+
+        Ok(params)
     }
 
-    fn use_weight_file(weights_path: &Path) -> anyhow::Result<MappedWeights> {
+    fn map_weight_file(weights_path: &Path) -> anyhow::Result<Mmap> {
         let without_full_ext = weights_path.with_extension("tmp");
         let without_full_ext = without_full_ext.as_os_str().to_string_lossy();
 
@@ -726,18 +747,16 @@ impl NNUEParams {
             "Pointer is not aligned to 64 bytes"
         );
 
-        // cast the mmap to a NNUEParams
-        // SAFETY: We just checked that the mmap is the right size and alignment.
-        #[allow(clippy::cast_ptr_alignment)]
-        let params: &'static Self = unsafe { &*mmap.as_ptr().cast::<Self>() };
-
         #[cfg(debug_assertions)]
         {
             // log the address of the mmap with pointer formatting
-            println!("Loaded NNUE weights from mmap at {params:p} from file {weights_path:#?}");
+            println!(
+                "Loaded NNUE weights from mmap at {:p} from file {weights_path:#?}",
+                mmap.as_ptr()
+            );
         }
 
-        Ok(MappedWeights { mmap, params })
+        Ok(mmap)
     }
 
     fn zeroed() -> Box<Self> {
