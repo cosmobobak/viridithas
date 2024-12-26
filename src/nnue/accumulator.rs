@@ -63,7 +63,7 @@ mod avx2 {
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
-            let mut registers = [simd::zero_i16(); 16];
+            let mut registers = [simd::zero_i16(); REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
@@ -233,7 +233,7 @@ mod generic {
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
-            let mut registers = [0; 16];
+            let mut registers = [0; REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
