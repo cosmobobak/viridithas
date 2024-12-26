@@ -612,7 +612,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
 
-    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), &nnue_params)];
+    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), nnue_params)];
 
     let version_extension = if cfg!(feature = "final-release") {
         ""
@@ -622,7 +622,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     if global_bench {
-        bench("openbench", &info.conf, &nnue_params).with_context(|| "bench failed")?;
+        bench("openbench", &info.conf, nnue_params).with_context(|| "bench failed")?;
         return Ok(());
     }
 
@@ -728,7 +728,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 );
                 Ok(())
             }
-            "gobench" => go_benchmark(&nnue_params),
+            "gobench" => go_benchmark(nnue_params),
             "initcuckoo" => cuckoo::init(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
@@ -748,7 +748,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
                             .zip(std::iter::repeat(&pos))
-                            .map(|(i, p)| ThreadData::new(i, p, tt.view(), &nnue_params))
+                            .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
                             .collect();
                         Ok(())
                     }
@@ -818,7 +818,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 println!("info error ponderhit given while not searching.");
                 Ok(())
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, &nnue_params),
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, nnue_params),
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
 
