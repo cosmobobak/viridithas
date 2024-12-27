@@ -23,7 +23,7 @@ zstd = ["dep:zstd"]
 final-release = ["zstd", "bindgen", "syzygy"]
 
 [build-dependencies]
-cc = { version = "1.0.90", optional = true }
+cc = { version = "1.2.6", optional = true }
 bindgen = { version = "0.69.4", optional = true }
 
 [dependencies]
@@ -48,7 +48,7 @@ memmap2 = "0.9.5"
 
 # for coloured terminal output
 [dependencies.windows-sys]
-version = "0.52"
+version = "0.59"
 features = [
     "Win32_Foundation",
     "Win32_Security",
