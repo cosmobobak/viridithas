@@ -1,11 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    fs::{File, OpenOptions},
-    io::BufReader,
-    ops::{Deref, DerefMut},
-    path::Path,
-    sync::{LazyLock, Mutex, OnceLock},
-    time::Duration,
+    fmt::{Debug, Display}, fs::{File, OpenOptions}, hash::Hasher, io::BufReader, ops::{Deref, DerefMut}, path::Path, sync::{Mutex, OnceLock}, time::Duration
 };
 
 use anyhow::Context;
@@ -91,11 +85,11 @@ const QB: i16 = 64;
 // have to do some path manipulation to get relative paths to work
 pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
-pub static COMPRESSED_NNUE_HASH: LazyLock<u64> = LazyLock::new(|| {
+pub fn nnue_checksum() -> u64 {
     let mut hasher = fxhash::FxHasher::default();
-    std::hash::Hasher::write(&mut hasher, &COMPRESSED_NNUE[..4096]);
-    std::hash::Hasher::finish(&hasher)
-});
+    hasher.write(&COMPRESSED_NNUE[..4096]);
+    hasher.finish()
+}
 
 /// Struct representing the floating-point parameter file emmitted by bullet.
 #[rustfmt::skip]
@@ -568,7 +562,7 @@ impl NNUEParams {
             // target cpu
             nnue::simd::ARCH,
             // avoid clashing with other versions
-            *COMPRESSED_NNUE_HASH,
+            nnue_checksum(),
         );
 
         let temp_dir = std::env::temp_dir();
