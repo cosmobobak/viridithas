@@ -59,7 +59,7 @@ fn enable_ansi_support() -> Result<(), u32> {
             null_mut(),
             OPEN_EXISTING,
             0,
-            0,
+            null_mut(),
         );
         if console_handle == INVALID_HANDLE_VALUE {
             return Err(GetLastError());
