@@ -931,7 +931,7 @@ impl Board {
                     let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
                     let threats = self.history().last().unwrap().threats.all;
                     let delta = i32::clamp(-10 * (ss_prev.eval + static_eval), -1600, 1600) + 600;
-                    self.update_quiet_history_single::<true>(t, from, to, moved, threats, delta);
+                    t.update_history_single(from, to, moved, threats, delta);
                 }
             }
         }
