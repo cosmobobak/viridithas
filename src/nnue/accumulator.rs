@@ -36,8 +36,10 @@ impl Accumulator {
     }
 }
 
-#[allow(clippy::needless_lifetimes)]
-unsafe fn slice_to_aligned<'a>(slice: &'a [i16]) -> &'a Align64<[i16; L1_SIZE]> {
+#[allow(clippy::inline_always)]
+#[inline(always)]
+unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
+    debug_assert_eq!(slice.len(), L1_SIZE);
     // don't immediately cast to Align64, as we want to check the alignment first.
     let ptr = slice.as_ptr();
     debug_assert_eq!(ptr.align_offset(64), 0);
@@ -46,8 +48,10 @@ unsafe fn slice_to_aligned<'a>(slice: &'a [i16]) -> &'a Align64<[i16; L1_SIZE]> 
     &*ptr.cast()
 }
 
-#[cfg(target_feature = "avx2")]
-mod avx2 {
+#[cfg(target_feature = "ssse3")]
+mod x86simd {
+    use arrayvec::ArrayVec;
+
     use super::{slice_to_aligned, Align64, FeatureIndex, INPUT, L1_SIZE};
     use crate::nnue::simd::{self, I16_CHUNK_SIZE};
 
@@ -63,17 +67,28 @@ mod avx2 {
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
-            let mut registers = [simd::zero_i16(); 16];
+            let mut add_blocks = ArrayVec::<_, 32>::new();
+            let mut sub_blocks = ArrayVec::<_, 32>::new();
+            for &add_index in adds {
+                let add_index = add_index.index() * L1_SIZE;
+                add_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(add_index..add_index + L1_SIZE),
+                ));
+            }
+            for &sub_index in subs {
+                let sub_index = sub_index.index() * L1_SIZE;
+                sub_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
+                ));
+            }
+            let mut registers = [simd::zero_i16(); REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
                     *reg =
                         simd::load_i16(input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
                 }
-                for &sub_index in subs {
-                    let sub_index = sub_index.index() * L1_SIZE;
-                    let sub_block =
-                        slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
+                for &sub_block in &sub_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let sub = simd::load_i16(
                             sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
@@ -81,10 +96,7 @@ mod avx2 {
                         *reg = simd::sub_i16(*reg, sub);
                     }
                 }
-                for &add_index in adds {
-                    let add_index = add_index.index() * L1_SIZE;
-                    let add_block =
-                        slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
+                for &add_block in &add_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let add = simd::load_i16(
                             add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
@@ -217,8 +229,10 @@ mod avx2 {
     }
 }
 
-#[cfg(not(target_feature = "avx2"))]
+#[cfg(not(target_feature = "ssse3"))]
 mod generic {
+    use arrayvec::ArrayVec;
+
     use super::{slice_to_aligned, Align64, FeatureIndex, INPUT, L1_SIZE};
 
     /// Apply add/subtract updates in place.
@@ -233,28 +247,36 @@ mod generic {
         // SAFETY: we never hold multiple mutable references, we never mutate immutable memory,
         // we use iterators to ensure that we're staying in-bounds, etc.
         unsafe {
-            let mut registers = [0; 16];
+            let mut add_blocks = ArrayVec::<_, 32>::new();
+            let mut sub_blocks = ArrayVec::<_, 32>::new();
+            for &add_index in adds {
+                let add_index = add_index.index() * L1_SIZE;
+                add_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(add_index..add_index + L1_SIZE),
+                ));
+            }
+            for &sub_index in subs {
+                let sub_index = sub_index.index() * L1_SIZE;
+                sub_blocks.push(slice_to_aligned(
+                    bucket.get_unchecked(sub_index..sub_index + L1_SIZE),
+                ));
+            }
+            let mut registers = [0; REGISTERS];
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
                     *reg = *input.get_unchecked(unroll_offset + r_idx);
                 }
-                for &sub_index in subs {
-                    let sub_index = sub_index.index() * L1_SIZE;
-                    let sub_block =
-                        slice_to_aligned(bucket.get_unchecked(sub_index..sub_index + L1_SIZE));
-                    for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let sub = *sub_block.get_unchecked(unroll_offset + r_idx);
-                        *reg -= sub;
-                    }
-                }
-                for &add_index in adds {
-                    let add_index = add_index.index() * L1_SIZE;
-                    let add_block =
-                        slice_to_aligned(bucket.get_unchecked(add_index..add_index + L1_SIZE));
+                for &add_block in &add_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
                         let add = *add_block.get_unchecked(unroll_offset + r_idx);
                         *reg += add;
+                    }
+                }
+                for &sub_block in &sub_blocks {
+                    for (r_idx, reg) in registers.iter_mut().enumerate() {
+                        let sub = *sub_block.get_unchecked(unroll_offset + r_idx);
+                        *reg -= sub;
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
@@ -379,7 +401,8 @@ mod generic {
     }
 }
 
-#[cfg(target_feature = "avx2")]
-pub use avx2::*;
-#[cfg(not(target_feature = "avx2"))]
+#[cfg(target_feature = "ssse3")]
+pub use x86simd::*;
+
+#[cfg(not(target_feature = "ssse3"))]
 pub use generic::*;

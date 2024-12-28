@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct CompactDepthStorage(u8);
 

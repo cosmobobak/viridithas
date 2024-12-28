@@ -6,10 +6,7 @@ use std::{
 use crate::{
     board::evaluation::MINIMUM_TB_WIN_SCORE,
     chessmove::Move,
-    util::{
-        self,
-        depth::CompactDepthStorage,
-    },
+    util::{self, depth::CompactDepthStorage},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -486,10 +483,7 @@ const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{
-        piece::PieceType,
-        util::Square,
-    };
+    use crate::{piece::PieceType, util::Square};
 
     use super::*;
 
