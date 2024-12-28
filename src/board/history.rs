@@ -1,8 +1,13 @@
 use crate::{
-    chessmove::Move, historytable::{
+    chessmove::Move,
+    historytable::{
         history_bonus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
-    }, piece::{Colour, Piece, PieceType}, squareset::SquareSet, threadlocal::ThreadData, util::{Square, Undo, MAX_PLY}
+    },
+    piece::{Colour, Piece, PieceType},
+    squareset::SquareSet,
+    threadlocal::ThreadData,
+    util::{Square, Undo, MAX_PLY},
 };
 
 use super::{movegen::MoveListEntry, Board};
@@ -40,12 +45,14 @@ impl ThreadData<'_> {
     }
 
     /// Update the history counters for a single move.
-    pub fn update_history_single(&mut self, from: Square, to: Square, moved: Piece, threats: SquareSet, delta: i32) {
-        // let Some(piece_moved) = pos.moved_piece(m) else {
-        //     return;
-        // };
-        // let from = m.from();
-        // let to = m.history_to_square();
+    pub fn update_history_single(
+        &mut self,
+        from: Square,
+        to: Square,
+        moved: Piece,
+        threats: SquareSet,
+        delta: i32,
+    ) {
         let val = self.main_history.get_mut(
             moved,
             to,
@@ -122,7 +129,6 @@ impl ThreadData<'_> {
     }
 
     /// Get the tactical history score for a single move.
-    #[allow(dead_code)]
     pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.moved_piece(m);
         let capture = caphist_piece_type(pos, m);
@@ -182,10 +188,6 @@ impl ThreadData<'_> {
         delta: i32,
         index: usize,
     ) {
-        // let Some(piece) = pos.moved_piece(m) else {
-        //     return;
-        // };
-        // let to = m.history_to_square();
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
         if let Some(Undo {
             cont_hist_index: None,

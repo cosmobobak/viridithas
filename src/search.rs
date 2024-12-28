@@ -812,7 +812,7 @@ impl Board {
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
                             let delta = history_bonus(depth);
-                            self.update_quiet_history_single(t, from, to, moved, threats, delta);
+                            self.update_quiet_history_single::<false>(t, from, to, moved, threats, delta);
                         }
                     }
 
@@ -922,13 +922,16 @@ impl Board {
         if !NT::ROOT {
             let ss_prev = &t.ss[height - 1];
             if let Some(mov) = ss_prev.searching {
-                if ss_prev.eval != VALUE_NONE && static_eval != VALUE_NONE && !ss_prev.searching_tactical {
+                if ss_prev.eval != VALUE_NONE
+                    && static_eval != VALUE_NONE
+                    && !ss_prev.searching_tactical
+                {
                     let from = mov.from();
                     let to = mov.history_to_square();
                     let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
                     let threats = self.history().last().unwrap().threats.all;
                     let delta = i32::clamp(-10 * (ss_prev.eval + static_eval), -1600, 1600) + 600;
-                    self.update_quiet_history_single(t, from, to, moved, threats, delta);
+                    self.update_quiet_history_single::<true>(t, from, to, moved, threats, delta);
                 }
             }
         }
@@ -1535,7 +1538,8 @@ impl Board {
     }
 
     /// Update the main and continuation history tables for a single move.
-    fn update_quiet_history_single(
+    #[allow(clippy::identity_op)]
+    fn update_quiet_history_single<const MADE: bool>(
         &self,
         t: &mut ThreadData,
         from: Square,
@@ -1545,9 +1549,9 @@ impl Board {
         delta: i32,
     ) {
         t.update_history_single(from, to, moved, threats, delta);
-        t.update_continuation_history_single(self, to, moved, delta, 0);
-        t.update_continuation_history_single(self, to, moved, delta, 1);
-        // t.update_continuation_history_single(self, to, moved, delta, delta, 3);
+        t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
+        t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
+        // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
     }
 
     /// Update the tactical history table.

@@ -1,5 +1,12 @@
 use std::{
-    fmt::{Debug, Display}, fs::{File, OpenOptions}, hash::Hasher, io::BufReader, ops::{Deref, DerefMut}, path::Path, sync::{Mutex, OnceLock}, time::Duration
+    fmt::{Debug, Display},
+    fs::{File, OpenOptions},
+    hash::Hasher,
+    io::BufReader,
+    ops::{Deref, DerefMut},
+    path::Path,
+    sync::{Mutex, OnceLock},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -534,6 +541,7 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 }
 
 impl NNUEParams {
+    #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
         type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
@@ -569,8 +577,10 @@ impl NNUEParams {
         let weights_path = temp_dir.join(&weights_file_name);
 
         // Try to open existing weights file
-        let exists = weights_path.try_exists()
+        let exists = weights_path
+            .try_exists()
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+
         if exists {
             let mmap = Self::map_weight_file(&weights_path).with_context(|| {
                 format!(
@@ -657,7 +667,8 @@ impl NNUEParams {
         let rename_result = std::fs::rename(&temp_path, &weights_path);
 
         // if the file now exists, either we succeeded or got beaten to the punch:
-        let exists = weights_path.try_exists()
+        let exists = weights_path
+            .try_exists()
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
 
         if !exists {
