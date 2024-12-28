@@ -26,14 +26,16 @@ use crate::{
     },
     cfor,
     chessmove::Move,
-    piece::{Colour, PieceType},
+    historytable::history_bonus,
+    piece::{Colour, Piece, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,
+    squareset::SquareSet,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     transpositiontable::{Bound, TTHit, TTView},
     uci,
-    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
+    util::{Square, INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -649,6 +651,8 @@ impl Board {
                 continue;
             }
             t.tt.prefetch(self.key_after(m));
+            t.ss[height].searching = Some(m);
+            t.ss[height].searching_tactical = is_tactical;
             if !self.make_move(m, t) {
                 continue;
             }
@@ -801,8 +805,14 @@ impl Board {
                 {
                     if let Some(mov) = hit.mov {
                         // add to the history of a quiet move that fails high here.
-                        if hit.value >= beta && !self.is_tactical(mov) {
-                            self.update_quiet_history_single(t, mov, depth);
+                        if hit.value >= beta && !self.is_tactical(mov) && self.is_pseudo_legal(mov)
+                        {
+                            let from = mov.from();
+                            let to = mov.history_to_square();
+                            let moved = self.piece_at(from).unwrap();
+                            let threats = self.threats().all;
+                            let delta = history_bonus(depth);
+                            self.update_quiet_history_single(t, from, to, moved, threats, delta);
                         }
                     }
 
@@ -908,6 +918,21 @@ impl Board {
 
         t.ss[height].eval = static_eval;
 
+        // value-difference based policy update.
+        if !NT::ROOT {
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if ss_prev.eval != VALUE_NONE && static_eval != VALUE_NONE && !ss_prev.searching_tactical {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    let threats = self.history().last().unwrap().threats.all;
+                    let delta = i32::clamp(-10 * (ss_prev.eval + static_eval), -1600, 1600) + 600;
+                    self.update_quiet_history_single(t, from, to, moved, threats, delta);
+                }
+            }
+        }
+
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less aggressive with alpha-reductions (eval is too low).
@@ -975,6 +1000,7 @@ impl Board {
                 && self.zugzwang_unlikely()
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
             {
+                t.tt.prefetch(self.key_after_null_move());
                 let r = info.conf.nmp_base_reduction
                     + depth / info.conf.nmp_reduction_depth_divisor
                     + std::cmp::min(
@@ -982,7 +1008,7 @@ impl Board {
                         info.conf.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
-                t.tt.prefetch(self.key_after_null_move());
+                t.ss[height].searching = None;
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -1082,6 +1108,8 @@ impl Board {
                 }
 
                 t.tt.prefetch(self.key_after(m));
+                t.ss[height].searching = Some(m);
+                t.ss[height].searching_tactical = true;
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -1204,6 +1232,8 @@ impl Board {
             }
 
             t.tt.prefetch(self.key_after(m));
+            t.ss[height].searching = Some(m);
+            t.ss[height].searching_tactical = !is_quiet;
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1253,6 +1283,8 @@ impl Board {
                     return Self::singularity_margin(tt_value, depth);
                 }
                 // re-make the singular move.
+                t.ss[height].searching = Some(m);
+                t.ss[height].searching_tactical = !is_quiet;
                 self.make_move(m, t);
 
                 if value < r_beta {
@@ -1503,11 +1535,19 @@ impl Board {
     }
 
     /// Update the main and continuation history tables for a single move.
-    fn update_quiet_history_single(&self, t: &mut ThreadData, move_to_adjust: Move, depth: i32) {
-        t.update_history_single(self, move_to_adjust, depth);
-        t.update_continuation_history_single(self, move_to_adjust, depth, 0);
-        t.update_continuation_history_single(self, move_to_adjust, depth, 1);
-        // t.update_continuation_history_single(self, move_to_adjust, depth, 3);
+    fn update_quiet_history_single(
+        &self,
+        t: &mut ThreadData,
+        from: Square,
+        to: Square,
+        moved: Piece,
+        threats: SquareSet,
+        delta: i32,
+    ) {
+        t.update_history_single(from, to, moved, threats, delta);
+        t.update_continuation_history_single(self, to, moved, delta, 0);
+        t.update_continuation_history_single(self, to, moved, delta, 1);
+        // t.update_continuation_history_single(self, to, moved, delta, delta, 3);
     }
 
     /// Update the tactical history table.
