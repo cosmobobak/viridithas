@@ -1,4 +1,4 @@
-use crate::chessmove::Move;
+use crate::chess::chessmove::Move;
 
 #[derive(Default, Clone)]
 #[allow(clippy::module_name_repetitions)]

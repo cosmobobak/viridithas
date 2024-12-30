@@ -23,7 +23,7 @@ use anyhow::{anyhow, bail, Context};
 
 use crate::{
     bench::BENCH_POSITIONS,
-    board::{
+    chess::board::{
         evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
         movegen::MoveList,
         Board,

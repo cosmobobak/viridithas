@@ -12,7 +12,7 @@ use std::{
 use arrayvec::ArrayVec;
 
 use crate::{
-    board::{
+    chess::board::{
         evaluation::{
             is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
             MINIMUM_TB_WIN_SCORE,
@@ -25,7 +25,7 @@ use crate::{
         Board,
     },
     cfor,
-    chessmove::Move,
+    chess::chessmove::Move,
     piece::{Colour, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,

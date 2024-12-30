@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    board::evaluation::MINIMUM_TB_WIN_SCORE,
-    chessmove::Move,
+    chess::board::evaluation::MINIMUM_TB_WIN_SCORE,
+    chess::chessmove::Move,
     util::{self, depth::CompactDepthStorage},
 };
 

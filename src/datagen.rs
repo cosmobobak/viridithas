@@ -25,7 +25,7 @@ use dataformat::Filter;
 use rand::Rng;
 
 use crate::{
-    board::{
+    chess::board::{
         evaluation::{is_game_theoretic_score, is_mate_score},
         Board, DrawType, GameOutcome, WinType,
     },

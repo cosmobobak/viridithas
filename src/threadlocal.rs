@@ -1,8 +1,8 @@
 use std::array;
 
 use crate::{
-    board::Board,
-    chessmove::Move,
+    chess::board::Board,
+    chess::chessmove::Move,
     historytable::{
         CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
         ThreatsHistoryTable,

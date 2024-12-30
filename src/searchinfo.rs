@@ -240,7 +240,7 @@ mod tests {
 
     use super::{SearchInfo, SearchLimit};
     use crate::{
-        board::{
+        chess::board::{
             evaluation::{mate_in, mated_in},
             Board,
         },

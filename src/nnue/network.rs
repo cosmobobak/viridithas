@@ -7,7 +7,7 @@ use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
 use crate::{
-    board::{movegen::piecelayout::PieceLayout, Board},
+    chess::board::{movegen::piecelayout::PieceLayout, Board},
     image::{self, Image},
     nnue,
     piece::{Black, Col, Colour, Piece, PieceType, White},

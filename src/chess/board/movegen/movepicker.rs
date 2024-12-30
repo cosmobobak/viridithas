@@ -1,6 +1,6 @@
 use crate::{
-    board::{history, Board},
-    chessmove::Move,
+    chess::board::{history, Board},
+    chess::chessmove::Move,
     historytable::MAX_HISTORY,
     threadlocal::ThreadData,
 };

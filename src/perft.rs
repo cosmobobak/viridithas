@@ -11,7 +11,7 @@ use anyhow::{bail, Context};
 #[cfg(test)]
 use crate::threadlocal::ThreadData;
 use crate::{
-    board::{movegen::MoveList, Board},
+    chess::board::{movegen::MoveList, Board},
     uci::CHESS960,
 };
 
@@ -65,7 +65,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 
 #[cfg(test)]
 pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
-    use crate::board::movegen::movepicker::MovePicker;
+    use crate::chess::board::movegen::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();
@@ -160,7 +160,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chessmove::Move,
+        chess::chessmove::Move,
         nnue::network::NNUEParams,
         piece::PieceType,
         transpositiontable::TT,

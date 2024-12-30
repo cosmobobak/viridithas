@@ -4,7 +4,7 @@ use arrayvec::ArrayVec;
 
 use crate::util::MAX_PLY;
 
-use crate::chessmove::Move;
+use crate::chess::chessmove::Move;
 
 #[derive(Clone, Debug)]
 pub struct PVariation {

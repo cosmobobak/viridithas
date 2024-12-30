@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    board::{
+    chess::board::{
         evaluation::MATE_SCORE,
         movegen::piecelayout::{PieceLayout, Threats},
     },

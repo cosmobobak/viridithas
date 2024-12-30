@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    chessmove::{Move, MoveFlags},
+    chess::chessmove::{Move, MoveFlags},
     lookups, magic,
     piece::{Black, Col, Colour, PieceType, White},
     squareset::SquareSet,

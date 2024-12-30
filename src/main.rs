@@ -11,8 +11,7 @@ mod macros;
 mod datagen;
 
 mod bench;
-mod board;
-mod chessmove;
+mod chess;
 mod cli;
 mod cuckoo;
 mod errors;

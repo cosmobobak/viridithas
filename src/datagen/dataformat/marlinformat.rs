@@ -1,5 +1,5 @@
 use crate::{
-    board::{Board, GameOutcome},
+    chess::board::{Board, GameOutcome},
     piece::{Colour, Piece, PieceType},
     squareset::SquareSet,
     util::{Rank, Square},

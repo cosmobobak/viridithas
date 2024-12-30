@@ -1,6 +1,6 @@
 use crate::{
-    board::movegen::attacks_by_type,
-    chessmove::Move,
+    chess::board::movegen::attacks_by_type,
+    chess::chessmove::Move,
     lookups::{PIECE_KEYS, SIDE_KEY},
     piece::{Piece, PieceType},
     squareset::SquareSet,

@@ -1,8 +1,8 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use crate::{
-    board::Board,
-    chessmove::Move,
+    chess::board::Board,
+    chess::chessmove::Move,
     nnue::network,
     piece::{Colour, Piece, PieceType},
     search::draw_score,

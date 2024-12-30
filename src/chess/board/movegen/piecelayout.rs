@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
+    chess::board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
     nnue::network::FeatureUpdate,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,

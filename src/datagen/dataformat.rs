@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::{
-    board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
-    chessmove::Move,
+    chess::board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
+    chess::chessmove::Move,
     piece::{Colour, PieceType},
     tablebases::probe::WDL,
 };

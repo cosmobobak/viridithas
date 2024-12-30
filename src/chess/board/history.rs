@@ -1,5 +1,5 @@
 use crate::{
-    chessmove::Move,
+    chess::chessmove::Move,
     historytable::{
         update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
