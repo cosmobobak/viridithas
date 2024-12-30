@@ -162,7 +162,7 @@ mod tests {
     use crate::{
         chess::chessmove::Move,
         nnue::network::NNUEParams,
-        piece::PieceType,
+        chess::piece::PieceType,
         transpositiontable::TT,
         util::{Square, MEGABYTE},
     };

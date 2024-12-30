@@ -1,8 +1,10 @@
 use crate::{
-    chess::board::movegen::attacks_by_type,
-    chess::chessmove::Move,
+    chess::{
+        board::movegen::attacks_by_type,
+        chessmove::Move,
+        piece::{Piece, PieceType},
+    },
     lookups::{PIECE_KEYS, SIDE_KEY},
-    piece::{Piece, PieceType},
     squareset::SquareSet,
     util::Square,
 };

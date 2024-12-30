@@ -1,6 +1,8 @@
 use crate::{
-    chess::board::{Board, GameOutcome},
-    piece::{Colour, Piece, PieceType},
+    chess::{
+        board::{Board, GameOutcome},
+        piece::{Colour, Piece, PieceType},
+    },
     squareset::SquareSet,
     util::{Rank, Square},
 };

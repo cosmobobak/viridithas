@@ -14,7 +14,7 @@ use crate::{
         movegen::piecelayout::{PieceLayout, Threats},
     },
     historytable::ContHistIndex,
-    piece::{Colour, Piece},
+    chess::piece::{Colour, Piece},
     squareset::SquareSet,
     uci::CHESS960,
 };

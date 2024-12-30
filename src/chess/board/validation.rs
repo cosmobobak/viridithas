@@ -2,7 +2,7 @@
 
 use crate::{
     nnue::network::NNUEState,
-    piece::{Colour, Piece},
+    chess::piece::{Colour, Piece},
     searchinfo::SearchInfo,
     util::{Rank, Square},
 };

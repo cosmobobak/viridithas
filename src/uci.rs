@@ -35,7 +35,7 @@ use crate::{
         network::{self, NNUEParams},
     },
     perft,
-    piece::Colour,
+    chess::piece::Colour,
     search::{parameters::Config, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,

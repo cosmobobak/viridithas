@@ -5,7 +5,7 @@
 
 use crate::{
     lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
-    piece::Piece,
+    chess::piece::Piece,
     util::{CastlingRights, Square},
 };
 

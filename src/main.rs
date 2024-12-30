@@ -22,7 +22,6 @@ mod magic;
 mod makemove;
 mod nnue;
 mod perft;
-mod piece;
 mod rng;
 mod search;
 mod searchinfo;

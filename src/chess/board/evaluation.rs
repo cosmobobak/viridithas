@@ -4,7 +4,7 @@ use crate::{
     chess::board::Board,
     chess::chessmove::Move,
     nnue::network,
-    piece::{Colour, Piece, PieceType},
+    chess::piece::{Colour, Piece, PieceType},
     search::draw_score,
     threadlocal::ThreadData,
     util::{MAX_DEPTH, MAX_PLY},

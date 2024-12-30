@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    piece::PieceType,
+    chess::piece::PieceType,
     uci::CHESS960,
     util::{File, Square},
 };

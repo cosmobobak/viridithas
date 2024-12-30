@@ -4,7 +4,7 @@ use crate::{
         update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
     },
-    piece::{Colour, PieceType},
+    chess::piece::{Colour, PieceType},
     threadlocal::ThreadData,
     util::{Undo, MAX_PLY},
 };

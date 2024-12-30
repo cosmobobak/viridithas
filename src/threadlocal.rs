@@ -8,7 +8,7 @@ use crate::{
         ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
-    piece::Colour,
+    chess::piece::Colour,
     search::pv::PVariation,
     stack::StackEntry,
     transpositiontable::TTView,

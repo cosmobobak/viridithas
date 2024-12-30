@@ -8,7 +8,7 @@
 use crate::{
     chess::board::{evaluation::TB_WIN_SCORE, movegen::MoveList, Board},
     chess::chessmove::Move,
-    piece::{Colour, PieceType},
+    chess::piece::{Colour, PieceType},
     tablebases::bindings::{
         tb_init, tb_probe_root, tb_probe_wdl, TB_BLESSED_LOSS, TB_CURSED_WIN, TB_DRAW, TB_LARGEST,
         TB_LOSS, TB_PROMOTES_BISHOP, TB_PROMOTES_KNIGHT, TB_PROMOTES_QUEEN, TB_PROMOTES_ROOK,

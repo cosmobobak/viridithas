@@ -14,15 +14,13 @@ use anyhow::{bail, Context};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
-    chess::board::movegen::{
+    chess::{board::movegen::{
         bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
-    },
-    chess::chessmove::Move,
+    }, chessmove::Move, piece::{Black, Col, Colour, Piece, PieceType, White}},
     cuckoo,
     historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
-    piece::{Black, Col, Colour, Piece, PieceType, White},
     search::pv::PVariation,
     squareset::SquareSet,
     threadlocal::ThreadData,
@@ -2144,7 +2142,7 @@ mod tests {
     #[test]
     fn scharnagl_backrank_works() {
         use super::Board;
-        use crate::piece::PieceType;
+        use crate::chess::piece::PieceType;
         let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
         assert_eq!(
             normal_chess_arrangement,
@@ -2249,7 +2247,7 @@ mod tests {
         use super::Board;
         use crate::chess::chessmove::Move;
         use crate::makemove::{hash_ep, hash_piece, hash_side};
-        use crate::piece::Piece;
+        use crate::chess::piece::Piece;
         use crate::util::Square;
         let mut not_ep_capturable =
             Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")

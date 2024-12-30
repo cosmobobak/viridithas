@@ -15,9 +15,8 @@ use std::{
 };
 
 use crate::{
-    chess::chessmove::{Move, MoveFlags},
+    chess::{chessmove::{Move, MoveFlags}, piece::{Black, Col, Colour, PieceType, White}},
     lookups, magic,
-    piece::{Black, Col, Colour, PieceType, White},
     squareset::SquareSet,
     uci::CHESS960,
     util::{Square, RAY_BETWEEN},

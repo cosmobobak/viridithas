@@ -1,6 +1,4 @@
-// use crate::{board::Board, piece::PieceType};
-
-use crate::piece::Colour;
+use crate::chess::piece::Colour;
 
 use super::network::{
     feature::FeatureIndex, Align64, MovedPiece, PovUpdate, UpdateBuffer, INPUT, L1_SIZE,

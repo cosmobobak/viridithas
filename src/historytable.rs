@@ -1,6 +1,8 @@
 use crate::{
-    chess::chessmove::Move,
-    piece::{Colour, Piece, PieceType},
+    chess::{
+        chessmove::Move,
+        piece::{Colour, Piece, PieceType},
+    },
     util::{Square, BOARD_N_SQUARES},
 };
 

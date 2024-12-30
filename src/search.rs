@@ -26,7 +26,7 @@ use crate::{
     },
     cfor,
     chess::chessmove::Move,
-    piece::{Colour, PieceType},
+    chess::piece::{Colour, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},

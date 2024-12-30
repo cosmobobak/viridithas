@@ -25,13 +25,15 @@ use dataformat::Filter;
 use rand::Rng;
 
 use crate::{
-    chess::board::{
-        evaluation::{is_game_theoretic_score, is_mate_score},
-        Board, DrawType, GameOutcome, WinType,
+    chess::{
+        board::{
+            evaluation::{is_game_theoretic_score, is_mate_score},
+            Board, DrawType, GameOutcome, WinType,
+        },
+        piece::{Colour, PieceType},
     },
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
-    piece::{Colour, PieceType},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,

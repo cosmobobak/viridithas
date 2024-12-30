@@ -1,4 +1,4 @@
-use crate::{piece::Col, util::File};
+use crate::{chess::piece::Col, util::File};
 
 use super::FeatureUpdate;
 
@@ -75,7 +75,7 @@ pub fn index<C: Col>(king: Square, f: FeatureUpdate) -> FeatureIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::piece::{Black, Piece, White};
+    use crate::chess::piece::{Black, Piece, White};
 
     use super::*;
 
