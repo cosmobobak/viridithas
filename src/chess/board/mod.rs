@@ -14,20 +14,19 @@ use anyhow::{bail, Context};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
-    chess::types::{CastlingRights, CheckState, File, Rank, Square, Undo},
+    chess::squareset::SquareSet,
     chess::{
         board::movegen::{
             bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
         },
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        types::{CastlingRights, CheckState, ContHistIndex, File, Rank, Square, Undo},
     },
     cuckoo,
-    historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
-    squareset::SquareSet,
     threadlocal::ThreadData,
     uci::CHESS960,
     util::RAY_BETWEEN,
@@ -1190,7 +1189,8 @@ impl Board {
                 _ => {
                     panic!(
                         "Invalid castle move, to: {}, castle_perm: {}",
-                        to, self.castle_perm.display(false)
+                        to,
+                        self.castle_perm.display(false)
                     );
                 }
             };
@@ -2190,7 +2190,7 @@ mod tests {
     #[test]
     fn threat_generation_white() {
         use super::Board;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
 
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
         assert_eq!(
@@ -2202,7 +2202,7 @@ mod tests {
     #[test]
     fn threat_generation_black() {
         use super::Board;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
 
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
         assert_eq!(

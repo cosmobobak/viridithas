@@ -15,13 +15,13 @@ use std::{
 };
 
 use crate::{
+    chess::squareset::SquareSet,
     chess::{
         chessmove::{Move, MoveFlags},
         piece::{Black, Col, Colour, PieceType, White},
         types::Square,
     },
     lookups, magic,
-    squareset::SquareSet,
     uci::CHESS960,
     util::RAY_BETWEEN,
 };

@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn test_all_square_combinations() {
         use super::*;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
         for from in SquareSet::FULL {
             for to in SquareSet::FULL.iter().filter(|s| *s < from) {
                 let m = Move::new(from, to);

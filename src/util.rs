@@ -2,10 +2,7 @@ pub mod depth;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::{
-    chess::{board::evaluation::MATE_SCORE, types::Square},
-    squareset::SquareSet,
-};
+use crate::chess::{board::evaluation::MATE_SCORE, squareset::SquareSet, types::Square};
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: i32 = 128;
@@ -139,7 +136,7 @@ mod tests {
     #[test]
     fn ray_test() {
         use super::{Square, RAY_BETWEEN};
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
         assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
         assert_eq!(RAY_BETWEEN[Square::A1][Square::C1], Square::B1.as_set());

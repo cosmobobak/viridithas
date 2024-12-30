@@ -25,7 +25,6 @@ mod perft;
 mod rng;
 mod search;
 mod searchinfo;
-mod squareset;
 mod stack;
 mod tablebases;
 mod term;

@@ -2,7 +2,7 @@ use crate::{
     chess::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
-        types::Square,
+        types::{ContHistIndex, Square},
     },
     util::BOARD_N_SQUARES,
 };
@@ -148,12 +148,6 @@ impl CaptureHistoryTable {
     pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
         self.table[capture].get_mut(piece, sq)
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ContHistIndex {
-    pub piece: Piece,
-    pub square: Square,
 }
 
 #[repr(transparent)]

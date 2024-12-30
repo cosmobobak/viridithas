@@ -5,12 +5,9 @@ use std::{
     str::FromStr,
 };
 
-use crate::{
-    chess::{
-        board::movegen::piecelayout::{PieceLayout, Threats},
-        piece::{Colour, Piece},
-    },
-    historytable::ContHistIndex,
+use crate::chess::{
+    board::movegen::piecelayout::{PieceLayout, Threats},
+    piece::{Colour, Piece},
     squareset::SquareSet,
 };
 
@@ -399,6 +396,12 @@ pub const BKCA: u8 = 0b0100;
 
 pub const BQCA: u8 = 0b1000;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ContHistIndex {
+    pub piece: Piece,
+    pub square: Square,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
     pub castle_perm: CastlingRights,
@@ -536,7 +539,7 @@ impl CastlingRights {
     }
 }
 
-pub struct CastlingRightsDisplay<'a>{
+pub struct CastlingRightsDisplay<'a> {
     rights: &'a CastlingRights,
     chess_960: bool,
 }

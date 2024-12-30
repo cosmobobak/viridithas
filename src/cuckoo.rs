@@ -3,10 +3,10 @@ use crate::{
         board::movegen::attacks_by_type,
         chessmove::Move,
         piece::{Piece, PieceType},
+        squareset::SquareSet,
         types::Square,
     },
     lookups::{PIECE_KEYS, SIDE_KEY},
-    squareset::SquareSet,
 };
 
 pub const KEYS: [u64; 8192] =
