@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::{rng::XorShiftState, squareset::SquareSet, util::Square};
+use crate::{chess::types::Square, rng::XorShiftState, squareset::SquareSet};
 
 /// Implements a C-style for loop, for use in const fn.
 #[macro_export]
@@ -112,9 +112,9 @@ mod tests {
 
     #[test]
     fn python_chess_validation() {
+        use crate::chess::types::Square;
         use crate::lookups::{get_king_attacks, get_knight_attacks};
         use crate::squareset::SquareSet;
-        use crate::util::Square;
         // testing that the attack squaresets match the ones in the python-chess library,
         // which are known to be correct.
         assert_eq!(

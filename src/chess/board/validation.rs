@@ -1,10 +1,12 @@
 #![allow(unused_imports)]
 
 use crate::{
+    chess::{
+        piece::{Colour, Piece},
+        types::{Rank, Square},
+    },
     nnue::network::NNUEState,
-    chess::piece::{Colour, Piece},
     searchinfo::SearchInfo,
-    util::{Rank, Square},
 };
 
 #[cfg(debug_assertions)]

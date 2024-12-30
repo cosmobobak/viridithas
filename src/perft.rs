@@ -160,11 +160,10 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::chessmove::Move,
+        chess::{chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
-        chess::piece::PieceType,
         transpositiontable::TT,
-        util::{Square, MEGABYTE},
+        util::MEGABYTE,
     };
 
     #[test]

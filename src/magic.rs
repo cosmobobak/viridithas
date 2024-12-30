@@ -1,4 +1,4 @@
-use crate::{macros, rng::XorShiftState, squareset::SquareSet, util::Square};
+use crate::{chess::types::Square, macros, rng::XorShiftState, squareset::SquareSet};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {

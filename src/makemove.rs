@@ -4,9 +4,11 @@
 // the Board::make_move() function.
 
 use crate::{
+    chess::{
+        piece::Piece,
+        types::{CastlingRights, Square},
+    },
     lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
-    chess::piece::Piece,
-    util::{CastlingRights, Square},
 };
 
 pub fn hash_castling(key: &mut u64, castle_perm: CastlingRights) {

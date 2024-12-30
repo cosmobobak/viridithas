@@ -31,6 +31,7 @@ use crate::{
             Board, DrawType, GameOutcome, WinType,
         },
         piece::{Colour, PieceType},
+        types::Square,
     },
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
@@ -40,7 +41,7 @@ use crate::{
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{Square, MEGABYTE},
+    util::MEGABYTE,
 };
 
 const MIN_SAVE_PLY: usize = 16;

@@ -2,7 +2,7 @@ use std::ops::{
     BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
 };
 
-use crate::{chess::board::movegen::SquareIter, util::Square};
+use crate::{chess::board::movegen::SquareIter, chess::types::Square};
 
 /// A set of squares, with support for very fast set operations and in-order iteration.
 /// Most chess engines call this type `Bitboard`.

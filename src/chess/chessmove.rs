@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     chess::piece::PieceType,
+    chess::{types::File, types::Square},
     uci::CHESS960,
-    util::{File, Square},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

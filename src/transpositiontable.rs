@@ -483,7 +483,7 @@ const fn reconstruct_gt_truth_score(mut score: i32, ply: usize) -> i32 {
 
 mod tests {
     #![allow(unused_imports)]
-    use crate::{chess::piece::PieceType, util::Square};
+    use crate::{chess::piece::PieceType, chess::types::Square};
 
     use super::*;
 

@@ -376,7 +376,7 @@ mod tests {
 
     use super::*;
 
-    use crate::util::Square;
+    use crate::chess::types::Square;
 
     #[test]
     #[ignore]

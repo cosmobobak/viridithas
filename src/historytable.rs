@@ -2,8 +2,9 @@ use crate::{
     chess::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
+        types::Square,
     },
-    util::{Square, BOARD_N_SQUARES},
+    util::BOARD_N_SQUARES,
 };
 
 const AGEING_DIVISOR: i16 = 2;

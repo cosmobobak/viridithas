@@ -1,10 +1,10 @@
-use crate::{chess::piece::Col, util::File};
-
-use super::FeatureUpdate;
-
-use crate::util::Square;
-
-use super::INPUT;
+use crate::{
+    chess::{
+        piece::Col,
+        types::{File, Square},
+    },
+    nnue::network::{FeatureUpdate, INPUT},
+};
 
 /// wrapper to enforce bounds.
 #[allow(clippy::module_name_repetitions)]

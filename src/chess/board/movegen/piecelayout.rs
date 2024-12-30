@@ -1,11 +1,15 @@
 use std::fmt::Display;
 
 use crate::{
-    chess::board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
+    chess::{
+        board::movegen::{
+            bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
+        },
+        piece::{Black, Col, Colour, Piece, PieceType, White},
+        types::{File, Rank, Square},
+    },
     nnue::network::FeatureUpdate,
-    chess::piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
-    util::{File, Rank, Square},
 };
 
 /// Iterator over the squares of a square-set.

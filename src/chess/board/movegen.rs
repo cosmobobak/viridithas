@@ -15,11 +15,15 @@ use std::{
 };
 
 use crate::{
-    chess::{chessmove::{Move, MoveFlags}, piece::{Black, Col, Colour, PieceType, White}},
+    chess::{
+        chessmove::{Move, MoveFlags},
+        piece::{Black, Col, Colour, PieceType, White},
+        types::Square,
+    },
     lookups, magic,
     squareset::SquareSet,
     uci::CHESS960,
-    util::{Square, RAY_BETWEEN},
+    util::RAY_BETWEEN,
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;

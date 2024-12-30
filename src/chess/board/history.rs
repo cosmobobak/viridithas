@@ -1,12 +1,15 @@
 use crate::{
-    chess::chessmove::Move,
+    chess::{
+        chessmove::Move,
+        piece::{Colour, PieceType},
+        types::Undo,
+    },
     historytable::{
         update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
     },
-    chess::piece::{Colour, PieceType},
     threadlocal::ThreadData,
-    util::{Undo, MAX_PLY},
+    util::MAX_PLY,
 };
 
 use super::{movegen::MoveListEntry, Board};

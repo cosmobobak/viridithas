@@ -3,8 +3,8 @@
 use crate::{
     chess::board::Board,
     chess::chessmove::Move,
-    nnue::network,
     chess::piece::{Colour, Piece, PieceType},
+    nnue::network,
     search::draw_score,
     threadlocal::ThreadData,
     util::{MAX_DEPTH, MAX_PLY},

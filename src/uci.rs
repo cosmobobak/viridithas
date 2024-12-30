@@ -28,6 +28,7 @@ use crate::{
         movegen::MoveList,
         Board,
     },
+    chess::piece::Colour,
     cuckoo,
     errors::{FenParseError, MoveParseError},
     nnue::{
@@ -35,7 +36,6 @@ use crate::{
         network::{self, NNUEParams},
     },
     perft,
-    chess::piece::Colour,
     search::{parameters::Config, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,

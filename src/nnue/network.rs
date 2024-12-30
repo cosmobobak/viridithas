@@ -17,10 +17,11 @@ use crate::{
     chess::{
         board::{movegen::piecelayout::PieceLayout, Board},
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        types::Square,
     },
     image::{self, Image},
     nnue,
-    util::{self, Square, MAX_PLY},
+    util::{self, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};

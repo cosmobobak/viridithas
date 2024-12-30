@@ -2,9 +2,9 @@ use crate::{
     chess::{
         board::{Board, GameOutcome},
         piece::{Colour, Piece, PieceType},
+        types::{Rank, Square},
     },
     squareset::SquareSet,
-    util::{Rank, Square},
 };
 
 const UNMOVED_ROOK: u8 = 6; // one higher than the max piecetype enum value
