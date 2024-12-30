@@ -1190,7 +1190,7 @@ impl Board {
                 _ => {
                     panic!(
                         "Invalid castle move, to: {}, castle_perm: {}",
-                        to, self.castle_perm
+                        to, self.castle_perm.display(false)
                     );
                 }
             };

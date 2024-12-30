@@ -1,21 +1,18 @@
-use std::{fmt, mem::size_of, str::FromStr, sync::atomic::Ordering};
+use std::{
+    fmt::{self, Display},
+    mem::size_of,
+    ops::{Index, IndexMut},
+    str::FromStr,
+};
 
 use crate::{
     chess::{
         board::movegen::piecelayout::{PieceLayout, Threats},
-        piece::Piece,
+        piece::{Colour, Piece},
     },
     historytable::ContHistIndex,
     squareset::SquareSet,
-    uci::CHESS960,
 };
-
-use std::fmt::Display;
-
-use crate::chess::piece::Colour;
-
-use std::ops::Index;
-use std::ops::IndexMut;
 
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
 #[repr(u8)]
@@ -530,43 +527,55 @@ impl CastlingRights {
             &mut self.bq
         }
     }
+
+    pub const fn display(&self, chess_960: bool) -> CastlingRightsDisplay {
+        CastlingRightsDisplay {
+            rights: self,
+            chess_960,
+        }
+    }
 }
 
-impl Display for CastlingRights {
+pub struct CastlingRightsDisplay<'a>{
+    rights: &'a CastlingRights,
+    chess_960: bool,
+}
+
+impl Display for CastlingRightsDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const FILE_NAMES: [u8; 8] = *b"abcdefgh";
-        if CHESS960.load(Ordering::Relaxed) {
-            if let Some(right) = self.wk {
+        if self.chess_960 {
+            if let Some(right) = self.rights.wk {
                 write!(
                     f,
                     "{}",
                     FILE_NAMES[right.file()].to_ascii_uppercase() as char
                 )?;
             }
-            if let Some(right) = self.wq {
+            if let Some(right) = self.rights.wq {
                 write!(
                     f,
                     "{}",
                     FILE_NAMES[right.file()].to_ascii_uppercase() as char
                 )?;
             }
-            if let Some(right) = self.bk {
+            if let Some(right) = self.rights.bk {
                 write!(f, "{}", FILE_NAMES[right.file()] as char)?;
             }
-            if let Some(right) = self.bq {
+            if let Some(right) = self.rights.bq {
                 write!(f, "{}", FILE_NAMES[right.file()] as char)?;
             }
         } else {
-            if self.wk.is_some() {
+            if self.rights.wk.is_some() {
                 write!(f, "K")?;
             }
-            if self.wq.is_some() {
+            if self.rights.wq.is_some() {
                 write!(f, "Q")?;
             }
-            if self.bk.is_some() {
+            if self.rights.bk.is_some() {
                 write!(f, "k")?;
             }
-            if self.bq.is_some() {
+            if self.rights.bq.is_some() {
                 write!(f, "q")?;
             }
         }
