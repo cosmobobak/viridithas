@@ -372,7 +372,7 @@ impl Game {
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
-    use crate::uci::CHESS960;
+    use crate::chess::CHESS960;
 
     use super::*;
 

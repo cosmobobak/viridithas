@@ -15,14 +15,14 @@ use std::{
 };
 
 use crate::{
-    chess::squareset::SquareSet,
     chess::{
         chessmove::{Move, MoveFlags},
         piece::{Black, Col, Colour, PieceType, White},
+        squareset::SquareSet,
         types::Square,
+        CHESS960,
     },
     lookups, magic,
-    uci::CHESS960,
     util::RAY_BETWEEN,
 };
 
@@ -94,12 +94,12 @@ impl Display for MoveList {
         }
         writeln!(f, "MoveList: ({}) [", self.inner.len())?;
         for m in &self.inner[0..self.inner.len() - 1] {
-            writeln!(f, "  {} ${}, ", m.mov, m.score)?;
+            writeln!(f, "  {} ${}, ", m.mov.display(false), m.score)?;
         }
         writeln!(
             f,
             "  {} ${}",
-            self.inner[self.inner.len() - 1].mov,
+            self.inner[self.inner.len() - 1].mov.display(false),
             self.inner[self.inner.len() - 1].score
         )?;
         write!(f, "]")

@@ -13,20 +13,23 @@ use arrayvec::ArrayVec;
 
 use crate::{
     cfor,
-    chess::board::{
-        evaluation::{
-            is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
-            MINIMUM_TB_WIN_SCORE,
+    chess::{
+        board::{
+            evaluation::{
+                is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+                MINIMUM_TB_WIN_SCORE,
+            },
+            movegen::{
+                self,
+                movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
+                MoveListEntry, MAX_POSITION_MOVES,
+            },
+            Board,
         },
-        movegen::{
-            self,
-            movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
-            MoveListEntry, MAX_POSITION_MOVES,
-        },
-        Board,
+        chessmove::Move,
+        piece::{Colour, PieceType},
+        CHESS960,
     },
-    chess::chessmove::Move,
-    chess::piece::{Colour, PieceType},
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -182,7 +185,10 @@ impl Board {
                 TB_HITS.store(1, Ordering::SeqCst);
                 readout_info(self, Bound::Exact, &pv, 0, info, tt, 1, true);
                 if info.print_to_stdout {
-                    println!("bestmove {best_move}");
+                    println!(
+                        "bestmove {}",
+                        best_move.display(CHESS960.load(Ordering::Relaxed))
+                    );
                 }
                 return (score, Some(best_move));
             }
@@ -242,9 +248,16 @@ impl Board {
         }
 
         if info.print_to_stdout {
-            let maybe_ponder = ponder_move
-                .map_or_else(String::new, |ponder_move| format!(" ponder {ponder_move}"));
-            println!("bestmove {best_move}{maybe_ponder}");
+            let maybe_ponder = ponder_move.map_or_else(String::new, |ponder_move| {
+                format!(
+                    " ponder {}",
+                    ponder_move.display(CHESS960.load(Ordering::Relaxed))
+                )
+            });
+            println!(
+                "bestmove {}{maybe_ponder}",
+                best_move.display(CHESS960.load(Ordering::Relaxed))
+            );
             #[cfg(feature = "stats")]
             info.print_stats();
             #[cfg(feature = "stats")]

@@ -1,8 +1,11 @@
+use std::sync::atomic::Ordering;
+
 use crate::{
     chess::{
         chessmove::Move,
         piece::{Colour, PieceType},
         types::Undo,
+        CHESS960,
     },
     historytable::{
         update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
@@ -27,7 +30,8 @@ impl ThreadData<'_> {
             let piece_moved = pos.moved_piece(m);
             debug_assert!(
                 piece_moved.is_some(),
-                "Invalid piece moved by move {m} in position \n{pos:X}"
+                "Invalid piece moved by move {} in position \n{pos:X}",
+                m.display(CHESS960.load(Ordering::Relaxed))
             );
             let from = m.from();
             let to = m.history_to_square();
@@ -98,7 +102,8 @@ impl ThreadData<'_> {
             let capture = caphist_piece_type(pos, m);
             debug_assert!(
                 piece_moved.is_some(),
-                "Invalid piece moved by move {m} in position \n{pos:X}"
+                "Invalid piece moved by move {} in position \n{pos:X}",
+                m.display(CHESS960.load(Ordering::Relaxed))
             );
             let to = m.to();
             let val = self

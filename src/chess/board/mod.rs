@@ -14,21 +14,21 @@ use anyhow::{bail, Context};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
-    chess::squareset::SquareSet,
     chess::{
         board::movegen::{
             bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
         },
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        squareset::SquareSet,
         types::{CastlingRights, CheckState, ContHistIndex, File, Rank, Square, Undo},
+        CHESS960,
     },
     cuckoo,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
     threadlocal::ThreadData,
-    uci::CHESS960,
     util::RAY_BETWEEN,
 };
 

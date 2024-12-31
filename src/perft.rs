@@ -12,7 +12,7 @@ use anyhow::{bail, Context};
 use crate::threadlocal::ThreadData;
 use crate::{
     chess::board::{movegen::MoveList, Board},
-    uci::CHESS960,
+    chess::CHESS960,
 };
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
@@ -160,7 +160,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::{chessmove::Move, piece::PieceType, types::Square},
+        chess::{chessmove::Move, piece::PieceType, types::Square, CHESS960},
         nnue::network::NNUEParams,
         transpositiontable::TT,
         util::MEGABYTE,
@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -197,7 +197,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -239,7 +239,7 @@ mod tests {
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -264,7 +264,7 @@ mod tests {
         assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(perft(&mut pos, 1), 3, "got {}", {
             pos.legal_moves()
                 .into_iter()
-                .map(|m| m.to_string())
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });

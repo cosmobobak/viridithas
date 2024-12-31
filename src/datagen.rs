@@ -32,6 +32,7 @@ use crate::{
         },
         piece::{Colour, PieceType},
         types::Square,
+        CHESS960,
     },
     datagen::dataformat::Game,
     nnue::network::NNUEParams,
@@ -40,7 +41,7 @@ use crate::{
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
-    uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
+    uci::{SYZYGY_ENABLED, SYZYGY_PATH},
     util::MEGABYTE,
 };
 
@@ -832,7 +833,10 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
                 writeln!(output_buffer).unwrap();
             }
             let san = board.san(mv).with_context(|| {
-                format!("Failed to create SAN for move {mv} in position {board:X}.")
+                format!(
+                    "Failed to create SAN for move {} in position {board:X}.",
+                    mv.display(CHESS960.load(Ordering::Relaxed))
+                )
             })?;
             if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();
