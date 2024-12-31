@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::{bail, Context};
 
+use movegen::RAY_BETWEEN;
 #[cfg(feature = "datagen")]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
@@ -29,7 +30,6 @@ use crate::{
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
     threadlocal::ThreadData,
-    util::RAY_BETWEEN,
 };
 
 use self::movegen::piecelayout::{PieceLayout, Threats};

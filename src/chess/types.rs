@@ -585,3 +585,31 @@ impl Display for CastlingRightsDisplay<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn square_flipping() {
+        use super::Square;
+
+        assert_eq!(Square::A1.flip_rank(), Square::A8);
+        assert_eq!(Square::H1.flip_rank(), Square::H8);
+        assert_eq!(Square::A8.flip_rank(), Square::A1);
+        assert_eq!(Square::H8.flip_rank(), Square::H1);
+
+        assert_eq!(Square::A1.flip_file(), Square::H1);
+        assert_eq!(Square::H1.flip_file(), Square::A1);
+        assert_eq!(Square::A8.flip_file(), Square::H8);
+        assert_eq!(Square::H8.flip_file(), Square::A8);
+    }
+
+    #[test]
+    fn square_relative_to() {
+        use super::{Colour, Square};
+
+        assert_eq!(Square::A1.relative_to(Colour::White), Square::A1);
+        assert_eq!(Square::A1.relative_to(Colour::Black), Square::A8);
+        assert_eq!(Square::A8.relative_to(Colour::White), Square::A8);
+        assert_eq!(Square::A8.relative_to(Colour::Black), Square::A1);
+    }
+}

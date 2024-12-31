@@ -15,6 +15,7 @@ use std::{
 };
 
 use crate::{
+    cfor,
     chess::{
         chessmove::{Move, MoveFlags},
         piece::{Black, Col, Colour, PieceType, White},
@@ -22,8 +23,7 @@ use crate::{
         types::Square,
         CHESS960,
     },
-    lookups, magic,
-    util::RAY_BETWEEN,
+    magic,
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -106,21 +106,89 @@ impl Display for MoveList {
     }
 }
 
+const fn in_between(sq1: Square, sq2: Square) -> SquareSet {
+    const M1: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+    const A2A7: u64 = 0x0001_0101_0101_0100;
+    const B2G7: u64 = 0x0040_2010_0804_0200;
+    const H1B7: u64 = 0x0002_0408_1020_4080;
+    let sq1 = sq1.index();
+    let sq2 = sq2.index();
+    let btwn = (M1 << sq1) ^ (M1 << sq2);
+    let file = ((sq2 & 7).wrapping_add((sq1 & 7).wrapping_neg())) as u64;
+    let rank = (((sq2 | 7).wrapping_sub(sq1)) >> 3) as u64;
+    let mut line = ((file & 7).wrapping_sub(1)) & A2A7;
+    line += 2 * ((rank & 7).wrapping_sub(1) >> 58);
+    line += ((rank.wrapping_sub(file) & 15).wrapping_sub(1)) & B2G7;
+    line += ((rank.wrapping_add(file) & 15).wrapping_sub(1)) & H1B7;
+    line = line.wrapping_mul(btwn & btwn.wrapping_neg());
+    SquareSet::from_inner(line & btwn)
+}
+
+pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
+            res[from.index()][to.index()] = in_between(from, to);
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     magic::get_diagonal_attacks(sq, blockers)
 }
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     magic::get_orthogonal_attacks(sq, blockers)
 }
-// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-// }
+
+const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
+    let mut attacks = [SquareSet::EMPTY; 64];
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
+
+    cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
+        let mut attacks_bb = 0;
+        cfor!(let mut idx = 0; idx < 8; idx += 1; {
+            let delta = deltas[idx];
+            let attacked_sq = sq.signed_inner() + delta;
+            #[allow(clippy::cast_sign_loss)]
+            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
+                sq,
+                Square::new_clamped(attacked_sq as u8)) <= 2 {
+                attacks_bb |= 1 << attacked_sq;
+            }
+        });
+        attacks[sq.index()] = SquareSet::from_inner(attacks_bb);
+        if matches!(sq, Square::H8) {
+            break;
+        }
+    });
+
+    attacks
+}
+
 pub fn knight_attacks(sq: Square) -> SquareSet {
-    lookups::get_knight_attacks(sq)
+    static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
+    KNIGHT_ATTACKS[sq]
 }
 pub fn king_attacks(sq: Square) -> SquareSet {
-    lookups::get_king_attacks(sq)
+    static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
+    KING_ATTACKS[sq]
 }
+
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
         bb.north_east_one() | bb.north_west_one()
@@ -136,8 +204,8 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
         PieceType::Queen => {
             magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
         }
-        PieceType::Knight => lookups::get_knight_attacks(sq),
-        PieceType::King => lookups::get_king_attacks(sq),
+        PieceType::Knight => knight_attacks(sq),
+        PieceType::King => king_attacks(sq),
         PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
     }
 }
@@ -863,17 +931,76 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     count
 }
 
+#[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        bench,
+        chess::{
+            board::movegen::{king_attacks, knight_attacks},
+            squareset::SquareSet,
+            types::Square,
+        },
+    };
+
     #[test]
     fn staged_matches_full() {
-        use super::*;
-        use crate::bench;
-
         let mut pos = Board::default();
 
         for fen in bench::BENCH_POSITIONS {
             pos.set_from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
         }
+    }
+
+    #[test]
+    fn python_chess_validation() {
+        // testing that the attack squaresets match the ones in the python-chess library,
+        // which are known to be correct.
+        assert_eq!(
+            knight_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(132_096)
+        );
+        assert_eq!(
+            knight_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(9_077_567_998_918_656)
+        );
+
+        assert_eq!(
+            king_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(770)
+        );
+        assert_eq!(
+            king_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(4_665_729_213_955_833_856)
+        );
+    }
+
+    #[test]
+    fn ray_test() {
+        use super::{Square, RAY_BETWEEN};
+        use crate::chess::squareset::SquareSet;
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::C1], Square::B1.as_set());
+        assert_eq!(
+            RAY_BETWEEN[Square::A1][Square::D1],
+            Square::B1.as_set() | Square::C1.as_set()
+        );
+        assert_eq!(RAY_BETWEEN[Square::B1][Square::D1], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::D1][Square::B1], Square::C1.as_set());
+
+        for from in Square::all() {
+            for to in Square::all() {
+                assert_eq!(RAY_BETWEEN[from][to], RAY_BETWEEN[to][from]);
+            }
+        }
+    }
+
+    #[test]
+    fn ray_diag_test() {
+        use super::{Square, RAY_BETWEEN};
+        let ray = RAY_BETWEEN[Square::B5][Square::E8];
+        assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }
 }
