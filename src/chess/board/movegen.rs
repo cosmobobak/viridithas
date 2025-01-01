@@ -1,7 +1,5 @@
 use arrayvec::ArrayVec;
 
-use crate::chess::board::Board;
-
 use std::{
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
@@ -11,13 +9,17 @@ use std::{
 use crate::{
     cfor,
     chess::{
+        board::Board,
         chessmove::{Move, MoveFlags},
+        magic::{
+            BISHOP_ATTACKS, BISHOP_MAGICS, BISHOP_MASKS, BISHOP_REL_BITS, ROOK_ATTACKS,
+            ROOK_MAGICS, ROOK_MASKS, ROOK_REL_BITS,
+        },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
         types::Square,
         CHESS960,
     },
-    magic,
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -138,13 +140,6 @@ pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
-pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_diagonal_attacks(sq, blockers)
-}
-pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_orthogonal_attacks(sq, blockers)
-}
-
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT {
@@ -174,6 +169,40 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
+#[allow(clippy::cast_possible_truncation)]
+pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    let relevant_blockers = blockers & BISHOP_MASKS[sq];
+    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
+    let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
+    // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
+    // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
+    // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
+    // in bounds.
+    unsafe {
+        if idx >= BISHOP_ATTACKS[sq].len() {
+            // assert to the compiler that it's chill not to bounds-check
+            inconceivable!();
+        }
+        BISHOP_ATTACKS[sq][idx]
+    }
+}
+#[allow(clippy::cast_possible_truncation)]
+pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
+    let relevant_blockers = blockers & ROOK_MASKS[sq];
+    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
+    let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
+    // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
+    // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
+    // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
+    // in bounds.
+    unsafe {
+        if idx >= ROOK_ATTACKS[sq].len() {
+            // assert to the compiler that it's chill not to bounds-check
+            inconceivable!();
+        }
+        ROOK_ATTACKS[sq][idx]
+    }
+}
 pub fn knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
     KNIGHT_ATTACKS[sq]
@@ -182,7 +211,6 @@ pub fn king_attacks(sq: Square) -> SquareSet {
     static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
     KING_ATTACKS[sq]
 }
-
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
         bb.north_east_one() | bb.north_west_one()
@@ -193,11 +221,9 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
-        PieceType::Bishop => magic::get_diagonal_attacks(sq, blockers),
-        PieceType::Rook => magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::Queen => {
-            magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-        }
+        PieceType::Bishop => bishop_attacks(sq, blockers),
+        PieceType::Rook => rook_attacks(sq, blockers),
+        PieceType::Queen => bishop_attacks(sq, blockers) | rook_attacks(sq, blockers),
         PieceType::Knight => knight_attacks(sq),
         PieceType::King => king_attacks(sq),
         PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),

@@ -20,7 +20,6 @@ mod history;
 mod historytable;
 mod image;
 mod lookups;
-mod magic;
 mod makemove;
 mod movepicker;
 mod nnue;

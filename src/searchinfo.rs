@@ -241,7 +241,6 @@ mod tests {
     use crate::{
         chess::board::Board,
         evaluation::{mate_in, mated_in},
-        magic,
         nnue::network::NNUEParams,
         searchinfo::SearchInfo,
         threadlocal::ThreadData,
