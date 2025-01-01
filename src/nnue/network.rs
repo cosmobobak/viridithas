@@ -1,5 +1,12 @@
 use std::{
-    fmt::{Debug, Display}, fs::{File, OpenOptions}, hash::Hasher, io::BufReader, ops::{Deref, DerefMut}, path::Path, sync::{Mutex, OnceLock}, time::Duration
+    fmt::{Debug, Display},
+    fs::{File, OpenOptions},
+    hash::Hasher,
+    io::BufReader,
+    ops::{Deref, DerefMut},
+    path::Path,
+    sync::{Mutex, OnceLock},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -569,7 +576,8 @@ impl NNUEParams {
         let weights_path = temp_dir.join(&weights_file_name);
 
         // Try to open existing weights file
-        let exists = weights_path.try_exists()
+        let exists = weights_path
+            .try_exists()
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
         if exists {
             let mmap = Self::map_weight_file(&weights_path).with_context(|| {
@@ -657,7 +665,8 @@ impl NNUEParams {
         let rename_result = std::fs::rename(&temp_path, &weights_path);
 
         // if the file now exists, either we succeeded or got beaten to the punch:
-        let exists = weights_path.try_exists()
+        let exists = weights_path
+            .try_exists()
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
 
         if !exists {
