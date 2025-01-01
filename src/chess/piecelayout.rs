@@ -1,15 +1,10 @@
 use std::fmt::Display;
 
-use crate::{
-    chess::squareset::SquareSet,
-    chess::{
-        board::movegen::{
-            bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks,
-        },
-        piece::{Black, Col, Colour, Piece, PieceType, White},
-        types::{File, Rank, Square},
-    },
-    nnue::network::FeatureUpdate,
+use crate::chess::{
+    board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
+    piece::{Black, Col, Colour, Piece, PieceType, White},
+    squareset::SquareSet,
+    types::{File, Rank, Square},
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -212,7 +207,7 @@ impl PieceLayout {
     }
 
     /// Calls `callback` for each piece that is added or removed from `self` to `target`.
-    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(FeatureUpdate, bool)) {
+    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(Square, Piece, bool)) {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 let piece = Piece::new(colour, piece_type);
@@ -221,10 +216,10 @@ impl PieceLayout {
                 let added = target_bb & !source_bb;
                 let removed = source_bb & !target_bb;
                 for sq in added {
-                    callback(FeatureUpdate { sq, piece }, true);
+                    callback(sq, piece, true);
                 }
                 for sq in removed {
-                    callback(FeatureUpdate { sq, piece }, false);
+                    callback(sq, piece, false);
                 }
             }
         }

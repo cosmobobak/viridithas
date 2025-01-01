@@ -3,9 +3,9 @@ use std::{
     num::NonZeroU16,
 };
 
-use crate::{
-    chess::piece::PieceType,
-    chess::{types::File, types::Square},
+use crate::chess::{
+    piece::PieceType,
+    types::{File, Square},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

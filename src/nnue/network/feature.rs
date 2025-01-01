@@ -1,6 +1,6 @@
 use crate::{
     chess::{
-        piece::Col,
+        piece::Colour,
         types::{File, Square},
     },
     nnue::network::{FeatureUpdate, INPUT},
@@ -52,7 +52,7 @@ pub fn indices(white_king: Square, black_king: Square, f: FeatureUpdate) -> [Fea
     [FeatureIndex(white_idx), FeatureIndex(black_idx)]
 }
 
-pub fn index<C: Col>(king: Square, f: FeatureUpdate) -> FeatureIndex {
+pub fn index(colour: Colour, king: Square, f: FeatureUpdate) -> FeatureIndex {
     const COLOUR_STRIDE: usize = 64 * 6;
     const PIECE_STRIDE: usize = 64;
 
@@ -61,10 +61,10 @@ pub fn index<C: Col>(king: Square, f: FeatureUpdate) -> FeatureIndex {
     } else {
         f.sq
     }
-    .relative_to(C::COLOUR);
+    .relative_to(colour);
 
     let piece_type = f.piece.piece_type().index();
-    let colour = f.piece.colour().index() ^ C::COLOUR.index();
+    let colour = f.piece.colour().index() ^ colour.index();
 
     let idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
 
@@ -75,7 +75,7 @@ pub fn index<C: Col>(king: Square, f: FeatureUpdate) -> FeatureIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::chess::piece::{Black, Piece, White};
+    use crate::chess::piece::Piece;
 
     use super::*;
 
@@ -89,12 +89,12 @@ mod tests {
                         let [i1, i2] = indices(wk, bk, f);
                         assert_eq!(
                             i1.index(),
-                            index::<White>(wk, f).index(),
+                            index(Colour::White, wk, f).index(),
                             "Failure when trying WHITE ({f:?}, {wk:?}, {bk:?}) - {i1:?} != {i2:?}"
                         );
                         assert_eq!(
                             i2.index(),
-                            index::<Black>(bk, f).index(),
+                            index(Colour::Black, bk, f).index(),
                             "Failure when trying BLACK ({f:?}, {wk:?}, {bk:?}) - {i1:?} != {i2:?}"
                         );
                     }
