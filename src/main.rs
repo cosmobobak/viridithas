@@ -33,6 +33,8 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
+mod movepicker;
+mod history;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};

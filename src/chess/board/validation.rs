@@ -2,6 +2,7 @@
 
 use crate::{
     chess::{
+        board::Board,
         piece::{Colour, Piece},
         types::{Rank, Square},
     },
@@ -11,8 +12,6 @@ use crate::{
 
 #[cfg(debug_assertions)]
 use crate::errors::PositionValidityError;
-
-use super::{movegen::piecelayout::SquareIter, Board};
 
 impl Board {
     #[cfg(debug_assertions)]

@@ -1,11 +1,12 @@
 use crate::{
-    chess::board::{history, Board},
+    history,
+    chess::board::Board,
     chess::chessmove::Move,
     historytable::MAX_HISTORY,
     threadlocal::ThreadData,
 };
 
-use super::{MoveList, MoveListEntry};
+use crate::chess::board::movegen::{MoveList, MoveListEntry};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const FIRST_KILLER_SCORE: i32 = 9_000_000;

@@ -1,5 +1,4 @@
 pub mod evaluation;
-mod history;
 pub mod movegen;
 pub mod validation;
 
@@ -115,6 +114,10 @@ impl Board {
 
     pub const fn ep_sq(&self) -> Option<Square> {
         self.ep_sq
+    }
+
+    pub fn history(&self) -> &[Undo] {
+        &self.history
     }
 
     #[cfg(feature = "datagen")]

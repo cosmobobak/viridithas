@@ -1,12 +1,10 @@
-pub mod movepicker;
+
 pub mod piecelayout;
 
 use arrayvec::ArrayVec;
 
-use self::movepicker::{MainSearch, MovePickerMode};
-pub use self::piecelayout::SquareIter;
-
-use super::Board;
+use crate::movepicker::{MainSearch, MovePickerMode};
+use crate::chess::board::Board;
 
 use std::{
     fmt::{Display, Formatter},

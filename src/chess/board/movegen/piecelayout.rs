@@ -12,36 +12,6 @@ use crate::{
     nnue::network::FeatureUpdate,
 };
 
-/// Iterator over the squares of a square-set.
-/// The squares are returned in increasing order.
-pub struct SquareIter {
-    value: u64,
-}
-
-impl SquareIter {
-    pub const fn new(value: u64) -> Self {
-        Self { value }
-    }
-}
-
-impl Iterator for SquareIter {
-    type Item = Square;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.value == 0 {
-            None
-        } else {
-            // faster if we have bmi (maybe)
-            #[allow(clippy::cast_possible_truncation)]
-            let lsb: u8 = self.value.trailing_zeros() as u8;
-            self.value &= self.value - 1;
-            // SAFETY: u64::trailing_zeros can only return values within `0..64`,
-            // all of which correspond to valid enum variants of Square.
-            Some(unsafe { Square::new_unchecked(lsb) })
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PieceLayout {
     pieces: [SquareSet; 6],

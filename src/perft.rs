@@ -65,7 +65,7 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 
 #[cfg(test)]
 pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
-    use crate::chess::board::movegen::movepicker::MovePicker;
+    use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
     pos.check_validity().unwrap();

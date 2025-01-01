@@ -15,7 +15,7 @@ use crate::{
     util::MAX_PLY,
 };
 
-use super::{movegen::MoveListEntry, Board};
+use crate::chess::board::{movegen::MoveListEntry, Board};
 
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
@@ -38,8 +38,8 @@ impl ThreadData<'_> {
             let val = self.main_history.get_mut(
                 piece_moved.unwrap(),
                 to,
-                pos.threats.all.contains_square(from),
-                pos.threats.all.contains_square(to),
+                pos.threats().all.contains_square(from),
+                pos.threats().all.contains_square(to),
             );
             update_history(val, depth, m == best_move);
         }
@@ -55,8 +55,8 @@ impl ThreadData<'_> {
         let val = self.main_history.get_mut(
             piece_moved,
             to,
-            pos.threats.all.contains_square(from),
-            pos.threats.all.contains_square(to),
+            pos.threats().all.contains_square(from),
+            pos.threats().all.contains_square(to),
         );
         update_history(val, depth, true);
     }
@@ -70,8 +70,8 @@ impl ThreadData<'_> {
             m.score += i32::from(self.main_history.get(
                 piece_moved.unwrap(),
                 to,
-                pos.threats.all.contains_square(from),
-                pos.threats.all.contains_square(to),
+                pos.threats().all.contains_square(from),
+                pos.threats().all.contains_square(to),
             ));
         }
     }
@@ -84,8 +84,8 @@ impl ThreadData<'_> {
         i32::from(self.main_history.get(
             piece_moved.unwrap(),
             to,
-            pos.threats.all.contains_square(from),
-            pos.threats.all.contains_square(to),
+            pos.threats().all.contains_square(from),
+            pos.threats().all.contains_square(to),
         ))
     }
 
@@ -145,15 +145,15 @@ impl ThreadData<'_> {
         if let Some(Undo {
             cont_hist_index: None,
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         {
             return;
         }
         let conthist_index = match pos
-            .history
+            .history()
             .len()
             .checked_sub(index + 1)
-            .and_then(|i| pos.history.get(i))
+            .and_then(|i| pos.history().get(i))
         {
             Some(Undo {
                 cont_hist_index: Some(cont_hist_index),
@@ -185,15 +185,15 @@ impl ThreadData<'_> {
         if let Some(Undo {
             cont_hist_index: None,
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         {
             return;
         }
         let conthist_index = match pos
-            .history
+            .history()
             .len()
             .checked_sub(index + 1)
-            .and_then(|i| pos.history.get(i))
+            .and_then(|i| pos.history().get(i))
         {
             Some(Undo {
                 cont_hist_index: Some(cont_hist_index),
@@ -216,15 +216,15 @@ impl ThreadData<'_> {
         if let Some(Undo {
             cont_hist_index: None,
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         {
             return;
         }
         let conthist_index = match pos
-            .history
+            .history()
             .len()
             .checked_sub(index + 1)
-            .and_then(|i| pos.history.get(i))
+            .and_then(|i| pos.history().get(i))
         {
             Some(Undo {
                 cont_hist_index: Some(cont_hist_index),
@@ -246,15 +246,15 @@ impl ThreadData<'_> {
         if let Some(Undo {
             cont_hist_index: None,
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         {
             return 0;
         }
         let conthist_index = match pos
-            .history
+            .history()
             .len()
             .checked_sub(index + 1)
-            .and_then(|i| pos.history.get(i))
+            .and_then(|i| pos.history().get(i))
         {
             Some(Undo {
                 cont_hist_index: Some(cont_hist_index),
@@ -270,8 +270,8 @@ impl ThreadData<'_> {
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height < MAX_PLY);
-        let idx = pos.height;
+        debug_assert!(pos.height() < MAX_PLY);
+        let idx = pos.height();
         if self.killer_move_table[idx][0] == Some(m) {
             return;
         }
@@ -281,11 +281,11 @@ impl ThreadData<'_> {
 
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height < MAX_PLY);
+        debug_assert!(pos.height() < MAX_PLY);
         let Some(&Undo {
             cont_hist_index: Some(cont_hist_index),
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         else {
             return;
         };
@@ -301,7 +301,7 @@ impl ThreadData<'_> {
         let Some(&Undo {
             cont_hist_index: Some(cont_hist_index),
             ..
-        }) = pos.history.last()
+        }) = pos.history().last()
         else {
             return None;
         };
