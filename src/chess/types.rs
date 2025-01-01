@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::chess::{
-    board::movegen::piecelayout::{PieceLayout, Threats},
     piece::{Colour, Piece},
+    piecelayout::{PieceLayout, Threats},
     squareset::SquareSet,
 };
 

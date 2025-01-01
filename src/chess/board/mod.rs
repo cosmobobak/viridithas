@@ -1,4 +1,3 @@
-pub mod evaluation;
 pub mod movegen;
 pub mod validation;
 
@@ -31,7 +30,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use self::movegen::piecelayout::{PieceLayout, Threats};
+use crate::chess::piecelayout::{PieceLayout, Threats};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {

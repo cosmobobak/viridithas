@@ -1,9 +1,5 @@
-
-pub mod piecelayout;
-
 use arrayvec::ArrayVec;
 
-use crate::movepicker::{MainSearch, MovePickerMode};
 use crate::chess::board::Board;
 
 use std::{
@@ -208,8 +204,21 @@ pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> Square
     }
 }
 
+pub trait MoveGenMode {
+    const SKIP_QUIETS: bool;
+}
+
+pub struct SkipQuiets;
+impl MoveGenMode for SkipQuiets {
+    const SKIP_QUIETS: bool = true;
+}
+pub struct AllMoves;
+impl MoveGenMode for AllMoves {
+    const SKIP_QUIETS: bool = false;
+}
+
 impl Board {
-    fn generate_pawn_caps<C: Col, Mode: MovePickerMode>(
+    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
         &self,
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
@@ -268,7 +277,7 @@ impl Board {
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
                 for promo in [
@@ -289,7 +298,7 @@ impl Board {
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
                 for promo in [
@@ -407,7 +416,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<C: Col, Mode: MovePickerMode>(
+    fn generate_forward_promos<C: Col, Mode: MoveGenMode>(
         &self,
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
@@ -438,7 +447,7 @@ impl Board {
             from_mask.south_one()
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
@@ -491,7 +500,7 @@ impl Board {
         };
 
         self.generate_pawn_forward::<C>(move_list, valid_target_squares);
-        self.generate_pawn_caps::<C, MainSearch>(move_list, valid_target_squares);
+        self.generate_pawn_caps::<C, AllMoves>(move_list, valid_target_squares);
         self.generate_ep::<C>(move_list);
 
         // knights
@@ -545,7 +554,7 @@ impl Board {
         }
     }
 
-    pub fn generate_captures<Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         move_list.clear();
         if self.side == Colour::White {
             self.generate_captures_for::<White, Mode>(move_list);
@@ -555,7 +564,7 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_captures_for<C: Col, Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -873,7 +882,7 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
     let mut ml_staged = MoveList::new();
-    pos.generate_captures::<MainSearch>(&mut ml_staged);
+    pos.generate_captures::<AllMoves>(&mut ml_staged);
     pos.generate_quiets(&mut ml_staged);
 
     let mut full_moves_vec = ml.to_vec();

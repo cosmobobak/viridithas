@@ -15,11 +15,14 @@ mod chess;
 mod cli;
 mod cuckoo;
 mod errors;
+mod evaluation;
+mod history;
 mod historytable;
 mod image;
 mod lookups;
 mod magic;
 mod makemove;
+mod movepicker;
 mod nnue;
 mod perft;
 mod rng;
@@ -33,8 +36,6 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
-mod movepicker;
-mod history;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};

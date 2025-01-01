@@ -2,10 +2,11 @@ use std::path::Path;
 
 use crate::{
     chess::{
-        board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
+        board::{Board, GameOutcome},
         chessmove::Move,
         piece::{Colour, PieceType},
     },
+    evaluation::MINIMUM_TB_WIN_SCORE,
     tablebases::probe::WDL,
 };
 

@@ -64,7 +64,7 @@ impl Board {
     pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
-        let v = t.nnue.evaluate(t.nnue_params, self.side, output_bucket);
+        let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
 
         // scale down the value estimate when there's not much
         // material left - this will incentivize keeping material
@@ -75,7 +75,7 @@ impl Board {
         // scale down the value when the fifty-move counter is high.
         // this goes some way toward making viri realise when he's not
         // making progress in a position.
-        let v = v * (200 - i32::from(self.fifty_move_counter)) / 200;
+        let v = v * (200 - i32::from(self.fifty_move_counter())) / 200;
 
         // clamp the value into the valid range.
         // this basically never comes up, but the network will
@@ -87,7 +87,7 @@ impl Board {
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         // detect draw by insufficient material
         if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
-            return if self.side == Colour::White {
+            return if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
                 -draw_score(t, nodes, self.turn())

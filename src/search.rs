@@ -15,16 +15,16 @@ use crate::{
     cfor,
     chess::{
         board::{
-            evaluation::{
-                is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
-                MINIMUM_TB_WIN_SCORE,
-            },
             movegen::{self, MoveListEntry, MAX_POSITION_MOVES},
             Board,
         },
         chessmove::Move,
         piece::{Colour, PieceType},
         CHESS960,
+    },
+    evaluation::{
+        is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+        MINIMUM_TB_WIN_SCORE,
     },
     movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
     search::pv::PVariation,

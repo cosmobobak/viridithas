@@ -2,7 +2,7 @@ pub mod depth;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::chess::board::evaluation::MATE_SCORE;
+use crate::evaluation::MATE_SCORE;
 
 pub const BOARD_N_SQUARES: usize = 64;
 pub const MAX_DEPTH: i32 = 128;

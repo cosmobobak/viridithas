@@ -26,15 +26,13 @@ use rand::Rng;
 
 use crate::{
     chess::{
-        board::{
-            evaluation::{is_game_theoretic_score, is_mate_score},
-            Board, DrawType, GameOutcome, WinType,
-        },
+        board::{Board, DrawType, GameOutcome, WinType},
         piece::{Colour, PieceType},
         types::Square,
         CHESS960,
     },
     datagen::dataformat::Game,
+    evaluation::{is_game_theoretic_score, is_mate_score},
     nnue::network::NNUEParams,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},

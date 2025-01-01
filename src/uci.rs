@@ -24,16 +24,13 @@ use anyhow::{anyhow, bail, Context};
 use crate::{
     bench::BENCH_POSITIONS,
     chess::{
-        board::{
-            evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
-            movegen::MoveList,
-            Board,
-        },
+        board::{movegen::MoveList, Board},
         piece::Colour,
         CHESS960,
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
+    evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
     nnue::{
         self,
         network::{self, NNUEParams},

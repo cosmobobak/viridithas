@@ -15,8 +15,9 @@ use memmap2::Mmap;
 
 use crate::{
     chess::{
-        board::{movegen::piecelayout::PieceLayout, Board},
+        board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        piecelayout::PieceLayout,
         types::Square,
     },
     image::{self, Image},
