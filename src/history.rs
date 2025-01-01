@@ -2,13 +2,10 @@ use std::sync::atomic::Ordering;
 
 use crate::{
     chess::{
-        chessmove::Move,
-        piece::{Colour, PieceType},
-        types::Undo,
-        CHESS960,
+        chessmove::Move, piece::{Colour, Piece, PieceType}, squareset::SquareSet, types::{Square, Undo}, CHESS960
     },
     historytable::{
-        update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
+        history_bonus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
         CORRECTION_HISTORY_WEIGHT_SCALE,
     },
     threadlocal::ThreadData,
@@ -41,24 +38,31 @@ impl ThreadData<'_> {
                 pos.threats().all.contains_square(from),
                 pos.threats().all.contains_square(to),
             );
-            update_history(val, depth, m == best_move);
+            let delta = if m == best_move {
+                history_bonus(depth)
+            } else {
+                -history_bonus(depth)
+            };
+            update_history(val, delta);
         }
     }
 
     /// Update the history counters for a single move.
-    pub fn update_history_single(&mut self, pos: &Board, m: Move, depth: i32) {
-        let Some(piece_moved) = pos.moved_piece(m) else {
-            return;
-        };
-        let from = m.from();
-        let to = m.history_to_square();
+    pub fn update_history_single(
+        &mut self,
+        from: Square,
+        to: Square,
+        moved: Piece,
+        threats: SquareSet,
+        delta: i32,
+    ) {
         let val = self.main_history.get_mut(
-            piece_moved,
+            moved,
             to,
-            pos.threats().all.contains_square(from),
-            pos.threats().all.contains_square(to),
+            threats.contains_square(from),
+            threats.contains_square(to),
         );
-        update_history(val, depth, true);
+        update_history(val, delta);
     }
 
     /// Get the history scores for a batch of moves.
@@ -109,7 +113,12 @@ impl ThreadData<'_> {
             let val = self
                 .tactical_history
                 .get_mut(piece_moved.unwrap(), to, capture);
-            update_history(val, depth, m == best_move);
+            let delta = if m == best_move {
+                history_bonus(depth)
+            } else {
+                -history_bonus(depth)
+            };
+            update_history(val, delta);
         }
     }
 
@@ -124,7 +133,6 @@ impl ThreadData<'_> {
     }
 
     /// Get the tactical history score for a single move.
-    #[allow(dead_code)]
     pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.moved_piece(m);
         let capture = caphist_piece_type(pos, m);
@@ -165,7 +173,13 @@ impl ThreadData<'_> {
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m).unwrap();
-            update_history(cmh_block.get_mut(piece, to), depth, m == best_move);
+
+            let delta = if m == best_move {
+                history_bonus(depth)
+            } else {
+                -history_bonus(depth)
+            };
+            update_history(cmh_block.get_mut(piece, to), delta);
         }
     }
 
@@ -173,14 +187,11 @@ impl ThreadData<'_> {
     pub fn update_continuation_history_single(
         &mut self,
         pos: &Board,
-        m: Move,
-        depth: i32,
+        to: Square,
+        moved: Piece,
+        delta: i32,
         index: usize,
     ) {
-        let Some(piece) = pos.moved_piece(m) else {
-            return;
-        };
-        let to = m.history_to_square();
         // get the index'th from the back of the conthist history, and make sure the entry is valid.
         if let Some(Undo {
             cont_hist_index: None,
@@ -202,7 +213,7 @@ impl ThreadData<'_> {
             _ => return,
         };
         let cmh_block = self.continuation_history.get_index_mut(conthist_index);
-        update_history(cmh_block.get_mut(piece, to), depth, true);
+        update_history(cmh_block.get_mut(moved, to), delta);
     }
 
     /// Get the continuation history scores for a batch of moves.

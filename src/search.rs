@@ -19,13 +19,16 @@ use crate::{
             Board,
         },
         chessmove::Move,
-        piece::{Colour, PieceType},
+        piece::{Colour, Piece, PieceType},
+        squareset::SquareSet,
+        types::Square,
         CHESS960,
     },
     evaluation::{
         is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
     },
+    historytable::history_bonus,
     movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -659,6 +662,8 @@ impl Board {
                 continue;
             }
             t.tt.prefetch(self.key_after(m));
+            t.ss[height].searching = Some(m);
+            t.ss[height].searching_tactical = is_tactical;
             if !self.make_move(m, t) {
                 continue;
             }
@@ -811,8 +816,16 @@ impl Board {
                 {
                     if let Some(mov) = hit.mov {
                         // add to the history of a quiet move that fails high here.
-                        if hit.value >= beta && !self.is_tactical(mov) {
-                            self.update_quiet_history_single(t, mov, depth);
+                        if hit.value >= beta && !self.is_tactical(mov) && self.is_pseudo_legal(mov)
+                        {
+                            let from = mov.from();
+                            let to = mov.history_to_square();
+                            let moved = self.piece_at(from).unwrap();
+                            let threats = self.threats().all;
+                            let delta = history_bonus(depth);
+                            self.update_quiet_history_single::<false>(
+                                t, from, to, moved, threats, delta,
+                            );
                         }
                     }
 
@@ -985,6 +998,7 @@ impl Board {
                 && self.zugzwang_unlikely()
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
             {
+                t.tt.prefetch(self.key_after_null_move());
                 let r = info.conf.nmp_base_reduction
                     + depth / info.conf.nmp_reduction_depth_divisor
                     + std::cmp::min(
@@ -992,7 +1006,7 @@ impl Board {
                         info.conf.max_nmp_eval_reduction,
                     );
                 let nm_depth = depth - r;
-                t.tt.prefetch(self.key_after_null_move());
+                t.ss[height].searching = None;
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -1092,6 +1106,8 @@ impl Board {
                 }
 
                 t.tt.prefetch(self.key_after(m));
+                t.ss[height].searching = Some(m);
+                t.ss[height].searching_tactical = true;
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -1214,6 +1230,8 @@ impl Board {
             }
 
             t.tt.prefetch(self.key_after(m));
+            t.ss[height].searching = Some(m);
+            t.ss[height].searching_tactical = !is_quiet;
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1263,6 +1281,8 @@ impl Board {
                     return Self::singularity_margin(tt_value, depth);
                 }
                 // re-make the singular move.
+                t.ss[height].searching = Some(m);
+                t.ss[height].searching_tactical = !is_quiet;
                 self.make_move(m, t);
 
                 if value < r_beta {
@@ -1513,11 +1533,20 @@ impl Board {
     }
 
     /// Update the main and continuation history tables for a single move.
-    fn update_quiet_history_single(&self, t: &mut ThreadData, move_to_adjust: Move, depth: i32) {
-        t.update_history_single(self, move_to_adjust, depth);
-        t.update_continuation_history_single(self, move_to_adjust, depth, 0);
-        t.update_continuation_history_single(self, move_to_adjust, depth, 1);
-        // t.update_continuation_history_single(self, move_to_adjust, depth, 3);
+    #[allow(clippy::identity_op)]
+    fn update_quiet_history_single<const MADE: bool>(
+        &self,
+        t: &mut ThreadData,
+        from: Square,
+        to: Square,
+        moved: Piece,
+        threats: SquareSet,
+        delta: i32,
+    ) {
+        t.update_history_single(from, to, moved, threats, delta);
+        t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
+        t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
+        // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
     }
 
     /// Update the tactical history table.
