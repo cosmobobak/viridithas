@@ -1,10 +1,12 @@
 use std::fmt::Display;
+use std::sync::atomic::Ordering;
 
 use arrayvec::ArrayVec;
 
+use crate::chess::CHESS960;
 use crate::util::MAX_PLY;
 
-use crate::chessmove::Move;
+use crate::chess::chessmove::Move;
 
 #[derive(Clone, Debug)]
 pub struct PVariation {
@@ -50,8 +52,9 @@ impl Display for PVariation {
         if !self.moves.is_empty() {
             write!(f, "pv ")?;
         }
+        let frc = CHESS960.load(Ordering::Relaxed);
         for &m in self.moves() {
-            write!(f, "{m} ")?;
+            write!(f, "{} ", m.display(frc))?;
         }
         Ok(())
     }

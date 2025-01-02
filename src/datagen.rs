@@ -25,20 +25,22 @@ use dataformat::Filter;
 use rand::Rng;
 
 use crate::{
-    board::{
-        evaluation::{is_game_theoretic_score, is_mate_score},
-        Board, DrawType, GameOutcome, WinType,
+    chess::{
+        board::{Board, DrawType, GameOutcome, WinType},
+        piece::{Colour, PieceType},
+        types::Square,
+        CHESS960,
     },
     datagen::dataformat::Game,
+    evaluation::{is_game_theoretic_score, is_mate_score},
     nnue::network::NNUEParams,
-    piece::{Colour, PieceType},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
-    uci::{CHESS960, SYZYGY_ENABLED, SYZYGY_PATH},
-    util::{Square, MEGABYTE},
+    uci::{SYZYGY_ENABLED, SYZYGY_PATH},
+    util::MEGABYTE,
 };
 
 const MIN_SAVE_PLY: usize = 16;
@@ -829,7 +831,10 @@ pub fn run_topgn(input: &Path, output: &Path, limit: Option<usize>) -> anyhow::R
                 writeln!(output_buffer).unwrap();
             }
             let san = board.san(mv).with_context(|| {
-                format!("Failed to create SAN for move {mv} in position {board:X}.")
+                format!(
+                    "Failed to create SAN for move {} in position {board:X}.",
+                    mv.display(CHESS960.load(Ordering::Relaxed))
+                )
             })?;
             if board.turn() == Colour::White {
                 write!(output_buffer, "{}. ", board.ply() / 2 + 1).unwrap();

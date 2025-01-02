@@ -1,42 +1,11 @@
 use std::fmt::Display;
 
-use crate::{
+use crate::chess::{
     board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
-    nnue::network::FeatureUpdate,
     piece::{Black, Col, Colour, Piece, PieceType, White},
     squareset::SquareSet,
-    util::{File, Rank, Square},
+    types::{File, Rank, Square},
 };
-
-/// Iterator over the squares of a square-set.
-/// The squares are returned in increasing order.
-pub struct SquareIter {
-    value: u64,
-}
-
-impl SquareIter {
-    pub const fn new(value: u64) -> Self {
-        Self { value }
-    }
-}
-
-impl Iterator for SquareIter {
-    type Item = Square;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.value == 0 {
-            None
-        } else {
-            // faster if we have bmi (maybe)
-            #[allow(clippy::cast_possible_truncation)]
-            let lsb: u8 = self.value.trailing_zeros() as u8;
-            self.value &= self.value - 1;
-            // SAFETY: u64::trailing_zeros can only return values within `0..64`,
-            // all of which correspond to valid enum variants of Square.
-            Some(unsafe { Square::new_unchecked(lsb) })
-        }
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PieceLayout {
@@ -238,7 +207,7 @@ impl PieceLayout {
     }
 
     /// Calls `callback` for each piece that is added or removed from `self` to `target`.
-    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(FeatureUpdate, bool)) {
+    pub fn update_iter(&self, target: Self, mut callback: impl FnMut(Square, Piece, bool)) {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 let piece = Piece::new(colour, piece_type);
@@ -247,10 +216,10 @@ impl PieceLayout {
                 let added = target_bb & !source_bb;
                 let removed = source_bb & !target_bb;
                 for sq in added {
-                    callback(FeatureUpdate { sq, piece }, true);
+                    callback(sq, piece, true);
                 }
                 for sq in removed {
-                    callback(FeatureUpdate { sq, piece }, false);
+                    callback(sq, piece, false);
                 }
             }
         }

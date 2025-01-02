@@ -1,16 +1,17 @@
 #![allow(unused_imports)]
 
 use crate::{
+    chess::{
+        board::Board,
+        piece::{Colour, Piece},
+        types::{Rank, Square},
+    },
     nnue::network::NNUEState,
-    piece::{Colour, Piece},
     searchinfo::SearchInfo,
-    util::{Rank, Square},
 };
 
 #[cfg(debug_assertions)]
 use crate::errors::PositionValidityError;
-
-use super::{movegen::piecelayout::SquareIter, Board};
 
 impl Board {
     #[cfg(debug_assertions)]

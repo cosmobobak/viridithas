@@ -1,4 +1,7 @@
-use crate::{macros, rng::XorShiftState, squareset::SquareSet, util::Square};
+use crate::{
+    chess::{squareset::SquareSet, types::Square},
+    rng::XorShiftState,
+};
 
 macro_rules! cfor {
     ($init: stmt; $cond: expr; $step: expr; $body: block) => {
@@ -18,7 +21,7 @@ macro_rules! cfor {
 /// along the long diagonal - but the contents of h8 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 6.
 #[rustfmt::skip]
-static BISHOP_REL_BITS: [i32; 64] = [
+pub static BISHOP_REL_BITS: [i32; 64] = [
     6, 5, 5, 5, 5, 5, 5, 6,
     5, 5, 5, 5, 5, 5, 5, 5,
     5, 5, 7, 7, 7, 7, 5, 5,
@@ -34,7 +37,7 @@ static BISHOP_REL_BITS: [i32; 64] = [
 /// along the file or rank - but the contents of a8 and h1 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 12.
 #[rustfmt::skip]
-static ROOK_REL_BITS: [i32; 64] = [
+pub static ROOK_REL_BITS: [i32; 64] = [
     12, 11, 11, 11, 11, 11, 11, 12,
     11, 10, 10, 10, 10, 10, 10, 11,
     11, 10, 10, 10, 10, 10, 10, 11,
@@ -335,16 +338,16 @@ macro_rules! init_masks_with {
     }};
 }
 
-static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
-static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
+pub static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
+pub static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
 pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
-    unsafe { std::mem::transmute(*include_bytes!("../embeds/diagonal_attacks.bin")) };
+    unsafe { std::mem::transmute(*include_bytes!("../../embeds/diagonal_attacks.bin")) };
 #[allow(clippy::large_stack_arrays)]
 pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] =
-    unsafe { std::mem::transmute(*include_bytes!("../embeds/orthogonal_attacks.bin")) };
+    unsafe { std::mem::transmute(*include_bytes!("../../embeds/orthogonal_attacks.bin")) };
 
-static BISHOP_MAGICS: [u64; 64] = [
+pub static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,
     0x0020_0404_0844_4882,
     0x0822_0801_0420_A100,
@@ -411,7 +414,7 @@ static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,
 ];
 
-static ROOK_MAGICS: [u64; 64] = [
+pub static ROOK_MAGICS: [u64; 64] = [
     0x2080_0010_2080_4000,
     0x0240_2000_4001_5005,
     0x6900_2002_1100_0840,
@@ -477,39 +480,3 @@ static ROOK_MAGICS: [u64; 64] = [
     0x2038_1140_9002_1804,
     0x0000_0080_4502_2C02,
 ];
-
-#[allow(clippy::cast_possible_truncation)]
-pub fn get_diagonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & BISHOP_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
-    let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
-    // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
-    // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
-    // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
-    // in bounds.
-    unsafe {
-        if idx >= BISHOP_ATTACKS[sq].len() {
-            // assert to the compiler that it's chill not to bounds-check
-            macros::inconceivable!();
-        }
-        BISHOP_ATTACKS[sq][idx]
-    }
-}
-
-#[allow(clippy::cast_possible_truncation)]
-pub fn get_orthogonal_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & ROOK_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
-    let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
-    // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
-    // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
-    // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
-    // in bounds.
-    unsafe {
-        if idx >= ROOK_ATTACKS[sq].len() {
-            // assert to the compiler that it's chill not to bounds-check
-            macros::inconceivable!();
-        }
-        ROOK_ATTACKS[sq][idx]
-    }
-}

@@ -1,5 +1,3 @@
-pub mod evaluation;
-mod history;
 pub mod movegen;
 pub mod validation;
 
@@ -10,27 +8,29 @@ use std::{
 
 use anyhow::{bail, Context};
 
+use movegen::RAY_BETWEEN;
 #[cfg(feature = "datagen")]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
 use crate::{
-    board::movegen::{
-        bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
+    chess::{
+        board::movegen::{
+            bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
+        },
+        chessmove::Move,
+        piece::{Black, Col, Colour, Piece, PieceType, White},
+        squareset::SquareSet,
+        types::{CastlingRights, CheckState, ContHistIndex, File, Rank, Square, Undo},
+        CHESS960,
     },
-    chessmove::Move,
     cuckoo,
-    historytable::ContHistIndex,
     makemove::{hash_castling, hash_ep, hash_piece, hash_side},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
-    piece::{Black, Col, Colour, Piece, PieceType, White},
     search::pv::PVariation,
-    squareset::SquareSet,
     threadlocal::ThreadData,
-    uci::CHESS960,
-    util::{CastlingRights, CheckState, File, Rank, Square, Undo, RAY_BETWEEN},
 };
 
-use self::movegen::piecelayout::{PieceLayout, Threats};
+use crate::chess::piecelayout::{PieceLayout, Threats};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Board {
@@ -113,6 +113,10 @@ impl Board {
 
     pub const fn ep_sq(&self) -> Option<Square> {
         self.ep_sq
+    }
+
+    pub fn history(&self) -> &[Undo] {
+        &self.history
     }
 
     #[cfg(feature = "datagen")]
@@ -1187,7 +1191,8 @@ impl Board {
                 _ => {
                     panic!(
                         "Invalid castle move, to: {}, castle_perm: {}",
-                        to, self.castle_perm
+                        to,
+                        self.castle_perm.display(false)
                     );
                 }
             };
@@ -2078,7 +2083,7 @@ mod tests {
     fn game_end_states() {
         use super::Board;
         use super::{DrawType, GameOutcome};
-        use crate::{chessmove::Move, util::Square};
+        use crate::{chess::chessmove::Move, chess::types::Square};
 
         let mut fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
@@ -2123,7 +2128,7 @@ mod tests {
 
     #[test]
     fn fen_round_trip() {
-        use crate::board::Board;
+        use crate::chess::board::Board;
         use std::{
             fs::File,
             io::{BufRead, BufReader},
@@ -2144,7 +2149,7 @@ mod tests {
     #[test]
     fn scharnagl_backrank_works() {
         use super::Board;
-        use crate::piece::PieceType;
+        use crate::chess::piece::PieceType;
         let normal_chess_arrangement = Board::get_scharnagl_backrank(518);
         assert_eq!(
             normal_chess_arrangement,
@@ -2175,8 +2180,8 @@ mod tests {
     #[test]
     fn castling_pseudolegality() {
         use super::Board;
-        use crate::chessmove::{Move, MoveFlags};
-        use crate::util::Square;
+        use crate::chess::chessmove::{Move, MoveFlags};
+        use crate::chess::types::Square;
         let board =
             Board::from_fen("1r2k2r/2pb1pp1/2pp4/p1n5/2P4p/PP2P2P/1qB2PP1/R2QKN1R w KQk - 0 20")
                 .unwrap();
@@ -2187,7 +2192,7 @@ mod tests {
     #[test]
     fn threat_generation_white() {
         use super::Board;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
 
         let board = Board::from_fen("3k4/8/8/5N2/8/1P6/8/K1Q1RB2 b - - 0 1").unwrap();
         assert_eq!(
@@ -2199,7 +2204,7 @@ mod tests {
     #[test]
     fn threat_generation_black() {
         use super::Board;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
 
         let board = Board::from_fen("2br1q1k/8/6p1/8/2n5/8/8/4K3 w - - 0 1").unwrap();
         assert_eq!(
@@ -2211,8 +2216,8 @@ mod tests {
     #[test]
     fn key_after_works_for_simple_moves() {
         use super::Board;
-        use crate::chessmove::Move;
-        use crate::util::Square;
+        use crate::chess::chessmove::Move;
+        use crate::chess::types::Square;
         let mut board = Board::default();
         let mv = Move::new(Square::E2, Square::E3);
         let key = board.key_after(mv);
@@ -2223,8 +2228,8 @@ mod tests {
     #[test]
     fn key_after_works_for_captures() {
         use super::Board;
-        use crate::chessmove::Move;
-        use crate::util::Square;
+        use crate::chess::chessmove::Move;
+        use crate::chess::types::Square;
         let mut board =
             Board::from_fen("r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6")
                 .unwrap();
@@ -2247,10 +2252,10 @@ mod tests {
     #[test]
     fn ep_square_edge_case() {
         use super::Board;
-        use crate::chessmove::Move;
+        use crate::chess::chessmove::Move;
+        use crate::chess::piece::Piece;
+        use crate::chess::types::Square;
         use crate::makemove::{hash_ep, hash_piece, hash_side};
-        use crate::piece::Piece;
-        use crate::util::Square;
         let mut not_ep_capturable =
             Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
                 .unwrap();
@@ -2281,8 +2286,8 @@ mod tests {
     #[test]
     fn other_ep_edge_case() {
         use super::Board;
-        use crate::chessmove::Move;
-        use crate::util::Square;
+        use crate::chess::chessmove::Move;
+        use crate::chess::types::Square;
         let mut board =
             Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));

@@ -23,19 +23,19 @@ use anyhow::{anyhow, bail, Context};
 
 use crate::{
     bench::BENCH_POSITIONS,
-    board::{
-        evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
-        movegen::MoveList,
-        Board,
+    chess::{
+        board::{movegen::MoveList, Board},
+        piece::Colour,
+        CHESS960,
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
+    evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
     nnue::{
         self,
         network::{self, NNUEParams},
     },
     perft,
-    piece::Colour,
     search::{parameters::Config, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,
@@ -59,7 +59,6 @@ pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
 pub static SYZYGY_PATH: Mutex<String> = Mutex::new(String::new());
 pub static SYZYGY_ENABLED: AtomicBool = AtomicBool::new(false);
 pub static CONTEMPT: AtomicI32 = AtomicI32::new(0);
-pub static CHESS960: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, PartialEq, Eq)]
 enum UciError {
@@ -975,7 +974,10 @@ fn divide_perft(depth: usize, pos: &mut Board) {
         }
         let arm_nodes = perft::perft(pos, depth - 1);
         nodes += arm_nodes;
-        println!("{m}: {arm_nodes}");
+        println!(
+            "{}: {arm_nodes}",
+            m.display(CHESS960.load(Ordering::Relaxed))
+        );
         pos.unmake_move_base();
     }
     let elapsed = start_time.elapsed();

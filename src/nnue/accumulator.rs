@@ -1,10 +1,6 @@
-// use crate::{board::Board, piece::PieceType};
+use crate::chess::piece::Colour;
 
-use crate::piece::Colour;
-
-use super::network::{
-    feature::FeatureIndex, Align64, MovedPiece, PovUpdate, UpdateBuffer, INPUT, L1_SIZE,
-};
+use super::network::{feature::FeatureIndex, Align64, MovedPiece, UpdateBuffer, INPUT, L1_SIZE};
 
 /// Activations of the hidden layer.
 pub struct Accumulator {
@@ -17,13 +13,11 @@ pub struct Accumulator {
 }
 
 impl Accumulator {
-    /// Initializes the accumulator with the given bias.
-    pub fn init(&mut self, bias: &Align64<[i16; L1_SIZE]>, update: PovUpdate) {
-        if update.white {
-            self.white = bias.clone();
-        }
-        if update.black {
-            self.black = bias.clone();
+    /// Select the buffer by colour.
+    pub const fn select(&self, colour: Colour) -> &Align64<[i16; L1_SIZE]> {
+        match colour {
+            Colour::White => &self.white,
+            Colour::Black => &self.black,
         }
     }
 

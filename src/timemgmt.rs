@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    board::evaluation::{is_mate_score, mate_in},
-    chessmove::Move,
+    chess::chessmove::Move,
+    evaluation::{is_mate_score, mate_in},
     search::{parameters::Config, pv::PVariation, SmpThreadType},
     transpositiontable::Bound,
 };

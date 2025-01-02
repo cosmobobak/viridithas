@@ -14,11 +14,16 @@ use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
 use crate::{
-    board::{movegen::piecelayout::PieceLayout, Board},
+    chess::{
+        board::Board,
+        piece::{Black, Col, Colour, Piece, PieceType, White},
+        piecelayout::PieceLayout,
+        squareset::SquareSet,
+        types::Square,
+    },
     image::{self, Image},
     nnue,
-    piece::{Black, Col, Colour, Piece, PieceType, White},
-    util::{self, Square, MAX_PLY},
+    util::{self, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -70,12 +75,7 @@ const BUCKET_MAP: [usize; 64] = {
     }
     map
 };
-/// Get indices into the feature transformer given king positions.
-pub fn get_bucket_indices(white_king: Square, black_king: Square) -> [usize; 2] {
-    let white_bucket = BUCKET_MAP[white_king];
-    let black_bucket = BUCKET_MAP[black_king.flip_rank()];
-    [white_bucket, black_bucket]
-}
+
 /// The number of output buckets
 pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
@@ -541,6 +541,7 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 }
 
 impl NNUEParams {
+    #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
         #[cfg(not(feature = "zstd"))]
         type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
@@ -579,6 +580,7 @@ impl NNUEParams {
         let exists = weights_path
             .try_exists()
             .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+
         if exists {
             let mmap = Self::map_weight_file(&weights_path).with_context(|| {
                 format!(
@@ -807,31 +809,6 @@ pub fn quantise(input: &std::path::Path, output: &std::path::Path) -> anyhow::Re
 /// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = MAX_PLY + 1;
 
-#[derive(Debug, Copy, Clone)]
-pub struct PovUpdate {
-    pub white: bool,
-    pub black: bool,
-}
-impl PovUpdate {
-    pub const BOTH: Self = Self {
-        white: true,
-        black: true,
-    };
-
-    pub const fn colour(colour: Colour) -> Self {
-        match colour {
-            Colour::White => Self {
-                white: true,
-                black: false,
-            },
-            Colour::Black => Self {
-                white: false,
-                black: true,
-            },
-        }
-    }
-}
-
 /// Struct representing some unmaterialised feature update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct FeatureUpdate {
@@ -890,33 +867,17 @@ impl BucketAccumulatorCache {
         &mut self,
         nnue_params: &NNUEParams,
         board_state: PieceLayout,
-        pov_update: PovUpdate,
+        colour: Colour,
         acc: &mut Accumulator,
     ) {
-        let side_we_care_about = if pov_update.white {
-            Colour::White
-        } else {
-            Colour::Black
-        };
-        let wk = board_state.piece_bb(Piece::WK).first();
-        let bk = board_state.piece_bb(Piece::BK).first();
-        let [white_bucket, black_bucket] = get_bucket_indices(wk, bk);
-        let bucket = if side_we_care_about == Colour::White {
-            white_bucket
-        } else {
-            black_bucket
-        };
-        let cache_acc = self.accs[bucket].select_mut(side_we_care_about);
+        let king = SquareSet::first(board_state.all_kings() & board_state.occupied_co(colour));
+        let bucket = BUCKET_MAP[king.relative_to(colour)];
+        let cache_acc = self.accs[bucket].select_mut(colour);
 
         let mut adds = ArrayVec::<_, 32>::new();
         let mut subs = ArrayVec::<_, 32>::new();
-        self.board_states[side_we_care_about][bucket].update_iter(board_state, |f, is_add| {
-            let [white_idx, black_idx] = feature::indices(wk, bk, f);
-            let index = if side_we_care_about == Colour::White {
-                white_idx
-            } else {
-                black_idx
-            };
+        self.board_states[colour][bucket].update_iter(board_state, |sq, piece, is_add| {
+            let index = feature::index(colour, king, FeatureUpdate { sq, piece });
             if is_add {
                 adds.push(index);
             } else {
@@ -928,10 +889,10 @@ impl BucketAccumulatorCache {
 
         accumulator::vector_update_inplace(cache_acc, weights, &adds, &subs);
 
-        *acc.select_mut(side_we_care_about) = cache_acc.clone();
-        acc.correct[side_we_care_about] = true;
+        *acc.select_mut(colour) = cache_acc.clone();
+        acc.correct[colour] = true;
 
-        self.board_states[side_we_care_about][bucket] = board_state;
+        self.board_states[colour][bucket] = board_state;
     }
 }
 
@@ -1007,7 +968,8 @@ impl NNUEState {
 
         // initalise all the accumulators in the bucket cache to the bias
         for acc in &mut self.bucket_cache.accs {
-            acc.init(&nnue_params.feature_bias, PovUpdate::BOTH);
+            acc.white = nnue_params.feature_bias.clone();
+            acc.black = nnue_params.feature_bias.clone();
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
@@ -1015,24 +977,14 @@ impl NNUEState {
         }
 
         // refresh the first accumulator
-        self.bucket_cache.load_accumulator_for_position(
-            nnue_params,
-            board.pieces,
-            PovUpdate {
-                white: true,
-                black: false,
-            },
-            &mut self.accumulators[0],
-        );
-        self.bucket_cache.load_accumulator_for_position(
-            nnue_params,
-            board.pieces,
-            PovUpdate {
-                white: false,
-                black: true,
-            },
-            &mut self.accumulators[0],
-        );
+        for colour in Colour::all() {
+            self.bucket_cache.load_accumulator_for_position(
+                nnue_params,
+                board.pieces,
+                colour,
+                &mut self.accumulators[0],
+            );
+        }
     }
 
     fn requires_refresh(piece: Piece, from: Square, to: Square) -> bool {
@@ -1043,50 +995,42 @@ impl NNUEState {
         BUCKET_MAP[from] != BUCKET_MAP[to]
     }
 
-    fn can_efficiently_update(&self, view: Colour) -> bool {
+    fn can_efficiently_update(&self, colour: Colour) -> bool {
         let mut curr_idx = self.current_acc;
         loop {
             curr_idx -= 1;
             let curr = &self.accumulators[curr_idx];
 
             let mv = curr.mv;
-            let from = mv.from.relative_to(view);
-            let to = mv.to.relative_to(view);
+            let from = mv.from.relative_to(colour);
+            let to = mv.to.relative_to(colour);
             let piece = mv.piece;
 
-            if piece.colour() == view && Self::requires_refresh(piece, from, to) {
+            if piece.colour() == colour && Self::requires_refresh(piece, from, to) {
                 return false;
             }
-            if curr.correct[view] {
+            if curr.correct[colour] {
                 return true;
             }
         }
     }
 
-    fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, view: Colour) {
+    fn apply_lazy_updates(&mut self, nnue_params: &NNUEParams, board: &Board, colour: Colour) {
         let mut curr_index = self.current_acc;
         loop {
             curr_index -= 1;
 
-            if self.accumulators[curr_index].correct[view] {
+            if self.accumulators[curr_index].correct[colour] {
                 break;
             }
         }
 
-        let pov_update = PovUpdate::colour(view);
-        let white_king = board.king_sq(Colour::White);
-        let black_king = board.king_sq(Colour::Black);
+        let king = board.king_sq(colour);
 
         loop {
-            self.materialise_new_acc_from(
-                white_king,
-                black_king,
-                pov_update,
-                curr_index + 1,
-                nnue_params,
-            );
+            self.materialise_new_acc_from(king, colour, curr_index + 1, nnue_params);
 
-            self.accumulators[curr_index + 1].correct[view] = true;
+            self.accumulators[curr_index + 1].correct[colour] = true;
 
             curr_index += 1;
             if curr_index == self.current_acc {
@@ -1105,7 +1049,7 @@ impl NNUEState {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
                         board.pieces,
-                        PovUpdate::colour(colour),
+                        colour,
                         &mut self.accumulators[self.current_acc],
                     );
                 }
@@ -1133,26 +1077,18 @@ impl NNUEState {
             assert!(self.accumulators[source].correct[C::COLOUR]);
             // directly construct the top accumulator from the last-known-good one
             let mut curr_index = source;
-            let wk = pos.king_sq(Colour::White);
-            let bk = pos.king_sq(Colour::Black);
-            let [white_bucket, black_bucket] = get_bucket_indices(wk, bk);
-            let bucket = if C::COLOUR == Colour::White {
-                white_bucket
-            } else {
-                black_bucket
-            };
+            let king = pos.king_sq(C::COLOUR);
+            let bucket = BUCKET_MAP[king.relative_to(C::COLOUR)];
             let weights = nnue_params.select_feature_weights(bucket);
             let mut adds = ArrayVec::<_, 32>::new();
             let mut subs = ArrayVec::<_, 32>::new();
 
             loop {
                 for &add in self.accumulators[curr_index].update_buffer.adds() {
-                    let add = feature::indices(wk, bk, add)[C::COLOUR];
-                    adds.push(add);
+                    adds.push(feature::index(C::COLOUR, king, add));
                 }
                 for &sub in self.accumulators[curr_index].update_buffer.subs() {
-                    let sub = feature::indices(wk, bk, sub)[C::COLOUR];
-                    subs.push(sub);
+                    subs.push(feature::index(C::COLOUR, king, sub));
                 }
 
                 curr_index += 1;
@@ -1175,7 +1111,7 @@ impl NNUEState {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
                 pos.pieces,
-                PovUpdate::colour(C::COLOUR),
+                C::COLOUR,
                 &mut self.accumulators[self.current_acc],
             );
         }
@@ -1219,97 +1155,45 @@ impl NNUEState {
 
     pub fn materialise_new_acc_from(
         &mut self,
-        white_king: Square,
-        black_king: Square,
-        pov_update: PovUpdate,
+        king: Square,
+        colour: Colour,
         create_at_idx: usize,
         nnue_params: &NNUEParams,
     ) {
         let (front, back) = self.accumulators.split_at_mut(create_at_idx);
-        let src = front.last().unwrap();
-        let tgt = back.first_mut().unwrap();
+        let src_acc = front.last().unwrap();
+        let tgt_acc = back.first_mut().unwrap();
 
-        let [white_bucket, black_bucket] = get_bucket_indices(white_king, black_king);
+        let bucket = BUCKET_MAP[king.relative_to(colour)];
 
-        let w_bucket = nnue_params.select_feature_weights(white_bucket);
-        let b_bucket = nnue_params.select_feature_weights(black_bucket);
+        let bucket = nnue_params.select_feature_weights(bucket);
 
-        if pov_update.white {
-            match (src.update_buffer.adds(), src.update_buffer.subs()) {
-                // quiet or promotion
-                (&[add], &[sub]) => {
-                    accumulator::vector_add_sub(
-                        &src.white,
-                        &mut tgt.white,
-                        w_bucket,
-                        feature::index::<White>(white_king, add),
-                        feature::index::<White>(white_king, sub),
-                    );
-                }
-                // capture
-                (&[add], &[sub1, sub2]) => {
-                    accumulator::vector_add_sub2(
-                        &src.white,
-                        &mut tgt.white,
-                        w_bucket,
-                        feature::index::<White>(white_king, add),
-                        feature::index::<White>(white_king, sub1),
-                        feature::index::<White>(white_king, sub2),
-                    );
-                }
-                // castling
-                (&[add1, add2], &[sub1, sub2]) => {
-                    accumulator::vector_add2_sub2(
-                        &src.white,
-                        &mut tgt.white,
-                        w_bucket,
-                        feature::index::<White>(white_king, add1),
-                        feature::index::<White>(white_king, add2),
-                        feature::index::<White>(white_king, sub1),
-                        feature::index::<White>(white_king, sub2),
-                    );
-                }
-                (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
+        let src = src_acc.select(colour);
+        let tgt = tgt_acc.select_mut(colour);
+
+        match (src_acc.update_buffer.adds(), src_acc.update_buffer.subs()) {
+            // quiet or promotion
+            (&[add], &[sub]) => {
+                let add = feature::index(colour, king, add);
+                let sub = feature::index(colour, king, sub);
+                accumulator::vector_add_sub(src, tgt, bucket, add, sub);
             }
-        }
-
-        if pov_update.black {
-            match (src.update_buffer.adds(), src.update_buffer.subs()) {
-                // quiet or promotion
-                (&[add], &[sub]) => {
-                    accumulator::vector_add_sub(
-                        &src.black,
-                        &mut tgt.black,
-                        b_bucket,
-                        feature::index::<Black>(black_king, add),
-                        feature::index::<Black>(black_king, sub),
-                    );
-                }
-                // capture
-                (&[add], &[sub1, sub2]) => {
-                    accumulator::vector_add_sub2(
-                        &src.black,
-                        &mut tgt.black,
-                        b_bucket,
-                        feature::index::<Black>(black_king, add),
-                        feature::index::<Black>(black_king, sub1),
-                        feature::index::<Black>(black_king, sub2),
-                    );
-                }
-                // castling
-                (&[add1, add2], &[sub1, sub2]) => {
-                    accumulator::vector_add2_sub2(
-                        &src.black,
-                        &mut tgt.black,
-                        b_bucket,
-                        feature::index::<Black>(black_king, add1),
-                        feature::index::<Black>(black_king, add2),
-                        feature::index::<Black>(black_king, sub1),
-                        feature::index::<Black>(black_king, sub2),
-                    );
-                }
-                (_, _) => panic!("invalid update buffer: {:?}", src.update_buffer),
+            // capture
+            (&[add], &[sub1, sub2]) => {
+                let add = feature::index(colour, king, add);
+                let sub1 = feature::index(colour, king, sub1);
+                let sub2 = feature::index(colour, king, sub2);
+                accumulator::vector_add_sub2(src, tgt, bucket, add, sub1, sub2);
             }
+            // castling
+            (&[add1, add2], &[sub1, sub2]) => {
+                let add1 = feature::index(colour, king, add1);
+                let add2 = feature::index(colour, king, add2);
+                let sub1 = feature::index(colour, king, sub1);
+                let sub2 = feature::index(colour, king, sub2);
+                accumulator::vector_add2_sub2(src, tgt, bucket, add1, add2, sub1, sub2);
+            }
+            (_, _) => panic!("invalid update buffer: {:?}", src_acc.update_buffer),
         }
     }
 

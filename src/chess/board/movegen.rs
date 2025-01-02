@@ -1,12 +1,4 @@
-pub mod movepicker;
-pub mod piecelayout;
-
 use arrayvec::ArrayVec;
-
-use self::movepicker::{MainSearch, MovePickerMode};
-pub use self::piecelayout::SquareIter;
-
-use super::Board;
 
 use std::{
     fmt::{Display, Formatter},
@@ -15,12 +7,19 @@ use std::{
 };
 
 use crate::{
-    chessmove::{Move, MoveFlags},
-    lookups, magic,
-    piece::{Black, Col, Colour, PieceType, White},
-    squareset::SquareSet,
-    uci::CHESS960,
-    util::{Square, RAY_BETWEEN},
+    cfor,
+    chess::{
+        board::Board,
+        chessmove::{Move, MoveFlags},
+        magic::{
+            BISHOP_ATTACKS, BISHOP_MAGICS, BISHOP_MASKS, BISHOP_REL_BITS, ROOK_ATTACKS,
+            ROOK_MAGICS, ROOK_MASKS, ROOK_REL_BITS,
+        },
+        piece::{Black, Col, Colour, PieceType, White},
+        squareset::SquareSet,
+        types::Square,
+        CHESS960,
+    },
 };
 
 pub const MAX_POSITION_MOVES: usize = 218;
@@ -91,32 +90,126 @@ impl Display for MoveList {
         }
         writeln!(f, "MoveList: ({}) [", self.inner.len())?;
         for m in &self.inner[0..self.inner.len() - 1] {
-            writeln!(f, "  {} ${}, ", m.mov, m.score)?;
+            writeln!(f, "  {} ${}, ", m.mov.display(false), m.score)?;
         }
         writeln!(
             f,
             "  {} ${}",
-            self.inner[self.inner.len() - 1].mov,
+            self.inner[self.inner.len() - 1].mov.display(false),
             self.inner[self.inner.len() - 1].score
         )?;
         write!(f, "]")
     }
 }
 
+const fn in_between(sq1: Square, sq2: Square) -> SquareSet {
+    const M1: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+    const A2A7: u64 = 0x0001_0101_0101_0100;
+    const B2G7: u64 = 0x0040_2010_0804_0200;
+    const H1B7: u64 = 0x0002_0408_1020_4080;
+    let sq1 = sq1.index();
+    let sq2 = sq2.index();
+    let btwn = (M1 << sq1) ^ (M1 << sq2);
+    let file = ((sq2 & 7).wrapping_add((sq1 & 7).wrapping_neg())) as u64;
+    let rank = (((sq2 | 7).wrapping_sub(sq1)) >> 3) as u64;
+    let mut line = ((file & 7).wrapping_sub(1)) & A2A7;
+    line += 2 * ((rank & 7).wrapping_sub(1) >> 58);
+    line += ((rank.wrapping_sub(file) & 15).wrapping_sub(1)) & B2G7;
+    line += ((rank.wrapping_add(file) & 15).wrapping_sub(1)) & H1B7;
+    line = line.wrapping_mul(btwn & btwn.wrapping_neg());
+    SquareSet::from_inner(line & btwn)
+}
+
+pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
+            res[from.index()][to.index()] = in_between(from, to);
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
+const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
+    let mut attacks = [SquareSet::EMPTY; 64];
+    let deltas = if IS_KNIGHT {
+        &[17, 15, 10, 6, -17, -15, -10, -6]
+    } else {
+        &[9, 8, 7, 1, -9, -8, -7, -1]
+    };
+
+    cfor!(let mut sq = Square::A1; true; sq = sq.saturating_add(1); {
+        let mut attacks_bb = 0;
+        cfor!(let mut idx = 0; idx < 8; idx += 1; {
+            let delta = deltas[idx];
+            let attacked_sq = sq.signed_inner() + delta;
+            #[allow(clippy::cast_sign_loss)]
+            if 0 <= attacked_sq && attacked_sq < 64 && Square::distance(
+                sq,
+                Square::new_clamped(attacked_sq as u8)) <= 2 {
+                attacks_bb |= 1 << attacked_sq;
+            }
+        });
+        attacks[sq.index()] = SquareSet::from_inner(attacks_bb);
+        if matches!(sq, Square::H8) {
+            break;
+        }
+    });
+
+    attacks
+}
+
+#[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_diagonal_attacks(sq, blockers)
+    let relevant_blockers = blockers & BISHOP_MASKS[sq];
+    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
+    let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
+    // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
+    // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
+    // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
+    // in bounds.
+    unsafe {
+        if idx >= BISHOP_ATTACKS[sq].len() {
+            // assert to the compiler that it's chill not to bounds-check
+            inconceivable!();
+        }
+        BISHOP_ATTACKS[sq][idx]
+    }
 }
+#[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    magic::get_orthogonal_attacks(sq, blockers)
+    let relevant_blockers = blockers & ROOK_MASKS[sq];
+    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
+    let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
+    // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
+    // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
+    // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
+    // in bounds.
+    unsafe {
+        if idx >= ROOK_ATTACKS[sq].len() {
+            // assert to the compiler that it's chill not to bounds-check
+            inconceivable!();
+        }
+        ROOK_ATTACKS[sq][idx]
+    }
 }
-// pub fn queen_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-//     magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-// }
 pub fn knight_attacks(sq: Square) -> SquareSet {
-    lookups::get_knight_attacks(sq)
+    static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
+    KNIGHT_ATTACKS[sq]
 }
 pub fn king_attacks(sq: Square) -> SquareSet {
-    lookups::get_king_attacks(sq)
+    static KING_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<false>();
+    KING_ATTACKS[sq]
 }
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
@@ -128,19 +221,30 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
-        PieceType::Bishop => magic::get_diagonal_attacks(sq, blockers),
-        PieceType::Rook => magic::get_orthogonal_attacks(sq, blockers),
-        PieceType::Queen => {
-            magic::get_diagonal_attacks(sq, blockers) | magic::get_orthogonal_attacks(sq, blockers)
-        }
-        PieceType::Knight => lookups::get_knight_attacks(sq),
-        PieceType::King => lookups::get_king_attacks(sq),
+        PieceType::Bishop => bishop_attacks(sq, blockers),
+        PieceType::Rook => rook_attacks(sq, blockers),
+        PieceType::Queen => bishop_attacks(sq, blockers) | rook_attacks(sq, blockers),
+        PieceType::Knight => knight_attacks(sq),
+        PieceType::King => king_attacks(sq),
         PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
     }
 }
 
+pub trait MoveGenMode {
+    const SKIP_QUIETS: bool;
+}
+
+pub struct SkipQuiets;
+impl MoveGenMode for SkipQuiets {
+    const SKIP_QUIETS: bool = true;
+}
+pub struct AllMoves;
+impl MoveGenMode for AllMoves {
+    const SKIP_QUIETS: bool = false;
+}
+
 impl Board {
-    fn generate_pawn_caps<C: Col, Mode: MovePickerMode>(
+    fn generate_pawn_caps<C: Col, Mode: MoveGenMode>(
         &self,
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
@@ -199,7 +303,7 @@ impl Board {
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
                 for promo in [
@@ -220,7 +324,7 @@ impl Board {
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
                 for promo in [
@@ -338,7 +442,7 @@ impl Board {
         }
     }
 
-    fn generate_forward_promos<C: Col, Mode: MovePickerMode>(
+    fn generate_forward_promos<C: Col, Mode: MoveGenMode>(
         &self,
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
@@ -369,7 +473,7 @@ impl Board {
             from_mask.south_one()
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
-            if Mode::CAPTURES_ONLY {
+            if Mode::SKIP_QUIETS {
                 // in quiescence search, we only generate promotions to queen.
                 move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
             } else {
@@ -422,7 +526,7 @@ impl Board {
         };
 
         self.generate_pawn_forward::<C>(move_list, valid_target_squares);
-        self.generate_pawn_caps::<C, MainSearch>(move_list, valid_target_squares);
+        self.generate_pawn_caps::<C, AllMoves>(move_list, valid_target_squares);
         self.generate_ep::<C>(move_list);
 
         // knights
@@ -476,7 +580,7 @@ impl Board {
         }
     }
 
-    pub fn generate_captures<Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
+    pub fn generate_captures<Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         move_list.clear();
         if self.side == Colour::White {
             self.generate_captures_for::<White, Mode>(move_list);
@@ -486,7 +590,7 @@ impl Board {
         debug_assert!(move_list.iter_moves().all(|m| m.is_valid()));
     }
 
-    fn generate_captures_for<C: Col, Mode: MovePickerMode>(&self, move_list: &mut MoveList) {
+    fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -804,7 +908,7 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     let mut ml = MoveList::new();
     pos.generate_moves(&mut ml);
     let mut ml_staged = MoveList::new();
-    pos.generate_captures::<MainSearch>(&mut ml_staged);
+    pos.generate_captures::<AllMoves>(&mut ml_staged);
     pos.generate_quiets(&mut ml_staged);
 
     let mut full_moves_vec = ml.to_vec();
@@ -860,17 +964,76 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
     count
 }
 
+#[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        bench,
+        chess::{
+            board::movegen::{king_attacks, knight_attacks},
+            squareset::SquareSet,
+            types::Square,
+        },
+    };
+
     #[test]
     fn staged_matches_full() {
-        use super::*;
-        use crate::bench;
-
         let mut pos = Board::default();
 
         for fen in bench::BENCH_POSITIONS {
             pos.set_from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
         }
+    }
+
+    #[test]
+    fn python_chess_validation() {
+        // testing that the attack squaresets match the ones in the python-chess library,
+        // which are known to be correct.
+        assert_eq!(
+            knight_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(132_096)
+        );
+        assert_eq!(
+            knight_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(9_077_567_998_918_656)
+        );
+
+        assert_eq!(
+            king_attacks(Square::new(0).unwrap()),
+            SquareSet::from_inner(770)
+        );
+        assert_eq!(
+            king_attacks(Square::new(63).unwrap()),
+            SquareSet::from_inner(4_665_729_213_955_833_856)
+        );
+    }
+
+    #[test]
+    fn ray_test() {
+        use super::{Square, RAY_BETWEEN};
+        use crate::chess::squareset::SquareSet;
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::A1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::B1], SquareSet::EMPTY);
+        assert_eq!(RAY_BETWEEN[Square::A1][Square::C1], Square::B1.as_set());
+        assert_eq!(
+            RAY_BETWEEN[Square::A1][Square::D1],
+            Square::B1.as_set() | Square::C1.as_set()
+        );
+        assert_eq!(RAY_BETWEEN[Square::B1][Square::D1], Square::C1.as_set());
+        assert_eq!(RAY_BETWEEN[Square::D1][Square::B1], Square::C1.as_set());
+
+        for from in Square::all() {
+            for to in Square::all() {
+                assert_eq!(RAY_BETWEEN[from][to], RAY_BETWEEN[to][from]);
+            }
+        }
+    }
+
+    #[test]
+    fn ray_diag_test() {
+        use super::{Square, RAY_BETWEEN};
+        let ray = RAY_BETWEEN[Square::B5][Square::E8];
+        assert_eq!(ray, Square::C6.as_set() | Square::D7.as_set());
     }
 }

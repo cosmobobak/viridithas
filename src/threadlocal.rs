@@ -1,14 +1,14 @@
 use std::array;
 
 use crate::{
-    board::Board,
-    chessmove::Move,
+    chess::board::Board,
+    chess::chessmove::Move,
+    chess::piece::Colour,
     historytable::{
         CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
         ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
-    piece::Colour,
     search::pv::PVariation,
     stack::StackEntry,
     transpositiontable::TTView,

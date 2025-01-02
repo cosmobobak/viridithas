@@ -1,13 +1,11 @@
 use std::{
     fmt::{Debug, Display, Formatter},
     num::NonZeroU16,
-    sync::atomic::Ordering,
 };
 
-use crate::{
+use crate::chess::{
     piece::PieceType,
-    uci::CHESS960,
-    util::{File, Square},
+    types::{File, Square},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,21 +156,30 @@ impl Move {
     pub fn from_raw(data: u16) -> Option<Self> {
         NonZeroU16::new(data).map(|nz| Self { data: nz })
     }
+
+    pub const fn display(self, chess960: bool) -> MoveDisplay {
+        MoveDisplay { m: self, chess960 }
+    }
 }
 
-impl Display for Move {
+pub struct MoveDisplay {
+    m: Move,
+    chess960: bool,
+}
+
+impl Display for MoveDisplay {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if CHESS960.load(Ordering::Relaxed) {
-            if let Some(promo) = self.promotion_type() {
+        if self.chess960 {
+            if let Some(promo) = self.m.promotion_type() {
                 let pchar = promo.promo_char().unwrap_or('?');
-                write!(f, "{}{}{pchar}", self.from(), self.to())?;
+                write!(f, "{}{}{pchar}", self.m.from(), self.m.to())?;
             } else {
-                write!(f, "{}{}", self.from(), self.to())?;
+                write!(f, "{}{}", self.m.from(), self.m.to())?;
             }
         } else {
-            let mut to = self.to();
+            let mut to = self.m.to();
             // fix up castling moves for normal UCI.
-            if self.is_castle() {
+            if self.m.is_castle() {
                 to = match to {
                     Square::H1 => Square::G1,
                     Square::A1 => Square::C1,
@@ -181,11 +188,11 @@ impl Display for Move {
                     _ => unreachable!(),
                 }
             }
-            if let Some(promo) = self.promotion_type() {
+            if let Some(promo) = self.m.promotion_type() {
                 let pchar = promo.promo_char().unwrap_or('?');
-                write!(f, "{}{}{}", self.from(), to, pchar)?;
+                write!(f, "{}{}{}", self.m.from(), to, pchar)?;
             } else {
-                write!(f, "{}{}", self.from(), to)?;
+                write!(f, "{}{}", self.m.from(), to)?;
             }
         }
 
@@ -245,7 +252,7 @@ mod tests {
     #[test]
     fn test_all_square_combinations() {
         use super::*;
-        use crate::squareset::SquareSet;
+        use crate::chess::squareset::SquareSet;
         for from in SquareSet::FULL {
             for to in SquareSet::FULL.iter().filter(|s| *s < from) {
                 let m = Move::new(from, to);

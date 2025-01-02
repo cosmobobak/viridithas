@@ -1,9 +1,12 @@
 use std::path::Path;
 
 use crate::{
-    board::{evaluation::MINIMUM_TB_WIN_SCORE, Board, GameOutcome},
-    chessmove::Move,
-    piece::{Colour, PieceType},
+    chess::{
+        board::{Board, GameOutcome},
+        chessmove::Move,
+        piece::{Colour, PieceType},
+    },
+    evaluation::MINIMUM_TB_WIN_SCORE,
     tablebases::probe::WDL,
 };
 
@@ -370,11 +373,11 @@ impl Game {
 #[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
-    use crate::uci::CHESS960;
+    use crate::chess::CHESS960;
 
     use super::*;
 
-    use crate::util::Square;
+    use crate::chess::types::Square;
 
     #[test]
     #[ignore]

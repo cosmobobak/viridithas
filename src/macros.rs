@@ -1,5 +1,3 @@
-#![allow(clippy::redundant_pub_crate)]
-
 macro_rules! inconceivable {
     () => {{
         #[cfg(debug_assertions)]
@@ -50,5 +48,3 @@ macro_rules! min {
         }
     };
 }
-
-pub(crate) use inconceivable;

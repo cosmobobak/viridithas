@@ -1,30 +1,15 @@
 use crate::{
-    board::{history, Board},
-    chessmove::Move,
-    historytable::MAX_HISTORY,
+    chess::board::Board, chess::chessmove::Move, history, historytable::MAX_HISTORY,
     threadlocal::ThreadData,
 };
 
-use super::{MoveList, MoveListEntry};
+use crate::chess::board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const FIRST_KILLER_SCORE: i32 = 9_000_000;
 pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
 pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-
-pub trait MovePickerMode {
-    const CAPTURES_ONLY: bool;
-}
-
-pub struct QSearch;
-impl MovePickerMode for QSearch {
-    const CAPTURES_ONLY: bool = true;
-}
-pub struct MainSearch;
-impl MovePickerMode for MainSearch {
-    const CAPTURES_ONLY: bool = false;
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -106,9 +91,9 @@ impl MovePicker {
             );
             // when we're in check, we want to generate enough moves to prove we're not mated.
             if self.skip_quiets {
-                position.generate_captures::<QSearch>(&mut self.movelist);
+                position.generate_captures::<SkipQuiets>(&mut self.movelist);
             } else {
-                position.generate_captures::<MainSearch>(&mut self.movelist);
+                position.generate_captures::<AllMoves>(&mut self.movelist);
             }
             Self::score_captures(t, position, &mut self.movelist);
         }

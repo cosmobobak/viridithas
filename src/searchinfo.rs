@@ -5,7 +5,7 @@ use std::sync::{
 
 use crate::{
     search::{parameters::Config, LMTable},
-    timemgmt::{SearchLimit, TimeManager},
+    timemgmt::TimeManager,
     uci,
     util::BatchedAtomicCounter,
 };
@@ -238,16 +238,13 @@ mod tests {
         sync::atomic::{AtomicBool, AtomicU64},
     };
 
-    use super::{SearchInfo, SearchLimit};
     use crate::{
-        board::{
-            evaluation::{mate_in, mated_in},
-            Board,
-        },
-        magic,
+        chess::board::Board,
+        evaluation::{mate_in, mated_in},
         nnue::network::NNUEParams,
+        searchinfo::SearchInfo,
         threadlocal::ThreadData,
-        timemgmt::TimeManager,
+        timemgmt::{SearchLimit, TimeManager},
         transpositiontable::TT,
         util::MEGABYTE,
     };

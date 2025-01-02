@@ -1,10 +1,12 @@
 use crate::{
-    board::movegen::attacks_by_type,
-    chessmove::Move,
+    chess::{
+        board::movegen::attacks_by_type,
+        chessmove::Move,
+        piece::{Piece, PieceType},
+        squareset::SquareSet,
+        types::Square,
+    },
     lookups::{PIECE_KEYS, SIDE_KEY},
-    piece::{Piece, PieceType},
-    squareset::SquareSet,
-    util::Square,
 };
 
 pub const KEYS: [u64; 8192] =
