@@ -54,7 +54,7 @@ use self::parameters::Config;
 
 const ASPIRATION_WINDOW: i32 = 6;
 const ASPIRATION_WINDOW_MIN_DEPTH: i32 = 5;
-const RFP_MARGIN: i32 = 73;
+const RFP_MARGIN: i32 = 65;
 const RFP_IMPROVING_MARGIN: i32 = 58;
 const NMP_IMPROVING_MARGIN: i32 = 73;
 const NMP_REDUCTION_DEPTH_DIVISOR: i32 = 3;
