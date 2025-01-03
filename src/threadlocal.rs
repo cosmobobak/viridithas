@@ -1,12 +1,10 @@
 use std::array;
 
 use crate::{
-    chess::board::Board,
-    chess::chessmove::Move,
-    chess::piece::Colour,
+    chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
         CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
-        ThreatsHistoryTable,
+        PawnHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -27,6 +25,7 @@ pub struct ThreadData<'a> {
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
     pub continuation_history: Box<DoubleHistoryTable>,
+    pub pawn_history: Box<PawnHistoryTable>,
     pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
     pub counter_move_table: MoveTable,
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
@@ -65,6 +64,7 @@ impl<'a> ThreadData<'a> {
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
             continuation_history: DoubleHistoryTable::boxed(),
+            pawn_history: PawnHistoryTable::boxed(),
             killer_move_table: [[None; 2]; MAX_PLY + 1],
             counter_move_table: MoveTable::new(),
             pawn_corrhist: CorrectionHistoryTable::boxed(),
@@ -117,6 +117,7 @@ impl<'a> ThreadData<'a> {
         self.main_history.clear();
         self.tactical_history.clear();
         self.continuation_history.clear();
+        self.pawn_history.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
@@ -133,6 +134,7 @@ impl<'a> ThreadData<'a> {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
+        self.pawn_history.age_entries();
         self.killer_move_table.fill([None; 2]);
         self.counter_move_table.clear();
         self.depth = 0;

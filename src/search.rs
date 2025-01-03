@@ -818,13 +818,14 @@ impl Board {
                         // add to the history of a quiet move that fails high here.
                         if hit.value >= beta && !self.is_tactical(mov) && self.is_pseudo_legal(mov)
                         {
+                            let pawn_key = self.pawn_key();
                             let from = mov.from();
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
                             let delta = history_bonus(depth);
                             self.update_quiet_history_single::<false>(
-                                t, from, to, moved, threats, delta,
+                                t, pawn_key, from, to, moved, threats, delta,
                             );
                         }
                     }
@@ -1180,6 +1181,7 @@ impl Board {
                 stat_score += t.get_continuation_history_score(self, m, 0);
                 stat_score += t.get_continuation_history_score(self, m, 1);
                 // stat_score += t.get_continuation_history_score(self, m, 3);
+                stat_score += t.get_pawn_history_score(self, m);
             } else {
                 stat_score += t.get_tactical_history_score(self, m);
             }
@@ -1530,6 +1532,7 @@ impl Board {
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
+        t.update_pawn_history(self, moves_to_adjust, best_move, depth);
     }
 
     /// Update the main and continuation history tables for a single move.
@@ -1537,6 +1540,7 @@ impl Board {
     fn update_quiet_history_single<const MADE: bool>(
         &self,
         t: &mut ThreadData,
+        pawn_key: u64,
         from: Square,
         to: Square,
         moved: Piece,
@@ -1547,6 +1551,7 @@ impl Board {
         t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
         t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
         // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
+        t.update_pawn_history_single(pawn_key, to, moved, delta);
     }
 
     /// Update the tactical history table.

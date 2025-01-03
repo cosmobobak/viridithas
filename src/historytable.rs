@@ -18,6 +18,7 @@ pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
 pub const CORRECTION_HISTORY_WEIGHT_SCALE: i32 = 256;
 pub const CORRECTION_HISTORY_MAX: i32 = CORRECTION_HISTORY_GRAIN * 32;
+pub const PAWN_HISTORY_SIZE: usize = 512;
 
 pub fn update_history(val: &mut i16, delta: i32) {
     #![allow(clippy::cast_possible_truncation)]
@@ -187,6 +188,47 @@ impl DoubleHistoryTable {
 
     pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
         &self.table[index.piece][index.square]
+    }
+}
+
+#[repr(transparent)]
+pub struct PawnHistoryTable {
+    table: [HistoryTable; PAWN_HISTORY_SIZE],
+}
+
+impl PawnHistoryTable {
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.table.iter_mut().for_each(HistoryTable::clear);
+    }
+
+    pub fn age_entries(&mut self) {
+        debug_assert!(!self.table.is_empty());
+        self.table.iter_mut().for_each(HistoryTable::age_entries);
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn get(&self, key: u64) -> &HistoryTable {
+        &self.table[(key & (PAWN_HISTORY_SIZE as u64 - 1)) as usize]
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_mut(&mut self, key: u64) -> &mut HistoryTable {
+        &mut self.table[(key & (PAWN_HISTORY_SIZE as u64 - 1)) as usize]
     }
 }
 

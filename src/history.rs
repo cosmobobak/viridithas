@@ -2,7 +2,11 @@ use std::sync::atomic::Ordering;
 
 use crate::{
     chess::{
-        chessmove::Move, piece::{Colour, Piece, PieceType}, squareset::SquareSet, types::{Square, Undo}, CHESS960
+        chessmove::Move,
+        piece::{Colour, Piece, PieceType},
+        squareset::SquareSet,
+        types::{Square, Undo},
+        CHESS960,
     },
     historytable::{
         history_bonus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
@@ -91,6 +95,67 @@ impl ThreadData<'_> {
             pos.threats().all.contains_square(from),
             pos.threats().all.contains_square(to),
         ))
+    }
+
+    /// Update the pawn history counters of a batch of moves.
+    pub fn update_pawn_history(
+        &mut self,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: i32,
+    ) {
+        let pawn_key = pos.pawn_key();
+        let sub_table = self.pawn_history.get_mut(pawn_key);
+        for &m in moves_to_adjust {
+            let piece_moved = pos.moved_piece(m);
+            debug_assert!(
+                piece_moved.is_some(),
+                "Invalid piece moved by move {} in position \n{pos:X}",
+                m.display(CHESS960.load(Ordering::Relaxed))
+            );
+            let to = m.to();
+            let val = sub_table.get_mut(piece_moved.unwrap(), to);
+            let delta = if m == best_move {
+                history_bonus(depth)
+            } else {
+                -history_bonus(depth)
+            };
+            update_history(val, delta);
+        }
+    }
+
+    /// Update the pawn history counter for a single move.
+    pub fn update_pawn_history_single(
+        &mut self,
+        pawn_key: u64,
+        to: Square,
+        moved: Piece,
+        delta: i32,
+    ) {
+        let sub_table = self.pawn_history.get_mut(pawn_key);
+        let val = sub_table.get_mut(moved, to);
+        update_history(val, delta);
+    }
+
+    /// Get the pawn history scores for a batch of moves.
+    pub(super) fn get_pawn_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        let pawn_key = pos.pawn_key();
+        let sub_table = self.pawn_history.get(pawn_key);
+        for m in ms {
+            let piece_moved = pos.moved_piece(m.mov);
+            let to = m.mov.to();
+            m.score += i32::from(sub_table.get(piece_moved.unwrap(), to));
+        }
+    }
+
+    /// Get the pawn history score for a single move.
+    pub fn get_pawn_history_score(&self, pos: &Board, m: Move) -> i32 {
+        let pawn_key = pos.pawn_key();
+        let sub_table = self.pawn_history.get(pawn_key);
+        let piece_moved = pos.moved_piece(m);
+        let to = m.to();
+        i32::from(sub_table.get(piece_moved.unwrap(), to))
     }
 
     /// Update the tactical history counters of a batch of moves.
