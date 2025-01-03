@@ -1384,6 +1384,17 @@ impl Board {
                             !cut_node,
                         );
                     }
+                    if is_quiet {
+                        let bonus = if score > alpha {
+                            history_bonus(depth)
+                        } else {
+                            -history_bonus(depth)
+                        };
+                        let to = m.to();
+                        let moved = self.piece_at(m.history_to_square()).unwrap();
+                        t.update_continuation_history_single(self, to, moved, bonus, 0);
+                        t.update_continuation_history_single(self, to, moved, bonus, 1);
+                    }
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
