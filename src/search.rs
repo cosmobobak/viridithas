@@ -68,12 +68,21 @@ const PROBCUT_IMPROVING_MARGIN: i32 = 53;
 const DOUBLE_EXTENSION_MARGIN: i32 = 15;
 const LMR_BASE: f64 = 75.0;
 const LMR_DIVISION: f64 = 231.0;
-const HISTORY_LMR_DIVISOR: i32 = 12000;
 const QS_SEE_BOUND: i32 = -108;
 const MAIN_SEE_BOUND: i32 = 0;
 const DO_DEEPER_BASE_MARGIN: i32 = 64;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
 const HISTORY_PRUNING_MARGIN: i32 = -2500;
+const QS_FUTILITY: i32 = 150;
+const SEE_STAT_SCORE_MUL: i32 = 32;
+
+const HISTORY_LMR_DIVISOR: i32 = 12000;
+const LMR_REFUTATION_MUL: i32 = 1024;
+const LMR_NON_PV_MUL: i32 = 1024;
+const LMR_TTPV_MUL: i32 = 1024;
+const LMR_CUT_NODE_MUL: i32 = 1024;
+const LMR_NON_IMPROVING_MUL: i32 = 1024;
+const LMR_TT_CAPTURE_MUL: i32 = 1024;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
@@ -628,7 +637,7 @@ impl Board {
         );
         move_picker.skip_quiets = !in_check;
 
-        let futility = stand_pat + 150;
+        let futility = stand_pat + info.conf.qs_futility;
 
         while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
             let is_tactical = self.is_tactical(m);
@@ -1206,7 +1215,7 @@ impl Board {
                 && depth <= 9
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score / 32)
+                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score * info.conf.see_stat_score_mul / 1024)
             {
                 continue;
             }
@@ -1311,22 +1320,23 @@ impl Board {
                 let r = if depth >= 3
                     && moves_made >= (2 + usize::from(NT::PV))
                 {
-                    let mut r = info.lm_table.lm_reduction(depth, moves_made);
+                    let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= stat_score / info.conf.history_lmr_divisor;
+                        r -= stat_score / info.conf.history_lmr_divisor * 1024;
                         // reduce refutation moves less
-                        r -= i32::from(killer_or_counter);
+                        r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
                         // reduce more on non-PV nodes
-                        r += i32::from(!NT::PV) - i32::from(t.ss[height].ttpv);
+                        r += i32::from(!NT::PV) * info.conf.lmr_non_pv_mul;
+                        r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
                         // reduce more on cut nodes
-                        r += i32::from(cut_node);
+                        r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
                         // reduce more if not improving
-                        r += i32::from(!improving);
+                        r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
                         // reduce more if the move from the transposition table is tactical
-                        r += i32::from(tt_capture);
+                        r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
                     }
-                    r.clamp(1, depth - 1)
+                    (r / 1024).clamp(1, depth - 1)
                 } else {
                     1
                 };

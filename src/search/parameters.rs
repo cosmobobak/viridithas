@@ -13,7 +13,14 @@ use super::{
     NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR,
     PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
     QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1,
-    RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN,
+    RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, QS_FUTILITY, SEE_STAT_SCORE_MUL,
+
+    LMR_REFUTATION_MUL,
+    LMR_NON_PV_MUL,
+    LMR_TTPV_MUL,
+    LMR_CUT_NODE_MUL,
+    LMR_NON_IMPROVING_MUL,
+    LMR_TT_CAPTURE_MUL,
 };
 
 #[derive(Clone, Debug)]
@@ -48,6 +55,14 @@ pub struct Config {
     pub do_deeper_base_margin: i32,
     pub do_deeper_depth_margin: i32,
     pub history_pruning_margin: i32,
+    pub qs_futility: i32,
+    pub see_stat_score_mul: i32,
+    pub lmr_refutation_mul: i32,
+    pub lmr_non_pv_mul: i32,
+    pub lmr_ttpv_mul: i32,
+    pub lmr_cut_node_mul: i32,
+    pub lmr_non_improving_mul: i32,
+    pub lmr_tt_capture_mul: i32,
 }
 
 impl Config {
@@ -83,6 +98,14 @@ impl Config {
             do_deeper_base_margin: DO_DEEPER_BASE_MARGIN,
             do_deeper_depth_margin: DO_DEEPER_DEPTH_MARGIN,
             history_pruning_margin: HISTORY_PRUNING_MARGIN,
+            qs_futility: QS_FUTILITY,
+            see_stat_score_mul: SEE_STAT_SCORE_MUL,
+            lmr_refutation_mul: LMR_REFUTATION_MUL,
+            lmr_non_pv_mul: LMR_NON_PV_MUL,
+            lmr_ttpv_mul: LMR_TTPV_MUL,
+            lmr_cut_node_mul: LMR_CUT_NODE_MUL,
+            lmr_non_improving_mul: LMR_NON_IMPROVING_MUL,
+            lmr_tt_capture_mul: LMR_TT_CAPTURE_MUL,
         }
     }
 }
@@ -156,7 +179,15 @@ impl Config {
             MAIN_SEE_BOUND = [self.main_see_bound],
             DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin],
             DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin],
-            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin]
+            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin],
+            QS_FUTILITY = [self.qs_futility],
+            SEE_STAT_SCORE_MUL = [self.see_stat_score_mul],
+            LMR_REFUTATION_MUL = [self.lmr_refutation_mul],
+            LMR_NON_PV_MUL = [self.lmr_non_pv_mul],
+            LMR_TTPV_MUL = [self.lmr_ttpv_mul],
+            LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul],
+            LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul],
+            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul]
         ]
     }
 
@@ -200,7 +231,15 @@ impl Config {
             MAIN_SEE_BOUND = [self.main_see_bound, -500, 500, 50],
             DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin, 1, 200, 20],
             DO_DEEPER_DEPTH_MARGIN = [self.do_deeper_depth_margin, 1, 50, 2],
-            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin, -5000, 1000, 500]
+            HISTORY_PRUNING_MARGIN = [self.history_pruning_margin, -5000, 1000, 500],
+            QS_FUTILITY = [self.qs_futility, -500, 500, 25],
+            SEE_STAT_SCORE_MUL = [self.see_stat_score_mul, 1, 100, 5],
+            LMR_REFUTATION_MUL = [self.lmr_refutation_mul, 1, 4096, 96],
+            LMR_NON_PV_MUL = [self.lmr_non_pv_mul, 1, 4096, 96],
+            LMR_TTPV_MUL = [self.lmr_ttpv_mul, 1, 4096, 96],
+            LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul, 1, 4096, 96],
+            LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul, 1, 4096, 96],
+            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul, 1, 4096, 96]
         ]
     }
 
