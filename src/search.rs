@@ -53,44 +53,26 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_WINDOW: i32 = 6;
-const ASPIRATION_WINDOW_MIN_DEPTH: i32 = 5;
 const RFP_MARGIN: i32 = 73;
 const RFP_IMPROVING_MARGIN: i32 = 58;
 const NMP_IMPROVING_MARGIN: i32 = 73;
-const NMP_REDUCTION_DEPTH_DIVISOR: i32 = 3;
 const NMP_REDUCTION_EVAL_DIVISOR: i32 = 200;
-const MAX_NMP_EVAL_REDUCTION: i32 = 4;
 const SEE_QUIET_MARGIN: i32 = -59;
 const SEE_TACTICAL_MARGIN: i32 = -21;
-const LMP_BASE_MOVES: i32 = 2;
 const FUTILITY_COEFF_0: i32 = 77;
 const FUTILITY_COEFF_1: i32 = 86;
 const RAZORING_COEFF_0: i32 = 392;
 const RAZORING_COEFF_1: i32 = 267;
 const PROBCUT_MARGIN: i32 = 203;
 const PROBCUT_IMPROVING_MARGIN: i32 = 53;
-const RFP_DEPTH: i32 = 8;
-const NMP_BASE_REDUCTION: i32 = 4;
-const NMP_VERIFICATION_DEPTH: i32 = 12;
-const LMP_DEPTH: i32 = 8;
-const TT_REDUCTION_DEPTH: i32 = 4;
-const TT_EXTENSION_DEPTH: i32 = 7;
-const FUTILITY_DEPTH: i32 = 6;
-const SINGULARITY_DEPTH: i32 = 8;
 const DOUBLE_EXTENSION_MARGIN: i32 = 15;
-const SEE_DEPTH: i32 = 9;
-const PROBCUT_MIN_DEPTH: i32 = 5;
-const PROBCUT_REDUCTION: i32 = 3;
-const LMR_BASE_MOVES: u32 = 2;
 const LMR_BASE: f64 = 75.0;
 const LMR_DIVISION: f64 = 231.0;
-const HISTORY_LMR_BOUND: i32 = 1;
 const HISTORY_LMR_DIVISOR: i32 = 12000;
 const QS_SEE_BOUND: i32 = -108;
 const MAIN_SEE_BOUND: i32 = 0;
 const DO_DEEPER_BASE_MARGIN: i32 = 64;
 const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
-const HISTORY_PRUNING_DEPTH: i32 = 7;
 const HISTORY_PRUNING_MARGIN: i32 = -2500;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
@@ -336,7 +318,7 @@ impl Board {
                 break 'deepening;
             };
 
-            if depth > ASPIRATION_WINDOW_MIN_DEPTH {
+            if depth > 5 {
                 aw = AspirationWindow::around_value(average_value, depth);
             } else {
                 aw = AspirationWindow::infinite();
@@ -977,7 +959,7 @@ impl Board {
             // if the static eval is too high, we can prune the node.
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
-                && depth <= info.conf.rfp_depth
+                && depth <= 8
                 && static_eval - Self::rfp_margin(info, depth, improving) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
@@ -999,11 +981,11 @@ impl Board {
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
             {
                 t.tt.prefetch(self.key_after_null_move());
-                let r = info.conf.nmp_base_reduction
-                    + depth / info.conf.nmp_reduction_depth_divisor
+                let r = 4
+                    + depth / 3
                     + std::cmp::min(
                         (static_eval - beta) / info.conf.nmp_reduction_eval_divisor,
-                        info.conf.max_nmp_eval_reduction,
+                        4,
                     );
                 let nm_depth = depth - r;
                 t.ss[height].searching = None;
@@ -1020,7 +1002,7 @@ impl Board {
                         null_score = beta;
                     }
                     // unconditionally cutoff if we're just too shallow.
-                    if depth < info.conf.nmp_verification_depth && !is_game_theoretic_score(beta) {
+                    if depth < 12 && !is_game_theoretic_score(beta) {
                         return null_score;
                     }
                     // verify that it's *actually* fine to prune,
@@ -1041,7 +1023,7 @@ impl Board {
 
         // TT-reduction (IIR).
         if NT::PV && tt_hit.map_or(true, |tte| tte.depth + 4 <= depth) {
-            depth -= i32::from(depth >= info.conf.tt_reduction_depth);
+            depth -= i32::from(depth >= 4);
         }
 
         // cutnode-based TT reduction.
@@ -1049,7 +1031,7 @@ impl Board {
             && excluded.is_none()
             && (tt_move.is_none() || tt_hit.map_or(true, |tte| tte.depth + 4 <= depth))
         {
-            depth -= i32::from(depth >= info.conf.tt_reduction_depth * 2);
+            depth -= i32::from(depth >= 8);
         }
 
         // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
@@ -1084,7 +1066,7 @@ impl Board {
         if !NT::PV
             && !in_check
             && excluded.is_none()
-            && depth >= info.conf.probcut_min_depth
+            && depth >= 5
             && !is_game_theoretic_score(beta)
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
@@ -1116,7 +1098,7 @@ impl Board {
                 let mut value = -self.quiescence::<OffPV>(l_pv, info, t, -pc_beta, -pc_beta + 1);
 
                 if value >= pc_beta {
-                    let pc_depth = depth - info.conf.probcut_reduction;
+                    let pc_depth = depth - 3;
                     value = -self.alpha_beta::<OffPV>(
                         l_pv,
                         info,
@@ -1190,7 +1172,7 @@ impl Board {
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= info.conf.lmp_depth && moves_made >= lmp_threshold {
+                if lmr_depth <= 8 && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
@@ -1198,7 +1180,7 @@ impl Board {
                 // if this move's history score is too low, we start skipping moves.
                 if is_quiet
                     && !killer_or_counter
-                    && lmr_depth < info.conf.history_pruning_depth
+                    && lmr_depth < 7
                     && stat_score < info.conf.history_pruning_margin * (depth - 1)
                 {
                     move_picker.skip_quiets = true;
@@ -1209,7 +1191,7 @@ impl Board {
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
                 if is_quiet
-                    && lmr_depth < info.conf.futility_depth
+                    && lmr_depth < 6
                     && static_eval + fp_margin <= alpha
                 {
                     move_picker.skip_quiets = true;
@@ -1221,7 +1203,7 @@ impl Board {
             if !NT::ROOT
                 && (!NT::PV || !cfg!(feature = "datagen"))
                 && best_score > -MINIMUM_TB_WIN_SCORE
-                && depth <= info.conf.see_depth
+                && depth <= 9
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
                 && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score / 32)
@@ -1246,7 +1228,7 @@ impl Board {
             info.nodes.increment();
             moves_made += 1;
 
-            let maybe_singular = depth >= info.conf.singularity_depth
+            let maybe_singular = depth >= 8
                 && excluded.is_none()
                 && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == Some(m) && tt_depth >= depth - 3);
 
@@ -1327,7 +1309,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if depth >= 3
-                    && moves_made >= (info.conf.lmr_base_moves as usize + usize::from(NT::PV))
+                    && moves_made >= (2 + usize::from(NT::PV))
                 {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
