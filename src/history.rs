@@ -2,12 +2,17 @@ use std::sync::atomic::Ordering;
 
 use crate::{
     chess::{
-        chessmove::Move, piece::{Colour, Piece, PieceType}, squareset::SquareSet, types::{Square, Undo}, CHESS960
+        chessmove::Move,
+        piece::{Colour, Piece, PieceType},
+        squareset::SquareSet,
+        types::{Square, Undo},
+        CHESS960,
     },
     historytable::{
-        history_bonus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
-        CORRECTION_HISTORY_WEIGHT_SCALE,
+        history_bonus, history_malus, update_history, CORRECTION_HISTORY_GRAIN,
+        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
     },
+    search::parameters::Config,
     threadlocal::ThreadData,
     util::MAX_PLY,
 };
@@ -18,6 +23,7 @@ impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -39,9 +45,9 @@ impl ThreadData<'_> {
                 pos.threats().all.contains_square(to),
             );
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -96,6 +102,7 @@ impl ThreadData<'_> {
     /// Update the tactical history counters of a batch of moves.
     pub fn update_tactical_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -114,9 +121,9 @@ impl ThreadData<'_> {
                 .tactical_history
                 .get_mut(piece_moved.unwrap(), to, capture);
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -143,6 +150,7 @@ impl ThreadData<'_> {
     /// Update the continuation history counters of a batch of moves.
     pub fn update_continuation_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -175,9 +183,9 @@ impl ThreadData<'_> {
             let piece = pos.moved_piece(m).unwrap();
 
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(cmh_block.get_mut(piece, to), delta);
         }

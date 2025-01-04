@@ -84,6 +84,11 @@ const LMR_CUT_NODE_MUL: i32 = 1024;
 const LMR_NON_IMPROVING_MUL: i32 = 1024;
 const LMR_TT_CAPTURE_MUL: i32 = 1024;
 
+const HISTORY_BONUS_MUL: i32 = 200;
+const HISTORY_BONUS_OFFSET: i32 = 0;
+const HISTORY_MALUS_MUL: i32 = 200;
+const HISTORY_MALUS_OFFSET: i32 = 0;
+
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
@@ -813,7 +818,7 @@ impl Board {
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
-                            let delta = history_bonus(depth);
+                            let delta = history_bonus(&info.conf, depth);
                             self.update_quiet_history_single::<false>(
                                 t, from, to, moved, threats, delta,
                             );
@@ -1199,10 +1204,7 @@ impl Board {
                 // futility pruning
                 // if the static eval is too low, we start skipping moves.
                 let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
-                if is_quiet
-                    && lmr_depth < 6
-                    && static_eval + fp_margin <= alpha
-                {
+                if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
                     move_picker.skip_quiets = true;
                 }
             }
@@ -1215,7 +1217,11 @@ impl Board {
                 && depth <= 9
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
-                && !self.static_exchange_eval(m, see_table[usize::from(is_quiet)] - stat_score * info.conf.see_stat_score_mul / 1024)
+                && !self.static_exchange_eval(
+                    m,
+                    see_table[usize::from(is_quiet)]
+                        - stat_score * info.conf.see_stat_score_mul / 1024,
+                )
             {
                 continue;
             }
@@ -1317,9 +1323,7 @@ impl Board {
                     -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= 3
-                    && moves_made >= (2 + usize::from(NT::PV))
-                {
+                let r = if depth >= 3 && moves_made >= (2 + usize::from(NT::PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
@@ -1460,6 +1464,7 @@ impl Board {
                 // any issues.
                 let history_depth_boost = i32::from(static_eval <= alpha);
                 self.update_quiet_history(
+                    &info.conf,
                     t,
                     quiets_tried.as_slice(),
                     best_move,
@@ -1471,7 +1476,13 @@ impl Board {
             // because tactical moves ought to be good in any position,
             // so it's good to decrease tactical history scores even
             // when the best move was non-tactical.
-            self.update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
+            self.update_tactical_history(
+                &info.conf,
+                t,
+                tacticals_tried.as_slice(),
+                best_move,
+                depth,
+            );
         }
 
         if excluded.is_none() {
@@ -1513,14 +1524,15 @@ impl Board {
     /// Update the main and continuation history tables for a batch of moves.
     fn update_quiet_history(
         &self,
+        conf: &Config,
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
     ) {
-        t.update_history(self, moves_to_adjust, best_move, depth);
-        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 0);
-        t.update_continuation_history(self, moves_to_adjust, best_move, depth, 1);
+        t.update_history(conf, self, moves_to_adjust, best_move, depth);
+        t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 0);
+        t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
     }
 
@@ -1544,12 +1556,13 @@ impl Board {
     /// Update the tactical history table.
     fn update_tactical_history(
         &self,
+        conf: &Config,
         t: &mut ThreadData,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
     ) {
-        t.update_tactical_history(self, moves_to_adjust, best_move, depth);
+        t.update_tactical_history(conf, self, moves_to_adjust, best_move, depth);
     }
 
     /// The reduced beta margin for Singular Extension.

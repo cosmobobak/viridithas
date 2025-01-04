@@ -7,20 +7,13 @@ use crate::timemgmt::{
 
 use super::{
     ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN,
-    FUTILITY_COEFF_0, FUTILITY_COEFF_1, HISTORY_LMR_DIVISOR,
-    HISTORY_PRUNING_MARGIN, LMR_BASE,
-    LMR_DIVISION, MAIN_SEE_BOUND,
-    NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR,
-    PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
-    QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1,
-    RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_TACTICAL_MARGIN, QS_FUTILITY, SEE_STAT_SCORE_MUL,
-
-    LMR_REFUTATION_MUL,
-    LMR_NON_PV_MUL,
-    LMR_TTPV_MUL,
-    LMR_CUT_NODE_MUL,
-    LMR_NON_IMPROVING_MUL,
-    LMR_TT_CAPTURE_MUL,
+    FUTILITY_COEFF_0, FUTILITY_COEFF_1, HISTORY_BONUS_MUL, HISTORY_BONUS_OFFSET,
+    HISTORY_LMR_DIVISOR, HISTORY_MALUS_MUL, HISTORY_MALUS_OFFSET, HISTORY_PRUNING_MARGIN, LMR_BASE,
+    LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL,
+    LMR_TTPV_MUL, LMR_TT_CAPTURE_MUL, MAIN_SEE_BOUND, NMP_IMPROVING_MARGIN,
+    NMP_REDUCTION_EVAL_DIVISOR, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, QS_FUTILITY,
+    QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN,
+    SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN,
 };
 
 #[derive(Clone, Debug)]
@@ -63,6 +56,10 @@ pub struct Config {
     pub lmr_cut_node_mul: i32,
     pub lmr_non_improving_mul: i32,
     pub lmr_tt_capture_mul: i32,
+    pub history_bonus_mul: i32,
+    pub history_bonus_offset: i32,
+    pub history_malus_mul: i32,
+    pub history_malus_offset: i32,
 }
 
 impl Config {
@@ -106,6 +103,10 @@ impl Config {
             lmr_cut_node_mul: LMR_CUT_NODE_MUL,
             lmr_non_improving_mul: LMR_NON_IMPROVING_MUL,
             lmr_tt_capture_mul: LMR_TT_CAPTURE_MUL,
+            history_bonus_mul: HISTORY_BONUS_MUL,
+            history_bonus_offset: HISTORY_BONUS_OFFSET,
+            history_malus_mul: HISTORY_MALUS_MUL,
+            history_malus_offset: HISTORY_MALUS_OFFSET,
         }
     }
 }
@@ -187,7 +188,11 @@ impl Config {
             LMR_TTPV_MUL = [self.lmr_ttpv_mul],
             LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul],
             LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul],
-            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul]
+            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul],
+            HISTORY_BONUS_MUL = [self.history_bonus_mul],
+            HISTORY_BONUS_OFFSET = [self.history_bonus_offset],
+            HISTORY_MALUS_MUL = [self.history_malus_mul],
+            HISTORY_MALUS_OFFSET = [self.history_malus_offset]
         ]
     }
 
@@ -239,7 +244,11 @@ impl Config {
             LMR_TTPV_MUL = [self.lmr_ttpv_mul, 1, 4096, 96],
             LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul, 1, 4096, 96],
             LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul, 1, 4096, 96],
-            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul, 1, 4096, 96]
+            LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul, 1, 4096, 96],
+            HISTORY_BONUS_MUL = [self.history_bonus_mul, 1, 1500, 20],
+            HISTORY_BONUS_OFFSET = [self.history_bonus_offset, -500, 500, 20],
+            HISTORY_MALUS_MUL = [self.history_malus_mul, 1, 1500, 20],
+            HISTORY_MALUS_OFFSET = [self.history_malus_offset, -500, 500, 20]
         ]
     }
 
