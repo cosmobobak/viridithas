@@ -13,13 +13,13 @@ const AGEING_DIVISOR: i16 = 2;
 pub fn history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
         conf.history_bonus_mul * depth + conf.history_bonus_offset,
-        1600,
+        conf.history_bonus_max,
     )
 }
 pub fn history_malus(conf: &Config, depth: i32) -> i32 {
     i32::min(
         conf.history_malus_mul * depth + conf.history_malus_offset,
-        1600,
+        conf.history_malus_max,
     )
 }
 
