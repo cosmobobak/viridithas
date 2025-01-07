@@ -92,6 +92,11 @@ const HISTORY_MALUS_MUL: i32 = 200;
 const HISTORY_MALUS_OFFSET: i32 = 0;
 const HISTORY_MALUS_MAX: i32 = 1600;
 
+const PAWN_CORRHIST_WEIGHT: i32 = 1024;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1024;
+const MINOR_CORRHIST_WEIGHT: i32 = 1024;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1024;
+
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
@@ -590,7 +595,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = t.correct_evaluation(self, raw_eval);
+            let adj_eval = raw_eval + t.correct_evaluation(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -620,7 +625,7 @@ impl Board {
                 0,
                 t.ss[height].ttpv,
             );
-            stand_pat = t.correct_evaluation(self, raw_eval);
+            stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
         if stand_pat >= beta {
@@ -921,11 +926,11 @@ impl Board {
                     t.nnue.hint_common_access(self, t.nnue_params);
                 }
             }
-            static_eval = t.correct_evaluation(self, raw_eval);
+            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info.nodes.get_local());
-            static_eval = t.correct_evaluation(self, raw_eval);
+            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
         t.ss[height].eval = static_eval;

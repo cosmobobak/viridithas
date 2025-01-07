@@ -377,7 +377,7 @@ impl ThreadData<'_> {
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
+    pub fn correct_evaluation(&self, conf: &Config, pos: &Board) -> i32 {
         let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
         let white =
             self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
@@ -385,8 +385,11 @@ impl ThreadData<'_> {
             self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let adjustment = pawn + major + minor + white + black;
-        raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
+        let adjustment = pawn * i64::from(conf.pawn_corrhist_weight)
+            + major * i64::from(conf.major_corrhist_weight)
+            + minor * i64::from(conf.minor_corrhist_weight)
+            + (white + black) * i64::from(conf.nonpawn_corrhist_weight);
+        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
 
