@@ -11,7 +11,8 @@ use super::{
     HISTORY_LMR_DIVISOR, HISTORY_MALUS_MAX, HISTORY_MALUS_MUL, HISTORY_MALUS_OFFSET,
     HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL,
     LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL, LMR_TT_CAPTURE_MUL, MAIN_SEE_BOUND,
-    NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
+    MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR,
+    NONPAWN_CORRHIST_WEIGHT, PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
     QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN,
     RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN,
 };
@@ -62,6 +63,10 @@ pub struct Config {
     pub history_malus_mul: i32,
     pub history_malus_offset: i32,
     pub history_malus_max: i32,
+    pub pawn_corrhist_weight: i32,
+    pub major_corrhist_weight: i32,
+    pub minor_corrhist_weight: i32,
+    pub nonpawn_corrhist_weight: i32,
 }
 
 impl Config {
@@ -111,6 +116,10 @@ impl Config {
             history_malus_mul: HISTORY_MALUS_MUL,
             history_malus_offset: HISTORY_MALUS_OFFSET,
             history_malus_max: HISTORY_MALUS_MAX,
+            pawn_corrhist_weight: PAWN_CORRHIST_WEIGHT,
+            major_corrhist_weight: MAJOR_CORRHIST_WEIGHT,
+            minor_corrhist_weight: MINOR_CORRHIST_WEIGHT,
+            nonpawn_corrhist_weight: NONPAWN_CORRHIST_WEIGHT,
         }
     }
 }
@@ -198,7 +207,11 @@ impl Config {
             HISTORY_BONUS_MAX = [self.history_bonus_max],
             HISTORY_MALUS_MUL = [self.history_malus_mul],
             HISTORY_MALUS_OFFSET = [self.history_malus_offset],
-            HISTORY_MALUS_MAX = [self.history_malus_max]
+            HISTORY_MALUS_MAX = [self.history_malus_max],
+            PAWN_CORRHIST_WEIGHT = [self.pawn_corrhist_weight],
+            MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight],
+            MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight],
+            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight]
         ]
     }
 
@@ -256,7 +269,11 @@ impl Config {
             HISTORY_BONUS_MAX = [self.history_bonus_max, 1, 4096, 256],
             HISTORY_MALUS_MUL = [self.history_malus_mul, 1, 1500, 32],
             HISTORY_MALUS_OFFSET = [self.history_malus_offset, -1024, 1024, 64],
-            HISTORY_MALUS_MAX = [self.history_malus_max, 1, 4096, 256]
+            HISTORY_MALUS_MAX = [self.history_malus_max, 1, 4096, 256],
+            PAWN_CORRHIST_WEIGHT = [self.pawn_corrhist_weight, 1, 4096, 144],
+            MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight, 1, 4096, 144],
+            MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight, 1, 4096, 144],
+            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight, 1, 4096, 144]
         ]
     }
 
