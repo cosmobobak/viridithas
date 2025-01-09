@@ -58,6 +58,7 @@ impl<'a> SearchInfo<'a> {
     pub fn new(stopped: &'a AtomicBool, nodes: &'a AtomicU64) -> Self {
         let out = Self {
             nodes: BatchedAtomicCounter::new(nodes),
+            #[allow(clippy::large_stack_arrays)]
             root_move_nodes: [[0; 64]; 64],
             stopped,
             seldepth: 0,

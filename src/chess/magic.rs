@@ -214,13 +214,13 @@ const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet 
 
 fn find_magic(square: Square, relevant_bits: i32, is_bishop: bool) -> u64 {
     // occupancies array
-    let mut occupancies = [SquareSet::EMPTY; 4096];
+    let mut occupancies = vec![SquareSet::EMPTY; 4096];
 
     // attacks array
-    let mut attacks = [SquareSet::EMPTY; 4096];
+    let mut attacks = vec![SquareSet::EMPTY; 4096];
 
     // used indices array
-    let mut used_indices = [SquareSet::EMPTY; 4096];
+    let mut used_indices = vec![SquareSet::EMPTY; 4096];
 
     // mask piece attack
     let mask_attack = if is_bishop {

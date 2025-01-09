@@ -572,7 +572,7 @@ impl Board {
             None
         };
 
-        t.ss[height].ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+        t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
 
         let raw_eval;
         let stand_pat;
@@ -841,7 +841,7 @@ impl Board {
         };
 
         if excluded.is_none() {
-            t.ss[height].ttpv = NT::PV || tt_hit.map_or(false, |hit| hit.was_pv);
+            t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
         }
 
         // Probe the tablebases.
