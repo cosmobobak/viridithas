@@ -256,8 +256,9 @@ impl UnquantisedNetwork {
         // quantise the feature transformer weights, and merge the feature factoriser in.
         let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
         let factoriser = buckets.next().unwrap();
-        for (bucket_idx, (src_bucket, tgt_bucket)) in
-            buckets.zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE)).enumerate()
+        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
+            .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .enumerate()
         {
             // for repermuting the weights.
             let mut things_written = 0;
@@ -272,8 +273,10 @@ impl UnquantisedNetwork {
                     if !in_bucket && piece == Piece::WK {
                         continue;
                     }
-                    let i = feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
-                    let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece }).index();
+                    let i =
+                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
+                    let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
+                        .index();
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];

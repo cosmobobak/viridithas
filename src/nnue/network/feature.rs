@@ -34,7 +34,8 @@ pub fn index(colour: Colour, king: Square, f: FeatureUpdate) -> FeatureIndex {
     .relative_to(colour);
 
     let piece_type = f.piece.piece_type().index();
-    let colour = (f.piece.colour().index() ^ colour.index()) * usize::from(f.piece.piece_type() != PieceType::King);
+    let colour = (f.piece.colour().index() ^ colour.index())
+        * usize::from(f.piece.piece_type() != PieceType::King);
 
     let idx = colour * COLOUR_STRIDE + piece_type * PIECE_STRIDE + sq.index();
 
