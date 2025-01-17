@@ -4,13 +4,23 @@ use crate::{
         piece::{Colour, Piece, PieceType},
         types::{ContHistIndex, Square},
     },
+    search::parameters::Config,
     util::BOARD_N_SQUARES,
 };
 
 const AGEING_DIVISOR: i16 = 2;
 
-pub fn history_bonus(depth: i32) -> i32 {
-    i32::min(200 * depth, 1600)
+pub fn history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.history_bonus_mul * depth + conf.history_bonus_offset,
+        conf.history_bonus_max,
+    )
+}
+pub fn history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.history_malus_mul * depth + conf.history_malus_offset,
+        conf.history_malus_max,
+    )
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
