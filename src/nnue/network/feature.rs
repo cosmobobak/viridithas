@@ -12,7 +12,7 @@ use crate::{
 pub struct FeatureIndex(usize);
 
 impl FeatureIndex {
-    /// Invariant: the result of this function is less than the number of NNUE input features (768),
+    /// Invariant: the result of this function is less than the number of NNUE input features (704),
     /// so it can be used to index a row of the feature-transformer matrix without bounds checking.
     #[allow(clippy::inline_always)]
     #[must_use]
