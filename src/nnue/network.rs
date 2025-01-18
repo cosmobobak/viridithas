@@ -32,7 +32,7 @@ pub mod feature;
 pub mod layers;
 
 /// The size of the input layer of the network.
-pub const INPUT: usize = 768;
+pub const INPUT: usize = 11 * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -103,7 +103,7 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:   [f32; INPUT * L1_SIZE * (BUCKETS + 1)],
+    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + 1)],
     ft_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -254,21 +254,41 @@ impl UnquantisedNetwork {
 
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights, and merge the feature factoriser in.
-        let mut buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
+        let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
         let factoriser = buckets.next().unwrap();
-        for (src_bucket, tgt_bucket) in
-            buckets.zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
+        for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
+            .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
+            .enumerate()
         {
             // for repermuting the weights.
-            for ((src, fac_src), tgt) in src_bucket
-                .iter()
-                .zip(factoriser.iter())
-                .zip(tgt_bucket.iter_mut())
-            {
-                // extra clamp in case bucket + factoriser goes out of the clipping bounds
-                let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * f32::from(QA);
-                *tgt = scaled.round() as i16;
+            let mut things_written = 0;
+            for piece in Piece::all() {
+                for sq in Square::all() {
+                    // don't write black king data into the white king's slots
+                    let in_bucket = BUCKET_MAP[sq] == bucket_idx;
+                    if in_bucket && piece == Piece::BK {
+                        continue;
+                    }
+                    // don't write white king data into the black king's slots
+                    if !in_bucket && piece == Piece::WK {
+                        continue;
+                    }
+                    let i =
+                        feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
+                    let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
+                        .index();
+                    let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
+                    let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
+                    let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
+                    for ((src, fac_src), tgt) in src.iter().zip(fac_src).zip(tgt) {
+                        // extra clamp in case bucket + factoriser goes out of the clipping bounds
+                        let scaled = f32::clamp(*src + *fac_src, -1.98, 1.98) * f32::from(QA);
+                        *tgt = scaled.round() as i16;
+                    }
+                    things_written += 1;
+                }
             }
+            assert_eq!(INPUT, things_written);
         }
 
         // quantise the feature transformer biases
@@ -1280,14 +1300,18 @@ impl NNUEParams {
         for colour in Colour::all() {
             for piece_type in PieceType::all() {
                 for square in Square::all() {
-                    let feature_indices = feature::indices(
-                        Square::H1,
-                        Square::H8,
-                        FeatureUpdate {
+                    let feature_indices = {
+                        let white_king = Square::H1;
+                        let black_king = Square::H8;
+                        let f = FeatureUpdate {
                             sq: square,
                             piece: Piece::new(colour, piece_type),
-                        },
-                    );
+                        };
+                        [
+                            feature::index(Colour::White, white_king, f),
+                            feature::index(Colour::Black, black_king, f),
+                        ]
+                    };
                     let index = feature_indices[Colour::White].index() * L1_SIZE + starting_idx;
                     slice.push(self.feature_weights[index]);
                 }

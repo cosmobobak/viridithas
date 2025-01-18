@@ -49,7 +49,6 @@ impl<'a> ThreadData<'a> {
     const WHITE_BANNED_NMP: u8 = 0b01;
     const BLACK_BANNED_NMP: u8 = 0b10;
     const ARRAY_REPEAT_VALUE: PVariation = PVariation::default_const();
-    const EMPTY_PV_TABLE: [PVariation; MAX_PLY] = [Self::ARRAY_REPEAT_VALUE; MAX_PLY];
 
     pub fn new(
         thread_id: usize,
@@ -75,7 +74,8 @@ impl<'a> ThreadData<'a> {
             major_corrhist: CorrectionHistoryTable::boxed(),
             minor_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
-            pvs: Self::EMPTY_PV_TABLE,
+            #[allow(clippy::large_stack_arrays)]
+            pvs: [Self::ARRAY_REPEAT_VALUE; MAX_PLY],
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
@@ -126,7 +126,7 @@ impl<'a> ThreadData<'a> {
         self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
-        self.pvs = Self::EMPTY_PV_TABLE;
+        self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
     }
 
     pub fn set_up_for_search(&mut self, board: &Board) {
@@ -137,7 +137,7 @@ impl<'a> ThreadData<'a> {
         self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
-        self.pvs = Self::EMPTY_PV_TABLE;
+        self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
         self.nnue.reinit_from(board, self.nnue_params);
         self.stm_at_root = board.turn();
     }
