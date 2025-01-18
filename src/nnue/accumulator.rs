@@ -122,7 +122,7 @@ mod x86simd {
         let a_block;
         // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds,
-        // as FeatureIndex ranges in 0..768.
+        // as FeatureIndex ranges in 0..704.
         unsafe {
             s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + L1_SIZE));
             a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
@@ -157,7 +157,7 @@ mod x86simd {
         let s_block2;
         // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
-        // FeatureIndex ranges in 0..768.
+        // FeatureIndex ranges in 0..704.
         unsafe {
             a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
             s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + L1_SIZE));
@@ -198,7 +198,7 @@ mod x86simd {
         let s_block2;
         // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
-        // FeatureIndex ranges in 0..768.
+        // FeatureIndex ranges in 0..704.
         unsafe {
             a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + L1_SIZE));
             a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + L1_SIZE));
@@ -294,7 +294,7 @@ mod generic {
         let a_block;
         // SAFETY: offset_{add,sub} are multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds,
-        // as FeatureIndex ranges in 0..768.
+        // as FeatureIndex ranges in 0..704.
         unsafe {
             s_block = slice_to_aligned(bucket.get_unchecked(offset_sub..offset_sub + L1_SIZE));
             a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
@@ -329,7 +329,7 @@ mod generic {
         let s_block2;
         // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
-        // FeatureIndex ranges in 0..768.
+        // FeatureIndex ranges in 0..704.
         unsafe {
             a_block = slice_to_aligned(bucket.get_unchecked(offset_add..offset_add + L1_SIZE));
             s_block1 = slice_to_aligned(bucket.get_unchecked(offset_sub1..offset_sub1 + L1_SIZE));
@@ -370,7 +370,7 @@ mod generic {
         let s_block2;
         // SAFETY: offset_{add,sub}{1,2} are all multiples of LAYER_1_SIZE, and so are correctly-aligned.
         // additionally, as they originate from FeatureIndex, the L1-SIZE slices are all in bounds, as
-        // FeatureIndex ranges in 0..768.
+        // FeatureIndex ranges in 0..704.
         unsafe {
             a_block1 = slice_to_aligned(bucket.get_unchecked(offset_add1..offset_add1 + L1_SIZE));
             a_block2 = slice_to_aligned(bucket.get_unchecked(offset_add2..offset_add2 + L1_SIZE));
