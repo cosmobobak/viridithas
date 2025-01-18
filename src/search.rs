@@ -28,7 +28,7 @@ use crate::{
         is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
     },
-    historytable::history_bonus,
+    historytable::{history_bonus, history_malus},
     movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -1390,14 +1390,14 @@ impl Board {
                     }
                     if is_quiet {
                         let bonus = if score > alpha {
-                            history_bonus(depth)
+                            history_bonus(&info.conf, depth)
                         } else {
-                            -history_bonus(depth)
+                            -history_malus(&info.conf, depth)
                         };
-                        let to = m.to();
-                        let moved = self.piece_at(m.history_to_square()).unwrap();
-                        t.update_continuation_history_single(self, to, moved, bonus, 0);
+                        let to = m.history_to_square();
+                        let moved = self.piece_at(to).unwrap();
                         t.update_continuation_history_single(self, to, moved, bonus, 1);
+                        t.update_continuation_history_single(self, to, moved, bonus, 2);
                     }
                 }
                 // if we failed completely, then do full-window search
