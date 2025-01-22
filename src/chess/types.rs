@@ -27,17 +27,6 @@ pub enum File {
 const _FILE_ASSERT: () = assert!(size_of::<File>() == size_of::<Option<File>>());
 
 impl File {
-    pub const ALL: [Self; 8] = [
-        Self::A,
-        Self::B,
-        Self::C,
-        Self::D,
-        Self::E,
-        Self::F,
-        Self::G,
-        Self::H,
-    ];
-
     pub const fn abs_diff(self, other: Self) -> u8 {
         (self as u8).abs_diff(other as u8)
     }
@@ -58,6 +47,11 @@ impl File {
     pub const fn sub(self, diff: u8) -> Option<Self> {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
         Self::from_index((self as i8 - diff as i8) as u8)
+    }
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        // SAFETY: all values are within `0..64`.
+        (0..8u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 }
 
@@ -93,17 +87,6 @@ pub enum Rank {
 const _RANK_ASSERT: () = assert!(size_of::<Rank>() == size_of::<Option<Rank>>());
 
 impl Rank {
-    pub const ALL: [Self; 8] = [
-        Self::One,
-        Self::Two,
-        Self::Three,
-        Self::Four,
-        Self::Five,
-        Self::Six,
-        Self::Seven,
-        Self::Eight,
-    ];
-
     pub const fn abs_diff(self, other: Self) -> u8 {
         (self as u8).abs_diff(other as u8)
     }
@@ -124,6 +107,11 @@ impl Rank {
     pub const fn sub(self, diff: u8) -> Option<Self> {
         #![allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
         Self::from_index((self as i8 - diff as i8) as u8)
+    }
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        // SAFETY: all values are within `0..8`.
+        (0..8u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 }
 
@@ -353,7 +341,7 @@ impl Square {
     #[rustfmt::skip]
     pub const fn gt(self, other: Self) -> bool { self as u8 > other as u8  }
 
-    pub fn all() -> impl Iterator<Item = Self> {
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
         // SAFETY: all values are within `0..64`.
         (0..64u8).map(|i| unsafe { std::mem::transmute(i) })
     }

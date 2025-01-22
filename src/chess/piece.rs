@@ -110,8 +110,8 @@ impl Colour {
         self as u8
     }
 
-    pub fn all() -> impl Iterator<Item = Self> {
-        [Self::White, Self::Black].iter().copied()
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        [Self::White, Self::Black].into_iter()
     }
 }
 
@@ -148,8 +148,9 @@ impl PieceType {
         }
     }
 
-    pub const fn all() -> PieceTypesIterator {
-        PieceTypesIterator::new()
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        // SAFETY: all values are within `0..6`.
+        (0..6u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 
     pub const fn index(self) -> usize {
@@ -167,26 +168,6 @@ impl PieceType {
     pub fn see_value(self) -> i32 {
         const SEE_PIECE_VALUES: [i32; 6] = [161, 445, 463, 704, 1321, 0];
         SEE_PIECE_VALUES[self]
-    }
-}
-
-#[allow(clippy::module_name_repetitions)]
-pub struct PieceTypesIterator {
-    v: u8,
-}
-impl PieceTypesIterator {
-    const fn new() -> Self {
-        Self { v: 0 }
-    }
-}
-
-impl Iterator for PieceTypesIterator {
-    type Item = PieceType;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let v = self.v;
-        self.v += 1;
-        PieceType::new(v)
     }
 }
 
@@ -256,34 +237,14 @@ impl Piece {
         }
     }
 
-    #[allow(dead_code)]
-    pub const fn all() -> PiecesIterator {
-        PiecesIterator::new()
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        // SAFETY: all values are within `0..6`.
+        (0..12u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 
     #[allow(dead_code)]
     pub const fn inner(self) -> u8 {
         self as u8
-    }
-}
-
-pub struct PiecesIterator {
-    v: u8,
-}
-
-impl PiecesIterator {
-    const fn new() -> Self {
-        Self { v: 0 }
-    }
-}
-
-impl Iterator for PiecesIterator {
-    type Item = Piece;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let v = self.v;
-        self.v += 1;
-        Piece::from_index(v)
     }
 }
 

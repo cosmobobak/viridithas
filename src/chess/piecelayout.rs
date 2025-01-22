@@ -302,8 +302,8 @@ pub struct Threats {
 
 impl Display for PieceLayout {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for rank in Rank::ALL.into_iter().rev() {
-            for file in File::ALL {
+        for rank in Rank::all().rev() {
+            for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
                 if let Some(piece) = self.piece_at(sq) {
                     write!(f, " {}", piece.char())?;
