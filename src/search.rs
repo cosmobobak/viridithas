@@ -1183,7 +1183,7 @@ impl Board {
                 stat_score += t.get_history_score(self, m);
                 stat_score += t.get_continuation_history_score(self, m, 0);
                 stat_score += t.get_continuation_history_score(self, m, 1);
-                // stat_score += t.get_continuation_history_score(self, m, 3);
+                stat_score += t.get_continuation_history_score(self, m, 3);
             } else {
                 stat_score += t.get_tactical_history_score(self, m);
             }
@@ -1541,7 +1541,7 @@ impl Board {
         t.update_history(conf, self, moves_to_adjust, best_move, depth);
         t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 1);
-        // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
+        t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 3);
     }
 
     /// Update the main and continuation history tables for a single move.
@@ -1558,7 +1558,7 @@ impl Board {
         t.update_history_single(from, to, moved, threats, delta);
         t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
         t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
-        // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
+        t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
     }
 
     /// Update the tactical history table.

@@ -243,7 +243,7 @@ impl MovePicker {
         t.get_history_scores(pos, ms);
         t.get_continuation_history_scores(pos, ms, 0);
         t.get_continuation_history_scores(pos, ms, 1);
-        // t.get_continuation_history_scores(pos, ms, 3);
+        t.get_continuation_history_scores(pos, ms, 3);
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
