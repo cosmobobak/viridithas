@@ -20,7 +20,7 @@ use crate::{
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
-        types::{CastlingRights, CheckState, ContHistIndex, File, Rank, Square, Undo},
+        types::{CastlingRights, CheckState, File, Rank, Square, Undo},
         CHESS960,
     },
     cuckoo,
@@ -113,10 +113,6 @@ impl Board {
 
     pub const fn ep_sq(&self) -> Option<Square> {
         self.ep_sq
-    }
-
-    pub fn history(&self) -> &[Undo] {
-        &self.history
     }
 
     #[cfg(feature = "datagen")]
@@ -1134,10 +1130,6 @@ impl Board {
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
             threats: self.threats,
-            cont_hist_index: Some(ContHistIndex {
-                piece,
-                square: m.history_to_square(),
-            }),
             piece_layout: self.pieces,
             piece_array: self.piece_array,
             key: self.key,
