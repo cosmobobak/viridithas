@@ -21,7 +21,7 @@ use crate::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::Square,
+        types::{ContHistIndex, Square},
         CHESS960,
     },
     evaluation::{
@@ -668,6 +668,11 @@ impl Board {
             t.tt.prefetch(self.key_after(m));
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = is_tactical;
+            let moved = self.piece_at(m.from()).unwrap();
+            t.ss[height].conthist_index = ContHistIndex {
+                piece: moved,
+                square: m.history_to_square(),
+            };
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1011,6 +1016,11 @@ impl Board {
                     );
                 let nm_depth = depth - r;
                 t.ss[height].searching = None;
+                t.ss[height].searching_tactical = false;
+                t.ss[height].conthist_index = ContHistIndex {
+                    piece: Piece::new(self.turn(), PieceType::Pawn),
+                    square: Square::A1,
+                };
                 self.make_nullmove();
                 let mut null_score =
                     -self.alpha_beta::<OffPV>(l_pv, info, t, nm_depth, -beta, -beta + 1, !cut_node);
@@ -1112,6 +1122,11 @@ impl Board {
                 t.tt.prefetch(self.key_after(m));
                 t.ss[height].searching = Some(m);
                 t.ss[height].searching_tactical = true;
+                let moved = self.piece_at(m.from()).unwrap();
+                t.ss[height].conthist_index = ContHistIndex {
+                    piece: moved,
+                    square: m.history_to_square(),
+                };
                 if !self.make_move(m, t) {
                     // illegal move
                     continue;
@@ -1237,6 +1252,11 @@ impl Board {
             t.tt.prefetch(self.key_after(m));
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = !is_quiet;
+            let moved = self.piece_at(m.from()).unwrap();
+            t.ss[height].conthist_index = ContHistIndex {
+                piece: moved,
+                square: m.history_to_square(),
+            };
             if !self.make_move(m, t) {
                 continue;
             }
@@ -1288,6 +1308,11 @@ impl Board {
                 // re-make the singular move.
                 t.ss[height].searching = Some(m);
                 t.ss[height].searching_tactical = !is_quiet;
+                let moved = self.piece_at(m.from()).unwrap();
+                t.ss[height].conthist_index = ContHistIndex {
+                    piece: moved,
+                    square: m.history_to_square(),
+                };
                 self.make_move(m, t);
 
                 if value < r_beta {

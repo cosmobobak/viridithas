@@ -12,7 +12,10 @@ pub struct Cli {
 #[derive(Parser)]
 pub enum Subcommands {
     /// Output node benchmark for openbench
-    Bench,
+    Bench {
+        /// Optionally specify the depth at which to run the benchmark.
+        depth: Option<usize>,
+    },
     /// Run the perft suite.
     Perft,
     /// Quantise a network parameter file.

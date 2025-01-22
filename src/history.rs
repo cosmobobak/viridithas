@@ -5,7 +5,7 @@ use crate::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::{Square, Undo},
+        types::Square,
         CHESS960,
     },
     historytable::{
@@ -157,27 +157,14 @@ impl ThreadData<'_> {
         depth: i32,
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
+        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m).unwrap();
@@ -200,27 +187,14 @@ impl ThreadData<'_> {
         delta: i32,
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
+        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
         update_history(cmh_block.get_mut(moved, to), delta);
     }
 
@@ -231,27 +205,14 @@ impl ThreadData<'_> {
         ms: &mut [MoveListEntry],
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov).unwrap();
@@ -261,27 +222,14 @@ impl ThreadData<'_> {
 
     /// Get the continuation history score for a single move.
     pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return 0;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return 0,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return 0;
         };
-        let cmh_block = self.continuation_history.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         let to = m.history_to_square();
         let piece = pos.moved_piece(m).unwrap();
         i32::from(cmh_block.get(piece, to))
@@ -300,33 +248,31 @@ impl ThreadData<'_> {
 
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height() < MAX_PLY);
-        let Some(&Undo {
-            cont_hist_index: Some(cont_hist_index),
-            ..
-        }) = pos.history().last()
-        else {
+        let height = pos.height();
+        if height == 0 {
+            return;
+        }
+        debug_assert!(height < MAX_PLY);
+        let Some(ss) = self.ss.get(height - 1) else {
             return;
         };
 
-        let prev_to = cont_hist_index.square;
-        let prev_piece = cont_hist_index.piece;
+        let prev_to = ss.conthist_index.square;
+        let prev_piece = ss.conthist_index.piece;
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
     /// Returns the counter move for this position.
     pub fn get_counter_move(&self, pos: &Board) -> Option<Move> {
-        let Some(&Undo {
-            cont_hist_index: Some(cont_hist_index),
-            ..
-        }) = pos.history().last()
-        else {
+        let height = pos.height();
+        if height == 0 {
             return None;
-        };
+        }
+        let ss = self.ss.get(height - 1)?;
 
-        let prev_to = cont_hist_index.square;
-        let prev_piece = cont_hist_index.piece;
+        let prev_to = ss.conthist_index.square;
+        let prev_piece = ss.conthist_index.piece;
 
         self.counter_move_table.get(prev_piece, prev_to)
     }
