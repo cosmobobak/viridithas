@@ -144,9 +144,10 @@ impl<T> IndexMut<Rank> for [T; 8] {
 }
 
 #[rustfmt::skip]
-#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug, Default)]
 #[repr(u8)]
 pub enum Square {
+    #[default]
     A1, B1, C1, D1, E1, F1, G1, H1,
     A2, B2, C2, D2, E2, F2, G2, H2,
     A3, B3, C3, D3, E3, F3, G3, H3,
@@ -396,7 +397,7 @@ pub const BKCA: u8 = 0b0100;
 
 pub const BQCA: u8 = 0b1000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ContHistIndex {
     pub piece: Piece,
     pub square: Square,
@@ -408,7 +409,6 @@ pub struct Undo {
     pub ep_square: Option<Square>,
     pub fifty_move_counter: u8,
     pub threats: Threats,
-    pub cont_hist_index: Option<ContHistIndex>,
     pub piece_layout: PieceLayout,
     pub piece_array: [Option<Piece>; 64],
     /// The Zobrist hash of the board.
@@ -433,7 +433,6 @@ impl Default for Undo {
                 all: SquareSet::EMPTY,
                 checkers: SquareSet::EMPTY,
             },
-            cont_hist_index: None,
             piece_layout: PieceLayout::NULL,
             piece_array: [None; 64],
             key: 0,

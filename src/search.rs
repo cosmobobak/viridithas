@@ -21,7 +21,7 @@ use crate::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::Square,
+        types::{ContHistIndex, Square},
         CHESS960,
     },
     evaluation::{
@@ -1237,6 +1237,11 @@ impl Board {
             t.tt.prefetch(self.key_after(m));
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = !is_quiet;
+            let moved = self.piece_at(m.from()).unwrap();
+            t.ss[height].conthist_index = ContHistIndex {
+                piece: moved,
+                square: m.history_to_square(),
+            };
             if !self.make_move(m, t) {
                 continue;
             }

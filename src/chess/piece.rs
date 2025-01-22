@@ -71,9 +71,10 @@ impl Display for PieceType {
 }
 
 #[rustfmt::skip]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 #[repr(u8)]
 pub enum Piece {
+    #[default]
     WP, WN, WB, WR, WQ, WK,
     BP, BN, BB, BR, BQ, BK,
 }
