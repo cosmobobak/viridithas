@@ -1195,10 +1195,9 @@ impl Board {
             let mut stat_score = 0;
 
             if is_quiet {
-                stat_score += 2 * t.get_history_score(self, m);
+                stat_score += t.get_history_score(self, m);
                 stat_score += t.get_continuation_history_score(self, m, 0);
                 stat_score += t.get_continuation_history_score(self, m, 1);
-                // stat_score += t.get_continuation_history_score(self, m, 3);
             } else {
                 stat_score += t.get_tactical_history_score(self, m);
             }
