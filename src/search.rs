@@ -1569,7 +1569,7 @@ impl Board {
         t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 0);
         t.update_continuation_history(conf, self, moves_to_adjust, best_move, depth, 1);
         // t.update_continuation_history(self, moves_to_adjust, best_move, depth, 3);
-        t.update_pawn_history(self, moves_to_adjust, best_move, depth);
+        t.update_pawn_history(conf, self, moves_to_adjust, best_move, depth);
     }
 
     /// Update the main and continuation history tables for a single move.
