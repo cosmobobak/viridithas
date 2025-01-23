@@ -20,7 +20,7 @@ use crate::{
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
-        types::{CastlingRights, CheckState, ContHistIndex, File, Rank, Square, Undo},
+        types::{CastlingRights, CheckState, File, Rank, Square, Undo},
         CHESS960,
     },
     cuckoo,
@@ -113,10 +113,6 @@ impl Board {
 
     pub const fn ep_sq(&self) -> Option<Square> {
         self.ep_sq
-    }
-
-    pub fn history(&self) -> &[Undo] {
-        &self.history
     }
 
     #[cfg(feature = "datagen")]
@@ -356,20 +352,20 @@ impl Board {
         assert!(scharnagl < 960, "scharnagl index out of range");
         let backrank = Self::get_scharnagl_backrank(scharnagl);
         self.reset();
-        for (&piece_type, file) in backrank.iter().zip(File::ALL) {
+        for (&piece_type, file) in backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
             self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
-        for file in File::ALL {
+        for file in File::all() {
             // add pawns
             let sq = Square::from_rank_file(Rank::Two, file);
             self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
-        for (&piece_type, file) in backrank.iter().zip(File::ALL) {
+        for (&piece_type, file) in backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::Eight, file);
             self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
-        for file in File::ALL {
+        for file in File::all() {
             // add pawns
             let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
@@ -417,20 +413,20 @@ impl Board {
         let white_backrank = Self::get_scharnagl_backrank(scharnagl % 960);
         let black_backrank = Self::get_scharnagl_backrank(scharnagl / 960);
         self.reset();
-        for (&piece_type, file) in white_backrank.iter().zip(File::ALL) {
+        for (&piece_type, file) in white_backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::One, file);
             self.add_piece(sq, Piece::new(Colour::White, piece_type));
         }
-        for file in File::ALL {
+        for file in File::all() {
             // add pawns
             let sq = Square::from_rank_file(Rank::Two, file);
             self.add_piece(sq, Piece::new(Colour::White, PieceType::Pawn));
         }
-        for (&piece_type, file) in black_backrank.iter().zip(File::ALL) {
+        for (&piece_type, file) in black_backrank.iter().zip(File::all()) {
             let sq = Square::from_rank_file(Rank::Eight, file);
             self.add_piece(sq, Piece::new(Colour::Black, piece_type));
         }
-        for file in File::ALL {
+        for file in File::all() {
             // add pawns
             let sq = Square::from_rank_file(Rank::Seven, file);
             self.add_piece(sq, Piece::new(Colour::Black, PieceType::Pawn));
@@ -1134,10 +1130,6 @@ impl Board {
             ep_square: self.ep_sq,
             fifty_move_counter: self.fifty_move_counter,
             threats: self.threats,
-            cont_hist_index: Some(ContHistIndex {
-                piece,
-                square: m.history_to_square(),
-            }),
             piece_layout: self.pieces,
             piece_array: self.piece_array,
             key: self.key,
@@ -1983,8 +1975,8 @@ impl Default for Board {
 impl Display for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let mut counter = 0;
-        for rank in Rank::ALL.into_iter().rev() {
-            for file in File::ALL {
+        for rank in Rank::all().rev() {
+            for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
                 let piece = self.piece_at(sq);
                 if let Some(piece) = piece {
@@ -2042,9 +2034,9 @@ impl Display for Board {
 
 impl std::fmt::UpperHex for Board {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        for rank in Rank::ALL.into_iter().rev() {
+        for rank in Rank::all().rev() {
             write!(f, "{} ", rank as u8 + 1)?;
-            for file in File::ALL {
+            for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
                 if let Some(piece) = self.piece_at(sq) {
                     write!(f, "{piece} ")?;

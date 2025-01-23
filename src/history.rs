@@ -5,13 +5,14 @@ use crate::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
-        types::{Square, Undo},
+        types::Square,
         CHESS960,
     },
     historytable::{
-        history_bonus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
-        CORRECTION_HISTORY_WEIGHT_SCALE,
+        history_bonus, history_malus, update_history, CORRECTION_HISTORY_GRAIN,
+        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
     },
+    search::parameters::Config,
     threadlocal::ThreadData,
     util::MAX_PLY,
 };
@@ -22,6 +23,7 @@ impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
     pub fn update_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -43,9 +45,9 @@ impl ThreadData<'_> {
                 pos.threats().all.contains_square(to),
             );
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -100,6 +102,7 @@ impl ThreadData<'_> {
     /// Update the pawn history counters of a batch of moves.
     pub fn update_pawn_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -117,9 +120,9 @@ impl ThreadData<'_> {
             let to = m.to();
             let val = sub_table.get_mut(piece_moved.unwrap(), to);
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -161,6 +164,7 @@ impl ThreadData<'_> {
     /// Update the tactical history counters of a batch of moves.
     pub fn update_tactical_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
@@ -179,9 +183,9 @@ impl ThreadData<'_> {
                 .tactical_history
                 .get_mut(piece_moved.unwrap(), to, capture);
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -208,41 +212,29 @@ impl ThreadData<'_> {
     /// Update the continuation history counters of a batch of moves.
     pub fn update_continuation_history(
         &mut self,
+        conf: &Config,
         pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
+        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = pos.moved_piece(m).unwrap();
 
             let delta = if m == best_move {
-                history_bonus(depth)
+                history_bonus(conf, depth)
             } else {
-                -history_bonus(depth)
+                -history_malus(conf, depth)
             };
             update_history(cmh_block.get_mut(piece, to), delta);
         }
@@ -257,27 +249,14 @@ impl ThreadData<'_> {
         delta: i32,
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index_mut(conthist_index);
+        let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
         update_history(cmh_block.get_mut(moved, to), delta);
     }
 
@@ -288,27 +267,14 @@ impl ThreadData<'_> {
         ms: &mut [MoveListEntry],
         index: usize,
     ) {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return;
         };
-        let cmh_block = self.continuation_history.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
             let piece = pos.moved_piece(m.mov).unwrap();
@@ -318,27 +284,14 @@ impl ThreadData<'_> {
 
     /// Get the continuation history score for a single move.
     pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
-        // get the index'th from the back of the conthist history, and make sure the entry is valid.
-        if let Some(Undo {
-            cont_hist_index: None,
-            ..
-        }) = pos.history().last()
-        {
+        let height = pos.height();
+        if height <= index {
             return 0;
         }
-        let conthist_index = match pos
-            .history()
-            .len()
-            .checked_sub(index + 1)
-            .and_then(|i| pos.history().get(i))
-        {
-            Some(Undo {
-                cont_hist_index: Some(cont_hist_index),
-                ..
-            }) => *cont_hist_index,
-            _ => return 0,
+        let Some(ss) = self.ss.get(height - index - 1) else {
+            return 0;
         };
-        let cmh_block = self.continuation_history.get_index(conthist_index);
+        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         let to = m.history_to_square();
         let piece = pos.moved_piece(m).unwrap();
         i32::from(cmh_block.get(piece, to))
@@ -357,33 +310,31 @@ impl ThreadData<'_> {
 
     /// Add a move to the countermove table.
     pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        debug_assert!(pos.height() < MAX_PLY);
-        let Some(&Undo {
-            cont_hist_index: Some(cont_hist_index),
-            ..
-        }) = pos.history().last()
-        else {
+        let height = pos.height();
+        if height == 0 {
+            return;
+        }
+        debug_assert!(height < MAX_PLY);
+        let Some(ss) = self.ss.get(height - 1) else {
             return;
         };
 
-        let prev_to = cont_hist_index.square;
-        let prev_piece = cont_hist_index.piece;
+        let prev_to = ss.conthist_index.square;
+        let prev_piece = ss.conthist_index.piece;
 
         self.counter_move_table.add(prev_piece, prev_to, m);
     }
 
     /// Returns the counter move for this position.
     pub fn get_counter_move(&self, pos: &Board) -> Option<Move> {
-        let Some(&Undo {
-            cont_hist_index: Some(cont_hist_index),
-            ..
-        }) = pos.history().last()
-        else {
+        let height = pos.height();
+        if height == 0 {
             return None;
-        };
+        }
+        let ss = self.ss.get(height - 1)?;
 
-        let prev_to = cont_hist_index.square;
-        let prev_piece = cont_hist_index.piece;
+        let prev_to = ss.conthist_index.square;
+        let prev_piece = ss.conthist_index.piece;
 
         self.counter_move_table.get(prev_piece, prev_to)
     }
@@ -434,7 +385,7 @@ impl ThreadData<'_> {
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correct_evaluation(&self, pos: &Board, raw_eval: i32) -> i32 {
+    pub fn correct_evaluation(&self, conf: &Config, pos: &Board) -> i32 {
         let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
         let white =
             self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
@@ -442,8 +393,11 @@ impl ThreadData<'_> {
             self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
         let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
         let major = self.major_corrhist.get(pos.turn(), pos.major_key());
-        let adjustment = pawn + major + minor + white + black;
-        raw_eval + adjustment as i32 / CORRECTION_HISTORY_GRAIN
+        let adjustment = pawn * i64::from(conf.pawn_corrhist_weight)
+            + major * i64::from(conf.major_corrhist_weight)
+            + minor * i64::from(conf.minor_corrhist_weight)
+            + (white + black) * i64::from(conf.nonpawn_corrhist_weight);
+        (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
 

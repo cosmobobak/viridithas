@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
 
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
-        return uci::main_loop(false);
+        return uci::main_loop();
     }
 
     let cli = <cli::Cli as clap::Parser>::parse();
@@ -107,7 +107,14 @@ fn main() -> anyhow::Result<()> {
             use_depth: depth_limit,
             generate_dfrc: dfrc,
         }),
-        Some(Bench) => uci::main_loop(true),
-        None => uci::main_loop(false),
+        Some(Bench { depth }) => {
+            let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;
+            let stopped = std::sync::atomic::AtomicBool::new(false);
+            let nodes = std::sync::atomic::AtomicU64::new(0);
+            let info = searchinfo::SearchInfo::new(&stopped, &nodes);
+            uci::bench("openbench", &info.conf, nnue_params, depth)?;
+            Ok(())
+        }
+        None => uci::main_loop(),
     }
 }

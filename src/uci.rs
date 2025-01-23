@@ -596,7 +596,7 @@ fn print_uci_response(info: &SearchInfo, full: bool) {
 static SET_TERM: Once = Once::new();
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
+pub fn main_loop() -> anyhow::Result<()> {
     let mut pos = Board::default();
 
     let mut tt = TT::new();
@@ -619,11 +619,6 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
         "-dev"
     };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
-
-    if global_bench {
-        bench("openbench", &info.conf, nnue_params).with_context(|| "bench failed")?;
-        return Ok(());
-    }
 
     loop {
         std::io::stdout()
@@ -817,7 +812,7 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
                 println!("info error ponderhit given while not searching.");
                 Ok(())
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, nnue_params),
+            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, nnue_params, None),
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
 
@@ -841,8 +836,8 @@ pub fn main_loop(global_bench: bool) -> anyhow::Result<()> {
 
 const BENCH_DEPTH: usize = 14;
 const BENCH_THREADS: usize = 1;
-fn bench(benchcmd: &str, search_params: &Config, nnue_params: &NNUEParams) -> anyhow::Result<()> {
-    let bench_string = format!("go depth {BENCH_DEPTH}\n");
+pub fn bench(benchcmd: &str, search_params: &Config, nnue_params: &NNUEParams, depth: Option<usize>) -> anyhow::Result<()> {
+    let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
     let mut info = SearchInfo::with_search_params(&stopped, &nodes, search_params);

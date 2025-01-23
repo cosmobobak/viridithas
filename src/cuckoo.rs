@@ -9,9 +9,9 @@ use crate::{
     lookups::{PIECE_KEYS, SIDE_KEY},
 };
 
-pub const KEYS: [u64; 8192] =
+pub static KEYS: [u64; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
-pub const MOVES: [Option<Move>; 8192] =
+pub static MOVES: [Option<Move>; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
 
 pub const fn h1(key: u64) -> usize {
@@ -27,8 +27,8 @@ pub fn init() -> anyhow::Result<()> {
     // keep a tally of the table entries to sanity-check the initialisation process.
     let mut count = 0;
 
-    let mut keys = [0; 8192];
-    let mut cuckoo_moves = [None; 8192];
+    let mut keys = vec![0; 8192];
+    let mut cuckoo_moves = vec![None; 8192];
 
     for piece in Piece::all() {
         if piece.piece_type() == PieceType::Pawn {
