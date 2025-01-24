@@ -226,7 +226,7 @@ impl MoveTable {
 
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
-    table: [[i32; CORRECTION_HISTORY_SIZE]; 2],
+    table: [[i32; 2]; CORRECTION_HISTORY_SIZE],
 }
 
 impl CorrectionHistoryTable {
@@ -251,11 +251,11 @@ impl CorrectionHistoryTable {
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn get(&self, side: Colour, key: u64) -> i64 {
-        i64::from(self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize])
+        i64::from(self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side])
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
-        &mut self.table[side][(key % CORRECTION_HISTORY_SIZE as u64) as usize]
+        &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
     }
 }
