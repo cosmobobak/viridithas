@@ -626,7 +626,8 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             | million datapoints generated using       | Games | N: 52732 W: 14703 L: 14336 D: 23693
             | hyperstition. No other changes to the    | Penta | [1019, 6368, 11343, 6499, 1137]
             | training setup.                          | https://chess.swehosting.se/test/8011/
-            |                                          | 
+            |                                          | vs. hyperstition
+            |                                          |
             |                                          | LTC:
             |                                          | Elo   | 4.04 +- 2.52 (95%)
             |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
@@ -634,6 +635,7 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Games | N: 17712 W: 3992 L: 3786 D: 9934
             |                                          | Penta | [17, 1966, 4693, 2154, 26]
             |                                          | https://chess.swehosting.se/test/8056/
+            |                                          | vs. hyperstition
 ------------|------------------------------------------|-----------------------------------------------
     voyager | the hyperstition arch, trained on the    | fixed-nodes:
          94 | new bullet version with extra fens       | Elo   | 9.80 +- 4.68 (95%)
@@ -642,6 +644,7 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Games | N: 8652 W: 2578 L: 2334 D: 3740
             |                                          | Penta | [166, 956, 1869, 1138, 197]
             |                                          | https://chess.swehosting.se/test/8717/
+            |                                          | vs. lila
             |                                          | 
             |                                          | LTC:
             |                                          | Elo   | 8.73 +- 4.00 (95%)
@@ -650,6 +653,7 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Games | N: 7724 W: 1854 L: 1660 D: 4210
             |                                          | Penta | [26, 833, 1947, 1033, 23]
             |                                          | https://chess.swehosting.se/test/8718/
+            |                                          | vs. lila
 ------------|------------------------------------------|-----------------------------------------------
      helios | voyager fine-tuned on a dataset rescored | fixed-nodes:
             | using TD with lambda = 0.05              | Elo   | -3.55 +- 3.31 (95%)
@@ -658,6 +662,7 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | Games | N: 16836 W: 4521 L: 4693 D: 7622
             |                                          | Penta | [350, 2079, 3683, 2005, 301]
             |                                          | https://chess.swehosting.se/test/8939/
+            |                                          | vs. voyager
             |                                          | 
             |                                          | LTC:
             |                                          | Elo   | -4.05 +- 3.09 (95%)
@@ -665,5 +670,102 @@ hyperstition| 2048x2 -pairwise> 16 -> 32 -> 1 net.     | fixed-nodes:
             |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
             |                                          | Games | N: 12526 W: 2730 L: 2876 D: 6920
             |                                          | Penta | [31, 1563, 3219, 1421, 29]
-            |                                          | https://chess.swehosting.se/test/8940/#
+            |                                          | https://chess.swehosting.se/test/8940/
+            |                                          | vs. voyager
+------------|------------------------------------------|-----------------------------------------------
+ jackhammer | attempt at a PSQT subnet. inference      | fixed-nodes:
+            | was likely written wrongly.              | Elo   | -41.40 +- 10.05 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 1838 W: 424 L: 642 D: 772
+            |                                          | Penta | [62, 287, 394, 159, 17]
+            |                                          | https://chess.swehosting.se/test/9016/
+            |                                          | vs. voyager
+------------|------------------------------------------|-----------------------------------------------
+   nostromo | attempt at lots of skip connections and  | fixed-nodes:
+            | a psqt subnet. inference also likely     | Elo   | -10.44 +- 5.26 (95%)
+            | to be bugged.                            | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 6692 W: 1770 L: 1971 D: 2951
+            |                                          | Penta | [157, 867, 1444, 776, 102]
+            |                                          | https://chess.swehosting.se/test/9108/
+            |                                          | vs. voyager
+------------|------------------------------------------|-----------------------------------------------
+ temperance | continued training on top of voyager for | fixed-nodes:
+            | 200 superbatches with halved lr.         | Elo   | 6.44 +- 3.66 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 13432 W: 3789 L: 3540 D: 6103
+            |                                          | Penta | [212, 1574, 2956, 1701, 273]
+            |                                          | https://chess.swehosting.se/test/9168/#
+            |                                          | vs. voyager
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | 4.99 +- 2.87 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 14414 W: 3329 L: 3122 D: 7963
+            |                                          | Penta | [30, 1617, 3716, 1804, 40]
+            |                                          | https://chess.swehosting.se/test/9169/
+            |                                          | vs. voyager
+------------|------------------------------------------|-----------------------------------------------
+   colossus | 3072x16 -> (16 -> 64 -> 1)x8 network.    | Elo   | 23.83 +- 7.22 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | tremendous performance at fixed-nodes,   | LLR   | 3.20 (-2.94, 2.94) [0.00, 3.00]
+            | but obviously far too slow for real play.| Games | N: 3636 W: 1132 L: 883 D: 1621
+            |                                          | Penta | [53, 372, 762, 535, 96]
+            |                                          | https://chess.swehosting.se/test/9339/
+            |                                          | vs. temperance
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -21.52 +- 6.67 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2780 W: 547 L: 719 D: 1514
+            |                                          | Penta | [13, 421, 685, 267, 4]
+            |                                          | https://chess.swehosting.se/test/9353/
+            |                                          | vs. temperance
+------------|------------------------------------------|-----------------------------------------------
+ blackheart | 2048x16 -> (16 -> 32 -> 1)x8 master arch | fixed-nodes:
+            | but with a PSQT skip connection, linear  | Elo   | -2.41 +- 2.94 (95%)
+            | lr schedule and noisy output buckets.    | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 22902 W: 6596 L: 6755 D: 9551
+            |                                          | Penta | [557, 2776, 4897, 2711, 510]
+            |                                          | https://chess.swehosting.se/test/9577/
+            |                                          | vs. temperance
+------------|------------------------------------------|-----------------------------------------------
+   goldsoul | 200 standard post-training superbatches  | fixed-nodes:
+            | on top of blackheart.                    | Elo   | 2.38 +- 1.88 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 55336 W: 16303 L: 15924 D: 23109
+            |                                          | Penta | [1246, 6447, 11921, 6790, 1264]
+            |                                          | https://chess.swehosting.se/test/9578/
+            |                                          | vs. temperance
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | -2.52 +- 2.72 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 20026 W: 5009 L: 5154 D: 9863
+            |                                          | Penta | [224, 2438, 4779, 2403, 169]
+            |                                          | https://chess.swehosting.se/test/9582/
+------------|------------------------------------------|-----------------------------------------------
+   godsword | 200 WDL=0.75 superbatches on top of      | fixed-nodes:
+            | blackheart.                              | Elo   | -4.29 +- 3.65 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 14668 W: 4247 L: 4428 D: 5993
+            |                                          | Penta | [380, 1735, 3216, 1692, 311]
+            |                                          | https://chess.swehosting.se/test/9580/
+            |                                          | vs. temperance
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | -6.62 +- 4.13 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 9186 W: 2269 L: 2444 D: 4473
+            |                                          | Penta | [127, 1173, 2125, 1084, 84]
+            |                                          | https://chess.swehosting.se/test/9583/
 ------------|------------------------------------------|-----------------------------------------------
