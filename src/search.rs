@@ -83,6 +83,7 @@ const LMR_TTPV_MUL: i32 = 1202;
 const LMR_CUT_NODE_MUL: i32 = 1284;
 const LMR_NON_IMPROVING_MUL: i32 = 689;
 const LMR_TT_CAPTURE_MUL: i32 = 1141;
+const LMR_CHECK_MUL: i32 = 1024;
 
 const HISTORY_BONUS_MUL: i32 = 251;
 const HISTORY_BONUS_OFFSET: i32 = 172;
@@ -1338,10 +1339,6 @@ impl Board {
                     // no extension.
                     extension = 0;
                 }
-            } else if self.in_check() {
-                // self.in_check() determines if the opponent is in check,
-                // because we have already made the move.
-                extension = i32::from(is_quiet);
             } else {
                 extension = 0;
             }
@@ -1373,6 +1370,8 @@ impl Board {
                         r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
                         // reduce more if the move from the transposition table is tactical
                         r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
+                        // reduce less if the move gives check
+                        r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     }
                     (r / 1024).clamp(1, depth - 1)
                 } else {

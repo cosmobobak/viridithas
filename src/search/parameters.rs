@@ -20,7 +20,7 @@ use super::{
     MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR,
     NONPAWN_CORRHIST_WEIGHT, PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
     QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN,
-    RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN,
+    RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN, LMR_CHECK_MUL
 };
 
 #[derive(Clone, Debug)]
@@ -63,6 +63,7 @@ pub struct Config {
     pub lmr_cut_node_mul: i32,
     pub lmr_non_improving_mul: i32,
     pub lmr_tt_capture_mul: i32,
+    pub lmr_check_mul: i32,
     pub history_bonus_mul: i32,
     pub history_bonus_offset: i32,
     pub history_bonus_max: i32,
@@ -122,6 +123,7 @@ impl Config {
             lmr_cut_node_mul: LMR_CUT_NODE_MUL,
             lmr_non_improving_mul: LMR_NON_IMPROVING_MUL,
             lmr_tt_capture_mul: LMR_TT_CAPTURE_MUL,
+            lmr_check_mul: LMR_CHECK_MUL,
             history_bonus_mul: HISTORY_BONUS_MUL,
             history_bonus_offset: HISTORY_BONUS_OFFSET,
             history_bonus_max: HISTORY_BONUS_MAX,
@@ -220,6 +222,7 @@ impl Config {
             LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul],
             LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul],
             LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul],
+            LMR_CHECK_MUL = [self.lmr_check_mul],
             HISTORY_BONUS_MUL = [self.history_bonus_mul],
             HISTORY_BONUS_OFFSET = [self.history_bonus_offset],
             HISTORY_BONUS_MAX = [self.history_bonus_max],
@@ -288,6 +291,7 @@ impl Config {
             LMR_CUT_NODE_MUL = [self.lmr_cut_node_mul, 1, 4096, 96],
             LMR_NON_IMPROVING_MUL = [self.lmr_non_improving_mul, 1, 4096, 96],
             LMR_TT_CAPTURE_MUL = [self.lmr_tt_capture_mul, 1, 4096, 96],
+            LMR_CHECK_MUL = [self.lmr_check_mul, 1, 4096, 96],
             HISTORY_BONUS_MUL = [self.history_bonus_mul, 1, 1500, 32],
             HISTORY_BONUS_OFFSET = [self.history_bonus_offset, -1024, 1024, 64],
             HISTORY_BONUS_MAX = [self.history_bonus_max, 1, 4096, 256],
