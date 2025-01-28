@@ -12,7 +12,8 @@ use std::{
 use arrayvec::ArrayVec;
 
 use crate::{
-    cfor, chess::{
+    cfor,
+    chess::{
         board::{
             movegen::{self, MoveListEntry, MAX_POSITION_MOVES},
             Board,
@@ -22,10 +23,20 @@ use crate::{
         squareset::SquareSet,
         types::{ContHistIndex, Square},
         CHESS960,
-    }, evaluation::{
+    },
+    evaluation::{
         is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
-    }, history, historytable::history_bonus, movepicker::{MovePicker, Stage, MVV_SCORE, WINNING_CAPTURE_SCORE}, search::pv::PVariation, searchinfo::SearchInfo, tablebases::{self, probe::WDL}, threadlocal::ThreadData, transpositiontable::{Bound, TTHit, TTView}, uci, util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE}
+    },
+    historytable::history_bonus,
+    movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
+    search::pv::PVariation,
+    searchinfo::SearchInfo,
+    tablebases::{self, probe::WDL},
+    threadlocal::ThreadData,
+    transpositiontable::{Bound, TTHit, TTView},
+    uci,
+    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -1190,7 +1201,6 @@ impl Board {
                 // stat_score += t.get_continuation_history_score(self, m, 3);
             } else {
                 stat_score += t.get_tactical_history_score(self, m);
-                stat_score += MVV_SCORE[history::caphist_piece_type(self, m)];
             }
 
             // lmp & fp.
