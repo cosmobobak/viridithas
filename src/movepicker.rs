@@ -10,6 +10,7 @@ pub const FIRST_KILLER_SCORE: i32 = 9_000_000;
 pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
 pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+pub const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -247,8 +248,6 @@ impl MovePicker {
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
-        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
-
         // provisionally set the WINNING_CAPTURE offset, for lazily SEE-guarding stuff later.
         for m in &mut *moves {
             m.score = WINNING_CAPTURE_SCORE;
