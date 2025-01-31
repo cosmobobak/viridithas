@@ -146,7 +146,7 @@ impl DataGenOptions {
             },
             self.book.as_ref().map_or_else(String::new, |book| format!(
                 "-{}",
-                book.file_name().unwrap().to_string_lossy()
+                book.file_name().unwrap().to_string_lossy().trim_end_matches(".epd")
             ))
         )
     }
@@ -221,7 +221,6 @@ impl StartposGenerator for BookStartposGenerator<'_> {
             .with_context(|| format!("Failed to set board from FEN {fen} at index {idx} in book."))
             .unwrap();
         thread_data.nnue.reinit_from(board, thread_data.nnue_params);
-        eprintln!("Yielded FEN {fen} at index {idx} in book.");
         ControlFlow::Continue(())
     }
 }
