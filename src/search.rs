@@ -1530,7 +1530,7 @@ impl Board {
                 || flag == Bound::Lower && best_score <= static_eval
                 || flag == Bound::Upper && best_score >= static_eval)
             {
-                t.update_correction_history(self, depth, best_score - static_eval);
+                t.update_correction_history(self, depth, best_score - (static_eval + raw_eval) / 2);
             }
             t.tt.store(
                 key,
