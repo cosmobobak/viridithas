@@ -940,6 +940,24 @@ impl Board {
 
         t.ss[height].eval = static_eval;
 
+        // value-difference based policy update.
+        if !NT::ROOT {
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if ss_prev.eval != VALUE_NONE
+                    && static_eval != VALUE_NONE
+                    && !ss_prev.searching_tactical
+                {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    let threats = self.history().last().unwrap().threats.all;
+                    let delta = i32::clamp(-10 * (ss_prev.eval + static_eval), -1600, 1600);
+                    t.update_history_single(from, to, moved, threats, delta);
+                }
+            }
+        }
+
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less aggressive with alpha-reductions (eval is too low).
