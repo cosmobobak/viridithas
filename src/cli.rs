@@ -76,6 +76,9 @@ pub enum Subcommands {
         /// Path to a tablebases folder
         #[clap(long, value_name = "PATH")]
         tbs: Option<std::path::PathBuf>,
+        /// Path to a book file to use for starting positions
+        #[clap(long, value_name = "PATH")]
+        book: Option<std::path::PathBuf>,
         /// Limit by depth instead of nodes
         #[clap(long)]
         depth_limit: bool,

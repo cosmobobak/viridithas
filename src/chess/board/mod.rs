@@ -2285,4 +2285,17 @@ mod tests {
         assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
         assert_eq!(board.ep_sq, Some(Square::B6));
     }
+
+    #[test]
+    fn reset_properly() {
+        use super::Board;
+        use crate::chess::chessmove::Move;
+        use crate::chess::types::Square;
+        let mut board = Board::default();
+        assert!(board.make_move_simple(Move::new(Square::E2, Square::E4)));
+        assert!(board.make_move_simple(Move::new(Square::E7, Square::E5)));
+        board.set_from_fen(Board::STARTING_FEN).unwrap();
+        let board2 = Board::default();
+        assert_eq!(board, board2);
+    }
 }
