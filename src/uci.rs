@@ -836,7 +836,12 @@ pub fn main_loop() -> anyhow::Result<()> {
 
 const BENCH_DEPTH: usize = 14;
 const BENCH_THREADS: usize = 1;
-pub fn bench(benchcmd: &str, search_params: &Config, nnue_params: &NNUEParams, depth: Option<usize>) -> anyhow::Result<()> {
+pub fn bench(
+    benchcmd: &str,
+    search_params: &Config,
+    nnue_params: &NNUEParams,
+    depth: Option<usize>,
+) -> anyhow::Result<()> {
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);

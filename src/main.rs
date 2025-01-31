@@ -98,14 +98,16 @@ fn main() -> anyhow::Result<()> {
             games,
             threads,
             tbs,
+            book,
             depth_limit,
             dfrc,
         }) => datagen::gen_data_main(datagen::DataGenOptionsBuilder {
-            num_games: games,
-            num_threads: threads,
-            tablebases_path: tbs,
-            use_depth: depth_limit,
-            generate_dfrc: dfrc,
+            games,
+            threads,
+            tbs,
+            book,
+            depth_limit,
+            dfrc,
         }),
         Some(Bench { depth }) => {
             let nnue_params = nnue::network::NNUEParams::decompress_and_alloc()?;

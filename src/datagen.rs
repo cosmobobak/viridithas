@@ -10,10 +10,11 @@ use std::{
     fs::{self, File},
     hash::Hash,
     io::{BufReader, BufWriter, Seek, Write},
+    ops::ControlFlow,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
     time::Instant,
@@ -22,7 +23,7 @@ use std::{
 use anyhow::{anyhow, bail, Context};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
-use rand::Rng;
+use rand::{rngs::ThreadRng, Rng};
 
 use crate::{
     chess::{
@@ -65,6 +66,8 @@ struct DataGenOptions {
     num_threads: usize,
     // The (optional) path to the directory containing syzygy endgame tablebases.
     tablebases_path: Option<PathBuf>,
+    // The (optional) path to an EPD format book to use for generating starting positions.
+    book: Option<PathBuf>,
     // The depth or node limit for searches.
     limit: DataGenLimit,
     // Whether to generate DFRC data.
@@ -76,29 +79,32 @@ struct DataGenOptions {
 /// Builder for datagen options.
 pub struct DataGenOptionsBuilder {
     // The number of games to generate.
-    pub num_games: usize,
+    pub games: usize,
     // The number of threads to use.
-    pub num_threads: usize,
+    pub threads: usize,
     // The (optional) path to the directory containing syzygy endgame tablebases.
-    pub tablebases_path: Option<PathBuf>,
+    pub tbs: Option<PathBuf>,
+    // The (optional) path to an EPD format book to use for generating starting positions.
+    pub book: Option<PathBuf>,
     // The depth or node limit for searches.
-    pub use_depth: bool,
+    pub depth_limit: bool,
     // Whether to generate DFRC data.
-    pub generate_dfrc: bool,
+    pub dfrc: bool,
 }
 
 impl DataGenOptionsBuilder {
     fn build(self) -> DataGenOptions {
         DataGenOptions {
-            num_games: self.num_games,
-            num_threads: self.num_threads,
-            tablebases_path: self.tablebases_path,
-            limit: if self.use_depth {
+            num_games: self.games,
+            num_threads: self.threads,
+            tablebases_path: self.tbs,
+            book: self.book,
+            limit: if self.depth_limit {
                 DataGenLimit::Depth(8)
             } else {
                 DataGenLimit::Nodes(5000)
             },
-            generate_dfrc: self.generate_dfrc,
+            generate_dfrc: self.dfrc,
             log_level: 1,
         }
     }
@@ -111,6 +117,7 @@ impl DataGenOptions {
             num_games: 100,
             num_threads: 1,
             tablebases_path: None,
+            book: None,
             limit: DataGenLimit::Depth(8),
             generate_dfrc: true,
             log_level: 1,
@@ -120,7 +127,7 @@ impl DataGenOptions {
     /// Gives a summarised string representation of the options.
     fn summary(&self) -> String {
         format!(
-            "{}g-{}t-{}-{}-{}",
+            "{}g-{}t-{}-{}-{}{}",
             self.num_games,
             self.num_threads,
             if self.tablebases_path.is_some() {
@@ -136,11 +143,90 @@ impl DataGenOptions {
             match self.limit {
                 DataGenLimit::Depth(depth) => format!("d{depth}"),
                 DataGenLimit::Nodes(nodes) => format!("n{nodes}"),
-            }
+            },
+            self.book.as_ref().map_or_else(String::new, |book| format!(
+                "-{}",
+                book.file_name().unwrap().to_string_lossy()
+            ))
         )
     }
 }
 
+trait StartposGenerator {
+    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()>;
+}
+
+struct ClassicalStartposGenerator {
+    rng: ThreadRng,
+}
+
+struct DFRCStartposGenerator {
+    rng: ThreadRng,
+}
+
+struct BookStartposGenerator<'a> {
+    source: &'a [&'a str],
+    cursor: &'a AtomicUsize,
+}
+
+impl StartposGenerator for ClassicalStartposGenerator {
+    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+        board.set_startpos();
+        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+        let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
+        for _ in 0..max {
+            let res = board.make_random_move(&mut self.rng, thread_data);
+            if res.is_none() {
+                return ControlFlow::Break(());
+            }
+            if board.outcome() != GameOutcome::Ongoing {
+                return ControlFlow::Break(());
+            }
+        }
+
+        ControlFlow::Continue(())
+    }
+}
+
+impl StartposGenerator for DFRCStartposGenerator {
+    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+        board.set_dfrc_idx(rand::Rng::gen_range(&mut self.rng, 0..960 * 960));
+        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+        let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
+        for _ in 0..max {
+            let res = board.make_random_move(&mut self.rng, thread_data);
+            if res.is_none() {
+                return ControlFlow::Break(());
+            }
+            if board.outcome() != GameOutcome::Ongoing {
+                return ControlFlow::Break(());
+            }
+        }
+
+        ControlFlow::Continue(())
+    }
+}
+
+impl StartposGenerator for BookStartposGenerator<'_> {
+    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+        let idx = self.cursor.fetch_add(1, Ordering::Relaxed);
+        if idx >= self.source.len() {
+            println!("Book exhausted!");
+            self.cursor.store(0, Ordering::Relaxed);
+            return ControlFlow::Break(());
+        }
+        let fen = self.source[idx];
+        board
+            .set_from_fen(fen)
+            .with_context(|| format!("Failed to set board from FEN {fen} at index {idx} in book."))
+            .unwrap();
+        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+        eprintln!("Yielded FEN {fen} at index {idx} in book.");
+        ControlFlow::Continue(())
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     if !cfg!(feature = "datagen") {
         bail!("datagen feature not enabled (compile with --features datagen)");
@@ -206,13 +292,38 @@ pub fn gen_data_main(cli_config: DataGenOptionsBuilder) -> anyhow::Result<()> {
     std::fs::create_dir_all(&data_dir).with_context(|| "Failed to create data directory")?;
 
     let mut counters = Vec::new();
+    let book_positions = options
+        .book
+        .as_deref()
+        .map(|book| fs::read_to_string(book).with_context(|| "Failed to read book file."))
+        .transpose()?;
+    let book_positions = book_positions
+        .as_deref()
+        .map(|book| book.lines().collect::<Vec<_>>());
+    let cursor = AtomicUsize::new(0);
+    let book_positions = book_positions.as_deref();
+    let cursor = &cursor;
     std::thread::scope(|s| {
         let thread_handles = (0..options.num_threads)
             .map(|id| {
                 let opt_ref = &options;
                 let path_ref = &data_dir;
                 let nnue_params_ref = &nnue_params;
-                s.spawn(move || generate_on_thread(id, opt_ref, path_ref, nnue_params_ref))
+                s.spawn(move || {
+                    // this rng is different between each thread
+                    // (https://rust-random.github.io/book/guide-parallel.html)
+                    // so no worries :3
+                    let rng = rand::thread_rng();
+                    #[allow(clippy::option_if_let_else)]
+                    let startpos_src = if let Some(source) = book_positions {
+                        Box::new(BookStartposGenerator { source, cursor }) as Box<_>
+                    } else if opt_ref.generate_dfrc {
+                        Box::new(DFRCStartposGenerator { rng }) as Box<_>
+                    } else {
+                        Box::new(ClassicalStartposGenerator { rng }) as Box<_>
+                    };
+                    generate_on_thread(id, opt_ref, path_ref, nnue_params_ref, startpos_src)
+                })
             })
             .collect::<Vec<_>>();
         for handle in thread_handles {
@@ -263,16 +374,13 @@ fn print_game_stats(counters: &HashMap<GameOutcome, u64>) {
     clippy::too_many_lines,
     clippy::cast_possible_truncation
 )]
-fn generate_on_thread(
+fn generate_on_thread<'a>(
     id: usize,
     options: &DataGenOptions,
     data_dir: &Path,
     nnue_params: &NNUEParams,
+    mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
-    // this rng is different between each thread
-    // (https://rust-random.github.io/book/guide-parallel.html)
-    // so no worries :3
-    let mut rng = rand::thread_rng();
     let mut board = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE);
@@ -348,63 +456,28 @@ fn generate_on_thread(
             }
         }
         // reset everything: board, thread data, tt, search info
-        if options.generate_dfrc {
-            board.set_dfrc_idx(rand::Rng::gen_range(&mut rng, 0..960 * 960));
-        } else {
-            board.set_startpos();
-        }
-        thread_data
-            .nnue
-            .reinit_from(&board, thread_data.nnue_params);
         tt.clear(1);
         info.set_up_for_search();
         // generate game
-        if options.log_level > 1 {
-            eprintln!("Generating game {game}...");
+        // STEP 1: get the next starting position from the callback
+        match startpos_src.generate(&mut board, &mut thread_data) {
+            ControlFlow::Break(()) => continue 'generation_main_loop,
+            ControlFlow::Continue(()) => {}
         }
-        // STEP 1: make random moves for variety
-        if options.log_level > 2 {
-            eprintln!("Making random moves...");
-        }
-        // pick either 8 or 9 random moves (to balance out the win/loss/draw ratio)
-        let max = if rng.gen_bool(0.5) { 8 } else { 9 };
-        for _ in 0..max {
-            let res = board.make_random_move(&mut rng, &mut thread_data);
-            if res.is_none() {
-                if options.log_level > 2 {
-                    eprintln!("Reached a position with no legal moves, skipping...");
-                }
-                continue 'generation_main_loop;
-            }
-            if board.outcome() != GameOutcome::Ongoing {
-                if options.log_level > 2 {
-                    eprintln!("Game ended early, skipping...");
-                }
-                continue 'generation_main_loop;
-            }
-        }
+
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
-        if options.log_level > 2 {
-            eprintln!("Evaluating position...");
-        }
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager.set_limit(SearchLimit::Depth(10));
         let (eval, _) =
             board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
-            if options.log_level > 2 {
-                eprintln!("Position is too good or too bad, skipping...");
-            }
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
         let mut game = Game::new(&board);
         // STEP 3: play out to the end of the game
-        if options.log_level > 2 {
-            eprintln!("Playing out game...");
-        }
         let mut win_adj_counter = 0;
         let mut draw_adj_counter = 0;
         let outcome = loop {
@@ -440,7 +513,7 @@ fn generate_on_thread(
             );
 
             let abs_score = score.abs();
-            if abs_score >= 2000 {
+            if abs_score >= 2500 {
                 win_adj_counter += 1;
                 draw_adj_counter = 0;
             } else if abs_score <= 4 {
@@ -476,14 +549,8 @@ fn generate_on_thread(
 
             board.make_move(best_move, &mut thread_data);
         };
-        if options.log_level > 2 {
-            eprintln!("Game is over, outcome: {outcome:?}");
-        }
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
         // STEP 4: write the game to the output file
-        if options.log_level > 2 {
-            eprintln!("Writing {} moves to output file...", game.len());
-        }
         let count = game.len();
         // update with outcome
         game.set_outcome(outcome);
