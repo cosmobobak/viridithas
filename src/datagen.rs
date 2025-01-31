@@ -102,7 +102,7 @@ impl DataGenOptionsBuilder {
             limit: if self.depth_limit {
                 DataGenLimit::Depth(8)
             } else {
-                DataGenLimit::Nodes(5000)
+                DataGenLimit::Nodes(25000)
             },
             generate_dfrc: self.dfrc,
             log_level: 1,
