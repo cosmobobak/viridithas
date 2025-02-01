@@ -25,17 +25,13 @@ pub const FAIL_LOW_TM_BONUS: u32 = 245;
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ForcedMoveType {
     OneLegal,
-    Strong,
-    Weak,
     None,
 }
 
 impl ForcedMoveType {
-    pub fn tm_multiplier(self, conf: &Config) -> f64 {
+    pub const fn tm_multiplier(self) -> f64 {
         match self {
             Self::OneLegal => 0.01,
-            Self::Strong => f64::from(conf.strong_forced_tm_frac) / 1000.0,
-            Self::Weak => f64::from(conf.weak_forced_tm_frac) / 1000.0,
             Self::None => 1.0,
         }
     }
@@ -356,38 +352,6 @@ impl TimeManager {
         ControlFlow::Continue(())
     }
 
-    const SLIGHTLY_FORCED: i32 = 12;
-    const VERY_FORCED: i32 = 8;
-    pub fn report_forced_move(&mut self, depth: i32, conf: &Config) {
-        assert_eq!(self.found_forced_move, ForcedMoveType::None);
-        if depth >= Self::SLIGHTLY_FORCED {
-            // reduce thinking time by conf.weak_forced_tm_frac
-            self.hard_time = self.hard_time * conf.weak_forced_tm_frac / 1000;
-            self.opt_time = self.opt_time * conf.weak_forced_tm_frac / 1000;
-            self.found_forced_move = ForcedMoveType::Weak;
-        } else {
-            /* depth >= Self::VERY_FORCED */
-            // reduce thinking time by conf.strong_forced_tm_frac
-            self.hard_time = self.hard_time * conf.strong_forced_tm_frac / 1000;
-            self.opt_time = self.opt_time * conf.strong_forced_tm_frac / 1000;
-            self.found_forced_move = ForcedMoveType::Strong;
-        }
-    }
-
-    pub fn check_for_forced_move(&self, depth: i32) -> Option<i32> {
-        if self.found_forced_move == ForcedMoveType::None && self.is_dynamic() {
-            if depth >= Self::SLIGHTLY_FORCED {
-                Some(170)
-            } else if depth >= Self::VERY_FORCED {
-                Some(400)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn notify_one_legal_move(&mut self) {
         self.opt_time = Duration::from_millis(0);
         self.found_forced_move = ForcedMoveType::OneLegal;
@@ -440,7 +404,7 @@ impl TimeManager {
             // retain time added by windows that failed low
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
-            let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
+            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
             let subtree_size_multiplier = self.best_move_nodes_fraction.map_or(1.0, |frac| {
                 Self::best_move_subtree_size_multiplier(frac, conf)
             });
@@ -487,7 +451,7 @@ impl TimeManager {
             // calculate the failed low multiplier
             let failed_low_multiplier =
                 f64::from(self.failed_low).mul_add(f64::from(conf.fail_low_tm_bonus) / 1000.0, 1.0);
-            let forced_move_multiplier = self.found_forced_move.tm_multiplier(conf);
+            let forced_move_multiplier = self.found_forced_move.tm_multiplier();
             let subtree_size_multiplier = self.best_move_nodes_fraction.map_or(1.0, |frac| {
                 Self::best_move_subtree_size_multiplier(frac, conf)
             });

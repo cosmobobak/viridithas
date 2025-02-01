@@ -116,8 +116,6 @@ struct Root;
 struct OnPV;
 /// A node with a null window, where we're trying to prove a PV.
 struct OffPV;
-/// A root node with a null window used for time-management searches.
-struct CheckForced;
 
 impl NodeType for Root {
     const PV: bool = true;
@@ -133,11 +131,6 @@ impl NodeType for OffPV {
     const PV: bool = false;
     const ROOT: bool = false;
     type Next = Self;
-}
-impl NodeType for CheckForced {
-    const PV: bool = false;
-    const ROOT: bool = true;
-    type Next = OffPV;
 }
 
 pub trait SmpThreadType {
@@ -433,11 +426,6 @@ impl Board {
 
             // if we've made it here, it means we got an exact score.
             let score = pv.score;
-            let bestmove = t.pvs[t.completed]
-                .moves()
-                .first()
-                .copied()
-                .unwrap_or_else(|| self.default_move(t));
             *average_value = if *average_value == VALUE_NONE {
                 score
             } else {
@@ -466,18 +454,6 @@ impl Board {
             if info.time_manager.mate_found_breaker::<ThTy>(pv, depth) == ControlFlow::Break(()) {
                 info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(());
-            }
-
-            if ThTy::MAIN_THREAD {
-                if let Some(margin) = info.time_manager.check_for_forced_move(depth) {
-                    let saved_seldepth = info.seldepth;
-                    let forced = self.is_forced(margin, info, t, bestmove, score, (depth - 1) / 2);
-                    info.seldepth = saved_seldepth;
-
-                    if forced {
-                        info.time_manager.report_forced_move(depth, &info.conf);
-                    }
-                }
             }
 
             if info.stopped() {
@@ -1601,37 +1577,6 @@ impl Board {
     /// The reduced beta margin for Singular Extension.
     fn singularity_margin(tt_value: i32, depth: i32) -> i32 {
         (tt_value - (depth * 3 / 4)).max(-MATE_SCORE)
-    }
-
-    /// Test if a move is *forced* - that is, if it is a move that is
-    /// significantly better than the rest of the moves in a position,
-    /// by at least `margin`. (typically ~200cp).
-    pub fn is_forced(
-        &mut self,
-        margin: i32,
-        info: &mut SearchInfo,
-        t: &mut ThreadData,
-        m: Move,
-        value: i32,
-        depth: i32,
-    ) -> bool {
-        let r_beta = (value - margin).max(-MATE_SCORE);
-        let r_depth = (depth - 1) / 2;
-        t.ss[self.height()].excluded = Some(m);
-        let pts_prev = info.print_to_stdout;
-        info.print_to_stdout = false;
-        let value = self.alpha_beta::<CheckForced>(
-            &mut PVariation::default(),
-            info,
-            t,
-            r_depth,
-            r_beta - 1,
-            r_beta,
-            false,
-        );
-        info.print_to_stdout = pts_prev;
-        t.ss[self.height()].excluded = None;
-        value < r_beta
     }
 
     /// See if a move looks like it would initiate a winning exchange.
