@@ -97,6 +97,10 @@ const MAJOR_CORRHIST_WEIGHT: i32 = 1289;
 const MINOR_CORRHIST_WEIGHT: i32 = 1290;
 const NONPAWN_CORRHIST_WEIGHT: i32 = 1319;
 
+const EVAL_POLICY_OFFSET: i32 = 530;
+const EVAL_POLICY_UPDATE_MAX: i32 = 1600;
+const EVAL_POLICY_UPDATE_MIN: i32 = 1600;
+
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
@@ -952,7 +956,11 @@ impl Board {
                     let to = mov.history_to_square();
                     let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
                     let threats = self.history().last().unwrap().threats.all;
-                    let delta = i32::clamp(-10 * (ss_prev.eval + static_eval), -1600, 1600) + 530;
+                    let delta = i32::clamp(
+                        -10 * (ss_prev.eval + static_eval),
+                        -info.conf.eval_policy_update_min,
+                        info.conf.eval_policy_update_max,
+                    ) + info.conf.eval_policy_offset;
                     t.update_history_single(from, to, moved, threats, delta);
                 }
             }
