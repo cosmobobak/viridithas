@@ -2,25 +2,27 @@ use std::fmt::Display;
 
 use crate::{
     evaluation::{
-        MATERIAL_SCALE_BASE, SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE, SEE_ROOK_VALUE
+        MATERIAL_SCALE_BASE, SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE,
+        SEE_ROOK_VALUE,
+    },
+    search::{
+        ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN,
+        EVAL_POLICY_OFFSET, EVAL_POLICY_UPDATE_MAX, EVAL_POLICY_UPDATE_MIN, FUTILITY_COEFF_0,
+        FUTILITY_COEFF_1, HISTORY_BONUS_MAX, HISTORY_BONUS_MUL, HISTORY_BONUS_OFFSET,
+        HISTORY_LMR_DIVISOR, HISTORY_MALUS_MAX, HISTORY_MALUS_MUL, HISTORY_MALUS_OFFSET,
+        HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CHECK_MUL, LMR_CUT_NODE_MUL, LMR_DIVISION,
+        LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL,
+        LMR_TT_CAPTURE_MUL, MAIN_SEE_BOUND, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT,
+        NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
+        PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, QS_FUTILITY, QS_SEE_BOUND,
+        RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN,
+        SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN,
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
         NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC,
         WEAK_FORCED_TM_FRAC,
     },
-};
-
-use super::{
-    ASPIRATION_WINDOW, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN, DO_DEEPER_DEPTH_MARGIN,
-    FUTILITY_COEFF_0, FUTILITY_COEFF_1, HISTORY_BONUS_MAX, HISTORY_BONUS_MUL, HISTORY_BONUS_OFFSET,
-    HISTORY_LMR_DIVISOR, HISTORY_MALUS_MAX, HISTORY_MALUS_MUL, HISTORY_MALUS_OFFSET,
-    HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CUT_NODE_MUL, LMR_DIVISION, LMR_NON_IMPROVING_MUL,
-    LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL, LMR_TT_CAPTURE_MUL, MAIN_SEE_BOUND,
-    MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR,
-    NONPAWN_CORRHIST_WEIGHT, PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN,
-    QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN,
-    RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN, LMR_CHECK_MUL
 };
 
 #[derive(Clone, Debug)]
@@ -80,6 +82,9 @@ pub struct Config {
     pub see_rook_value: i32,
     pub see_queen_value: i32,
     pub material_scale_base: i32,
+    pub eval_policy_offset: i32,
+    pub eval_policy_update_max: i32,
+    pub eval_policy_update_min: i32,
 }
 
 impl Config {
@@ -140,6 +145,9 @@ impl Config {
             see_rook_value: SEE_ROOK_VALUE,
             see_queen_value: SEE_QUEEN_VALUE,
             material_scale_base: MATERIAL_SCALE_BASE,
+            eval_policy_offset: EVAL_POLICY_OFFSET,
+            eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
+            eval_policy_update_min: EVAL_POLICY_UPDATE_MIN,
         }
     }
 }
@@ -238,7 +246,10 @@ impl Config {
             SEE_BISHOP_VALUE = [self.see_bishop_value],
             SEE_ROOK_VALUE = [self.see_rook_value],
             SEE_QUEEN_VALUE = [self.see_queen_value],
-            MATERIAL_SCALE_BASE = [self.material_scale_base]
+            MATERIAL_SCALE_BASE = [self.material_scale_base],
+            EVAL_POLICY_OFFSET = [self.eval_policy_offset],
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
+            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min]
         ]
     }
 
@@ -307,7 +318,10 @@ impl Config {
             SEE_BISHOP_VALUE = [self.see_bishop_value, 1, 4096, 16],
             SEE_ROOK_VALUE = [self.see_rook_value, 1, 4096, 16],
             SEE_QUEEN_VALUE = [self.see_queen_value, 1, 4096, 16],
-            MATERIAL_SCALE_BASE = [self.material_scale_base, 1, 4096, 32]
+            MATERIAL_SCALE_BASE = [self.material_scale_base, 1, 4096, 32],
+            EVAL_POLICY_OFFSET = [self.eval_policy_offset, -1536, 1536, 96],
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 144],
+            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min, 1, 4096, 144]
         ]
     }
 

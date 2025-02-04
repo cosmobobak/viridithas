@@ -779,7 +779,6 @@ pub fn run_splat(
     }
 
     let filter = cfg_path.map_or_else(|| Ok(Filter::default()), Filter::from_path)?;
-    let mut rng = rand::thread_rng();
 
     // open the input file
     let input_file = File::open(input).with_context(|| "Failed to create input file")?;
@@ -804,7 +803,6 @@ pub fn run_splat(
                         .with_context(|| "Failed to write PackedBoard into buffered writer.")
                 },
                 &filter,
-                &mut rng,
             )?;
         } else {
             game.splat_to_bulletformat(
@@ -816,7 +814,6 @@ pub fn run_splat(
                     })
                 },
                 &filter,
-                &mut rng,
             )?;
         }
         move_buffer = game.into_move_buffer();

@@ -115,6 +115,10 @@ impl Board {
         self.ep_sq
     }
 
+    pub fn history(&self) -> &[Undo] {
+        &self.history
+    }
+
     #[cfg(feature = "datagen")]
     pub fn ep_sq_mut(&mut self) -> &mut Option<Square> {
         &mut self.ep_sq
