@@ -12,8 +12,7 @@ use std::{
 use arrayvec::ArrayVec;
 
 use crate::{
-    cfor,
-    chess::{
+    cfor, chess::{
         board::{
             movegen::{self, MoveListEntry, MAX_POSITION_MOVES},
             Board,
@@ -23,20 +22,10 @@ use crate::{
         squareset::SquareSet,
         types::{ContHistIndex, Square},
         CHESS960,
-    },
-    evaluation::{
+    }, evaluation::{
         is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
-    },
-    historytable::history_bonus,
-    movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
-    search::pv::PVariation,
-    searchinfo::SearchInfo,
-    tablebases::{self, probe::WDL},
-    threadlocal::ThreadData,
-    transpositiontable::{Bound, TTHit, TTView},
-    uci,
-    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
+    }, historytable::{cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus, main_history_bonus, main_history_malus}, movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE}, search::pv::PVariation, searchinfo::SearchInfo, tablebases::{self, probe::WDL}, threadlocal::ThreadData, transpositiontable::{Bound, TTHit, TTView}, uci, util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE}
 };
 
 use self::parameters::Config;
@@ -85,13 +74,37 @@ const LMR_NON_IMPROVING_MUL: i32 = 689;
 const LMR_TT_CAPTURE_MUL: i32 = 1141;
 const LMR_CHECK_MUL: i32 = 1024;
 
-const HISTORY_BONUS_MUL: i32 = 251;
-const HISTORY_BONUS_OFFSET: i32 = 172;
-const HISTORY_BONUS_MAX: i32 = 2193;
+const MAIN_HISTORY_BONUS_MUL: i32 = 251;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 172;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2193;
 
-const HISTORY_MALUS_MUL: i32 = 225;
-const HISTORY_MALUS_OFFSET: i32 = 278;
-const HISTORY_MALUS_MAX: i32 = 1244;
+const MAIN_HISTORY_MALUS_MUL: i32 = 225;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 278;
+const MAIN_HISTORY_MALUS_MAX: i32 = 1244;
+
+const CONT1_HISTORY_BONUS_MUL: i32 = 251;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 172;
+const CONT1_HISTORY_BONUS_MAX: i32 = 2193;
+
+const CONT1_HISTORY_MALUS_MUL: i32 = 225;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 278;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1244;
+
+const CONT2_HISTORY_BONUS_MUL: i32 = 251;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 172;
+const CONT2_HISTORY_BONUS_MAX: i32 = 2193;
+
+const CONT2_HISTORY_MALUS_MUL: i32 = 225;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 278;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1244;
+
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 251;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 172;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2193;
+
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 225;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 278;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1244;
 
 const PAWN_CORRHIST_WEIGHT: i32 = 1191;
 const MAJOR_CORRHIST_WEIGHT: i32 = 1289;
@@ -836,9 +849,8 @@ impl Board {
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
-                            let delta = history_bonus(&info.conf, depth);
                             self.update_quiet_history_single::<false>(
-                                t, from, to, moved, threats, delta,
+                                t, info, from, to, moved, threats, depth, true
                             );
                         }
                     }
@@ -1600,15 +1612,22 @@ impl Board {
     fn update_quiet_history_single<const MADE: bool>(
         &self,
         t: &mut ThreadData,
+        info: &SearchInfo,
         from: Square,
         to: Square,
         moved: Piece,
         threats: SquareSet,
-        delta: i32,
+        depth: i32,
+        good: bool,
     ) {
-        t.update_history_single(from, to, moved, threats, delta);
-        t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
-        t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
+        let (main, cont1, cont2) = if good {
+            (main_history_bonus(&info.conf, depth), cont1_history_bonus(&info.conf, depth), cont2_history_bonus(&info.conf, depth))
+        } else {
+            (main_history_malus(&info.conf, depth), cont1_history_malus(&info.conf, depth), cont2_history_malus(&info.conf, depth))
+        };
+        t.update_history_single(from, to, moved, threats, main);
+        t.update_continuation_history_single(self, to, moved, cont1, 0 + usize::from(MADE));
+        t.update_continuation_history_single(self, to, moved, cont2, 1 + usize::from(MADE));
         // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
     }
 
