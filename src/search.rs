@@ -12,7 +12,8 @@ use std::{
 use arrayvec::ArrayVec;
 
 use crate::{
-    cfor, chess::{
+    cfor,
+    chess::{
         board::{
             movegen::{self, MoveListEntry, MAX_POSITION_MOVES},
             Board,
@@ -22,10 +23,23 @@ use crate::{
         squareset::SquareSet,
         types::{ContHistIndex, Square},
         CHESS960,
-    }, evaluation::{
+    },
+    evaluation::{
         is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
-    }, historytable::{cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus, main_history_bonus, main_history_malus}, movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE}, search::pv::PVariation, searchinfo::SearchInfo, tablebases::{self, probe::WDL}, threadlocal::ThreadData, transpositiontable::{Bound, TTHit, TTView}, uci, util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE}
+    },
+    historytable::{
+        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
+        main_history_bonus, main_history_malus,
+    },
+    movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
+    search::pv::PVariation,
+    searchinfo::SearchInfo,
+    tablebases::{self, probe::WDL},
+    threadlocal::ThreadData,
+    transpositiontable::{Bound, TTHit, TTView},
+    uci,
+    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -850,7 +864,7 @@ impl Board {
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
                             self.update_quiet_history_single::<false>(
-                                t, info, from, to, moved, threats, depth, true
+                                t, info, from, to, moved, threats, depth, true,
                             );
                         }
                     }
@@ -1621,9 +1635,17 @@ impl Board {
         good: bool,
     ) {
         let (main, cont1, cont2) = if good {
-            (main_history_bonus(&info.conf, depth), cont1_history_bonus(&info.conf, depth), cont2_history_bonus(&info.conf, depth))
+            (
+                main_history_bonus(&info.conf, depth),
+                cont1_history_bonus(&info.conf, depth),
+                cont2_history_bonus(&info.conf, depth),
+            )
         } else {
-            (main_history_malus(&info.conf, depth), cont1_history_malus(&info.conf, depth), cont2_history_malus(&info.conf, depth))
+            (
+                main_history_malus(&info.conf, depth),
+                cont1_history_malus(&info.conf, depth),
+                cont2_history_malus(&info.conf, depth),
+            )
         };
         t.update_history_single(from, to, moved, threats, main);
         t.update_continuation_history_single(self, to, moved, cont1, 0 + usize::from(MADE));

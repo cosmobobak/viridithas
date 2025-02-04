@@ -64,11 +64,12 @@ pub const SEE_QUEEN_VALUE: i32 = 1321;
 impl Board {
     fn material_scale(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        info.conf.material_scale_base + (info.conf.see_knight_value * self.pieces.all_knights().count() as i32
-            + info.conf.see_bishop_value * self.pieces.all_bishops().count() as i32
-            + info.conf.see_rook_value * self.pieces.all_rooks().count() as i32
-            + info.conf.see_queen_value * self.pieces.all_queens().count() as i32)
-            / 32
+        info.conf.material_scale_base
+            + (info.conf.see_knight_value * self.pieces.all_knights().count() as i32
+                + info.conf.see_bishop_value * self.pieces.all_bishops().count() as i32
+                + info.conf.see_rook_value * self.pieces.all_rooks().count() as i32
+                + info.conf.see_queen_value * self.pieces.all_queens().count() as i32)
+                / 32
     }
 
     pub fn evaluate_nnue(&self, t: &ThreadData, info: &SearchInfo) -> i32 {

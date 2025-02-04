@@ -9,7 +9,9 @@ use crate::{
         CHESS960,
     },
     historytable::{
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus, tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE
+        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
+        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
+        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
     },
     search::parameters::Config,
     threadlocal::ThreadData,
