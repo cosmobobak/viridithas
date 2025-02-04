@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     evaluation::{
-        SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE, SEE_ROOK_VALUE,
+        MATERIAL_SCALE_BASE, SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE, SEE_ROOK_VALUE
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
@@ -78,6 +78,7 @@ pub struct Config {
     pub see_bishop_value: i32,
     pub see_rook_value: i32,
     pub see_queen_value: i32,
+    pub material_scale_base: i32,
 }
 
 impl Config {
@@ -136,6 +137,7 @@ impl Config {
             see_bishop_value: SEE_BISHOP_VALUE,
             see_rook_value: SEE_ROOK_VALUE,
             see_queen_value: SEE_QUEEN_VALUE,
+            material_scale_base: MATERIAL_SCALE_BASE,
         }
     }
 }
@@ -232,7 +234,8 @@ impl Config {
             SEE_KNIGHT_VALUE = [self.see_knight_value],
             SEE_BISHOP_VALUE = [self.see_bishop_value],
             SEE_ROOK_VALUE = [self.see_rook_value],
-            SEE_QUEEN_VALUE = [self.see_queen_value]
+            SEE_QUEEN_VALUE = [self.see_queen_value],
+            MATERIAL_SCALE_BASE = [self.material_scale_base]
         ]
     }
 
@@ -299,7 +302,8 @@ impl Config {
             SEE_KNIGHT_VALUE = [self.see_knight_value, 1, 4096, 16],
             SEE_BISHOP_VALUE = [self.see_bishop_value, 1, 4096, 16],
             SEE_ROOK_VALUE = [self.see_rook_value, 1, 4096, 16],
-            SEE_QUEEN_VALUE = [self.see_queen_value, 1, 4096, 16]
+            SEE_QUEEN_VALUE = [self.see_queen_value, 1, 4096, 16],
+            MATERIAL_SCALE_BASE = [self.material_scale_base, 1, 4096, 32]
         ]
     }
 

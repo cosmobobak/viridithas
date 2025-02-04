@@ -54,6 +54,7 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
+pub const MATERIAL_SCALE_BASE: i32 = 700;
 pub const SEE_PAWN_VALUE: i32 = 161;
 pub const SEE_KNIGHT_VALUE: i32 = 445;
 pub const SEE_BISHOP_VALUE: i32 = 463;
@@ -63,7 +64,7 @@ pub const SEE_QUEEN_VALUE: i32 = 1321;
 impl Board {
     fn material_scale(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        700 + (info.conf.see_knight_value * self.pieces.all_knights().count() as i32
+        info.conf.material_scale_base + (info.conf.see_knight_value * self.pieces.all_knights().count() as i32
             + info.conf.see_bishop_value * self.pieces.all_bishops().count() as i32
             + info.conf.see_rook_value * self.pieces.all_rooks().count() as i32
             + info.conf.see_queen_value * self.pieces.all_queens().count() as i32)
