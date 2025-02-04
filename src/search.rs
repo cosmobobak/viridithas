@@ -1642,9 +1642,9 @@ impl Board {
             )
         } else {
             (
-                main_history_malus(&info.conf, depth),
-                cont1_history_malus(&info.conf, depth),
-                cont2_history_malus(&info.conf, depth),
+                -main_history_malus(&info.conf, depth),
+                -cont1_history_malus(&info.conf, depth),
+                -cont2_history_malus(&info.conf, depth),
             )
         };
         t.update_history_single(from, to, moved, threats, main);
