@@ -1,8 +1,14 @@
 use std::fmt::Display;
 
-use crate::timemgmt::{
-    DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
-    NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC, WEAK_FORCED_TM_FRAC,
+use crate::{
+    evaluation::{
+        SEE_BISHOP_VALUE, SEE_KNIGHT_VALUE, SEE_PAWN_VALUE, SEE_QUEEN_VALUE, SEE_ROOK_VALUE,
+    },
+    timemgmt::{
+        DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
+        NODE_TM_SUBTREE_MULTIPLIER, OPTIMAL_WINDOW_FRAC, STRONG_FORCED_TM_FRAC,
+        WEAK_FORCED_TM_FRAC,
+    },
 };
 
 use super::{
@@ -67,6 +73,11 @@ pub struct Config {
     pub major_corrhist_weight: i32,
     pub minor_corrhist_weight: i32,
     pub nonpawn_corrhist_weight: i32,
+    pub see_pawn_value: i32,
+    pub see_knight_value: i32,
+    pub see_bishop_value: i32,
+    pub see_rook_value: i32,
+    pub see_queen_value: i32,
 }
 
 impl Config {
@@ -120,6 +131,11 @@ impl Config {
             major_corrhist_weight: MAJOR_CORRHIST_WEIGHT,
             minor_corrhist_weight: MINOR_CORRHIST_WEIGHT,
             nonpawn_corrhist_weight: NONPAWN_CORRHIST_WEIGHT,
+            see_pawn_value: SEE_PAWN_VALUE,
+            see_knight_value: SEE_KNIGHT_VALUE,
+            see_bishop_value: SEE_BISHOP_VALUE,
+            see_rook_value: SEE_ROOK_VALUE,
+            see_queen_value: SEE_QUEEN_VALUE,
         }
     }
 }
@@ -211,7 +227,12 @@ impl Config {
             PAWN_CORRHIST_WEIGHT = [self.pawn_corrhist_weight],
             MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight],
             MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight],
-            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight]
+            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight],
+            SEE_PAWN_VALUE = [self.see_pawn_value],
+            SEE_KNIGHT_VALUE = [self.see_knight_value],
+            SEE_BISHOP_VALUE = [self.see_bishop_value],
+            SEE_ROOK_VALUE = [self.see_rook_value],
+            SEE_QUEEN_VALUE = [self.see_queen_value]
         ]
     }
 
@@ -273,7 +294,12 @@ impl Config {
             PAWN_CORRHIST_WEIGHT = [self.pawn_corrhist_weight, 1, 4096, 144],
             MAJOR_CORRHIST_WEIGHT = [self.major_corrhist_weight, 1, 4096, 144],
             MINOR_CORRHIST_WEIGHT = [self.minor_corrhist_weight, 1, 4096, 144],
-            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight, 1, 4096, 144]
+            NONPAWN_CORRHIST_WEIGHT = [self.nonpawn_corrhist_weight, 1, 4096, 144],
+            SEE_PAWN_VALUE = [self.see_pawn_value, 1, 4096, 16],
+            SEE_KNIGHT_VALUE = [self.see_knight_value, 1, 4096, 16],
+            SEE_BISHOP_VALUE = [self.see_bishop_value, 1, 4096, 16],
+            SEE_ROOK_VALUE = [self.see_rook_value, 1, 4096, 16],
+            SEE_QUEEN_VALUE = [self.see_queen_value, 1, 4096, 16]
         ]
     }
 

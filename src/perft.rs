@@ -8,12 +8,12 @@ use std::{
 
 use anyhow::{bail, Context};
 
-#[cfg(test)]
-use crate::threadlocal::ThreadData;
 use crate::{
     chess::board::{movegen::MoveList, Board},
     chess::CHESS960,
 };
+#[cfg(test)]
+use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -64,7 +64,12 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 }
 
 #[cfg(test)]
-pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+pub fn movepicker_perft(
+    pos: &mut Board,
+    t: &mut ThreadData,
+    info: &SearchInfo,
+    depth: usize,
+) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
@@ -78,11 +83,11 @@ pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u6
     let mut ml = MovePicker::new(None, [None, None], None, 0);
 
     let mut count = 0;
-    while let Some(m) = ml.next(pos, t) {
+    while let Some(m) = ml.next(pos, t, info) {
         if !pos.make_move(m.mov, t) {
             continue;
         }
-        count += movepicker_perft(pos, t, depth - 1);
+        count += movepicker_perft(pos, t, info, depth - 1);
         pos.unmake_move(t);
     }
 
@@ -236,16 +241,24 @@ mod tests {
         tt.resize(MEGABYTE * 16);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves()
-                .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 400);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 8_902);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 197_281);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(
+            movepicker_perft(&mut pos, &mut t, &info, 1),
+            20,
+            "got {}",
+            {
+                pos.legal_moves()
+                    .into_iter()
+                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 400);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 8_902);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 197_281);
     }
 
     #[test]
@@ -261,16 +274,24 @@ mod tests {
         tt.resize(MEGABYTE * 16);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
-            pos.legal_moves()
-                .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 2_039);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 97_862);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 4_085_603);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(
+            movepicker_perft(&mut pos, &mut t, &info, 1),
+            48,
+            "got {}",
+            {
+                pos.legal_moves()
+                    .into_iter()
+                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 2_039);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 97_862);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 4_085_603);
     }
 
     #[test]

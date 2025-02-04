@@ -1,3 +1,4 @@
+use crate::searchinfo::SearchInfo;
 use crate::{
     chess::board::Board, chess::chessmove::Move, history, historytable::MAX_HISTORY,
     threadlocal::ThreadData,
@@ -67,7 +68,12 @@ impl MovePicker {
 
     /// Select the next move to try. Returns None if there are no more moves to try.
     #[allow(clippy::cognitive_complexity)]
-    pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
+    pub fn next(
+        &mut self,
+        position: &Board,
+        t: &ThreadData,
+        info: &SearchInfo,
+    ) -> Option<MoveListEntry> {
         if self.stage == Stage::Done {
             return None;
         }
@@ -98,7 +104,7 @@ impl MovePicker {
             Self::score_captures(t, position, &mut self.movelist);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once(position) {
+            if let Some(m) = self.yield_once(info, position) {
                 if m.score >= WINNING_CAPTURE_SCORE {
                     return Some(m);
                 }
@@ -166,7 +172,7 @@ impl MovePicker {
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once(position) {
+            if let Some(m) = self.yield_once(info, position) {
                 return Some(m);
             }
             self.stage = Stage::Done;
@@ -181,7 +187,7 @@ impl MovePicker {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self, pos: &Board) -> Option<MoveListEntry> {
+    fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
         loop {
             // If we have already tried all moves, return None.
             if self.index == self.movelist.len() {
@@ -204,7 +210,7 @@ impl MovePicker {
 
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY))
-                && !pos.static_exchange_eval(m.mov, self.see_threshold)
+                && !pos.static_exchange_eval(info, m.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 m.score -= WINNING_CAPTURE_SCORE;

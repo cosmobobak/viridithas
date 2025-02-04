@@ -25,7 +25,7 @@ use crate::{
         CHESS960,
     },
     evaluation::{
-        is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+        is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
     },
     historytable::history_bonus,
@@ -233,7 +233,7 @@ impl Board {
             .moves()
             .first()
             .copied()
-            .unwrap_or_else(|| self.default_move(&thread_headers[0]));
+            .unwrap_or_else(|| self.default_move(&thread_headers[0], info));
         let ponder_move = pv.moves().get(1);
 
         if info.print_to_stdout {
@@ -437,7 +437,7 @@ impl Board {
                 .moves()
                 .first()
                 .copied()
-                .unwrap_or_else(|| self.default_move(t));
+                .unwrap_or_else(|| self.default_move(t, info));
             *average_value = if *average_value == VALUE_NONE {
                 score
             } else {
@@ -489,13 +489,13 @@ impl Board {
     }
 
     /// Give a legal default move in the case where we don't have enough time to search.
-    fn default_move(&mut self, t: &ThreadData) -> Move {
+    fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
             t.tt.probe_for_provisional_info(self.zobrist_key())
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = None;
-        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
+        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t, info) {
             if !self.make_move_simple(mov) {
                 continue;
             }
@@ -546,7 +546,7 @@ impl Board {
             return if in_check {
                 0
             } else {
-                self.evaluate(t, info.nodes.get_local())
+                self.evaluate(t, info, info.nodes.get_local())
             };
         }
 
@@ -590,7 +590,7 @@ impl Board {
             let v = *tt_eval;
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                raw_eval = self.evaluate(t, info, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
@@ -612,7 +612,7 @@ impl Board {
             }
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
+            raw_eval = self.evaluate(t, info, info.nodes.get_local());
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
             t.tt.store(
@@ -652,13 +652,13 @@ impl Board {
 
         let futility = stand_pat + info.conf.qs_futility;
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
             let is_tactical = self.is_tactical(m);
             if best_score > -MINIMUM_TB_WIN_SCORE
                 && is_tactical
                 && !in_check
                 && futility <= alpha
-                && !self.static_exchange_eval(m, 1)
+                && !self.static_exchange_eval(info, m, 1)
             {
                 if best_score < futility {
                     best_score = futility;
@@ -792,7 +792,7 @@ impl Board {
                 return if in_check {
                     0
                 } else {
-                    self.evaluate(t, info.nodes.get_local())
+                    self.evaluate(t, info, info.nodes.get_local())
                 };
             }
 
@@ -923,7 +923,7 @@ impl Board {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                raw_eval = self.evaluate(t, info, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
@@ -934,7 +934,7 @@ impl Board {
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
+            raw_eval = self.evaluate(t, info, info.nodes.get_local());
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
@@ -1108,7 +1108,7 @@ impl Board {
             while let Some(MoveListEntry {
                 mov: m,
                 score: ordering_score,
-            }) = move_picker.next(self, t)
+            }) = move_picker.next(self, t, info)
             {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -1183,7 +1183,7 @@ impl Board {
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
             if excluded == Some(m) {
                 continue;
             }
@@ -1241,6 +1241,7 @@ impl Board {
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
                 && !self.static_exchange_eval(
+                    info,
                     m,
                     see_table[usize::from(is_quiet)]
                         - stat_score * info.conf.see_stat_score_mul / 1024,
@@ -1639,7 +1640,7 @@ impl Board {
     /// the given move, from least to most valuable moved piece, and returns
     /// true if the exchange comes out with a material advantage of at
     /// least `threshold`.
-    pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
+    pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
 
@@ -1647,7 +1648,7 @@ impl Board {
             .promotion_type()
             .map_or_else(|| self.piece_at(from).unwrap().piece_type(), |promo| promo);
 
-        let mut balance = self.estimated_see(m) - threshold;
+        let mut balance = self.estimated_see(info, m) - threshold;
 
         // if the best case fails, don't bother doing the full search.
         if balance < 0 {
@@ -1655,7 +1656,7 @@ impl Board {
         }
 
         // worst case is losing the piece
-        balance -= next_victim.see_value();
+        balance -= see_value(next_victim, info);
 
         // if the worst case passes, we can return true immediately.
         if balance >= 0 {
@@ -1711,7 +1712,7 @@ impl Board {
 
             colour = colour.flip();
 
-            balance = -balance - 1 - next_victim.see_value();
+            balance = -balance - 1 - see_value(next_victim, info);
 
             if balance >= 0 {
                 // from Ethereal:

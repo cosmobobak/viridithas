@@ -146,7 +146,10 @@ impl DataGenOptions {
             },
             self.book.as_ref().map_or_else(String::new, |book| format!(
                 "-{}",
-                book.file_name().unwrap().to_string_lossy().trim_end_matches(".epd")
+                book.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .trim_end_matches(".epd")
             ))
         )
     }
