@@ -906,12 +906,18 @@ pub fn bench(
 
     // logging for permutation
     #[cfg(feature = "nnz-counts")]
-    println!(
-        "NNZ counts: {:?}",
-        network::layers::NNZ_COUNTS
-            .iter()
-            .map(|c| c.load(Ordering::Relaxed))
-            .collect::<Vec<u64>>()
+    std::fs::write(
+        "correlations.txt",
+        format!(
+            "{:?}",
+            network::layers::NNZ_COUNTS
+                .iter()
+                .map(|c| c
+                    .iter()
+                    .map(|c| c.load(Ordering::Relaxed))
+                    .collect::<Vec<u64>>())
+                .collect::<Vec<Vec<u64>>>()
+        ),
     );
 
     Ok(())

@@ -359,7 +359,14 @@ mod x86simd {
                 let elem = elem.assume_init();
                 let nnz = elem != 0;
                 if nnz {
-                    super::NNZ_COUNTS[i].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    for (j, elem) in ft_outputs.iter().enumerate() {
+                        let elem = elem.assume_init();
+                        let nnz = elem != 0;
+                        if nnz {
+                            super::NNZ_COUNTS[i % 1024][j % 1024]
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
                 }
             }
 
@@ -550,5 +557,5 @@ use super::{QA, QB};
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
-pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] =
-    { unsafe { std::mem::transmute([0u64; super::L1_SIZE]) } };
+pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_SIZE / 2]; super::L1_SIZE / 2] =
+    const { unsafe { std::mem::transmute([[0u64; super::L1_SIZE / 2]; super::L1_SIZE / 2]) } };
