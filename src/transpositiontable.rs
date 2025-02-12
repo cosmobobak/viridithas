@@ -1,12 +1,12 @@
 use std::{
-    mem::size_of,
+    mem::{size_of, MaybeUninit},
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
 use crate::{
     chess::chessmove::Move,
     evaluation::MINIMUM_TB_WIN_SCORE,
-    util::{self, depth::CompactDepthStorage},
+    util::{self, depth::CompactDepthStorage, MEGABYTE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,9 +31,33 @@ macro_rules! impl_from_bound {
 impl_from_bound!(u8);
 impl_from_bound!(i32);
 
-fn divide_into_chunks<T>(slice: &[T], n_chunks: usize) -> impl Iterator<Item = &[T]> {
-    let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
+fn divide_into_chunks<T>(slice: &[T], chunks: usize) -> impl Iterator<Item = &[T]> {
+    let chunk_size = slice.len() / chunks + 1; // +1 to avoid 0
     slice.chunks(chunk_size)
+}
+
+unsafe fn threaded_memset_zero(ptr: *mut MaybeUninit<u8>, len: usize, threads: usize) {
+    #[allow(clippy::collection_is_never_read)]
+    std::thread::scope(|s| {
+        let chunk_size = len / threads + 64;
+        let mut handles = Vec::with_capacity(threads);
+        for thread in 0..threads {
+            let start = thread * chunk_size;
+            let end = ((thread + 1) * chunk_size).min(len);
+            if start > end {
+                // with many threads we can hit this
+                break;
+            }
+            let slice_ptr = ptr.add(start);
+            let slice_len = end.checked_sub(start).unwrap();
+            // launder address
+            let addr = slice_ptr as usize;
+            handles.push(s.spawn(move || {
+                let slice_ptr = addr as *mut u8;
+                std::ptr::write_bytes(slice_ptr, 0, slice_len);
+            }));
+        }
+    });
 }
 
 const MAX_AGE: i32 = 1 << 5; // must be power of 2
@@ -231,7 +255,8 @@ impl TT {
         }
     }
 
-    pub fn resize(&mut self, bytes: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: usize) {
+        let start = std::time::Instant::now();
         let new_len = bytes / size_of::<TTClusterMemory>();
         // dealloc the old table:
         self.table = Vec::new();
@@ -239,12 +264,18 @@ impl TT {
         // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
             let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
-            let ptr = std::alloc::alloc_zeroed(layout);
+            let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
+            threaded_memset_zero(ptr.cast(), new_len * size_of::<TTClusterMemory>(), threads);
             self.table = Vec::from_raw_parts(ptr.cast(), new_len, new_len);
         }
+        println!(
+            "info string hash initialisation of {}mb complete in {}us",
+            bytes / MEGABYTE,
+            start.elapsed().as_micros()
+        );
     }
 
     pub fn clear(&self, threads: usize) {
@@ -518,6 +549,50 @@ mod tests {
                 loaded.to_ne_bytes(),
                 "Assertion failed for slot {i}!"
             );
+        }
+    }
+
+    #[test]
+    fn memset_correct() {
+        #![allow(clippy::undocumented_unsafe_blocks)]
+        let mut x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 2);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 7);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1337);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 5555);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
         }
     }
 }
