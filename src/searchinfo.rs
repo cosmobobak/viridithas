@@ -267,7 +267,7 @@ mod tests {
             ..SearchInfo::new(&stopped, &nodes)
         };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
@@ -295,7 +295,7 @@ mod tests {
             ..SearchInfo::new(&stopped, &nodes)
         };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
@@ -323,7 +323,7 @@ mod tests {
             ..SearchInfo::new(&stopped, &nodes)
         };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
@@ -351,7 +351,7 @@ mod tests {
             ..SearchInfo::new(&stopped, &nodes)
         };
         let mut tt = TT::new();
-        tt.resize(MEGABYTE);
+        tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
         let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());

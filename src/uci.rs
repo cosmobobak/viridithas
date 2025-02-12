@@ -597,10 +597,17 @@ static SET_TERM: Once = Once::new();
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn main_loop() -> anyhow::Result<()> {
+    let version_extension = if cfg!(feature = "final-release") {
+        ""
+    } else {
+        "-dev"
+    };
+    println!("{NAME} {VERSION}{version_extension} by Cosmo");
+
     let mut pos = Board::default();
 
     let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE); // default hash size
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
 
     let nnue_params = NNUEParams::decompress_and_alloc()?;
 
@@ -612,13 +619,6 @@ pub fn main_loop() -> anyhow::Result<()> {
     info.set_stdin(&stdin);
 
     let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), nnue_params)];
-
-    let version_extension = if cfg!(feature = "final-release") {
-        ""
-    } else {
-        "-dev"
-    };
-    println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
     loop {
         std::io::stdout()
@@ -739,7 +739,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                         let new_size = conf.hash_mb * MEGABYTE;
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
-                        tt.resize(new_size);
+                        tt.resize(new_size, conf.threads);
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
                             .zip(std::iter::repeat(&pos))
@@ -850,7 +850,7 @@ pub fn bench(
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..BENCH_THREADS)
         .zip(std::iter::repeat(&pos))
         .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
@@ -929,7 +929,7 @@ pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
     info.print_to_stdout = false;
     let mut pos = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..THREADS)
         .zip(std::iter::repeat(&pos))
         .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))

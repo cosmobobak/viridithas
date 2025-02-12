@@ -385,7 +385,7 @@ fn generate_on_thread<'a>(
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     let mut board = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE);
+    tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = ThreadData::new(0, &board, tt.view(), nnue_params);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {

@@ -217,7 +217,7 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
@@ -238,7 +238,7 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
@@ -271,7 +271,7 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
