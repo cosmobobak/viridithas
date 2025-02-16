@@ -995,12 +995,10 @@ impl Board {
                 return beta + (static_eval - beta) / 3;
             }
 
-            let last_move_was_null = self.last_move_was_nullmove();
-
             // null-move pruning.
             // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
-            if !last_move_was_null
+            if t.ss[height - 1].searching.is_some()
                 && depth >= 3
                 && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())

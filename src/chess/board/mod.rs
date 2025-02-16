@@ -1393,14 +1393,6 @@ impl Board {
         self.unmake_move_nnue(t);
     }
 
-    pub fn last_move_was_nullmove(&self) -> bool {
-        if let Some(State { piece_layout, .. }) = self.history.last() {
-            piece_layout.all_kings().is_empty()
-        } else {
-            false
-        }
-    }
-
     /// Makes a guess about the new position key after a move.
     /// This is a cheap estimate, and will fail for special moves such as promotions and castling.
     pub fn key_after(&self, m: Move) -> u64 {
