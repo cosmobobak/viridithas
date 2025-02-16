@@ -121,10 +121,6 @@ impl PieceLayout {
         self.pieces[PieceType::King]
     }
 
-    pub fn reset(&mut self) {
-        *self = Self::NULL;
-    }
-
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
         let from_to_bb = from.as_set() | to.as_set();
         self.pieces[piece.piece_type()] ^= from_to_bb;

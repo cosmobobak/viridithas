@@ -391,21 +391,12 @@ pub struct ContHistIndex {
     pub square: Square,
 }
 
-// todo: remove Copy
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Undo {
-    /// Which rooks can castle.
-    pub castle_perm: CastlingRights,
-    /// The en passant square.
-    pub ep_square: Option<Square>,
-    /// The number of half moves made since the last capture or pawn advance.
-    pub fifty_move_counter: u8,
-    /// Squares that the opponent attacks
-    pub threats: Threats,
-    /// The square-sets of all the pieces on the board.
-    pub piece_layout: PieceLayout,
-    /// An array to accelerate `Board::piece_at()`.
-    pub piece_array: [Option<Piece>; 64],
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[repr(C)]
+/// Zobrist keys for a position.
+/// 
+/// `repr(C)` because this actually how i want it to be laid out in memory.
+pub struct Keys {
     /// The Zobrist hash of the board.
     pub key: u64,
     /// The Zobrist hash of the pawns on the board.
@@ -418,7 +409,26 @@ pub struct Undo {
     pub major_key: u64,
 }
 
-impl Default for Undo {
+/// Full state for a chess position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    /// Which rooks can castle.
+    pub castle_perm: CastlingRights,
+    /// The en passant square.
+    pub ep_square: Option<Square>,
+    /// The number of half moves made since the last capture or pawn advance.
+    pub fifty_move_counter: u8,
+    /// Squares that the opponent attacks
+    pub threats: Threats,
+    /// The square-sets of all the pieces on the board.
+    pub piece_layout: PieceLayout,
+    /// An array to accelerate `Board::piece_at()`.
+    pub piece_array: [Option<Piece>; 64],
+    /// Zobrist hashes.
+    pub keys: Keys,
+}
+
+impl Default for State {
     fn default() -> Self {
         Self {
             castle_perm: CastlingRights::NONE,
@@ -430,11 +440,7 @@ impl Default for Undo {
             },
             piece_layout: PieceLayout::NULL,
             piece_array: [None; 64],
-            key: 0,
-            pawn_key: 0,
-            non_pawn_key: [0; 2],
-            minor_key: 0,
-            major_key: 0,
+            keys: Keys::default(),
         }
     }
 }

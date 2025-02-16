@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{bail, Context};
 
+use arrayvec::ArrayVec;
 use movegen::RAY_BETWEEN;
 #[cfg(feature = "datagen")]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
@@ -20,7 +21,7 @@ use crate::{
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         squareset::SquareSet,
-        types::{CastlingRights, CheckState, File, Rank, Square, Undo},
+        types::{CastlingRights, CheckState, File, Rank, Square, State},
         CHESS960,
     },
     cuckoo,
@@ -28,22 +29,39 @@ use crate::{
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
     threadlocal::ThreadData,
+    util::MAX_PLY,
 };
 
 use crate::chess::piecelayout::{PieceLayout, Threats};
 
-#[derive(Clone, PartialEq, Eq)]
+use super::types::Keys;
+
+#[derive(PartialEq, Eq)]
 pub struct Board {
+    /// Copyable state for the board.
+    pub(crate) state: State,
     /// The side to move.
     side: Colour,
     /// The number of half moves made since the start of the game.
     ply: usize,
 
-    /// Copyable state for the board.
-    pub(crate) state: Undo,
-
     height: usize,
-    history: Vec<Undo>,
+    history: Box<ArrayVec<State, MAX_PLY>>,
+}
+
+// manual impl so that i can detect if i'm doing anything stupid.
+impl Clone for Board {
+    fn clone(&self) -> Self {
+        #[cfg(debug_assertions)]
+        eprintln!("info string copying board");
+        Self {
+            state: self.state.clone(),
+            side: self.side,
+            ply: self.ply,
+            height: self.height,
+            history: self.history.clone(),
+        }
+    }
 }
 
 impl Debug for Board {
@@ -55,7 +73,7 @@ impl Debug for Board {
             .field("fifty_move_counter", &self.state.fifty_move_counter)
             .field("height", &self.height)
             .field("ply", &self.ply)
-            .field("key", &self.state.key)
+            .field("key", &self.state.keys.key)
             .field("threats", &self.state.threats)
             .field("castle_perm", &self.state.castle_perm)
             .finish_non_exhaustive()
@@ -70,23 +88,11 @@ impl Board {
 
     pub fn new() -> Self {
         let mut out = Self {
-            state: Undo {
-                piece_layout: PieceLayout::NULL,
-                piece_array: [None; 64],
-                ep_square: None,
-                fifty_move_counter: 0,
-                key: 0,
-                pawn_key: 0,
-                non_pawn_key: [0; 2],
-                minor_key: 0,
-                major_key: 0,
-                threats: Threats::default(),
-                castle_perm: CastlingRights::NONE,
-            },
+            state: State::default(),
             side: Colour::White,
             height: 0,
             ply: 0,
-            history: Vec::new(),
+            history: Box::new(ArrayVec::new()),
         };
         out.reset();
         out
@@ -117,23 +123,23 @@ impl Board {
     }
 
     pub const fn zobrist_key(&self) -> u64 {
-        self.state.key
+        self.state.keys.key
     }
 
     pub const fn pawn_key(&self) -> u64 {
-        self.state.pawn_key
+        self.state.keys.pawn_key
     }
 
     pub fn non_pawn_key(&self, colour: Colour) -> u64 {
-        self.state.non_pawn_key[colour]
+        self.state.keys.non_pawn_key[colour]
     }
 
     pub const fn minor_key(&self) -> u64 {
-        self.state.minor_key
+        self.state.keys.minor_key
     }
 
     pub const fn major_key(&self) -> u64 {
-        self.state.major_key
+        self.state.keys.major_key
     }
 
     pub const fn pieces(&self) -> &PieceLayout {
@@ -141,15 +147,8 @@ impl Board {
     }
 
     #[cfg(debug_assertions)]
-    pub const fn all_keys(&self) -> (u64, u64, [u64; 2], u64, u64) {
-        // todo: should be a type
-        (
-            self.state.key,
-            self.state.pawn_key,
-            self.state.non_pawn_key,
-            self.state.minor_key,
-            self.state.major_key,
-        )
+    pub fn all_keys(&self) -> Keys {
+        self.state.keys.clone()
     }
 
     pub fn n_men(&self) -> u8 {
@@ -206,53 +205,43 @@ impl Board {
         &mut self.state.castle_perm
     }
 
-    pub fn generate_pos_keys(&self) -> (u64, u64, [u64; 2], u64, u64) {
-        let mut key = 0;
-        let mut pawn_key = 0;
-        let mut non_pawn_key = [0; 2];
-        let mut minor_key = 0;
-        let mut major_key = 0;
+    pub fn generate_pos_keys(&self) -> Keys {
+        let mut keys = Keys::default();
         self.state.piece_layout.visit_pieces(|sq, piece| {
-            hash_piece(&mut key, piece, sq);
+            hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn_key, piece, sq);
             } else {
-                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut major_key, piece, sq);
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
                 } else {
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 }
             }
         });
 
         if self.side == Colour::White {
-            hash_side(&mut key);
+            hash_side(&mut keys.key);
         }
 
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut key, ep_sq);
+            hash_ep(&mut keys.key, ep_sq);
         }
 
-        hash_castling(&mut key, self.state.castle_perm);
+        hash_castling(&mut keys.key, self.state.castle_perm);
 
         debug_assert!(self.state.fifty_move_counter <= 100);
 
-        (key, pawn_key, non_pawn_key, minor_key, major_key)
+        keys
     }
 
     #[cfg(feature = "datagen")]
     pub fn regenerate_zobrist(&mut self) {
-        (
-            self.state.key,
-            self.state.pawn_key,
-            self.state.non_pawn_key,
-            self.state.minor_key,
-            self.state.major_key,
-        ) = self.generate_pos_keys();
+        self.state.keys = self.generate_pos_keys();
     }
 
     #[cfg(feature = "datagen")]
@@ -319,19 +308,10 @@ impl Board {
     }
 
     pub fn reset(&mut self) {
-        // todo: use state = Default
-        self.state.piece_layout.reset();
-        self.state.piece_array = [None; 64];
+        self.state = State::default();
         self.side = Colour::White;
-        self.state.ep_square = None;
-        self.state.fifty_move_counter = 0;
         self.height = 0;
         self.ply = 0;
-        self.state.castle_perm = CastlingRights::NONE;
-        self.state.key = 0;
-        self.state.pawn_key = 0;
-        // todo: fix missing other keys
-        self.state.threats = Threats::default();
         self.history.clear();
     }
 
@@ -385,13 +365,7 @@ impl Board {
                 File::from_index(queenside_file as u8).unwrap(),
             )),
         };
-        (
-            self.state.key,
-            self.state.pawn_key,
-            self.state.non_pawn_key,
-            self.state.minor_key,
-            self.state.major_key,
-        ) = self.generate_pos_keys();
+        self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
     }
 
@@ -455,13 +429,7 @@ impl Board {
                 File::from_index(black_queenside_file as u8).unwrap(),
             )),
         };
-        (
-            self.state.key,
-            self.state.pawn_key,
-            self.state.non_pawn_key,
-            self.state.minor_key,
-            self.state.major_key,
-        ) = self.generate_pos_keys();
+        self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
     }
 
@@ -608,13 +576,7 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        (
-            self.state.key,
-            self.state.pawn_key,
-            self.state.non_pawn_key,
-            self.state.minor_key,
-            self.state.major_key,
-        ) = self.generate_pos_keys();
+        self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
 
         Ok(())
@@ -1114,7 +1076,10 @@ impl Board {
             self.state.piece_array[to]
         };
 
-        let saved_state = self.state;
+        self.history.push(self.state.clone());
+        let saved_ep_square = self.state.ep_square;
+        let saved_fifty_move_counter = self.state.fifty_move_counter;
+        let saved_piece_layout = self.state.piece_layout;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1219,47 +1184,23 @@ impl Board {
 
         // reversed in_check fn, as we have now swapped sides
         if self.sq_attacked(self.king_sq(self.side.flip()), self.side) {
-            // this would be a function but we run into borrow checker issues
-            // because it's currently not smart enough to realize that we're
-            // borrowing disjoint parts of the board.
-            let Undo {
-                ep_square,
-                fifty_move_counter,
-                piece_layout,
-                ..
-            } = saved_state;
-
-            // self.height -= 1;
-            // self.ply -= 1;
             self.side = self.side.flip();
-            // self.key = key;
-            // self.pawn_key = pawn_key;
-            // self.non_pawn_key = non_pawn_key;
-            // self.minor_key = minor_key;
-            // self.major_key = major_key;
-            // self.material_key = material_key;
-            // self.state.castle_perm = castle_perm;
-            self.state.ep_square = ep_square;
-            self.state.fifty_move_counter = fifty_move_counter;
-            // self.threats = threats;
-            self.state.piece_layout = piece_layout;
-            // self.state.piece_array = piece_array;
+            self.state.ep_square = saved_ep_square;
+            self.state.fifty_move_counter = saved_fifty_move_counter;
+            self.state.piece_layout = saved_piece_layout;
+            self.history.pop();
             return false;
         }
 
-        let mut key = self.state.key;
-        let mut pawn_key = self.state.pawn_key;
-        let mut non_pawn_key = self.state.non_pawn_key;
-        let mut minor_key = self.state.minor_key;
-        let mut major_key = self.state.major_key;
+        let mut keys = self.state.keys.clone();
 
         // remove a previous en passant square from the hash
-        if let Some(ep_sq) = saved_state.ep_square {
-            hash_ep(&mut key, ep_sq);
+        if let Some(ep_sq) = saved_ep_square {
+            hash_ep(&mut keys.key, ep_sq);
         }
 
         // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut key, self.state.castle_perm);
+        hash_castling(&mut keys.key, self.state.castle_perm);
 
         // update castling rights
         let mut new_rights = self.state.castle_perm;
@@ -1287,57 +1228,51 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut key, ep_sq);
+            hash_ep(&mut keys.key, ep_sq);
         }
-        hash_side(&mut key);
+        hash_side(&mut keys.key);
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.piece_array[sq] = None;
-            hash_piece(&mut key, piece, sq);
+            hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn_key, piece, sq);
             } else {
-                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut major_key, piece, sq);
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
                 } else {
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.piece_array[sq] = Some(piece);
-            hash_piece(&mut key, piece, sq);
+            hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn_key, piece, sq);
             } else {
-                hash_piece(&mut non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut major_key, piece, sq);
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut major_key, piece, sq);
+                    hash_piece(&mut keys.major_key, piece, sq);
                 } else {
-                    hash_piece(&mut minor_key, piece, sq);
+                    hash_piece(&mut keys.minor_key, piece, sq);
                 }
             }
         }
         // reinsert the castling rights
-        hash_castling(&mut key, self.state.castle_perm);
-        self.state.key = key;
-        self.state.pawn_key = pawn_key;
-        self.state.non_pawn_key = non_pawn_key;
-        self.state.minor_key = minor_key;
-        self.state.major_key = major_key;
+        hash_castling(&mut keys.key, self.state.castle_perm);
+        self.state.keys = keys;
 
         self.ply += 1;
         self.height += 1;
 
         self.state.threats = self.generate_threats(self.side.flip());
-
-        self.history.push(saved_state);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1354,40 +1289,10 @@ impl Board {
         // #[cfg(debug_assertions)]
         // self.check_validity().unwrap();
 
-        let undo = self.history.last().expect("No move to unmake!");
-
-        let Undo {
-            castle_perm,
-            ep_square,
-            fifty_move_counter,
-            threats,
-            piece_layout,
-            piece_array,
-            key,
-            pawn_key,
-            non_pawn_key,
-            minor_key,
-            major_key,
-            ..
-        } = undo;
-
         self.height -= 1;
         self.ply -= 1;
         self.side = self.side.flip();
-        // todo: should this be a direct copy?
-        self.state.key = *key;
-        self.state.pawn_key = *pawn_key;
-        self.state.non_pawn_key = *non_pawn_key;
-        self.state.minor_key = *minor_key;
-        self.state.major_key = *major_key;
-        self.state.castle_perm = *castle_perm;
-        self.state.ep_square = *ep_square;
-        self.state.fifty_move_counter = *fifty_move_counter;
-        self.state.threats = *threats;
-        self.state.piece_layout = *piece_layout;
-        self.state.piece_array = *piece_array;
-
-        self.history.pop();
+        self.state = self.history.pop().expect("No move to unmake!");
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1398,19 +1303,22 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        self.history.push(Undo {
+        self.history.push(State {
             ep_square: self.state.ep_square,
             threats: self.state.threats,
-            key: self.state.key,
+            keys: Keys {
+                key: self.state.keys.key,
+                ..Default::default()
+            },
             ..Default::default()
         });
 
-        let mut key = self.state.key;
+        let mut key = self.state.keys.key;
         if let Some(ep_sq) = self.state.ep_square {
             hash_ep(&mut key, ep_sq);
         }
         hash_side(&mut key);
-        self.state.key = key;
+        self.state.keys.key = key;
 
         self.state.ep_square = None;
         self.side = self.side.flip();
@@ -1431,16 +1339,16 @@ impl Board {
         self.ply -= 1;
         self.side = self.side.flip();
 
-        let Undo {
+        let State {
             ep_square,
             threats,
-            key,
+            keys,
             ..
         } = self.history.last().expect("No move to unmake!");
 
         self.state.ep_square = *ep_square;
         self.state.threats = *threats;
-        self.state.key = *key;
+        self.state.keys.key = keys.key;
 
         self.history.pop();
 
@@ -1486,7 +1394,7 @@ impl Board {
     }
 
     pub fn last_move_was_nullmove(&self) -> bool {
-        if let Some(Undo { piece_layout, .. }) = self.history.last() {
+        if let Some(State { piece_layout, .. }) = self.history.last() {
             piece_layout.all_kings().is_empty()
         } else {
             false
@@ -1502,7 +1410,7 @@ impl Board {
         let piece = self.state.piece_array[src].unwrap();
         let captured = self.piece_at(tgt);
 
-        let mut new_key = self.state.key;
+        let mut new_key = self.state.keys.key;
         hash_side(&mut new_key);
         hash_piece(&mut new_key, piece, src);
         hash_piece(&mut new_key, piece, tgt);
@@ -1515,7 +1423,7 @@ impl Board {
     }
 
     pub fn key_after_null_move(&self) -> u64 {
-        let mut new_key = self.state.key;
+        let mut new_key = self.state.keys.key;
         hash_side(&mut new_key);
         new_key
     }
@@ -1697,7 +1605,7 @@ impl Board {
             .skip(3)
             .step_by(2)
         {
-            if u.key == self.state.key {
+            if u.keys.key == self.state.keys.key {
                 // in-tree, can twofold:
                 if dist_back < self.height {
                     return true;
@@ -1792,10 +1700,10 @@ impl Board {
             return false;
         }
 
-        let old_key = |i: usize| self.history[self.history.len() - i].key;
+        let old_key = |i: usize| self.history[self.history.len() - i].keys.key;
 
         let occ = self.state.piece_layout.occupied();
-        let original_key = self.state.key;
+        let original_key = self.state.keys.key;
 
         let mut other = !(original_key ^ old_key(1));
 
@@ -1861,7 +1769,7 @@ impl Board {
         }
         let mut reps = 1;
         for undo in self.history.iter().rev().skip(1).step_by(2) {
-            if undo.key == self.state.key {
+            if undo.keys.key == self.state.keys.key {
                 reps += 1;
                 if reps == 3 {
                     return GameOutcome::Draw(DrawType::Repetition);
@@ -2199,7 +2107,7 @@ mod tests {
         let mv = Move::new(Square::E2, Square::E3);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
-        assert_eq!(board.state.key, key);
+        assert_eq!(board.state.keys.key, key);
     }
 
     #[test]
@@ -2214,7 +2122,7 @@ mod tests {
         let mv = Move::new(Square::G5, Square::F7);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
-        assert_eq!(board.state.key, key);
+        assert_eq!(board.state.keys.key, key);
     }
 
     #[test]
@@ -2223,7 +2131,7 @@ mod tests {
         let mut board = Board::default();
         let key = board.key_after_null_move();
         board.make_nullmove();
-        assert_eq!(board.state.key, key);
+        assert_eq!(board.state.keys.key, key);
     }
 
     #[test]
@@ -2239,8 +2147,8 @@ mod tests {
         let mut ep_capturable =
             Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
         let d5 = Move::new(Square::D7, Square::D5);
-        let mut not_ep_capturable_key = not_ep_capturable.state.key;
-        let mut ep_capturable_key = ep_capturable.state.key;
+        let mut not_ep_capturable_key = not_ep_capturable.state.keys.key;
+        let mut ep_capturable_key = ep_capturable.state.keys.key;
         hash_side(&mut not_ep_capturable_key);
         hash_side(&mut ep_capturable_key);
         hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D7);
@@ -2256,8 +2164,8 @@ mod tests {
         assert_eq!(not_ep_capturable.state.ep_square, None);
         assert_eq!(ep_capturable.state.ep_square, Some(Square::D6));
 
-        assert_eq!(not_ep_capturable.state.key, not_ep_capturable_key);
-        assert_eq!(ep_capturable.state.key, ep_capturable_key);
+        assert_eq!(not_ep_capturable.state.keys.key, not_ep_capturable_key);
+        assert_eq!(ep_capturable.state.keys.key, ep_capturable_key);
     }
 
     #[test]
