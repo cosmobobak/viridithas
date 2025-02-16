@@ -45,7 +45,8 @@ pub fn init() -> anyhow::Result<()> {
 
                 let mut mv = Some(Move::new(square0, square1));
                 #[allow(clippy::cast_possible_truncation)]
-                let mut key = (PIECE_KEYS[piece][square0] ^ PIECE_KEYS[piece][square1] ^ SIDE_KEY) as u32;
+                let mut key =
+                    (PIECE_KEYS[piece][square0] ^ PIECE_KEYS[piece][square1] ^ SIDE_KEY) as u32;
                 let mut slot = h1(key);
                 loop {
                     std::mem::swap(&mut keys[slot], &mut key);

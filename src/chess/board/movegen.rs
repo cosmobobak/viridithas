@@ -178,13 +178,7 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
     // in bounds.
-    unsafe {
-        if idx >= BISHOP_ATTACKS[sq].len() {
-            // assert to the compiler that it's chill not to bounds-check
-            inconceivable!();
-        }
-        BISHOP_ATTACKS[sq][idx]
-    }
+    unsafe { *BISHOP_ATTACKS[sq].get_unchecked(idx) }
 }
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
@@ -195,13 +189,7 @@ pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
     // in bounds.
-    unsafe {
-        if idx >= ROOK_ATTACKS[sq].len() {
-            // assert to the compiler that it's chill not to bounds-check
-            inconceivable!();
-        }
-        ROOK_ATTACKS[sq][idx]
-    }
+    unsafe { *ROOK_ATTACKS[sq].get_unchecked(idx) }
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
@@ -221,12 +209,15 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {
+        PieceType::Pawn => {
+            debug_assert!(false, "Invalid piece type: {pt:?}");
+            SquareSet::EMPTY
+        }
+        PieceType::Knight => knight_attacks(sq),
         PieceType::Bishop => bishop_attacks(sq, blockers),
         PieceType::Rook => rook_attacks(sq, blockers),
         PieceType::Queen => bishop_attacks(sq, blockers) | rook_attacks(sq, blockers),
-        PieceType::Knight => knight_attacks(sq),
         PieceType::King => king_attacks(sq),
-        PieceType::Pawn => panic!("Invalid piece type: {pt:?}"),
     }
 }
 

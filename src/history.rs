@@ -30,7 +30,7 @@ impl ThreadData<'_> {
         depth: i32,
     ) {
         for &m in moves_to_adjust {
-            let piece_moved = pos.moved_piece(m);
+            let piece_moved = pos.piece_at(m.from());
             debug_assert!(
                 piece_moved.is_some(),
                 "Invalid piece moved by move {} in position \n{pos:X}",
@@ -74,7 +74,7 @@ impl ThreadData<'_> {
     /// Get the history scores for a batch of moves.
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
-            let piece_moved = pos.moved_piece(m.mov);
+            let piece_moved = pos.piece_at(m.mov.from());
             let from = m.mov.from();
             let to = m.mov.history_to_square();
             m.score += i32::from(self.main_history.get(
@@ -88,7 +88,7 @@ impl ThreadData<'_> {
 
     /// Get the history score for a single move.
     pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let piece_moved = pos.moved_piece(m);
+        let piece_moved = pos.piece_at(m.from());
         let from = m.from();
         let to = m.history_to_square();
         i32::from(self.main_history.get(
@@ -109,7 +109,7 @@ impl ThreadData<'_> {
         depth: i32,
     ) {
         for &m in moves_to_adjust {
-            let piece_moved = pos.moved_piece(m);
+            let piece_moved = pos.piece_at(m.from());
             let capture = caphist_piece_type(pos, m);
             debug_assert!(
                 piece_moved.is_some(),
@@ -132,7 +132,7 @@ impl ThreadData<'_> {
     /// Get the tactical history scores for a batch of moves.
     pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
         for m in ms {
-            let piece_moved = pos.moved_piece(m.mov);
+            let piece_moved = pos.piece_at(m.mov.from());
             let capture = caphist_piece_type(pos, m.mov);
             let to = m.mov.to();
             m.score += i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture));
@@ -141,7 +141,7 @@ impl ThreadData<'_> {
 
     /// Get the tactical history score for a single move.
     pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
-        let piece_moved = pos.moved_piece(m);
+        let piece_moved = pos.piece_at(m.from());
         let capture = caphist_piece_type(pos, m);
         let to = m.to();
         i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture))
@@ -167,7 +167,7 @@ impl ThreadData<'_> {
         let cmh_block = self.continuation_history.get_index_mut(ss.conthist_index);
         for &m in moves_to_adjust {
             let to = m.history_to_square();
-            let piece = pos.moved_piece(m).unwrap();
+            let piece = pos.piece_at(m.from()).unwrap();
 
             let delta = if m == best_move {
                 history_bonus(conf, depth)
@@ -215,7 +215,7 @@ impl ThreadData<'_> {
         let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         for m in ms {
             let to = m.mov.history_to_square();
-            let piece = pos.moved_piece(m.mov).unwrap();
+            let piece = pos.piece_at(m.mov.from()).unwrap();
             m.score += i32::from(cmh_block.get(piece, to));
         }
     }
@@ -231,7 +231,7 @@ impl ThreadData<'_> {
         };
         let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         let to = m.history_to_square();
-        let piece = pos.moved_piece(m).unwrap();
+        let piece = pos.piece_at(m.from()).unwrap();
         i32::from(cmh_block.get(piece, to))
     }
 
@@ -347,7 +347,8 @@ pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {
         // the capture history table.
         PieceType::Pawn
     } else {
-        pos.captured_piece(mv)
+        debug_assert!(!mv.is_castle(), "shouldn't be using caphist for castling.");
+        pos.piece_at(mv.to())
             .expect("you weren't capturing anything!")
             .piece_type()
     }

@@ -1057,12 +1057,6 @@ impl Board {
         *self.piece_at_mut(sq) = Some(piece);
     }
 
-    /// Gets the piece that will be moved by the given move.
-    pub fn moved_piece(&self, m: Move) -> Option<Piece> {
-        let idx = m.from();
-        self.piece_array[idx]
-    }
-
     /// Gets the piece that will be captured by the given move.
     pub fn captured_piece(&self, m: Move) -> Option<Piece> {
         if m.is_castle() {
@@ -1079,15 +1073,15 @@ impl Board {
 
     /// Determines whether this move would be a double pawn push in the current position.
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
-        let from_bb = m.from().as_set();
-        if (from_bb & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
+        let to = m.to();
+        if (to.as_set() & (SquareSet::RANK_4 | SquareSet::RANK_5)).is_empty() {
             return false;
         }
-        let to_bb = m.to().as_set();
-        if (to_bb & (SquareSet::RANK_4 | SquareSet::RANK_5)).is_empty() {
+        let from = m.from();
+        if (from.as_set() & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
             return false;
         }
-        let Some(piece_moved) = self.moved_piece(m) else {
+        let Some(piece_moved) = self.piece_array[from] else {
             return false;
         };
         piece_moved.piece_type() == PieceType::Pawn
@@ -1119,11 +1113,14 @@ impl Board {
 
         let from = m.from();
         let mut to = m.to();
+        let castle = m.is_castle();
         let side = self.side;
-        let Some(piece) = self.moved_piece(m) else {
-            return false;
+        let piece = self.piece_array[from].unwrap();
+        let captured = if castle {
+            None
+        } else {
+            self.piece_array[to]
         };
-        let captured = self.captured_piece(m);
 
         let saved_state = Undo {
             castle_perm: self.castle_perm,
@@ -1142,7 +1139,7 @@ impl Board {
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
         // we sort out castling in a branch later, dw about it.
-        if !m.is_castle() {
+        if !castle {
             if m.is_promo() {
                 // just remove the source piece, as a different piece will be arriving here
                 update_buffer.clear_piece(from, piece);
@@ -1161,7 +1158,7 @@ impl Board {
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
             self.pieces.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
-        } else if m.is_castle() {
+        } else if castle {
             self.pieces.clear_piece_at(from, piece);
             let (rook_from, rook_to) = match to {
                 _ if Some(to) == self.castle_perm.wk => {
@@ -1472,7 +1469,7 @@ impl Board {
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let mut update_buffer = UpdateBuffer::default();
-        let Some(piece) = self.moved_piece(m) else {
+        let Some(piece) = self.piece_array[m.from()] else {
             return false;
         };
         let res = self.make_move_base(m, &mut update_buffer);
@@ -1520,7 +1517,8 @@ impl Board {
     pub fn key_after(&self, m: Move) -> u64 {
         let src = m.from();
         let tgt = m.to();
-        let piece = self.moved_piece(m).unwrap();
+        // todo: could be a branchless lookup into a padded array
+        let piece = self.piece_array[src].unwrap();
         let captured = self.piece_at(tgt);
 
         let mut new_key = self.key;
