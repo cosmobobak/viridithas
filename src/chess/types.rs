@@ -53,6 +53,10 @@ impl File {
         // SAFETY: all values are within `0..64`.
         (0..8u8).map(|i| unsafe { std::mem::transmute(i) })
     }
+
+    pub const fn with(self, rank: Rank) -> Square {
+        Square::from_rank_file(rank, self)
+    }
 }
 
 impl<T> Index<File> for [T; 8] {
@@ -112,6 +116,10 @@ impl Rank {
     pub fn all() -> impl DoubleEndedIterator<Item = Self> {
         // SAFETY: all values are within `0..8`.
         (0..8u8).map(|i| unsafe { std::mem::transmute(i) })
+    }
+
+    pub const fn with(self, file: File) -> Square {
+        Square::from_rank_file(self, file)
     }
 }
 
@@ -451,10 +459,10 @@ pub enum CheckState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CastlingRights {
-    pub wk: Option<Square>,
-    pub wq: Option<Square>,
-    pub bk: Option<Square>,
-    pub bq: Option<Square>,
+    pub wk: Option<File>,
+    pub wq: Option<File>,
+    pub bk: Option<File>,
+    pub bq: Option<File>,
 }
 
 impl CastlingRights {
@@ -483,19 +491,24 @@ impl CastlingRights {
     }
 
     pub fn remove(&mut self, sq: Square) {
-        let sq = Some(sq);
-        if self.wk == sq {
-            self.wk = None;
-        } else if self.wq == sq {
-            self.wq = None;
-        } else if self.bk == sq {
-            self.bk = None;
-        } else if self.bq == sq {
-            self.bq = None;
+        let file = Some(sq.file());
+        #[allow(clippy::collapsible_else_if)]
+        if sq.rank() == Rank::One {
+            if self.wk == file {
+                self.wk = None;
+            } else if self.wq == file {
+                self.wq = None;
+            }
+        } else if sq.rank() == Rank::Eight {
+            if self.bk == file {
+                self.bk = None;
+            } else if self.bq == file {
+                self.bq = None;
+            }
         }
     }
 
-    pub fn kingside(self, side: Colour) -> Option<Square> {
+    pub fn kingside(self, side: Colour) -> Option<File> {
         if side == Colour::White {
             self.wk
         } else {
@@ -504,7 +517,7 @@ impl CastlingRights {
     }
 
     #[allow(dead_code)]
-    pub fn kingside_mut(&mut self, side: Colour) -> &mut Option<Square> {
+    pub fn kingside_mut(&mut self, side: Colour) -> &mut Option<File> {
         if side == Colour::White {
             &mut self.wk
         } else {
@@ -512,7 +525,7 @@ impl CastlingRights {
         }
     }
 
-    pub fn queenside(self, side: Colour) -> Option<Square> {
+    pub fn queenside(self, side: Colour) -> Option<File> {
         if side == Colour::White {
             self.wq
         } else {
@@ -521,66 +534,12 @@ impl CastlingRights {
     }
 
     #[allow(dead_code)]
-    pub fn queenside_mut(&mut self, side: Colour) -> &mut Option<Square> {
+    pub fn queenside_mut(&mut self, side: Colour) -> &mut Option<File> {
         if side == Colour::White {
             &mut self.wq
         } else {
             &mut self.bq
         }
-    }
-
-    pub const fn display(&self, chess_960: bool) -> CastlingRightsDisplay {
-        CastlingRightsDisplay {
-            rights: self,
-            chess_960,
-        }
-    }
-}
-
-pub struct CastlingRightsDisplay<'a> {
-    rights: &'a CastlingRights,
-    chess_960: bool,
-}
-
-impl Display for CastlingRightsDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const FILE_NAMES: [u8; 8] = *b"abcdefgh";
-        if self.chess_960 {
-            if let Some(right) = self.rights.wk {
-                write!(
-                    f,
-                    "{}",
-                    FILE_NAMES[right.file()].to_ascii_uppercase() as char
-                )?;
-            }
-            if let Some(right) = self.rights.wq {
-                write!(
-                    f,
-                    "{}",
-                    FILE_NAMES[right.file()].to_ascii_uppercase() as char
-                )?;
-            }
-            if let Some(right) = self.rights.bk {
-                write!(f, "{}", FILE_NAMES[right.file()] as char)?;
-            }
-            if let Some(right) = self.rights.bq {
-                write!(f, "{}", FILE_NAMES[right.file()] as char)?;
-            }
-        } else {
-            if self.rights.wk.is_some() {
-                write!(f, "K")?;
-            }
-            if self.rights.wq.is_some() {
-                write!(f, "Q")?;
-            }
-            if self.rights.bk.is_some() {
-                write!(f, "k")?;
-            }
-            if self.rights.bq.is_some() {
-                write!(f, "q")?;
-            }
-        }
-        Ok(())
     }
 }
 

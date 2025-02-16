@@ -17,7 +17,7 @@ use crate::{
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
-        types::Square,
+        types::{Rank, Square},
         CHESS960,
     },
 };
@@ -661,9 +661,13 @@ impl Board {
             if let Some(castling_kingside) = castling_kingside {
                 let king_dst = Square::G1.relative_to(C::COLOUR);
                 let rook_dst = Square::F1.relative_to(C::COLOUR);
+                let castling_sq = castling_kingside.with(match C::COLOUR {
+                    Colour::White => Rank::One,
+                    Colour::Black => Rank::Eight,
+                });
                 self.try_generate_frc_castling::<C>(
                     king_sq,
-                    castling_kingside,
+                    castling_sq,
                     king_dst,
                     rook_dst,
                     occupied,
@@ -675,9 +679,13 @@ impl Board {
             if let Some(castling_queenside) = castling_queenside {
                 let king_dst = Square::C1.relative_to(C::COLOUR);
                 let rook_dst = Square::D1.relative_to(C::COLOUR);
+                let castling_sq = castling_queenside.with(match C::COLOUR {
+                    Colour::White => Rank::One,
+                    Colour::Black => Rank::Eight,
+                });
                 self.try_generate_frc_castling::<C>(
                     king_sq,
-                    castling_queenside,
+                    castling_sq,
                     king_dst,
                     rook_dst,
                     occupied,

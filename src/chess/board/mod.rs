@@ -348,22 +348,10 @@ impl Board {
         let queenside_file = rook_indices.next().unwrap();
         let kingside_file = rook_indices.next().unwrap();
         self.state.castle_perm = CastlingRights {
-            wk: Some(Square::from_rank_file(
-                Rank::One,
-                File::from_index(kingside_file as u8).unwrap(),
-            )),
-            wq: Some(Square::from_rank_file(
-                Rank::One,
-                File::from_index(queenside_file as u8).unwrap(),
-            )),
-            bk: Some(Square::from_rank_file(
-                Rank::Eight,
-                File::from_index(kingside_file as u8).unwrap(),
-            )),
-            bq: Some(Square::from_rank_file(
-                Rank::Eight,
-                File::from_index(queenside_file as u8).unwrap(),
-            )),
+            wk: Some(File::from_index(kingside_file as u8).unwrap()),
+            wq: Some(File::from_index(queenside_file as u8).unwrap()),
+            bk: Some(File::from_index(kingside_file as u8).unwrap()),
+            bq: Some(File::from_index(queenside_file as u8).unwrap()),
         };
         self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
@@ -412,22 +400,10 @@ impl Board {
         let black_queenside_file = black_rook_indices.next().unwrap();
         let black_kingside_file = black_rook_indices.next().unwrap();
         self.state.castle_perm = CastlingRights {
-            wk: Some(Square::from_rank_file(
-                Rank::One,
-                File::from_index(white_kingside_file as u8).unwrap(),
-            )),
-            wq: Some(Square::from_rank_file(
-                Rank::One,
-                File::from_index(white_queenside_file as u8).unwrap(),
-            )),
-            bk: Some(Square::from_rank_file(
-                Rank::Eight,
-                File::from_index(black_kingside_file as u8).unwrap(),
-            )),
-            bq: Some(Square::from_rank_file(
-                Rank::Eight,
-                File::from_index(black_queenside_file as u8).unwrap(),
-            )),
+            wk: Some(File::from_index(white_kingside_file as u8).unwrap()),
+            wq: Some(File::from_index(white_queenside_file as u8).unwrap()),
+            bk: Some(File::from_index(black_kingside_file as u8).unwrap()),
+            bq: Some(File::from_index(black_queenside_file as u8).unwrap()),
         };
         self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
@@ -635,10 +611,10 @@ impl Board {
             Some(castling) if !CHESS960.load(Ordering::SeqCst) => {
                 for &c in castling {
                     match c {
-                        b'K' => self.state.castle_perm.wk = Some(Square::H1),
-                        b'Q' => self.state.castle_perm.wq = Some(Square::A1),
-                        b'k' => self.state.castle_perm.bk = Some(Square::H8),
-                        b'q' => self.state.castle_perm.bq = Some(Square::A8),
+                        b'K' => self.state.castle_perm.wk = Some(File::H),
+                        b'Q' => self.state.castle_perm.wq = Some(File::A),
+                        b'k' => self.state.castle_perm.bk = Some(File::H),
+                        b'q' => self.state.castle_perm.bq = Some(File::A),
                         _ => {
                             bail!(format!(
                                 "FEN string is invalid, expected castling part to be of the form 'KQkq', got \"{}\"",
@@ -670,13 +646,12 @@ impl Board {
                             if file == king_file {
                                 bail!(format!("FEN string is invalid, white king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                             }
-                            let sq = Square::from_rank_file(Rank::One, file);
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
-                                self.state.castle_perm.wk = Some(sq);
+                                self.state.castle_perm.wk = Some(file);
                             } else {
                                 // castling rights are to the left of the king, so it's "queenside" castling rights.
-                                self.state.castle_perm.wq = Some(sq);
+                                self.state.castle_perm.wq = Some(file);
                             }
                         }
                         c if c.is_ascii_lowercase() => {
@@ -685,13 +660,12 @@ impl Board {
                             if file == king_file {
                                 bail!(format!("FEN string is invalid, black king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
                             }
-                            let sq = Square::from_rank_file(Rank::Eight, file);
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
-                                self.state.castle_perm.bk = Some(sq);
+                                self.state.castle_perm.bk = Some(file);
                             } else {
                                 // castling rights are to the left of the king, so it's "queenside" castling rights.
-                                self.state.castle_perm.bq = Some(sq);
+                                self.state.castle_perm.bq = Some(file);
                             }
                         }
                         _ => {
@@ -946,7 +920,7 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to())
+            if Some(m.to().file())
                 != (if self.side == Colour::Black {
                     self.state.castle_perm.bk
                 } else {
@@ -964,7 +938,7 @@ impl Board {
             }
         } else {
             // queenside castling.
-            if Some(m.to())
+            if Some(m.to().file())
                 != (if self.side == Colour::Black {
                     self.state.castle_perm.bq
                 } else {
@@ -1105,29 +1079,28 @@ impl Board {
             update_buffer.clear_piece(clear_at, to_clear);
         } else if castle {
             self.state.piece_layout.clear_piece_at(from, piece);
-            let (rook_from, rook_to) = match to {
-                _ if Some(to) == self.state.castle_perm.wk => {
+            let to_file = Some(to.file());
+            let rook_from = to;
+            #[allow(clippy::collapsible_else_if)]
+            let rook_to = if side == Colour::White {
+                if to_file == self.state.castle_perm.wk {
                     to = Square::G1;
-                    (self.state.castle_perm.wk.unwrap(), Square::F1)
-                }
-                _ if Some(to) == self.state.castle_perm.wq => {
+                    Square::F1
+                } else if to_file == self.state.castle_perm.wq {
                     to = Square::C1;
-                    (self.state.castle_perm.wq.unwrap(), Square::D1)
+                    Square::D1
+                } else {
+                    unreachable!()
                 }
-                _ if Some(to) == self.state.castle_perm.bk => {
+            } else {
+                if to_file == self.state.castle_perm.bk {
                     to = Square::G8;
-                    (self.state.castle_perm.bk.unwrap(), Square::F8)
-                }
-                _ if Some(to) == self.state.castle_perm.bq => {
+                    Square::F8
+                } else if to_file == self.state.castle_perm.bq {
                     to = Square::C8;
-                    (self.state.castle_perm.bq.unwrap(), Square::D8)
-                }
-                _ => {
-                    panic!(
-                        "Invalid castle move, to: {}, castle_perm: {}",
-                        to,
-                        self.state.castle_perm.display(false)
-                    );
+                    Square::D8
+                } else {
+                    unreachable!()
                 }
             };
             if from != to {
@@ -1174,7 +1147,7 @@ impl Board {
             self.state.piece_layout.clear_piece_at(from, piece);
             self.state.piece_layout.set_piece_at(to, promo);
             update_buffer.add_piece(to, promo);
-        } else if m.is_castle() {
+        } else if castle {
             self.state.piece_layout.set_piece_at(to, piece); // stupid hack for piece-swapping
         } else {
             self.state.piece_layout.move_piece(from, to, piece);
@@ -1204,16 +1177,16 @@ impl Board {
 
         // update castling rights
         let mut new_rights = self.state.castle_perm;
-        if piece == Piece::WR {
-            if Some(from) == self.state.castle_perm.wk {
+        if piece == Piece::WR && from.rank() == Rank::One {
+            if Some(from.file()) == self.state.castle_perm.wk {
                 new_rights.wk = None;
-            } else if Some(from) == self.state.castle_perm.wq {
+            } else if Some(from.file()) == self.state.castle_perm.wq {
                 new_rights.wq = None;
             }
-        } else if piece == Piece::BR {
-            if Some(from) == self.state.castle_perm.bk {
+        } else if piece == Piece::BR && from.rank() == Rank::Eight {
+            if Some(from.file()) == self.state.castle_perm.bk {
                 new_rights.bk = None;
-            } else if Some(from) == self.state.castle_perm.bq {
+            } else if Some(from.file()) == self.state.castle_perm.bq {
                 new_rights.bq = None;
             }
         } else if piece == Piece::WK {
