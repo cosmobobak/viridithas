@@ -993,7 +993,7 @@ impl NNUEState {
         }
         // initialise all the board states in the bucket cache to the empty board
         for board_state in self.bucket_cache.board_states.iter_mut().flatten() {
-            *board_state = PieceLayout::NULL;
+            *board_state = PieceLayout::default();
         }
 
         // refresh the first accumulator

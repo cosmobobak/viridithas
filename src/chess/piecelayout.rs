@@ -7,41 +7,13 @@ use crate::chess::{
     types::{File, Rank, Square},
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct PieceLayout {
     pieces: [SquareSet; 6],
     colours: [SquareSet; 2],
 }
 
 impl PieceLayout {
-    pub const NULL: Self = Self::new(
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-    );
-
-    #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
-    pub const fn new(
-        p: SquareSet,
-        n: SquareSet,
-        b: SquareSet,
-        r: SquareSet,
-        q: SquareSet,
-        k: SquareSet,
-        white: SquareSet,
-        black: SquareSet,
-    ) -> Self {
-        Self {
-            pieces: [p, n, b, r, q, k],
-            colours: [white, black],
-        }
-    }
-
     pub fn king<C: Col>(&self) -> SquareSet {
         self.all_kings() & self.our_pieces::<C>()
     }

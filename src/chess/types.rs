@@ -394,7 +394,7 @@ pub struct ContHistIndex {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 /// Zobrist keys for a position.
-/// 
+///
 /// `repr(C)` because this actually how i want it to be laid out in memory.
 pub struct Keys {
     /// The Zobrist hash of the board.
@@ -431,15 +431,13 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            castle_perm: CastlingRights::NONE,
-            ep_square: None,
-            fifty_move_counter: 0,
-            threats: Threats {
-                all: SquareSet::EMPTY,
-                checkers: SquareSet::EMPTY,
-            },
-            piece_layout: PieceLayout::NULL,
+            // curse thee array autoimpls
             piece_array: [None; 64],
+            castle_perm: CastlingRights::default(),
+            ep_square: None,
+            fifty_move_counter: Default::default(),
+            threats: Threats::default(),
+            piece_layout: PieceLayout::default(),
             keys: Keys::default(),
         }
     }
@@ -451,7 +449,7 @@ pub enum CheckState {
     Checkmate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CastlingRights {
     pub wk: Option<Square>,
     pub wq: Option<Square>,
