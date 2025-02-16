@@ -11,6 +11,8 @@ use crate::chess::{
     squareset::SquareSet,
 };
 
+use super::piece::Col;
+
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, Debug)]
 #[repr(u8)]
 pub enum File {
@@ -385,14 +387,6 @@ impl From<Square> for u16 {
     }
 }
 
-pub const WKCA: u8 = 0b0001;
-
-pub const WQCA: u8 = 0b0010;
-
-pub const BKCA: u8 = 0b0100;
-
-pub const BQCA: u8 = 0b1000;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ContHistIndex {
     pub piece: Piece,
@@ -459,87 +453,131 @@ pub enum CheckState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CastlingRights {
-    pub wk: Option<File>,
-    pub wq: Option<File>,
-    pub bk: Option<File>,
-    pub bq: Option<File>,
+    // pub wk: Option<File>,
+    // pub wq: Option<File>,
+    // pub bk: Option<File>,
+    // pub bq: Option<File>,
+    // packed representation:
+    // each file requires 8 values - three bits.
+    // three times four is twelve, and then
+    // the bottom four bits are used to represent presence.
+    // [ 3 | wk ][ 3 | wq ][ 3 | bk ][ 3 | bq ][ 4 | flags ]
+    data: u16,
 }
 
+#[allow(clippy::unusual_byte_groupings)]
 impl CastlingRights {
-    pub const NONE: Self = Self {
-        wk: None,
-        wq: None,
-        bk: None,
-        bq: None,
-    };
+    pub const WKCA: u16 = 0b0001;
+    pub const WQCA: u16 = 0b0010;
+    pub const BKCA: u16 = 0b0100;
+    pub const BQCA: u16 = 0b1000;
+    pub const WK_MASK: u16 = 0b111_000_000_000_0000;
+    pub const WQ_MASK: u16 = 0b000_111_000_000_0000;
+    pub const BK_MASK: u16 = 0b000_000_111_000_0000;
+    pub const BQ_MASK: u16 = 0b000_000_000_111_0000;
+    pub const WK_SHIFT: u8 = 4 + 3 + 3 + 3;
+    pub const WQ_SHIFT: u8 = 4 + 3 + 3;
+    pub const BK_SHIFT: u8 = 4 + 3;
+    pub const BQ_SHIFT: u8 = 4;
+    pub const KEY_MASK: u16 = 0b1111;
 
-    pub const fn hashkey_index(self) -> usize {
-        let mut index = 0;
-        if self.wk.is_some() {
-            index |= WKCA;
+    pub const fn new(
+        wk: Option<File>,
+        wq: Option<File>,
+        bk: Option<File>,
+        bq: Option<File>,
+    ) -> Self {
+        let mut data = 0;
+
+        if let Some(wk) = wk {
+            data |= ((wk as u16) << Self::WK_SHIFT) | Self::WKCA;
         }
-        if self.wq.is_some() {
-            index |= WQCA;
+        if let Some(wq) = wq {
+            data |= ((wq as u16) << Self::WQ_SHIFT) | Self::WQCA;
         }
-        if self.bk.is_some() {
-            index |= BKCA;
+        if let Some(bk) = bk {
+            data |= ((bk as u16) << Self::BK_SHIFT) | Self::BKCA;
         }
-        if self.bq.is_some() {
-            index |= BQCA;
+        if let Some(bq) = bq {
+            data |= ((bq as u16) << Self::BQ_SHIFT) | Self::BQCA;
         }
-        index as usize
+
+        Self { data }
     }
 
-    pub fn remove(&mut self, sq: Square) {
-        let file = Some(sq.file());
-        #[allow(clippy::collapsible_else_if)]
-        if sq.rank() == Rank::One {
-            if self.wk == file {
-                self.wk = None;
-            } else if self.wq == file {
-                self.wq = None;
-            }
-        } else if sq.rank() == Rank::Eight {
-            if self.bk == file {
-                self.bk = None;
-            } else if self.bq == file {
-                self.bq = None;
-            }
+    pub const fn hashkey_index(self) -> usize {
+        (self.data & Self::KEY_MASK) as usize
+    }
+
+    pub fn clear<C: Col>(&mut self) {
+        self.data &= if C::WHITE {
+            !(Self::WK_MASK | Self::WQ_MASK)
+        } else {
+            !(Self::BK_MASK | Self::BQ_MASK)
+        };
+    }
+
+    pub fn clear_side<const IS_KINGSIDE: bool, C: Col>(&mut self) {
+        self.data &= if C::WHITE {
+            !(if IS_KINGSIDE {
+                Self::WK_MASK
+            } else {
+                Self::WQ_MASK
+            }) } else {
+            !(if IS_KINGSIDE {
+                Self::BK_MASK
+            } else {
+                Self::BQ_MASK
+            })
+        };
+    }
+
+    pub fn remove<C: Col>(&mut self, file: File) {
+        if self.kingside(C::COLOUR) == Some(file) {
+            self.clear_side::<true, C>();
+        } else if self.queenside(C::COLOUR) == Some(file) {
+            self.clear_side::<false, C>();
         }
     }
 
     pub fn kingside(self, side: Colour) -> Option<File> {
-        if side == Colour::White {
-            self.wk
-        } else {
-            self.bk
+        let presence = [Self::WKCA, Self::BKCA][side];
+        if self.data & presence == 0 {
+            return None;
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn kingside_mut(&mut self, side: Colour) -> &mut Option<File> {
-        if side == Colour::White {
-            &mut self.wk
-        } else {
-            &mut self.bk
-        }
+        let shift = [Self::WK_SHIFT, Self::BK_SHIFT][side];
+        let mask = [Self::WK_MASK, Self::BK_MASK][side];
+        let value = (self.data & mask) >> shift;
+        File::from_index(value as u8)
     }
 
     pub fn queenside(self, side: Colour) -> Option<File> {
-        if side == Colour::White {
-            self.wq
-        } else {
-            self.bq
+        let presence = [Self::WQCA, Self::BQCA][side];
+        if self.data & presence == 0 {
+            return None;
         }
+        let shift = [Self::WQ_SHIFT, Self::BQ_SHIFT][side];
+        let mask = [Self::WQ_MASK, Self::BQ_MASK][side];
+        let value = (self.data & mask) >> shift;
+        File::from_index(value as u8)
     }
 
-    #[allow(dead_code)]
-    pub fn queenside_mut(&mut self, side: Colour) -> &mut Option<File> {
-        if side == Colour::White {
-            &mut self.wq
-        } else {
-            &mut self.bq
-        }
+    pub fn set_kingside(&mut self, side: Colour, file: File) {
+        let presence = [Self::WKCA, Self::BKCA][side];
+        let shift = [Self::WK_SHIFT, Self::BK_SHIFT][side];
+        let mask = [Self::WK_MASK, Self::BK_MASK][side];
+        let value = file as u16;
+        self.data &= mask;
+        self.data |= (value << shift) | presence;
+    }
+
+    pub fn set_queenside(&mut self, side: Colour, file: File) {
+        let presence = [Self::WQCA, Self::BQCA][side];
+        let shift = [Self::WQ_SHIFT, Self::BQ_SHIFT][side];
+        let mask = [Self::WQ_MASK, Self::BQ_MASK][side];
+        let value = file as u16;
+        self.data &= mask;
+        self.data |= (value << shift) | presence;
     }
 }
 

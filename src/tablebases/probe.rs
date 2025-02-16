@@ -69,7 +69,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     const BLACK: bool = false;
 
     // guards for invalid positions
-    if board.castling_rights() != CastlingRights::NONE || board.fifty_move_counter() != 0 {
+    if board.castling_rights() != CastlingRights::default() || board.fifty_move_counter() != 0 {
         return None;
     }
 
