@@ -75,7 +75,7 @@ impl Filter {
         if eval.unsigned_abs() >= self.max_eval {
             return true;
         }
-        if board.pieces.occupied().count() < self.min_pieces {
+        if board.pieces().occupied().count() < self.min_pieces {
             return true;
         }
         if self.filter_tactical && board.is_tactical(mv) {
@@ -329,7 +329,7 @@ impl Game {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
-                let piece_layout = &board.pieces;
+                let piece_layout = board.pieces();
                 bbs[0] = piece_layout.occupied_co(Colour::White).inner();
                 bbs[1] = piece_layout.occupied_co(Colour::Black).inner();
                 bbs[2] = piece_layout.of_type(PieceType::Pawn).inner();
@@ -384,43 +384,43 @@ mod tests {
     fn roundtrip() {
         fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
             assert_eq!(
-                lhs.pieces.all_pawns(),
-                rhs.pieces.all_pawns(),
+                lhs.pieces().all_pawns(),
+                rhs.pieces().all_pawns(),
                 "pawn square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_knights(),
-                rhs.pieces.all_knights(),
+                lhs.pieces().all_knights(),
+                rhs.pieces().all_knights(),
                 "knight square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_bishops(),
-                rhs.pieces.all_bishops(),
+                lhs.pieces().all_bishops(),
+                rhs.pieces().all_bishops(),
                 "bishop square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_rooks(),
-                rhs.pieces.all_rooks(),
+                lhs.pieces().all_rooks(),
+                rhs.pieces().all_rooks(),
                 "rook square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_queens(),
-                rhs.pieces.all_queens(),
+                lhs.pieces().all_queens(),
+                rhs.pieces().all_queens(),
                 "queen square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_kings(),
-                rhs.pieces.all_kings(),
+                lhs.pieces().all_kings(),
+                rhs.pieces().all_kings(),
                 "king square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.occupied_co(Colour::White),
-                rhs.pieces.occupied_co(Colour::White),
+                lhs.pieces().occupied_co(Colour::White),
+                rhs.pieces().occupied_co(Colour::White),
                 "white square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.occupied_co(Colour::Black),
-                rhs.pieces.occupied_co(Colour::Black),
+                lhs.pieces().occupied_co(Colour::Black),
+                rhs.pieces().occupied_co(Colour::Black),
                 "black square-sets {msg}"
             );
             for sq in Square::all() {

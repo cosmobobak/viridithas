@@ -391,13 +391,20 @@ pub struct ContHistIndex {
     pub square: Square,
 }
 
+// todo: remove Copy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Undo {
+    /// Which rooks can castle.
     pub castle_perm: CastlingRights,
+    /// The en passant square.
     pub ep_square: Option<Square>,
+    /// The number of half moves made since the last capture or pawn advance.
     pub fifty_move_counter: u8,
+    /// Squares that the opponent attacks
     pub threats: Threats,
+    /// The square-sets of all the pieces on the board.
     pub piece_layout: PieceLayout,
+    /// An array to accelerate `Board::piece_at()`.
     pub piece_array: [Option<Piece>; 64],
     /// The Zobrist hash of the board.
     pub key: u64,

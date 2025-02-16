@@ -1000,7 +1000,7 @@ impl NNUEState {
         for colour in Colour::all() {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
-                board.pieces,
+                board.state.piece_layout,
                 colour,
                 &mut self.accumulators[0],
             );
@@ -1068,7 +1068,7 @@ impl NNUEState {
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
-                        board.pieces,
+                        board.state.piece_layout,
                         colour,
                         &mut self.accumulators[self.current_acc],
                     );
@@ -1130,7 +1130,7 @@ impl NNUEState {
         } else {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
-                pos.pieces,
+                pos.state.piece_layout,
                 C::COLOUR,
                 &mut self.accumulators[self.current_acc],
             );
@@ -1146,7 +1146,7 @@ impl NNUEState {
     )]
     fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
         let mut idx = self.current_acc;
-        let mut budget = pos.pieces.occupied().count() as i32;
+        let mut budget = pos.pieces().occupied().count() as i32;
         while idx > 0 && !self.accumulators[idx].correct[C::COLOUR] {
             let curr = &self.accumulators[idx - 1];
             if curr.mv.piece.colour() == C::COLOUR

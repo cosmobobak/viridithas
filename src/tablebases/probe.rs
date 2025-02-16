@@ -76,15 +76,16 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
+        let b = board.pieces();
         let wdl = tb_probe_wdl(
-            board.pieces.occupied_co(Colour::White).inner(),
-            board.pieces.occupied_co(Colour::Black).inner(),
-            board.pieces.all_kings().inner(),
-            board.pieces.all_queens().inner(),
-            board.pieces.all_rooks().inner(),
-            board.pieces.all_bishops().inner(),
-            board.pieces.all_knights().inner(),
-            board.pieces.all_pawns().inner(),
+            b.occupied_co(Colour::White).inner(),
+            b.occupied_co(Colour::Black).inner(),
+            b.all_kings().inner(),
+            b.all_queens().inner(),
+            b.all_rooks().inner(),
+            b.all_bishops().inner(),
+            b.all_knights().inner(),
+            b.all_pawns().inner(),
             0,
             0,
             0,
@@ -111,15 +112,16 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
+        let b = board.pieces();
         let result = tb_probe_root(
-            board.pieces.occupied_co(Colour::White).inner(),
-            board.pieces.occupied_co(Colour::Black).inner(),
-            board.pieces.all_kings().inner(),
-            board.pieces.all_queens().inner(),
-            board.pieces.all_rooks().inner(),
-            board.pieces.all_bishops().inner(),
-            board.pieces.all_knights().inner(),
-            board.pieces.all_pawns().inner(),
+            b.occupied_co(Colour::White).inner(),
+            b.occupied_co(Colour::Black).inner(),
+            b.all_kings().inner(),
+            b.all_queens().inner(),
+            b.all_rooks().inner(),
+            b.all_bishops().inner(),
+            b.all_knights().inner(),
+            b.all_pawns().inner(),
             u32::from(board.fifty_move_counter()),
             0,
             0,
