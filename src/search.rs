@@ -1048,12 +1048,10 @@ impl Board {
                 return beta + (static_eval - beta) / 3;
             }
 
-            let last_move_was_null = self.last_move_was_nullmove();
-
             // null-move pruning.
             // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
-            if !last_move_was_null
+            if t.ss[height - 1].searching.is_some()
                 && depth >= 3
                 && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
@@ -1709,6 +1707,7 @@ impl Board {
     pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
+        let board = self.pieces();
 
         let mut next_victim = m
             .promotion_type()
@@ -1729,22 +1728,22 @@ impl Board {
             return true;
         }
 
-        let diag_sliders = self.pieces.all_bishops() | self.pieces.all_queens();
-        let orth_sliders = self.pieces.all_rooks() | self.pieces.all_queens();
+        let diag_sliders = board.all_bishops() | board.all_queens();
+        let orth_sliders = board.all_rooks() | board.all_queens();
 
         // occupied starts with the position after the move `m` is made.
-        let mut occupied = (self.pieces.occupied() ^ from.as_set()) | to.as_set();
+        let mut occupied = (board.occupied() ^ from.as_set()) | to.as_set();
         if m.is_ep() {
             occupied ^= self.ep_sq().unwrap().as_set();
         }
 
-        let mut attackers = self.pieces.all_attackers_to_sq(to, occupied) & occupied;
+        let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
 
         // after the move, it's the opponent's turn.
         let mut colour = self.turn().flip();
 
         loop {
-            let my_attackers = attackers & self.pieces.occupied_co(colour);
+            let my_attackers = attackers & board.occupied_co(colour);
             if my_attackers.is_empty() {
                 break;
             }
@@ -1752,14 +1751,12 @@ impl Board {
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if (my_attackers & self.pieces.of_type(victim)).non_empty() {
+                if (my_attackers & board.of_type(victim)).non_empty() {
                     break;
                 }
             }
 
-            occupied ^= (my_attackers & self.pieces.of_type(next_victim))
-                .first()
-                .as_set();
+            occupied ^= (my_attackers & board.of_type(next_victim)).first().as_set();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
@@ -1786,7 +1783,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::King
-                    && (attackers & self.pieces.occupied_co(colour)).non_empty()
+                    && (attackers & board.occupied_co(colour)).non_empty()
                 {
                     colour = colour.flip();
                 }

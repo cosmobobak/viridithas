@@ -973,10 +973,10 @@ impl Display for MaterialConfiguration {
 impl From<&Board> for MaterialConfiguration {
     fn from(board: &Board) -> Self {
         let mut mc = Self::default();
-        let white = board.pieces.occupied_co(Colour::White);
-        let black = board.pieces.occupied_co(Colour::Black);
+        let white = board.pieces().occupied_co(Colour::White);
+        let black = board.pieces().occupied_co(Colour::Black);
         for piece in PieceType::all().take(5) {
-            let pieces = board.pieces.of_type(piece);
+            let pieces = board.pieces().of_type(piece);
             let white_pieces = pieces & white;
             let black_pieces = pieces & black;
             mc.counts[piece.index()] = u8::try_from(white_pieces.count()).unwrap_or(u8::MAX);
@@ -1052,7 +1052,7 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
             *stats.eval_counts.entry(evaluation).or_default() += 1;
             *stats
                 .piece_counts
-                .entry(u8::try_from(position.pieces.occupied().count()).unwrap_or(u8::MAX))
+                .entry(u8::try_from(position.pieces().occupied().count()).unwrap_or(u8::MAX))
                 .or_default() += 1;
             *stats
                 .material_counts
