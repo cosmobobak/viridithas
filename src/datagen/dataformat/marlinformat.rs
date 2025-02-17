@@ -30,7 +30,7 @@ impl PackedBoard {
     }
 
     pub fn pack(board: &Board, eval: i16, wdl: u8, extra: u8) -> Self {
-        let occupancy = board.pieces.occupied();
+        let occupancy = board.pieces().occupied();
 
         let mut pieces = util::U4Array32::default();
         for (i, sq) in occupancy.iter().enumerate() {
@@ -45,12 +45,11 @@ impl PackedBoard {
                 Rank::Eight
             };
             if piece_type == PieceType::Rook && sq.rank() == rank1 {
-                let castling_sq = if board.king_sq(colour) < sq {
+                let castling_file = if board.king_sq(colour) < sq {
                     board.castling_rights().kingside(colour)
                 } else {
                     board.castling_rights().queenside(colour)
                 };
-                let castling_file = castling_sq.map(Square::file);
                 if Some(sq.file()) == castling_file {
                     piece_code = UNMOVED_ROOK;
                 }
@@ -86,9 +85,13 @@ impl PackedBoard {
             let piece_type = match piece_code {
                 UNMOVED_ROOK => {
                     if seen_king[colour] {
-                        *builder.castling_rights_mut().kingside_mut(colour) = Some(sq);
+                        builder
+                            .castling_rights_mut()
+                            .set_kingside(colour, sq.file());
                     } else {
-                        *builder.castling_rights_mut().queenside_mut(colour) = Some(sq);
+                        builder
+                            .castling_rights_mut()
+                            .set_queenside(colour, sq.file());
                     }
                     PieceType::Rook
                 }

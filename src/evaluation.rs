@@ -54,10 +54,11 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
 impl Board {
     fn material_scale(&self) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        700 + (PieceType::Knight.see_value() * self.pieces.all_knights().count() as i32
-            + PieceType::Bishop.see_value() * self.pieces.all_bishops().count() as i32
-            + PieceType::Rook.see_value() * self.pieces.all_rooks().count() as i32
-            + PieceType::Queen.see_value() * self.pieces.all_queens().count() as i32)
+        let b = self.pieces();
+        700 + (PieceType::Knight.see_value() * b.all_knights().count() as i32
+            + PieceType::Bishop.see_value() * b.all_bishops().count() as i32
+            + PieceType::Rook.see_value() * b.all_rooks().count() as i32
+            + PieceType::Queen.see_value() * b.all_queens().count() as i32)
             / 32
     }
 
@@ -86,7 +87,7 @@ impl Board {
 
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         // detect draw by insufficient material
-        if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
+        if !self.pieces().any_pawns() && self.pieces().is_material_draw() {
             return if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
@@ -102,9 +103,9 @@ impl Board {
 
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
-        let us = self.pieces.occupied_co(stm);
-        let kings = self.pieces.all_kings();
-        let pawns = self.pieces.all_pawns();
+        let us = self.pieces().occupied_co(stm);
+        let kings = self.pieces().all_kings();
+        let pawns = self.pieces().all_pawns();
         (us & (kings | pawns)) != us
     }
 
