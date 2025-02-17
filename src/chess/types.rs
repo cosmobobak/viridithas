@@ -453,10 +453,6 @@ pub enum CheckState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CastlingRights {
-    // pub wk: Option<File>,
-    // pub wq: Option<File>,
-    // pub bk: Option<File>,
-    // pub bq: Option<File>,
     // packed representation:
     // each file requires 8 values - three bits.
     // three times four is twelve, and then
@@ -511,24 +507,26 @@ impl CastlingRights {
 
     pub fn clear<C: Col>(&mut self) {
         self.data &= if C::WHITE {
-            !(Self::WK_MASK | Self::WQ_MASK)
+            !(Self::WK_MASK | Self::WQ_MASK | Self::WKCA | Self::WQCA)
         } else {
-            !(Self::BK_MASK | Self::BQ_MASK)
+            !(Self::BK_MASK | Self::BQ_MASK | Self::BKCA | Self::BQCA)
         };
     }
 
     pub fn clear_side<const IS_KINGSIDE: bool, C: Col>(&mut self) {
-        self.data &= if C::WHITE {
-            !(if IS_KINGSIDE {
-                Self::WK_MASK
+        #![allow(clippy::collapsible_else_if)]
+        self.data &= !if C::WHITE {
+            if IS_KINGSIDE {
+                Self::WK_MASK | Self::WKCA
             } else {
-                Self::WQ_MASK
-            }) } else {
-            !(if IS_KINGSIDE {
-                Self::BK_MASK
+                Self::WQ_MASK | Self::WQCA
+            }
+        } else {
+            if IS_KINGSIDE {
+                Self::BK_MASK | Self::BKCA
             } else {
-                Self::BQ_MASK
-            })
+                Self::BQ_MASK | Self::BQCA
+            }
         };
     }
 
@@ -565,7 +563,7 @@ impl CastlingRights {
     pub fn set_kingside(&mut self, side: Colour, file: File) {
         let presence = [Self::WKCA, Self::BKCA][side];
         let shift = [Self::WK_SHIFT, Self::BK_SHIFT][side];
-        let mask = [Self::WK_MASK, Self::BK_MASK][side];
+        let mask = [!Self::WK_MASK, !Self::BK_MASK][side];
         let value = file as u16;
         self.data &= mask;
         self.data |= (value << shift) | presence;
@@ -574,7 +572,7 @@ impl CastlingRights {
     pub fn set_queenside(&mut self, side: Colour, file: File) {
         let presence = [Self::WQCA, Self::BQCA][side];
         let shift = [Self::WQ_SHIFT, Self::BQ_SHIFT][side];
-        let mask = [Self::WQ_MASK, Self::BQ_MASK][side];
+        let mask = [!Self::WQ_MASK, !Self::BQ_MASK][side];
         let value = file as u16;
         self.data &= mask;
         self.data |= (value << shift) | presence;
@@ -583,6 +581,10 @@ impl CastlingRights {
 
 #[cfg(test)]
 mod tests {
+    use crate::chess::piece::{Black, White};
+
+    use super::*;
+
     #[test]
     fn square_flipping() {
         use super::Square;
@@ -606,5 +608,86 @@ mod tests {
         assert_eq!(Square::A1.relative_to(Colour::Black), Square::A8);
         assert_eq!(Square::A8.relative_to(Colour::White), Square::A8);
         assert_eq!(Square::A8.relative_to(Colour::Black), Square::A1);
+    }
+
+    #[test]
+    fn test_kingside_getters_and_setters() {
+        let mut rights = CastlingRights::default();
+
+        // Test white kingside
+        assert_eq!(rights.kingside(Colour::White), None);
+        rights.set_kingside(Colour::White, File::H);
+        assert_eq!(rights.kingside(Colour::White), Some(File::H));
+
+        // Test black kingside
+        assert_eq!(rights.kingside(Colour::Black), None);
+        rights.set_kingside(Colour::Black, File::H);
+        assert_eq!(rights.kingside(Colour::Black), Some(File::H));
+
+        // Test overwriting existing rights
+        rights.set_kingside(Colour::White, File::G);
+        assert_eq!(rights.kingside(Colour::White), Some(File::G));
+    }
+
+    #[test]
+    fn test_queenside_getters_and_setters() {
+        let mut rights = CastlingRights::default();
+
+        // Test white queenside
+        assert_eq!(rights.queenside(Colour::White), None);
+        rights.set_queenside(Colour::White, File::A);
+        assert_eq!(rights.queenside(Colour::White), Some(File::A));
+
+        // Test black queenside
+        assert_eq!(rights.queenside(Colour::Black), None);
+        rights.set_queenside(Colour::Black, File::A);
+        assert_eq!(rights.queenside(Colour::Black), Some(File::A));
+
+        // Test overwriting existing rights
+        rights.set_queenside(Colour::White, File::B);
+        assert_eq!(rights.queenside(Colour::White), Some(File::B));
+    }
+
+    #[test]
+    fn test_clear_rights() {
+        let mut rights =
+            CastlingRights::new(Some(File::H), Some(File::A), Some(File::H), Some(File::A));
+
+        assert_eq!(rights.kingside(Colour::White), Some(File::H));
+        assert_eq!(rights.queenside(Colour::White), Some(File::A));
+        assert_eq!(rights.kingside(Colour::Black), Some(File::H));
+        assert_eq!(rights.queenside(Colour::Black), Some(File::A));
+
+        // Test clearing white rights
+        rights.clear::<White>();
+        assert_eq!(rights.kingside(Colour::White), None);
+        assert_eq!(rights.queenside(Colour::White), None);
+        assert_eq!(rights.kingside(Colour::Black), Some(File::H));
+        assert_eq!(rights.queenside(Colour::Black), Some(File::A));
+
+        // Test clearing black rights
+        rights.clear::<Black>();
+        assert_eq!(rights.kingside(Colour::Black), None);
+        assert_eq!(rights.queenside(Colour::Black), None);
+    }
+
+    #[test]
+    fn test_remove_specific_rights() {
+        let mut rights =
+            CastlingRights::new(Some(File::H), Some(File::A), Some(File::H), Some(File::A));
+
+        // Remove white kingside by file
+        rights.remove::<White>(File::H);
+        assert_eq!(rights.kingside(Colour::White), None);
+        assert_eq!(rights.queenside(Colour::White), Some(File::A));
+
+        // Remove black queenside by file
+        rights.remove::<Black>(File::A);
+        assert_eq!(rights.kingside(Colour::Black), Some(File::H));
+        assert_eq!(rights.queenside(Colour::Black), None);
+
+        // Removing non-existent rights should have no effect
+        rights.remove::<White>(File::G);
+        assert_eq!(rights.queenside(Colour::White), Some(File::A));
     }
 }

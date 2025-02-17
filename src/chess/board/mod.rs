@@ -1683,7 +1683,7 @@ impl Board {
             }
 
             #[allow(clippy::cast_possible_truncation)]
-            let diff = (original_key ^ curr_key) as u32;
+            let diff = original_key ^ curr_key;
 
             let mut slot = cuckoo::h1(diff);
 

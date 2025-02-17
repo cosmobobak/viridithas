@@ -35,7 +35,7 @@ impl MoveListEntry {
     pub const QUIET_SENTINEL: i32 = 0x7FFF_FFFE;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MoveList {
     // moves: [MoveListEntry; MAX_POSITION_MOVES],
     // count: usize,
