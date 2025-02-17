@@ -85,9 +85,13 @@ impl PackedBoard {
             let piece_type = match piece_code {
                 UNMOVED_ROOK => {
                     if seen_king[colour] {
-                        builder.castling_rights_mut().set_kingside(colour, sq.file());
+                        builder
+                            .castling_rights_mut()
+                            .set_kingside(colour, sq.file());
                     } else {
-                        builder.castling_rights_mut().set_queenside(colour, sq.file());
+                        builder
+                            .castling_rights_mut()
+                            .set_queenside(colour, sq.file());
                     }
                     PieceType::Rook
                 }
