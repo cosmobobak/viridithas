@@ -1,16 +1,3 @@
-macro_rules! inconceivable {
-    () => {{
-        #[cfg(debug_assertions)]
-        {
-            panic!("That word you use - I do not think it means what you think it means.");
-        }
-        #[allow(unreachable_code)]
-        {
-            std::hint::unreachable_unchecked();
-        }
-    }};
-}
-
 macro_rules! max {
     ($a:expr) => {{
         let mut idx = 0;

@@ -9,16 +9,16 @@ use crate::{
     lookups::{PIECE_KEYS, SIDE_KEY},
 };
 
-pub static KEYS: [u32; 8192] =
+pub static KEYS: [u64; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
 pub static MOVES: [Option<Move>; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
 
-pub const fn h1(key: u32) -> usize {
+pub const fn h1(key: u64) -> usize {
     (key & 0x1FFF) as usize
 }
 
-pub const fn h2(key: u32) -> usize {
+pub const fn h2(key: u64) -> usize {
     ((key >> 16) & 0x1FFF) as usize
 }
 
@@ -45,7 +45,7 @@ pub fn init() -> anyhow::Result<()> {
 
                 let mut mv = Some(Move::new(square0, square1));
                 #[allow(clippy::cast_possible_truncation)]
-                let mut key = (PIECE_KEYS[piece][square0] ^ PIECE_KEYS[piece][square1] ^ SIDE_KEY) as u32;
+                let mut key = PIECE_KEYS[piece][square0] ^ PIECE_KEYS[piece][square1] ^ SIDE_KEY;
                 let mut slot = h1(key);
                 loop {
                     std::mem::swap(&mut keys[slot], &mut key);
