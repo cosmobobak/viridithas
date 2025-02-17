@@ -46,7 +46,7 @@ pub struct Board {
     ply: usize,
 
     height: usize,
-    history: Box<ArrayVec<State, MAX_PLY>>,
+    history: Vec<State>,
 }
 
 // manual impl so that i can detect if i'm doing anything stupid.
@@ -92,7 +92,7 @@ impl Board {
             side: Colour::White,
             height: 0,
             ply: 0,
-            history: Box::new(ArrayVec::new()),
+            history: Vec::new(),
         };
         out.reset();
         out
