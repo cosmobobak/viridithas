@@ -539,6 +539,7 @@ impl CastlingRights {
     }
 
     pub fn kingside(self, side: Colour) -> Option<File> {
+        #![allow(clippy::cast_possible_truncation)]
         let presence = [Self::WKCA, Self::BKCA][side];
         if self.data & presence == 0 {
             return None;
@@ -550,6 +551,7 @@ impl CastlingRights {
     }
 
     pub fn queenside(self, side: Colour) -> Option<File> {
+        #![allow(clippy::cast_possible_truncation)]
         let presence = [Self::WQCA, Self::BQCA][side];
         if self.data & presence == 0 {
             return None;

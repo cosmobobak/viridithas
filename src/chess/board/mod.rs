@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{bail, Context};
 
-use arrayvec::ArrayVec;
 use movegen::RAY_BETWEEN;
 #[cfg(feature = "datagen")]
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
@@ -29,7 +28,6 @@ use crate::{
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
     threadlocal::ThreadData,
-    util::MAX_PLY,
 };
 
 use crate::chess::piecelayout::{PieceLayout, Threats};
