@@ -1,3 +1,4 @@
+use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use std::{
@@ -11,7 +12,10 @@ use crate::{
     chess::{
         board::Board,
         chessmove::{Move, MoveFlags},
-        magic::{BISHOP_TABLE, ROOK_TABLE},
+        magic::{
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_REL_BITS,
+            BISHOP_TABLE, ROOK_REL_BITS, ROOK_TABLE,
+        },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
@@ -166,12 +170,68 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
+pub fn init_sliders_attacks() -> anyhow::Result<()> {
+    #![allow(clippy::large_stack_arrays)]
+    let mut bishop_attacks = vec![[SquareSet::EMPTY; 512]; 64];
+    for sq in Square::all() {
+        let entry = &BISHOP_TABLE[sq];
+        // init the current mask
+        let mask = entry.mask;
+        // count attack mask bits
+        let bit_count = mask.count();
+        // occupancy var count
+        let occupancy_variations = 1 << bit_count;
+        // loop over all occupancy variations
+        for count in 0..occupancy_variations {
+            // init occupancies
+            let occupancy = set_occupancy(count, bit_count.into(), mask);
+            let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
+                >> (64 - BISHOP_REL_BITS))
+                .try_into()
+                .unwrap();
+            bishop_attacks[sq as usize][magic_index] = bishop_attacks_on_the_fly(sq, occupancy);
+        }
+    }
+    let mut rook_attacks = vec![[SquareSet::EMPTY; 4096]; 64];
+    for sq in Square::all() {
+        let entry = &ROOK_TABLE[sq];
+        // init the current mask
+        let mask = entry.mask;
+        // count attack mask bits
+        let bit_count = mask.count();
+        // occupancy var count
+        let occupancy_variations = 1 << bit_count;
+        // loop over all occupancy variations
+        for count in 0..occupancy_variations {
+            // init occupancies
+            let occupancy = set_occupancy(count, bit_count.into(), mask);
+            let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
+                >> (64 - ROOK_REL_BITS))
+                .try_into()
+                .unwrap();
+            rook_attacks[sq as usize][magic_index] = rook_attacks_on_the_fly(sq, occupancy);
+        }
+    }
+
+    // SAFETY: SquareSet is POD.
+    let bishop_bytes = unsafe { bishop_attacks.align_to::<u8>().1 };
+    // SAFETY: SquareSet is POD.
+    let rook_bytes = unsafe { rook_attacks.align_to::<u8>().1 };
+
+    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)
+        .context("failed to write embeds/diagonal_attacks.bin")?;
+    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)
+        .context("failed to write embeds/orthogonal_attacks.bin")?;
+
+    Ok(())
+}
+
 #[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &BISHOP_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-    let idx = (data >> entry.shift) as usize;
+    let idx = (data >> (64 - BISHOP_REL_BITS)) as usize;
     // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
@@ -183,7 +243,7 @@ pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &ROOK_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-    let idx = (data >> entry.shift) as usize;
+    let idx = (data >> (64 - ROOK_REL_BITS)) as usize;
     // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
