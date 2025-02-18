@@ -323,42 +323,37 @@ macro_rules! init_masks_with {
 }
 
 #[derive(Clone, Copy)]
-pub struct MagicEntry<const ATTACKS_SIZE: usize> {
+pub struct MagicEntry {
     pub mask: SquareSet,
     pub magic: u64,
-    pub table: &'static [SquareSet; ATTACKS_SIZE],
 }
 
-pub static BISHOP_TABLE: [MagicEntry<512>; 64] = {
+pub static BISHOP_TABLE: [MagicEntry; 64] = {
     let mut table = [MagicEntry {
         mask: SquareSet::EMPTY,
         magic: 0,
-        table: &BISHOP_ATTACKS[0],
     }; 64];
 
     cfor!(let mut square = 0; square < 64; square += 1; {
         table[square] = MagicEntry {
             mask: BISHOP_MASKS[square],
             magic: BISHOP_MAGICS[square],
-            table: &BISHOP_ATTACKS[square],
         };
     });
 
     table
 };
 
-pub static ROOK_TABLE: [MagicEntry<4096>; 64] = {
+pub static ROOK_TABLE: [MagicEntry; 64] = {
     let mut table = [MagicEntry {
         mask: SquareSet::EMPTY,
         magic: 0,
-        table: &ROOK_ATTACKS[0],
     }; 64];
 
     cfor!(let mut square = 0; square < 64; square += 1; {
         table[square] = MagicEntry {
             mask: ROOK_MASKS[square],
             magic: ROOK_MAGICS[square],
-            table: &ROOK_ATTACKS[square],
         };
     });
 

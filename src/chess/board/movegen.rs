@@ -13,8 +13,7 @@ use crate::{
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_REL_BITS,
-            BISHOP_TABLE, ROOK_REL_BITS, ROOK_TABLE,
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
@@ -236,7 +235,7 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
     // in bounds.
-    unsafe { *entry.table.get_unchecked(idx) }
+    unsafe { *BISHOP_ATTACKS[sq].get_unchecked(idx) }
 }
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
@@ -248,7 +247,7 @@ pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
     // in bounds.
-    unsafe { *entry.table.get_unchecked(idx) }
+    unsafe { *ROOK_ATTACKS[sq].get_unchecked(idx) }
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
