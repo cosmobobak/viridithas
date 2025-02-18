@@ -351,7 +351,7 @@ pub static BISHOP_TABLE: [MagicEntry<512>; 64] = {
         mask: SquareSet::EMPTY,
         magic: 0,
         shift: 0,
-        table: &BISHOP_ATTACKS[0]
+        table: &BISHOP_ATTACKS[0],
     }; 64];
 
     cfor!(let mut square = 0; square < 64; square += 1; {
@@ -371,7 +371,7 @@ pub static ROOK_TABLE: [MagicEntry<4096>; 64] = {
         mask: SquareSet::EMPTY,
         magic: 0,
         shift: 0,
-        table: &ROOK_ATTACKS[0]
+        table: &ROOK_ATTACKS[0],
     }; 64];
 
     cfor!(let mut square = 0; square < 64; square += 1; {

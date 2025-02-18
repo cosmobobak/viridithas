@@ -1,6 +1,10 @@
-use std::{fmt::Display, ops::{
-    BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
-}};
+use std::{
+    fmt::Display,
+    ops::{
+        BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub,
+        SubAssign,
+    },
+};
 
 use crate::chess::types::Square;
 
