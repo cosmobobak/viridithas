@@ -24,7 +24,10 @@ use anyhow::{anyhow, bail, Context};
 use crate::{
     bench::BENCH_POSITIONS,
     chess::{
-        board::{movegen::MoveList, Board},
+        board::{
+            movegen::{self, MoveList},
+            Board,
+        },
         piece::Colour,
         CHESS960,
     },
@@ -724,6 +727,7 @@ pub fn main_loop() -> anyhow::Result<()> {
             }
             "gobench" => go_benchmark(nnue_params),
             "initcuckoo" => cuckoo::init(),
+            "initattacks" => movegen::init_sliders_attacks(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
                     search_config: info.conf.clone(),
