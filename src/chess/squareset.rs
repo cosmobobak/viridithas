@@ -1,6 +1,6 @@
-use std::ops::{
+use std::{fmt::Display, ops::{
     BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
-};
+}};
 
 use crate::chess::types::Square;
 
@@ -343,5 +343,20 @@ impl Shl<u8> for SquareSet {
         Self {
             inner: self.inner << rhs,
         }
+    }
+}
+
+impl Display for SquareSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for rank in (0..8).rev() {
+            for file in 0..8 {
+                let bit = 1u64 << (rank * 8 + file);
+                write!(f, "{}", if self.inner & bit != 0 { '1' } else { '0' })?;
+            }
+            if rank > 0 {
+                writeln!(f)?;
+            }
+        }
+        Ok(())
     }
 }

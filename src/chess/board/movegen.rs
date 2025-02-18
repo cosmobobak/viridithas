@@ -11,10 +11,7 @@ use crate::{
     chess::{
         board::Board,
         chessmove::{Move, MoveFlags},
-        magic::{
-            BISHOP_ATTACKS, BISHOP_MAGICS, BISHOP_MASKS, BISHOP_REL_BITS, ROOK_ATTACKS,
-            ROOK_MAGICS, ROOK_MASKS, ROOK_REL_BITS,
-        },
+        magic::{BISHOP_TABLE, ROOK_TABLE},
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
         types::{Rank, Square},
@@ -171,25 +168,59 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
 
 #[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & BISHOP_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
-    let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
+    let entry = &BISHOP_TABLE[sq];
+    // #[cfg(all(
+    //     target_feature = "bmi2",
+    //     not(target_cpu = "znver1"),
+    //     not(target_cpu = "znver2")
+    // ))]
+    // // SAFETY: it's pext.
+    // let idx = unsafe { 
+    //     std::arch::x86_64::_pext_u64(blockers.inner(), entry.mask.inner()) as usize
+    // };
+    // #[cfg(not(all(
+    //     target_feature = "bmi2",
+    //     not(target_cpu = "znver1"),
+    //     not(target_cpu = "znver2")
+    // )))]
+    let idx = {
+        let relevant_blockers = blockers & entry.mask;
+        let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+        (data >> entry.shift) as usize
+    };
     // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
     // in bounds.
-    unsafe { *BISHOP_ATTACKS[sq].get_unchecked(idx) }
+    unsafe { *entry.table.get_unchecked(idx) }
 }
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & ROOK_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
-    let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
+    let entry = &ROOK_TABLE[sq];
+    // #[cfg(all(
+    //     target_feature = "bmi2",
+    //     not(target_cpu = "znver1"),
+    //     not(target_cpu = "znver2")
+    // ))]
+    // // SAFETY: it's pext.
+    // let idx = unsafe { 
+    //     std::arch::x86_64::_pext_u64(blockers.inner(), entry.mask.inner()) as usize
+    // };
+    // #[cfg(not(all(
+    //     target_feature = "bmi2",
+    //     not(target_cpu = "znver1"),
+    //     not(target_cpu = "znver2")
+    // )))]
+    let idx = {
+        let relevant_blockers = blockers & entry.mask;
+        let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+        (data >> entry.shift) as usize
+    };
     // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
     // in bounds.
-    unsafe { *ROOK_ATTACKS[sq].get_unchecked(idx) }
+    unsafe { *entry.table.get_unchecked(idx) }
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {
     static KNIGHT_ATTACKS: [SquareSet; 64] = init_jumping_attacks::<true>();
@@ -972,9 +1003,7 @@ mod tests {
     use crate::{
         bench,
         chess::{
-            board::movegen::{king_attacks, knight_attacks},
-            squareset::SquareSet,
-            types::Square,
+            board::movegen::{king_attacks, knight_attacks}, magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly}, squareset::SquareSet, types::Square
         },
     };
 
@@ -1009,6 +1038,38 @@ mod tests {
             king_attacks(Square::new(63).unwrap()),
             SquareSet::from_inner(4_665_729_213_955_833_856)
         );
+    }
+
+    #[test]
+    fn rook_attacks_basic() {
+        let sq = Square::E4;
+        let mask = ROOK_TABLE[sq].mask;
+        let mut subset = SquareSet::EMPTY;
+        loop {
+            let attacks_naive = rook_attacks_on_the_fly(sq, subset);
+            let attacks_fast = rook_attacks(sq, subset);
+            assert_eq!(attacks_naive, attacks_fast, "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}");
+            subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
+            if subset.is_empty() {
+                break;
+            }
+        };
+    }
+
+    #[test]
+    fn bishop_attacks_basic() {
+        let sq = Square::E4;
+        let mask = BISHOP_TABLE[sq].mask;
+        let mut subset = SquareSet::EMPTY;
+        loop {
+            let attacks_naive = bishop_attacks_on_the_fly(sq, subset);
+            let attacks_fast = bishop_attacks(sq, subset);
+            assert_eq!(attacks_naive, attacks_fast, "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}");
+            subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
+            if subset.is_empty() {
+                break;
+            }
+        };
     }
 
     #[test]

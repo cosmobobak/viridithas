@@ -21,7 +21,7 @@ macro_rules! cfor {
 /// along the long diagonal - but the contents of h8 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 6.
 #[rustfmt::skip]
-pub static BISHOP_REL_BITS: [i32; 64] = [
+const BISHOP_REL_BITS: [u64; 64] = [
     6, 5, 5, 5, 5, 5, 5, 6,
     5, 5, 5, 5, 5, 5, 5, 5,
     5, 5, 7, 7, 7, 7, 5, 5,
@@ -37,7 +37,7 @@ pub static BISHOP_REL_BITS: [i32; 64] = [
 /// along the file or rank - but the contents of a8 and h1 are irrelevant to movegen,
 /// so the number of relevant bits on the board is 12.
 #[rustfmt::skip]
-pub static ROOK_REL_BITS: [i32; 64] = [
+const ROOK_REL_BITS: [u64; 64] = [
     12, 11, 11, 11, 11, 11, 11, 12,
     11, 10, 10, 10, 10, 10, 10, 11,
     11, 10, 10, 10, 10, 10, 10, 11,
@@ -48,7 +48,7 @@ pub static ROOK_REL_BITS: [i32; 64] = [
     12, 11, 11, 11, 11, 11, 11, 12,
 ];
 
-const fn set_occupancy(index: usize, bits_in_mask: i32, mut attack_mask: SquareSet) -> SquareSet {
+const fn set_occupancy(index: usize, bits_in_mask: u64, mut attack_mask: SquareSet) -> SquareSet {
     let mut occupancy = SquareSet::EMPTY;
 
     let mut count = 0;
@@ -117,7 +117,7 @@ const fn mask_rook_attacks(sq: Square) -> SquareSet {
     SquareSet::from_inner(attacks)
 }
 
-const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
+pub const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -162,7 +162,7 @@ const fn bishop_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSe
     SquareSet::from_inner(attacks)
 }
 
-const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
+pub const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet {
     let mut attacks = 0;
 
     // so sue me
@@ -212,7 +212,7 @@ const fn rook_attacks_on_the_fly(square: Square, block: SquareSet) -> SquareSet 
 |                :3                    |
 \**************************************/
 
-fn find_magic(square: Square, relevant_bits: i32, is_bishop: bool) -> u64 {
+fn find_magic(square: Square, relevant_bits: u64, is_bishop: bool) -> u64 {
     // occupancies array
     let mut occupancies = vec![SquareSet::EMPTY; 4096];
 
@@ -338,8 +338,56 @@ macro_rules! init_masks_with {
     }};
 }
 
-pub static BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
-pub static ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
+#[derive(Clone, Copy)]
+pub struct MagicEntry<const ATTACKS_SIZE: usize> {
+    pub mask: SquareSet,
+    pub magic: u64,
+    pub shift: u64,
+    pub table: &'static [SquareSet; ATTACKS_SIZE],
+}
+
+pub static BISHOP_TABLE: [MagicEntry<512>; 64] = {
+    let mut table = [MagicEntry {
+        mask: SquareSet::EMPTY,
+        magic: 0,
+        shift: 0,
+        table: &BISHOP_ATTACKS[0]
+    }; 64];
+
+    cfor!(let mut square = 0; square < 64; square += 1; {
+        table[square] = MagicEntry {
+            mask: BISHOP_MASKS[square],
+            magic: BISHOP_MAGICS[square],
+            shift: 64 - BISHOP_REL_BITS[square],
+            table: &BISHOP_ATTACKS[square],
+        };
+    });
+
+    table
+};
+
+pub static ROOK_TABLE: [MagicEntry<4096>; 64] = {
+    let mut table = [MagicEntry {
+        mask: SquareSet::EMPTY,
+        magic: 0,
+        shift: 0,
+        table: &ROOK_ATTACKS[0]
+    }; 64];
+
+    cfor!(let mut square = 0; square < 64; square += 1; {
+        table[square] = MagicEntry {
+            mask: ROOK_MASKS[square],
+            magic: ROOK_MAGICS[square],
+            shift: 64 - ROOK_REL_BITS[square],
+            table: &ROOK_ATTACKS[square],
+        };
+    });
+
+    table
+};
+
+const BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
+const ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
 pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/diagonal_attacks.bin")) };
@@ -347,7 +395,7 @@ pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
 pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/orthogonal_attacks.bin")) };
 
-pub static BISHOP_MAGICS: [u64; 64] = [
+const BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,
     0x0020_0404_0844_4882,
     0x0822_0801_0420_A100,
@@ -414,7 +462,7 @@ pub static BISHOP_MAGICS: [u64; 64] = [
     0x0231_100A_1344_0020,
 ];
 
-pub static ROOK_MAGICS: [u64; 64] = [
+const ROOK_MAGICS: [u64; 64] = [
     0x2080_0010_2080_4000,
     0x0240_2000_4001_5005,
     0x6900_2002_1100_0840,
