@@ -169,25 +169,9 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
 #[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &BISHOP_TABLE[sq];
-    // #[cfg(all(
-    //     target_feature = "bmi2",
-    //     not(target_cpu = "znver1"),
-    //     not(target_cpu = "znver2")
-    // ))]
-    // // SAFETY: it's pext.
-    // let idx = unsafe { 
-    //     std::arch::x86_64::_pext_u64(blockers.inner(), entry.mask.inner()) as usize
-    // };
-    // #[cfg(not(all(
-    //     target_feature = "bmi2",
-    //     not(target_cpu = "znver1"),
-    //     not(target_cpu = "znver2")
-    // )))]
-    let idx = {
-        let relevant_blockers = blockers & entry.mask;
-        let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-        (data >> entry.shift) as usize
-    };
+    let relevant_blockers = blockers & entry.mask;
+    let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    let idx = (data >> entry.shift) as usize;
     // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
@@ -197,25 +181,9 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &ROOK_TABLE[sq];
-    // #[cfg(all(
-    //     target_feature = "bmi2",
-    //     not(target_cpu = "znver1"),
-    //     not(target_cpu = "znver2")
-    // ))]
-    // // SAFETY: it's pext.
-    // let idx = unsafe { 
-    //     std::arch::x86_64::_pext_u64(blockers.inner(), entry.mask.inner()) as usize
-    // };
-    // #[cfg(not(all(
-    //     target_feature = "bmi2",
-    //     not(target_cpu = "znver1"),
-    //     not(target_cpu = "znver2")
-    // )))]
-    let idx = {
-        let relevant_blockers = blockers & entry.mask;
-        let data = relevant_blockers.inner().wrapping_mul(entry.magic);
-        (data >> entry.shift) as usize
-    };
+    let relevant_blockers = blockers & entry.mask;
+    let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    let idx = (data >> entry.shift) as usize;
     // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
@@ -1003,7 +971,10 @@ mod tests {
     use crate::{
         bench,
         chess::{
-            board::movegen::{king_attacks, knight_attacks}, magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly}, squareset::SquareSet, types::Square
+            board::movegen::{king_attacks, knight_attacks},
+            magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly},
+            squareset::SquareSet,
+            types::Square,
         },
     };
 
@@ -1048,12 +1019,15 @@ mod tests {
         loop {
             let attacks_naive = rook_attacks_on_the_fly(sq, subset);
             let attacks_fast = rook_attacks(sq, subset);
-            assert_eq!(attacks_naive, attacks_fast, "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}");
+            assert_eq!(
+                attacks_naive, attacks_fast,
+                "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
+            );
             subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
             if subset.is_empty() {
                 break;
             }
-        };
+        }
     }
 
     #[test]
@@ -1064,12 +1038,15 @@ mod tests {
         loop {
             let attacks_naive = bishop_attacks_on_the_fly(sq, subset);
             let attacks_fast = bishop_attacks(sq, subset);
-            assert_eq!(attacks_naive, attacks_fast, "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}");
+            assert_eq!(
+                attacks_naive, attacks_fast,
+                "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
+            );
             subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
             if subset.is_empty() {
                 break;
             }
-        };
+        }
     }
 
     #[test]
