@@ -54,11 +54,11 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
-pub const MATERIAL_SCALE_BASE: i32 = 700;
-pub const SEE_PAWN_VALUE: i32 = 161;
-pub const SEE_KNIGHT_VALUE: i32 = 445;
-pub const SEE_BISHOP_VALUE: i32 = 463;
-pub const SEE_ROOK_VALUE: i32 = 704;
+pub const MATERIAL_SCALE_BASE: i32 = 773;
+pub const SEE_PAWN_VALUE: i32 = 171;
+pub const SEE_KNIGHT_VALUE: i32 = 443;
+pub const SEE_BISHOP_VALUE: i32 = 440;
+pub const SEE_ROOK_VALUE: i32 = 705;
 pub const SEE_QUEEN_VALUE: i32 = 1321;
 
 impl Board {
