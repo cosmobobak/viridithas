@@ -57,13 +57,13 @@ impl PackedBoard {
 
             debug_assert_eq!(piece_code & 0b0111, piece_code);
             debug_assert_ne!(piece_code, 0b0111, "we are not using the 0b0111 piece code");
-            pieces.set(i, piece_code | colour.inner() << 3);
+            pieces.set(i, piece_code | (colour.inner() << 3));
         }
 
         Self {
             occupancy: util::U64Le::new(occupancy.inner()),
             pieces,
-            stm_ep_square: board.turn().inner() << 7 | board.ep_sq().map_or(64, Square::inner),
+            stm_ep_square: (board.turn().inner() << 7) | board.ep_sq().map_or(64, Square::inner),
             halfmove_clock: board.fifty_move_counter(),
             fullmove_number: util::U16Le::new(board.full_move_number().try_into().unwrap()),
             wdl,

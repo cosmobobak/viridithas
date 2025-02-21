@@ -323,7 +323,7 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
     })?;
     let Some(value_part) = parts.next() else {
         bail!(UciError::InvalidFormat(
-            "no \"value\" after \"setoption name {opt_name}\"".into()
+            format!("no \"value\" after \"setoption name {opt_name}\"")
         ));
     };
     if value_part != "value" {
