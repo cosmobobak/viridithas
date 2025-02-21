@@ -97,9 +97,10 @@ const MAJOR_CORRHIST_WEIGHT: i32 = 1289;
 const MINOR_CORRHIST_WEIGHT: i32 = 1290;
 const NONPAWN_CORRHIST_WEIGHT: i32 = 1319;
 
-const EVAL_POLICY_OFFSET: i32 = 573;
-const EVAL_POLICY_UPDATE_MAX: i32 = 1790;
-const EVAL_POLICY_UPDATE_MIN: i32 = 1398;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 222;
+const EVAL_POLICY_OFFSET: i32 = 57;
+const EVAL_POLICY_UPDATE_MAX: i32 = 1639;
+const EVAL_POLICY_UPDATE_MIN: i32 = 572;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
@@ -955,12 +956,14 @@ impl Board {
                     let from = mov.from();
                     let to = mov.history_to_square();
                     let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    debug_assert_eq!(moved.colour(), !self.turn());
                     let threats = self.history().last().unwrap().threats.all;
+                    let improvement = -(ss_prev.eval + static_eval) + info.conf.eval_policy_offset;
                     let delta = i32::clamp(
-                        -10 * (ss_prev.eval + static_eval),
+                        improvement * info.conf.eval_policy_improvement_scale / 32,
                         -info.conf.eval_policy_update_min,
                         info.conf.eval_policy_update_max,
-                    ) + info.conf.eval_policy_offset;
+                    );
                     t.update_history_single(from, to, moved, threats, delta);
                 }
             }
@@ -1699,7 +1702,7 @@ impl Board {
         let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
 
         // after the move, it's the opponent's turn.
-        let mut colour = self.turn().flip();
+        let mut colour = !self.turn();
 
         loop {
             let my_attackers = attackers & board.occupied_co(colour);
@@ -1732,7 +1735,7 @@ impl Board {
 
             attackers &= occupied;
 
-            colour = colour.flip();
+            colour = !colour;
 
             balance = -balance - 1 - next_victim.see_value();
 
@@ -1744,7 +1747,7 @@ impl Board {
                 if next_victim == PieceType::King
                     && (attackers & board.occupied_co(colour)).non_empty()
                 {
-                    colour = colour.flip();
+                    colour = !colour;
                 }
                 break;
             }
