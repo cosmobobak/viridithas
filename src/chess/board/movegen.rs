@@ -1,3 +1,4 @@
+use anyhow::Context;
 use arrayvec::ArrayVec;
 
 use std::{
@@ -12,8 +13,7 @@ use crate::{
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            BISHOP_ATTACKS, BISHOP_MAGICS, BISHOP_MASKS, BISHOP_REL_BITS, ROOK_ATTACKS,
-            ROOK_MAGICS, ROOK_MASKS, ROOK_REL_BITS,
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
@@ -169,11 +169,68 @@ const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     attacks
 }
 
+pub fn init_sliders_attacks() -> anyhow::Result<()> {
+    #![allow(clippy::large_stack_arrays)]
+    let mut bishop_attacks = vec![[SquareSet::EMPTY; 512]; 64];
+    for sq in Square::all() {
+        let entry = &BISHOP_TABLE[sq];
+        // init the current mask
+        let mask = entry.mask;
+        // count attack mask bits
+        let bit_count = mask.count();
+        // occupancy var count
+        let occupancy_variations = 1 << bit_count;
+        // loop over all occupancy variations
+        for count in 0..occupancy_variations {
+            // init occupancies
+            let occupancy = set_occupancy(count, bit_count.into(), mask);
+            let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
+                >> (64 - BISHOP_REL_BITS))
+                .try_into()
+                .unwrap();
+            bishop_attacks[sq as usize][magic_index] = bishop_attacks_on_the_fly(sq, occupancy);
+        }
+    }
+    let mut rook_attacks = vec![[SquareSet::EMPTY; 4096]; 64];
+    for sq in Square::all() {
+        let entry = &ROOK_TABLE[sq];
+        // init the current mask
+        let mask = entry.mask;
+        // count attack mask bits
+        let bit_count = mask.count();
+        // occupancy var count
+        let occupancy_variations = 1 << bit_count;
+        // loop over all occupancy variations
+        for count in 0..occupancy_variations {
+            // init occupancies
+            let occupancy = set_occupancy(count, bit_count.into(), mask);
+            let magic_index: usize = ((occupancy.inner().wrapping_mul(entry.magic))
+                >> (64 - ROOK_REL_BITS))
+                .try_into()
+                .unwrap();
+            rook_attacks[sq as usize][magic_index] = rook_attacks_on_the_fly(sq, occupancy);
+        }
+    }
+
+    // SAFETY: SquareSet is POD.
+    let bishop_bytes = unsafe { bishop_attacks.align_to::<u8>().1 };
+    // SAFETY: SquareSet is POD.
+    let rook_bytes = unsafe { rook_attacks.align_to::<u8>().1 };
+
+    std::fs::write("embeds/diagonal_attacks.bin", bishop_bytes)
+        .context("failed to write embeds/diagonal_attacks.bin")?;
+    std::fs::write("embeds/orthogonal_attacks.bin", rook_bytes)
+        .context("failed to write embeds/orthogonal_attacks.bin")?;
+
+    Ok(())
+}
+
 #[allow(clippy::cast_possible_truncation)]
 pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & BISHOP_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(BISHOP_MAGICS[sq]);
-    let idx = (data >> (64 - BISHOP_REL_BITS[sq])) as usize;
+    let entry = &BISHOP_TABLE[sq];
+    let relevant_blockers = blockers & entry.mask;
+    let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    let idx = (data >> (64 - BISHOP_REL_BITS)) as usize;
     // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
     // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
     // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
@@ -182,9 +239,10 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
 }
 #[allow(clippy::cast_possible_truncation)]
 pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
-    let relevant_blockers = blockers & ROOK_MASKS[sq];
-    let data = relevant_blockers.inner().wrapping_mul(ROOK_MAGICS[sq]);
-    let idx = (data >> (64 - ROOK_REL_BITS[sq])) as usize;
+    let entry = &ROOK_TABLE[sq];
+    let relevant_blockers = blockers & entry.mask;
+    let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    let idx = (data >> (64 - ROOK_REL_BITS)) as usize;
     // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
     // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
     // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
@@ -973,6 +1031,7 @@ mod tests {
         bench,
         chess::{
             board::movegen::{king_attacks, knight_attacks},
+            magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly},
             squareset::SquareSet,
             types::Square,
         },
@@ -1009,6 +1068,44 @@ mod tests {
             king_attacks(Square::new(63).unwrap()),
             SquareSet::from_inner(4_665_729_213_955_833_856)
         );
+    }
+
+    #[test]
+    fn rook_attacks_basic() {
+        let sq = Square::E4;
+        let mask = ROOK_TABLE[sq].mask;
+        let mut subset = SquareSet::EMPTY;
+        loop {
+            let attacks_naive = rook_attacks_on_the_fly(sq, subset);
+            let attacks_fast = rook_attacks(sq, subset);
+            assert_eq!(
+                attacks_naive, attacks_fast,
+                "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
+            );
+            subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
+            if subset.is_empty() {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn bishop_attacks_basic() {
+        let sq = Square::E4;
+        let mask = BISHOP_TABLE[sq].mask;
+        let mut subset = SquareSet::EMPTY;
+        loop {
+            let attacks_naive = bishop_attacks_on_the_fly(sq, subset);
+            let attacks_fast = bishop_attacks(sq, subset);
+            assert_eq!(
+                attacks_naive, attacks_fast,
+                "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
+            );
+            subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
+            if subset.is_empty() {
+                break;
+            }
+        }
     }
 
     #[test]
