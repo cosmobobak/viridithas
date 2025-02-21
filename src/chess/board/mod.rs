@@ -100,10 +100,6 @@ impl Board {
         self.state.ep_square
     }
 
-    pub fn history(&self) -> &[State] {
-        &self.history
-    }
-
     #[cfg(feature = "datagen")]
     pub fn ep_sq_mut(&mut self) -> &mut Option<Square> {
         &mut self.state.ep_square
