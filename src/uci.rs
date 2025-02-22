@@ -322,9 +322,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
     let Some(value_part) = parts.next() else {
-        bail!(UciError::InvalidFormat(
-            format!("no \"value\" after \"setoption name {opt_name}\"")
-        ));
+        bail!(UciError::InvalidFormat(format!(
+            "no \"value\" after \"setoption name {opt_name}\""
+        )));
     };
     if value_part != "value" {
         bail!(UciError::InvalidFormat(format!(

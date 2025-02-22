@@ -13,7 +13,8 @@ use crate::{
         board::Board,
         chessmove::{Move, MoveFlags},
         magic::{
-            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS, BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE
+            bishop_attacks_on_the_fly, rook_attacks_on_the_fly, set_occupancy, BISHOP_ATTACKS,
+            BISHOP_REL_BITS, BISHOP_TABLE, ROOK_ATTACKS, ROOK_REL_BITS, ROOK_TABLE,
         },
         piece::{Black, Col, Colour, PieceType, White},
         squareset::SquareSet,
