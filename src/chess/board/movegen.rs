@@ -230,11 +230,14 @@ pub fn bishop_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &BISHOP_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    // BISHOP_REL_BITS is 9, so this shift is by 55.
     let idx = (data >> (64 - BISHOP_REL_BITS)) as usize;
-    // SAFETY: BISHOP_REL_BITS[sq] is at most 9, so this shift is at least by 55.
-    // The largest value we can obtain from (data >> 55) is u64::MAX >> 55, which
-    // is 511 (0x1FF). BISHOP_ATTACKS[sq] is 512 elements long, so this is always
-    // in bounds.
+    const {
+        assert!(1 << BISHOP_REL_BITS == BISHOP_ATTACKS[0].len());
+    }
+    // SAFETY: The largest value we can obtain from (data >> 55)
+    // is u64::MAX >> 55, which is 511 (0x1FF). BISHOP_ATTACKS[sq]
+    // is 512 elements long, so this is always in bounds.
     unsafe { *BISHOP_ATTACKS[sq].get_unchecked(idx) }
 }
 #[allow(clippy::cast_possible_truncation)]
@@ -242,11 +245,14 @@ pub fn rook_attacks(sq: Square, blockers: SquareSet) -> SquareSet {
     let entry = &ROOK_TABLE[sq];
     let relevant_blockers = blockers & entry.mask;
     let data = relevant_blockers.inner().wrapping_mul(entry.magic);
+    // ROOK_REL_BITS is 12, so this shift is by 52.
     let idx = (data >> (64 - ROOK_REL_BITS)) as usize;
-    // SAFETY: ROOK_REL_BITS[sq] is at most 12, so this shift is at least by 52.
-    // The largest value we can obtain from (data >> 52) is u64::MAX >> 52, which
-    // is 4095 (0xFFF). ROOK_ATTACKS[sq] is 4096 elements long, so this is always
-    // in bounds.
+    const {
+        assert!(1 << ROOK_REL_BITS == ROOK_ATTACKS[0].len());
+    }
+    // SAFETY: The largest value we can obtain from (data >> 52)
+    // is u64::MAX >> 52, which is 4095 (0xFFF). ROOK_ATTACKS[sq]
+    // is 4096 elements long, so this is always in bounds.
     unsafe { *ROOK_ATTACKS[sq].get_unchecked(idx) }
 }
 pub fn knight_attacks(sq: Square) -> SquareSet {

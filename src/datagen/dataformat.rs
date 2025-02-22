@@ -44,7 +44,7 @@ pub struct Filter {
 impl Default for Filter {
     fn default() -> Self {
         Self {
-            min_ply: 16,
+            min_ply: 12,
             min_pieces: 4,
             max_eval: MINIMUM_TB_WIN_SCORE.try_into().unwrap(),
             filter_tactical: true,
