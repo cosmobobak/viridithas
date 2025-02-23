@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display},
     mem::size_of,
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut, Not},
 };
 
 pub trait Col {
@@ -113,6 +113,14 @@ impl Colour {
 
     pub fn all() -> impl DoubleEndedIterator<Item = Self> {
         [Self::White, Self::Black].into_iter()
+    }
+}
+
+impl Not for Colour {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        self.flip()
     }
 }
 
