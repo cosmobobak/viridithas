@@ -32,9 +32,9 @@ pub mod feature;
 pub mod layers;
 
 /// Whether to perform the king-plane merging optimisation.
-pub const MERGE_KING_PLANES: bool = false;
+pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = false;
+pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The size of the input layer of the network.
 pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
@@ -52,14 +52,14 @@ pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_o
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
+     0,  1,  2,  3,
+     4,  5,  6,  7,
+     8,  9, 10, 11,
+     8,  9, 10, 11,
+    12, 12, 13, 13,
+    12, 12, 13, 13,
+    14, 14, 15, 15,
+    14, 14, 15, 15,
 ];
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
