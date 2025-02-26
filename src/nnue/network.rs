@@ -38,24 +38,24 @@ pub const INPUT: usize = 11 * 64;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 8192;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
-pub const L3_SIZE: usize = 32;
+pub const L3_SIZE: usize = 64;
 /// chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<i8>();
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
-     0,  1,  2,  3,
-     4,  5,  6,  7,
-     8,  9, 10, 11,
-     8,  9, 10, 11,
-    12, 12, 13, 13,
-    12, 12, 13, 13,
-    14, 14, 15, 15,
-    14, 14, 15, 15,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
 ];
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
@@ -77,11 +77,12 @@ const BUCKET_MAP: [usize; 64] = {
 };
 
 /// The number of output buckets
-pub const OUTPUT_BUCKETS: usize = 8;
+pub const OUTPUT_BUCKETS: usize = 1;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
     const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
+    return 1;
     (pos.n_men() as usize - 2) / DIVISOR
 }
 
@@ -142,17 +143,17 @@ pub struct NNUEParams {
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
-const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
+static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
     let mut indices = [0; L1_SIZE / 2];
     let mut i = 0;
-    while i < L1_SIZE / 2 {
-        indices[i] = i;
+    while i < L1_SIZE as u16 / 2 {
+        indices[i as usize] = i;
         i += 1;
     }
     indices
 };
 
-// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
+// static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = [
 //     846, 382, 423, 1443, 1192, 660, 52, 502, 421, 658, 1293, 329, 98, 874, 247, 759, 820, 29, 146,
 //     1261, 802, 139, 1150, 1347, 919, 429, 888, 202, 1308, 1331, 733, 267, 875, 1358, 643, 601,
 //     1070, 592, 1399, 522, 1034, 261, 1376, 1429, 588, 998, 1269, 766, 704, 1450, 795, 1203, 787,
@@ -523,19 +524,19 @@ fn repermute_l1_weights(
     l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
 ) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        sorted[tgt_index] = l1_weights[src_index];
+        sorted[tgt_index] = l1_weights[src_index as usize];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index + L1_SIZE / 2];
+        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index as usize + L1_SIZE / 2];
     }
 }
 
 fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        feature_bias[tgt_index] = unsorted[src_index];
+        feature_bias[tgt_index] = unsorted[src_index as usize];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
+        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index as usize + L1_SIZE / 2];
     }
 }
 
@@ -547,11 +548,11 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
-            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index as usize];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             let tgt_index = tgt_index + L1_SIZE / 2;
-            let src_index = src_index + L1_SIZE / 2;
+            let src_index = src_index as usize + L1_SIZE / 2;
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
