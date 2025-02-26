@@ -42,11 +42,11 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 8192;
+pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
-pub const L3_SIZE: usize = 64;
+pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
 pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<i8>();
 /// The structure of the king-buckets.
