@@ -839,5 +839,5 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             | no buckets, input or output.             |
 ------------|------------------------------------------|-----------------------------------------------
     alembic | normal hyperstition arch, distilled from | fixed-nodes:
-            | sensei.                                  | TBD
+            | sensei. farseer buckets.                 | TBD
 ------------|------------------------------------------|-----------------------------------------------
