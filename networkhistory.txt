@@ -789,3 +789,55 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/9602/
             |                                          | vs. temperance
 ------------|------------------------------------------|-----------------------------------------------
+    kolibri | fresh run including some UHO Lichess     | fixed-nodes:
+            | data generated using perseverance.       | Elo   | 0.15 +- 1.41 (95%)
+            | linear lr schedule.                      | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
+            | merged for the DFRC performance.         | Games | N: 98426 W: 28680 L: 28637 D: 41109
+            |                                          | Penta | [2282, 11657, 21257, 11770, 2247]
+            |                                          | https://chess.swehosting.se/test/9891/
+            |                                          | vs. perseverance
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | 0.11 +- 3.38 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -0.42 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 12964 W: 3330 L: 3326 D: 6308
+            |                                          | Penta | [126, 1575, 3070, 1591, 120]
+            |                                          | https://chess.swehosting.se/test/9894/
+            |                                          | vs. perseverance
+            |                                          |
+            |                                          | fixed-nodes DFRC:
+            |                                          | Elo   | 6.54 +- 3.90 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 15946 W: 4805 L: 4505 D: 6636
+            |                                          | Penta | [523, 1872, 2944, 2050, 584]
+            |                                          | https://chess.swehosting.se/test/9897/
+            |                                          | vs. perseverance
+------------|------------------------------------------|-----------------------------------------------
+    requiem | Uses the farseer output bucket layout,   | fixed-nodes:
+            | small amount of extra DFRC book data,    | Elo   | -1.29 +- 2.36 (95%)
+            | less early-ply filtering, adds l4=32     | SPRT  | N=25000 Threads=1 Hash=16MB
+            | and uses skip connection (final layer    | LLR   | -3.02 (-2.94, 2.94) [0.00, 3.00]
+            | dotprod is on the concatentation of the  | Games | N: 34692 W: 10078 L: 10207 D: 14407
+            | previous two layers' output).            | Penta | [779, 4199, 7520, 4068, 780]
+            | final lr dropped by x0.3.                | https://chess.swehosting.se/test/9945/
+            |                                          | vs. kolibri
+            | less filtering probably ruined it.       |
+            |                                          | STC:
+            |                                          | Elo   | -10.62 +- 4.92 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5758 W: 1344 L: 1520 D: 2894
+            |                                          | Penta | [46, 776, 1408, 606, 43]
+            |                                          | https://chess.swehosting.se/test/9946/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+     sensei | 8192x2 -(pairwise)> 16 -> 64 -> 1 net.   | fixed-nodes:
+            | crelu/screlu/screlu activations.         | TBD
+            | no buckets, input or output.             |
+------------|------------------------------------------|-----------------------------------------------
+    alembic | normal hyperstition arch, distilled from | fixed-nodes:
+            | sensei.                                  | TBD
+------------|------------------------------------------|-----------------------------------------------
