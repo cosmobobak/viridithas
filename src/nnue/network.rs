@@ -31,8 +31,12 @@ use super::accumulator::{self, Accumulator};
 pub mod feature;
 pub mod layers;
 
+/// Whether to perform the king-plane merging optimisation.
+pub const MERGE_KING_PLANES: bool = false;
+/// Whether the unquantised network has a feature factoriser.
+pub const UNQUANTISED_HAS_FACTORISER: bool = false;
 /// The size of the input layer of the network.
-pub const INPUT: usize = 11 * 64;
+pub const INPUT: usize = 12 * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -82,7 +86,7 @@ pub const OUTPUT_BUCKETS: usize = 1;
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
     const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    return 1;
+    return 0;
     (pos.n_men() as usize - 2) / DIVISOR
 }
 
@@ -104,7 +108,7 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + 1)],
+    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -256,7 +260,14 @@ impl UnquantisedNetwork {
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights, and merge the feature factoriser in.
         let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
-        let factoriser = buckets.next().unwrap();
+        let factoriser;
+        let alternate_buffer;
+        if UNQUANTISED_HAS_FACTORISER {
+            factoriser = buckets.next().unwrap();
+        } else {
+            alternate_buffer = vec![0.0; 12 * 64 * L1_SIZE];
+            factoriser = &alternate_buffer;
+        }
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
             .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
             .enumerate()
@@ -267,17 +278,18 @@ impl UnquantisedNetwork {
                 for sq in Square::all() {
                     // don't write black king data into the white king's slots
                     let in_bucket = BUCKET_MAP[sq] == bucket_idx;
-                    if in_bucket && piece == Piece::BK {
+                    if MERGE_KING_PLANES && in_bucket && piece == Piece::BK {
                         continue;
                     }
                     // don't write white king data into the black king's slots
-                    if !in_bucket && piece == Piece::WK {
+                    if MERGE_KING_PLANES && !in_bucket && piece == Piece::WK {
                         continue;
                     }
                     let i =
                         feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
                     let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
                         .index();
+                    assert!(MERGE_KING_PLANES || i == j, "if not merging the king planes, indices should match");
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
