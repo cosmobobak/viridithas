@@ -36,7 +36,7 @@ pub const MERGE_KING_PLANES: bool = false;
 /// Whether the unquantised network has a feature factoriser.
 pub const UNQUANTISED_HAS_FACTORISER: bool = false;
 /// The size of the input layer of the network.
-pub const INPUT: usize = 12 * 64;
+pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
