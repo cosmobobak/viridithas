@@ -81,13 +81,24 @@ const BUCKET_MAP: [usize; 64] = {
 };
 
 /// The number of output buckets
-pub const OUTPUT_BUCKETS: usize = 1;
+pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
-    #![allow(clippy::cast_possible_truncation)]
-    const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    return 0;
-    (pos.n_men() as usize - 2) / DIVISOR
+    const TABLE: [u8; 33] = [
+        0,
+        0, 0, 0, 0, 0, 0, // 1, 2, 3, 4, 5, 6
+        0, 0, 0, 0, // 7, 8, 9, 10
+        1, 1, 1,
+        2, 2, 2,
+        3, 3, 3,
+        4, 4, 4,
+        5, 5, 5,
+        6, 6, 6,
+        7, 7, 7, 7
+    ];
+    let occ = pos.n_men() as usize;
+    let occ = if occ > 32 { 32 } else { occ };
+    TABLE[occ] as usize
 }
 
 const QA: i16 = 255;
