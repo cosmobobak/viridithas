@@ -835,8 +835,13 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
      sensei | 8192x2 -(pairwise)> 16 -> 64 -> 1 net.   | fixed-nodes:
-            | crelu/screlu/screlu activations.         | TBD
-            | no buckets, input or output.             |
+            | crelu/screlu/screlu activations.         | Elo   | 35.57 +- 9.22 (95%)
+            | no buckets, input or output.             | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 3.05 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2372 W: 820 L: 578 D: 974
+            |                                          | Penta | [32, 224, 485, 360, 85]
+            |                                          | https://chess.swehosting.se/test/9979/
+            |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
     alembic | normal hyperstition arch, distilled from | fixed-nodes:
             | sensei. farseer buckets.                 | TBD
