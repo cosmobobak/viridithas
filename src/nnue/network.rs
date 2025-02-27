@@ -84,6 +84,7 @@ const BUCKET_MAP: [usize; 64] = {
 pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
+    #[rustfmt::skip]
     const TABLE: [u8; 33] = [
         0,
         0, 0, 0, 0, 0, 0, // 1, 2, 3, 4, 5, 6
@@ -161,6 +162,7 @@ pub struct NNUEParams {
 static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
     let mut indices = [0; L1_SIZE / 2];
     let mut i = 0;
+    #[allow(clippy::cast_possible_truncation)]
     while i < L1_SIZE as u16 / 2 {
         indices[i as usize] = i;
         i += 1;
@@ -263,7 +265,7 @@ impl UnquantisedNetwork {
     /// for embedding into viri as a zstd-compressed archive. We do one processing
     /// step other than quantisation, namely merging the feature factoriser with the
     /// main king buckets.
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants)]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
@@ -300,7 +302,10 @@ impl UnquantisedNetwork {
                         feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
                     let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
                         .index();
-                    assert!(MERGE_KING_PLANES || i == j, "if not merging the king planes, indices should match");
+                    assert!(
+                        MERGE_KING_PLANES || i == j,
+                        "if not merging the king planes, indices should match"
+                    );
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
