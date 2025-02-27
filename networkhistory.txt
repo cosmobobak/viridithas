@@ -844,5 +844,20 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
     alembic | normal hyperstition arch, distilled from | fixed-nodes:
-            | sensei. farseer buckets.                 | TBD
+            | sensei. farseer buckets.                 | Elo   | -12.69 +- 5.77 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | very depressed about how bad this was.   | LLR   | -3.08 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5918 W: 1660 L: 1876 D: 2382
+            |                                          | Penta | [157, 778, 1267, 638, 119]
+            |                                          | https://chess.swehosting.se/test/9990/
+            |                                          | vs. kolibri
+            |                                          | 
+            |                                          | STC:
+            |                                          | Elo   | -25.95 +- 7.62 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2616 W: 553 L: 748 D: 1315
+            |                                          | Penta | [33, 418, 584, 257, 16]
+            |                                          | https://chess.swehosting.se/test/9991/
+            |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
