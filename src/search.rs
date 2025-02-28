@@ -125,9 +125,10 @@ const MAJOR_CORRHIST_WEIGHT: i32 = 1275;
 const MINOR_CORRHIST_WEIGHT: i32 = 1432;
 const NONPAWN_CORRHIST_WEIGHT: i32 = 1385;
 
-const EVAL_POLICY_OFFSET: i32 = 573;
-const EVAL_POLICY_UPDATE_MAX: i32 = 1790;
-const EVAL_POLICY_UPDATE_MIN: i32 = 1398;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 195;
+const EVAL_POLICY_OFFSET: i32 = 0;
+const EVAL_POLICY_UPDATE_MAX: i32 = 102;
+const EVAL_POLICY_UPDATE_MIN: i32 = 55;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
@@ -971,6 +972,30 @@ impl Board {
 
         t.ss[height].eval = static_eval;
 
+        // value-difference based policy update.
+        if !NT::ROOT {
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if ss_prev.eval != VALUE_NONE
+                    && static_eval != VALUE_NONE
+                    && !ss_prev.searching_tactical
+                {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    debug_assert_eq!(moved.colour(), !self.turn());
+                    let threats = self.history().last().unwrap().threats.all;
+                    let improvement = -(ss_prev.eval + static_eval) + info.conf.eval_policy_offset;
+                    let delta = i32::clamp(
+                        improvement * info.conf.eval_policy_improvement_scale / 32,
+                        -info.conf.eval_policy_update_min,
+                        info.conf.eval_policy_update_max,
+                    );
+                    t.update_history_single(from, to, moved, threats, delta);
+                }
+            }
+        }
+
         // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
         // if a position is "improving", we can be more aggressive with beta-reductions (eval is too high),
         // but we should be less aggressive with alpha-reductions (eval is too low).
@@ -1718,7 +1743,7 @@ impl Board {
         let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
 
         // after the move, it's the opponent's turn.
-        let mut colour = self.turn().flip();
+        let mut colour = !self.turn();
 
         loop {
             let my_attackers = attackers & board.occupied_co(colour);
@@ -1751,7 +1776,7 @@ impl Board {
 
             attackers &= occupied;
 
-            colour = colour.flip();
+            colour = !colour;
 
             balance = -balance - 1 - see_value(next_victim, info);
 
@@ -1763,7 +1788,7 @@ impl Board {
                 if next_victim == PieceType::King
                     && (attackers & board.occupied_co(colour)).non_empty()
                 {
-                    colour = colour.flip();
+                    colour = !colour;
                 }
                 break;
             }

@@ -31,8 +31,12 @@ use super::accumulator::{self, Accumulator};
 pub mod feature;
 pub mod layers;
 
+/// Whether to perform the king-plane merging optimisation.
+pub const MERGE_KING_PLANES: bool = true;
+/// Whether the unquantised network has a feature factoriser.
+pub const UNQUANTISED_HAS_FACTORISER: bool = true;
 /// The size of the input layer of the network.
-pub const INPUT: usize = 11 * 64;
+pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
@@ -103,7 +107,7 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + 1)],
+    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:    [f32; L1_SIZE],
     l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
@@ -142,17 +146,18 @@ pub struct NNUEParams {
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
-const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
+static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
     let mut indices = [0; L1_SIZE / 2];
     let mut i = 0;
-    while i < L1_SIZE / 2 {
-        indices[i] = i;
+    #[allow(clippy::cast_possible_truncation)]
+    while i < L1_SIZE as u16 / 2 {
+        indices[i as usize] = i;
         i += 1;
     }
     indices
 };
 
-// const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = [
+// static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = [
 //     846, 382, 423, 1443, 1192, 660, 52, 502, 421, 658, 1293, 329, 98, 874, 247, 759, 820, 29, 146,
 //     1261, 802, 139, 1150, 1347, 919, 429, 888, 202, 1308, 1331, 733, 267, 875, 1358, 643, 601,
 //     1070, 592, 1399, 522, 1034, 261, 1376, 1429, 588, 998, 1269, 766, 704, 1450, 795, 1203, 787,
@@ -247,7 +252,7 @@ impl UnquantisedNetwork {
     /// for embedding into viri as a zstd-compressed archive. We do one processing
     /// step other than quantisation, namely merging the feature factoriser with the
     /// main king buckets.
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants)]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
@@ -255,7 +260,14 @@ impl UnquantisedNetwork {
         let mut net = QuantisedNetwork::zeroed();
         // quantise the feature transformer weights, and merge the feature factoriser in.
         let mut buckets = self.ft_weights.chunks_exact(12 * 64 * L1_SIZE);
-        let factoriser = buckets.next().unwrap();
+        let factoriser;
+        let alternate_buffer;
+        if UNQUANTISED_HAS_FACTORISER {
+            factoriser = buckets.next().unwrap();
+        } else {
+            alternate_buffer = vec![0.0; 12 * 64 * L1_SIZE];
+            factoriser = &alternate_buffer;
+        }
         for (bucket_idx, (src_bucket, tgt_bucket)) in buckets
             .zip(net.ft_weights.chunks_exact_mut(INPUT * L1_SIZE))
             .enumerate()
@@ -266,17 +278,21 @@ impl UnquantisedNetwork {
                 for sq in Square::all() {
                     // don't write black king data into the white king's slots
                     let in_bucket = BUCKET_MAP[sq] == bucket_idx;
-                    if in_bucket && piece == Piece::BK {
+                    if MERGE_KING_PLANES && in_bucket && piece == Piece::BK {
                         continue;
                     }
                     // don't write white king data into the black king's slots
-                    if !in_bucket && piece == Piece::WK {
+                    if MERGE_KING_PLANES && !in_bucket && piece == Piece::WK {
                         continue;
                     }
                     let i =
                         feature::index_full(Colour::White, Square::A1, FeatureUpdate { sq, piece });
                     let j = feature::index(Colour::White, Square::A1, FeatureUpdate { sq, piece })
                         .index();
+                    assert!(
+                        MERGE_KING_PLANES || i == j,
+                        "if not merging the king planes, indices should match"
+                    );
                     let src = &src_bucket[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let fac_src = &factoriser[i * L1_SIZE..i * L1_SIZE + L1_SIZE];
                     let tgt = &mut tgt_bucket[j * L1_SIZE..j * L1_SIZE + L1_SIZE];
@@ -523,19 +539,19 @@ fn repermute_l1_weights(
     l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
 ) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        sorted[tgt_index] = l1_weights[src_index];
+        sorted[tgt_index] = l1_weights[src_index as usize];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index + L1_SIZE / 2];
+        sorted[tgt_index + L1_SIZE / 2] = l1_weights[src_index as usize + L1_SIZE / 2];
     }
 }
 
 fn repermute_ft_bias(feature_bias: &mut [i16; L1_SIZE], unsorted: &[i16]) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        feature_bias[tgt_index] = unsorted[src_index];
+        feature_bias[tgt_index] = unsorted[src_index as usize];
     }
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
-        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index + L1_SIZE / 2];
+        feature_bias[tgt_index + L1_SIZE / 2] = unsorted[src_index as usize + L1_SIZE / 2];
     }
 }
 
@@ -547,11 +563,11 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
-            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index];
+            tgt_bucket[feature + tgt_index] = unsorted[feature + src_index as usize];
         }
         for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
             let tgt_index = tgt_index + L1_SIZE / 2;
-            let src_index = src_index + L1_SIZE / 2;
+            let src_index = src_index as usize + L1_SIZE / 2;
             // get the neuron's corresponding weight in the unsorted bucket,
             // and write it to the same feature (but the new position) in the target bucket.
             let feature = i * L1_SIZE;
