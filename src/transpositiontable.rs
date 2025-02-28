@@ -71,7 +71,7 @@ pub struct PackedInfo {
 impl PackedInfo {
     const fn new(age: u8, flag: Bound, pv: bool) -> Self {
         Self {
-            data: (age << 3) | (pv as u8) << 2 | flag as u8,
+            data: (age << 3) | ((pv as u8) << 2) | flag as u8,
         }
     }
 
@@ -152,20 +152,20 @@ impl TTClusterMemory {
                 let part1 = self.entry1_block1.load(Ordering::Relaxed);
                 let part2 = self.entry1_block2.load(Ordering::Relaxed);
                 // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 64
+                u128::from(part1) | (u128::from(part2) << 64)
             }
             2 => {
                 let part1 = self.entry2_block1.load(Ordering::Relaxed);
                 let part2 = self.entry2_block2.load(Ordering::Relaxed);
                 let part3 = self.entry2_block3.load(Ordering::Relaxed);
                 // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
+                u128::from(part1) | (u128::from(part2) << 16) | (u128::from(part3) << 48)
             }
             1 => {
                 let part1 = self.entry3_block1.load(Ordering::Relaxed);
                 let part2 = self.entry3_block2.load(Ordering::Relaxed);
                 // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 32
+                u128::from(part1) | (u128::from(part2) << 32)
             }
             _ => panic!("Index out of bounds!"),
         };

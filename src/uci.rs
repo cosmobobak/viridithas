@@ -24,7 +24,10 @@ use anyhow::{anyhow, bail, Context};
 use crate::{
     bench::BENCH_POSITIONS,
     chess::{
-        board::{movegen::MoveList, Board},
+        board::{
+            movegen::{self, MoveList},
+            Board,
+        },
         piece::Colour,
         CHESS960,
     },
@@ -319,9 +322,9 @@ fn parse_setoption(text: &str, pre_config: SetOptions) -> anyhow::Result<SetOpti
         UnexpectedCommandTermination("no option name given after \"setoption name\"".into())
     })?;
     let Some(value_part) = parts.next() else {
-        bail!(UciError::InvalidFormat(
-            "no \"value\" after \"setoption name {opt_name}\"".into()
-        ));
+        bail!(UciError::InvalidFormat(format!(
+            "no \"value\" after \"setoption name {opt_name}\""
+        )));
     };
     if value_part != "value" {
         bail!(UciError::InvalidFormat(format!(
@@ -725,6 +728,7 @@ pub fn main_loop() -> anyhow::Result<()> {
             }
             "gobench" => go_benchmark(nnue_params),
             "initcuckoo" => cuckoo::init(),
+            "initattacks" => movegen::init_sliders_attacks(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
                     search_config: info.conf.clone(),
