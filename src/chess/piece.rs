@@ -173,11 +173,6 @@ impl PieceType {
             .position(|&x| x == c)
             .and_then(|x| Self::new(x.try_into().ok()?))
     }
-
-    pub fn see_value(self) -> i32 {
-        const SEE_PIECE_VALUES: [i32; 6] = [161, 445, 463, 704, 1321, 0];
-        SEE_PIECE_VALUES[self]
-    }
 }
 
 impl Piece {

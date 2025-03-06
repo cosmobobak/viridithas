@@ -10,17 +10,68 @@ use crate::{
 
 const AGEING_DIVISOR: i16 = 2;
 
-pub fn history_bonus(conf: &Config, depth: i32) -> i32 {
+pub fn main_history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
-        conf.history_bonus_mul * depth + conf.history_bonus_offset,
-        conf.history_bonus_max,
+        conf.main_history_bonus_mul * depth + conf.main_history_bonus_offset,
+        conf.main_history_bonus_max,
     )
 }
-pub fn history_malus(conf: &Config, depth: i32) -> i32 {
+pub fn main_history_malus(conf: &Config, depth: i32) -> i32 {
     i32::min(
-        conf.history_malus_mul * depth + conf.history_malus_offset,
-        conf.history_malus_max,
+        conf.main_history_malus_mul * depth + conf.main_history_malus_offset,
+        conf.main_history_malus_max,
     )
+}
+pub fn cont1_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont1_history_bonus_mul * depth + conf.cont1_history_bonus_offset,
+        conf.cont1_history_bonus_max,
+    )
+}
+pub fn cont1_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont1_history_malus_mul * depth + conf.cont1_history_malus_offset,
+        conf.cont1_history_malus_max,
+    )
+}
+pub fn cont2_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont2_history_bonus_mul * depth + conf.cont2_history_bonus_offset,
+        conf.cont2_history_bonus_max,
+    )
+}
+pub fn cont2_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.cont2_history_malus_mul * depth + conf.cont2_history_malus_offset,
+        conf.cont2_history_malus_max,
+    )
+}
+pub fn tactical_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.tactical_history_bonus_mul * depth + conf.tactical_history_bonus_offset,
+        conf.tactical_history_bonus_max,
+    )
+}
+pub fn tactical_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.tactical_history_malus_mul * depth + conf.tactical_history_malus_offset,
+        conf.tactical_history_malus_max,
+    )
+}
+
+pub fn cont_history_bonus(conf: &Config, depth: i32, index: usize) -> i32 {
+    match index {
+        0 => cont1_history_bonus(conf, depth),
+        1 => cont2_history_bonus(conf, depth),
+        _ => unreachable!(),
+    }
+}
+pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
+    match index {
+        0 => cont1_history_malus(conf, depth),
+        1 => cont2_history_malus(conf, depth),
+        _ => unreachable!(),
+    }
 }
 
 pub const MAX_HISTORY: i16 = i16::MAX / 2;

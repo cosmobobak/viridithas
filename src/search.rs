@@ -25,10 +25,13 @@ use crate::{
         CHESS960,
     },
     evaluation::{
-        is_game_theoretic_score, mate_in, mated_in, tb_loss_in, tb_win_in, MATE_SCORE,
+        is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in, MATE_SCORE,
         MINIMUM_TB_WIN_SCORE,
     },
-    historytable::history_bonus,
+    historytable::{
+        cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
+        main_history_bonus, main_history_malus,
+    },
     movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -53,49 +56,74 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_WINDOW: i32 = 6;
-const RFP_MARGIN: i32 = 64;
-const RFP_IMPROVING_MARGIN: i32 = 50;
+const RFP_MARGIN: i32 = 68;
+const RFP_IMPROVING_MARGIN: i32 = 48;
 const NMP_IMPROVING_MARGIN: i32 = 72;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 192;
-const SEE_QUIET_MARGIN: i32 = -78;
-const SEE_TACTICAL_MARGIN: i32 = -22;
-const FUTILITY_COEFF_0: i32 = 82;
-const FUTILITY_COEFF_1: i32 = 101;
-const RAZORING_COEFF_0: i32 = 427;
-const RAZORING_COEFF_1: i32 = 167;
-const PROBCUT_MARGIN: i32 = 227;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 200;
+const SEE_QUIET_MARGIN: i32 = -75;
+const SEE_TACTICAL_MARGIN: i32 = -24;
+const FUTILITY_COEFF_0: i32 = 84;
+const FUTILITY_COEFF_1: i32 = 97;
+const RAZORING_COEFF_0: i32 = 413;
+const RAZORING_COEFF_1: i32 = 150;
+const PROBCUT_MARGIN: i32 = 236;
 const PROBCUT_IMPROVING_MARGIN: i32 = 58;
 const DOUBLE_EXTENSION_MARGIN: i32 = 12;
-const LMR_BASE: f64 = 85.0;
-const LMR_DIVISION: f64 = 206.0;
-const QS_SEE_BOUND: i32 = -211;
-const MAIN_SEE_BOUND: i32 = -110;
-const DO_DEEPER_BASE_MARGIN: i32 = 59;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 10;
-const HISTORY_PRUNING_MARGIN: i32 = -3321;
-const QS_FUTILITY: i32 = 220;
-const SEE_STAT_SCORE_MUL: i32 = 26;
+const LMR_BASE: f64 = 84.0;
+const LMR_DIVISION: f64 = 198.0;
+const QS_SEE_BOUND: i32 = -188;
+const MAIN_SEE_BOUND: i32 = -114;
+const DO_DEEPER_BASE_MARGIN: i32 = 60;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
+const HISTORY_PRUNING_MARGIN: i32 = -3597;
+const QS_FUTILITY: i32 = 222;
+const SEE_STAT_SCORE_MUL: i32 = 23;
 
-const HISTORY_LMR_DIVISOR: i32 = 12065;
-const LMR_REFUTATION_MUL: i32 = 1000;
+const HISTORY_LMR_DIVISOR: i32 = 11966;
+const LMR_REFUTATION_MUL: i32 = 1106;
 const LMR_NON_PV_MUL: i32 = 992;
-const LMR_TTPV_MUL: i32 = 1202;
-const LMR_CUT_NODE_MUL: i32 = 1284;
-const LMR_NON_IMPROVING_MUL: i32 = 689;
-const LMR_TT_CAPTURE_MUL: i32 = 1141;
+const LMR_TTPV_MUL: i32 = 1297;
+const LMR_CUT_NODE_MUL: i32 = 1394;
+const LMR_NON_IMPROVING_MUL: i32 = 695;
+const LMR_TT_CAPTURE_MUL: i32 = 1173;
+const LMR_CHECK_MUL: i32 = 1036;
 
-const HISTORY_BONUS_MUL: i32 = 251;
-const HISTORY_BONUS_OFFSET: i32 = 172;
-const HISTORY_BONUS_MAX: i32 = 2193;
+const MAIN_HISTORY_BONUS_MUL: i32 = 306;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 217;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2392;
 
-const HISTORY_MALUS_MUL: i32 = 225;
-const HISTORY_MALUS_OFFSET: i32 = 278;
-const HISTORY_MALUS_MAX: i32 = 1244;
+const MAIN_HISTORY_MALUS_MUL: i32 = 209;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 259;
+const MAIN_HISTORY_MALUS_MAX: i32 = 1211;
 
-const PAWN_CORRHIST_WEIGHT: i32 = 1191;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1289;
-const MINOR_CORRHIST_WEIGHT: i32 = 1290;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1319;
+const CONT1_HISTORY_BONUS_MUL: i32 = 265;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 207;
+const CONT1_HISTORY_BONUS_MAX: i32 = 2551;
+
+const CONT1_HISTORY_MALUS_MUL: i32 = 228;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 226;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1134;
+
+const CONT2_HISTORY_BONUS_MUL: i32 = 226;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 116;
+const CONT2_HISTORY_BONUS_MAX: i32 = 2064;
+
+const CONT2_HISTORY_MALUS_MUL: i32 = 250;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 293;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1277;
+
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 247;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 203;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2380;
+
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 230;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 328;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1176;
+
+const PAWN_CORRHIST_WEIGHT: i32 = 1180;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1275;
+const MINOR_CORRHIST_WEIGHT: i32 = 1432;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1385;
 
 const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 195;
 const EVAL_POLICY_OFFSET: i32 = 0;
@@ -238,7 +266,7 @@ impl Board {
             .moves()
             .first()
             .copied()
-            .unwrap_or_else(|| self.default_move(&thread_headers[0]));
+            .unwrap_or_else(|| self.default_move(&thread_headers[0], info));
         let ponder_move = pv.moves().get(1);
 
         if info.print_to_stdout {
@@ -442,7 +470,7 @@ impl Board {
                 .moves()
                 .first()
                 .copied()
-                .unwrap_or_else(|| self.default_move(t));
+                .unwrap_or_else(|| self.default_move(t, info));
             *average_value = if *average_value == VALUE_NONE {
                 score
             } else {
@@ -494,13 +522,13 @@ impl Board {
     }
 
     /// Give a legal default move in the case where we don't have enough time to search.
-    fn default_move(&mut self, t: &ThreadData) -> Move {
+    fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
             t.tt.probe_for_provisional_info(self.zobrist_key())
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
         let mut m = None;
-        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t) {
+        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t, info) {
             if !self.make_move_simple(mov) {
                 continue;
             }
@@ -551,7 +579,7 @@ impl Board {
             return if in_check {
                 0
             } else {
-                self.evaluate(t, info.nodes.get_local())
+                self.evaluate(t, info, info.nodes.get_local())
             };
         }
 
@@ -595,7 +623,7 @@ impl Board {
             let v = *tt_eval;
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                raw_eval = self.evaluate(t, info, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
@@ -617,7 +645,7 @@ impl Board {
             }
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
+            raw_eval = self.evaluate(t, info, info.nodes.get_local());
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
             t.tt.store(
@@ -657,13 +685,13 @@ impl Board {
 
         let futility = stand_pat + info.conf.qs_futility;
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
             let is_tactical = self.is_tactical(m);
             if best_score > -MINIMUM_TB_WIN_SCORE
                 && is_tactical
                 && !in_check
                 && futility <= alpha
-                && !self.static_exchange_eval(m, 1)
+                && !self.static_exchange_eval(info, m, 1)
             {
                 if best_score < futility {
                     best_score = futility;
@@ -797,7 +825,7 @@ impl Board {
                 return if in_check {
                     0
                 } else {
-                    self.evaluate(t, info.nodes.get_local())
+                    self.evaluate(t, info, info.nodes.get_local())
                 };
             }
 
@@ -836,9 +864,8 @@ impl Board {
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
                             let threats = self.threats().all;
-                            let delta = history_bonus(&info.conf, depth);
                             self.update_quiet_history_single::<false>(
-                                t, from, to, moved, threats, delta,
+                                t, info, from, to, moved, threats, depth, true,
                             );
                         }
                     }
@@ -928,7 +955,7 @@ impl Board {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
             if v == VALUE_NONE {
                 // regenerate the static eval if it's VALUE_NONE.
-                raw_eval = self.evaluate(t, info.nodes.get_local());
+                raw_eval = self.evaluate(t, info, info.nodes.get_local());
             } else {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
@@ -939,7 +966,7 @@ impl Board {
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         } else {
             // otherwise, use the static evaluation.
-            raw_eval = self.evaluate(t, info.nodes.get_local());
+            raw_eval = self.evaluate(t, info, info.nodes.get_local());
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
@@ -1135,7 +1162,7 @@ impl Board {
             while let Some(MoveListEntry {
                 mov: m,
                 score: ordering_score,
-            }) = move_picker.next(self, t)
+            }) = move_picker.next(self, t, info)
             {
                 if ordering_score < WINNING_CAPTURE_SCORE {
                     break;
@@ -1210,7 +1237,7 @@ impl Board {
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t) {
+        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
             if excluded == Some(m) {
                 continue;
             }
@@ -1268,6 +1295,7 @@ impl Board {
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
                 && !self.static_exchange_eval(
+                    info,
                     m,
                     see_table[usize::from(is_quiet)]
                         - stat_score * info.conf.see_stat_score_mul / 1024,
@@ -1364,10 +1392,6 @@ impl Board {
                     // no extension.
                     extension = 0;
                 }
-            } else if self.in_check() {
-                // self.in_check() determines if the opponent is in check,
-                // because we have already made the move.
-                extension = i32::from(is_quiet);
             } else {
                 extension = 0;
             }
@@ -1399,6 +1423,8 @@ impl Board {
                         r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
                         // reduce more if the move from the transposition table is tactical
                         r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
+                        // reduce less if the move gives check
+                        r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     }
                     (r / 1024).clamp(1, depth - 1)
                 } else {
@@ -1601,15 +1627,30 @@ impl Board {
     fn update_quiet_history_single<const MADE: bool>(
         &self,
         t: &mut ThreadData,
+        info: &SearchInfo,
         from: Square,
         to: Square,
         moved: Piece,
         threats: SquareSet,
-        delta: i32,
+        depth: i32,
+        good: bool,
     ) {
-        t.update_history_single(from, to, moved, threats, delta);
-        t.update_continuation_history_single(self, to, moved, delta, 0 + usize::from(MADE));
-        t.update_continuation_history_single(self, to, moved, delta, 1 + usize::from(MADE));
+        let (main, cont1, cont2) = if good {
+            (
+                main_history_bonus(&info.conf, depth),
+                cont1_history_bonus(&info.conf, depth),
+                cont2_history_bonus(&info.conf, depth),
+            )
+        } else {
+            (
+                -main_history_malus(&info.conf, depth),
+                -cont1_history_malus(&info.conf, depth),
+                -cont2_history_malus(&info.conf, depth),
+            )
+        };
+        t.update_history_single(from, to, moved, threats, main);
+        t.update_continuation_history_single(self, to, moved, cont1, 0 + usize::from(MADE));
+        t.update_continuation_history_single(self, to, moved, cont2, 1 + usize::from(MADE));
         // t.update_continuation_history_single(self, to, moved, delta, 3 + usize::from(MADE));
     }
 
@@ -1666,7 +1707,7 @@ impl Board {
     /// the given move, from least to most valuable moved piece, and returns
     /// true if the exchange comes out with a material advantage of at
     /// least `threshold`.
-    pub fn static_exchange_eval(&self, m: Move, threshold: i32) -> bool {
+    pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
         let board = self.pieces();
@@ -1675,7 +1716,7 @@ impl Board {
             .promotion_type()
             .map_or_else(|| self.piece_at(from).unwrap().piece_type(), |promo| promo);
 
-        let mut balance = self.estimated_see(m) - threshold;
+        let mut balance = self.estimated_see(info, m) - threshold;
 
         // if the best case fails, don't bother doing the full search.
         if balance < 0 {
@@ -1683,7 +1724,7 @@ impl Board {
         }
 
         // worst case is losing the piece
-        balance -= next_victim.see_value();
+        balance -= see_value(next_victim, info);
 
         // if the worst case passes, we can return true immediately.
         if balance >= 0 {
@@ -1737,7 +1778,7 @@ impl Board {
 
             colour = !colour;
 
-            balance = -balance - 1 - next_victim.see_value();
+            balance = -balance - 1 - see_value(next_victim, info);
 
             if balance >= 0 {
                 // from Ethereal:

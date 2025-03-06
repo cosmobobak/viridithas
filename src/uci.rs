@@ -695,6 +695,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                         thread_data
                             .first_mut()
                             .with_context(|| "the thread headers are empty.")?,
+                        &info,
                         0,
                     )
                 };

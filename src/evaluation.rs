@@ -1,11 +1,14 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use crate::{
-    chess::board::Board,
-    chess::chessmove::Move,
-    chess::piece::{Colour, Piece, PieceType},
+    chess::{
+        board::Board,
+        chessmove::Move,
+        piece::{Colour, PieceType},
+    },
     nnue::network,
     search::draw_score,
+    searchinfo::SearchInfo,
     threadlocal::ThreadData,
     util::{MAX_DEPTH, MAX_PLY},
 };
@@ -51,18 +54,26 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
+pub const MATERIAL_SCALE_BASE: i32 = 773;
+pub const SEE_PAWN_VALUE: i32 = 171;
+pub const SEE_KNIGHT_VALUE: i32 = 443;
+pub const SEE_BISHOP_VALUE: i32 = 440;
+pub const SEE_ROOK_VALUE: i32 = 705;
+pub const SEE_QUEEN_VALUE: i32 = 1321;
+
 impl Board {
-    fn material_scale(&self) -> i32 {
+    fn material_scale(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
         let b = self.pieces();
-        700 + (PieceType::Knight.see_value() * b.all_knights().count() as i32
-            + PieceType::Bishop.see_value() * b.all_bishops().count() as i32
-            + PieceType::Rook.see_value() * b.all_rooks().count() as i32
-            + PieceType::Queen.see_value() * b.all_queens().count() as i32)
-            / 32
+        info.conf.material_scale_base
+            + (info.conf.see_knight_value * b.all_knights().count() as i32
+                + info.conf.see_bishop_value * b.all_bishops().count() as i32
+                + info.conf.see_rook_value * b.all_rooks().count() as i32
+                + info.conf.see_queen_value * b.all_queens().count() as i32)
+                / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
+    pub fn evaluate_nnue(&self, t: &ThreadData, info: &SearchInfo) -> i32 {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
         let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
@@ -71,7 +82,7 @@ impl Board {
         // material left - this will incentivize keeping material
         // on the board if we have winning chances, and trading
         // material off if the position is worse for us.
-        let v = v * self.material_scale() / 1024;
+        let v = v * self.material_scale(info) / 1024;
 
         // scale down the value when the fifty-move counter is high.
         // this goes some way toward making viri realise when he's not
@@ -85,7 +96,7 @@ impl Board {
         v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate(&self, t: &mut ThreadData, info: &SearchInfo, nodes: u64) -> i32 {
         // detect draw by insufficient material
         if !self.pieces().any_pawns() && self.pieces().is_material_draw() {
             return if self.turn() == Colour::White {
@@ -98,7 +109,7 @@ impl Board {
         // neural network accumulator state.
         t.nnue.force(self, t.nnue_params);
         // run the neural network evaluation
-        self.evaluate_nnue(t)
+        self.evaluate_nnue(t, info)
     }
 
     pub fn zugzwang_unlikely(&self) -> bool {
@@ -109,20 +120,31 @@ impl Board {
         (us & (kings | pawns)) != us
     }
 
-    pub fn estimated_see(&self, m: Move) -> i32 {
+    pub fn estimated_see(&self, info: &SearchInfo, m: Move) -> i32 {
         // initially take the value of the thing on the target square
         let mut value = self
             .piece_at(m.to())
-            .map_or(0, |p| PieceType::see_value(Piece::piece_type(p)));
+            .map_or(0, |p| see_value(p.piece_type(), info));
 
         if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += promo.see_value() - PieceType::Pawn.see_value();
+            value += see_value(promo, info) - info.conf.see_pawn_value;
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = PieceType::Pawn.see_value();
+            value = info.conf.see_pawn_value;
         }
 
         value
+    }
+}
+
+pub const fn see_value(piece_type: PieceType, info: &SearchInfo) -> i32 {
+    match piece_type {
+        PieceType::Pawn => info.conf.see_pawn_value,
+        PieceType::Knight => info.conf.see_knight_value,
+        PieceType::Bishop => info.conf.see_bishop_value,
+        PieceType::Rook => info.conf.see_rook_value,
+        PieceType::Queen => info.conf.see_queen_value,
+        PieceType::King => 0,
     }
 }

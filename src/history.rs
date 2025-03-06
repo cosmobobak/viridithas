@@ -9,7 +9,8 @@ use crate::{
         CHESS960,
     },
     historytable::{
-        history_bonus, history_malus, update_history, CORRECTION_HISTORY_GRAIN,
+        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
+        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
         CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
     },
     search::parameters::Config,
@@ -45,9 +46,9 @@ impl ThreadData<'_> {
                 pos.threats().all.contains_square(to),
             );
             let delta = if m == best_move {
-                history_bonus(conf, depth)
+                main_history_bonus(conf, depth)
             } else {
-                -history_malus(conf, depth)
+                -main_history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -121,9 +122,9 @@ impl ThreadData<'_> {
                 .tactical_history
                 .get_mut(piece_moved.unwrap(), to, capture);
             let delta = if m == best_move {
-                history_bonus(conf, depth)
+                tactical_history_bonus(conf, depth)
             } else {
-                -history_malus(conf, depth)
+                -tactical_history_malus(conf, depth)
             };
             update_history(val, delta);
         }
@@ -170,9 +171,9 @@ impl ThreadData<'_> {
             let piece = pos.piece_at(m.from()).unwrap();
 
             let delta = if m == best_move {
-                history_bonus(conf, depth)
+                cont_history_bonus(conf, depth, index)
             } else {
-                -history_malus(conf, depth)
+                -cont_history_malus(conf, depth, index)
             };
             update_history(cmh_block.get_mut(piece, to), delta);
         }
