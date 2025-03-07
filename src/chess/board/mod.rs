@@ -252,10 +252,9 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        if side == Colour::White {
-            self.generate_threats_from::<White>()
-        } else {
-            self.generate_threats_from::<Black>()
+        match side {
+            Colour::White => self.generate_threats_from::<White>(),
+            Colour::Black => self.generate_threats_from::<Black>(),
         }
     }
 
@@ -752,10 +751,9 @@ impl Board {
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
-        if side == Colour::White {
-            self.sq_attacked_by::<White>(sq)
-        } else {
-            self.sq_attacked_by::<Black>(sq)
+        match side {
+            Colour::White => self.sq_attacked_by::<White>(sq),
+            Colour::Black => self.sq_attacked_by::<Black>(sq),
         }
     }
 
@@ -821,7 +819,7 @@ impl Board {
 
         let moved_piece = self.piece_at(from);
         let captured_piece = if m.is_castle() {
-            None
+            return self.is_pseudo_legal_castling(m);
         } else {
             self.piece_at(to)
         };
@@ -855,10 +853,6 @@ impl Board {
             return false;
         }
 
-        if m.is_castle() {
-            return self.is_pseudo_legal_castling(m);
-        }
-
         if moved_piece.piece_type() == PieceType::Pawn {
             let should_be_promoting = to > Square::H7 || to < Square::A2;
             if should_be_promoting && !m.is_promo() {
@@ -879,19 +873,18 @@ impl Board {
                 return Some(to) == from.pawn_push(self.side);
             }
             // pawn capture
-            if self.side == Colour::White {
-                return (pawn_attacks::<White>(from.as_set()) & to.as_set()).non_empty();
-            }
-            return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
+            return match self.side {
+                Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
+                Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
+            };
         }
 
-        (to.as_set()
-            & movegen::attacks_by_type(
-                moved_piece.piece_type(),
-                from,
-                self.state.piece_layout.occupied(),
-            ))
-        .non_empty()
+        movegen::attacks_by_type(
+            moved_piece.piece_type(),
+            from,
+            self.state.piece_layout.occupied(),
+        )
+        .contains_square(to)
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -909,10 +902,9 @@ impl Board {
         if moved.piece_type() != PieceType::King {
             return false;
         }
-        let home_rank = if self.side == Colour::White {
-            SquareSet::RANK_1
-        } else {
-            SquareSet::RANK_8
+        let home_rank = match self.side {
+            Colour::White => SquareSet::RANK_1,
+            Colour::Black => SquareSet::RANK_8,
         };
         if (m.to().as_set() & home_rank).is_empty() {
             return false;
@@ -922,40 +914,26 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to().file())
-                != (if self.side == Colour::Black {
-                    self.state.castle_perm.kingside(Colour::Black)
-                } else {
-                    self.state.castle_perm.kingside(Colour::White)
-                })
-            {
+            if Some(m.to().file()) != self.state.castle_perm.kingside(self.side) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::Black {
-                (Square::G8, Square::F8)
-            } else {
-                (Square::G1, Square::F1)
-            }
+            (
+                Square::G1.relative_to(self.side),
+                Square::F1.relative_to(self.side),
+            )
         } else {
             // queenside castling.
-            if Some(m.to().file())
-                != (if self.side == Colour::Black {
-                    self.state.castle_perm.queenside(Colour::Black)
-                } else {
-                    self.state.castle_perm.queenside(Colour::White)
-                })
-            {
+            if Some(m.to().file()) != self.state.castle_perm.queenside(self.side) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::Black {
-                (Square::C8, Square::D8)
-            } else {
-                (Square::C1, Square::D1)
-            }
+            (
+                Square::C1.relative_to(self.side),
+                Square::D1.relative_to(self.side),
+            )
         };
 
         // king_path is the path the king takes to get to its destination.
@@ -1070,10 +1048,9 @@ impl Board {
         }
 
         if m.is_ep() {
-            let clear_at = if side == Colour::White {
-                to.sub(8)
-            } else {
-                to.add(8)
+            let clear_at = match side {
+                Colour::White => to.sub(8),
+                Colour::Black => to.add(8),
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
@@ -1083,27 +1060,14 @@ impl Board {
             self.state.piece_layout.clear_piece_at(from, piece);
             let to_file = Some(to.file());
             let rook_from = to;
-            #[allow(clippy::collapsible_else_if)]
-            let rook_to = if side == Colour::White {
-                if to_file == self.state.castle_perm.kingside(Colour::White) {
-                    to = Square::G1;
-                    Square::F1
-                } else if to_file == self.state.castle_perm.queenside(Colour::White) {
-                    to = Square::C1;
-                    Square::D1
-                } else {
-                    unreachable!()
-                }
+            let rook_to = if to_file == self.state.castle_perm.kingside(side) {
+                to = Square::G1.relative_to(side);
+                Square::F1.relative_to(side)
+            } else if to_file == self.state.castle_perm.queenside(side) {
+                to = Square::C1.relative_to(side);
+                Square::D1.relative_to(side)
             } else {
-                if to_file == self.state.castle_perm.kingside(Colour::Black) {
-                    to = Square::G8;
-                    Square::F8
-                } else if to_file == self.state.castle_perm.queenside(Colour::Black) {
-                    to = Square::C8;
-                    Square::D8
-                } else {
-                    unreachable!()
-                }
+                unreachable!()
             };
             if from != to {
                 update_buffer.move_piece(from, to, piece);
@@ -1860,10 +1824,9 @@ impl Display for Board {
             }
         }
 
-        if self.side == Colour::White {
-            write!(f, " w")?;
-        } else {
-            write!(f, " b")?;
+        match self.side {
+            Colour::White => write!(f, " w")?,
+            Colour::Black => write!(f, " b")?,
         }
         write!(f, " ")?;
         if self.state.castle_perm == CastlingRights::default() {
