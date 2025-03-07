@@ -26,8 +26,8 @@ impl Board {
 
         // check square-set / piece array coherency
         for sq in Square::all() {
-            let piece = self.state.piece_array[sq];
-            if self.state.piece_layout.piece_at(sq) != piece {
+            let piece = self.state.mailbox[sq];
+            if self.state.bbs.piece_at(sq) != piece {
                 return Err(format!(
                     "square-set / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
                     sq,
@@ -72,16 +72,16 @@ impl Board {
         }
 
         // check there are the correct number of kings for each side
-        if self.state.piece_layout.piece_bb(Piece::WK).count() != 1 {
+        if self.state.bbs.piece_bb(Piece::WK).count() != 1 {
             return Err(format!(
                 "white king count is corrupt: expected 1, got {}",
-                self.state.piece_layout.piece_bb(Piece::WK).count()
+                self.state.bbs.piece_bb(Piece::WK).count()
             ));
         }
-        if self.state.piece_layout.piece_bb(Piece::BK).count() != 1 {
+        if self.state.bbs.piece_bb(Piece::BK).count() != 1 {
             return Err(format!(
                 "black king count is corrupt: expected 1, got {}",
-                self.state.piece_layout.piece_bb(Piece::BK).count()
+                self.state.bbs.piece_bb(Piece::BK).count()
             ));
         }
 

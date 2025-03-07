@@ -1016,7 +1016,7 @@ impl NNUEState {
         for colour in Colour::all() {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
-                board.state.piece_layout,
+                board.state.bbs,
                 colour,
                 &mut self.accumulators[0],
             );
@@ -1084,7 +1084,7 @@ impl NNUEState {
                 } else {
                     self.bucket_cache.load_accumulator_for_position(
                         nnue_params,
-                        board.state.piece_layout,
+                        board.state.bbs,
                         colour,
                         &mut self.accumulators[self.current_acc],
                     );
@@ -1146,7 +1146,7 @@ impl NNUEState {
         } else {
             self.bucket_cache.load_accumulator_for_position(
                 nnue_params,
-                pos.state.piece_layout,
+                pos.state.bbs,
                 C::COLOUR,
                 &mut self.accumulators[self.current_acc],
             );

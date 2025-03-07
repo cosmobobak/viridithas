@@ -109,18 +109,6 @@ impl SquareSet {
         self.inner.count_ones()
     }
 
-    pub const fn is_empty(self) -> bool {
-        self.inner == 0
-    }
-
-    pub const fn is_full(self) -> bool {
-        self.inner == !0
-    }
-
-    pub const fn non_empty(self) -> bool {
-        self.inner != 0
-    }
-
     pub const fn intersection(self, other: Self) -> Self {
         Self {
             inner: self.inner & other.inner,

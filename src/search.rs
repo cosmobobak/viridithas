@@ -1747,14 +1747,14 @@ impl Board {
 
         loop {
             let my_attackers = attackers & board.occupied_co(colour);
-            if my_attackers.is_empty() {
+            if my_attackers == SquareSet::EMPTY {
                 break;
             }
 
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if (my_attackers & board.of_type(victim)).non_empty() {
+                if (my_attackers & board.of_type(victim)) != SquareSet::EMPTY {
                     break;
                 }
             }
@@ -1786,7 +1786,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::King
-                    && (attackers & board.occupied_co(colour)).non_empty()
+                    && (attackers & board.occupied_co(colour)) != SquareSet::EMPTY
                 {
                     colour = !colour;
                 }

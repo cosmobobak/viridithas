@@ -301,8 +301,8 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
-        let our_pawns = self.state.piece_layout.pawns::<C>();
-        let their_pieces = self.state.piece_layout.their_pieces::<C>();
+        let our_pawns = self.state.bbs.pawns::<C>();
+        let their_pieces = self.state.bbs.their_pieces::<C>();
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacking_west = if C::WHITE {
             their_pieces.south_east_one() & our_pawns
@@ -396,7 +396,7 @@ impl Board {
             return;
         };
         let ep_bb = ep_sq.as_set();
-        let our_pawns = self.state.piece_layout.pawns::<C>();
+        let our_pawns = self.state.bbs.pawns::<C>();
         let attacks_west = if C::WHITE {
             ep_bb.south_east_one() & our_pawns
         } else {
@@ -408,11 +408,11 @@ impl Board {
             ep_bb.north_west_one() & our_pawns
         };
 
-        if attacks_west.non_empty() {
+        if attacks_west != SquareSet::EMPTY {
             let from_sq = attacks_west.first();
             move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
         }
-        if attacks_east.non_empty() {
+        if attacks_east != SquareSet::EMPTY {
             let from_sq = attacks_east.first();
             move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
         }
@@ -434,14 +434,14 @@ impl Board {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.piece_layout.empty() >> 8
+            self.state.bbs.empty() >> 8
         } else {
-            self.state.piece_layout.empty() << 8
+            self.state.bbs.empty() << 8
         };
         let double_shifted_empty_squares = if C::WHITE {
-            self.state.piece_layout.empty() >> 16
+            self.state.bbs.empty() >> 16
         } else {
-            self.state.piece_layout.empty() << 16
+            self.state.bbs.empty() << 16
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
@@ -453,7 +453,7 @@ impl Board {
         } else {
             valid_target_squares << 16
         };
-        let our_pawns = self.state.piece_layout.pawns::<C>();
+        let our_pawns = self.state.bbs.pawns::<C>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -505,16 +505,16 @@ impl Board {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.piece_layout.empty() >> 8
+            self.state.bbs.empty() >> 8
         } else {
-            self.state.piece_layout.empty() << 8
+            self.state.bbs.empty() << 8
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
         } else {
             valid_target_squares << 8
         };
-        let our_pawns = self.state.piece_layout.pawns::<C>();
+        let our_pawns = self.state.bbs.pawns::<C>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
 
@@ -555,9 +555,9 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.piece_layout.their_pieces::<C>();
-        let freespace = self.state.piece_layout.empty();
-        let our_king_sq = self.state.piece_layout.king::<C>().first();
+        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let freespace = self.state.bbs.empty();
+        let our_king_sq = self.state.bbs.king::<C>().first();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -583,7 +583,7 @@ impl Board {
         self.generate_ep::<C>(move_list);
 
         // knights
-        let our_knights = self.state.piece_layout.knights::<C>();
+        let our_knights = self.state.bbs.knights::<C>();
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
@@ -604,8 +604,8 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.piece_layout.diags::<C>();
-        let blockers = self.state.piece_layout.occupied();
+        let our_diagonal_sliders = self.state.bbs.diags::<C>();
+        let blockers = self.state.bbs.occupied();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -617,7 +617,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.piece_layout.orthos::<C>();
+        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -647,8 +647,8 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.piece_layout.their_pieces::<C>();
-        let our_king_sq = self.state.piece_layout.king::<C>().first();
+        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let our_king_sq = self.state.bbs.king::<C>().first();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -660,8 +660,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
-                | self.state.threats.checkers
+            self.state.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -674,8 +673,7 @@ impl Board {
         self.generate_ep::<C>(move_list);
 
         // knights
-        let our_knights = self.state.piece_layout.knights::<C>();
-        let their_pieces = self.state.piece_layout.their_pieces::<C>();
+        let our_knights = self.state.bbs.knights::<C>();
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
@@ -690,8 +688,8 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.piece_layout.diags::<C>();
-        let blockers = self.state.piece_layout.occupied();
+        let our_diagonal_sliders = self.state.bbs.diags::<C>();
+        let blockers = self.state.bbs.occupied();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -700,7 +698,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.piece_layout.orthos::<C>();
+        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -710,7 +708,7 @@ impl Board {
     }
 
     fn generate_castling_moves_for<C: Col>(&self, move_list: &mut MoveList) {
-        let occupied = self.state.piece_layout.occupied();
+        let occupied = self.state.bbs.occupied();
 
         if CHESS960.load(Ordering::Relaxed) {
             let king_sq = self.king_sq(C::COLOUR);
@@ -779,7 +777,7 @@ impl Board {
             let mut cache = None;
 
             if k_perm.is_some()
-                && (occupied & k_freespace).is_empty()
+                && occupied & k_freespace == SquareSet::EMPTY
                 && {
                     let got_attacked_king = self.sq_attacked_by::<C::Opposite>(from);
                     cache = Some(got_attacked_king);
@@ -791,7 +789,7 @@ impl Board {
             }
 
             if q_perm.is_some()
-                && (occupied & q_freespace).is_empty()
+                && occupied & q_freespace == SquareSet::EMPTY
                 && !cache.unwrap_or_else(|| self.sq_attacked_by::<C::Opposite>(from))
                 && !self.sq_attacked_by::<C::Opposite>(q_thru)
             {
@@ -812,10 +810,9 @@ impl Board {
         let king_path = RAY_BETWEEN[king_sq][king_dst];
         let rook_path = RAY_BETWEEN[king_sq][castling_sq];
         let relevant_occupied = occupied ^ king_sq.as_set() ^ castling_sq.as_set();
-        if (relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set()))
-            .is_empty()
-            && !self.any_attacked(king_path, C::Opposite::COLOUR)
-        {
+        let intersection =
+            relevant_occupied & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set());
+        if intersection == SquareSet::EMPTY && !self.any_attacked(king_path, C::Opposite::COLOUR) {
             move_list.push::<false>(Move::new_with_flags(
                 king_sq,
                 castling_sq,
@@ -850,14 +847,14 @@ impl Board {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.piece_layout.empty() >> 8
+            self.state.bbs.empty() >> 8
         } else {
-            self.state.piece_layout.empty() << 8
+            self.state.bbs.empty() << 8
         };
         let double_shifted_empty_squares = if C::WHITE {
-            self.state.piece_layout.empty() >> 16
+            self.state.bbs.empty() >> 16
         } else {
-            self.state.piece_layout.empty() << 16
+            self.state.bbs.empty() << 16
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
@@ -869,7 +866,7 @@ impl Board {
         } else {
             valid_target_squares << 16
         };
-        let our_pawns = self.state.piece_layout.pawns::<C>();
+        let our_pawns = self.state.bbs.pawns::<C>();
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -895,9 +892,9 @@ impl Board {
     }
 
     fn generate_quiets_for<C: Col>(&self, move_list: &mut MoveList) {
-        let freespace = self.state.piece_layout.empty();
-        let our_king_sq = self.state.piece_layout.king::<C>().first();
-        let blockers = self.state.piece_layout.occupied();
+        let freespace = self.state.bbs.empty();
+        let our_king_sq = self.state.bbs.king::<C>().first();
+        let blockers = self.state.bbs.occupied();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -910,7 +907,6 @@ impl Board {
 
         let valid_target_squares = if self.in_check() {
             RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
-                | self.state.threats.checkers
         } else {
             SquareSet::FULL
         };
@@ -919,7 +915,7 @@ impl Board {
         self.generate_pawn_quiet::<C>(move_list, valid_target_squares);
 
         // knights
-        let our_knights = self.state.piece_layout.knights::<C>();
+        let our_knights = self.state.bbs.knights::<C>();
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & !blockers {
@@ -934,7 +930,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.piece_layout.diags::<C>();
+        let our_diagonal_sliders = self.state.bbs.diags::<C>();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
@@ -943,7 +939,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.piece_layout.orthos::<C>();
+        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
@@ -1086,7 +1082,7 @@ mod tests {
                 "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
             );
             subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
-            if subset.is_empty() {
+            if subset == SquareSet::EMPTY {
                 break;
             }
         }
@@ -1105,7 +1101,7 @@ mod tests {
                 "naive:\n{attacks_naive}\nfast:\n{attacks_fast}\nblockers were\n{subset}"
             );
             subset = SquareSet::from_inner(subset.inner().wrapping_sub(mask.inner())) & mask;
-            if subset.is_empty() {
+            if subset == SquareSet::EMPTY {
                 break;
             }
         }
