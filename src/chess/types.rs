@@ -305,6 +305,16 @@ impl Square {
 
     /// SAFETY: You may not call this function with a square and offset such that
     /// `square as u8 - offset` is outwith `0..64`.
+    pub const unsafe fn sub_unchecked(self, offset: u8) -> Self {
+        #![allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
+        let res = self as u8 - offset;
+        Self::new_unchecked(res)
+    }
+
     pub const fn sub(self, offset: u8) -> Option<Self> {
         #![allow(
             clippy::cast_possible_truncation,
