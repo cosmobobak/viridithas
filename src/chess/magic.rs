@@ -252,7 +252,7 @@ fn find_magic(square: Square, relevant_bits: u64, is_bishop: bool) -> u64 {
             let magic_index = ((occupancies[count].inner().wrapping_mul(magic)) >> (64 - relevant_bits)) as usize;
 
             // if got free index
-            if used_indices[magic_index].is_empty() {
+            if used_indices[magic_index] == SquareSet::EMPTY {
                 // assign attack map
                 used_indices[magic_index] = attacks[count];
             }

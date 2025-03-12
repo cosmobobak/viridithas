@@ -65,7 +65,7 @@ impl Clone for Board {
 impl Debug for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Board")
-            .field("piece_array", &self.state.piece_array)
+            .field("piece_array", &self.state.mailbox)
             .field("side", &self.side)
             .field("ep_sq", &self.state.ep_square)
             .field("fifty_move_counter", &self.state.fifty_move_counter)
@@ -145,7 +145,7 @@ impl Board {
     }
 
     pub const fn pieces(&self) -> &PieceLayout {
-        &self.state.piece_layout
+        &self.state.bbs
     }
 
     #[cfg(debug_assertions)]
@@ -155,7 +155,7 @@ impl Board {
 
     pub fn n_men(&self) -> u8 {
         #![allow(clippy::cast_possible_truncation)]
-        self.state.piece_layout.occupied().count() as u8
+        self.state.bbs.occupied().count() as u8
     }
 
     pub const fn ply(&self) -> usize {
@@ -168,22 +168,22 @@ impl Board {
 
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::White || side == Colour::Black);
-        debug_assert_eq!(self.state.piece_layout.king::<White>().count(), 1);
-        debug_assert_eq!(self.state.piece_layout.king::<Black>().count(), 1);
+        debug_assert_eq!(self.state.bbs.king::<White>().count(), 1);
+        debug_assert_eq!(self.state.bbs.king::<Black>().count(), 1);
         let sq = match side {
-            Colour::White => self.state.piece_layout.king::<White>().first(),
-            Colour::Black => self.state.piece_layout.king::<Black>().first(),
+            Colour::White => self.state.bbs.king::<White>().first(),
+            Colour::Black => self.state.bbs.king::<Black>().first(),
         };
-        debug_assert_eq!(self.state.piece_layout.piece_at(sq).unwrap().colour(), side);
+        debug_assert_eq!(self.state.bbs.piece_at(sq).unwrap().colour(), side);
         debug_assert_eq!(
-            self.state.piece_layout.piece_at(sq).unwrap().piece_type(),
+            self.state.bbs.piece_at(sq).unwrap().piece_type(),
             PieceType::King
         );
         sq
     }
 
-    pub const fn in_check(&self) -> bool {
-        self.state.threats.checkers.non_empty()
+    pub fn in_check(&self) -> bool {
+        self.state.threats.checkers != SquareSet::EMPTY
     }
 
     pub fn zero_height(&mut self) {
@@ -209,7 +209,7 @@ impl Board {
 
     pub fn generate_pos_keys(&self) -> Keys {
         let mut keys = Keys::default();
-        self.state.piece_layout.visit_pieces(|sq, piece| {
+        self.state.bbs.visit_pieces(|sq, piece| {
             hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut keys.pawn_key, piece, sq);
@@ -252,10 +252,9 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        if side == Colour::White {
-            self.generate_threats_from::<White>()
-        } else {
-            self.generate_threats_from::<Black>()
+        match side {
+            Colour::White => self.generate_threats_from::<White>(),
+            Colour::Black => self.generate_threats_from::<Black>(),
         }
     }
 
@@ -263,12 +262,12 @@ impl Board {
         let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
 
-        let their_pawns = self.state.piece_layout.pawns::<C>();
-        let their_knights = self.state.piece_layout.knights::<C>();
-        let their_diags = self.state.piece_layout.diags::<C>();
-        let their_orthos = self.state.piece_layout.orthos::<C>();
+        let their_pawns = self.state.bbs.pawns::<C>();
+        let their_knights = self.state.bbs.knights::<C>();
+        let their_diags = self.state.bbs.diags::<C>();
+        let their_orthos = self.state.bbs.orthos::<C>();
         let their_king = self.king_sq(C::COLOUR);
-        let blockers = self.state.piece_layout.occupied();
+        let blockers = self.state.bbs.occupied();
 
         // compute threats
         threats |= pawn_attacks::<C>(their_pawns);
@@ -752,10 +751,9 @@ impl Board {
 
     /// Determines if `sq` is attacked by `side`
     pub fn sq_attacked(&self, sq: Square, side: Colour) -> bool {
-        if side == Colour::White {
-            self.sq_attacked_by::<White>(sq)
-        } else {
-            self.sq_attacked_by::<Black>(sq)
+        match side {
+            Colour::White => self.sq_attacked_by::<White>(sq),
+            Colour::Black => self.sq_attacked_by::<Black>(sq),
         }
     }
 
@@ -772,41 +770,30 @@ impl Board {
             return self.state.threats.all.contains_square(sq);
         }
 
-        let sq_bb = sq.as_set();
-        let our_pawns = self.state.piece_layout.pawns::<C>();
-        let our_knights = self.state.piece_layout.knights::<C>();
-        let our_diags = self.state.piece_layout.diags::<C>();
-        let our_orthos = self.state.piece_layout.orthos::<C>();
-        let our_king = self.state.piece_layout.king::<C>();
-        let blockers = self.state.piece_layout.occupied();
-
         // pawns
-        let attacks = pawn_attacks::<C>(our_pawns);
-        if (attacks & sq_bb).non_empty() {
+        if pawn_attacks::<C>(self.state.bbs.pawns::<C>()).contains_square(sq) {
             return true;
         }
 
         // knights
-        let knight_attacks_from_this_square = movegen::knight_attacks(sq);
-        if (our_knights & knight_attacks_from_this_square).non_empty() {
+        if self.state.bbs.knights::<C>() & movegen::knight_attacks(sq) != SquareSet::EMPTY {
             return true;
         }
 
+        let blockers = self.state.bbs.occupied();
+
         // bishops, queens
-        let diag_attacks_from_this_square = movegen::bishop_attacks(sq, blockers);
-        if (our_diags & diag_attacks_from_this_square).non_empty() {
+        if self.state.bbs.diags::<C>() & movegen::bishop_attacks(sq, blockers) != SquareSet::EMPTY {
             return true;
         }
 
         // rooks, queens
-        let ortho_attacks_from_this_square = movegen::rook_attacks(sq, blockers);
-        if (our_orthos & ortho_attacks_from_this_square).non_empty() {
+        if self.state.bbs.orthos::<C>() & movegen::rook_attacks(sq, blockers) != SquareSet::EMPTY {
             return true;
         }
 
         // king
-        let king_attacks_from_this_square = movegen::king_attacks(sq);
-        if (our_king & king_attacks_from_this_square).non_empty() {
+        if self.state.bbs.king::<C>() & movegen::king_attacks(sq) != SquareSet::EMPTY {
             return true;
         }
 
@@ -821,7 +808,7 @@ impl Board {
 
         let moved_piece = self.piece_at(from);
         let captured_piece = if m.is_castle() {
-            None
+            return self.is_pseudo_legal_castling(m);
         } else {
             self.piece_at(to)
         };
@@ -855,10 +842,6 @@ impl Board {
             return false;
         }
 
-        if m.is_castle() {
-            return self.is_pseudo_legal_castling(m);
-        }
-
         if moved_piece.piece_type() == PieceType::Pawn {
             let should_be_promoting = to > Square::H7 || to < Square::A2;
             if should_be_promoting && !m.is_promo() {
@@ -879,19 +862,14 @@ impl Board {
                 return Some(to) == from.pawn_push(self.side);
             }
             // pawn capture
-            if self.side == Colour::White {
-                return (pawn_attacks::<White>(from.as_set()) & to.as_set()).non_empty();
-            }
-            return (pawn_attacks::<Black>(from.as_set()) & to.as_set()).non_empty();
+            return match self.side {
+                Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
+                Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
+            };
         }
 
-        (to.as_set()
-            & movegen::attacks_by_type(
-                moved_piece.piece_type(),
-                from,
-                self.state.piece_layout.occupied(),
-            ))
-        .non_empty()
+        movegen::attacks_by_type(moved_piece.piece_type(), from, self.state.bbs.occupied())
+            .contains_square(to)
     }
 
     pub fn is_pseudo_legal_castling(&self, m: Move) -> bool {
@@ -909,53 +887,38 @@ impl Board {
         if moved.piece_type() != PieceType::King {
             return false;
         }
-        let home_rank = if self.side == Colour::White {
-            SquareSet::RANK_1
-        } else {
-            SquareSet::RANK_8
+        let home_rank = match self.side {
+            Colour::White => SquareSet::RANK_1,
+            Colour::Black => SquareSet::RANK_8,
         };
-        if (m.to().as_set() & home_rank).is_empty() {
+        if !home_rank.contains_square(m.to()) {
             return false;
         }
-        if (m.from().as_set() & home_rank).is_empty() {
+        if !home_rank.contains_square(m.from()) {
             return false;
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to().file())
-                != (if self.side == Colour::Black {
-                    self.state.castle_perm.kingside(Colour::Black)
-                } else {
-                    self.state.castle_perm.kingside(Colour::White)
-                })
-            {
+            if Some(m.to().file()) != self.state.castle_perm.kingside(self.side) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::Black {
-                (Square::G8, Square::F8)
-            } else {
-                (Square::G1, Square::F1)
-            }
+            (
+                Square::G1.relative_to(self.side),
+                Square::F1.relative_to(self.side),
+            )
         } else {
             // queenside castling.
-            if Some(m.to().file())
-                != (if self.side == Colour::Black {
-                    self.state.castle_perm.queenside(Colour::Black)
-                } else {
-                    self.state.castle_perm.queenside(Colour::White)
-                })
-            {
+            if Some(m.to().file()) != self.state.castle_perm.queenside(self.side) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
             }
-            if self.side == Colour::Black {
-                (Square::C8, Square::D8)
-            } else {
-                (Square::C1, Square::D1)
-            }
+            (
+                Square::C1.relative_to(self.side),
+                Square::D1.relative_to(self.side),
+            )
         };
 
         // king_path is the path the king takes to get to its destination.
@@ -963,15 +926,16 @@ impl Board {
         // rook_path is the path the rook takes to get to its destination.
         let rook_path = RAY_BETWEEN[m.from()][m.to()];
         // castle_occ is the occupancy that "counts" for castling.
-        let castle_occ = self.state.piece_layout.occupied() ^ m.from().as_set() ^ m.to().as_set();
+        let castle_occ = self.state.bbs.occupied() ^ m.from().as_set() ^ m.to().as_set();
 
-        (castle_occ & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())).is_empty()
+        castle_occ & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())
+            == SquareSet::EMPTY
             && !self.any_attacked(king_path | m.from().as_set(), self.side.flip())
     }
 
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
         if by == self.side.flip() {
-            (squares & self.state.threats.all).non_empty()
+            squares & self.state.threats.all != SquareSet::EMPTY
         } else {
             for sq in squares {
                 if self.sq_attacked(sq, by) {
@@ -983,7 +947,7 @@ impl Board {
     }
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
-        self.state.piece_layout.set_piece_at(sq, piece);
+        self.state.bbs.set_piece_at(sq, piece);
         *self.piece_at_mut(sq) = Some(piece);
     }
 
@@ -993,7 +957,7 @@ impl Board {
             return None;
         }
         let idx = m.to();
-        self.state.piece_array[idx]
+        self.state.mailbox[idx]
     }
 
     /// Determines whether this move would be a capture in the current position.
@@ -1004,14 +968,14 @@ impl Board {
     /// Determines whether this move would be a double pawn push in the current position.
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
         let to = m.to();
-        if (to.as_set() & (SquareSet::RANK_4 | SquareSet::RANK_5)).is_empty() {
+        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(to) {
             return false;
         }
         let from = m.from();
-        if (from.as_set() & (SquareSet::RANK_2 | SquareSet::RANK_7)).is_empty() {
+        if !(SquareSet::RANK_2 | SquareSet::RANK_7).contains_square(from) {
             return false;
         }
-        let Some(piece_moved) = self.state.piece_array[from] else {
+        let Some(piece_moved) = self.state.mailbox[from] else {
             return false;
         };
         piece_moved.piece_type() == PieceType::Pawn
@@ -1024,12 +988,12 @@ impl Board {
 
     /// Gets the piece at the given square.
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        self.state.piece_array[sq]
+        self.state.mailbox[sq]
     }
 
     /// Gets a mutable reference to the piece at the given square.
     pub fn piece_at_mut(&mut self, sq: Square) -> &mut Option<Piece> {
-        &mut self.state.piece_array[sq]
+        &mut self.state.mailbox[sq]
     }
 
     pub fn make_move_simple(&mut self, m: Move) -> bool {
@@ -1045,17 +1009,13 @@ impl Board {
         let mut to = m.to();
         let castle = m.is_castle();
         let side = self.side;
-        let piece = self.state.piece_array[from].unwrap();
-        let captured = if castle {
-            None
-        } else {
-            self.state.piece_array[to]
-        };
+        let piece = self.state.mailbox[from].unwrap();
+        let captured = if castle { None } else { self.state.mailbox[to] };
 
         self.history.push(self.state.clone());
         let saved_ep_square = self.state.ep_square;
         let saved_fifty_move_counter = self.state.fifty_move_counter;
-        let saved_piece_layout = self.state.piece_layout;
+        let saved_piece_layout = self.state.bbs;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1070,47 +1030,33 @@ impl Board {
         }
 
         if m.is_ep() {
-            let clear_at = if side == Colour::White {
-                to.sub(8)
-            } else {
-                to.add(8)
+            let clear_at = match side {
+                Colour::White => to.sub(8),
+                Colour::Black => to.add(8),
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
-            self.state.piece_layout.clear_piece_at(clear_at, to_clear);
+            self.state.bbs.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
         } else if castle {
-            self.state.piece_layout.clear_piece_at(from, piece);
+            self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
             let rook_from = to;
-            #[allow(clippy::collapsible_else_if)]
-            let rook_to = if side == Colour::White {
-                if to_file == self.state.castle_perm.kingside(Colour::White) {
-                    to = Square::G1;
-                    Square::F1
-                } else if to_file == self.state.castle_perm.queenside(Colour::White) {
-                    to = Square::C1;
-                    Square::D1
-                } else {
-                    unreachable!()
-                }
+            let rook_to = if to_file == self.state.castle_perm.kingside(side) {
+                to = Square::G1.relative_to(side);
+                Square::F1.relative_to(side)
+            } else if to_file == self.state.castle_perm.queenside(side) {
+                to = Square::C1.relative_to(side);
+                Square::D1.relative_to(side)
             } else {
-                if to_file == self.state.castle_perm.kingside(Colour::Black) {
-                    to = Square::G8;
-                    Square::F8
-                } else if to_file == self.state.castle_perm.queenside(Colour::Black) {
-                    to = Square::C8;
-                    Square::D8
-                } else {
-                    unreachable!()
-                }
+                unreachable!()
             };
             if from != to {
                 update_buffer.move_piece(from, to, piece);
             }
             if rook_from != rook_to {
                 let rook = Piece::new(side, PieceType::Rook);
-                self.state.piece_layout.move_piece(rook_from, rook_to, rook);
+                self.state.bbs.move_piece(rook_from, rook_to, rook);
                 update_buffer.move_piece(rook_from, rook_to, rook);
             }
         }
@@ -1121,7 +1067,7 @@ impl Board {
 
         if let Some(captured) = captured {
             self.state.fifty_move_counter = 0;
-            self.state.piece_layout.clear_piece_at(to, captured);
+            self.state.bbs.clear_piece_at(to, captured);
             update_buffer.clear_piece(to, captured);
         }
 
@@ -1129,8 +1075,8 @@ impl Board {
             self.state.fifty_move_counter = 0;
             if self.is_double_pawn_push(m)
                 && (m.to().as_set().west_one() | m.to().as_set().east_one())
-                    & self.state.piece_layout.all_pawns()
-                    & self.state.piece_layout.occupied_co(side.flip())
+                    & self.state.bbs.all_pawns()
+                    & self.state.bbs.occupied_co(side.flip())
                     != SquareSet::EMPTY
             {
                 if side == Colour::White {
@@ -1146,13 +1092,13 @@ impl Board {
         if let Some(promo) = m.promotion_type() {
             let promo = Piece::new(side, promo);
             debug_assert!(promo.piece_type().legal_promo());
-            self.state.piece_layout.clear_piece_at(from, piece);
-            self.state.piece_layout.set_piece_at(to, promo);
+            self.state.bbs.clear_piece_at(from, piece);
+            self.state.bbs.set_piece_at(to, promo);
             update_buffer.add_piece(to, promo);
         } else if castle {
-            self.state.piece_layout.set_piece_at(to, piece); // stupid hack for piece-swapping
+            self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
         } else {
-            self.state.piece_layout.move_piece(from, to, piece);
+            self.state.bbs.move_piece(from, to, piece);
         }
 
         self.side = self.side.flip();
@@ -1162,7 +1108,7 @@ impl Board {
             self.side = self.side.flip();
             self.state.ep_square = saved_ep_square;
             self.state.fifty_move_counter = saved_fifty_move_counter;
-            self.state.piece_layout = saved_piece_layout;
+            self.state.bbs = saved_piece_layout;
             self.history.pop();
             return false;
         }
@@ -1209,7 +1155,7 @@ impl Board {
         }
         hash_side(&mut keys.key);
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
-            self.state.piece_array[sq] = None;
+            self.state.mailbox[sq] = None;
             hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut keys.pawn_key, piece, sq);
@@ -1226,7 +1172,7 @@ impl Board {
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
-            self.state.piece_array[sq] = Some(piece);
+            self.state.mailbox[sq] = Some(piece);
             hash_piece(&mut keys.key, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
                 hash_piece(&mut keys.pawn_key, piece, sq);
@@ -1335,7 +1281,7 @@ impl Board {
 
     pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
         let mut update_buffer = UpdateBuffer::default();
-        let Some(piece) = self.state.piece_array[m.from()] else {
+        let Some(piece) = self.state.mailbox[m.from()] else {
             return false;
         };
         let res = self.make_move_base(m, &mut update_buffer);
@@ -1376,7 +1322,7 @@ impl Board {
         let src = m.from();
         let tgt = m.to();
         // todo: could be a branchless lookup into a padded array
-        let piece = self.state.piece_array[src].unwrap();
+        let piece = self.state.mailbox[src].unwrap();
         let captured = self.piece_at(tgt);
 
         let mut new_key = self.state.keys.key;
@@ -1493,11 +1439,8 @@ impl Board {
         let possible_ambiguous_attackers = if moved_piece.piece_type() == PieceType::Pawn {
             SquareSet::EMPTY
         } else {
-            movegen::attacks_by_type(
-                moved_piece.piece_type(),
-                to_sq,
-                self.state.piece_layout.occupied(),
-            ) & self.state.piece_layout.piece_bb(moved_piece)
+            movegen::attacks_by_type(moved_piece.piece_type(), to_sq, self.state.bbs.occupied())
+                & self.state.bbs.piece_bb(moved_piece)
         };
         let needs_disambiguation =
             possible_ambiguous_attackers.count() > 1 && moved_piece.piece_type() != PieceType::Pawn;
@@ -1627,31 +1570,30 @@ impl Board {
 
     #[cfg(any(feature = "datagen", test))]
     pub fn has_insufficient_material<C: Col>(&self) -> bool {
-        if (self.state.piece_layout.pawns::<C>()
-            | self.state.piece_layout.rooks::<C>()
-            | self.state.piece_layout.queens::<C>())
-        .non_empty()
+        if self.state.bbs.pawns::<C>() | self.state.bbs.rooks::<C>() | self.state.bbs.queens::<C>()
+            != SquareSet::EMPTY
         {
             return false;
         }
 
-        if self.state.piece_layout.knights::<C>().non_empty() {
+        if self.state.bbs.knights::<C>() != SquareSet::EMPTY {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
-            let kings = self.state.piece_layout.all_kings();
-            let queens = self.state.piece_layout.all_queens();
-            return self.state.piece_layout.our_pieces::<C>().count() <= 2
-                && (self.state.piece_layout.their_pieces::<C>() & !kings & !queens).is_empty();
+            let kings = self.state.bbs.all_kings();
+            let queens = self.state.bbs.all_queens();
+            return self.state.bbs.our_pieces::<C>().count() <= 2
+                && self.state.bbs.their_pieces::<C>() & !kings & !queens == SquareSet::EMPTY;
         }
 
-        if self.state.piece_layout.bishops::<C>().non_empty() {
-            let bishops = self.state.piece_layout.all_bishops();
-            let same_color = (bishops & SquareSet::DARK_SQUARES).is_empty()
-                || (bishops & SquareSet::LIGHT_SQUARES).is_empty();
-            let pawns = self.state.piece_layout.all_pawns();
-            let knights = self.state.piece_layout.all_knights();
-            return same_color && pawns.is_empty() && knights.is_empty();
+        if self.state.bbs.bishops::<C>() != SquareSet::EMPTY {
+            let bishops = self.state.bbs.all_bishops();
+            let pawns = self.state.bbs.all_pawns();
+            let knights = self.state.bbs.all_knights();
+            return pawns == SquareSet::EMPTY
+                && knights == SquareSet::EMPTY
+                && (bishops & SquareSet::DARK_SQUARES == SquareSet::EMPTY
+                    || bishops & SquareSet::LIGHT_SQUARES == SquareSet::EMPTY);
         }
 
         true
@@ -1671,7 +1613,7 @@ impl Board {
 
         let old_key = |i: usize| self.history[self.history.len() - i].keys.key;
 
-        let occ = self.state.piece_layout.occupied();
+        let occ = self.state.bbs.occupied();
         let original_key = self.state.keys.key;
 
         let mut other = !(original_key ^ old_key(1));
@@ -1699,7 +1641,7 @@ impl Board {
 
             let mv = cuckoo::MOVES[slot].unwrap();
 
-            if (occ & RAY_BETWEEN[mv.from()][mv.to()]).is_empty() {
+            if (occ & RAY_BETWEEN[mv.from()][mv.to()]) == SquareSet::EMPTY {
                 // repetition is after root, done:
                 if ply > i {
                     return true;
@@ -1860,10 +1802,9 @@ impl Display for Board {
             }
         }
 
-        if self.side == Colour::White {
-            write!(f, " w")?;
-        } else {
-            write!(f, " b")?;
+        match self.side {
+            Colour::White => write!(f, " w")?,
+            Colour::Black => write!(f, " b")?,
         }
         write!(f, " ")?;
         if self.state.castle_perm == CastlingRights::default() {
