@@ -64,8 +64,8 @@ const SEE_QUIET_MARGIN: i32 = -75;
 const SEE_TACTICAL_MARGIN: i32 = -24;
 const FUTILITY_COEFF_0: i32 = 84;
 const FUTILITY_COEFF_1: i32 = 97;
-const RAZORING_COEFF_0: i32 = 413;
-const RAZORING_COEFF_1: i32 = 150;
+const RAZORING_COEFF_0: i32 = 0;
+const RAZORING_COEFF_1: i32 = 350;
 const PROBCUT_MARGIN: i32 = 236;
 const PROBCUT_IMPROVING_MARGIN: i32 = 58;
 const DOUBLE_EXTENSION_MARGIN: i32 = 12;
@@ -1028,11 +1028,9 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if static_eval
-                < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth * depth
-            {
-                let v = self.quiescence::<OffPV>(pv, info, t, alpha - 1, alpha);
-                if v < alpha {
+            if alpha < 2000 && static_eval < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth {
+                let v = self.quiescence::<OffPV>(pv, info, t, alpha, beta);
+                if v <= alpha {
                     return v;
                 }
             }
