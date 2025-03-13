@@ -32,12 +32,15 @@ use crate::{
     },
 };
 
+use super::NMP_DEPTH_MUL;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub aspiration_window: i32,
     pub rfp_margin: i32,
     pub rfp_improving_margin: i32,
     pub nmp_improving_margin: i32,
+    pub nmp_depth_mul: i32,
     pub nmp_reduction_eval_divisor: i32,
     pub see_quiet_margin: i32,
     pub see_tactical_margin: i32,
@@ -120,6 +123,7 @@ impl Config {
             rfp_margin: RFP_MARGIN,
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
             nmp_improving_margin: NMP_IMPROVING_MARGIN,
+            nmp_depth_mul: NMP_DEPTH_MUL,
             nmp_reduction_eval_divisor: NMP_REDUCTION_EVAL_DIVISOR,
             see_quiet_margin: SEE_QUIET_MARGIN,
             see_tactical_margin: SEE_TACTICAL_MARGIN,
@@ -241,6 +245,7 @@ impl Config {
             RFP_MARGIN = [self.rfp_margin],
             RFP_IMPROVING_MARGIN = [self.rfp_improving_margin],
             NMP_IMPROVING_MARGIN = [self.nmp_improving_margin],
+            NMP_DEPTH_MUL = [self.nmp_depth_mul],
             NMP_REDUCTION_EVAL_DIVISOR = [self.nmp_reduction_eval_divisor],
             SEE_QUIET_MARGIN = [self.see_quiet_margin],
             SEE_TACTICAL_MARGIN = [self.see_tactical_margin],
@@ -332,6 +337,7 @@ impl Config {
             RFP_MARGIN = [self.rfp_margin, 40, 200, 10],
             RFP_IMPROVING_MARGIN = [self.rfp_improving_margin, 30, 150, 10],
             NMP_IMPROVING_MARGIN = [self.nmp_improving_margin, 30, 200, 10],
+            NMP_DEPTH_MUL = [self.nmp_depth_mul, -128, 128, 8],
             NMP_REDUCTION_EVAL_DIVISOR = [self.nmp_reduction_eval_divisor, 100, 400, 20],
             SEE_QUIET_MARGIN = [self.see_quiet_margin, -150, -20, 5],
             SEE_TACTICAL_MARGIN = [self.see_tactical_margin, -100, -1, 3],
