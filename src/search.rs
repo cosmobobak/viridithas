@@ -59,7 +59,6 @@ const ASPIRATION_WINDOW: i32 = 6;
 const RFP_MARGIN: i32 = 68;
 const RFP_IMPROVING_MARGIN: i32 = 48;
 const NMP_IMPROVING_MARGIN: i32 = 72;
-const NMP_DEPTH_MUL: i32 = 20;
 const NMP_REDUCTION_EVAL_DIVISOR: i32 = 200;
 const SEE_QUIET_MARGIN: i32 = -75;
 const SEE_TACTICAL_MARGIN: i32 = -24;
@@ -1057,10 +1056,7 @@ impl Board {
             // a score above beta, we can prune the node.
             if t.ss[height - 1].searching.is_some()
                 && depth >= 3
-                && static_eval
-                    + i32::from(improving) * info.conf.nmp_improving_margin
-                    + depth * info.conf.nmp_depth_mul
-                    >= beta
+                && static_eval + i32::from(improving) * info.conf.nmp_improving_margin >= beta
                 && !t.nmp_banned_for(self.turn())
                 && self.zugzwang_unlikely()
                 && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
@@ -1112,14 +1108,14 @@ impl Board {
         }
 
         // TT-reduction (IIR).
-        if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
+        if NT::PV && tt_hit.map_or(true, |tte| tte.depth + 4 <= depth) {
             depth -= i32::from(depth >= 4);
         }
 
         // cutnode-based TT reduction.
         if cut_node
             && excluded.is_none()
-            && (tt_move.is_none() || !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth))
+            && (tt_move.is_none() || tt_hit.map_or(true, |tte| tte.depth + 4 <= depth))
         {
             depth -= i32::from(depth >= 8);
         }
