@@ -1029,7 +1029,10 @@ impl Board {
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
-            if alpha < 2000 && static_eval < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth {
+            if alpha < 2000
+                && static_eval
+                    < alpha - info.conf.razoring_coeff_0 - info.conf.razoring_coeff_1 * depth
+            {
                 let v = self.quiescence::<OffPV>(pv, info, t, alpha, beta);
                 if v <= alpha {
                     return v;
