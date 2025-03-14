@@ -621,6 +621,10 @@ pub fn main_loop() -> anyhow::Result<()> {
     let mut info = SearchInfo::new(&stopped, &nodes);
     info.set_stdin(&stdin);
 
+    let mut pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .context("Failed to construct ThreadPool.")?;
     let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), nnue_params)];
 
     loop {
@@ -726,7 +730,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 );
                 Ok(())
             }
-            "gobench" => go_benchmark(nnue_params),
+            "gobench" => go_benchmark(nnue_params, &pool),
             "initcuckoo" => cuckoo::init(),
             "initattacks" => movegen::init_sliders_attacks(),
             input if input.starts_with("setoption") => {
@@ -749,6 +753,10 @@ pub fn main_loop() -> anyhow::Result<()> {
                             .zip(std::iter::repeat(&pos))
                             .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
                             .collect();
+                        pool = rayon::ThreadPoolBuilder::new()
+                            .num_threads(conf.threads)
+                            .build()
+                            .context("Failed to resize ThreadPool.")?;
                         Ok(())
                     }
                     Err(err) => Err(err),
@@ -807,7 +815,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 if let Ok(search_limit) = res {
                     info.time_manager.set_limit(search_limit);
                     tt.increase_age();
-                    pos.search_position(&mut info, &mut thread_data, tt.view());
+                    pos.search_position(&mut info, &mut thread_data, &pool, tt.view());
                     Ok(())
                 } else {
                     res.map(|_| ())
@@ -847,6 +855,7 @@ pub fn bench(
     nnue_params: &NNUEParams,
     depth: Option<usize>,
 ) -> anyhow::Result<()> {
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
@@ -890,7 +899,7 @@ pub fn bench(
             }
         }
         tt.increase_age();
-        pos.search_position(&mut info, &mut thread_data, tt.view());
+        pos.search_position(&mut info, &mut thread_data, &pool, tt.view());
         node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());
@@ -923,7 +932,7 @@ pub fn bench(
 }
 
 /// Benchmark the go UCI command.
-pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
+pub fn go_benchmark(nnue_params: &NNUEParams, pool: &rayon::ThreadPool) -> anyhow::Result<()> {
     #![allow(clippy::cast_precision_loss)]
     const COUNT: usize = 1000;
     const THREADS: usize = 250;
@@ -947,7 +956,7 @@ pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
         )?;
         info.time_manager.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(pos.search_position(&mut info, &mut thread_data, tt.view()));
+        std::hint::black_box(pos.search_position(&mut info, &mut thread_data, pool, tt.view()));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);

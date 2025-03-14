@@ -6,7 +6,6 @@ pub mod pv;
 use std::{
     ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
-    thread,
 };
 
 use arrayvec::ArrayVec;
@@ -193,6 +192,7 @@ impl Board {
         &mut self,
         info: &mut SearchInfo,
         thread_headers: &mut [ThreadData],
+        pool: &rayon::ThreadPool,
         tt: TTView,
     ) -> (i32, Option<Move>) {
         self.zero_height();
@@ -242,15 +242,15 @@ impl Board {
         let (t1, rest) = thread_headers.split_first_mut().unwrap();
         let bcopy = self.clone();
         let icopy = info.clone();
-        thread::scope(|s| {
-            s.spawn(|| {
+        pool.scope(|s| {
+            s.spawn(|_| {
                 // copy data into thread
                 t1.set_up_for_search(self);
                 self.iterative_deepening::<MainThread>(info, t1);
                 global_stopped.store(true, Ordering::SeqCst);
             });
             for t in rest.iter_mut() {
-                s.spawn(|| {
+                s.spawn(|_| {
                     // copy data into thread
                     let mut board = bcopy.clone();
                     let mut info = icopy.clone();

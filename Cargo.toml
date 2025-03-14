@@ -50,6 +50,7 @@ memmap2 = "0.9.5"
 
 # for deconflicting shared weights
 fxhash = "0.2.1"
+rayon = "1.10.0"
 
 # for coloured terminal output
 [dependencies.windows-sys]

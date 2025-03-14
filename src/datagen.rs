@@ -383,6 +383,7 @@ fn generate_on_thread<'a>(
     nnue_params: &NNUEParams,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
     let mut board = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, 1);
@@ -472,7 +473,7 @@ fn generate_on_thread<'a>(
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager.set_limit(SearchLimit::Depth(10));
         let (eval, _) =
-            board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+            board.search_position(&mut info, std::array::from_mut(&mut thread_data), &pool, tt.view());
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
@@ -499,7 +500,7 @@ fn generate_on_thread<'a>(
             tt.increase_age();
 
             let (score, best_move) =
-                board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+                board.search_position(&mut info, std::array::from_mut(&mut thread_data), &pool, tt.view());
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
