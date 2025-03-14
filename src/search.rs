@@ -1048,7 +1048,6 @@ impl Board {
                 && static_eval - Self::rfp_margin(info, depth, improving) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
-                && static_eval < MINIMUM_TB_WIN_SCORE
             {
                 return beta + (static_eval - beta) / 3;
             }
