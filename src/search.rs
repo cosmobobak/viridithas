@@ -969,6 +969,18 @@ impl Board {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+
+            // store the eval into the TT
+            t.tt.store(
+                key,
+                height,
+                None,
+                VALUE_NONE,
+                raw_eval,
+                Bound::None,
+                0,
+                t.ss[height].ttpv,
+            );
         };
 
         t.ss[height].eval = static_eval;
@@ -1129,20 +1141,6 @@ impl Board {
             info.conf.see_tactical_margin * depth * depth,
             info.conf.see_quiet_margin * depth,
         ];
-
-        // store the eval into the TT if we won't overwrite anything:
-        if tt_hit.is_none() && !in_check && excluded.is_none() {
-            t.tt.store(
-                key,
-                height,
-                None,
-                VALUE_NONE,
-                raw_eval,
-                Bound::None,
-                0,
-                t.ss[height].ttpv,
-            );
-        }
 
         // probcut:
         let pc_beta = std::cmp::min(
