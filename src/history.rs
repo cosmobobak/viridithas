@@ -240,11 +240,7 @@ impl ThreadData<'_> {
     pub fn insert_killer(&mut self, pos: &Board, m: Move) {
         debug_assert!(pos.height() < MAX_PLY);
         let idx = pos.height();
-        if self.killer_move_table[idx][0] == Some(m) {
-            return;
-        }
-        self.killer_move_table[idx][1] = self.killer_move_table[idx][0];
-        self.killer_move_table[idx][0] = Some(m);
+        self.killer_move_table[idx] = Some(m);
     }
 
     /// Add a move to the countermove table.
