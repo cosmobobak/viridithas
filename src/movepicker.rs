@@ -7,8 +7,7 @@ use crate::{
 use crate::chess::board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
-pub const FIRST_KILLER_SCORE: i32 = 9_000_000;
-pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
+pub const KILLER_SCORE: i32 = 9_000_000;
 pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 
@@ -17,8 +16,7 @@ pub enum Stage {
     TTMove,
     GenerateCaptures,
     YieldGoodCaptures,
-    YieldKiller1,
-    YieldKiller2,
+    YieldKiller,
     YieldCounterMove,
     GenerateQuiets,
     YieldRemaining,
@@ -30,7 +28,7 @@ pub struct MovePicker {
     index: usize,
     pub stage: Stage,
     tt_move: Option<Move>,
-    killers: [Option<Move>; 2],
+    killer: Option<Move>,
     counter_move: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
@@ -39,21 +37,16 @@ pub struct MovePicker {
 impl MovePicker {
     pub fn new(
         tt_move: Option<Move>,
-        killers: [Option<Move>; 2],
+        killer: Option<Move>,
         counter_move: Option<Move>,
         see_threshold: i32,
     ) -> Self {
-        debug_assert!(
-            killers[0].is_none() || killers[0] != killers[1],
-            "Killers are both {:?}",
-            killers[0]
-        );
         Self {
             movelist: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
-            killers,
+            killer,
             counter_move,
             skip_quiets: false,
             see_threshold,
@@ -63,7 +56,7 @@ impl MovePicker {
     /// Returns true if a move was already yielded by the movepicker.
     pub fn was_tried_lazily(&self, m: Move) -> bool {
         let m = Some(m);
-        m == self.tt_move || m == self.killers[0] || m == self.killers[1] || m == self.counter_move
+        m == self.tt_move || m == self.killer || m == self.counter_move
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
@@ -116,30 +109,17 @@ impl MovePicker {
             self.stage = if self.skip_quiets {
                 Stage::Done
             } else {
-                Stage::YieldKiller1
+                Stage::YieldKiller
             };
         }
-        if self.stage == Stage::YieldKiller1 {
-            self.stage = Stage::YieldKiller2;
-            if !self.skip_quiets && self.killers[0] != self.tt_move {
-                if let Some(killer) = self.killers[0] {
-                    if position.is_pseudo_legal(killer) {
-                        return Some(MoveListEntry {
-                            mov: killer,
-                            score: FIRST_KILLER_SCORE,
-                        });
-                    }
-                }
-            }
-        }
-        if self.stage == Stage::YieldKiller2 {
+        if self.stage == Stage::YieldKiller {
             self.stage = Stage::YieldCounterMove;
-            if !self.skip_quiets && self.killers[1] != self.tt_move {
-                if let Some(killer) = self.killers[1] {
+            if !self.skip_quiets && self.killer != self.tt_move {
+                if let Some(killer) = self.killer {
                     if position.is_pseudo_legal(killer) {
                         return Some(MoveListEntry {
                             mov: killer,
-                            score: SECOND_KILLER_SCORE,
+                            score: KILLER_SCORE,
                         });
                     }
                 }
@@ -149,8 +129,7 @@ impl MovePicker {
             self.stage = Stage::GenerateQuiets;
             if !self.skip_quiets
                 && self.counter_move != self.tt_move
-                && self.counter_move != self.killers[0]
-                && self.counter_move != self.killers[1]
+                && self.counter_move != self.killer
             {
                 if let Some(counter) = self.counter_move {
                     if position.is_pseudo_legal(counter) {

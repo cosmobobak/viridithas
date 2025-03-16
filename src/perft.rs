@@ -80,7 +80,7 @@ pub fn movepicker_perft(
         return 1;
     }
 
-    let mut ml = MovePicker::new(None, [None, None], None, 0);
+    let mut ml = MovePicker::new(None, None, None, 0);
 
     let mut count = 0;
     while let Some(m) = ml.next(pos, t, info) {

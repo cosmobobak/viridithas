@@ -527,7 +527,7 @@ impl Board {
         let tt_move =
             t.tt.probe_for_provisional_info(self.zobrist_key())
                 .and_then(|e| e.0);
-        let mut mp = MovePicker::new(tt_move, self.get_killer_set(t), t.get_counter_move(self), 0);
+        let mut mp = MovePicker::new(tt_move, self.get_killer(t), t.get_counter_move(self), 0);
         let mut m = None;
         while let Some(MoveListEntry { mov, .. }) = mp.next(self, t, info) {
             if !self.make_move_simple(mov) {
@@ -678,7 +678,7 @@ impl Board {
         let mut moves_made = 0;
         let mut move_picker = MovePicker::new(
             tt_hit.and_then(|e| e.mov),
-            [None; 2],
+            None,
             None,
             info.conf.qs_see_bound,
         );
@@ -764,7 +764,7 @@ impl Board {
     }
 
     /// Get the two killer moves for this position.
-    pub const fn get_killer_set(&self, t: &ThreadData) -> [Option<Move>; 2] {
+    pub const fn get_killer(&self, t: &ThreadData) -> Option<Move> {
         let ply = self.height();
         t.killer_move_table[ply]
     }
@@ -1030,8 +1030,8 @@ impl Board {
             t.ss[height - 1].dextensions
         };
 
-        // clear out the next set of killer moves.
-        t.killer_move_table[height + 1] = [None; 2];
+        // clear out the next killer move.
+        t.killer_move_table[height + 1] = None;
 
         let tt_move = tt_hit.and_then(|hit| hit.mov);
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
@@ -1159,7 +1159,7 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let mut move_picker = MovePicker::new(tt_move, [None; 2], None, 0);
+            let mut move_picker = MovePicker::new(tt_move, None, None, 0);
             move_picker.skip_quiets = true;
             while let Some(MoveListEntry {
                 mov: m,
@@ -1231,10 +1231,10 @@ impl Board {
         // number of quiet moves to try before we start pruning
         let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
-        let killers = self.get_killer_set(t);
+        let killer = self.get_killer(t);
         let counter_move = t.get_counter_move(self);
         let mut move_picker =
-            MovePicker::new(tt_move, killers, counter_move, info.conf.main_see_bound);
+            MovePicker::new(tt_move, killer, counter_move, info.conf.main_see_bound);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1261,7 +1261,7 @@ impl Board {
 
             // lmp & fp.
             let killer_or_counter =
-                Some(m) == killers[0] || Some(m) == killers[1] || Some(m) == counter_move;
+                Some(m) == killer || Some(m) == counter_move;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
