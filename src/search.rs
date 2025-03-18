@@ -37,7 +37,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, TTHit, TTView, TT},
+    transpositiontable::{Bound, TTHit, TTView},
     uci,
     util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
@@ -593,8 +593,7 @@ impl Board {
 
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let (tte, tt_tok) = t.tt.probe(key, height);
-        let tt_hit = if let Some(hit) = tte {
+        let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
                 && !in_check
                 && !fifty_move_rule_near
@@ -650,9 +649,8 @@ impl Board {
 
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
-            t.tt.direct_store(
-                tt_tok,
-                TT::pack_key(key),
+            t.tt.store(
+                key,
                 height,
                 None,
                 VALUE_NONE,
@@ -851,9 +849,8 @@ impl Board {
 
         let excluded = t.ss[height].excluded;
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let (tt_hit, tt_tok) = if excluded.is_none() {
-            let (tte, tt_tok) = t.tt.probe(key, height);
-            if let Some(hit) = tte {
+        let tt_hit = if excluded.is_none() {
+            if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
                     && hit.depth >= depth
                     && !fifty_move_rule_near
@@ -878,12 +875,12 @@ impl Board {
                     return hit.value;
                 }
 
-                (Some(hit), Some(tt_tok))
+                Some(hit)
             } else {
-                (None, Some(tt_tok))
+                None
             }
         } else {
-            (None, None) // do not probe the TT if we're in a singular-verification search.
+            None // do not probe the TT if we're in a singular-verification search.
         };
 
         if excluded.is_none() {
@@ -975,9 +972,7 @@ impl Board {
 
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
-            t.tt.direct_store(
-                tt_tok.unwrap(),
-                TT::pack_key(key),
+            t.tt.store(key,
                 height,
                 None,
                 VALUE_NONE,
