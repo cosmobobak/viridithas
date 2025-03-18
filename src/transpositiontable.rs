@@ -293,7 +293,7 @@ impl TT {
         });
     }
 
-    const fn pack_key(key: u64) -> u16 {
+    pub const fn pack_key(key: u64) -> u16 {
         #![allow(clippy::cast_possible_truncation)]
         key as u16
     }
@@ -338,13 +338,13 @@ impl TTView<'_> {
         pv: bool,
     ) {
         // get index into the table:
-        let index = self.wrap_key(key);
+        let cluster_index = self.wrap_key(key);
         // create a small key from the full key:
         let key = TT::pack_key(key);
         // get current table age:
         let tt_age = i32::from(self.age);
         // load the cluster:
-        let cluster = &self.table[index];
+        let cluster = &self.table[cluster_index];
         let mut tte = cluster.load(0);
         let mut idx = 0;
 
@@ -376,9 +376,6 @@ impl TTView<'_> {
             best_move = tte.m;
         }
 
-        // normalise mate / TB scores:
-        let score = normalise_gt_truth_score(score, ply);
-
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
@@ -405,7 +402,8 @@ impl TTView<'_> {
             let write = TTEntry {
                 key,
                 m: best_move,
-                score: score.try_into().expect(
+                // normalise mate / TB scores:
+                score: normalise_gt_truth_score(score, ply).try_into().expect(
                     "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
                 depth: depth.try_into().unwrap(),
@@ -414,7 +412,7 @@ impl TTView<'_> {
                     "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
             };
-            self.table[index].store(idx, write);
+            cluster.store(idx, write);
         }
     }
 
@@ -422,7 +420,6 @@ impl TTView<'_> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
-        // load the entry:
         let cluster = &self.table[index];
 
         for i in 0..CLUSTER_SIZE {
@@ -432,19 +429,11 @@ impl TTView<'_> {
                 continue;
             }
 
-            let tt_move = entry.m;
-            let tt_depth = entry.depth.into();
-            let tt_bound = entry.info.flag();
-
-            // we can't store the score in a tagged union,
-            // because we need to do mate score preprocessing.
-            let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
-
             return Some(TTHit {
-                mov: tt_move,
-                depth: tt_depth,
-                bound: tt_bound,
-                value: tt_value,
+                mov: entry.m,
+                depth: entry.depth.into(),
+                bound: entry.info.flag(),
+                value: reconstruct_gt_truth_score(entry.score.into(), ply),
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
             });
