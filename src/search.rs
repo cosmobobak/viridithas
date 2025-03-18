@@ -972,7 +972,8 @@ impl Board {
 
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
-            t.tt.store(key,
+            t.tt.store(
+                key,
                 height,
                 None,
                 VALUE_NONE,
