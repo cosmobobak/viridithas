@@ -37,7 +37,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
-    transpositiontable::{Bound, TTHit, TTView},
+    transpositiontable::{Bound, TTHit, TTView, TT},
     uci,
     util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
 };
@@ -262,13 +262,12 @@ impl Board {
 
         let best_thread = select_best(self, thread_headers, info, tt, info.nodes.get_global());
         let depth_achieved = best_thread.completed;
-        let pv = best_thread.pv().clone();
+        let pv = best_thread.pv();
         let best_move = pv
             .moves()
             .first()
             .copied()
             .unwrap_or_else(|| self.default_move(&thread_headers[0], info));
-        let ponder_move = pv.moves().get(1);
 
         if info.print_to_stdout {
             // always give a final info log before ending search
@@ -276,7 +275,7 @@ impl Board {
             readout_info(
                 self,
                 Bound::Exact,
-                &pv,
+                pv,
                 depth_achieved,
                 info,
                 tt,
@@ -286,7 +285,7 @@ impl Board {
         }
 
         if info.print_to_stdout {
-            let maybe_ponder = ponder_move.map_or_else(String::new, |ponder_move| {
+            let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
                 format!(
                     " ponder {}",
                     ponder_move.display(CHESS960.load(Ordering::Relaxed))
@@ -594,7 +593,8 @@ impl Board {
 
         // probe the TT and see if we get a cutoff.
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
+        let (tte, tt_tok) = t.tt.probe(key, height);
+        let tt_hit = if let Some(hit) = tte {
             if !NT::PV
                 && !in_check
                 && !fifty_move_rule_near
@@ -647,10 +647,12 @@ impl Board {
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
+
             // store the eval into the TT. We know that we won't overwrite anything,
             // because this branch is one where there wasn't a TT-hit.
-            t.tt.store(
-                key,
+            t.tt.direct_store(
+                tt_tok,
+                TT::pack_key(key),
                 height,
                 None,
                 VALUE_NONE,
@@ -659,6 +661,7 @@ impl Board {
                 0,
                 t.ss[height].ttpv,
             );
+
             stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
@@ -848,8 +851,9 @@ impl Board {
 
         let excluded = t.ss[height].excluded;
         let fifty_move_rule_near = self.fifty_move_counter() >= 80;
-        let tt_hit = if excluded.is_none() {
-            if let Some(hit) = t.tt.probe(key, height) {
+        let (tt_hit, tt_tok) = if excluded.is_none() {
+            let (tte, tt_tok) = t.tt.probe(key, height);
+            if let Some(hit) = tte {
                 if !NT::PV
                     && hit.depth >= depth
                     && !fifty_move_rule_near
@@ -874,12 +878,12 @@ impl Board {
                     return hit.value;
                 }
 
-                Some(hit)
+                (Some(hit), Some(tt_tok))
             } else {
-                None
+                (None, Some(tt_tok))
             }
         } else {
-            None // do not probe the TT if we're in a singular-verification search.
+            (None, None) // do not probe the TT if we're in a singular-verification search.
         };
 
         if excluded.is_none() {
@@ -968,11 +972,12 @@ impl Board {
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
 
-            // store the eval into the TT
-            t.tt.store(
-                key,
+            // store the eval into the TT. We know that we won't overwrite anything,
+            // because this branch is one where there wasn't a TT-hit.
+            t.tt.direct_store(
+                tt_tok.unwrap(),
+                TT::pack_key(key),
                 height,
                 None,
                 VALUE_NONE,
@@ -981,6 +986,8 @@ impl Board {
                 0,
                 t.ss[height].ttpv,
             );
+
+            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
         };
 
         t.ss[height].eval = static_eval;
@@ -1260,8 +1267,7 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter =
-                Some(m) == killer || Some(m) == counter_move;
+            let killer_or_counter = Some(m) == killer || Some(m) == counter_move;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.

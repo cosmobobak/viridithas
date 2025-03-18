@@ -220,6 +220,12 @@ impl TTClusterMemory {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct Token {
+    cluster: usize,
+    idx: usize,
+}
+
 const _CLUSTER_SIZE: () = assert!(
     size_of::<TTClusterMemory>() == 32,
     "TT Cluster size is suboptimal."
@@ -293,7 +299,7 @@ impl TT {
         });
     }
 
-    const fn pack_key(key: u64) -> u16 {
+    pub const fn pack_key(key: u64) -> u16 {
         #![allow(clippy::cast_possible_truncation)]
         key as u16
     }
@@ -326,6 +332,36 @@ impl TTView<'_> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn direct_store(
+        &self,
+        tok: Token,
+        key: u16,
+        ply: usize,
+        best_move: Option<Move>,
+        score: i32,
+        eval: i32,
+        flag: Bound,
+        depth: i32,
+        pv: bool,
+    ) {
+        // normalise mate / TB scores:
+        let score = normalise_gt_truth_score(score, ply);
+        let write = TTEntry {
+            key,
+            m: best_move,
+            score: score.try_into().expect(
+                "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
+            ),
+            depth: depth.try_into().unwrap(),
+            info: PackedInfo::new(self.age, flag, pv),
+            evaluation: eval.try_into().expect(
+                "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
+            ),
+        };
+        self.table[tok.cluster].store(tok.idx, write);
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn store(
         &self,
         key: u64,
@@ -336,15 +372,15 @@ impl TTView<'_> {
         flag: Bound,
         depth: i32,
         pv: bool,
-    ) {
+    ) -> (bool, usize) {
         // get index into the table:
-        let index = self.wrap_key(key);
+        let cluster_index = self.wrap_key(key);
         // create a small key from the full key:
         let key = TT::pack_key(key);
         // get current table age:
         let tt_age = i32::from(self.age);
         // load the cluster:
-        let cluster = &self.table[index];
+        let cluster = &self.table[cluster_index];
         let mut tte = cluster.load(0);
         let mut idx = 0;
 
@@ -370,14 +406,16 @@ impl TTView<'_> {
             }
         }
 
+        let tok = Token {
+            cluster: cluster_index,
+            idx,
+        };
+
         if best_move.is_none() && tte.key == key {
             // if we don't have a best move, and the entry is for the same position,
             // then we should retain the best move from the previous entry.
             best_move = tte.m;
         }
-
-        // normalise mate / TB scores:
-        let score = normalise_gt_truth_score(score, ply);
 
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
@@ -402,55 +440,95 @@ impl TTView<'_> {
             || flag == Bound::Exact && tte.info.flag() != Bound::Exact
             || insert_priority * 3 >= record_prority * 2
         {
-            let write = TTEntry {
-                key,
-                m: best_move,
-                score: score.try_into().expect(
-                    "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
-                depth: depth.try_into().unwrap(),
-                info: PackedInfo::new(self.age, flag, pv),
-                evaluation: eval.try_into().expect(
-                    "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
-                ),
-            };
-            self.table[index].store(idx, write);
+            self.direct_store(tok, key, ply, best_move, score, eval, flag, depth, pv);
+            (true, tok.idx)
+        } else {
+            (false, tok.idx)
         }
     }
 
-    pub fn probe(&self, key: u64, ply: usize) -> Option<TTHit> {
+    pub fn probe(&self, key: u64, ply: usize) -> (Option<TTHit>, Token) {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
+
+        // get current table age:
+        let tt_age = i32::from(self.age);
 
         // load the entry:
         let cluster = &self.table[index];
 
-        for i in 0..CLUSTER_SIZE {
+        let mut tte = cluster.load(0);
+        let mut looking = true;
+        let mut idx = 0;
+
+        if tte.key == key {
+            return (
+                Some(TTHit {
+                    mov: tte.m,
+                    depth: tte.depth.into(),
+                    bound: tte.info.flag(),
+                    value: reconstruct_gt_truth_score(tte.score.into(), ply),
+                    eval: tte.evaluation.into(),
+                    was_pv: tte.info.pv(),
+                }),
+                Token {
+                    cluster: index,
+                    idx,
+                },
+            );
+        }
+
+        if tte.key == 0 {
+            looking = false;
+        }
+
+        for i in 1..CLUSTER_SIZE {
             let entry = cluster.load(i);
 
             if entry.key != key {
+                if looking && entry.key == 0 {
+                    looking = false;
+                    tte = entry;
+                    idx = i;
+                    continue;
+                }
+
+                if looking
+                    && i32::from(tte.depth.inner())
+                        - ((MAX_AGE + tt_age - i32::from(tte.info.age())) & AGE_MASK) * 4
+                        > i32::from(entry.depth.inner())
+                            - ((MAX_AGE + tt_age - i32::from(entry.info.age())) & AGE_MASK) * 4
+                {
+                    tte = entry;
+                    idx = i;
+                }
+
                 continue;
             }
 
-            let tt_move = entry.m;
-            let tt_depth = entry.depth.into();
-            let tt_bound = entry.info.flag();
-
-            // we can't store the score in a tagged union,
-            // because we need to do mate score preprocessing.
-            let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
-
-            return Some(TTHit {
-                mov: tt_move,
-                depth: tt_depth,
-                bound: tt_bound,
-                value: tt_value,
-                eval: entry.evaluation.into(),
-                was_pv: entry.info.pv(),
-            });
+            return (
+                Some(TTHit {
+                    mov: entry.m,
+                    depth: entry.depth.into(),
+                    bound: entry.info.flag(),
+                    value: reconstruct_gt_truth_score(entry.score.into(), ply),
+                    eval: entry.evaluation.into(),
+                    was_pv: entry.info.pv(),
+                }),
+                Token {
+                    cluster: index,
+                    idx: i,
+                },
+            );
         }
 
-        None
+        (
+            None,
+            Token {
+                cluster: index,
+                idx,
+            },
+        )
     }
 
     pub fn prefetch(&self, key: u64) {
@@ -474,6 +552,7 @@ impl TTView<'_> {
 
     pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Option<Move>, i32)> {
         self.probe(key, 0)
+            .0
             .map(|TTHit { mov, value, .. }| (mov, value))
     }
 
