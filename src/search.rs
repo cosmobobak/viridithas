@@ -70,6 +70,7 @@ const RAZORING_COEFF_1: i32 = 350;
 const PROBCUT_MARGIN: i32 = 236;
 const PROBCUT_IMPROVING_MARGIN: i32 = 58;
 const DOUBLE_EXTENSION_MARGIN: i32 = 12;
+const TRIPLE_EXTENSION_MARGIN: i32 = 120;
 const LMR_BASE: f64 = 84.0;
 const LMR_DIVISION: f64 = 198.0;
 const QS_SEE_BOUND: i32 = -188;
@@ -1267,7 +1268,7 @@ impl Board {
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
-                if lmr_depth <= 8 && moves_made >= lmp_threshold {
+                if lmr_depth < 9 && moves_made >= lmp_threshold {
                     move_picker.skip_quiets = true;
                 }
 
@@ -1295,7 +1296,7 @@ impl Board {
             if !NT::ROOT
                 && (!NT::PV || !cfg!(feature = "datagen"))
                 && best_score > -MINIMUM_TB_WIN_SCORE
-                && depth <= 9
+                && depth < 10
                 && move_picker.stage > Stage::YieldGoodCaptures
                 && self.threats().all.contains_square(m.to())
                 && !self.static_exchange_eval(
@@ -1380,7 +1381,8 @@ impl Board {
                         && value < r_beta - info.conf.dext_margin
                     {
                         // double-extend if we failed low by a lot
-                        extension = 2;
+                        extension =
+                            2 + i32::from(is_quiet && value < r_beta - info.conf.text_margin);
                     } else {
                         // normal singular extension
                         extension = 1;
