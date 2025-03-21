@@ -5,7 +5,7 @@ pub mod pv;
 
 use std::{
     ops::ControlFlow,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicI64, AtomicU64, Ordering},
     thread,
 };
 
@@ -135,6 +135,10 @@ const EVAL_POLICY_UPDATE_MIN: i32 = 55;
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
+
+// static SUM: AtomicI64 = AtomicI64::new(0);
+// static COUNT: AtomicU64 = AtomicU64::new(0);
+// static SQUARE_SUM: AtomicU64 = AtomicU64::new(0);
 
 pub trait NodeType {
     /// Whether this node is on the principal variation.
@@ -304,6 +308,13 @@ impl Board {
                 (info.nodes.get_global() as f64).powf(1.0 / thread_headers[0].completed as f64)
             );
         }
+
+        // dbg!((&COUNT, &SUM, &SQUARE_SUM));
+        // // mean and variance calculation
+        // let mean = SUM.load(Ordering::SeqCst) as f64 / COUNT.load(Ordering::SeqCst) as f64;
+        // let variance = SQUARE_SUM.load(Ordering::SeqCst) as f64 / COUNT.load(Ordering::SeqCst) as f64
+        //     - mean * mean;
+        // dbg!((mean, variance));
 
         assert!(
             legal_moves.contains(&best_move),
@@ -1060,7 +1071,7 @@ impl Board {
             // if the static eval is too high, we can prune the node.
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
-                && depth <= 8
+                && depth < 9
                 && static_eval - Self::rfp_margin(info, depth, improving) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
@@ -1072,7 +1083,7 @@ impl Board {
             // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
             if t.ss[height - 1].searching.is_some()
-                && depth >= 3
+                && depth > 2
                 && static_eval
                     + i32::from(improving) * info.conf.nmp_improving_margin
                     + depth * info.conf.nmp_depth_mul
@@ -1413,11 +1424,15 @@ impl Board {
                     -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= 3 && moves_made >= (2 + usize::from(NT::PV)) {
+                let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= stat_score / info.conf.history_lmr_divisor * 1024;
+                        // let v = stat_score * 1024 / info.conf.history_lmr_divisor;
+                        // COUNT.fetch_add(1, Ordering::Relaxed);
+                        // SUM.fetch_add(i64::from(v), Ordering::Relaxed);
+                        // SQUARE_SUM.fetch_add((v * v) as u64, Ordering::Relaxed);
+                        r -= stat_score * 1024 / info.conf.history_lmr_divisor;
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
                         // reduce more on non-PV nodes
