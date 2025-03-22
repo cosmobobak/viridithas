@@ -5,7 +5,7 @@ pub mod pv;
 
 use std::{
     ops::ControlFlow,
-    sync::atomic::{AtomicI64, AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
 };
 
@@ -81,7 +81,7 @@ const HISTORY_PRUNING_MARGIN: i32 = -3597;
 const QS_FUTILITY: i32 = 222;
 const SEE_STAT_SCORE_MUL: i32 = 23;
 
-const HISTORY_LMR_DIVISOR: i32 = 11966;
+const HISTORY_LMR_DIVISOR: i32 = 14336;
 const LMR_REFUTATION_MUL: i32 = 1106;
 const LMR_NON_PV_MUL: i32 = 992;
 const LMR_TTPV_MUL: i32 = 1297;
@@ -1428,10 +1428,6 @@ impl Board {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        // let v = stat_score * 1024 / info.conf.history_lmr_divisor;
-                        // COUNT.fetch_add(1, Ordering::Relaxed);
-                        // SUM.fetch_add(i64::from(v), Ordering::Relaxed);
-                        // SQUARE_SUM.fetch_add((v * v) as u64, Ordering::Relaxed);
                         r -= stat_score * 1024 / info.conf.history_lmr_divisor;
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
