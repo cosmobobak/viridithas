@@ -136,10 +136,6 @@ const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
-// static SUM: AtomicI64 = AtomicI64::new(0);
-// static COUNT: AtomicU64 = AtomicU64::new(0);
-// static SQUARE_SUM: AtomicU64 = AtomicU64::new(0);
-
 pub trait NodeType {
     /// Whether this node is on the principal variation.
     const PV: bool;
@@ -308,13 +304,6 @@ impl Board {
                 (info.nodes.get_global() as f64).powf(1.0 / thread_headers[0].completed as f64)
             );
         }
-
-        // dbg!((&COUNT, &SUM, &SQUARE_SUM));
-        // // mean and variance calculation
-        // let mean = SUM.load(Ordering::SeqCst) as f64 / COUNT.load(Ordering::SeqCst) as f64;
-        // let variance = SQUARE_SUM.load(Ordering::SeqCst) as f64 / COUNT.load(Ordering::SeqCst) as f64
-        //     - mean * mean;
-        // dbg!((mean, variance));
 
         assert!(
             legal_moves.contains(&best_move),
