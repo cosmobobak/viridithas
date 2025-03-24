@@ -1249,7 +1249,7 @@ impl Board {
             }
 
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
-            let lmr_depth = std::cmp::max(depth - lmr_reduction, 0);
+            let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
             let is_quiet = !self.is_tactical(m);
 
             let mut stat_score = 0;
@@ -1414,7 +1414,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
-                    let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
+                    let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
                         r -= stat_score * 1024 / info.conf.history_lmr_divisor;
@@ -1970,7 +1970,7 @@ impl LMTable {
     pub fn lm_reduction(&self, depth: i32, moves_made: usize) -> i32 {
         let depth: usize = depth.clamp(0, 63).try_into().unwrap_or_default();
         let played = moves_made.min(63);
-        self.lm_reduction_table[depth][played]
+        self.lm_reduction_table[depth][played] * 1024
     }
 
     pub fn lmp_movecount(&self, depth: i32, improving: bool) -> usize {
