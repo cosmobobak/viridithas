@@ -81,7 +81,7 @@ const HISTORY_PRUNING_MARGIN: i32 = -3597;
 const QS_FUTILITY: i32 = 222;
 const SEE_STAT_SCORE_MUL: i32 = 23;
 
-const HISTORY_LMR_DIVISOR: i32 = 11966;
+const HISTORY_LMR_DIVISOR: i32 = 16384;
 const LMR_REFUTATION_MUL: i32 = 1106;
 const LMR_NON_PV_MUL: i32 = 992;
 const LMR_TTPV_MUL: i32 = 1297;
@@ -1060,7 +1060,7 @@ impl Board {
             // if the static eval is too high, we can prune the node.
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
-                && depth <= 8
+                && depth < 9
                 && static_eval - Self::rfp_margin(info, depth, improving) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
@@ -1072,7 +1072,7 @@ impl Board {
             // if we can give the opponent a free move while retaining
             // a score above beta, we can prune the node.
             if t.ss[height - 1].searching.is_some()
-                && depth >= 3
+                && depth > 2
                 && static_eval
                     + i32::from(improving) * info.conf.nmp_improving_margin
                     + depth * info.conf.nmp_depth_mul
@@ -1413,11 +1413,11 @@ impl Board {
                     -self.alpha_beta::<NT::Next>(l_pv, info, t, new_depth, -beta, -alpha, false);
             } else {
                 // calculation of LMR stuff
-                let r = if depth >= 3 && moves_made >= (2 + usize::from(NT::PV)) {
+                let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
-                        r -= stat_score / info.conf.history_lmr_divisor * 1024;
+                        r -= stat_score * 1024 / info.conf.history_lmr_divisor;
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
                         // reduce more on non-PV nodes
