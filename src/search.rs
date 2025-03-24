@@ -1415,16 +1415,16 @@ impl Board {
                 // calculation of LMR stuff
                 let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
                     let mut r = info.lm_table.lm_reduction(depth, moves_made);
+                    // reduce more on non-PV nodes
+                    r += i32::from(!NT::PV) * info.conf.lmr_non_pv_mul;
+                    r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
+                    // reduce more on cut nodes
+                    r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
                         r -= stat_score * 1024 / info.conf.history_lmr_divisor;
                         // reduce refutation moves less
                         r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
-                        // reduce more on non-PV nodes
-                        r += i32::from(!NT::PV) * info.conf.lmr_non_pv_mul;
-                        r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
-                        // reduce more on cut nodes
-                        r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
                         // reduce more if not improving
                         r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
                         // reduce more if the move from the transposition table is tactical
