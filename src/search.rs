@@ -1957,7 +1957,7 @@ impl LMTable {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
-                out.lm_reduction_table[depth][played] = (base + ld * lp / division) as i32;
+                out.lm_reduction_table[depth][played] = (base + ld * lp / division) as i32 * 1024;
             });
         });
         cfor!(let mut depth = 1; depth < 12; depth += 1; {
@@ -1970,7 +1970,7 @@ impl LMTable {
     pub fn lm_reduction(&self, depth: i32, moves_made: usize) -> i32 {
         let depth: usize = depth.clamp(0, 63).try_into().unwrap_or_default();
         let played = moves_made.min(63);
-        self.lm_reduction_table[depth][played] * 1024
+        self.lm_reduction_table[depth][played]
     }
 
     pub fn lmp_movecount(&self, depth: i32, improving: bool) -> usize {
