@@ -360,7 +360,7 @@ impl Config {
             INCREMENT_FRAC = [self.increment_frac, 1, 100, 10],
             NODE_TM_SUBTREE_MULTIPLIER = [self.node_tm_subtree_multiplier, 1, 1000, 15],
             FAIL_LOW_TM_BONUS = [self.fail_low_tm_bonus, 1, 1000, 30],
-            HISTORY_LMR_DIVISOR = [self.history_lmr_divisor, 1, 16383, 100],
+            HISTORY_LMR_DIVISOR = [self.history_lmr_divisor, 1, 65536, 512],
             QS_SEE_BOUND = [self.qs_see_bound, -500, 500, 50],
             MAIN_SEE_BOUND = [self.main_see_bound, -500, 500, 50],
             DO_DEEPER_BASE_MARGIN = [self.do_deeper_base_margin, 1, 200, 20],

@@ -1249,7 +1249,7 @@ impl Board {
             }
 
             let lmr_reduction = info.lm_table.lm_reduction(depth, moves_made);
-            let lmr_depth = std::cmp::max(depth - lmr_reduction, 0);
+            let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
             let is_quiet = !self.is_tactical(m);
 
             let mut stat_score = 0;
@@ -1414,7 +1414,7 @@ impl Board {
             } else {
                 // calculation of LMR stuff
                 let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
-                    let mut r = info.lm_table.lm_reduction(depth, moves_made) * 1024;
+                    let mut r = info.lm_table.lm_reduction(depth, moves_made);
                     if is_quiet {
                         // extend/reduce using the stat_score of the move
                         r -= stat_score * 1024 / info.conf.history_lmr_divisor;
@@ -1952,7 +1952,7 @@ impl LMTable {
             clippy::cast_sign_loss
         )]
         let mut out = Self::NULL;
-        let (base, division) = (config.lmr_base / 100.0, config.lmr_division / 100.0);
+        let (base, division) = (config.lmr_base / 100.0 * 1024.0, config.lmr_division / 100.0 / 1024.0);
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
