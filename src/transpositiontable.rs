@@ -477,7 +477,7 @@ impl TTView<'_> {
                 }
             }
         }
-        hit / 2 * CLUSTER_SIZE
+        hit / (2 * CLUSTER_SIZE)
     }
 }
 
