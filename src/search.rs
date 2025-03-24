@@ -1957,7 +1957,7 @@ impl LMTable {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
                 let lp = f64::ln(played as f64);
-                out.lm_reduction_table[depth][played] = (base + ld * lp / division) as i32 * 1024;
+                out.lm_reduction_table[depth][played] = (base + 1024.0 + ld * lp * 1024.0 / division) as i32;
             });
         });
         cfor!(let mut depth = 1; depth < 12; depth += 1; {
