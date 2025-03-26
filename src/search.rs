@@ -1087,7 +1087,8 @@ impl Board {
                     + std::cmp::min(
                         (static_eval - beta) / info.conf.nmp_reduction_eval_divisor,
                         4,
-                    );
+                    )
+                    + i32::from(tt_capture);
                 let nm_depth = depth - r;
                 t.ss[height].searching = None;
                 t.ss[height].searching_tactical = false;
