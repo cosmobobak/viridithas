@@ -1236,8 +1236,8 @@ impl Board {
         // number of quiet moves to try before we start pruning
         let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
-        let killer = self.get_killer(t);
-        let counter_move = t.get_counter_move(self);
+        let killer = self.get_killer(t).filter(|m| !self.is_tactical(*m));
+        let counter_move = t.get_counter_move(self).filter(|m| !self.is_tactical(*m));
         let mut move_picker =
             MovePicker::new(tt_move, killer, counter_move, info.conf.main_see_bound);
 
@@ -1953,7 +1953,10 @@ impl LMTable {
             clippy::cast_sign_loss
         )]
         let mut out = Self::NULL;
-        let (base, division) = (config.lmr_base / 100.0 * 1024.0, config.lmr_division / 100.0 / 1024.0);
+        let (base, division) = (
+            config.lmr_base / 100.0 * 1024.0,
+            config.lmr_division / 100.0 / 1024.0,
+        );
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
