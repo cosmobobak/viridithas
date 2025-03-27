@@ -1236,8 +1236,8 @@ impl Board {
         // number of quiet moves to try before we start pruning
         let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
-        let killer = self.get_killer(t);
-        let counter_move = t.get_counter_move(self);
+        let killer = self.get_killer(t).filter(|m| !self.is_tactical(*m));
+        let counter_move = t.get_counter_move(self).filter(|m| !self.is_tactical(*m));
         let mut move_picker =
             MovePicker::new(tt_move, killer, counter_move, info.conf.main_see_bound);
 

@@ -116,7 +116,8 @@ impl MovePicker {
             self.stage = Stage::YieldCounterMove;
             if !self.skip_quiets && self.killer != self.tt_move {
                 if let Some(killer) = self.killer {
-                    if !position.is_tactical(killer) && position.is_pseudo_legal(killer) {
+                    if position.is_pseudo_legal(killer) {
+                        debug_assert!(!position.is_tactical(killer));
                         return Some(MoveListEntry {
                             mov: killer,
                             score: KILLER_SCORE,
@@ -132,7 +133,8 @@ impl MovePicker {
                 && self.counter_move != self.killer
             {
                 if let Some(counter) = self.counter_move {
-                    if !position.is_tactical(counter) && position.is_pseudo_legal(counter) {
+                    if position.is_pseudo_legal(counter) {
+                        debug_assert!(!position.is_tactical(counter));
                         return Some(MoveListEntry {
                             mov: counter,
                             score: COUNTER_MOVE_SCORE,
