@@ -1953,7 +1953,10 @@ impl LMTable {
             clippy::cast_sign_loss
         )]
         let mut out = Self::NULL;
-        let (base, division) = (config.lmr_base / 100.0 * 1024.0, config.lmr_division / 100.0 / 1024.0);
+        let (base, division) = (
+            config.lmr_base / 100.0 * 1024.0,
+            config.lmr_division / 100.0 / 1024.0,
+        );
         cfor!(let mut depth = 1; depth < 64; depth += 1; {
             cfor!(let mut played = 1; played < 64; played += 1; {
                 let ld = f64::ln(depth as f64);
