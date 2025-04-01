@@ -10,6 +10,7 @@ pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const KILLER_SCORE: i32 = 9_000_000;
 pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_SCORE - MAX_HISTORY as i32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -189,8 +190,15 @@ impl MovePicker {
 
             let m = &mut self.movelist[best_num];
 
+            debug_assert!(
+                m.score < WINNING_CAPTURE_SCORE / 2 || m.score >= MIN_WINNING_SEE_SCORE,
+                "{}'s score is {}, lower bound is {}, this is too close.",
+                m.mov.display(false),
+                m.score,
+                MIN_WINNING_SEE_SCORE
+            );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY))
+            if m.score >= MIN_WINNING_SEE_SCORE
                 && !pos.static_exchange_eval(info, m.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
@@ -205,12 +213,7 @@ impl MovePicker {
 
             self.index += 1;
 
-            // as the scores of positive-SEE moves can be pushed below
-            // WINNING_CAPTURE_SCORE if their capture history is particularly
-            // bad, this implicitly filters out moves with bad history scores.
-            let not_winning = m.score < WINNING_CAPTURE_SCORE;
-
-            if self.skip_quiets && not_winning {
+            if self.skip_quiets && m.score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
