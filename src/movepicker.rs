@@ -170,26 +170,11 @@ impl MovePicker {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
-        loop {
-            // If we have already tried all moves, return None.
-            if self.index == self.movelist.len() {
-                return None;
-            }
-
-            let mut best_score = self.movelist[self.index].score;
-            let mut best_num = self.index;
-
-            // find the best move in the unsorted portion of the movelist.
-            for index in self.index + 1..self.movelist.len() {
-                let score = self.movelist[index].score;
-                if score > best_score {
-                    best_score = score;
-                    best_num = index;
-                }
-            }
-
-            let m = &mut self.movelist[best_num];
-
+        while let Some((best_num, m)) = self.movelist[self.index..]
+            .iter_mut()
+            .enumerate()
+            .reduce(|a, b| if a.1.score > b.1.score { a } else { b })
+        {
             debug_assert!(
                 m.score < WINNING_CAPTURE_SCORE / 2 || m.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
@@ -209,7 +194,7 @@ impl MovePicker {
             let m = *m;
 
             // swap the best move with the first unsorted move.
-            self.movelist.swap(best_num, self.index);
+            self.movelist.swap(best_num + self.index, self.index);
 
             self.index += 1;
 
@@ -222,6 +207,9 @@ impl MovePicker {
                 return Some(m);
             }
         }
+
+        // If we have already tried all moves, return None.
+        None
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
