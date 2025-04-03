@@ -174,48 +174,48 @@ impl MovePicker {
     fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
         let mut remaining =
             Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
-        while let Some(m) =
+        while let Some(best_entry_ref) =
             remaining
                 .iter()
                 .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
         {
-            let entry = m.get();
+            let best = best_entry_ref.get();
             debug_assert!(
-                entry.score < WINNING_CAPTURE_SCORE / 2 || entry.score >= MIN_WINNING_SEE_SCORE,
+                best.score < WINNING_CAPTURE_SCORE / 2 || best.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
-                entry.mov.display(false),
-                entry.score,
+                best.mov.display(false),
+                best.score,
                 MIN_WINNING_SEE_SCORE
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if entry.score >= MIN_WINNING_SEE_SCORE
-                && !pos.static_exchange_eval(info, entry.mov, self.see_threshold)
+            if best.score >= MIN_WINNING_SEE_SCORE
+                && !pos.static_exchange_eval(info, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                m.set(MoveListEntry {
-                    score: entry.score - WINNING_CAPTURE_SCORE,
-                    mov: entry.mov,
+                best_entry_ref.set(MoveListEntry {
+                    score: best.score - WINNING_CAPTURE_SCORE,
+                    mov: best.mov,
                 });
                 continue;
             }
 
             // swap the best move with the first unsorted move.
-            m.set(remaining[0].get());
-            remaining[0].set(entry);
+            best_entry_ref.set(remaining[0].get());
+            remaining[0].set(best);
             remaining = &remaining[1..];
 
             self.index += 1;
 
-            if self.skip_quiets && entry.score < MIN_WINNING_SEE_SCORE {
+            if self.skip_quiets && best.score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !(Some(entry.mov) == self.tt_move
-                || Some(entry.mov) == self.killer
-                || Some(entry.mov) == self.counter_move)
+            if !(Some(best.mov) == self.tt_move
+                || Some(best.mov) == self.killer
+                || Some(best.mov) == self.counter_move)
             {
-                return Some(entry);
+                return Some(best);
             }
         }
 
