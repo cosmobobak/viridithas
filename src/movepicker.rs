@@ -1,10 +1,18 @@
-use crate::searchinfo::SearchInfo;
+use std::cell::Cell;
+
 use crate::{
-    chess::board::Board, chess::chessmove::Move, history, historytable::MAX_HISTORY,
+    chess::{
+        board::{
+            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets},
+            Board,
+        },
+        chessmove::Move,
+    },
+    history,
+    historytable::MAX_HISTORY,
+    searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };
-
-use crate::chess::board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const KILLER_SCORE: i32 = 9_000_000;
@@ -52,12 +60,6 @@ impl MovePicker {
             skip_quiets: false,
             see_threshold,
         }
-    }
-
-    /// Returns true if a move was already yielded by the movepicker.
-    pub fn was_tried_lazily(&self, m: Move) -> bool {
-        let m = Some(m);
-        m == self.tt_move || m == self.killer || m == self.counter_move
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
@@ -170,58 +172,55 @@ impl MovePicker {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
-        loop {
-            // If we have already tried all moves, return None.
-            if self.index == self.movelist.len() {
-                return None;
-            }
-
-            let mut best_score = self.movelist[self.index].score;
-            let mut best_num = self.index;
-
-            // find the best move in the unsorted portion of the movelist.
-            for index in self.index + 1..self.movelist.len() {
-                let score = self.movelist[index].score;
-                if score > best_score {
-                    best_score = score;
-                    best_num = index;
-                }
-            }
-
-            let m = &mut self.movelist[best_num];
-
+        let mut remaining =
+            Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
+        while let Some(best_entry_ref) =
+            remaining
+                .iter()
+                .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
+        {
+            let best = best_entry_ref.get();
             debug_assert!(
-                m.score < WINNING_CAPTURE_SCORE / 2 || m.score >= MIN_WINNING_SEE_SCORE,
+                best.score < WINNING_CAPTURE_SCORE / 2 || best.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
-                m.mov.display(false),
-                m.score,
+                best.mov.display(false),
+                best.score,
                 MIN_WINNING_SEE_SCORE
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if m.score >= MIN_WINNING_SEE_SCORE
-                && !pos.static_exchange_eval(info, m.mov, self.see_threshold)
+            if best.score >= MIN_WINNING_SEE_SCORE
+                && !pos.static_exchange_eval(info, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                m.score -= WINNING_CAPTURE_SCORE;
+                best_entry_ref.set(MoveListEntry {
+                    score: best.score - WINNING_CAPTURE_SCORE,
+                    mov: best.mov,
+                });
                 continue;
             }
 
-            let m = *m;
-
             // swap the best move with the first unsorted move.
-            self.movelist.swap(best_num, self.index);
+            best_entry_ref.set(remaining[0].get());
+            remaining[0].set(best);
+            remaining = &remaining[1..];
 
             self.index += 1;
 
-            if self.skip_quiets && m.score < MIN_WINNING_SEE_SCORE {
+            if self.skip_quiets && best.score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !self.was_tried_lazily(m.mov) {
-                return Some(m);
+            if !(Some(best.mov) == self.tt_move
+                || Some(best.mov) == self.killer
+                || Some(best.mov) == self.counter_move)
+            {
+                return Some(best);
             }
         }
+
+        // If we have already tried all moves, return None.
+        None
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
