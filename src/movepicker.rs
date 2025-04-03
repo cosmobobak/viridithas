@@ -1,10 +1,18 @@
-use crate::searchinfo::SearchInfo;
+use std::cell::Cell;
+
 use crate::{
-    chess::board::Board, chess::chessmove::Move, history, historytable::MAX_HISTORY,
+    chess::{
+        board::{
+            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets},
+            Board,
+        },
+        chessmove::Move,
+    },
+    history,
+    historytable::MAX_HISTORY,
+    searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };
-
-use crate::chess::board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets};
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const KILLER_SCORE: i32 = 9_000_000;
@@ -52,12 +60,6 @@ impl MovePicker {
             skip_quiets: false,
             see_threshold,
         }
-    }
-
-    /// Returns true if a move was already yielded by the movepicker.
-    pub fn was_tried_lazily(&self, m: Move) -> bool {
-        let m = Some(m);
-        m == self.tt_move || m == self.killer || m == self.counter_move
     }
 
     /// Select the next move to try. Returns None if there are no more moves to try.
@@ -170,41 +172,50 @@ impl MovePicker {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
-        while let Some((best_num, m)) = self.movelist[self.index..]
-            .iter_mut()
-            .enumerate()
-            .reduce(|a, b| if a.1.score >= b.1.score { a } else { b })
+        let mut remaining =
+            Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
+        while let Some(m) =
+            remaining
+                .iter()
+                .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
         {
+            let entry = m.get();
             debug_assert!(
-                m.score < WINNING_CAPTURE_SCORE / 2 || m.score >= MIN_WINNING_SEE_SCORE,
+                entry.score < WINNING_CAPTURE_SCORE / 2 || entry.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
-                m.mov.display(false),
-                m.score,
+                entry.mov.display(false),
+                entry.score,
                 MIN_WINNING_SEE_SCORE
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if m.score >= MIN_WINNING_SEE_SCORE
-                && !pos.static_exchange_eval(info, m.mov, self.see_threshold)
+            if entry.score >= MIN_WINNING_SEE_SCORE
+                && !pos.static_exchange_eval(info, entry.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                m.score -= WINNING_CAPTURE_SCORE;
+                m.set(MoveListEntry {
+                    score: entry.score - WINNING_CAPTURE_SCORE,
+                    mov: entry.mov,
+                });
                 continue;
             }
 
-            let m = *m;
-
             // swap the best move with the first unsorted move.
-            self.movelist.swap(best_num + self.index, self.index);
+            m.set(remaining[0].get());
+            remaining[0].set(entry);
+            remaining = &remaining[1..];
 
             self.index += 1;
 
-            if self.skip_quiets && m.score < MIN_WINNING_SEE_SCORE {
+            if self.skip_quiets && entry.score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !self.was_tried_lazily(m.mov) {
-                return Some(m);
+            if !(Some(entry.mov) == self.tt_move
+                || Some(entry.mov) == self.killer
+                || Some(entry.mov) == self.counter_move)
+            {
+                return Some(entry);
             }
         }
 
