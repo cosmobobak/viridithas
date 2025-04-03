@@ -173,7 +173,7 @@ impl MovePicker {
         while let Some((best_num, m)) = self.movelist[self.index..]
             .iter_mut()
             .enumerate()
-            .reduce(|a, b| if a.1.score > b.1.score { a } else { b })
+            .reduce(|a, b| if a.1.score >= b.1.score { a } else { b })
         {
             debug_assert!(
                 m.score < WINNING_CAPTURE_SCORE / 2 || m.score >= MIN_WINNING_SEE_SCORE,
