@@ -861,3 +861,48 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/9991/
             |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
+     umwelt | very standard from-scratch net with      | fixed-nodes:
+            | farseer buckets and some more 25knodes   | Elo   | -2.18 +- 2.79 (95%)
+            | data.                                    | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 24186 W: 6764 L: 6916 D: 10506
+            |                                          | Penta | [498, 3027, 5167, 2931, 470]
+            |                                          | https://chess.swehosting.se/test/10275/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | -4.82 +- 3.47 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11744 W: 2775 L: 2938 D: 6031
+            |                                          | Penta | [99, 1499, 2816, 1382, 76]
+            |                                          | https://chess.swehosting.se/test/10276/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -4.54 +- 3.27 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11548 W: 2546 L: 2697 D: 6305
+            |                                          | Penta | [35, 1478, 2899, 1327, 35]
+            |                                          | https://chess.swehosting.se/test/10279/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+      falke | fine-tune of kolibri with old data       | fixed-nodes:
+            | cleaned out and 25knode data upsampled.  | Elo   | 4.54 +- 2.96 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 20808 W: 5893 L: 5621 D: 9294
+            |                                          | Penta | [396, 2394, 4526, 2718, 370]
+            |                                          | https://chess.swehosting.se/test/10323/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | 13.86 +- 5.07 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4564 W: 1127 L: 945 D: 2492
+            |                                          | Penta | [8, 449, 1195, 613, 17]
+            |                                          | https://chess.swehosting.se/test/10324/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
