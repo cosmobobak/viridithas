@@ -350,8 +350,7 @@ mod x86simd {
                 offset += L1_PAIR_COUNT;
             }
 
-            let nnz_slice =
-                std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);
+            let nnz_slice = std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);
 
             // logging for permutation
             #[cfg(feature = "nnz-counts")]
