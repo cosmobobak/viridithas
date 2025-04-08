@@ -84,7 +84,7 @@ pub fn movepicker_perft(
 
     let mut count = 0;
     while let Some(m) = ml.next(pos, t, info) {
-        if !pos.make_move(m.mov, t) {
+        if !pos.make_move(m, t) {
             continue;
         }
         count += movepicker_perft(pos, t, info, depth - 1);

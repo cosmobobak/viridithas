@@ -15,7 +15,7 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MoveListEntry, MAX_POSITION_MOVES},
+            movegen::{self, MAX_POSITION_MOVES},
             Board,
         },
         chessmove::Move,
@@ -32,7 +32,7 @@ use crate::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
     },
-    movepicker::{MovePicker, Stage, WINNING_CAPTURE_SCORE},
+    movepicker::{MovePicker, Stage},
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -529,7 +529,7 @@ impl Board {
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer(t), t.get_counter_move(self), 0);
         let mut m = None;
-        while let Some(MoveListEntry { mov, .. }) = mp.next(self, t, info) {
+        while let Some(mov) = mp.next(self, t, info) {
             if !self.make_move_simple(mov) {
                 continue;
             }
@@ -688,7 +688,7 @@ impl Board {
 
         let futility = stand_pat + info.conf.qs_futility;
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
+        while let Some(m) = move_picker.next(self, t, info) {
             let is_tactical = self.is_tactical(m);
             if best_score > -MINIMUM_TB_WIN_SCORE
                 && is_tactical
@@ -1164,22 +1164,10 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let mut move_picker = MovePicker::new(tt_move, None, None, 0);
+            let tt_move_if_capture = tt_move.filter(|m| self.is_tactical(*m));
+            let mut move_picker = MovePicker::new(tt_move_if_capture, None, None, 0);
             move_picker.skip_quiets = true;
-            while let Some(MoveListEntry {
-                mov: m,
-                score: ordering_score,
-            }) = move_picker.next(self, t, info)
-            {
-                if ordering_score < WINNING_CAPTURE_SCORE {
-                    break;
-                }
-
-                // skip non-tacticals from the TT:
-                if Some(m) == tt_move && !self.is_tactical(m) {
-                    continue;
-                }
-
+            while let Some(m) = move_picker.next(self, t, info) {
                 t.tt.prefetch(self.key_after(m));
                 t.ss[height].searching = Some(m);
                 t.ss[height].searching_tactical = true;
@@ -1244,7 +1232,7 @@ impl Board {
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
-        while let Some(MoveListEntry { mov: m, .. }) = move_picker.next(self, t, info) {
+        while let Some(m) = move_picker.next(self, t, info) {
             if excluded == Some(m) {
                 continue;
             }
