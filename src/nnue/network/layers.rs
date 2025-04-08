@@ -351,7 +351,7 @@ mod x86simd {
             }
 
             let nnz_slice =
-                std::slice::from_raw_parts(nnz.get_unchecked(0).as_ptr().cast::<u16>(), nnz_count);
+                std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);
 
             // logging for permutation
             #[cfg(feature = "nnz-counts")]
@@ -372,8 +372,8 @@ mod x86simd {
         ft_outputs: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
         weights: &Align64<[i8; L1_SIZE * L2_SIZE]>,
-        biases: &Align64<[f32; 16]>,
-        output: &mut Align64<[f32; 16]>,
+        biases: &Align64<[f32; L2_SIZE]>,
+        output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most
