@@ -5,8 +5,7 @@ use crate::{
     chess::chessmove::Move,
     chess::piece::Colour,
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
-        ThreatsHistoryTable,
+        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -28,7 +27,6 @@ pub struct ThreadData<'a> {
     pub tactical_history: Box<CaptureHistoryTable>,
     pub continuation_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_PLY + 1],
-    pub counter_move_table: MoveTable,
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
@@ -65,7 +63,6 @@ impl<'a> ThreadData<'a> {
             tactical_history: CaptureHistoryTable::boxed(),
             continuation_history: DoubleHistoryTable::boxed(),
             killer_move_table: [None; MAX_PLY + 1],
-            counter_move_table: MoveTable::new(),
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
                 CorrectionHistoryTable::boxed(),
@@ -123,7 +120,6 @@ impl<'a> ThreadData<'a> {
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
         self.killer_move_table.fill(None);
-        self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
@@ -134,7 +130,6 @@ impl<'a> ThreadData<'a> {
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
         self.killer_move_table.fill(None);
-        self.counter_move_table.clear();
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);

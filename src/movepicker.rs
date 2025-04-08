@@ -16,7 +16,6 @@ use crate::{
 
 pub const TT_MOVE_SCORE: i32 = 20_000_000;
 pub const KILLER_SCORE: i32 = 9_000_000;
-pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_SCORE - MAX_HISTORY as i32;
 
@@ -26,7 +25,6 @@ pub enum Stage {
     GenerateCaptures,
     YieldGoodCaptures,
     YieldKiller,
-    YieldCounterMove,
     GenerateQuiets,
     YieldRemaining,
     Done,
@@ -38,25 +36,18 @@ pub struct MovePicker {
     pub stage: Stage,
     tt_move: Option<Move>,
     killer: Option<Move>,
-    counter_move: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
 }
 
 impl MovePicker {
-    pub fn new(
-        tt_move: Option<Move>,
-        killer: Option<Move>,
-        counter_move: Option<Move>,
-        see_threshold: i32,
-    ) -> Self {
+    pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
             killer,
-            counter_move,
             skip_quiets: false,
             see_threshold,
         }
@@ -116,7 +107,7 @@ impl MovePicker {
             };
         }
         if self.stage == Stage::YieldKiller {
-            self.stage = Stage::YieldCounterMove;
+            self.stage = Stage::GenerateQuiets;
             if !self.skip_quiets && self.killer != self.tt_move {
                 if let Some(killer) = self.killer {
                     if position.is_pseudo_legal(killer) {
@@ -124,23 +115,6 @@ impl MovePicker {
                         return Some(MoveListEntry {
                             mov: killer,
                             score: KILLER_SCORE,
-                        });
-                    }
-                }
-            }
-        }
-        if self.stage == Stage::YieldCounterMove {
-            self.stage = Stage::GenerateQuiets;
-            if !self.skip_quiets
-                && self.counter_move != self.tt_move
-                && self.counter_move != self.killer
-            {
-                if let Some(counter) = self.counter_move {
-                    if position.is_pseudo_legal(counter) {
-                        debug_assert!(!position.is_tactical(counter));
-                        return Some(MoveListEntry {
-                            mov: counter,
-                            score: COUNTER_MOVE_SCORE,
                         });
                     }
                 }
@@ -211,10 +185,7 @@ impl MovePicker {
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !(Some(best.mov) == self.tt_move
-                || Some(best.mov) == self.killer
-                || Some(best.mov) == self.counter_move)
-            {
+            if !(Some(best.mov) == self.tt_move || Some(best.mov) == self.killer) {
                 return Some(best);
             }
         }

@@ -1,6 +1,5 @@
 use crate::{
     chess::{
-        chessmove::Move,
         piece::{Colour, Piece, PieceType},
         types::{ContHistIndex, Square},
     },
@@ -248,30 +247,6 @@ impl DoubleHistoryTable {
 
     pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
         &self.table[index.piece][index.square]
-    }
-}
-
-pub struct MoveTable {
-    table: Box<[[Option<Move>; BOARD_N_SQUARES]; 12]>,
-}
-
-impl MoveTable {
-    pub fn new() -> Self {
-        Self {
-            table: Box::new([[None; BOARD_N_SQUARES]; 12]),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(|t| t.fill(None));
-    }
-
-    pub fn add(&mut self, piece: Piece, sq: Square, m: Move) {
-        self.table[piece][sq] = Some(m);
-    }
-
-    pub fn get(&self, piece: Piece, sq: Square) -> Option<Move> {
-        self.table[piece][sq]
     }
 }
 
