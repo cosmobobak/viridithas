@@ -14,8 +14,6 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-pub const TT_MOVE_SCORE: i32 = 20_000_000;
-pub const KILLER_SCORE: i32 = 9_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
 pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_SCORE - MAX_HISTORY as i32;
 
@@ -55,12 +53,7 @@ impl MovePicker {
 
     /// Select the next move to try. Returns None if there are no more moves to try.
     #[allow(clippy::cognitive_complexity)]
-    pub fn next(
-        &mut self,
-        position: &Board,
-        t: &ThreadData,
-        info: &SearchInfo,
-    ) -> Option<MoveListEntry> {
+    pub fn next(&mut self, position: &Board, t: &ThreadData, info: &SearchInfo) -> Option<Move> {
         if self.stage == Stage::Done {
             return None;
         }
@@ -68,10 +61,7 @@ impl MovePicker {
             self.stage = Stage::GenerateCaptures;
             if let Some(tt_move) = self.tt_move {
                 if position.is_pseudo_legal(tt_move) {
-                    return Some(MoveListEntry {
-                        mov: tt_move,
-                        score: TT_MOVE_SCORE,
-                    });
+                    return Some(tt_move);
                 }
             }
         }
@@ -93,7 +83,7 @@ impl MovePicker {
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once(info, position) {
                 if m.score >= WINNING_CAPTURE_SCORE {
-                    return Some(m);
+                    return Some(m.mov);
                 }
                 // the move was not winning, so we're going to
                 // generate quiet moves next. As such, we decrement
@@ -112,10 +102,7 @@ impl MovePicker {
                 if let Some(killer) = self.killer {
                     if position.is_pseudo_legal(killer) {
                         debug_assert!(!position.is_tactical(killer));
-                        return Some(MoveListEntry {
-                            mov: killer,
-                            score: KILLER_SCORE,
-                        });
+                        return Some(killer);
                     }
                 }
             }
@@ -131,7 +118,7 @@ impl MovePicker {
         }
         if self.stage == Stage::YieldRemaining {
             if let Some(m) = self.yield_once(info, position) {
-                return Some(m);
+                return Some(m.mov);
             }
             self.stage = Stage::Done;
         }
