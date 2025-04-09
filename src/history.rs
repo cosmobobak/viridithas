@@ -243,37 +243,6 @@ impl ThreadData<'_> {
         self.killer_move_table[idx] = Some(m);
     }
 
-    /// Add a move to the countermove table.
-    pub fn insert_countermove(&mut self, pos: &Board, m: Move) {
-        let height = pos.height();
-        if height == 0 {
-            return;
-        }
-        debug_assert!(height < MAX_PLY);
-        let Some(ss) = self.ss.get(height - 1) else {
-            return;
-        };
-
-        let prev_to = ss.conthist_index.square;
-        let prev_piece = ss.conthist_index.piece;
-
-        self.counter_move_table.add(prev_piece, prev_to, m);
-    }
-
-    /// Returns the counter move for this position.
-    pub fn get_counter_move(&self, pos: &Board) -> Option<Move> {
-        let height = pos.height();
-        if height == 0 {
-            return None;
-        }
-        let ss = self.ss.get(height - 1)?;
-
-        let prev_to = ss.conthist_index.square;
-        let prev_piece = ss.conthist_index.piece;
-
-        self.counter_move_table.get(prev_piece, prev_to)
-    }
-
     /// Update the correction history for a pawn pattern.
     pub fn update_correction_history(&mut self, pos: &Board, depth: i32, diff: i32) {
         use Colour::{Black, White};

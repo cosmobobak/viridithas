@@ -527,7 +527,7 @@ impl Board {
         let tt_move =
             t.tt.probe_for_provisional_info(self.zobrist_key())
                 .and_then(|e| e.0);
-        let mut mp = MovePicker::new(tt_move, self.get_killer(t), t.get_counter_move(self), 0);
+        let mut mp = MovePicker::new(tt_move, self.get_killer(t), 0);
         let mut m = None;
         while let Some(mov) = mp.next(self, t, info) {
             if !self.make_move_simple(mov) {
@@ -678,12 +678,8 @@ impl Board {
         let mut best_score = stand_pat;
 
         let mut moves_made = 0;
-        let mut move_picker = MovePicker::new(
-            tt_hit.and_then(|e| e.mov),
-            None,
-            None,
-            info.conf.qs_see_bound,
-        );
+        let mut move_picker =
+            MovePicker::new(tt_hit.and_then(|e| e.mov), None, info.conf.qs_see_bound);
         move_picker.skip_quiets = !in_check;
 
         let futility = stand_pat + info.conf.qs_futility;
@@ -1165,7 +1161,7 @@ impl Board {
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
             let tt_move_if_capture = tt_move.filter(|m| self.is_tactical(*m));
-            let mut move_picker = MovePicker::new(tt_move_if_capture, None, None, 0);
+            let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
             move_picker.skip_quiets = true;
             while let Some(m) = move_picker.next(self, t, info) {
                 t.tt.prefetch(self.key_after(m));
@@ -1225,9 +1221,7 @@ impl Board {
         let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
         let killer = self.get_killer(t).filter(|m| !self.is_tactical(*m));
-        let counter_move = t.get_counter_move(self).filter(|m| !self.is_tactical(*m));
-        let mut move_picker =
-            MovePicker::new(tt_move, killer, counter_move, info.conf.main_see_bound);
+        let mut move_picker = MovePicker::new(tt_move, killer, info.conf.main_see_bound);
 
         let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
         let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
@@ -1253,7 +1247,7 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter = Some(m) == killer || Some(m) == counter_move;
+            let killer_or_counter = Some(m) == killer;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -1537,7 +1531,6 @@ impl Board {
             let best_move = best_move.expect("if alpha was raised, we should have a best move.");
             if !self.is_tactical(best_move) {
                 t.insert_killer(self, best_move);
-                t.insert_countermove(self, best_move);
 
                 // this heuristic is on the whole unmotivated, beyond mere empiricism.
                 // perhaps it's really important to know which quiet moves are good in "bad" positions?
