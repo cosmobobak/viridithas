@@ -662,7 +662,7 @@ impl Board {
             );
 
             stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
-        };
+        }
 
         if stand_pat >= beta {
             // return stand_pat instead of beta, this is fail-soft
@@ -981,7 +981,7 @@ impl Board {
             );
 
             static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
-        };
+        }
 
         t.ss[height].eval = static_eval;
 
@@ -1876,7 +1876,7 @@ fn readout_info(
             let final_space = pv_string
                 .match_indices(' ')
                 .filter(|(i, _)| *i < 130)
-                .last()
+                .next_back()
                 .map_or(0, |(i, _)| i);
             pv_string.truncate(final_space);
             pv_string.push_str("...         ");
