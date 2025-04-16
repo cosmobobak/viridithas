@@ -35,6 +35,8 @@ pub mod layers;
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
 pub const UNQUANTISED_HAS_FACTORISER: bool = true;
+/// The number of output heads in the network.
+pub const OUTPUT_HEADS: usize = 4;
 /// The size of the input layer of the network.
 pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
@@ -113,8 +115,8 @@ struct UnquantisedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l3_weights: [[[f32; OUTPUT_HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32; OUTPUT_HEADS]; OUTPUT_BUCKETS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -127,8 +129,8 @@ struct QuantisedNetwork {
     l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l3_weights: [[[f32; OUTPUT_HEADS]; OUTPUT_BUCKETS]; L3_SIZE],
+    l3_biases:   [[f32; OUTPUT_HEADS]; OUTPUT_BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -143,7 +145,7 @@ pub struct NNUEParams {
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub l3_bias:                 [f32; OUTPUT_BUCKETS],
 }
 
 static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
@@ -501,13 +503,13 @@ impl QuantisedNetwork {
                 net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
             }
 
-            // transfer the L3 weights
+            // transpose the L3 weights
             for i in 0..L3_SIZE {
-                net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
+                net.l3_weights[bucket][i] = self.l3_weights[i][bucket][0];
             }
 
             // transfer the L3 biases
-            net.l3_bias[bucket] = self.l3_biases[bucket];
+            net.l3_bias[bucket] = self.l3_biases[bucket][0];
         }
 
         net
@@ -1265,6 +1267,7 @@ impl NNUEState {
         );
         layers::propagate_l3(
             &l2_outputs,
+            // SAFETY: Just extracting the prefix.
             &nn.l3_weights[out],
             nn.l3_bias[out],
             &mut l3_output,
