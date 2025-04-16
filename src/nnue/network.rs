@@ -101,6 +101,7 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 pub fn nnue_checksum() -> u64 {
     let mut hasher = fxhash::FxHasher::default();
     hasher.write(&COMPRESSED_NNUE[..4096]);
+    hasher.write(&std::mem::size_of::<NNUEParams>().to_ne_bytes());
     hasher.finish()
 }
 
