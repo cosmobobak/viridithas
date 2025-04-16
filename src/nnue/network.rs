@@ -144,8 +144,8 @@ pub struct NNUEParams {
     pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:                 [f32; OUTPUT_BUCKETS],
+    pub l3_weights:    [[Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS]; OUTPUT_HEADS],
+    pub l3_bias:                [[f32; OUTPUT_BUCKETS]; OUTPUT_HEADS],
 }
 
 static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
@@ -504,12 +504,16 @@ impl QuantisedNetwork {
             }
 
             // transpose the L3 weights
-            for i in 0..L3_SIZE {
-                net.l3_weights[bucket][i] = self.l3_weights[i][bucket][0];
+            for head in 0..OUTPUT_HEADS {
+                for i in 0..L3_SIZE {
+                    net.l3_weights[head][bucket][i] = self.l3_weights[i][bucket][head];
+                }
             }
 
             // transfer the L3 biases
-            net.l3_bias[bucket] = self.l3_biases[bucket][0];
+            for head in 0..OUTPUT_HEADS {
+                net.l3_bias[head][bucket] = self.l3_biases[bucket][head];
+            }
         }
 
         net
@@ -1250,7 +1254,7 @@ impl NNUEState {
 
         let mut l1_outputs = Align64([0.0; L2_SIZE]);
         let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output = 0.0;
+        let mut l3_output_logits = [0.0; 3];
 
         layers::activate_ft_and_propagate_l1(
             us,
@@ -1265,12 +1269,30 @@ impl NNUEState {
             &nn.l2_bias[out],
             &mut l2_outputs,
         );
+        for head in 1..4 {
         layers::propagate_l3(
             &l2_outputs,
-            &nn.l3_weights[out],
-            nn.l3_bias[out],
-            &mut l3_output,
-        );
+            &nn.l3_weights[head][out],
+            nn.l3_bias[head][out],
+            &mut l3_output_logits[head - 1],
+        );}
+
+        // softmax
+        let max = l3_output_logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let mut logit_sum = 0.0;
+        for logit in &mut l3_output_logits {
+            *logit = (*logit - max).exp();
+            logit_sum += *logit;
+        }
+        for logit in &mut l3_output_logits {
+            *logit /= logit_sum;
+        }
+
+        let l3_output = l3_output_logits[2].mul_add(1.0, l3_output_logits[1] * 0.5);
+
+        // l3_output is in the range [0, 1]
+        // we need to reverse the sigmoid to get the final output
+        let l3_output = (l3_output / (1.0 - l3_output)).ln();
 
         (l3_output * SCALE as f32) as i32
     }
