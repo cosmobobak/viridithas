@@ -1267,7 +1267,6 @@ impl NNUEState {
         );
         layers::propagate_l3(
             &l2_outputs,
-            // SAFETY: Just extracting the prefix.
             &nn.l3_weights[out],
             nn.l3_bias[out],
             &mut l3_output,
