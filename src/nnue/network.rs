@@ -42,7 +42,7 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 1536;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
@@ -84,9 +84,8 @@ const BUCKET_MAP: [usize; 64] = {
 pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
-    #![allow(clippy::cast_possible_truncation)]
-    const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    (pos.n_men() as usize - 2) / DIVISOR
+    let pc_count = pos.n_men() as usize;
+    ((63 - pc_count) * (32 - pc_count) / 225).min(7)
 }
 
 const QA: i16 = 255;
