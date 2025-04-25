@@ -87,9 +87,10 @@ impl PieceLayout {
         let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();
         let white_pawn_attackers = pawn_attacks::<Black>(sq_bb) & self.pawns::<White>();
         let knight_attackers = knight_attacks(sq) & (self.pieces[PieceType::Knight]);
-        let diag_attackers =
-            bishop_attacks(sq, occupied) & (self.pieces[PieceType::Bishop] | self.pieces[PieceType::Queen]);
-        let orth_attackers = rook_attacks(sq, occupied) & (self.pieces[PieceType::Rook] | self.pieces[PieceType::Queen]);
+        let diag_attackers = bishop_attacks(sq, occupied)
+            & (self.pieces[PieceType::Bishop] | self.pieces[PieceType::Queen]);
+        let orth_attackers = rook_attacks(sq, occupied)
+            & (self.pieces[PieceType::Rook] | self.pieces[PieceType::Queen]);
         let king_attackers = king_attacks(sq) & (self.pieces[PieceType::King]);
         black_pawn_attackers
             | white_pawn_attackers
