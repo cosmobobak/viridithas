@@ -124,11 +124,6 @@ impl Board {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
-    #[cfg(debug_assertions)]
-    pub fn all_keys(&self) -> Keys {
-        self.state.keys.clone()
-    }
-
     pub const fn ply(&self) -> usize {
         self.ply
     }
