@@ -1075,8 +1075,8 @@ impl Board {
             self.state.fifty_move_counter = 0;
             if self.is_double_pawn_push(m)
                 && (m.to().as_set().west_one() | m.to().as_set().east_one())
-                    & self.state.bbs.all_pawns()
-                    & self.state.bbs.occupied_co(side.flip())
+                    & self.state.bbs.pieces[PieceType::Pawn]
+                    & self.state.bbs.colours[side.flip()]
                     != SquareSet::EMPTY
             {
                 if side == Colour::White {
@@ -1580,16 +1580,16 @@ impl Board {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
-            let kings = self.state.bbs.all_kings();
-            let queens = self.state.bbs.all_queens();
-            return self.state.bbs.our_pieces::<C>().count() <= 2
-                && self.state.bbs.their_pieces::<C>() & !kings & !queens == SquareSet::EMPTY;
+            let kings = self.state.bbs.pieces[PieceType::King];
+            let queens = self.state.bbs.pieces[PieceType::Queen];
+            return self.state.bbs.colours[C::COLOUR].count() <= 2
+                && self.state.bbs.colours[!C::COLOUR] & !kings & !queens == SquareSet::EMPTY;
         }
 
         if self.state.bbs.bishops::<C>() != SquareSet::EMPTY {
-            let bishops = self.state.bbs.all_bishops();
-            let pawns = self.state.bbs.all_pawns();
-            let knights = self.state.bbs.all_knights();
+            let bishops = self.state.bbs.pieces[PieceType::Bishop];
+            let pawns = self.state.bbs.pieces[PieceType::Pawn];
+            let knights = self.state.bbs.pieces[PieceType::Knight];
             return pawns == SquareSet::EMPTY
                 && knights == SquareSet::EMPTY
                 && (bishops & SquareSet::DARK_SQUARES == SquareSet::EMPTY

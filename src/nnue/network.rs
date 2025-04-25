@@ -890,7 +890,7 @@ impl BucketAccumulatorCache {
         colour: Colour,
         acc: &mut Accumulator,
     ) {
-        let king = SquareSet::first(board_state.all_kings() & board_state.occupied_co(colour));
+        let king = SquareSet::first(board_state.pieces[PieceType::King] & board_state.colours[colour]);
         let bucket = BUCKET_MAP[king.relative_to(colour)];
         let cache_acc = self.accs[bucket].select_mut(colour);
 

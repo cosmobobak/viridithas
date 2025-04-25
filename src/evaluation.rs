@@ -66,10 +66,10 @@ impl Board {
         #![allow(clippy::cast_possible_wrap)]
         let b = self.pieces();
         info.conf.material_scale_base
-            + (info.conf.see_knight_value * b.all_knights().count() as i32
-                + info.conf.see_bishop_value * b.all_bishops().count() as i32
-                + info.conf.see_rook_value * b.all_rooks().count() as i32
-                + info.conf.see_queen_value * b.all_queens().count() as i32)
+            + (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
+                + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32
+                + info.conf.see_rook_value * b.pieces[PieceType::Rook].count() as i32
+                + info.conf.see_queen_value * b.pieces[PieceType::Queen].count() as i32)
                 / 32
     }
 
@@ -114,9 +114,9 @@ impl Board {
 
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
-        let us = self.pieces().occupied_co(stm);
-        let kings = self.pieces().all_kings();
-        let pawns = self.pieces().all_pawns();
+        let us = self.state.bbs.colours[stm];
+        let kings = self.state.bbs.pieces[PieceType::King];
+        let pawns = self.state.bbs.pieces[PieceType::Pawn];
         (us & (kings | pawns)) != us
     }
 

@@ -1719,8 +1719,8 @@ impl Board {
             return true;
         }
 
-        let diag_sliders = board.all_bishops() | board.all_queens();
-        let orth_sliders = board.all_rooks() | board.all_queens();
+        let diag_sliders = board.pieces[PieceType::Bishop] | board.pieces[PieceType::Queen];
+        let orth_sliders = board.pieces[PieceType::Rook] | board.pieces[PieceType::Queen];
 
         // occupied starts with the position after the move `m` is made.
         let mut occupied = (board.occupied() ^ from.as_set()) | to.as_set();
@@ -1734,7 +1734,7 @@ impl Board {
         let mut colour = !self.turn();
 
         loop {
-            let my_attackers = attackers & board.occupied_co(colour);
+            let my_attackers = attackers & board.colours[colour];
             if my_attackers == SquareSet::EMPTY {
                 break;
             }
@@ -1774,7 +1774,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::King
-                    && (attackers & board.occupied_co(colour)) != SquareSet::EMPTY
+                    && (attackers & board.colours[colour]) != SquareSet::EMPTY
                 {
                     colour = !colour;
                 }

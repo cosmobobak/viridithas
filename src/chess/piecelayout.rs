@@ -9,37 +9,25 @@ use crate::chess::{
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct PieceLayout {
-    pieces: [SquareSet; 6],
-    colours: [SquareSet; 2],
+    pub pieces: [SquareSet; 6],
+    pub colours: [SquareSet; 2],
 }
 
 impl PieceLayout {
     pub fn king<C: Col>(&self) -> SquareSet {
-        self.all_kings() & self.our_pieces::<C>()
+        self.pieces[PieceType::King] & self.colours[C::COLOUR]
     }
 
     pub fn pawns<C: Col>(&self) -> SquareSet {
-        self.all_pawns() & self.our_pieces::<C>()
-    }
-
-    pub fn occupied_co(&self, colour: Colour) -> SquareSet {
-        self.colours[colour]
-    }
-
-    pub fn their_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::Opposite::COLOUR]
-    }
-
-    pub fn our_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::COLOUR]
+        self.pieces[PieceType::Pawn] & self.colours[C::COLOUR]
     }
 
     pub fn orthos<C: Col>(&self) -> SquareSet {
-        (self.all_rooks() | self.all_queens()) & self.our_pieces::<C>()
+        (self.pieces[PieceType::Rook] | self.pieces[PieceType::Queen]) & self.colours[C::COLOUR]
     }
 
     pub fn diags<C: Col>(&self) -> SquareSet {
-        (self.all_bishops() | self.all_queens()) & self.our_pieces::<C>()
+        (self.pieces[PieceType::Bishop] | self.pieces[PieceType::Queen]) & self.colours[C::COLOUR]
     }
 
     pub fn empty(&self) -> SquareSet {
@@ -51,46 +39,22 @@ impl PieceLayout {
     }
 
     pub fn knights<C: Col>(&self) -> SquareSet {
-        self.all_knights() & self.our_pieces::<C>()
+        self.pieces[PieceType::Knight] & self.colours[C::COLOUR]
     }
 
     #[cfg(any(feature = "datagen", test))]
     pub fn rooks<C: Col>(&self) -> SquareSet {
-        self.all_rooks() & self.our_pieces::<C>()
+        self.pieces[PieceType::Rook] & self.colours[C::COLOUR]
     }
 
     #[cfg(any(feature = "datagen", test))]
     pub fn bishops<C: Col>(&self) -> SquareSet {
-        self.all_bishops() & self.our_pieces::<C>()
+        self.pieces[PieceType::Bishop] & self.colours[C::COLOUR]
     }
 
     #[cfg(any(feature = "datagen", test))]
     pub fn queens<C: Col>(&self) -> SquareSet {
-        self.all_queens() & self.our_pieces::<C>()
-    }
-
-    pub fn all_pawns(&self) -> SquareSet {
-        self.pieces[PieceType::Pawn]
-    }
-
-    pub fn all_knights(&self) -> SquareSet {
-        self.pieces[PieceType::Knight]
-    }
-
-    pub fn all_bishops(&self) -> SquareSet {
-        self.pieces[PieceType::Bishop]
-    }
-
-    pub fn all_rooks(&self) -> SquareSet {
-        self.pieces[PieceType::Rook]
-    }
-
-    pub fn all_queens(&self) -> SquareSet {
-        self.pieces[PieceType::Queen]
-    }
-
-    pub fn all_kings(&self) -> SquareSet {
-        self.pieces[PieceType::King]
+        self.pieces[PieceType::Queen] & self.colours[C::COLOUR]
     }
 
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
@@ -112,7 +76,7 @@ impl PieceLayout {
     }
 
     pub fn any_pawns(&self) -> bool {
-        self.all_pawns() != SquareSet::EMPTY
+        self.pieces[PieceType::Pawn] != SquareSet::EMPTY
     }
 
     pub fn piece_bb(&self, piece: Piece) -> SquareSet {
@@ -130,11 +94,11 @@ impl PieceLayout {
         let sq_bb = sq.as_set();
         let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();
         let white_pawn_attackers = pawn_attacks::<Black>(sq_bb) & self.pawns::<White>();
-        let knight_attackers = knight_attacks(sq) & (self.all_knights());
+        let knight_attackers = knight_attacks(sq) & (self.pieces[PieceType::Knight]);
         let diag_attackers =
-            bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
-        let orth_attackers = rook_attacks(sq, occupied) & (self.all_rooks() | self.all_queens());
-        let king_attackers = king_attacks(sq) & (self.all_kings());
+            bishop_attacks(sq, occupied) & (self.pieces[PieceType::Bishop] | self.pieces[PieceType::Queen]);
+        let orth_attackers = rook_attacks(sq, occupied) & (self.pieces[PieceType::Rook] | self.pieces[PieceType::Queen]);
+        let king_attackers = king_attacks(sq) & (self.pieces[PieceType::King]);
         black_pawn_attackers
             | white_pawn_attackers
             | knight_attackers
@@ -145,9 +109,9 @@ impl PieceLayout {
 
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         let sq_bb = sq.as_set();
-        let colour = if (self.our_pieces::<White>() & sq_bb) != SquareSet::EMPTY {
+        let colour = if (self.colours[Colour::White] & sq_bb) != SquareSet::EMPTY {
             Colour::White
-        } else if (self.our_pieces::<Black>() & sq_bb) != SquareSet::EMPTY {
+        } else if (self.colours[Colour::Black] & sq_bb) != SquareSet::EMPTY {
             Colour::Black
         } else {
             return None;
