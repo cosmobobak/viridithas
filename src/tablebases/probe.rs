@@ -178,7 +178,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
 
 /// Checks if there's a tablebase move and returns it as [Some], otherwise [None].
 pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
-    if board.n_men() > get_max_pieces_count() {
+    if board.state.bbs.occupied().count() > u32::from(get_max_pieces_count()) {
         return None;
     }
 

@@ -129,11 +129,6 @@ impl Board {
         self.state.keys.clone()
     }
 
-    pub fn n_men(&self) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.state.bbs.occupied().count() as u8
-    }
-
     pub const fn ply(&self) -> usize {
         self.ply
     }

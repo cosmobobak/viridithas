@@ -525,9 +525,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
-            t.tt.probe_for_provisional_info(
-                self.state.keys.zobrist
-            )
+            t.tt.probe_for_provisional_info(self.state.keys.zobrist)
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer(t), 0);
         let mut m = None;
@@ -888,13 +886,14 @@ impl Board {
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-        let cardinality = tablebases::probe::get_max_pieces_count();
+        let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
+        let n_men = self.state.bbs.occupied().count();
         if !NT::ROOT
             && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
-                || self.n_men() < cardinality)
-            && self.n_men() <= cardinality
+                || n_men < cardinality)
+            && n_men <= cardinality
         {
             if let Some(wdl) = tablebases::probe::get_wdl(self) {
                 TB_HITS.fetch_add(1, Ordering::Relaxed);

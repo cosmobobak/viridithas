@@ -86,7 +86,7 @@ pub const OUTPUT_BUCKETS: usize = 8;
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
     const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    (pos.n_men() as usize - 2) / DIVISOR
+    (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
 }
 
 const QA: i16 = 255;
