@@ -239,6 +239,7 @@ mod x86simd {
             std::mem::size_of::<VecI32>() / std::mem::size_of::<i32>();
         const NNZ_CHUNK_SIZE: usize = max!(NNZ_INPUT_SIMD_WIDTH * 2, 8);
         const NNZ_OUTPUTS_PER_CHUNK: usize = NNZ_CHUNK_SIZE / 8;
+        const SHIFT: S = 16 - FT_SHIFT as S;
 
         // SAFETY: Breaking it down by unsafe operations:
         // 1. get_unchecked[_mut]: We only ever index at most
@@ -266,20 +267,17 @@ mod x86simd {
             for acc in [us, them] {
                 for i in (0..L1_PAIR_COUNT).step_by(I16_CHUNK_SIZE * 2 * 2) {
                     // load the left-hand pair inputs
-                    let input0a = simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + 0));
-                    let input0b = simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + 0));
-                    let input0c = simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + 0));
-                    let input0d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + 0));
+                    let input0a = simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE));
+                    let input0b = simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE));
+                    let input0c = simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE));
+                    let input0d = simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE));
 
                     // load the right-hand pair inputs
-                    let input1a =
-                        simd::load_i16(acc.get_unchecked(i + 0 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1b =
-                        simd::load_i16(acc.get_unchecked(i + 1 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1c =
-                        simd::load_i16(acc.get_unchecked(i + 2 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
-                    let input1d =
-                        simd::load_i16(acc.get_unchecked(i + 3 * I16_CHUNK_SIZE + L1_PAIR_COUNT));
+                    let j = i + L1_PAIR_COUNT;
+                    let input1a = simd::load_i16(acc.get_unchecked(j + 0 * I16_CHUNK_SIZE));
+                    let input1b = simd::load_i16(acc.get_unchecked(j + 1 * I16_CHUNK_SIZE));
+                    let input1c = simd::load_i16(acc.get_unchecked(j + 2 * I16_CHUNK_SIZE));
+                    let input1d = simd::load_i16(acc.get_unchecked(j + 3 * I16_CHUNK_SIZE));
 
                     // crelu the left-hand inputs
                     let clipped0a = simd::min_i16(simd::max_i16(input0a, ft_zero), ft_one);
@@ -294,22 +292,10 @@ mod x86simd {
                     let clipped1d = simd::min_i16(input1d, ft_one);
 
                     // shift and mulhi such that the high bits we get are equal to crelu(x1) * crelu(x2)
-                    let producta = simd::mul_high_i16(
-                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0a),
-                        clipped1a,
-                    );
-                    let productb = simd::mul_high_i16(
-                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0b),
-                        clipped1b,
-                    );
-                    let productc = simd::mul_high_i16(
-                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0c),
-                        clipped1c,
-                    );
-                    let productd = simd::mul_high_i16(
-                        simd::shl_i16::<{ 16 - FT_SHIFT as S }>(clipped0d),
-                        clipped1d,
-                    );
+                    let producta = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0a), clipped1a);
+                    let productb = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0b), clipped1b);
+                    let productc = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0c), clipped1c);
+                    let productd = simd::mul_high_i16(simd::shl_i16::<SHIFT>(clipped0d), clipped1d);
 
                     // pack the resulting values in to u8s
                     let product_one = simd::pack_i16_to_u8(producta, productb);
