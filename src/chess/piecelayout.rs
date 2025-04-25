@@ -86,10 +86,6 @@ impl PieceLayout {
         )
     }
 
-    pub fn of_type(&self, piece_type: PieceType) -> SquareSet {
-        self.pieces[piece_type]
-    }
-
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
         let sq_bb = sq.as_set();
         let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();

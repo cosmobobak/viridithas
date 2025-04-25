@@ -1742,12 +1742,12 @@ impl Board {
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if (my_attackers & board.of_type(victim)) != SquareSet::EMPTY {
+                if (my_attackers & board.pieces[victim]) != SquareSet::EMPTY {
                     break;
                 }
             }
 
-            occupied ^= (my_attackers & board.of_type(next_victim)).first().as_set();
+            occupied ^= (my_attackers & board.pieces[next_victim]).first().as_set();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
