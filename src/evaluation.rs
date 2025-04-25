@@ -99,7 +99,7 @@ impl Board {
 
     pub fn evaluate(&self, t: &mut ThreadData, info: &SearchInfo, nodes: u64) -> i32 {
         // detect draw by insufficient material
-        if !self.state.bbs.pieces[PieceType::Pawn] != SquareSet::EMPTY
+        if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
             && self.state.bbs.is_material_draw()
         {
             return if self.turn() == Colour::White {
