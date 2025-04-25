@@ -525,7 +525,9 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
-            t.tt.probe_for_provisional_info(self.zobrist_key())
+            t.tt.probe_for_provisional_info(
+                self.state.keys.zobrist
+            )
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer(t), 0);
         let mut m = None;
@@ -558,7 +560,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist;
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -785,7 +787,7 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist;
 
         let in_check = self.in_check();
         if depth <= 0 && !in_check {

@@ -124,10 +124,6 @@ impl Board {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
-    pub const fn zobrist_key(&self) -> u64 {
-        self.state.keys.zobrist
-    }
-
     pub const fn pawn_key(&self) -> u64 {
         self.state.keys.pawn
     }
