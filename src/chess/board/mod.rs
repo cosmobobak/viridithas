@@ -124,22 +124,6 @@ impl Board {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
-    pub const fn pawn_key(&self) -> u64 {
-        self.state.keys.pawn
-    }
-
-    pub fn non_pawn_key(&self, colour: Colour) -> u64 {
-        self.state.keys.non_pawn[colour]
-    }
-
-    pub const fn minor_key(&self) -> u64 {
-        self.state.keys.minor
-    }
-
-    pub const fn major_key(&self) -> u64 {
-        self.state.keys.major
-    }
-
     pub const fn pieces(&self) -> &PieceLayout {
         &self.state.bbs
     }
