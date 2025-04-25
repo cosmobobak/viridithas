@@ -3,7 +3,7 @@ const FT_SHIFT: u32 = 10;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 mod generic {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -157,7 +157,7 @@ mod generic {
     }
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 mod x86simd {
     use super::{
         super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
@@ -539,10 +539,10 @@ mod x86simd {
     }
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 pub use x86simd::*;
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 pub use generic::*;
 
 use super::{QA, QB};

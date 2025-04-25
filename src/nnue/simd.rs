@@ -520,15 +520,15 @@ mod avx2 {
 }
 
 #[cfg(all(
-    target_feature = "ssse3",
+    target_arch = "x86_64",
     not(target_feature = "avx2"),
     not(target_feature = "avx512f")
 ))]
-mod ssse3 {
+mod sse2 {
     #![allow(non_camel_case_types)]
     use std::arch::x86_64::*;
 
-    pub const INNER_ARCH: &str = "ssse3";
+    pub const INNER_ARCH: &str = "sse2";
 
     wrap_simd_register!(__m128i, i8, VecI8);
     wrap_simd_register!(__m128i, i16, VecI16);
@@ -756,41 +756,25 @@ pub use avx512::*;
 pub use avx2::*;
 
 #[cfg(all(
-    target_feature = "ssse3",
+    target_arch = "x86_64",
     not(target_feature = "avx2"),
     not(target_feature = "avx512f")
 ))]
-pub use ssse3::*;
+pub use sse2::*;
 
-#[cfg(any(
-    target_feature = "ssse3",
-    target_feature = "avx2",
-    target_feature = "avx512f"
-))]
+#[cfg(target_arch = "x86_64")]
 #[inline(always)]
 pub fn reinterpret_i32s_as_i8s(vec: VecI32) -> VecI8 {
     VecI8::from_raw(vec.inner())
 }
 
-#[cfg(any(
-    target_feature = "ssse3",
-    target_feature = "avx2",
-    target_feature = "avx512f"
-))]
+#[cfg(target_arch = "x86_64")]
 #[inline(always)]
 pub fn reinterpret_i8s_as_i32s(vec: VecI8) -> VecI32 {
     VecI32::from_raw(vec.inner())
 }
 
-#[cfg(any(
-    target_feature = "ssse3",
-    target_feature = "avx2",
-    target_feature = "avx512f"
-))]
+#[cfg(target_arch = "x86_64")]
 pub const ARCH: &str = INNER_ARCH;
-#[cfg(not(any(
-    target_feature = "ssse3",
-    target_feature = "avx2",
-    target_feature = "avx512f"
-)))]
+#[cfg(not(target_arch = "x86_64"))]
 pub const ARCH: &str = "generic";
