@@ -65,7 +65,7 @@ pub const SEE_QUEEN_VALUE: i32 = 1321;
 impl Board {
     fn material_scale(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        let b = self.pieces();
+        let b = &self.state.bbs;
         info.conf.material_scale_base
             + (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
                 + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32

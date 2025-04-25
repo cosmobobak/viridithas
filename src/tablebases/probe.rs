@@ -76,7 +76,7 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
-        let b = board.pieces();
+        let b = &board.state.bbs;
         let wdl = tb_probe_wdl(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),
@@ -112,7 +112,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
-        let b = board.pieces();
+        let b = &board.state.bbs;
         let result = tb_probe_root(
             b.colours[Colour::White].inner(),
             b.colours[Colour::Black].inner(),

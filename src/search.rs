@@ -1700,7 +1700,7 @@ impl Board {
     pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
-        let board = self.pieces();
+        let board = &self.state.bbs;
 
         let mut next_victim = m
             .promotion_type()

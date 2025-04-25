@@ -30,7 +30,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use crate::chess::piecelayout::{PieceLayout, Threats};
+use crate::chess::piecelayout::Threats;
 
 use super::types::Keys;
 
@@ -122,10 +122,6 @@ impl Board {
     #[cfg(feature = "datagen")]
     pub fn set_fullmove_clock(&mut self, fullmove_clock: u16) {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
-    }
-
-    pub const fn pieces(&self) -> &PieceLayout {
-        &self.state.bbs
     }
 
     #[cfg(debug_assertions)]
