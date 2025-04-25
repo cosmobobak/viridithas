@@ -75,10 +75,6 @@ impl PieceLayout {
         self.colours[piece.colour()] &= !sq_bb;
     }
 
-    pub fn any_pawns(&self) -> bool {
-        self.pieces[PieceType::Pawn] != SquareSet::EMPTY
-    }
-
     pub fn piece_bb(&self, piece: Piece) -> SquareSet {
         SquareSet::intersection(
             self.pieces[piece.piece_type()],

@@ -5,6 +5,7 @@ use crate::{
         board::Board,
         chessmove::Move,
         piece::{Colour, PieceType},
+        squareset::SquareSet,
     },
     nnue::network,
     search::draw_score,
@@ -98,7 +99,9 @@ impl Board {
 
     pub fn evaluate(&self, t: &mut ThreadData, info: &SearchInfo, nodes: u64) -> i32 {
         // detect draw by insufficient material
-        if !self.pieces().any_pawns() && self.pieces().is_material_draw() {
+        if !self.state.bbs.pieces[PieceType::Pawn] != SquareSet::EMPTY
+            && self.state.bbs.is_material_draw()
+        {
             return if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
