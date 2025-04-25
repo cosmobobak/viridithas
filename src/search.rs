@@ -1747,7 +1747,7 @@ impl Board {
                 }
             }
 
-            occupied ^= (my_attackers & board.pieces[next_victim]).first().as_set();
+            occupied ^= (my_attackers & board.pieces[next_victim]).extract_lowest();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
