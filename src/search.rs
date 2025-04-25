@@ -862,7 +862,7 @@ impl Board {
                             let from = mov.from();
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
-                            let threats = self.threats().all;
+                            let threats = self.state.threats.all;
                             self.update_quiet_history_single::<false>(
                                 t, info, from, to, moved, threats, depth, true,
                             );
@@ -1282,7 +1282,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth < 10
                 && move_picker.stage > Stage::YieldGoodCaptures
-                && self.threats().all.contains_square(m.to())
+                && self.state.threats.all.contains_square(m.to())
                 && !self.static_exchange_eval(
                     info,
                     m,

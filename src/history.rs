@@ -30,6 +30,7 @@ impl ThreadData<'_> {
         best_move: Move,
         depth: i32,
     ) {
+        let threats = pos.state.threats.all;
         for &m in moves_to_adjust {
             let piece_moved = pos.piece_at(m.from());
             debug_assert!(
@@ -42,8 +43,8 @@ impl ThreadData<'_> {
             let val = self.main_history.get_mut(
                 piece_moved.unwrap(),
                 to,
-                pos.threats().all.contains_square(from),
-                pos.threats().all.contains_square(to),
+                threats.contains_square(from),
+                threats.contains_square(to),
             );
             let delta = if m == best_move {
                 main_history_bonus(conf, depth)
@@ -74,6 +75,7 @@ impl ThreadData<'_> {
 
     /// Get the history scores for a batch of moves.
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        let threats = pos.state.threats.all;
         for m in ms {
             let piece_moved = pos.piece_at(m.mov.from());
             let from = m.mov.from();
@@ -81,8 +83,8 @@ impl ThreadData<'_> {
             m.score += i32::from(self.main_history.get(
                 piece_moved.unwrap(),
                 to,
-                pos.threats().all.contains_square(from),
-                pos.threats().all.contains_square(to),
+                threats.contains_square(from),
+                threats.contains_square(to),
             ));
         }
     }
@@ -92,11 +94,12 @@ impl ThreadData<'_> {
         let piece_moved = pos.piece_at(m.from());
         let from = m.from();
         let to = m.history_to_square();
+        let threats = pos.state.threats.all;
         i32::from(self.main_history.get(
             piece_moved.unwrap(),
             to,
-            pos.threats().all.contains_square(from),
-            pos.threats().all.contains_square(to),
+            threats.contains_square(from),
+            threats.contains_square(to),
         ))
     }
 

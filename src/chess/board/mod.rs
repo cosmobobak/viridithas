@@ -128,10 +128,6 @@ impl Board {
         self.ply
     }
 
-    pub const fn threats(&self) -> &Threats {
-        &self.state.threats
-    }
-
     pub fn king_sq(&self, side: Colour) -> Square {
         debug_assert!(side == Colour::White || side == Colour::Black);
         debug_assert_eq!(self.state.bbs.king::<White>().count(), 1);
