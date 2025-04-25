@@ -30,6 +30,7 @@ impl ThreadData<'_> {
         best_move: Move,
         depth: i32,
     ) {
+        let threats = pos.state.threats.all;
         for &m in moves_to_adjust {
             let piece_moved = pos.piece_at(m.from());
             debug_assert!(
@@ -42,8 +43,8 @@ impl ThreadData<'_> {
             let val = self.main_history.get_mut(
                 piece_moved.unwrap(),
                 to,
-                pos.threats().all.contains_square(from),
-                pos.threats().all.contains_square(to),
+                threats.contains_square(from),
+                threats.contains_square(to),
             );
             let delta = if m == best_move {
                 main_history_bonus(conf, depth)
@@ -74,6 +75,7 @@ impl ThreadData<'_> {
 
     /// Get the history scores for a batch of moves.
     pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
+        let threats = pos.state.threats.all;
         for m in ms {
             let piece_moved = pos.piece_at(m.mov.from());
             let from = m.mov.from();
@@ -81,8 +83,8 @@ impl ThreadData<'_> {
             m.score += i32::from(self.main_history.get(
                 piece_moved.unwrap(),
                 to,
-                pos.threats().all.contains_square(from),
-                pos.threats().all.contains_square(to),
+                threats.contains_square(from),
+                threats.contains_square(to),
             ));
         }
     }
@@ -92,11 +94,12 @@ impl ThreadData<'_> {
         let piece_moved = pos.piece_at(m.from());
         let from = m.from();
         let to = m.history_to_square();
+        let threats = pos.state.threats.all;
         i32::from(self.main_history.get(
             piece_moved.unwrap(),
             to,
-            pos.threats().all.contains_square(from),
-            pos.threats().all.contains_square(to),
+            threats.contains_square(from),
+            threats.contains_square(to),
         ))
     }
 
@@ -260,28 +263,30 @@ impl ThreadData<'_> {
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = pos.turn();
 
+        let keys = &pos.state.keys;
+
         update(
-            self.pawn_corrhist.get_mut(us, pos.pawn_key()),
+            self.pawn_corrhist.get_mut(us, keys.pawn),
             new_weight,
             scaled_diff,
         );
         update(
-            self.nonpawn_corrhist[White].get_mut(us, pos.non_pawn_key(White)),
+            self.nonpawn_corrhist[White].get_mut(us, keys.non_pawn[White]),
             new_weight,
             scaled_diff,
         );
         update(
-            self.nonpawn_corrhist[Black].get_mut(us, pos.non_pawn_key(Black)),
+            self.nonpawn_corrhist[Black].get_mut(us, keys.non_pawn[Black]),
             new_weight,
             scaled_diff,
         );
         update(
-            self.minor_corrhist.get_mut(us, pos.minor_key()),
+            self.minor_corrhist.get_mut(us, keys.minor),
             new_weight,
             scaled_diff,
         );
         update(
-            self.major_corrhist.get_mut(us, pos.major_key()),
+            self.major_corrhist.get_mut(us, keys.major),
             new_weight,
             scaled_diff,
         );
@@ -290,13 +295,14 @@ impl ThreadData<'_> {
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
     pub fn correct_evaluation(&self, conf: &Config, pos: &Board) -> i32 {
-        let pawn = self.pawn_corrhist.get(pos.turn(), pos.pawn_key());
+        let keys = &pos.state.keys;
+        let pawn = self.pawn_corrhist.get(pos.turn(), keys.pawn);
         let white =
-            self.nonpawn_corrhist[Colour::White].get(pos.turn(), pos.non_pawn_key(Colour::White));
+            self.nonpawn_corrhist[Colour::White].get(pos.turn(), keys.non_pawn[Colour::White]);
         let black =
-            self.nonpawn_corrhist[Colour::Black].get(pos.turn(), pos.non_pawn_key(Colour::Black));
-        let minor = self.minor_corrhist.get(pos.turn(), pos.minor_key());
-        let major = self.major_corrhist.get(pos.turn(), pos.major_key());
+            self.nonpawn_corrhist[Colour::Black].get(pos.turn(), keys.non_pawn[Colour::Black]);
+        let minor = self.minor_corrhist.get(pos.turn(), keys.minor);
+        let major = self.major_corrhist.get(pos.turn(), keys.major);
         let adjustment = pawn * i64::from(conf.pawn_corrhist_weight)
             + major * i64::from(conf.major_corrhist_weight)
             + minor * i64::from(conf.minor_corrhist_weight)

@@ -5,6 +5,7 @@ use crate::{
         board::Board,
         chessmove::Move,
         piece::{Colour, PieceType},
+        squareset::SquareSet,
     },
     nnue::network,
     search::draw_score,
@@ -64,12 +65,12 @@ pub const SEE_QUEEN_VALUE: i32 = 1321;
 impl Board {
     fn material_scale(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        let b = self.pieces();
+        let b = &self.state.bbs;
         info.conf.material_scale_base
-            + (info.conf.see_knight_value * b.all_knights().count() as i32
-                + info.conf.see_bishop_value * b.all_bishops().count() as i32
-                + info.conf.see_rook_value * b.all_rooks().count() as i32
-                + info.conf.see_queen_value * b.all_queens().count() as i32)
+            + (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
+                + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32
+                + info.conf.see_rook_value * b.pieces[PieceType::Rook].count() as i32
+                + info.conf.see_queen_value * b.pieces[PieceType::Queen].count() as i32)
                 / 32
     }
 
@@ -98,7 +99,9 @@ impl Board {
 
     pub fn evaluate(&self, t: &mut ThreadData, info: &SearchInfo, nodes: u64) -> i32 {
         // detect draw by insufficient material
-        if !self.pieces().any_pawns() && self.pieces().is_material_draw() {
+        if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
+            && self.state.bbs.is_material_draw()
+        {
             return if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
@@ -114,9 +117,9 @@ impl Board {
 
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
-        let us = self.pieces().occupied_co(stm);
-        let kings = self.pieces().all_kings();
-        let pawns = self.pieces().all_pawns();
+        let us = self.state.bbs.colours[stm];
+        let kings = self.state.bbs.pieces[PieceType::King];
+        let pawns = self.state.bbs.pieces[PieceType::Pawn];
         (us & (kings | pawns)) != us
     }
 

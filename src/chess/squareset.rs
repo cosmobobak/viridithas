@@ -205,6 +205,10 @@ impl SquareSet {
     pub fn south_one(self) -> Self {
         self >> 8
     }
+
+    pub fn extract_lowest(self) -> Self {
+        self & !(Self::from_inner(self.inner() - 1))
+    }
 }
 
 /// Iterator over the squares of a square-set.

@@ -525,7 +525,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
-            t.tt.probe_for_provisional_info(self.zobrist_key())
+            t.tt.probe_for_provisional_info(self.state.keys.zobrist)
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer(t), 0);
         let mut m = None;
@@ -558,7 +558,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist;
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -785,7 +785,7 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist;
 
         let in_check = self.in_check();
         if depth <= 0 && !in_check {
@@ -862,7 +862,7 @@ impl Board {
                             let from = mov.from();
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
-                            let threats = self.threats().all;
+                            let threats = self.state.threats.all;
                             self.update_quiet_history_single::<false>(
                                 t, info, from, to, moved, threats, depth, true,
                             );
@@ -886,13 +886,14 @@ impl Board {
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-        let cardinality = tablebases::probe::get_max_pieces_count();
+        let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
+        let n_men = self.state.bbs.occupied().count();
         if !NT::ROOT
             && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
-                || self.n_men() < cardinality)
-            && self.n_men() <= cardinality
+                || n_men < cardinality)
+            && n_men <= cardinality
         {
             if let Some(wdl) = tablebases::probe::get_wdl(self) {
                 TB_HITS.fetch_add(1, Ordering::Relaxed);
@@ -1281,7 +1282,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth < 10
                 && move_picker.stage > Stage::YieldGoodCaptures
-                && self.threats().all.contains_square(m.to())
+                && self.state.threats.all.contains_square(m.to())
                 && !self.static_exchange_eval(
                     info,
                     m,
@@ -1698,7 +1699,7 @@ impl Board {
     pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
-        let board = self.pieces();
+        let board = &self.state.bbs;
 
         let mut next_victim = m
             .promotion_type()
@@ -1719,8 +1720,8 @@ impl Board {
             return true;
         }
 
-        let diag_sliders = board.all_bishops() | board.all_queens();
-        let orth_sliders = board.all_rooks() | board.all_queens();
+        let diag_sliders = board.pieces[PieceType::Bishop] | board.pieces[PieceType::Queen];
+        let orth_sliders = board.pieces[PieceType::Rook] | board.pieces[PieceType::Queen];
 
         // occupied starts with the position after the move `m` is made.
         let mut occupied = (board.occupied() ^ from.as_set()) | to.as_set();
@@ -1734,7 +1735,7 @@ impl Board {
         let mut colour = !self.turn();
 
         loop {
-            let my_attackers = attackers & board.occupied_co(colour);
+            let my_attackers = attackers & board.colours[colour];
             if my_attackers == SquareSet::EMPTY {
                 break;
             }
@@ -1742,12 +1743,12 @@ impl Board {
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if (my_attackers & board.of_type(victim)) != SquareSet::EMPTY {
+                if (my_attackers & board.pieces[victim]) != SquareSet::EMPTY {
                     break;
                 }
             }
 
-            occupied ^= (my_attackers & board.of_type(next_victim)).first().as_set();
+            occupied ^= (my_attackers & board.pieces[next_victim]).extract_lowest();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
@@ -1774,7 +1775,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::King
-                    && (attackers & board.occupied_co(colour)) != SquareSet::EMPTY
+                    && (attackers & board.colours[colour]) != SquareSet::EMPTY
                 {
                     colour = !colour;
                 }

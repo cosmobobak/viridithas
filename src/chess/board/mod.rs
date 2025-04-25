@@ -30,7 +30,7 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-use crate::chess::piecelayout::{PieceLayout, Threats};
+use crate::chess::piecelayout::Threats;
 
 use super::types::Keys;
 
@@ -71,7 +71,7 @@ impl Debug for Board {
             .field("fifty_move_counter", &self.state.fifty_move_counter)
             .field("height", &self.height)
             .field("ply", &self.ply)
-            .field("key", &self.state.keys.key)
+            .field("key", &self.state.keys.zobrist)
             .field("threats", &self.state.threats)
             .field("castle_perm", &self.state.castle_perm)
             .finish_non_exhaustive()
@@ -124,46 +124,8 @@ impl Board {
         self.ply = (fullmove_clock as usize - 1) * 2 + usize::from(self.side == Colour::Black);
     }
 
-    pub const fn zobrist_key(&self) -> u64 {
-        self.state.keys.key
-    }
-
-    pub const fn pawn_key(&self) -> u64 {
-        self.state.keys.pawn_key
-    }
-
-    pub fn non_pawn_key(&self, colour: Colour) -> u64 {
-        self.state.keys.non_pawn_key[colour]
-    }
-
-    pub const fn minor_key(&self) -> u64 {
-        self.state.keys.minor_key
-    }
-
-    pub const fn major_key(&self) -> u64 {
-        self.state.keys.major_key
-    }
-
-    pub const fn pieces(&self) -> &PieceLayout {
-        &self.state.bbs
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn all_keys(&self) -> Keys {
-        self.state.keys.clone()
-    }
-
-    pub fn n_men(&self) -> u8 {
-        #![allow(clippy::cast_possible_truncation)]
-        self.state.bbs.occupied().count() as u8
-    }
-
     pub const fn ply(&self) -> usize {
         self.ply
-    }
-
-    pub const fn threats(&self) -> &Threats {
-        &self.state.threats
     }
 
     pub fn king_sq(&self, side: Colour) -> Square {
@@ -210,31 +172,31 @@ impl Board {
     pub fn generate_pos_keys(&self) -> Keys {
         let mut keys = Keys::default();
         self.state.bbs.visit_pieces(|sq, piece| {
-            hash_piece(&mut keys.key, piece, sq);
+            hash_piece(&mut keys.zobrist, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn, piece, sq);
             } else {
-                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major_key, piece, sq);
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
                 } else {
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 }
             }
         });
 
         if self.side == Colour::White {
-            hash_side(&mut keys.key);
+            hash_side(&mut keys.zobrist);
         }
 
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut keys.key, ep_sq);
+            hash_ep(&mut keys.zobrist, ep_sq);
         }
 
-        hash_castling(&mut keys.key, self.state.castle_perm);
+        hash_castling(&mut keys.zobrist, self.state.castle_perm);
 
         debug_assert!(self.state.fifty_move_counter <= 100);
 
@@ -1075,8 +1037,8 @@ impl Board {
             self.state.fifty_move_counter = 0;
             if self.is_double_pawn_push(m)
                 && (m.to().as_set().west_one() | m.to().as_set().east_one())
-                    & self.state.bbs.all_pawns()
-                    & self.state.bbs.occupied_co(side.flip())
+                    & self.state.bbs.pieces[PieceType::Pawn]
+                    & self.state.bbs.colours[side.flip()]
                     != SquareSet::EMPTY
             {
                 if side == Colour::White {
@@ -1117,11 +1079,11 @@ impl Board {
 
         // remove a previous en passant square from the hash
         if let Some(ep_sq) = saved_ep_square {
-            hash_ep(&mut keys.key, ep_sq);
+            hash_ep(&mut keys.zobrist, ep_sq);
         }
 
         // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut keys.key, self.state.castle_perm);
+        hash_castling(&mut keys.zobrist, self.state.castle_perm);
 
         // update castling rights
         let mut new_rights = self.state.castle_perm;
@@ -1151,45 +1113,45 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut keys.key, ep_sq);
+            hash_ep(&mut keys.zobrist, ep_sq);
         }
-        hash_side(&mut keys.key);
+        hash_side(&mut keys.zobrist);
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
-            hash_piece(&mut keys.key, piece, sq);
+            hash_piece(&mut keys.zobrist, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn, piece, sq);
             } else {
-                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major_key, piece, sq);
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
                 } else {
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
-            hash_piece(&mut keys.key, piece, sq);
+            hash_piece(&mut keys.zobrist, piece, sq);
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn_key, piece, sq);
+                hash_piece(&mut keys.pawn, piece, sq);
             } else {
-                hash_piece(&mut keys.non_pawn_key[piece.colour()], piece, sq);
+                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major_key, piece, sq);
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major_key, piece, sq);
+                    hash_piece(&mut keys.major, piece, sq);
                 } else {
-                    hash_piece(&mut keys.minor_key, piece, sq);
+                    hash_piece(&mut keys.minor, piece, sq);
                 }
             }
         }
         // reinsert the castling rights
-        hash_castling(&mut keys.key, self.state.castle_perm);
+        hash_castling(&mut keys.zobrist, self.state.castle_perm);
         self.state.keys = keys;
 
         self.ply += 1;
@@ -1230,18 +1192,18 @@ impl Board {
             ep_square: self.state.ep_square,
             threats: self.state.threats,
             keys: Keys {
-                key: self.state.keys.key,
+                zobrist: self.state.keys.zobrist,
                 ..Default::default()
             },
             ..Default::default()
         });
 
-        let mut key = self.state.keys.key;
+        let mut key = self.state.keys.zobrist;
         if let Some(ep_sq) = self.state.ep_square {
             hash_ep(&mut key, ep_sq);
         }
         hash_side(&mut key);
-        self.state.keys.key = key;
+        self.state.keys.zobrist = key;
 
         self.state.ep_square = None;
         self.side = self.side.flip();
@@ -1271,7 +1233,7 @@ impl Board {
 
         self.state.ep_square = *ep_square;
         self.state.threats = *threats;
-        self.state.keys.key = keys.key;
+        self.state.keys.zobrist = keys.zobrist;
 
         self.history.pop();
 
@@ -1325,7 +1287,7 @@ impl Board {
         let piece = self.state.mailbox[src].unwrap();
         let captured = self.piece_at(tgt);
 
-        let mut new_key = self.state.keys.key;
+        let mut new_key = self.state.keys.zobrist;
         hash_side(&mut new_key);
         hash_piece(&mut new_key, piece, src);
         hash_piece(&mut new_key, piece, tgt);
@@ -1338,7 +1300,7 @@ impl Board {
     }
 
     pub fn key_after_null_move(&self) -> u64 {
-        let mut new_key = self.state.keys.key;
+        let mut new_key = self.state.keys.zobrist;
         hash_side(&mut new_key);
         new_key
     }
@@ -1517,7 +1479,7 @@ impl Board {
             .skip(3)
             .step_by(2)
         {
-            if u.keys.key == self.state.keys.key {
+            if u.keys.zobrist == self.state.keys.zobrist {
                 // in-tree, can twofold:
                 if dist_back < self.height {
                     return true;
@@ -1580,16 +1542,16 @@ impl Board {
             // this approach renders KNNvK as *not* being insufficient material.
             // this is because the losing side can in theory help the winning side
             // into a checkmate, despite it being impossible to /force/ mate.
-            let kings = self.state.bbs.all_kings();
-            let queens = self.state.bbs.all_queens();
-            return self.state.bbs.our_pieces::<C>().count() <= 2
-                && self.state.bbs.their_pieces::<C>() & !kings & !queens == SquareSet::EMPTY;
+            let kings = self.state.bbs.pieces[PieceType::King];
+            let queens = self.state.bbs.pieces[PieceType::Queen];
+            return self.state.bbs.colours[C::COLOUR].count() <= 2
+                && self.state.bbs.colours[!C::COLOUR] & !kings & !queens == SquareSet::EMPTY;
         }
 
         if self.state.bbs.bishops::<C>() != SquareSet::EMPTY {
-            let bishops = self.state.bbs.all_bishops();
-            let pawns = self.state.bbs.all_pawns();
-            let knights = self.state.bbs.all_knights();
+            let bishops = self.state.bbs.pieces[PieceType::Bishop];
+            let pawns = self.state.bbs.pieces[PieceType::Pawn];
+            let knights = self.state.bbs.pieces[PieceType::Knight];
             return pawns == SquareSet::EMPTY
                 && knights == SquareSet::EMPTY
                 && (bishops & SquareSet::DARK_SQUARES == SquareSet::EMPTY
@@ -1611,10 +1573,10 @@ impl Board {
             return false;
         }
 
-        let old_key = |i: usize| self.history[self.history.len() - i].keys.key;
+        let old_key = |i: usize| self.history[self.history.len() - i].keys.zobrist;
 
         let occ = self.state.bbs.occupied();
-        let original_key = self.state.keys.key;
+        let original_key = self.state.keys.zobrist;
 
         let mut other = !(original_key ^ old_key(1));
 
@@ -1680,7 +1642,7 @@ impl Board {
         }
         let mut reps = 1;
         for undo in self.history.iter().rev().skip(1).step_by(2) {
-            if undo.keys.key == self.state.keys.key {
+            if undo.keys.zobrist == self.state.keys.zobrist {
                 reps += 1;
                 if reps == 3 {
                     return GameOutcome::Draw(DrawType::Repetition);
@@ -2017,7 +1979,7 @@ mod tests {
         let mv = Move::new(Square::E2, Square::E3);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
-        assert_eq!(board.state.keys.key, key);
+        assert_eq!(board.state.keys.zobrist, key);
     }
 
     #[test]
@@ -2032,7 +1994,7 @@ mod tests {
         let mv = Move::new(Square::G5, Square::F7);
         let key = board.key_after(mv);
         board.make_move_simple(mv);
-        assert_eq!(board.state.keys.key, key);
+        assert_eq!(board.state.keys.zobrist, key);
     }
 
     #[test]
@@ -2041,7 +2003,7 @@ mod tests {
         let mut board = Board::default();
         let key = board.key_after_null_move();
         board.make_nullmove();
-        assert_eq!(board.state.keys.key, key);
+        assert_eq!(board.state.keys.zobrist, key);
     }
 
     #[test]
@@ -2057,8 +2019,8 @@ mod tests {
         let mut ep_capturable =
             Board::from_fen("rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2").unwrap();
         let d5 = Move::new(Square::D7, Square::D5);
-        let mut not_ep_capturable_key = not_ep_capturable.state.keys.key;
-        let mut ep_capturable_key = ep_capturable.state.keys.key;
+        let mut not_ep_capturable_key = not_ep_capturable.state.keys.zobrist;
+        let mut ep_capturable_key = ep_capturable.state.keys.zobrist;
         hash_side(&mut not_ep_capturable_key);
         hash_side(&mut ep_capturable_key);
         hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D7);
@@ -2074,8 +2036,8 @@ mod tests {
         assert_eq!(not_ep_capturable.state.ep_square, None);
         assert_eq!(ep_capturable.state.ep_square, Some(Square::D6));
 
-        assert_eq!(not_ep_capturable.state.keys.key, not_ep_capturable_key);
-        assert_eq!(ep_capturable.state.keys.key, ep_capturable_key);
+        assert_eq!(not_ep_capturable.state.keys.zobrist, not_ep_capturable_key);
+        assert_eq!(ep_capturable.state.keys.zobrist, ep_capturable_key);
     }
 
     #[test]
