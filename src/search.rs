@@ -15,11 +15,11 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MAX_POSITION_MOVES},
+            movegen::{self, MAX_POSITION_MOVES, RAY_BETWEEN},
             Board,
         },
         chessmove::Move,
-        piece::{Colour, Piece, PieceType},
+        piece::{Black, Colour, Piece, PieceType, White},
         squareset::SquareSet,
         types::{ContHistIndex, Square},
         CHESS960,
@@ -1734,8 +1734,14 @@ impl Board {
         // after the move, it's the opponent's turn.
         let mut colour = !self.turn();
 
+        let white_king = board.king::<White>().first();
+        let black_king = board.king::<Black>().first();
+        let mut blockers = board.occupied();
+        let mut aligned_blockers = (board.colours[Colour::White] & RAY_BETWEEN[to][white_king])
+            | (board.colours[Colour::Black] & RAY_BETWEEN[to][black_king]);
+
         loop {
-            let my_attackers = attackers & board.colours[colour];
+            let my_attackers = attackers & board.colours[colour] & (!blockers | aligned_blockers);
             if my_attackers == SquareSet::EMPTY {
                 break;
             }
@@ -1748,7 +1754,10 @@ impl Board {
                 }
             }
 
-            occupied ^= (my_attackers & board.pieces[next_victim]).extract_lowest();
+            let mask = (my_attackers & board.pieces[next_victim]).extract_lowest();
+            occupied ^= mask;
+            blockers &= !mask;
+            aligned_blockers &= !mask;
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
