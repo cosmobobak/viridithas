@@ -30,7 +30,7 @@ impl PackedBoard {
     }
 
     pub fn pack(board: &Board, eval: i16, wdl: u8, extra: u8) -> Self {
-        let occupancy = board.pieces().occupied();
+        let occupancy = board.state.bbs.occupied();
 
         let mut pieces = util::U4Array32::default();
         for (i, sq) in occupancy.iter().enumerate() {
