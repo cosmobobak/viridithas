@@ -1039,6 +1039,14 @@ impl Board {
 
         // whole-node pruning techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
+            if depth >= 2
+                && t.ss[height - 1].reduction >= 2048
+                && t.ss[height - 1].eval != VALUE_NONE
+                && static_eval + t.ss[height - 1].eval > 96
+            {
+                depth -= 1;
+            }
+
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -1416,8 +1424,10 @@ impl Board {
                         // reduce less if the move gives check
                         r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     }
+                    t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
                 } else {
+                    t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
@@ -1432,6 +1442,8 @@ impl Board {
                     -alpha,
                     true,
                 );
+                // simple reduction for any future searches
+                t.ss[height].reduction = 1024;
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > 1 {
