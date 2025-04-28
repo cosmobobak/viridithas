@@ -410,15 +410,15 @@ pub struct ContHistIndex {
 /// `repr(C)` because this actually how i want it to be laid out in memory.
 pub struct Keys {
     /// The Zobrist hash of the board.
-    pub key: u64,
+    pub zobrist: u64,
     /// The Zobrist hash of the pawns on the board.
-    pub pawn_key: u64,
+    pub pawn: u64,
     /// The Zobrist hash of the non-pawns on the board, split by side.
-    pub non_pawn_key: [u64; 2],
+    pub non_pawn: [u64; 2],
     /// The Zobrist hash of the minor pieces on the board.
-    pub minor_key: u64,
+    pub minor: u64,
     /// The Zobrist hash of the major pieces on the board.
-    pub major_key: u64,
+    pub major: u64,
 }
 
 /// Full state for a chess position.

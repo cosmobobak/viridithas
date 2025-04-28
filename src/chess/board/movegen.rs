@@ -302,7 +302,7 @@ impl Board {
         valid_target_squares: SquareSet,
     ) {
         let our_pawns = self.state.bbs.pawns::<C>();
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacking_west = if C::WHITE {
             their_pieces.south_east_one() & our_pawns
@@ -555,7 +555,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         let freespace = self.state.bbs.empty();
         let our_king_sq = self.state.bbs.king::<C>().first();
 
@@ -647,7 +647,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         let our_king_sq = self.state.bbs.king::<C>().first();
 
         if self.state.threats.checkers.count() > 1 {

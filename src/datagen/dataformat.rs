@@ -69,7 +69,7 @@ impl Filter {
         if eval.unsigned_abs() >= self.max_eval {
             return true;
         }
-        if board.pieces().occupied().count() < self.min_pieces {
+        if board.state.bbs.occupied().count() < self.min_pieces {
             return true;
         }
         if self.filter_tactical && board.is_tactical(mv) {
@@ -300,15 +300,15 @@ impl Game {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
-                let piece_layout = board.pieces();
-                bbs[0] = piece_layout.occupied_co(Colour::White).inner();
-                bbs[1] = piece_layout.occupied_co(Colour::Black).inner();
-                bbs[2] = piece_layout.of_type(PieceType::Pawn).inner();
-                bbs[3] = piece_layout.of_type(PieceType::Knight).inner();
-                bbs[4] = piece_layout.of_type(PieceType::Bishop).inner();
-                bbs[5] = piece_layout.of_type(PieceType::Rook).inner();
-                bbs[6] = piece_layout.of_type(PieceType::Queen).inner();
-                bbs[7] = piece_layout.of_type(PieceType::King).inner();
+                let piece_layout = &board.state.bbs;
+                bbs[0] = piece_layout.colours[Colour::White].inner();
+                bbs[1] = piece_layout.colours[Colour::Black].inner();
+                bbs[2] = piece_layout.pieces[PieceType::Pawn].inner();
+                bbs[3] = piece_layout.pieces[PieceType::Knight].inner();
+                bbs[4] = piece_layout.pieces[PieceType::Bishop].inner();
+                bbs[5] = piece_layout.pieces[PieceType::Rook].inner();
+                bbs[6] = piece_layout.pieces[PieceType::Queen].inner();
+                bbs[7] = piece_layout.pieces[PieceType::King].inner();
                 callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,
@@ -348,43 +348,43 @@ mod tests {
     fn roundtrip() {
         fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
             assert_eq!(
-                lhs.pieces().all_pawns(),
-                rhs.pieces().all_pawns(),
+                lhs.state.bbs.pieces[PieceType::Pawn],
+                rhs.state.bbs.pieces[PieceType::Pawn],
                 "pawn square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().all_knights(),
-                rhs.pieces().all_knights(),
+                lhs.state.bbs.pieces[PieceType::Knight],
+                rhs.state.bbs.pieces[PieceType::Knight],
                 "knight square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().all_bishops(),
-                rhs.pieces().all_bishops(),
+                lhs.state.bbs.pieces[PieceType::Bishop],
+                rhs.state.bbs.pieces[PieceType::Bishop],
                 "bishop square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().all_rooks(),
-                rhs.pieces().all_rooks(),
+                lhs.state.bbs.pieces[PieceType::Rook],
+                rhs.state.bbs.pieces[PieceType::Rook],
                 "rook square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().all_queens(),
-                rhs.pieces().all_queens(),
+                lhs.state.bbs.pieces[PieceType::Queen],
+                rhs.state.bbs.pieces[PieceType::Queen],
                 "queen square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().all_kings(),
-                rhs.pieces().all_kings(),
+                lhs.state.bbs.pieces[PieceType::King],
+                rhs.state.bbs.pieces[PieceType::King],
                 "king square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().occupied_co(Colour::White),
-                rhs.pieces().occupied_co(Colour::White),
+                lhs.state.bbs.colours[Colour::White],
+                rhs.state.bbs.colours[Colour::White],
                 "white square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces().occupied_co(Colour::Black),
-                rhs.pieces().occupied_co(Colour::Black),
+                lhs.state.bbs.colours[Colour::Black],
+                rhs.state.bbs.colours[Colour::Black],
                 "black square-sets {msg}"
             );
             for sq in Square::all() {
@@ -403,8 +403,8 @@ mod tests {
                 "fifty_move_counter {msg}"
             );
             assert_eq!(lhs.ply(), rhs.ply(), "ply {msg}");
-            assert_eq!(lhs.all_keys(), rhs.all_keys(), "key {msg}");
-            assert_eq!(lhs.threats(), rhs.threats(), "threats {msg}");
+            assert_eq!(lhs.state.keys, rhs.state.keys, "key {msg}");
+            assert_eq!(lhs.state.threats, rhs.state.threats, "threats {msg}");
             assert_eq!(lhs.height(), rhs.height(), "height {msg}");
         }
         CHESS960.store(true, std::sync::atomic::Ordering::SeqCst);

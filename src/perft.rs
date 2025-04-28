@@ -318,15 +318,15 @@ mod tests {
         let e4 = Move::new(Square::E2, Square::E4);
         let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");
-        let hashkey_before = pos.zobrist_key();
+        let hashkey_before = pos.state.keys.zobrist;
         pos.make_move_simple(e4);
         assert_ne!(pos.state.bbs, piece_layout_before);
         println!("{bb_after}", bb_after = pos.state.bbs);
-        assert_ne!(pos.zobrist_key(), hashkey_before);
+        assert_ne!(pos.state.keys.zobrist, hashkey_before);
         pos.unmake_move_base();
         assert_eq!(pos.state.bbs, piece_layout_before);
         println!("{bb_returned}", bb_returned = pos.state.bbs);
-        assert_eq!(pos.zobrist_key(), hashkey_before);
+        assert_eq!(pos.state.keys.zobrist, hashkey_before);
     }
 
     #[test]
@@ -339,14 +339,14 @@ mod tests {
         let exd5 = Move::new(Square::E4, Square::D5);
         let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");
-        let hashkey_before = pos.zobrist_key();
+        let hashkey_before = pos.state.keys.zobrist;
         pos.make_move_simple(exd5);
         assert_ne!(pos.state.bbs, piece_layout_before);
         println!("{bb_after}", bb_after = pos.state.bbs);
-        assert_ne!(pos.zobrist_key(), hashkey_before);
+        assert_ne!(pos.state.keys.zobrist, hashkey_before);
         pos.unmake_move_base();
         assert_eq!(pos.state.bbs, piece_layout_before);
         println!("{bb_returned}", bb_returned = pos.state.bbs);
-        assert_eq!(pos.zobrist_key(), hashkey_before);
+        assert_eq!(pos.state.keys.zobrist, hashkey_before);
     }
 }

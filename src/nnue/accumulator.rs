@@ -42,7 +42,7 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
     &*ptr.cast()
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 mod x86simd {
     use arrayvec::ArrayVec;
 
@@ -223,7 +223,7 @@ mod x86simd {
     }
 }
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 mod generic {
     use arrayvec::ArrayVec;
 
@@ -395,8 +395,8 @@ mod generic {
     }
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 pub use x86simd::*;
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 pub use generic::*;
