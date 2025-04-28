@@ -787,12 +787,9 @@ impl Board {
 
         let key = self.state.keys.zobrist;
 
-        let in_check = self.in_check();
-        if depth <= 0 && !in_check {
+        if depth <= 0 {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
         }
-
-        depth = depth.max(0);
 
         pv.moves.clear();
 
@@ -811,6 +808,8 @@ impl Board {
         } else {
             info.seldepth.max(i32::try_from(height).unwrap())
         };
+
+        let in_check = self.in_check();
 
         if !NT::ROOT {
             // check draw
