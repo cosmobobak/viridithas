@@ -1456,6 +1456,8 @@ impl Board {
                             !cut_node,
                         );
                     }
+                } else if score > alpha && score < best_score + 16 {
+                    new_depth -= 1;
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
