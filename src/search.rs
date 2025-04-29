@@ -1259,7 +1259,6 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter = Some(m) == killer;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -1270,7 +1269,7 @@ impl Board {
                 // history pruning
                 // if this move's history score is too low, we start skipping moves.
                 if is_quiet
-                    && !killer_or_counter
+                    && (Some(m) != killer)
                     && lmr_depth < 7
                     && stat_score < info.conf.history_pruning_margin * (depth - 1)
                 {
@@ -1415,18 +1414,16 @@ impl Board {
                     r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
                     // reduce more on cut nodes
                     r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
-                    if is_quiet {
-                        // extend/reduce using the stat_score of the move
-                        r -= stat_score * 1024 / info.conf.history_lmr_divisor;
-                        // reduce refutation moves less
-                        r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
-                        // reduce more if not improving
-                        r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
-                        // reduce more if the move from the transposition table is tactical
-                        r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
-                        // reduce less if the move gives check
-                        r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
-                    }
+                    // extend/reduce using the stat_score of the move
+                    r -= stat_score * 1024 / info.conf.history_lmr_divisor;
+                    // reduce refutation moves less
+                    r -= i32::from(Some(m) == killer) * info.conf.lmr_refutation_mul;
+                    // reduce more if not improving
+                    r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
+                    // reduce more if the move from the transposition table is tactical
+                    r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
+                    // reduce less if the move gives check
+                    r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
                 } else {
