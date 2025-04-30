@@ -319,7 +319,7 @@ impl UnquantisedNetwork {
             if scaled.abs() > QA_BOUND {
                 eprintln!("feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             }
-            *tgt = scaled.round() as i16;
+            *tgt = scaled.clamp(-QA_BOUND, QA_BOUND).round() as i16;
         }
 
         // quantise (or not) later layers
@@ -331,7 +331,7 @@ impl UnquantisedNetwork {
                     if v.abs() > QB_BOUND {
                         eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
                     }
-                    let v = v.round() as i8;
+                    let v = v.clamp(-QB_BOUND, QB_BOUND).round() as i8;
                     net.l1_weights[i][bucket][j] = v;
                 }
             }
