@@ -1033,6 +1033,8 @@ impl Board {
         // clear out the next killer move.
         t.killer_move_table[height + 1] = None;
 
+        t.ss[height + 2].cutoff_count = 0;
+
         let tt_move = tt_hit.and_then(|hit| hit.mov);
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
@@ -1424,6 +1426,10 @@ impl Board {
                     r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
                     // reduce less if the move gives check
                     r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
+                    // reduce more if we've cut a great deal already
+                    if t.ss[height + 1].cutoff_count > 2 {
+                        r += 896 + 64 * t.ss[height + 1].cutoff_count.max(8);
+                    }
                     t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
                 } else {
@@ -1513,6 +1519,7 @@ impl Board {
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
                     info.log_fail_high::<false>(moves_made - 1, movepick_score);
+                    t.ss[height].cutoff_count += 1;
                     break;
                 }
             }
