@@ -1428,7 +1428,7 @@ impl Board {
                     r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     // reduce more if we've cut a great deal already
                     if t.ss[height + 1].cutoff_count > 2 {
-                        r += 896 + 64 * t.ss[height + 1].cutoff_count.max(8);
+                        r += 1024;
                     }
                     t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
@@ -1519,7 +1519,9 @@ impl Board {
                 if alpha >= beta {
                     #[cfg(feature = "stats")]
                     info.log_fail_high::<false>(moves_made - 1, movepick_score);
-                    t.ss[height].cutoff_count += 1;
+                    if excluded.is_none() && (NT::PV || extension < 2) {
+                        t.ss[height].cutoff_count += 1;
+                    }
                     break;
                 }
             }

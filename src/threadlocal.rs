@@ -16,9 +16,9 @@ use crate::{
 
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
 pub struct ThreadData<'a> {
-    // stack array is right-padded by one because singular verification
-    // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_PLY + 1],
+    // stack array is right-padded because heuristics will
+    // try to access future plies in some edge-cases.
+    pub ss: [StackEntry; MAX_PLY + 2],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'a NNUEParams,
