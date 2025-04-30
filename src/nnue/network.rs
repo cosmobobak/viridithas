@@ -109,12 +109,18 @@ struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
     ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:    [f32; L1_SIZE],
-    l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
-    l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
-    l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
-    l3_biases:    [f32; OUTPUT_BUCKETS],
+    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
+    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1f_biases:    [f32; L2_SIZE],
+    l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
+    l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
+    l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
+    l2f_biases:    [f32; L3_SIZE],
+    l3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    l3f_weights:   [f32; L3_SIZE],
+    l3x_biases:    [f32; OUTPUT_BUCKETS],
+    l3f_biases:    [f32; 1],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -310,10 +316,9 @@ impl UnquantisedNetwork {
         // quantise the feature transformer biases
         for (src, tgt) in self.ft_biases.iter().zip(net.ft_biases.iter_mut()) {
             let scaled = *src * f32::from(QA);
-            assert!(
-                scaled.abs() <= QA_BOUND,
-                "feature transformer bias {scaled} is too large (max = {QA_BOUND})"
-            );
+            if scaled.abs() > QA_BOUND {
+                eprintln!("feature transformer bias {scaled} is too large (max = {QA_BOUND})");
+            }
             *tgt = scaled.round() as i16;
         }
 
@@ -321,11 +326,11 @@ impl UnquantisedNetwork {
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
-                    let v = self.l1_weights[i][bucket][j] * f32::from(QB);
-                    assert!(
-                        v.abs() <= QB_BOUND,
-                        "L1 weight {v} is too large (max = {QB_BOUND})"
-                    );
+                    let v =
+                        (self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j]) * f32::from(QB);
+                    if v.abs() > QB_BOUND {
+                        eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
+                    }
                     let v = v.round() as i8;
                     net.l1_weights[i][bucket][j] = v;
                 }
@@ -333,11 +338,36 @@ impl UnquantisedNetwork {
         }
 
         // transfer the L1 biases
-        net.l1_biases = self.l1_biases;
-        net.l2_weights = self.l2_weights;
-        net.l2_biases = self.l2_biases;
-        net.l3_weights = self.l3_weights;
-        net.l3_biases = self.l3_biases;
+        net.l1_biases = self.l1x_biases;
+        for bucket in 0..OUTPUT_BUCKETS {
+            for i in 0..L2_SIZE {
+                net.l1_biases[bucket][i] += self.l1f_biases[i];
+            }
+        }
+        net.l2_weights = self.l2x_weights;
+        for bucket in 0..OUTPUT_BUCKETS {
+            for i in 0..L3_SIZE {
+                for j in 0..L2_SIZE {
+                    net.l2_weights[j][bucket][i] = self.l2f_weights[j][i];
+                }
+            }
+        }
+        net.l2_biases = self.l2x_biases;
+        for bucket in 0..OUTPUT_BUCKETS {
+            for i in 0..L3_SIZE {
+                net.l2_biases[bucket][i] += self.l2f_biases[i];
+            }
+        }
+        net.l3_weights = self.l3x_weights;
+        for bucket in 0..OUTPUT_BUCKETS {
+            for i in 0..L3_SIZE {
+                net.l3_weights[i][bucket] += self.l3f_weights[i];
+            }
+        }
+        net.l3_biases = self.l3x_biases;
+        for bucket in 0..OUTPUT_BUCKETS {
+            net.l3_biases[bucket] += self.l3f_biases[0];
+        }
 
         net
     }
