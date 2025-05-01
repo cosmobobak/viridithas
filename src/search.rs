@@ -787,12 +787,9 @@ impl Board {
 
         let key = self.state.keys.zobrist;
 
-        let in_check = self.in_check();
-        if depth <= 0 && !in_check {
+        if depth <= 0 {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
         }
-
-        depth = depth.max(0);
 
         pv.moves.clear();
 
@@ -811,6 +808,8 @@ impl Board {
         } else {
             info.seldepth.max(i32::try_from(height).unwrap())
         };
+
+        let in_check = self.in_check();
 
         if !NT::ROOT {
             // check draw
@@ -1037,8 +1036,20 @@ impl Board {
         let tt_move = tt_hit.and_then(|hit| hit.mov);
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
-        // whole-node pruning techniques:
+        // whole-node techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
+            if t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
+                depth += 1;
+            }
+
+            if depth >= 2
+                && t.ss[height - 1].reduction >= 2048
+                && t.ss[height - 1].eval != VALUE_NONE
+                && static_eval + t.ss[height - 1].eval > 96
+            {
+                depth -= 1;
+            }
+
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -1248,7 +1259,6 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter = Some(m) == killer;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -1259,7 +1269,7 @@ impl Board {
                 // history pruning
                 // if this move's history score is too low, we start skipping moves.
                 if is_quiet
-                    && !killer_or_counter
+                    && (Some(m) != killer)
                     && lmr_depth < 7
                     && stat_score < info.conf.history_pruning_margin * (depth - 1)
                 {
@@ -1404,20 +1414,20 @@ impl Board {
                     r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
                     // reduce more on cut nodes
                     r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
-                    if is_quiet {
-                        // extend/reduce using the stat_score of the move
-                        r -= stat_score * 1024 / info.conf.history_lmr_divisor;
-                        // reduce refutation moves less
-                        r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
-                        // reduce more if not improving
-                        r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
-                        // reduce more if the move from the transposition table is tactical
-                        r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
-                        // reduce less if the move gives check
-                        r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
-                    }
+                    // extend/reduce using the stat_score of the move
+                    r -= stat_score * 1024 / info.conf.history_lmr_divisor;
+                    // reduce refutation moves less
+                    r -= i32::from(Some(m) == killer) * info.conf.lmr_refutation_mul;
+                    // reduce more if not improving
+                    r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
+                    // reduce more if the move from the transposition table is tactical
+                    r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
+                    // reduce less if the move gives check
+                    r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
+                    t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
                 } else {
+                    t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
@@ -1432,6 +1442,8 @@ impl Board {
                     -alpha,
                     true,
                 );
+                // simple reduction for any future searches
+                t.ss[height].reduction = 1024;
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > 1 {
@@ -1456,6 +1468,8 @@ impl Board {
                             !cut_node,
                         );
                     }
+                } else if score > alpha && score < best_score + 16 {
+                    new_depth -= 1;
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
