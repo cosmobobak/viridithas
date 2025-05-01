@@ -1753,8 +1753,8 @@ impl Board {
         let white_king = kings & board.colours[Colour::White];
         let black_king = kings & board.colours[Colour::Black];
 
-        let white_king_ray = RAY_INTERSECTING[white_king.first()][to];
-        let black_king_ray = RAY_INTERSECTING[black_king.first()][to];
+        let white_king_ray = RAY_INTERSECTING[to][white_king.first()];
+        let black_king_ray = RAY_INTERSECTING[to][black_king.first()];
 
         let allowed = !(white_pinned | black_pinned)
             | (white_pinned & white_king_ray)

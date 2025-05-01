@@ -230,7 +230,7 @@ impl Board {
             bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
 
         for potential_attacker in potential_attackers {
-            let maybe_pinned = us & RAY_BETWEEN[potential_attacker][king];
+            let maybe_pinned = us & RAY_BETWEEN[king][potential_attacker];
             if maybe_pinned.one() {
                 pinned |= maybe_pinned;
             }
