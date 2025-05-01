@@ -226,8 +226,8 @@ impl Board {
         let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
         let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
 
-        let potential_attackers = bishop_attacks(king, them) & their_diags
-            | rook_attacks(king, them) & their_orthos;
+        let potential_attackers =
+            bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
 
         for potential_attacker in potential_attackers {
             let maybe_pinned = us & RAY_BETWEEN[potential_attacker][king];
@@ -244,21 +244,19 @@ impl Board {
         let mut checkers = SquareSet::EMPTY;
 
         let bbs = &self.state.bbs;
-        let them = bbs.colours[side];
+        let them = bbs.colours[!side];
         let their_pawns = bbs.pieces[PieceType::Pawn] & them;
         let their_knights = bbs.pieces[PieceType::Knight] & them;
         let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
         let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
-        let their_king = self.king_sq(side);
+        let their_king = self.king_sq(!side);
         let blockers = bbs.occupied();
 
         // compute threats
-        threats |= if side == Colour::White {
-            their_pawns.north_east_one() | their_pawns.north_west_one()
-        } else {
-            their_pawns.south_east_one() | their_pawns.south_west_one()
+        threats |= match side {
+            Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
+            Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
         };
-
         for sq in their_knights {
             threats |= knight_attacks(sq);
         }
@@ -268,29 +266,21 @@ impl Board {
         for sq in their_orthos {
             threats |= rook_attacks(sq, blockers);
         }
-
         threats |= king_attacks(their_king);
 
         // compute checkers
-        let our_king = self.king_sq(!side);
-        let king_bb = our_king.as_set();
-        let backwards_from_king = if side == Colour::Black {
-            king_bb.north_east_one() | king_bb.north_west_one()
-        } else {
-            king_bb.south_east_one() | king_bb.south_west_one()
+        let our_king_bb = bbs.colours[side] & bbs.pieces[PieceType::King];
+        let our_king_sq = our_king_bb.first();
+        let backwards_from_king = match side {
+            Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
+            Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
         };
         checkers |= backwards_from_king & their_pawns;
-
-        let knight_attacks = knight_attacks(our_king);
-
+        let knight_attacks = knight_attacks(our_king_sq);
         checkers |= knight_attacks & their_knights;
-
-        let diag_attacks = bishop_attacks(our_king, blockers);
-
+        let diag_attacks = bishop_attacks(our_king_sq, blockers);
         checkers |= diag_attacks & their_diags;
-
-        let ortho_attacks = rook_attacks(our_king, blockers);
-
+        let ortho_attacks = rook_attacks(our_king_sq, blockers);
         checkers |= ortho_attacks & their_orthos;
 
         Threats {
@@ -346,7 +336,7 @@ impl Board {
             Some(File::from_index(queenside_file as u8).unwrap()),
         );
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
         self.state.pinned = [
             self.generate_pinned(Colour::White),
             self.generate_pinned(Colour::Black),
@@ -402,7 +392,7 @@ impl Board {
             Some(File::from_index(black_queenside_file as u8).unwrap()),
         );
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
         self.state.pinned = [
             self.generate_pinned(Colour::White),
             self.generate_pinned(Colour::Black),
@@ -553,7 +543,7 @@ impl Board {
         self.set_fullmove(info_parts.next())?;
 
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
         self.state.pinned = [
             self.generate_pinned(Colour::White),
             self.generate_pinned(Colour::Black),
@@ -1198,7 +1188,7 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
         self.state.pinned = [
             self.generate_pinned(Colour::White),
             self.generate_pinned(Colour::Black),
@@ -1247,7 +1237,7 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
         self.state.pinned.swap(0, 1);
 
         #[cfg(debug_assertions)]

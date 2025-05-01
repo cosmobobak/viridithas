@@ -147,7 +147,8 @@ pub static RAY_INTERSECTING: [[SquareSet; 64]; 64] = {
     loop {
         let mut to = Square::A1;
         loop {
-            res[from.index()][to.index()] = in_between(from, to).union(from.as_set()).union(to.as_set());
+            res[from.index()][to.index()] =
+                in_between(from, to).union(from.as_set()).union(to.as_set());
             let Some(next) = to.add(1) else {
                 break;
             };

@@ -1756,7 +1756,9 @@ impl Board {
         let white_king_ray = RAY_INTERSECTING[white_king.first()][to];
         let black_king_ray = RAY_INTERSECTING[black_king.first()][to];
 
-        let allowed = !(white_pinned | black_pinned) | (white_pinned & white_king_ray) | (black_pinned & black_king_ray);
+        let allowed = !(white_pinned | black_pinned)
+            | (white_pinned & white_king_ray)
+            | (black_pinned & black_king_ray);
 
         let mut attackers = board.all_attackers_to_sq(to, occupied) & allowed;
 
