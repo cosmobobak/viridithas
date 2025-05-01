@@ -214,25 +214,24 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        match side {
-            Colour::White => self.generate_threats_from::<White>(),
-            Colour::Black => self.generate_threats_from::<Black>(),
-        }
-    }
-
-    pub fn generate_threats_from<C: Col>(&self) -> Threats {
         let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
 
-        let their_pawns = self.state.bbs.pawns::<C>();
-        let their_knights = self.state.bbs.knights::<C>();
-        let their_diags = self.state.bbs.diags::<C>();
-        let their_orthos = self.state.bbs.orthos::<C>();
-        let their_king = self.king_sq(C::COLOUR);
-        let blockers = self.state.bbs.occupied();
+        let bbs = &self.state.bbs;
+        let them = bbs.colours[side];
+        let their_pawns = bbs.pieces[PieceType::Pawn] & them;
+        let their_knights = bbs.pieces[PieceType::Knight] & them;
+        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
+        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+        let their_king = self.king_sq(side);
+        let blockers = bbs.occupied();
 
         // compute threats
-        threats |= pawn_attacks::<C>(their_pawns);
+        threats |= if side == Colour::White {
+                their_pawns.north_east_one() | their_pawns.north_west_one()
+            } else {
+                their_pawns.south_east_one() | their_pawns.south_west_one()
+            };
 
         for sq in their_knights {
             threats |= knight_attacks(sq);
@@ -247,9 +246,13 @@ impl Board {
         threats |= king_attacks(their_king);
 
         // compute checkers
-        let our_king = self.king_sq(C::Opposite::COLOUR);
+        let our_king = self.king_sq(!side);
         let king_bb = our_king.as_set();
-        let backwards_from_king = pawn_attacks::<C::Opposite>(king_bb);
+        let backwards_from_king = if side == Colour::Black {
+                king_bb.north_east_one() | king_bb.north_west_one()
+            } else {
+                king_bb.south_east_one() | king_bb.south_west_one()
+            };
         checkers |= backwards_from_king & their_pawns;
 
         let knight_attacks = knight_attacks(our_king);
