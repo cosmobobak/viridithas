@@ -15,11 +15,11 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MAX_POSITION_MOVES, RAY_BETWEEN},
+            movegen::{self, MAX_POSITION_MOVES, RAY_INTERSECTING},
             Board,
         },
         chessmove::Move,
-        piece::{Black, Colour, Piece, PieceType, White},
+        piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::{ContHistIndex, Square},
         CHESS960,
@@ -1743,19 +1743,25 @@ impl Board {
             occupied ^= self.ep_sq().unwrap().as_set();
         }
 
-        let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
-
         // after the move, it's the opponent's turn.
         let mut colour = !self.turn();
 
-        // let white_king = board.king::<White>().first();
-        // let black_king = board.king::<Black>().first();
-        // let mut blockers = board.occupied();
-        // let mut aligned_blockers = (board.colours[Colour::White] & RAY_BETWEEN[to][white_king])
-        //     | (board.colours[Colour::Black] & RAY_BETWEEN[to][black_king]);
+        let white_pinned = self.state.pinned[Colour::White];
+        let black_pinned = self.state.pinned[Colour::Black];
+
+        let kings = board.pieces[PieceType::King];
+        let white_king = kings & board.colours[Colour::White];
+        let black_king = kings & board.colours[Colour::Black];
+
+        let white_king_ray = RAY_INTERSECTING[white_king.first()][to];
+        let black_king_ray = RAY_INTERSECTING[black_king.first()][to];
+
+        let allowed = !(white_pinned | black_pinned) | (white_pinned & white_king_ray) | (black_pinned & black_king_ray);
+
+        let mut attackers = board.all_attackers_to_sq(to, occupied) & allowed;
 
         loop {
-            let my_attackers = attackers & board.colours[colour];// & (!blockers | aligned_blockers);
+            let my_attackers = attackers & board.colours[colour];
             if my_attackers == SquareSet::EMPTY {
                 break;
             }
@@ -1768,10 +1774,7 @@ impl Board {
                 }
             }
 
-            let mask = (my_attackers & board.pieces[next_victim]).extract_lowest();
-            occupied ^= mask;
-            // blockers &= !mask;
-            // aligned_blockers &= !mask;
+            occupied ^= (my_attackers & board.pieces[next_victim]).isolate_lsb();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn

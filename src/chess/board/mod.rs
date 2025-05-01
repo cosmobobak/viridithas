@@ -213,6 +213,32 @@ impl Board {
         self.state.threats = self.generate_threats(self.side.flip());
     }
 
+    pub fn generate_pinned(&self, side: Colour) -> SquareSet {
+        let mut pinned = SquareSet::EMPTY;
+
+        let king = self.king_sq(side);
+
+        let bbs = &self.state.bbs;
+
+        let us = bbs.colours[side];
+        let them = bbs.colours[!side];
+
+        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
+        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+
+        let potential_attackers = bishop_attacks(king, them) & their_diags
+            | rook_attacks(king, them) & their_orthos;
+
+        for potential_attacker in potential_attackers {
+            let maybe_pinned = us & RAY_BETWEEN[potential_attacker][king];
+            if maybe_pinned.one() {
+                pinned |= maybe_pinned;
+            }
+        }
+
+        pinned
+    }
+
     pub fn generate_threats(&self, side: Colour) -> Threats {
         let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
@@ -228,10 +254,10 @@ impl Board {
 
         // compute threats
         threats |= if side == Colour::White {
-                their_pawns.north_east_one() | their_pawns.north_west_one()
-            } else {
-                their_pawns.south_east_one() | their_pawns.south_west_one()
-            };
+            their_pawns.north_east_one() | their_pawns.north_west_one()
+        } else {
+            their_pawns.south_east_one() | their_pawns.south_west_one()
+        };
 
         for sq in their_knights {
             threats |= knight_attacks(sq);
@@ -249,10 +275,10 @@ impl Board {
         let our_king = self.king_sq(!side);
         let king_bb = our_king.as_set();
         let backwards_from_king = if side == Colour::Black {
-                king_bb.north_east_one() | king_bb.north_west_one()
-            } else {
-                king_bb.south_east_one() | king_bb.south_west_one()
-            };
+            king_bb.north_east_one() | king_bb.north_west_one()
+        } else {
+            king_bb.south_east_one() | king_bb.south_west_one()
+        };
         checkers |= backwards_from_king & their_pawns;
 
         let knight_attacks = knight_attacks(our_king);
@@ -321,6 +347,10 @@ impl Board {
         );
         self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
     }
 
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
@@ -373,6 +403,10 @@ impl Board {
         );
         self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
     }
 
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
@@ -520,6 +554,10 @@ impl Board {
 
         self.state.keys = self.generate_pos_keys();
         self.state.threats = self.generate_threats(self.side.flip());
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
 
         Ok(())
     }
@@ -1161,6 +1199,10 @@ impl Board {
         self.height += 1;
 
         self.state.threats = self.generate_threats(self.side.flip());
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1191,15 +1233,7 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        self.history.push(State {
-            ep_square: self.state.ep_square,
-            threats: self.state.threats,
-            keys: Keys {
-                zobrist: self.state.keys.zobrist,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+        self.history.push(self.state.clone());
 
         let mut key = self.state.keys.zobrist;
         if let Some(ep_sq) = self.state.ep_square {
@@ -1214,6 +1248,7 @@ impl Board {
         self.height += 1;
 
         self.state.threats = self.generate_threats(self.side.flip());
+        self.state.pinned.swap(0, 1);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1231,11 +1266,13 @@ impl Board {
             ep_square,
             threats,
             keys,
+            pinned,
             ..
         } = self.history.last().expect("No move to unmake!");
 
         self.state.ep_square = *ep_square;
         self.state.threats = *threats;
+        self.state.pinned = *pinned;
         self.state.keys.zobrist = keys.zobrist;
 
         self.history.pop();
