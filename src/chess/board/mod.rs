@@ -8,9 +8,8 @@ use std::{
 
 use anyhow::{bail, Context};
 
-use movegen::RAY_BETWEEN;
-#[cfg(feature = "datagen")]
-use rand::{prelude::SliceRandom, rngs::ThreadRng};
+use arrayvec::ArrayVec;
+use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN};
 
 use crate::{
     chess::{
@@ -19,6 +18,7 @@ use crate::{
         },
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        piecelayout::Threats,
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
         CHESS960,
@@ -29,8 +29,6 @@ use crate::{
     search::pv::PVariation,
     threadlocal::ThreadData,
 };
-
-use crate::chess::piecelayout::Threats;
 
 use super::types::Keys;
 
@@ -1543,10 +1541,10 @@ impl Board {
         Ok(out)
     }
 
-    pub fn legal_moves(&mut self) -> Vec<Move> {
+    pub fn legal_moves(&mut self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
+        let mut legal_moves = ArrayVec::default();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
-        let mut legal_moves = Vec::new();
         for &m in move_list.iter_moves() {
             if self.make_move_simple(m) {
                 self.unmake_move_base();
@@ -1649,15 +1647,6 @@ impl Board {
         }
 
         false
-    }
-
-    #[cfg(feature = "datagen")]
-    pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
-        let mut ml = MoveList::new();
-        self.generate_moves(&mut ml);
-        let self::movegen::MoveListEntry { mov, .. } = ml.choose(rng)?;
-        self.make_move(*mov, t);
-        Some(*mov)
     }
 
     #[cfg(any(feature = "datagen", test))]
