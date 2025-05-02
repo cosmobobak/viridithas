@@ -180,7 +180,7 @@ fn make_random_move(
     for _ in 0..8 {
         let m = *legal_moves.choose(rng)?;
         if board.static_exchange_eval(info, m, see_threshold) {
-            board.make_move(m, t);
+            assert!(board.make_move(m, t));
             return Some(m);
         }
     }
