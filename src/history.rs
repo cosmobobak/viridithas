@@ -294,7 +294,7 @@ impl ThreadData<'_> {
 
     /// Adjust a raw evaluation using statistics from the correction history.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn correct_evaluation(&self, conf: &Config, pos: &Board) -> i32 {
+    pub fn correction(&self, conf: &Config, pos: &Board) -> i32 {
         let keys = &pos.state.keys;
         let pawn = self.pawn_corrhist.get(pos.turn(), keys.pawn);
         let white =
