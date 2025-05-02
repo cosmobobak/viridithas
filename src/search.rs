@@ -15,7 +15,7 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MAX_POSITION_MOVES},
+            movegen::{self, MAX_POSITION_MOVES, RAY_INTERSECTING},
             Board,
         },
         chessmove::Move,
@@ -1743,10 +1743,24 @@ impl Board {
             occupied ^= self.ep_sq().unwrap().as_set();
         }
 
-        let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
-
         // after the move, it's the opponent's turn.
         let mut colour = !self.turn();
+
+        let white_pinned = self.state.pinned[Colour::White];
+        let black_pinned = self.state.pinned[Colour::Black];
+
+        let kings = board.pieces[PieceType::King];
+        let white_king = kings & board.colours[Colour::White];
+        let black_king = kings & board.colours[Colour::Black];
+
+        let white_king_ray = RAY_INTERSECTING[to][white_king.first()];
+        let black_king_ray = RAY_INTERSECTING[to][black_king.first()];
+
+        let allowed = !(white_pinned | black_pinned)
+            | (white_pinned & white_king_ray)
+            | (black_pinned & black_king_ray);
+
+        let mut attackers = board.all_attackers_to_sq(to, occupied) & allowed;
 
         loop {
             let my_attackers = attackers & board.colours[colour];
@@ -1762,7 +1776,7 @@ impl Board {
                 }
             }
 
-            occupied ^= (my_attackers & board.pieces[next_victim]).extract_lowest();
+            occupied ^= (my_attackers & board.pieces[next_victim]).isolate_lsb();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
