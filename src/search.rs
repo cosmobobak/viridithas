@@ -629,7 +629,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            let adj_eval = raw_eval + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +661,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
+            stand_pat = raw_eval + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -939,16 +939,19 @@ impl Board {
 
         let raw_eval;
         let static_eval;
+        let correction;
 
         if in_check {
             // when we're in check, it could be checkmate, so it's unsound to use evaluate().
             raw_eval = VALUE_NONE;
             static_eval = VALUE_NONE;
+            correction = 0;
         } else if excluded.is_some() {
             // if we're in a singular-verification search, we already have the static eval.
             // we can set raw_eval to whatever we like, because we're not going to be saving it.
             raw_eval = VALUE_NONE;
             static_eval = t.ss[height].eval;
+            correction = 0;
             t.nnue.hint_common_access(self, t.nnue_params);
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
@@ -962,7 +965,8 @@ impl Board {
                     t.nnue.hint_common_access(self, t.nnue_params);
                 }
             }
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = raw_eval + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -980,7 +984,8 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = raw_eval + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1069,7 +1074,7 @@ impl Board {
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
                 && depth < 9
-                && static_eval - Self::rfp_margin(info, depth, improving) >= beta
+                && static_eval - Self::rfp_margin(info, depth, improving, correction) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
             {
@@ -1606,8 +1611,8 @@ impl Board {
     }
 
     /// The margin for Reverse Futility Pruning.
-    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool) -> i32 {
-        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
+        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin + correction.abs() / 2
     }
 
     /// Update the main and continuation history tables for a batch of moves.
