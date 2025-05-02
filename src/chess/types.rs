@@ -430,10 +430,12 @@ pub struct State {
     pub ep_square: Option<Square>,
     /// The number of half moves made since the last capture or pawn advance.
     pub fifty_move_counter: u8,
-    /// Squares that the opponent attacks
+    /// Squares that the opponent attacks.
     pub threats: Threats,
     /// The square-sets of all the pieces on the board.
     pub bbs: PieceLayout,
+    /// Pieces that cannot be moved without the king being checked.
+    pub pinned: [SquareSet; 2],
     /// An array to accelerate `Board::piece_at()`.
     pub mailbox: [Option<Piece>; 64],
     /// Zobrist hashes.
@@ -447,9 +449,10 @@ impl Default for State {
             mailbox: [None; 64],
             castle_perm: CastlingRights::default(),
             ep_square: None,
-            fifty_move_counter: Default::default(),
+            fifty_move_counter: u8::default(),
             threats: Threats::default(),
             bbs: PieceLayout::default(),
+            pinned: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
     }
