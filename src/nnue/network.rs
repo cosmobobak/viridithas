@@ -90,7 +90,7 @@ pub fn output_bucket(pos: &Board) -> usize {
 }
 
 const QA: i16 = 255;
-const QB: i16 = 64;
+const QB: i16 = 32;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
@@ -258,7 +258,7 @@ impl UnquantisedNetwork {
     /// for embedding into viri as a zstd-compressed archive. We do one processing
     /// step other than quantisation, namely merging the feature factoriser with the
     /// main king buckets.
-    #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants)]
+    #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants, clippy::too_many_lines, clippy::cognitive_complexity)]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
@@ -314,20 +314,32 @@ impl UnquantisedNetwork {
         }
 
         // quantise the feature transformer biases
+        let mut max_seen = 0.0f32;
         for (src, tgt) in self.ft_biases.iter().zip(net.ft_biases.iter_mut()) {
             let scaled = *src * f32::from(QA);
+            max_seen = max_seen.max(scaled.abs());
             if scaled.abs() > QA_BOUND {
                 eprintln!("feature transformer bias {scaled} is too large (max = {QA_BOUND})");
             }
             *tgt = scaled.clamp(-QA_BOUND, QA_BOUND).round() as i16;
         }
+        let needed = QA_BOUND / max_seen * f32::from(QA);
+        if max_seen > QA_BOUND {
+            eprintln!("Worst offender was {max_seen}");
+            eprintln!("In order to fit these weights, QA would need to be {needed} instead of {QA}");
+        } else {
+            eprintln!("Quantisation of FT weights was successful");
+            eprintln!("QA could be increased to {needed} instead of {QA}");
+        }
 
         // quantise (or not) later layers
+        let mut max_seen = 0.0f32;
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
                     let v =
                         (self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j]) * f32::from(QB);
+                    max_seen = max_seen.max(v.abs());
                     if v.abs() > QB_BOUND {
                         eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
                     }
@@ -335,6 +347,14 @@ impl UnquantisedNetwork {
                     net.l1_weights[i][bucket][j] = v;
                 }
             }
+        }
+        let needed = QB_BOUND / max_seen * f32::from(QB);
+        if max_seen > QB_BOUND {
+            eprintln!("Worst offender was {max_seen}");
+            eprintln!("In order to fit these weights, QB would need to be {needed} instead of {QB}");
+        } else {
+            eprintln!("Quantisation of L1 weights was successful");
+            eprintln!("QB could be increased to {needed} instead of {QB}");
         }
 
         // transfer the L1 biases
