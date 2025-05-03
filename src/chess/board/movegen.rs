@@ -141,6 +141,27 @@ pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
+pub static RAY_INTERSECTING: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
+            res[from.index()][to.index()] =
+                in_between(from, to).union(from.as_set()).union(to.as_set());
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT {
