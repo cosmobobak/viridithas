@@ -629,7 +629,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correction(&info.conf, self);
+            let adj_eval = shuffle_scale(raw_eval, self.fifty_move_counter()) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +661,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correction(&info.conf, self);
+            stand_pat = shuffle_scale(raw_eval, self.fifty_move_counter()) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -966,7 +966,7 @@ impl Board {
                 }
             }
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = shuffle_scale(raw_eval, self.fifty_move_counter()) + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -985,7 +985,7 @@ impl Board {
             );
 
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = shuffle_scale(raw_eval, self.fifty_move_counter()) + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1819,6 +1819,10 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+fn shuffle_scale(raw_eval: i32, ply: u8) -> i32 {
+    raw_eval * (200 - i32::from(ply)) / 200
 }
 
 pub fn select_best<'a>(
