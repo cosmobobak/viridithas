@@ -39,9 +39,15 @@ macro_rules! min {
 /// Collect statistics on the average value of a variable.
 #[allow(unused_macros)]
 macro_rules! track {
-    ($v:expr) => {
-        {{
-            #![allow(clippy::cast_lossless, clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+    ($v:expr) => {{
+        {
+            #![allow(
+                clippy::cast_lossless,
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_possible_wrap
+            )]
             static TOTAL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
             static COUNT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
             TOTAL.fetch_add($v as i64, std::sync::atomic::Ordering::Relaxed);
@@ -53,6 +59,6 @@ macro_rules! track {
             }
             // pass-through
             $v
-        }}
-    };
+        }
+    }};
 }
