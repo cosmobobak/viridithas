@@ -592,8 +592,10 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         // probe the TT and see if we get a cutoff.
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
                 && !in_check
@@ -629,7 +631,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correction(&info.conf, self);
+            let adj_eval = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +663,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correction(&info.conf, self);
+            stand_pat = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -843,8 +845,10 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         let excluded = t.ss[height].excluded;
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
@@ -966,7 +970,7 @@ impl Board {
                 }
             }
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -985,7 +989,7 @@ impl Board {
             );
 
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1612,7 +1616,8 @@ impl Board {
 
     /// The margin for Reverse Futility Pruning.
     fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
-        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin + correction.abs() / 2
+        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+            + correction.abs() / 2
     }
 
     /// Update the main and continuation history tables for a batch of moves.
@@ -1819,6 +1824,10 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+fn adj_shuffle(raw_eval: i32, clock: u8) -> i32 {
+    raw_eval * (200 - i32::from(clock)) / 200
 }
 
 pub fn select_best<'a>(
