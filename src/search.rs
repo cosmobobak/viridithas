@@ -15,7 +15,7 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MAX_POSITION_MOVES},
+            movegen::{self, MAX_POSITION_MOVES, RAY_INTERSECTING},
             Board,
         },
         chessmove::Move,
@@ -592,8 +592,10 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         // probe the TT and see if we get a cutoff.
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
                 && !in_check
@@ -629,7 +631,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            let adj_eval = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +663,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
+            stand_pat = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -843,8 +845,10 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         let excluded = t.ss[height].excluded;
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
+        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
@@ -939,16 +943,19 @@ impl Board {
 
         let raw_eval;
         let static_eval;
+        let correction;
 
         if in_check {
             // when we're in check, it could be checkmate, so it's unsound to use evaluate().
             raw_eval = VALUE_NONE;
             static_eval = VALUE_NONE;
+            correction = 0;
         } else if excluded.is_some() {
             // if we're in a singular-verification search, we already have the static eval.
             // we can set raw_eval to whatever we like, because we're not going to be saving it.
             raw_eval = VALUE_NONE;
             static_eval = t.ss[height].eval;
+            correction = 0;
             t.nnue.hint_common_access(self, t.nnue_params);
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
@@ -962,7 +969,8 @@ impl Board {
                     t.nnue.hint_common_access(self, t.nnue_params);
                 }
             }
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -980,7 +988,8 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1071,7 +1080,7 @@ impl Board {
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
                 && depth < 9
-                && static_eval - Self::rfp_margin(info, depth, improving) >= beta
+                && static_eval - Self::rfp_margin(info, depth, improving, correction) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
             {
@@ -1615,8 +1624,9 @@ impl Board {
     }
 
     /// The margin for Reverse Futility Pruning.
-    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool) -> i32 {
+    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
         info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+            + correction.abs() / 2
     }
 
     /// Update the main and continuation history tables for a batch of moves.
@@ -1752,10 +1762,24 @@ impl Board {
             occupied ^= self.ep_sq().unwrap().as_set();
         }
 
-        let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
-
         // after the move, it's the opponent's turn.
         let mut colour = !self.turn();
+
+        let white_pinned = self.state.pinned[Colour::White];
+        let black_pinned = self.state.pinned[Colour::Black];
+
+        let kings = board.pieces[PieceType::King];
+        let white_king = kings & board.colours[Colour::White];
+        let black_king = kings & board.colours[Colour::Black];
+
+        let white_king_ray = RAY_INTERSECTING[to][white_king.first()];
+        let black_king_ray = RAY_INTERSECTING[to][black_king.first()];
+
+        let allowed = !(white_pinned | black_pinned)
+            | (white_pinned & white_king_ray)
+            | (black_pinned & black_king_ray);
+
+        let mut attackers = board.all_attackers_to_sq(to, occupied) & allowed;
 
         loop {
             let my_attackers = attackers & board.colours[colour];
@@ -1771,7 +1795,7 @@ impl Board {
                 }
             }
 
-            occupied ^= (my_attackers & board.pieces[next_victim]).extract_lowest();
+            occupied ^= (my_attackers & board.pieces[next_victim]).isolate_lsb();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
@@ -1809,6 +1833,10 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+fn adj_shuffle(raw_eval: i32, clock: u8) -> i32 {
+    raw_eval * (200 - i32::from(clock)) / 200
 }
 
 pub fn select_best<'a>(

@@ -224,25 +224,12 @@ impl Piece {
         }
     }
 
-    pub const fn byte_char(self) -> u8 {
-        match self {
-            Self::WP => b'P',
-            Self::WN => b'N',
-            Self::WB => b'B',
-            Self::WR => b'R',
-            Self::WQ => b'Q',
-            Self::WK => b'K',
-            Self::BP => b'p',
-            Self::BN => b'n',
-            Self::BB => b'b',
-            Self::BR => b'r',
-            Self::BQ => b'q',
-            Self::BK => b'k',
-        }
+    pub fn byte_char(self) -> u8 {
+        b"PNBRQKpnbrqk"[self]
     }
 
     pub fn all() -> impl DoubleEndedIterator<Item = Self> {
-        // SAFETY: all values are within `0..6`.
+        // SAFETY: all values are within `0..12`.
         (0..12u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 

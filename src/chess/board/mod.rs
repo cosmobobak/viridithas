@@ -8,9 +8,8 @@ use std::{
 
 use anyhow::{bail, Context};
 
-use movegen::RAY_BETWEEN;
-#[cfg(feature = "datagen")]
-use rand::{prelude::SliceRandom, rngs::ThreadRng};
+use arrayvec::ArrayVec;
+use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN};
 
 use crate::{
     chess::{
@@ -19,6 +18,7 @@ use crate::{
         },
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
+        piecelayout::Threats,
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
         CHESS960,
@@ -29,8 +29,6 @@ use crate::{
     search::pv::PVariation,
     threadlocal::ThreadData,
 };
-
-use crate::chess::piecelayout::Threats;
 
 use super::types::Keys;
 
@@ -213,27 +211,50 @@ impl Board {
         self.state.threats = self.generate_threats(self.side.flip());
     }
 
-    pub fn generate_threats(&self, side: Colour) -> Threats {
-        match side {
-            Colour::White => self.generate_threats_from::<White>(),
-            Colour::Black => self.generate_threats_from::<Black>(),
+    pub fn generate_pinned(&self, side: Colour) -> SquareSet {
+        let mut pinned = SquareSet::EMPTY;
+
+        let king = self.king_sq(side);
+
+        let bbs = &self.state.bbs;
+
+        let us = bbs.colours[side];
+        let them = bbs.colours[!side];
+
+        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
+        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+
+        let potential_attackers =
+            bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
+
+        for potential_attacker in potential_attackers {
+            let maybe_pinned = us & RAY_BETWEEN[king][potential_attacker];
+            if maybe_pinned.one() {
+                pinned |= maybe_pinned;
+            }
         }
+
+        pinned
     }
 
-    pub fn generate_threats_from<C: Col>(&self) -> Threats {
+    pub fn generate_threats(&self, side: Colour) -> Threats {
         let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
 
-        let their_pawns = self.state.bbs.pawns::<C>();
-        let their_knights = self.state.bbs.knights::<C>();
-        let their_diags = self.state.bbs.diags::<C>();
-        let their_orthos = self.state.bbs.orthos::<C>();
-        let their_king = self.king_sq(C::COLOUR);
-        let blockers = self.state.bbs.occupied();
+        let bbs = &self.state.bbs;
+        let them = bbs.colours[!side];
+        let their_pawns = bbs.pieces[PieceType::Pawn] & them;
+        let their_knights = bbs.pieces[PieceType::Knight] & them;
+        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
+        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+        let their_king = self.king_sq(!side);
+        let blockers = bbs.occupied();
 
         // compute threats
-        threats |= pawn_attacks::<C>(their_pawns);
-
+        threats |= match side {
+            Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
+            Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
+        };
         for sq in their_knights {
             threats |= knight_attacks(sq);
         }
@@ -243,25 +264,21 @@ impl Board {
         for sq in their_orthos {
             threats |= rook_attacks(sq, blockers);
         }
-
         threats |= king_attacks(their_king);
 
         // compute checkers
-        let our_king = self.king_sq(C::Opposite::COLOUR);
-        let king_bb = our_king.as_set();
-        let backwards_from_king = pawn_attacks::<C::Opposite>(king_bb);
+        let our_king_bb = bbs.colours[side] & bbs.pieces[PieceType::King];
+        let our_king_sq = our_king_bb.first();
+        let backwards_from_king = match side {
+            Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
+            Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
+        };
         checkers |= backwards_from_king & their_pawns;
-
-        let knight_attacks = knight_attacks(our_king);
-
+        let knight_attacks = knight_attacks(our_king_sq);
         checkers |= knight_attacks & their_knights;
-
-        let diag_attacks = bishop_attacks(our_king, blockers);
-
+        let diag_attacks = bishop_attacks(our_king_sq, blockers);
         checkers |= diag_attacks & their_diags;
-
-        let ortho_attacks = rook_attacks(our_king, blockers);
-
+        let ortho_attacks = rook_attacks(our_king_sq, blockers);
         checkers |= ortho_attacks & their_orthos;
 
         Threats {
@@ -317,7 +334,11 @@ impl Board {
             Some(File::from_index(queenside_file as u8).unwrap()),
         );
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
     }
 
     pub fn set_dfrc_idx(&mut self, scharnagl: usize) {
@@ -369,7 +390,11 @@ impl Board {
             Some(File::from_index(black_queenside_file as u8).unwrap()),
         );
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
     }
 
     pub fn get_scharnagl_backrank(scharnagl: usize) -> [PieceType; 8] {
@@ -516,7 +541,11 @@ impl Board {
         self.set_fullmove(info_parts.next())?;
 
         self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
 
         Ok(())
     }
@@ -1157,7 +1186,11 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
+        self.state.pinned = [
+            self.generate_pinned(Colour::White),
+            self.generate_pinned(Colour::Black),
+        ];
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1188,15 +1221,7 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        self.history.push(State {
-            ep_square: self.state.ep_square,
-            threats: self.state.threats,
-            keys: Keys {
-                zobrist: self.state.keys.zobrist,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+        self.history.push(self.state.clone());
 
         let mut key = self.state.keys.zobrist;
         if let Some(ep_sq) = self.state.ep_square {
@@ -1210,7 +1235,8 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
+        self.state.pinned.swap(0, 1);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1228,11 +1254,13 @@ impl Board {
             ep_square,
             threats,
             keys,
+            pinned,
             ..
         } = self.history.last().expect("No move to unmake!");
 
         self.state.ep_square = *ep_square;
         self.state.threats = *threats;
+        self.state.pinned = *pinned;
         self.state.keys.zobrist = keys.zobrist;
 
         self.history.pop();
@@ -1513,10 +1541,10 @@ impl Board {
         Ok(out)
     }
 
-    pub fn legal_moves(&mut self) -> Vec<Move> {
+    pub fn legal_moves(&mut self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
+        let mut legal_moves = ArrayVec::default();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
-        let mut legal_moves = Vec::new();
         for &m in move_list.iter_moves() {
             if self.make_move_simple(m) {
                 self.unmake_move_base();
@@ -1619,15 +1647,6 @@ impl Board {
         }
 
         false
-    }
-
-    #[cfg(feature = "datagen")]
-    pub fn make_random_move(&mut self, rng: &mut ThreadRng, t: &mut ThreadData) -> Option<Move> {
-        let mut ml = MoveList::new();
-        self.generate_moves(&mut ml);
-        let self::movegen::MoveListEntry { mov, .. } = ml.choose(rng)?;
-        self.make_move(*mov, t);
-        Some(*mov)
     }
 
     #[cfg(any(feature = "datagen", test))]

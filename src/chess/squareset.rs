@@ -206,8 +206,16 @@ impl SquareSet {
         self >> 8
     }
 
-    pub fn extract_lowest(self) -> Self {
-        self & !(Self::from_inner(self.inner() - 1))
+    pub fn isolate_lsb(self) -> Self {
+        self & (Self::from_inner(0u64.wrapping_sub(self.inner())))
+    }
+
+    pub fn without_lsb(self) -> Self {
+        self & (Self::from_inner(self.inner() - 1))
+    }
+
+    pub fn one(self) -> bool {
+        self != Self::EMPTY && self.without_lsb() == Self::EMPTY
     }
 }
 
