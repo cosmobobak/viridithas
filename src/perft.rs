@@ -326,6 +326,37 @@ mod tests {
     }
 
     #[test]
+    fn perft_movepicker_forward_promo_evasion_and_capture() {
+        use super::*;
+        const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
+
+        std::env::set_var("RUST_BACKTRACE", "1");
+        let mut pos = Board::new();
+        pos.set_from_fen(TEST_FEN).unwrap();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16, 1);
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(
+            movepicker_perft(&mut pos, &mut t, &info, 1),
+            8,
+            "got {}",
+            {
+                pos.legal_moves()
+                    .into_iter()
+                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 143);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 3954);
+    }
+
+    #[test]
     fn perft_krk() {
         use super::*;
 
