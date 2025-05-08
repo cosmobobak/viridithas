@@ -598,7 +598,6 @@ impl Board {
         let fifty_move_rule_near = clock >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && !in_check
                 && !fifty_move_rule_near
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
