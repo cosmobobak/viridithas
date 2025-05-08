@@ -680,6 +680,12 @@ impl Board {
             return;
         }
 
+        let valid_forward_promo_target_squares = if self.in_check() {
+            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
+        } else {
+            SquareSet::FULL
+        };
+
         let valid_target_squares = if self.in_check() {
             self.state.threats.checkers
         } else {
@@ -687,7 +693,7 @@ impl Board {
         };
 
         // promotions
-        self.generate_forward_promos::<C, Mode>(move_list, valid_target_squares);
+        self.generate_forward_promos::<C, Mode>(move_list, valid_forward_promo_target_squares);
 
         // pawn captures and capture promos
         self.generate_pawn_caps::<C, Mode>(move_list, valid_target_squares);
