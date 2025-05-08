@@ -32,6 +32,7 @@ use crate::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
     },
+    lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -558,7 +559,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.state.keys.zobrist;
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -595,11 +596,10 @@ impl Board {
         let clock = self.fifty_move_counter();
 
         // probe the TT and see if we get a cutoff.
-        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
                 && !in_check
-                && !fifty_move_rule_near
+                && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -787,7 +787,7 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.state.keys.zobrist;
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
         if depth <= 0 {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
@@ -848,12 +848,11 @@ impl Board {
         let clock = self.fifty_move_counter();
 
         let excluded = t.ss[height].excluded;
-        let fifty_move_rule_near = clock >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
                     && hit.depth >= depth
-                    && !fifty_move_rule_near
+                    && clock < 80
                     && (hit.bound == Bound::Exact
                         || (hit.bound == Bound::Lower && hit.value >= beta)
                         || (hit.bound == Bound::Upper && hit.value <= alpha))
