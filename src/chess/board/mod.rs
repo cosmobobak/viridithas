@@ -1319,7 +1319,6 @@ impl Board {
         let captured = self.piece_at(tgt);
 
         let mut new_key = self.state.keys.zobrist;
-        new_key ^= SIDE_KEY;
         new_key ^= PIECE_KEYS[piece][src];
         new_key ^= PIECE_KEYS[piece][tgt];
 
@@ -1327,15 +1326,15 @@ impl Board {
             new_key ^= PIECE_KEYS[captured][tgt];
         }
 
+        new_key ^= SIDE_KEY;
+
         let new_hmc = if captured.is_some() || piece.piece_type() == PieceType::Pawn {
             0
         } else {
             self.state.fifty_move_counter + 1
         };
 
-        new_key ^= HM_CLOCK_KEYS[new_hmc as usize];
-
-        new_key
+        new_key ^ HM_CLOCK_KEYS[new_hmc as usize]
     }
 
     pub fn key_after_null_move(&self) -> u64 {
