@@ -170,18 +170,19 @@ impl Board {
     pub fn generate_pos_keys(&self) -> Keys {
         let mut keys = Keys::default();
         self.state.bbs.visit_pieces(|sq, piece| {
-            keys.zobrist ^= PIECE_KEYS[piece][sq];
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= PIECE_KEYS[piece][sq];
+                keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= PIECE_KEYS[piece][sq];
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= PIECE_KEYS[piece][sq];
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.minor ^= piece_key;
                 }
             }
         });
@@ -1147,35 +1148,37 @@ impl Board {
         keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
-            keys.zobrist ^= PIECE_KEYS[piece][sq];
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= PIECE_KEYS[piece][sq];
+                keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= PIECE_KEYS[piece][sq];
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= PIECE_KEYS[piece][sq];
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.minor ^= piece_key;
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
-            keys.zobrist ^= PIECE_KEYS[piece][sq];
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= PIECE_KEYS[piece][sq];
+                keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= PIECE_KEYS[piece][sq];
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= PIECE_KEYS[piece][sq];
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= PIECE_KEYS[piece][sq];
+                    keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= PIECE_KEYS[piece][sq];
+                    keys.minor ^= piece_key;
                 }
             }
         }
