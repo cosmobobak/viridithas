@@ -598,7 +598,6 @@ impl Board {
         // probe the TT and see if we get a cutoff.
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && !in_check
                 && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
