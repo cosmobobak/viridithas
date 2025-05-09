@@ -335,18 +335,13 @@ mod tests {
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
         let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(
-            movepicker_perft(&mut pos, &mut t, &info, 1),
-            8,
-            "got {}",
-            {
-                pos.legal_moves()
-                    .into_iter()
-                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 8, "got {}", {
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
         assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 143);
         assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 3954);
     }
