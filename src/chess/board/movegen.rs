@@ -141,6 +141,27 @@ pub static RAY_BETWEEN: [[SquareSet; 64]; 64] = {
     res
 };
 
+pub static RAY_INTERSECTING: [[SquareSet; 64]; 64] = {
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+    loop {
+        let mut to = Square::A1;
+        loop {
+            res[from.index()][to.index()] =
+                in_between(from, to).union(from.as_set()).union(to.as_set());
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT {
@@ -302,7 +323,7 @@ impl Board {
         valid_target_squares: SquareSet,
     ) {
         let our_pawns = self.state.bbs.pawns::<C>();
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacking_west = if C::WHITE {
             their_pieces.south_east_one() & our_pawns
@@ -555,7 +576,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         let freespace = self.state.bbs.empty();
         let our_king_sq = self.state.bbs.king::<C>().first();
 
@@ -572,8 +593,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
-                | self.state.threats.checkers
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
         } else {
             SquareSet::FULL
         };
@@ -647,7 +667,7 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.their_pieces::<C>();
+        let their_pieces = self.state.bbs.colours[!C::COLOUR];
         let our_king_sq = self.state.bbs.king::<C>().first();
 
         if self.state.threats.checkers.count() > 1 {
@@ -660,7 +680,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            self.state.threats.checkers
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
         } else {
             SquareSet::FULL
         };

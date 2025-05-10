@@ -42,7 +42,7 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
     &*ptr.cast()
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 mod x86simd {
     use arrayvec::ArrayVec;
 
@@ -79,30 +79,24 @@ mod x86simd {
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
-                    *reg =
-                        simd::load_i16(input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE));
+                    let src = input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                    *reg = simd::load_i16(src);
                 }
                 for &sub_block in &sub_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let sub = simd::load_i16(
-                            sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
-                        );
-                        *reg = simd::sub_i16(*reg, sub);
+                        let src = sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                        *reg = simd::sub_i16(*reg, simd::load_i16(src));
                     }
                 }
                 for &add_block in &add_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let add = simd::load_i16(
-                            add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE),
-                        );
-                        *reg = simd::add_i16(*reg, add);
+                        let src = add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                        *reg = simd::add_i16(*reg, simd::load_i16(src));
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
-                    simd::store_i16(
-                        input.get_unchecked_mut(unroll_offset + r_idx * I16_CHUNK_SIZE),
-                        *reg,
-                    );
+                    let dst = input.get_unchecked_mut(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                    simd::store_i16(dst, *reg);
                 }
             }
         }
@@ -223,7 +217,7 @@ mod x86simd {
     }
 }
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 mod generic {
     use arrayvec::ArrayVec;
 
@@ -395,8 +389,8 @@ mod generic {
     }
 }
 
-#[cfg(target_feature = "ssse3")]
+#[cfg(target_arch = "x86_64")]
 pub use x86simd::*;
 
-#[cfg(not(target_feature = "ssse3"))]
+#[cfg(not(target_arch = "x86_64"))]
 pub use generic::*;

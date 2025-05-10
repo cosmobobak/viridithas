@@ -410,15 +410,15 @@ pub struct ContHistIndex {
 /// `repr(C)` because this actually how i want it to be laid out in memory.
 pub struct Keys {
     /// The Zobrist hash of the board.
-    pub key: u64,
+    pub zobrist: u64,
     /// The Zobrist hash of the pawns on the board.
-    pub pawn_key: u64,
+    pub pawn: u64,
     /// The Zobrist hash of the non-pawns on the board, split by side.
-    pub non_pawn_key: [u64; 2],
+    pub non_pawn: [u64; 2],
     /// The Zobrist hash of the minor pieces on the board.
-    pub minor_key: u64,
+    pub minor: u64,
     /// The Zobrist hash of the major pieces on the board.
-    pub major_key: u64,
+    pub major: u64,
 }
 
 /// Full state for a chess position.
@@ -430,10 +430,12 @@ pub struct State {
     pub ep_square: Option<Square>,
     /// The number of half moves made since the last capture or pawn advance.
     pub fifty_move_counter: u8,
-    /// Squares that the opponent attacks
+    /// Squares that the opponent attacks.
     pub threats: Threats,
     /// The square-sets of all the pieces on the board.
     pub bbs: PieceLayout,
+    /// Pieces that cannot be moved without the king being checked.
+    pub pinned: [SquareSet; 2],
     /// An array to accelerate `Board::piece_at()`.
     pub mailbox: [Option<Piece>; 64],
     /// Zobrist hashes.
@@ -447,9 +449,10 @@ impl Default for State {
             mailbox: [None; 64],
             castle_perm: CastlingRights::default(),
             ep_square: None,
-            fifty_move_counter: Default::default(),
+            fifty_move_counter: u8::default(),
             threats: Threats::default(),
             bbs: PieceLayout::default(),
+            pinned: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
     }

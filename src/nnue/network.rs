@@ -88,7 +88,7 @@ pub const OUTPUT_BUCKETS: usize = 8;
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
     const DIVISOR: usize = usize::div_ceil(32, OUTPUT_BUCKETS);
-    (pos.n_men() as usize - 2) / DIVISOR
+    (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
 }
 
 const QA: i16 = 255;
@@ -411,32 +411,24 @@ impl QuantisedNetwork {
             #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
             let num_regs = 4;
             #[cfg(all(
-                target_feature = "ssse3",
+                target_arch = "x86_64",
                 not(target_feature = "avx2"),
                 not(target_feature = "avx512f")
             ))]
             let num_regs = 2;
-            #[cfg(not(any(
-                target_feature = "ssse3",
-                target_feature = "avx2",
-                target_feature = "avx512f"
-            )))]
+            #[cfg(not(target_arch = "x86_64"))]
             let num_regs = 1;
             #[cfg(target_feature = "avx512f")]
             let order = [0, 2, 4, 6, 1, 3, 5, 7];
             #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
             let order = [0, 2, 1, 3];
             #[cfg(all(
-                target_feature = "ssse3",
+                target_arch = "x86_64",
                 not(target_feature = "avx2"),
                 not(target_feature = "avx512f")
             ))]
             let order = [0, 1];
-            #[cfg(not(any(
-                target_feature = "ssse3",
-                target_feature = "avx2",
-                target_feature = "avx512f"
-            )))]
+            #[cfg(not(target_arch = "x86_64"))]
             let order = [0];
 
             let mut regs = vec![[0i16; 8]; num_regs];
@@ -656,7 +648,7 @@ impl NNUEParams {
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
         anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
-        let use_simd = cfg!(target_feature = "ssse3");
+        let use_simd = cfg!(target_arch = "x86_64");
         let net = net.permute(use_simd);
 
         // create a temporary file to store the weights
@@ -913,7 +905,8 @@ impl BucketAccumulatorCache {
         colour: Colour,
         acc: &mut Accumulator,
     ) {
-        let king = SquareSet::first(board_state.all_kings() & board_state.occupied_co(colour));
+        let king =
+            SquareSet::first(board_state.pieces[PieceType::King] & board_state.colours[colour]);
         let bucket = BUCKET_MAP[king.relative_to(colour)];
         let cache_acc = self.accs[bucket].select_mut(colour);
 
@@ -1169,7 +1162,7 @@ impl NNUEState {
     )]
     fn try_find_computed_accumulator<C: Col>(&self, pos: &Board) -> Option<usize> {
         let mut idx = self.current_acc;
-        let mut budget = pos.pieces().occupied().count() as i32;
+        let mut budget = pos.state.bbs.occupied().count() as i32;
         while idx > 0 && !self.accumulators[idx].correct[C::COLOUR] {
             let curr = &self.accumulators[idx - 1];
             if curr.mv.piece.colour() == C::COLOUR
