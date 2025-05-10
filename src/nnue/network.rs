@@ -1264,15 +1264,19 @@ impl NNUEState {
             &mut l2_outputs,
         );
         for head in 1..4 {
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[head][out],
-            nn.l3_bias[head][out],
-            &mut l3_output_logits[head - 1],
-        );}
+            layers::propagate_l3(
+                &l2_outputs,
+                &nn.l3_weights[head][out],
+                nn.l3_bias[head][out],
+                &mut l3_output_logits[head - 1],
+            );
+        }
 
         // softmax
-        let max = l3_output_logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let max = l3_output_logits
+            .iter()
+            .copied()
+            .fold(f32::NEG_INFINITY, f32::max);
         let mut logit_sum = 0.0;
         for logit in &mut l3_output_logits {
             *logit = (*logit - max).exp();
