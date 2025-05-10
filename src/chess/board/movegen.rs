@@ -593,8 +593,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
-                | self.state.threats.checkers
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
         } else {
             SquareSet::FULL
         };
@@ -681,7 +680,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            self.state.threats.checkers
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
         } else {
             SquareSet::FULL
         };

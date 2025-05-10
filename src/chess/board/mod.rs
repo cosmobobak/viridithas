@@ -24,7 +24,7 @@ use crate::{
         CHESS960,
     },
     cuckoo,
-    makemove::{hash_castling, hash_ep, hash_piece, hash_side},
+    lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
     nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
     search::pv::PVariation,
     threadlocal::ThreadData,
@@ -170,31 +170,32 @@ impl Board {
     pub fn generate_pos_keys(&self) -> Keys {
         let mut keys = Keys::default();
         self.state.bbs.visit_pieces(|sq, piece| {
-            hash_piece(&mut keys.zobrist, piece, sq);
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn, piece, sq);
+                keys.pawn ^= piece_key;
             } else {
-                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major, piece, sq);
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major, piece, sq);
+                    keys.major ^= piece_key;
                 } else {
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.minor ^= piece_key;
                 }
             }
         });
 
         if self.side == Colour::White {
-            hash_side(&mut keys.zobrist);
+            keys.zobrist ^= SIDE_KEY;
         }
 
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut keys.zobrist, ep_sq);
+            keys.zobrist ^= EP_KEYS[ep_sq];
         }
 
-        hash_castling(&mut keys.zobrist, self.state.castle_perm);
+        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         debug_assert!(self.state.fifty_move_counter <= 100);
 
@@ -1108,11 +1109,11 @@ impl Board {
 
         // remove a previous en passant square from the hash
         if let Some(ep_sq) = saved_ep_square {
-            hash_ep(&mut keys.zobrist, ep_sq);
+            keys.zobrist ^= EP_KEYS[ep_sq];
         }
 
         // hash out the castling to insert it again after updating rights.
-        hash_castling(&mut keys.zobrist, self.state.castle_perm);
+        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         // update castling rights
         let mut new_rights = self.state.castle_perm;
@@ -1142,45 +1143,47 @@ impl Board {
 
         // apply all the updates to the zobrist hash
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut keys.zobrist, ep_sq);
+            keys.zobrist ^= EP_KEYS[ep_sq];
         }
-        hash_side(&mut keys.zobrist);
+        keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
-            hash_piece(&mut keys.zobrist, piece, sq);
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn, piece, sq);
+                keys.pawn ^= piece_key;
             } else {
-                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major, piece, sq);
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major, piece, sq);
+                    keys.major ^= piece_key;
                 } else {
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.minor ^= piece_key;
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
-            hash_piece(&mut keys.zobrist, piece, sq);
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                hash_piece(&mut keys.pawn, piece, sq);
+                keys.pawn ^= piece_key;
             } else {
-                hash_piece(&mut keys.non_pawn[piece.colour()], piece, sq);
+                keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    hash_piece(&mut keys.major, piece, sq);
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    hash_piece(&mut keys.major, piece, sq);
+                    keys.major ^= piece_key;
                 } else {
-                    hash_piece(&mut keys.minor, piece, sq);
+                    keys.minor ^= piece_key;
                 }
             }
         }
         // reinsert the castling rights
-        hash_castling(&mut keys.zobrist, self.state.castle_perm);
+        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
         self.state.keys = keys;
 
         self.ply += 1;
@@ -1225,9 +1228,9 @@ impl Board {
 
         let mut key = self.state.keys.zobrist;
         if let Some(ep_sq) = self.state.ep_square {
-            hash_ep(&mut key, ep_sq);
+            key ^= EP_KEYS[ep_sq];
         }
-        hash_side(&mut key);
+        key ^= SIDE_KEY;
         self.state.keys.zobrist = key;
 
         self.state.ep_square = None;
@@ -1316,21 +1319,26 @@ impl Board {
         let captured = self.piece_at(tgt);
 
         let mut new_key = self.state.keys.zobrist;
-        hash_side(&mut new_key);
-        hash_piece(&mut new_key, piece, src);
-        hash_piece(&mut new_key, piece, tgt);
+        new_key ^= PIECE_KEYS[piece][src];
+        new_key ^= PIECE_KEYS[piece][tgt];
 
         if let Some(captured) = captured {
-            hash_piece(&mut new_key, captured, tgt);
+            new_key ^= PIECE_KEYS[captured][tgt];
         }
 
-        new_key
+        new_key ^= SIDE_KEY;
+
+        let new_hmc = if captured.is_some() || piece.piece_type() == PieceType::Pawn {
+            0
+        } else {
+            self.state.fifty_move_counter + 1
+        };
+
+        new_key ^ HM_CLOCK_KEYS[new_hmc as usize]
     }
 
     pub fn key_after_null_move(&self) -> u64 {
-        let mut new_key = self.state.keys.zobrist;
-        hash_side(&mut new_key);
-        new_key
+        self.state.keys.zobrist ^ SIDE_KEY
     }
 
     /// Parses a move in the UCI format and returns a move or a reason why it couldn't be parsed.
@@ -2031,7 +2039,7 @@ mod tests {
         use crate::chess::chessmove::Move;
         use crate::chess::piece::Piece;
         use crate::chess::types::Square;
-        use crate::makemove::{hash_ep, hash_piece, hash_side};
+        use crate::lookups::{EP_KEYS, PIECE_KEYS, SIDE_KEY};
         let mut not_ep_capturable =
             Board::from_fen("rnbqkbnr/ppppp1pp/8/5p2/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
                 .unwrap();
@@ -2040,14 +2048,14 @@ mod tests {
         let d5 = Move::new(Square::D7, Square::D5);
         let mut not_ep_capturable_key = not_ep_capturable.state.keys.zobrist;
         let mut ep_capturable_key = ep_capturable.state.keys.zobrist;
-        hash_side(&mut not_ep_capturable_key);
-        hash_side(&mut ep_capturable_key);
-        hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D7);
-        hash_piece(&mut ep_capturable_key, Piece::BP, Square::D7);
-        hash_piece(&mut not_ep_capturable_key, Piece::BP, Square::D5);
-        hash_piece(&mut ep_capturable_key, Piece::BP, Square::D5);
+        not_ep_capturable_key ^= SIDE_KEY;
+        ep_capturable_key ^= SIDE_KEY;
+        not_ep_capturable_key ^= PIECE_KEYS[Piece::BP][Square::D7];
+        ep_capturable_key ^= PIECE_KEYS[Piece::BP][Square::D7];
+        not_ep_capturable_key ^= PIECE_KEYS[Piece::BP][Square::D5];
+        ep_capturable_key ^= PIECE_KEYS[Piece::BP][Square::D5];
 
-        hash_ep(&mut ep_capturable_key, Square::D6);
+        ep_capturable_key ^= EP_KEYS[Square::D6];
 
         assert!(not_ep_capturable.make_move_simple(d5));
         assert!(ep_capturable.make_move_simple(d5));
