@@ -21,7 +21,6 @@ mod history;
 mod historytable;
 mod image;
 mod lookups;
-mod makemove;
 mod movepicker;
 mod nnue;
 mod perft;

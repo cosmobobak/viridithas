@@ -15,7 +15,7 @@ use crate::{
     cfor,
     chess::{
         board::{
-            movegen::{self, MAX_POSITION_MOVES},
+            movegen::{self, MAX_POSITION_MOVES, RAY_INTERSECTING},
             Board,
         },
         chessmove::Move,
@@ -32,6 +32,7 @@ use crate::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
     },
+    lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -56,81 +57,81 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_WINDOW: i32 = 6;
-const RFP_MARGIN: i32 = 68;
-const RFP_IMPROVING_MARGIN: i32 = 48;
-const NMP_IMPROVING_MARGIN: i32 = 72;
-const NMP_DEPTH_MUL: i32 = 0;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 200;
-const SEE_QUIET_MARGIN: i32 = -75;
-const SEE_TACTICAL_MARGIN: i32 = -24;
-const FUTILITY_COEFF_0: i32 = 84;
-const FUTILITY_COEFF_1: i32 = 97;
-const RAZORING_COEFF_0: i32 = 0;
-const RAZORING_COEFF_1: i32 = 350;
-const PROBCUT_MARGIN: i32 = 236;
-const PROBCUT_IMPROVING_MARGIN: i32 = 58;
-const DOUBLE_EXTENSION_MARGIN: i32 = 12;
-const TRIPLE_EXTENSION_MARGIN: i32 = 120;
-const LMR_BASE: f64 = 84.0;
-const LMR_DIVISION: f64 = 198.0;
-const QS_SEE_BOUND: i32 = -188;
-const MAIN_SEE_BOUND: i32 = -114;
-const DO_DEEPER_BASE_MARGIN: i32 = 60;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 11;
-const HISTORY_PRUNING_MARGIN: i32 = -3597;
-const QS_FUTILITY: i32 = 222;
-const SEE_STAT_SCORE_MUL: i32 = 23;
+const RFP_MARGIN: i32 = 67;
+const RFP_IMPROVING_MARGIN: i32 = 47;
+const NMP_IMPROVING_MARGIN: i32 = 74;
+const NMP_DEPTH_MUL: i32 = -4;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 171;
+const SEE_QUIET_MARGIN: i32 = -77;
+const SEE_TACTICAL_MARGIN: i32 = -27;
+const FUTILITY_COEFF_0: i32 = 107;
+const FUTILITY_COEFF_1: i32 = 80;
+const RAZORING_COEFF_0: i32 = -30;
+const RAZORING_COEFF_1: i32 = 255;
+const PROBCUT_MARGIN: i32 = 271;
+const PROBCUT_IMPROVING_MARGIN: i32 = 65;
+const DOUBLE_EXTENSION_MARGIN: i32 = 13;
+const TRIPLE_EXTENSION_MARGIN: i32 = 125;
+const LMR_BASE: f64 = 89.0;
+const LMR_DIVISION: f64 = 245.0;
+const QS_SEE_BOUND: i32 = -199;
+const MAIN_SEE_BOUND: i32 = -102;
+const DO_DEEPER_BASE_MARGIN: i32 = 50;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 10;
+const HISTORY_PRUNING_MARGIN: i32 = -4322;
+const QS_FUTILITY: i32 = 220;
+const SEE_STAT_SCORE_MUL: i32 = 26;
 
-const HISTORY_LMR_DIVISOR: i32 = 16384;
-const LMR_REFUTATION_MUL: i32 = 1106;
-const LMR_NON_PV_MUL: i32 = 992;
-const LMR_TTPV_MUL: i32 = 1297;
-const LMR_CUT_NODE_MUL: i32 = 1394;
-const LMR_NON_IMPROVING_MUL: i32 = 695;
-const LMR_TT_CAPTURE_MUL: i32 = 1173;
-const LMR_CHECK_MUL: i32 = 1036;
+const HISTORY_LMR_DIVISOR: i32 = 16962;
+const LMR_REFUTATION_MUL: i32 = 931;
+const LMR_NON_PV_MUL: i32 = 1034;
+const LMR_TTPV_MUL: i32 = 1380;
+const LMR_CUT_NODE_MUL: i32 = 1444;
+const LMR_NON_IMPROVING_MUL: i32 = 688;
+const LMR_TT_CAPTURE_MUL: i32 = 1104;
+const LMR_CHECK_MUL: i32 = 1192;
 
-const MAIN_HISTORY_BONUS_MUL: i32 = 306;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 217;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2392;
+const MAIN_HISTORY_BONUS_MUL: i32 = 303;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 149;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2846;
 
-const MAIN_HISTORY_MALUS_MUL: i32 = 209;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 259;
-const MAIN_HISTORY_MALUS_MAX: i32 = 1211;
+const MAIN_HISTORY_MALUS_MUL: i32 = 199;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 388;
+const MAIN_HISTORY_MALUS_MAX: i32 = 1327;
 
-const CONT1_HISTORY_BONUS_MUL: i32 = 265;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 207;
-const CONT1_HISTORY_BONUS_MAX: i32 = 2551;
+const CONT1_HISTORY_BONUS_MUL: i32 = 319;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 234;
+const CONT1_HISTORY_BONUS_MAX: i32 = 2790;
 
-const CONT1_HISTORY_MALUS_MUL: i32 = 228;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 226;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1134;
+const CONT1_HISTORY_MALUS_MUL: i32 = 220;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 263;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1072;
 
-const CONT2_HISTORY_BONUS_MUL: i32 = 226;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 116;
-const CONT2_HISTORY_BONUS_MAX: i32 = 2064;
+const CONT2_HISTORY_BONUS_MUL: i32 = 264;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 243;
+const CONT2_HISTORY_BONUS_MAX: i32 = 2466;
 
-const CONT2_HISTORY_MALUS_MUL: i32 = 250;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 293;
-const CONT2_HISTORY_MALUS_MAX: i32 = 1277;
+const CONT2_HISTORY_MALUS_MUL: i32 = 275;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 275;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1335;
 
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 247;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 203;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 2380;
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 228;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 265;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2411;
 
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 230;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 328;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1176;
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 140;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 349;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1015;
 
-const PAWN_CORRHIST_WEIGHT: i32 = 1180;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1275;
-const MINOR_CORRHIST_WEIGHT: i32 = 1432;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1385;
+const PAWN_CORRHIST_WEIGHT: i32 = 1333;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1518;
+const MINOR_CORRHIST_WEIGHT: i32 = 1454;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1611;
 
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 195;
-const EVAL_POLICY_OFFSET: i32 = 0;
-const EVAL_POLICY_UPDATE_MAX: i32 = 102;
-const EVAL_POLICY_UPDATE_MIN: i32 = 55;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 207;
+const EVAL_POLICY_OFFSET: i32 = 9;
+const EVAL_POLICY_UPDATE_MAX: i32 = 5;
+const EVAL_POLICY_UPDATE_MIN: i32 = 42;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
@@ -525,7 +526,7 @@ impl Board {
     /// Give a legal default move in the case where we don't have enough time to search.
     fn default_move(&mut self, t: &ThreadData, info: &SearchInfo) -> Move {
         let tt_move =
-            t.tt.probe_for_provisional_info(self.zobrist_key())
+            t.tt.probe_for_provisional_info(self.state.keys.zobrist)
                 .and_then(|e| e.0);
         let mut mp = MovePicker::new(tt_move, self.get_killer(t), 0);
         let mut m = None;
@@ -558,7 +559,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -592,12 +593,12 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         // probe the TT and see if we get a cutoff.
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && !in_check
-                && !fifty_move_rule_near
+                && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -629,7 +630,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            let adj_eval = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +662,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correct_evaluation(&info.conf, self);
+            stand_pat = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -785,14 +786,11 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.zobrist_key();
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
-        let in_check = self.in_check();
-        if depth <= 0 && !in_check {
+        if depth <= 0 {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
         }
-
-        depth = depth.max(0);
 
         pv.moves.clear();
 
@@ -811,6 +809,8 @@ impl Board {
         } else {
             info.seldepth.max(i32::try_from(height).unwrap())
         };
+
+        let in_check = self.in_check();
 
         if !NT::ROOT {
             // check draw
@@ -844,13 +844,14 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         let excluded = t.ss[height].excluded;
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
                     && hit.depth >= depth
-                    && !fifty_move_rule_near
+                    && clock < 80
                     && (hit.bound == Bound::Exact
                         || (hit.bound == Bound::Lower && hit.value >= beta)
                         || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -862,7 +863,7 @@ impl Board {
                             let from = mov.from();
                             let to = mov.history_to_square();
                             let moved = self.piece_at(from).unwrap();
-                            let threats = self.threats().all;
+                            let threats = self.state.threats.all;
                             self.update_quiet_history_single::<false>(
                                 t, info, from, to, moved, threats, depth, true,
                             );
@@ -886,13 +887,14 @@ impl Board {
 
         // Probe the tablebases.
         let (mut syzygy_max, mut syzygy_min) = (MATE_SCORE, -MATE_SCORE);
-        let cardinality = tablebases::probe::get_max_pieces_count();
+        let cardinality = u32::from(tablebases::probe::get_max_pieces_count());
+        let n_men = self.state.bbs.occupied().count();
         if !NT::ROOT
             && excluded.is_none() // do not probe the tablebases if we're in a singular-verification search.
             && uci::SYZYGY_ENABLED.load(Ordering::SeqCst)
             && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
-                || self.n_men() < cardinality)
-            && self.n_men() <= cardinality
+                || n_men < cardinality)
+            && n_men <= cardinality
         {
             if let Some(wdl) = tablebases::probe::get_wdl(self) {
                 TB_HITS.fetch_add(1, Ordering::Relaxed);
@@ -939,16 +941,19 @@ impl Board {
 
         let raw_eval;
         let static_eval;
+        let correction;
 
         if in_check {
             // when we're in check, it could be checkmate, so it's unsound to use evaluate().
             raw_eval = VALUE_NONE;
             static_eval = VALUE_NONE;
+            correction = 0;
         } else if excluded.is_some() {
             // if we're in a singular-verification search, we already have the static eval.
             // we can set raw_eval to whatever we like, because we're not going to be saving it.
             raw_eval = VALUE_NONE;
             static_eval = t.ss[height].eval;
+            correction = 0;
             t.nnue.hint_common_access(self, t.nnue_params);
         } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
             let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
@@ -962,7 +967,8 @@ impl Board {
                     t.nnue.hint_common_access(self, t.nnue_params);
                 }
             }
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -980,7 +986,8 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            static_eval = raw_eval + t.correct_evaluation(&info.conf, self);
+            correction = t.correction(&info.conf, self);
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1036,8 +1043,20 @@ impl Board {
         let tt_move = tt_hit.and_then(|hit| hit.mov);
         let tt_capture = matches!(tt_move, Some(mv) if self.is_capture(mv));
 
-        // whole-node pruning techniques:
+        // whole-node techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
+            if t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
+                depth += 1;
+            }
+
+            if depth >= 2
+                && t.ss[height - 1].reduction >= 2048
+                && t.ss[height - 1].eval != VALUE_NONE
+                && static_eval + t.ss[height - 1].eval > 96
+            {
+                depth -= 1;
+            }
+
             // razoring.
             // if the static eval is too low, check if qsearch can beat alpha.
             // if it can't, we can prune the node.
@@ -1057,7 +1076,7 @@ impl Board {
             // this is a generalisation of stand_pat in quiescence search.
             if !t.ss[height].ttpv
                 && depth < 9
-                && static_eval - Self::rfp_margin(info, depth, improving) >= beta
+                && static_eval - Self::rfp_margin(info, depth, improving, correction) >= beta
                 && (tt_move.is_none() || tt_capture)
                 && beta > -MINIMUM_TB_WIN_SCORE
             {
@@ -1247,7 +1266,6 @@ impl Board {
             }
 
             // lmp & fp.
-            let killer_or_counter = Some(m) == killer;
             if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
                 // late move pruning
                 // if we have made too many moves, we start skipping moves.
@@ -1258,7 +1276,7 @@ impl Board {
                 // history pruning
                 // if this move's history score is too low, we start skipping moves.
                 if is_quiet
-                    && !killer_or_counter
+                    && (Some(m) != killer)
                     && lmr_depth < 7
                     && stat_score < info.conf.history_pruning_margin * (depth - 1)
                 {
@@ -1281,7 +1299,7 @@ impl Board {
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && depth < 10
                 && move_picker.stage > Stage::YieldGoodCaptures
-                && self.threats().all.contains_square(m.to())
+                && self.state.threats.all.contains_square(m.to())
                 && !self.static_exchange_eval(
                     info,
                     m,
@@ -1403,20 +1421,20 @@ impl Board {
                     r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
                     // reduce more on cut nodes
                     r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
-                    if is_quiet {
-                        // extend/reduce using the stat_score of the move
-                        r -= stat_score * 1024 / info.conf.history_lmr_divisor;
-                        // reduce refutation moves less
-                        r -= i32::from(killer_or_counter) * info.conf.lmr_refutation_mul;
-                        // reduce more if not improving
-                        r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
-                        // reduce more if the move from the transposition table is tactical
-                        r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
-                        // reduce less if the move gives check
-                        r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
-                    }
+                    // extend/reduce using the stat_score of the move
+                    r -= stat_score * 1024 / info.conf.history_lmr_divisor;
+                    // reduce refutation moves less
+                    r -= i32::from(Some(m) == killer) * info.conf.lmr_refutation_mul;
+                    // reduce more if not improving
+                    r += i32::from(!improving) * info.conf.lmr_non_improving_mul;
+                    // reduce more if the move from the transposition table is tactical
+                    r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
+                    // reduce less if the move gives check
+                    r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
+                    t.ss[height].reduction = r;
                     (r / 1024).clamp(1, depth - 1)
                 } else {
+                    t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
@@ -1431,6 +1449,8 @@ impl Board {
                     -alpha,
                     true,
                 );
+                // simple reduction for any future searches
+                t.ss[height].reduction = 1024;
                 // if we beat alpha, and reduced more than one ply,
                 // then we do a zero-window search at full depth.
                 if score > alpha && r > 1 {
@@ -1455,6 +1475,8 @@ impl Board {
                             !cut_node,
                         );
                     }
+                } else if score > alpha && score < best_score + 16 {
+                    new_depth -= 1;
                 }
                 // if we failed completely, then do full-window search
                 if score > alpha && score < beta {
@@ -1591,8 +1613,9 @@ impl Board {
     }
 
     /// The margin for Reverse Futility Pruning.
-    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool) -> i32 {
+    fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
         info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+            + correction.abs() / 2
     }
 
     /// Update the main and continuation history tables for a batch of moves.
@@ -1698,7 +1721,7 @@ impl Board {
     pub fn static_exchange_eval(&self, info: &SearchInfo, m: Move, threshold: i32) -> bool {
         let from = m.from();
         let to = m.to();
-        let board = self.pieces();
+        let board = &self.state.bbs;
 
         let mut next_victim = m
             .promotion_type()
@@ -1719,8 +1742,8 @@ impl Board {
             return true;
         }
 
-        let diag_sliders = board.all_bishops() | board.all_queens();
-        let orth_sliders = board.all_rooks() | board.all_queens();
+        let diag_sliders = board.pieces[PieceType::Bishop] | board.pieces[PieceType::Queen];
+        let orth_sliders = board.pieces[PieceType::Rook] | board.pieces[PieceType::Queen];
 
         // occupied starts with the position after the move `m` is made.
         let mut occupied = (board.occupied() ^ from.as_set()) | to.as_set();
@@ -1728,13 +1751,27 @@ impl Board {
             occupied ^= self.ep_sq().unwrap().as_set();
         }
 
-        let mut attackers = board.all_attackers_to_sq(to, occupied) & occupied;
-
         // after the move, it's the opponent's turn.
         let mut colour = !self.turn();
 
+        let white_pinned = self.state.pinned[Colour::White];
+        let black_pinned = self.state.pinned[Colour::Black];
+
+        let kings = board.pieces[PieceType::King];
+        let white_king = kings & board.colours[Colour::White];
+        let black_king = kings & board.colours[Colour::Black];
+
+        let white_king_ray = RAY_INTERSECTING[to][white_king.first()];
+        let black_king_ray = RAY_INTERSECTING[to][black_king.first()];
+
+        let allowed = !(white_pinned | black_pinned)
+            | (white_pinned & white_king_ray)
+            | (black_pinned & black_king_ray);
+
+        let mut attackers = board.all_attackers_to_sq(to, occupied) & allowed;
+
         loop {
-            let my_attackers = attackers & board.occupied_co(colour);
+            let my_attackers = attackers & board.colours[colour];
             if my_attackers == SquareSet::EMPTY {
                 break;
             }
@@ -1742,12 +1779,12 @@ impl Board {
             // find cheapest attacker
             for victim in PieceType::all() {
                 next_victim = victim;
-                if (my_attackers & board.of_type(victim)) != SquareSet::EMPTY {
+                if (my_attackers & board.pieces[victim]) != SquareSet::EMPTY {
                     break;
                 }
             }
 
-            occupied ^= (my_attackers & board.of_type(next_victim)).first().as_set();
+            occupied ^= (my_attackers & board.pieces[next_victim]).isolate_lsb();
 
             // diagonal moves reveal bishops and queens:
             if next_victim == PieceType::Pawn
@@ -1774,7 +1811,7 @@ impl Board {
                 // piece is a king, and our opponent still has attackers, then we've
                 // lost as the move we followed would be illegal
                 if next_victim == PieceType::King
-                    && (attackers & board.occupied_co(colour)) != SquareSet::EMPTY
+                    && (attackers & board.colours[colour]) != SquareSet::EMPTY
                 {
                     colour = !colour;
                 }
@@ -1785,6 +1822,10 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+fn adj_shuffle(raw_eval: i32, clock: u8) -> i32 {
+    raw_eval * (200 - i32::from(clock)) / 200
 }
 
 pub fn select_best<'a>(

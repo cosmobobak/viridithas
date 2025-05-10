@@ -18,7 +18,8 @@ macro_rules! cfor {
     }
 }
 
-const fn init_hash_keys() -> ([[u64; 64]; 12], [u64; 64], [u64; 16], u64) {
+#[allow(clippy::type_complexity)]
+const fn init_hash_keys() -> ([[u64; 64]; 12], [u64; 64], [u64; 16], u64, [u64; 256]) {
     let mut state = XorShiftState::new();
     let mut piece_keys = [[0; 64]; 12];
     cfor!(let mut index = 0; index < 12; index += 1; {
@@ -41,15 +42,30 @@ const fn init_hash_keys() -> ([[u64; 64]; 12], [u64; 64], [u64; 16], u64) {
         castle_keys[index] = key;
     });
     let key;
-    (key, _) = state.next_self();
+    (key, state) = state.next_self();
     let side_key = key;
-    (piece_keys, ep_keys, castle_keys, side_key)
+    let mut halfmove_clock_keys = [0; 256];
+    cfor!(let mut i = 14; i < 256 - 8; i += 8; {
+        let key;
+        (key, state) = state.next_self();
+        cfor!(let mut j = 0; j < 8; j += 1; {
+            halfmove_clock_keys[i + j] = key;
+        });
+    });
+    (
+        piece_keys,
+        ep_keys,
+        castle_keys,
+        side_key,
+        halfmove_clock_keys,
+    )
 }
 
 pub static PIECE_KEYS: [[u64; 64]; 12] = init_hash_keys().0;
 pub static EP_KEYS: [u64; 64] = init_hash_keys().1;
 pub static CASTLE_KEYS: [u64; 16] = init_hash_keys().2;
 pub const SIDE_KEY: u64 = init_hash_keys().3;
+pub static HM_CLOCK_KEYS: [u64; 256] = init_hash_keys().4;
 
 mod tests {
     #[test]

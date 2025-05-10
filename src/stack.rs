@@ -11,4 +11,5 @@ pub struct StackEntry {
     pub dextensions: i32,
     pub ttpv: bool,
     pub conthist_index: ContHistIndex,
+    pub reduction: i32,
 }

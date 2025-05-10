@@ -23,11 +23,12 @@ use std::{
 use anyhow::{anyhow, bail, Context};
 use bulletformat::ChessBoard;
 use dataformat::Filter;
-use rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::ThreadRng, seq::SliceRandom, Rng};
 
 use crate::{
     chess::{
         board::{Board, DrawType, GameOutcome, WinType},
+        chessmove::Move,
         piece::{Colour, PieceType},
         types::Square,
         CHESS960,
@@ -156,7 +157,36 @@ impl DataGenOptions {
 }
 
 trait StartposGenerator {
-    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()>;
+    fn generate(
+        &mut self,
+        board: &mut Board,
+        info: &SearchInfo,
+        thread_data: &mut ThreadData,
+    ) -> ControlFlow<(), ()>;
+}
+
+/// Make a random move on the board, attempting to pick only
+/// moves with a static exchange evaluation above the given threshold.
+/// If no such move is found, a random legal move is made.
+/// If there are no legal moves, None is returned.
+fn make_random_move(
+    board: &mut Board,
+    info: &SearchInfo,
+    rng: &mut ThreadRng,
+    t: &mut ThreadData,
+    see_threshold: i32,
+) -> Option<Move> {
+    let legal_moves = board.legal_moves();
+    for _ in 0..8 {
+        let m = *legal_moves.choose(rng)?;
+        if board.static_exchange_eval(info, m, see_threshold) {
+            assert!(board.make_move(m, t));
+            return Some(m);
+        }
+    }
+    let m = *legal_moves.choose(rng)?;
+    assert!(board.make_move(m, t));
+    Some(m)
 }
 
 struct ClassicalStartposGenerator {
@@ -173,12 +203,17 @@ struct BookStartposGenerator<'a> {
 }
 
 impl StartposGenerator for ClassicalStartposGenerator {
-    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+    fn generate(
+        &mut self,
+        board: &mut Board,
+        info: &SearchInfo,
+        thread_data: &mut ThreadData,
+    ) -> ControlFlow<(), ()> {
         board.set_startpos();
         thread_data.nnue.reinit_from(board, thread_data.nnue_params);
         let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = board.make_random_move(&mut self.rng, thread_data);
+            let res = make_random_move(board, info, &mut self.rng, thread_data, 0);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
@@ -192,12 +227,17 @@ impl StartposGenerator for ClassicalStartposGenerator {
 }
 
 impl StartposGenerator for DFRCStartposGenerator {
-    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+    fn generate(
+        &mut self,
+        board: &mut Board,
+        info: &SearchInfo,
+        thread_data: &mut ThreadData,
+    ) -> ControlFlow<(), ()> {
         board.set_dfrc_idx(rand::Rng::gen_range(&mut self.rng, 0..960 * 960));
         thread_data.nnue.reinit_from(board, thread_data.nnue_params);
         let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = board.make_random_move(&mut self.rng, thread_data);
+            let res = make_random_move(board, info, &mut self.rng, thread_data, 0);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
@@ -211,7 +251,12 @@ impl StartposGenerator for DFRCStartposGenerator {
 }
 
 impl StartposGenerator for BookStartposGenerator<'_> {
-    fn generate(&mut self, board: &mut Board, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+    fn generate(
+        &mut self,
+        board: &mut Board,
+        _info: &SearchInfo,
+        thread_data: &mut ThreadData,
+    ) -> ControlFlow<(), ()> {
         let idx = self.cursor.fetch_add(1, Ordering::Relaxed);
         if idx >= self.source.len() {
             println!("Book exhausted!");
@@ -385,7 +430,7 @@ fn generate_on_thread<'a>(
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
     let mut board = Board::default();
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, 1);
+    tt.resize(MEGABYTE, 1);
     let mut thread_data = ThreadData::new(0, &board, tt.view(), nnue_params);
     let stopped = AtomicBool::new(false);
     let time_manager = TimeManager::default_with_limit(match options.limit {
@@ -462,7 +507,7 @@ fn generate_on_thread<'a>(
         info.set_up_for_search();
         // generate game
         // STEP 1: get the next starting position from the callback
-        match startpos_src.generate(&mut board, &mut thread_data) {
+        match startpos_src.generate(&mut board, &info, &mut thread_data) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
         }
@@ -973,10 +1018,10 @@ impl Display for MaterialConfiguration {
 impl From<&Board> for MaterialConfiguration {
     fn from(board: &Board) -> Self {
         let mut mc = Self::default();
-        let white = board.pieces().occupied_co(Colour::White);
-        let black = board.pieces().occupied_co(Colour::Black);
+        let white = board.state.bbs.colours[Colour::White];
+        let black = board.state.bbs.colours[Colour::Black];
         for piece in PieceType::all().take(5) {
-            let pieces = board.pieces().of_type(piece);
+            let pieces = board.state.bbs.pieces[piece];
             let white_pieces = pieces & white;
             let black_pieces = pieces & black;
             mc.counts[piece.index()] = u8::try_from(white_pieces.count()).unwrap_or(u8::MAX);
@@ -1052,7 +1097,7 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
             *stats.eval_counts.entry(evaluation).or_default() += 1;
             *stats
                 .piece_counts
-                .entry(u8::try_from(position.pieces().occupied().count()).unwrap_or(u8::MAX))
+                .entry(u8::try_from(position.state.bbs.occupied().count()).unwrap_or(u8::MAX))
                 .or_default() += 1;
             *stats
                 .material_counts
