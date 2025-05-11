@@ -209,7 +209,7 @@ impl Board {
 
     #[cfg(feature = "datagen")]
     pub fn regenerate_threats(&mut self) {
-        self.state.threats = self.generate_threats(self.side.flip());
+        self.state.threats = self.generate_threats(self.side);
     }
 
     pub fn generate_pinned(&self, side: Colour) -> SquareSet {
