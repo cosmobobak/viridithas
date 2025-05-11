@@ -1054,7 +1054,7 @@ impl NNUEState {
             }
         }
 
-        let king = board.king_sq(colour);
+        let king = board.state.bbs.king_sq(colour);
 
         loop {
             self.materialise_new_acc_from(king, colour, curr_index + 1, nnue_params);
@@ -1106,7 +1106,7 @@ impl NNUEState {
             assert!(self.accumulators[source].correct[C::COLOUR]);
             // directly construct the top accumulator from the last-known-good one
             let mut curr_index = source;
-            let king = pos.king_sq(C::COLOUR);
+            let king = pos.state.bbs.king_sq(C::COLOUR);
             let bucket = BUCKET_MAP[king.relative_to(C::COLOUR)];
             let weights = nnue_params.select_feature_weights(bucket);
             let mut adds = ArrayVec::<_, 32>::new();
