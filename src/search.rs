@@ -1045,11 +1045,11 @@ impl Board {
 
         // whole-node techniques:
         if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
-            if t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
+            if !t.ss[height].ttpv && t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
                 depth += 1;
             }
 
-            if depth >= 2
+            if !t.ss[height].ttpv && depth >= 2
                 && t.ss[height - 1].reduction >= 2048
                 && t.ss[height - 1].eval != VALUE_NONE
                 && static_eval + t.ss[height - 1].eval > 96

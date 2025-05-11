@@ -4,7 +4,7 @@
 NAME=viridithas
 
 # run the command given in the arguments and collect performance statistics
-perf record --call-graph dwarf target/release/viridithas bench
+perf record --call-graph dwarf target/release/viridithas bench 18
 
 # process the performance statistics:
 # map the first occurrence of either `even` or `odd` in a flame to `eveod`, and drop the rest
