@@ -197,17 +197,19 @@ impl Board {
     }
 
     pub fn generate_pinned(&self, side: Colour) -> SquareSet {
+        use PieceType::{Bishop, Queen, Rook};
+
         let mut pinned = SquareSet::EMPTY;
 
-        let king = (self.state.bbs.colours[side] & self.state.bbs.pieces[PieceType::King]).first();
-
         let bbs = &self.state.bbs;
+
+        let king = bbs.king_sq(side);
 
         let us = bbs.colours[side];
         let them = bbs.colours[!side];
 
-        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
-        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+        let their_diags = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & them;
+        let their_orthos = (bbs.pieces[Queen] | bbs.pieces[Rook]) & them;
 
         let potential_attackers =
             bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
@@ -227,13 +229,14 @@ impl Board {
         let mut checkers = SquareSet::EMPTY;
 
         let bbs = &self.state.bbs;
+        let us = bbs.colours[side];
         let them = bbs.colours[!side];
         let their_pawns = bbs.pieces[PieceType::Pawn] & them;
         let their_knights = bbs.pieces[PieceType::Knight] & them;
-        let their_diags = (bbs.pieces[PieceType::Bishop] | bbs.pieces[PieceType::Queen]) & them;
-        let their_orthos = (bbs.pieces[PieceType::Rook] | bbs.pieces[PieceType::Queen]) & them;
+        let their_diags = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Bishop]) & them;
+        let their_orthos = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Rook]) & them;
         let their_king = (bbs.pieces[PieceType::King] & them).first();
-        let blockers = bbs.colours[Colour::White] | bbs.colours[Colour::Black];
+        let blockers = us | them;
 
         // compute threats
         threats |= match side {
@@ -252,7 +255,7 @@ impl Board {
         threats |= king_attacks(their_king);
 
         // compute checkers
-        let our_king_bb = bbs.colours[side] & bbs.pieces[PieceType::King];
+        let our_king_bb = us & bbs.pieces[PieceType::King];
         let our_king_sq = our_king_bb.first();
         let backwards_from_king = match side {
             Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
