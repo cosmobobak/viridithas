@@ -322,8 +322,10 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
-        let our_pawns = self.state.bbs.pawns::<C>();
-        let their_pieces = self.state.bbs.colours[!C::COLOUR];
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+        let bbs = &self.state.bbs;
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
+        let their_pieces = bbs.colours[!C::COLOUR];
         // to determine which pawns can capture, we shift the opponent's pieces backwards and find the intersection
         let attacking_west = if C::WHITE {
             their_pieces.south_east_one() & our_pawns
@@ -377,14 +379,9 @@ impl Board {
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
+                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
             } else {
-                for promo in [
-                    PieceType::Queen,
-                    PieceType::Rook,
-                    PieceType::Bishop,
-                    PieceType::Knight,
-                ] {
+                for promo in [Queen, Rook, Bishop, Knight] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -398,14 +395,9 @@ impl Board {
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             // in quiescence search, we only generate promotions to queen.
             if Mode::SKIP_QUIETS {
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
+                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
             } else {
-                for promo in [
-                    PieceType::Queen,
-                    PieceType::Rook,
-                    PieceType::Bishop,
-                    PieceType::Knight,
-                ] {
+                for promo in [Queen, Rook, Bishop, Knight] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -417,7 +409,7 @@ impl Board {
             return;
         };
         let ep_bb = ep_sq.as_set();
-        let our_pawns = self.state.bbs.pawns::<C>();
+        let our_pawns = self.state.bbs.pieces[PieceType::Pawn] & self.state.bbs.colours[C::COLOUR];
         let attacks_west = if C::WHITE {
             ep_bb.south_east_one() & our_pawns
         } else {
@@ -444,6 +436,8 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+        let bbs = &self.state.bbs;
         let start_rank = if C::WHITE {
             SquareSet::RANK_2
         } else {
@@ -455,14 +449,14 @@ impl Board {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.bbs.empty() >> 8
+            bbs.empty() >> 8
         } else {
-            self.state.bbs.empty() << 8
+            bbs.empty() << 8
         };
         let double_shifted_empty_squares = if C::WHITE {
-            self.state.bbs.empty() >> 16
+            bbs.empty() >> 16
         } else {
-            self.state.bbs.empty() << 16
+            bbs.empty() << 16
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
@@ -474,7 +468,7 @@ impl Board {
         } else {
             valid_target_squares << 16
         };
-        let our_pawns = self.state.bbs.pawns::<C>();
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -504,12 +498,7 @@ impl Board {
             from_mask.south_one()
         };
         for (from, to) in from_mask.into_iter().zip(to_mask) {
-            for promo in [
-                PieceType::Queen,
-                PieceType::Knight,
-                PieceType::Rook,
-                PieceType::Bishop,
-            ] {
+            for promo in [Queen, Knight, Rook, Bishop] {
                 move_list.push::<true>(Move::new_with_promo(from, to, promo));
             }
         }
@@ -520,22 +509,24 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
+        use PieceType::{Bishop, Knight, Pawn, Queen, Rook};
+        let bbs = &self.state.bbs;
         let promo_rank = if C::WHITE {
             SquareSet::RANK_7
         } else {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.bbs.empty() >> 8
+            bbs.empty() >> 8
         } else {
-            self.state.bbs.empty() << 8
+            bbs.empty() << 8
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
         } else {
             valid_target_squares << 8
         };
-        let our_pawns = self.state.bbs.pawns::<C>();
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let promoting_pawns = pushable_pawns & promo_rank;
 
@@ -548,14 +539,9 @@ impl Board {
         for (from, to) in from_mask.into_iter().zip(to_mask) {
             if Mode::SKIP_QUIETS {
                 // in quiescence search, we only generate promotions to queen.
-                move_list.push::<true>(Move::new_with_promo(from, to, PieceType::Queen));
+                move_list.push::<true>(Move::new_with_promo(from, to, Queen));
             } else {
-                for promo in [
-                    PieceType::Queen,
-                    PieceType::Knight,
-                    PieceType::Rook,
-                    PieceType::Bishop,
-                ] {
+                for promo in [Queen, Knight, Rook, Bishop] {
                     move_list.push::<true>(Move::new_with_promo(from, to, promo));
                 }
             }
@@ -573,12 +559,17 @@ impl Board {
     }
 
     fn generate_moves_for<C: Col>(&self, move_list: &mut MoveList) {
+        use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.colours[!C::COLOUR];
-        let freespace = self.state.bbs.empty();
-        let our_king_sq = self.state.bbs.king::<C>().first();
+        let bbs = &self.state.bbs;
+        let our_pieces = bbs.colours[C::COLOUR];
+        let their_pieces = bbs.colours[!C::COLOUR];
+        let freespace = !(our_pieces | their_pieces);
+        let our_king = bbs.pieces[King] & our_pieces;
+        debug_assert_eq!(our_king.count(), 1);
+        let our_king_sq = our_king.first();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -603,7 +594,7 @@ impl Board {
         self.generate_ep::<C>(move_list);
 
         // knights
-        let our_knights = self.state.bbs.knights::<C>();
+        let our_knights = bbs.pieces[Knight] & our_pieces;
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
@@ -624,8 +615,8 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.bbs.diags::<C>();
-        let blockers = self.state.bbs.occupied();
+        let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
+        let blockers = bbs.occupied();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -637,7 +628,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
+        let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -664,11 +655,16 @@ impl Board {
     }
 
     fn generate_captures_for<C: Col, Mode: MoveGenMode>(&self, move_list: &mut MoveList) {
+        use PieceType::{Bishop, King, Knight, Queen, Rook};
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let their_pieces = self.state.bbs.colours[!C::COLOUR];
-        let our_king_sq = self.state.bbs.king::<C>().first();
+        let bbs = &self.state.bbs;
+        let our_pieces = bbs.colours[C::COLOUR];
+        let their_pieces = bbs.colours[!C::COLOUR];
+        let our_king = bbs.pieces[King] & our_pieces;
+        debug_assert_eq!(our_king.count(), 1);
+        let our_king_sq = our_king.first();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -693,7 +689,7 @@ impl Board {
         self.generate_ep::<C>(move_list);
 
         // knights
-        let our_knights = self.state.bbs.knights::<C>();
+        let our_knights = bbs.pieces[Knight] & our_pieces;
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & their_pieces {
@@ -708,8 +704,8 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.bbs.diags::<C>();
-        let blockers = self.state.bbs.occupied();
+        let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
+        let blockers = bbs.occupied();
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -718,7 +714,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
+        let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & their_pieces {
@@ -731,7 +727,7 @@ impl Board {
         let occupied = self.state.bbs.occupied();
 
         if CHESS960.load(Ordering::Relaxed) {
-            let king_sq = self.king_sq(C::COLOUR);
+            let king_sq = self.state.bbs.king_sq(C::COLOUR);
             if self.sq_attacked(king_sq, C::Opposite::COLOUR) {
                 return;
             }
@@ -856,6 +852,8 @@ impl Board {
         move_list: &mut MoveList,
         valid_target_squares: SquareSet,
     ) {
+        use PieceType::Pawn;
+        let bbs = &self.state.bbs;
         let start_rank = if C::WHITE {
             SquareSet::RANK_2
         } else {
@@ -867,14 +865,14 @@ impl Board {
             SquareSet::RANK_2
         };
         let shifted_empty_squares = if C::WHITE {
-            self.state.bbs.empty() >> 8
+            bbs.empty() >> 8
         } else {
-            self.state.bbs.empty() << 8
+            bbs.empty() << 8
         };
         let double_shifted_empty_squares = if C::WHITE {
-            self.state.bbs.empty() >> 16
+            bbs.empty() >> 16
         } else {
-            self.state.bbs.empty() << 16
+            bbs.empty() << 16
         };
         let shifted_valid_squares = if C::WHITE {
             valid_target_squares >> 8
@@ -886,7 +884,7 @@ impl Board {
         } else {
             valid_target_squares << 16
         };
-        let our_pawns = self.state.bbs.pawns::<C>();
+        let our_pawns = bbs.pieces[Pawn] & bbs.colours[C::COLOUR];
         let pushable_pawns = our_pawns & shifted_empty_squares;
         let double_pushable_pawns = pushable_pawns & double_shifted_empty_squares & start_rank;
         let promoting_pawns = pushable_pawns & promo_rank;
@@ -912,9 +910,16 @@ impl Board {
     }
 
     fn generate_quiets_for<C: Col>(&self, move_list: &mut MoveList) {
-        let freespace = self.state.bbs.empty();
-        let our_king_sq = self.state.bbs.king::<C>().first();
-        let blockers = self.state.bbs.occupied();
+        use PieceType::{Bishop, Knight, Queen, Rook};
+
+        let bbs = &self.state.bbs;
+        let our_pieces = bbs.colours[C::COLOUR];
+        let their_pieces = bbs.colours[!C::COLOUR];
+        let blockers = our_pieces | their_pieces;
+        let freespace = !blockers;
+        let our_king = bbs.pieces[PieceType::King] & our_pieces;
+        debug_assert_eq!(our_king.count(), 1);
+        let our_king_sq = our_king.first();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -935,7 +940,7 @@ impl Board {
         self.generate_pawn_quiet::<C>(move_list, valid_target_squares);
 
         // knights
-        let our_knights = self.state.bbs.knights::<C>();
+        let our_knights = bbs.pieces[Knight] & our_pieces;
         for sq in our_knights {
             let moves = knight_attacks(sq) & valid_target_squares;
             for to in moves & !blockers {
@@ -950,7 +955,7 @@ impl Board {
         }
 
         // bishops and queens
-        let our_diagonal_sliders = self.state.bbs.diags::<C>();
+        let our_diagonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & our_pieces;
         for sq in our_diagonal_sliders {
             let moves = bishop_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
@@ -959,7 +964,7 @@ impl Board {
         }
 
         // rooks and queens
-        let our_orthogonal_sliders = self.state.bbs.orthos::<C>();
+        let our_orthogonal_sliders = (bbs.pieces[Queen] | bbs.pieces[Rook]) & our_pieces;
         for sq in our_orthogonal_sliders {
             let moves = rook_attacks(sq, blockers) & valid_target_squares;
             for to in moves & !blockers {
