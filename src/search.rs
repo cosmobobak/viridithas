@@ -1179,8 +1179,7 @@ impl Board {
             // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
             && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
         {
-            let tt_move_if_capture = tt_move.filter(|m| self.is_tactical(*m));
-            let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
+            let mut move_picker = MovePicker::new(tt_move, None, 0);
             move_picker.skip_quiets = true;
             while let Some(m) = move_picker.next(self, t, info) {
                 t.tt.prefetch(self.key_after(m));
