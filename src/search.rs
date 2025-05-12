@@ -1581,6 +1581,23 @@ impl Board {
             );
         }
 
+        if !NT::ROOT && flag == Bound::Upper {
+            // the current node has failed low. this means that the inbound edge to this node
+            // will fail high, so we can give a bonus to that edge.
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if !ss_prev.searching_tactical {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    debug_assert_eq!(moved.colour(), !self.turn());
+                    let threats = self.history().last().unwrap().threats.all;
+                    let bonus = main_history_bonus(&info.conf, depth);
+                    t.update_history_single(from, to, moved, threats, bonus);
+                }
+            }
+        }
+
         if excluded.is_none() {
             debug_assert!(
                 alpha != original_alpha || best_move.is_none(),
