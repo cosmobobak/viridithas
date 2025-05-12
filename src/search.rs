@@ -1432,14 +1432,14 @@ impl Board {
                     // reduce less if the move gives check
                     r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     t.ss[height].reduction = r;
-                    (r / 1024).clamp(1, depth - 1)
+                    r / 1024
                 } else {
                     t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
-                let reduced_depth = new_depth - r;
+                let reduced_depth = (new_depth - r).clamp(0, new_depth);
                 score = -self.alpha_beta::<OffPV>(
                     l_pv,
                     info,
