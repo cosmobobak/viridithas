@@ -368,7 +368,7 @@ impl UnquantisedNetwork {
         for bucket in 0..OUTPUT_BUCKETS {
             for i in 0..L3_SIZE {
                 for j in 0..L2_SIZE {
-                    net.l2_weights[j][bucket][i] = self.l2f_weights[j][i];
+                    net.l2_weights[j][bucket][i] += self.l2f_weights[j][i];
                 }
             }
         }
