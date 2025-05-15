@@ -107,12 +107,10 @@ pub fn nnue_checksum() -> u64 {
 #[repr(C)]
 struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
-    ft_weights:   [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
-    ft_biases:    [f32; L1_SIZE],
-    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
-    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l1f_biases:    [f32; L2_SIZE],
+    ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
+    ft_biases:     [f32; L1_SIZE],
+    l1_weights:  [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:    [[f32; L2_SIZE]; OUTPUT_BUCKETS],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
@@ -338,7 +336,7 @@ impl UnquantisedNetwork {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
                     let v =
-                        (self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j]) * f32::from(QB);
+                        self.l1_weights[i][bucket][j] * f32::from(QB);
                     max_seen = max_seen.max(v.abs());
                     if v.abs() > QB_BOUND {
                         eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
@@ -358,17 +356,12 @@ impl UnquantisedNetwork {
         }
 
         // transfer the L1 biases
-        net.l1_biases = self.l1x_biases;
-        for bucket in 0..OUTPUT_BUCKETS {
-            for i in 0..L2_SIZE {
-                net.l1_biases[bucket][i] += self.l1f_biases[i];
-            }
-        }
+        net.l1_biases = self.l1_biases;
         net.l2_weights = self.l2x_weights;
         for bucket in 0..OUTPUT_BUCKETS {
             for i in 0..L3_SIZE {
                 for j in 0..L2_SIZE {
-                    net.l2_weights[j][bucket][i] = self.l2f_weights[j][i];
+                    net.l2_weights[j][bucket][i] += self.l2f_weights[j][i];
                 }
             }
         }
