@@ -32,6 +32,7 @@ use crate::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
     },
+    lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
     search::pv::PVariation,
     searchinfo::SearchInfo,
@@ -558,7 +559,7 @@ impl Board {
             return 0;
         }
 
-        let key = self.state.keys.zobrist;
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
@@ -592,12 +593,12 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         // probe the TT and see if we get a cutoff.
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && !in_check
-                && !fifty_move_rule_near
+                && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -629,7 +630,7 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = raw_eval + t.correction(&info.conf, self);
+            let adj_eval = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -661,7 +662,7 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = raw_eval + t.correction(&info.conf, self);
+            stand_pat = adj_shuffle(raw_eval, clock) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -785,7 +786,7 @@ impl Board {
         let mut local_pv = PVariation::default();
         let l_pv = &mut local_pv;
 
-        let key = self.state.keys.zobrist;
+        let key = self.state.keys.zobrist ^ HM_CLOCK_KEYS[self.state.fifty_move_counter as usize];
 
         if depth <= 0 {
             return self.quiescence::<NT::Next>(pv, info, t, alpha, beta);
@@ -843,13 +844,14 @@ impl Board {
             }
         }
 
+        let clock = self.fifty_move_counter();
+
         let excluded = t.ss[height].excluded;
-        let fifty_move_rule_near = self.fifty_move_counter() >= 80;
         let tt_hit = if excluded.is_none() {
             if let Some(hit) = t.tt.probe(key, height) {
                 if !NT::PV
                     && hit.depth >= depth
-                    && !fifty_move_rule_near
+                    && clock < 80
                     && (hit.bound == Bound::Exact
                         || (hit.bound == Bound::Lower && hit.value >= beta)
                         || (hit.bound == Bound::Upper && hit.value <= alpha))
@@ -966,7 +968,7 @@ impl Board {
                 }
             }
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         } else {
             // otherwise, use the static evaluation.
             raw_eval = self.evaluate(t, info, info.nodes.get_local());
@@ -985,7 +987,7 @@ impl Board {
             );
 
             correction = t.correction(&info.conf, self);
-            static_eval = raw_eval + correction;
+            static_eval = adj_shuffle(raw_eval, clock) + correction;
         }
 
         t.ss[height].eval = static_eval;
@@ -1430,14 +1432,14 @@ impl Board {
                     // reduce less if the move gives check
                     r -= i32::from(self.in_check()) * info.conf.lmr_check_mul;
                     t.ss[height].reduction = r;
-                    (r / 1024).clamp(1, depth - 1)
+                    r / 1024
                 } else {
                     t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
-                let reduced_depth = new_depth - r;
+                let reduced_depth = (new_depth - r).clamp(0, new_depth);
                 score = -self.alpha_beta::<OffPV>(
                     l_pv,
                     info,
@@ -1579,6 +1581,23 @@ impl Board {
             );
         }
 
+        if !NT::ROOT && flag == Bound::Upper {
+            // the current node has failed low. this means that the inbound edge to this node
+            // will fail high, so we can give a bonus to that edge.
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if !ss_prev.searching_tactical {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    debug_assert_eq!(moved.colour(), !self.turn());
+                    let threats = self.history().last().unwrap().threats.all;
+                    let bonus = main_history_bonus(&info.conf, depth);
+                    t.update_history_single(from, to, moved, threats, bonus);
+                }
+            }
+        }
+
         if excluded.is_none() {
             debug_assert!(
                 alpha != original_alpha || best_move.is_none(),
@@ -1612,7 +1631,8 @@ impl Board {
 
     /// The margin for Reverse Futility Pruning.
     fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
-        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin + correction.abs() / 2
+        info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+            + correction.abs() / 2
     }
 
     /// Update the main and continuation history tables for a batch of moves.
@@ -1819,6 +1839,10 @@ impl Board {
         // the side that is to move after loop exit is the loser.
         self.turn() != colour
     }
+}
+
+fn adj_shuffle(raw_eval: i32, clock: u8) -> i32 {
+    raw_eval * (200 - i32::from(clock)) / 200
 }
 
 pub fn select_best<'a>(

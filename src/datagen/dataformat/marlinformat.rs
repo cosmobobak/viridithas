@@ -45,7 +45,7 @@ impl PackedBoard {
                 Rank::Eight
             };
             if piece_type == PieceType::Rook && sq.rank() == rank1 {
-                let castling_file = if board.king_sq(colour) < sq {
+                let castling_file = if board.state.bbs.king_sq(colour) < sq {
                     board.castling_rights().kingside(colour)
                 } else {
                     board.castling_rights().queenside(colour)

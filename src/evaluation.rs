@@ -85,11 +85,6 @@ impl Board {
         // material off if the position is worse for us.
         let v = v * self.material_scale(info) / 1024;
 
-        // scale down the value when the fifty-move counter is high.
-        // this goes some way toward making viri realise when he's not
-        // making progress in a position.
-        let v = v * (200 - i32::from(self.fifty_move_counter())) / 200;
-
         // clamp the value into the valid range.
         // this basically never comes up, but the network will
         // occasionally output OOB values in crazy positions with
