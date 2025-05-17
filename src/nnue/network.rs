@@ -90,7 +90,7 @@ pub fn output_bucket(pos: &Board) -> usize {
 }
 
 const QA: i16 = 255;
-const QB: i16 = 32;
+const QB: i16 = 64;
 
 // read in the binary file containing the network parameters
 // have to do some path manipulation to get relative paths to work
