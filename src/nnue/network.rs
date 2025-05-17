@@ -98,7 +98,7 @@ pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
 
 pub fn nnue_checksum() -> u64 {
     let mut hasher = fxhash::FxHasher::default();
-    hasher.write(&COMPRESSED_NNUE[..4096]);
+    hasher.write(COMPRESSED_NNUE);
     hasher.finish()
 }
 
@@ -258,7 +258,12 @@ impl UnquantisedNetwork {
     /// for embedding into viri as a zstd-compressed archive. We do one processing
     /// step other than quantisation, namely merging the feature factoriser with the
     /// main king buckets.
-    #[allow(clippy::cast_possible_truncation, clippy::assertions_on_constants, clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::assertions_on_constants,
+        clippy::too_many_lines,
+        clippy::cognitive_complexity
+    )]
     fn quantise(&self) -> Box<QuantisedNetwork> {
         const QA_BOUND: f32 = 1.98 * QA as f32;
         const QB_BOUND: f32 = 1.98 * QB as f32;
@@ -326,7 +331,9 @@ impl UnquantisedNetwork {
         let needed = QA_BOUND / max_seen * f32::from(QA);
         if max_seen > QA_BOUND {
             eprintln!("Worst offender was {max_seen}");
-            eprintln!("In order to fit these weights, QA would need to be {needed} instead of {QA}");
+            eprintln!(
+                "In order to fit these weights, QA would need to be {needed} instead of {QA}"
+            );
         } else {
             eprintln!("Quantisation of FT weights was successful");
             eprintln!("QA could be increased to {needed} instead of {QA}");
@@ -351,7 +358,9 @@ impl UnquantisedNetwork {
         let needed = QB_BOUND / max_seen * f32::from(QB);
         if max_seen > QB_BOUND {
             eprintln!("Worst offender was {max_seen}");
-            eprintln!("In order to fit these weights, QB would need to be {needed} instead of {QB}");
+            eprintln!(
+                "In order to fit these weights, QB would need to be {needed} instead of {QB}"
+            );
         } else {
             eprintln!("Quantisation of L1 weights was successful");
             eprintln!("QB could be increased to {needed} instead of {QB}");
@@ -657,12 +666,13 @@ impl NNUEParams {
         // Try to open existing weights file
         let exists = weights_path
             .try_exists()
-            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+            .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
 
         if exists {
             let mmap = Self::map_weight_file(&weights_path).with_context(|| {
                 format!(
-                    "Failed while attempting to load pre-existing weight file at {weights_path:#?}"
+                    "Failed while attempting to load pre-existing weight file at {}",
+                    weights_path.display()
                 )
             })?;
 
@@ -708,19 +718,23 @@ impl NNUEParams {
             .truncate(true)
             // use a temporary path to avoid race conditions
             .open(&temp_path)
-            .with_context(|| format!("Failed to open temporary file at {temp_path:#?}"))?;
+            .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
 
         // Allocate the file to the right size
         let size = std::mem::size_of::<Self>();
-        file.set_len(size as u64)
-            .with_context(|| format!("Failed to set length of file at {temp_path:#?} to {size}"))?;
+        file.set_len(size as u64).with_context(|| {
+            format!(
+                "Failed to set length of file at {} to {size}",
+                temp_path.display()
+            )
+        })?;
 
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
         let mut mmap = unsafe {
             memmap2::MmapOptions::new()
                 .map_mut(&file)
-                .with_context(|| format!("Failed to map temp file at {temp_path:#?}"))?
+                .with_context(|| format!("Failed to map temp file at {}", temp_path.display()))?
         };
 
         // Verify that the pointer is aligned to 64 bytes
@@ -738,8 +752,12 @@ impl NNUEParams {
         }
 
         // sync the file to disk
-        mmap.flush()
-            .with_context(|| format!("Failed to flush mmaped temporary file at {temp_path:#?}"))?;
+        mmap.flush().with_context(|| {
+            format!(
+                "Failed to flush mmaped temporary file at {}",
+                temp_path.display()
+            )
+        })?;
 
         // move the file to the correct path
         let rename_result = std::fs::rename(&temp_path, &weights_path);
@@ -747,7 +765,7 @@ impl NNUEParams {
         // if the file now exists, either we succeeded or got beaten to the punch:
         let exists = weights_path
             .try_exists()
-            .with_context(|| format!("Could not check existence of {weights_path:#?}"))?;
+            .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
 
         if !exists {
             let tfile = temp_path.file_name().unwrap_or_else(|| "<empty>".as_ref());
@@ -756,7 +774,10 @@ impl NNUEParams {
                 .unwrap_or_else(|| "<empty>".as_ref());
 
             rename_result.with_context(|| {
-                format!("Failed to rename temp file from {tfile:#?} to {wfile:#?} in {temp_dir:#?}")
+                format!(
+                    "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
+                    temp_dir.display()
+                )
             })?;
 
             panic!("Somehow rename succeeded but the file doesn't exist!");
@@ -765,12 +786,18 @@ impl NNUEParams {
         #[cfg(debug_assertions)]
         {
             // log that we've created the file freshly
-            println!("Created NNUE weights file at {weights_path:#?} from decompressed data");
+            println!(
+                "Created NNUE weights file at {} from decompressed data",
+                weights_path.display()
+            );
         }
 
         // file created, return the mapped weights
         let mmap = Self::map_weight_file(&weights_path).with_context(|| {
-            format!("Failed while attempting to load just-created weight file at {weights_path:#?}")
+            format!(
+                "Failed while attempting to load just-created weight file at {}",
+                weights_path.display()
+            )
         })?;
 
         // store the mmap in the cache
@@ -792,11 +819,19 @@ impl NNUEParams {
         //
         // this is a bit of a hack, but it's the best way to ensure that the file is
         // fully written before we try to use it.
-        let temp_dir_path = weights_path
-            .parent()
-            .with_context(|| format!("Weights path ({weights_path:#?}) is not in a directory!"))?;
+        let temp_dir_path = weights_path.parent().with_context(|| {
+            format!(
+                "Weights path ({}) is not in a directory!",
+                weights_path.display()
+            )
+        })?;
         while std::fs::read_dir(temp_dir_path)
-            .with_context(|| format!("Failed to read temporary directory at {temp_dir_path:#?}"))?
+            .with_context(|| {
+                format!(
+                    "Failed to read temporary directory at {}",
+                    temp_dir_path.display()
+                )
+            })?
             .filter_map(Result::ok)
             .any(|entry| {
                 entry
@@ -808,14 +843,15 @@ impl NNUEParams {
             std::thread::sleep(Duration::from_millis(100));
         }
 
-        let file = File::open(weights_path)
-            .with_context(|| format!("Failed to open weights file at {weights_path:#?}"))?;
+        let file = File::open(weights_path).with_context(|| {
+            format!("Failed to open weights file at {}", weights_path.display())
+        })?;
         // SAFETY: This file must not be modified while we have a reference to it.
         // we avoid doing this ourselves, but we can't defend against other processes.
         let mmap = unsafe {
-            memmap2::MmapOptions::new()
-                .map(&file)
-                .with_context(|| format!("Failed to map weights file at {weights_path:#?}"))?
+            memmap2::MmapOptions::new().map(&file).with_context(|| {
+                format!("Failed to map weights file at {}", weights_path.display())
+            })?
         };
 
         anyhow::ensure!(
@@ -834,8 +870,9 @@ impl NNUEParams {
         {
             // log the address of the mmap with pointer formatting
             println!(
-                "Loaded NNUE weights from mmap at {:p} from file {weights_path:#?}",
-                mmap.as_ptr()
+                "Loaded NNUE weights from mmap at {:p} from file {}",
+                mmap.as_ptr(),
+                weights_path.display()
             );
         }
 
