@@ -906,3 +906,53 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/10324/
             |                                          | vs. kolibri
 ------------|------------------------------------------|-----------------------------------------------
+  synthesis | four-headed network (value, W, D, L)     | fixed-nodes (value head):
+            | trained on standard value-blend target   | Elo   | -14.70 +- 6.23 (95%)
+            | and a cross-entropy loss against WDL.    | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4966 W: 1316 L: 1526 D: 2124
+            |                                          | Penta | [131, 669, 1038, 569, 76]
+            |                                          | https://chess.swehosting.se/test/10427/
+            |                                          | vs. falke
+            |                                          | 
+            |                                          | fixed-nodes (WDL heads):
+            |                                          | Elo   | -17.25 +- 6.67 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4132 W: 1017 L: 1222 D: 1893
+            |                                          | Penta | [102, 572, 867, 479, 46]
+            |                                          | https://chess.swehosting.se/test/10431/
+            |                                          | vs. synthesis-value
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -33.72 +- 4.80 (95%)
+            |                                          | Conf  | 60.0+0.60s Threads=1 Hash=128MB
+            |                                          | Games | N: 5002 W: 959 L: 1443 D: 2600
+            |                                          | Penta | [21, 830, 1266, 380, 4]
+            |                                          | https://chess.swehosting.se/test/10657/
+            |                                          | vs. falke
+------------|------------------------------------------|-----------------------------------------------
+    delenda | fresh retrain with full network          | fixed-nodes:
+            | factorisation.                           | Elo   | 7.81 +- 4.08 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11082 W: 3261 L: 3012 D: 4809
+            |                                          | Penta | [203, 1230, 2470, 1391, 247]
+            |                                          | https://chess.swehosting.se/test/10740/
+            |                                          | vs. falke
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | 2.06 +- 1.61 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 47132 W: 11259 L: 10979 D: 24894
+            |                                          | Penta | [115, 5554, 11997, 5736, 164]
+            |                                          | https://chess.swehosting.se/test/10741/
+            |                                          | vs. falke
+------------|------------------------------------------|-----------------------------------------------
+  wavefront | a variety of 50-superbatch retraining    | https://chess.swehosting.se/test/10601/
+            | experiments to test direct viripack data | https://chess.swehosting.se/test/10606/
+            |                                          | https://chess.swehosting.se/test/10611/
+            | all terrible.                            | https://chess.swehosting.se/test/10613/
+            |                                          | https://chess.swehosting.se/test/10617/
+------------|------------------------------------------|-----------------------------------------------
