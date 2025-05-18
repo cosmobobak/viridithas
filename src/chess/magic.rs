@@ -363,8 +363,10 @@ pub static ROOK_TABLE: [MagicEntry; 64] = {
 const BISHOP_MASKS: [SquareSet; 64] = init_masks_with!(mask_bishop_attacks);
 const ROOK_MASKS: [SquareSet; 64] = init_masks_with!(mask_rook_attacks);
 
+// SAFETY: All bitpatterns of u64 are valid, and SquareSet is repr(transparent) around u64.
 pub static BISHOP_ATTACKS: [[SquareSet; 512]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/diagonal_attacks.bin")) };
+// SAFETY: All bitpatterns of u64 are valid, and SquareSet is repr(transparent) around u64.
 #[allow(clippy::large_stack_arrays)]
 pub static ROOK_ATTACKS: [[SquareSet; 4096]; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../embeds/orthogonal_attacks.bin")) };
