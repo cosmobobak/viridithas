@@ -105,10 +105,10 @@ impl Filter {
 
     pub fn from_path(path: &Path) -> Result<Self, anyhow::Error> {
         let text = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read filter config file at {path:?}"))?;
+            .with_context(|| format!("Failed to read filter config file at {}", path.display()))?;
         toml::from_str(&text).with_context(|| {
             let default = toml::to_string_pretty(&Self::default()).unwrap();
-            format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
+            format!("Failed to parse filter config file at {} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```", path.display())
         })
     }
 }

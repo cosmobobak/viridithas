@@ -25,6 +25,13 @@ pub enum Subcommands {
         /// Path to output network parameter file.
         output: std::path::PathBuf,
     },
+    /// Merge the factorisers in a network parameter file.
+    Merge {
+        /// Path to input network parameter file.
+        input: std::path::PathBuf,
+        /// Path to output network parameter file.
+        output: std::path::PathBuf,
+    },
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
     /// Count the number of positions contained within one or more packed game records.

@@ -9,8 +9,12 @@ use crate::{
     lookups::{PIECE_KEYS, SIDE_KEY},
 };
 
+/// Zobrist keys for the repetition detection table.
+// SAFETY: All bitpatterns of u64 are valid.
 pub static KEYS: [u64; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_keys.bin")) };
+/// Moves for the repetition detection table.
+// SAFETY: All bitpatterns of Option<Move> are valid.
 pub static MOVES: [Option<Move>; 8192] =
     unsafe { std::mem::transmute(*include_bytes!("../embeds/cuckoo_moves.bin")) };
 

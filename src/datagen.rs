@@ -1105,11 +1105,11 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
                 .or_default() += 1;
             *stats
                 .pov_king_positions
-                .entry(position.king_sq(Colour::White))
+                .entry(position.state.bbs.king_sq(Colour::White))
                 .or_default() += 1;
             *stats
                 .pov_king_positions
-                .entry(position.king_sq(Colour::Black).flip_rank())
+                .entry(position.state.bbs.king_sq(Colour::Black).flip_rank())
                 .or_default() += 1;
         });
         move_buffer = game.into_move_buffer();

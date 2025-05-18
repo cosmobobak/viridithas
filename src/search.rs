@@ -1438,14 +1438,14 @@ impl Board {
                         r += 1024;
                     }
                     t.ss[height].reduction = r;
-                    (r / 1024).clamp(1, depth - 1)
+                    r / 1024
                 } else {
                     t.ss[height].reduction = 1024;
                     1
                 };
                 // perform a zero-window search
                 let mut new_depth = depth + extension;
-                let reduced_depth = new_depth - r;
+                let reduced_depth = (new_depth - r).clamp(0, new_depth);
                 score = -self.alpha_beta::<OffPV>(
                     l_pv,
                     info,
@@ -1588,6 +1588,23 @@ impl Board {
                 best_move,
                 depth,
             );
+        }
+
+        if !NT::ROOT && flag == Bound::Upper {
+            // the current node has failed low. this means that the inbound edge to this node
+            // will fail high, so we can give a bonus to that edge.
+            let ss_prev = &t.ss[height - 1];
+            if let Some(mov) = ss_prev.searching {
+                if !ss_prev.searching_tactical {
+                    let from = mov.from();
+                    let to = mov.history_to_square();
+                    let moved = self.piece_at(to).expect("Cannot fail, move has been made.");
+                    debug_assert_eq!(moved.colour(), !self.turn());
+                    let threats = self.history().last().unwrap().threats.all;
+                    let bonus = main_history_bonus(&info.conf, depth);
+                    t.update_history_single(from, to, moved, threats, bonus);
+                }
+            }
         }
 
         if excluded.is_none() {
