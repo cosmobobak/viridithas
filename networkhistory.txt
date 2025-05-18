@@ -956,3 +956,12 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             | all terrible.                            | https://chess.swehosting.se/test/10613/
             |                                          | https://chess.swehosting.se/test/10617/
 ------------|------------------------------------------|-----------------------------------------------
+    scorpio | factorised (apart from L1), training     | fixed-nodes:
+            | using the viribinpack dataloader.        | Elo   | -50.65 +- 11.13 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | because upsampling-via-dual-interleaving | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
+            | puts the duplicate records in the same   | Games | N: 1582 W: 353 L: 582 D: 647
+            | area of the data file, this probably had | Penta | [57, 275, 317, 124, 18]
+            | bugged data.                             | https://chess.swehosting.se/test/10761/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
