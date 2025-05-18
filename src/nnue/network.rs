@@ -110,9 +110,9 @@ struct UnquantisedNetwork {
     ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:     [f32; L1_SIZE],
     l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
+    // l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
     l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l1f_biases:    [f32; L2_SIZE],
+    // l1f_biases:    [f32; L2_SIZE],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
@@ -308,14 +308,14 @@ impl UnquantisedNetwork {
             for bucket in 0..OUTPUT_BUCKETS {
                 for j in 0..L2_SIZE {
                     net.l1_weights[i][bucket][j] =
-                        self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j];
+                        self.l1x_weights[i][bucket][j];// + self.l1f_weights[i][j];
                 }
             }
         }
         // copy the L1 biases
         for i in 0..L2_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                net.l1_biases[bucket][i] = self.l1x_biases[bucket][i] + self.l1f_biases[i];
+                net.l1_biases[bucket][i] = self.l1x_biases[bucket][i];// + self.l1f_biases[i];
             }
         }
         // copy the L2 weights
