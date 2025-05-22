@@ -1174,16 +1174,15 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     }
     pov_king_positions_file.flush()?;
 
-    #[allow(clippy::cast_precision_loss)]
-    let mean_game_len = ((stats
+    let total_position_count = stats
         .length_counts
         .iter()
         .map(|(k, v)| k * v)
-        .sum::<usize>() as u128
-        * 1000)
-        / stats.games as u128) as f64
-        / 1000.0;
+        .sum::<usize>() as u128;
+    #[allow(clippy::cast_precision_loss)]
+    let mean_game_len = ((total_position_count * 1000) / stats.games as u128) as f64 / 1000.0;
     println!("Mean game length: {mean_game_len}");
+    println!("Total position count: {total_position_count}");
 
     Ok(())
 }
