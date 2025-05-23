@@ -965,3 +965,48 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             | bugged data.                             | https://chess.swehosting.se/test/10761/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+     legion | delenda finetune on new data.            | fixed-nodes:
+            | loading from naively interleaved         | Elo   | -43.14 +- 10.05 (95%)
+            | viribinpacks.                            | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.30 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2032 W: 488 L: 739 D: 805
+            |                                          | Penta | [92, 288, 439, 173, 24]
+            |                                          | https://chess.swehosting.se/test/10763/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ iridescent | same as legion with 4gb mixing buffer.   | fixed-nodes:
+            |                                          | Elo   | -48.90 +- 11.15 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.06 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 1702 W: 382 L: 620 D: 700
+            |                                          | Penta | [78, 268, 338, 148, 19]
+            |                                          | https://chess.swehosting.se/test/10765/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+inquisition | same as legion/iridescent with standard  | fixed-nodes:
+            | full-shuffled bulletformat dataloading.  | Elo   | -33.65 +- 8.51 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.50 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2662 W: 665 L: 922 D: 1075
+            |                                          | Penta | [83, 411, 550, 254, 33]
+            |                                          | https://chess.swehosting.se/test/10768/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+   resonant | i actually cannot remember what the      | resonant fixed-nodes:
+      angel | difference between these nets is.        | Elo   | -14.89 +- 6.18 (95%)
+            | at least one of them upsampled the new   | SPRT  | N=25000 Threads=1 Hash=16MB
+            | data and cleaned out the old stuff.      | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            | probably only angel? not sure.           | Games | N: 4740 W: 1241 L: 1444 D: 2055
+            |                                          | Penta | [94, 674, 1017, 511, 74]
+            | i wish i wrote things down instead of    | https://chess.swehosting.se/test/10779/
+            | just YOLOing them into new runs.         | vs. delenda
+            |                                          | 
+            | the important part is that legion        | angel fixed-nodes:
+            | through angel are all on top of a merged | Elo   | -15.40 +- 6.26 (95%)
+            | delenda weight file, so they have been   | SPRT  | N=25000 Threads=1 Hash=16MB
+            | trained without a factoriser.            | LLR   | -3.09 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4900 W: 1290 L: 1507 D: 2103
+            |                                          | Penta | [112, 709, 993, 556, 80]
+            |                                          | https://chess.swehosting.se/test/10782/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
