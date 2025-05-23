@@ -1010,3 +1010,12 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/10782/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+  broadside | direct finetune on top of the non-merged | fixed-nodes:
+            | delenda checkpoint, with new data.       | Elo   | -1.63 +- 2.50 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | clearly, factorisation is massive, even  | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            | for fine-tuning runs. lesson learned.    | Games | N: 29188 W: 8132 L: 8269 D: 12787
+            |                                          | Penta | [558, 3611, 6366, 3528, 531]
+            |                                          | https://chess.swehosting.se/test/10787/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
