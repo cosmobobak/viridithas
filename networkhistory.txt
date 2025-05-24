@@ -1028,3 +1028,7 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/10790/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+ foundation | broadside trained locally via viripacks, | fixed-nodes:
+            | 6gb mixing buffer, uniform sampling.     | TBD
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
