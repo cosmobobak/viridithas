@@ -1010,7 +1010,12 @@ const NORMALISE_TO_PAWN_VALUE: i32 = 229;
 fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     const AS: [f64; 4] = [6.871_558_62, -39.652_263_91, 90.684_603_52, 170.669_963_64];
-    const BS: [f64; 4] = [-7.198_907_10, 56.139_471_85, -139.910_911_83, 182.810_074_27];
+    const BS: [f64; 4] = [
+        -7.198_907_10,
+        56.139_471_85,
+        -139.910_911_83,
+        182.810_074_27,
+    ];
     debug_assert_eq!(
         NORMALISE_TO_PAWN_VALUE,
         AS.iter().sum::<f64>().round() as i32,
@@ -1023,7 +1028,11 @@ fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
     let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
     let b = BS[0].mul_add(m, BS[1]).mul_add(m, BS[2]).mul_add(m, BS[3]);
 
-    let x = f64::clamp(f64::from(100 * eval) / f64::from(NORMALISE_TO_PAWN_VALUE), -2000.0, 2000.0);
+    let x = f64::clamp(
+        f64::from(100 * eval) / f64::from(NORMALISE_TO_PAWN_VALUE),
+        -2000.0,
+        2000.0,
+    );
     let win = 1.0 / (1.0 + f64::exp((a - x) / b));
     let loss = 1.0 / (1.0 + f64::exp((a + x) / b));
     let draw = 1.0 - win - loss;
