@@ -769,7 +769,12 @@ impl Board {
     }
 
     /// Perform alpha-beta minimax search.
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation
+    )]
     pub fn alpha_beta<NT: NodeType>(
         &mut self,
         pv: &mut PVariation,
@@ -1290,6 +1295,22 @@ impl Board {
             {
                 move_picker.skip_quiets = true;
                 continue;
+            }
+
+            // futility pruning for bad noisy moves.
+            let margin = static_eval + 122 * depth + 371 * moves_made as i32 / 128;
+            if !NT::ROOT
+                && !NT::PV
+                && !in_check
+                && depth < 6
+                && !is_quiet
+                && move_picker.stage > Stage::YieldGoodCaptures
+                && margin <= alpha
+            {
+                if best_score > -MINIMUM_TB_WIN_SCORE && best_score <= margin {
+                    best_score = margin;
+                }
+                break;
             }
 
             // futility pruning
