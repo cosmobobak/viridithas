@@ -1265,31 +1265,45 @@ impl Board {
                 stat_score += t.get_tactical_history_score(self, m);
             }
 
-            // lmp & fp.
-            if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
-                // late move pruning
-                // if we have made too many moves, we start skipping moves.
-                if lmr_depth < 9 && moves_made >= lmp_threshold {
-                    move_picker.skip_quiets = true;
-                }
+            // late move pruning
+            // if we have made too many moves, we start skipping moves.
+            if !NT::ROOT
+                && !NT::PV
+                && !in_check
+                && best_score > -MINIMUM_TB_WIN_SCORE
+                && lmr_depth < 9
+                && moves_made >= lmp_threshold
+            {
+                move_picker.skip_quiets = true;
+            }
 
-                // history pruning
-                // if this move's history score is too low, we start skipping moves.
-                if is_quiet
-                    && (Some(m) != killer)
-                    && lmr_depth < 7
-                    && stat_score < info.conf.history_pruning_margin * (depth - 1)
-                {
-                    move_picker.skip_quiets = true;
-                    continue;
-                }
+            // history pruning
+            // if this move's history score is too low, we start skipping moves.
+            if !NT::ROOT
+                && !NT::PV
+                && !in_check
+                && best_score > -MINIMUM_TB_WIN_SCORE
+                && is_quiet
+                && (Some(m) != killer)
+                && lmr_depth < 7
+                && stat_score < info.conf.history_pruning_margin * (depth - 1)
+            {
+                move_picker.skip_quiets = true;
+                continue;
+            }
 
-                // futility pruning
-                // if the static eval is too low, we start skipping moves.
-                let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
-                if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
-                    move_picker.skip_quiets = true;
-                }
+            // futility pruning
+            // if the static eval is too low, we start skipping moves.
+            let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
+            if !NT::ROOT
+                && !NT::PV
+                && !in_check
+                && best_score > -MINIMUM_TB_WIN_SCORE
+                && is_quiet
+                && lmr_depth < 6
+                && static_eval + fp_margin <= alpha
+            {
+                move_picker.skip_quiets = true;
             }
 
             // static exchange evaluation pruning
