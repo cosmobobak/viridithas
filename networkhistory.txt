@@ -1018,6 +1018,15 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | Penta | [558, 3611, 6366, 3528, 531]
             |                                          | https://chess.swehosting.se/test/10787/
             |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -3.16 +- 2.79 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 15380 W: 3464 L: 3604 D: 8312
+            |                                          | Penta | [40, 1903, 3932, 1787, 28]
+            |                                          | https://chess.swehosting.se/test/10788/
+            |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
      spigot | same as broadside, but removing data     | fixed-nodes:
             | before 2024-05-01, and 4x upsampling all | Elo   | -18.62 +- 6.63 (95%)
