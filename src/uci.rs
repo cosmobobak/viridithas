@@ -1005,29 +1005,35 @@ fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> anyho
 /// [the WLD model](https://github.com/vondele/WLD_model) such that Viridithas
 /// outputs an advantage of 100 centipawns for a position if the engine has a
 /// 50% probability to win from this position in selfplay at 16s+0.16s time control.
-const NORMALISE_TO_PAWN_VALUE: i32 = 199;
-fn win_rate_model(eval: i32, ply: usize) -> (i32, i32) {
+const NORMALISE_TO_PAWN_VALUE: i32 = 229;
+
+fn wdl_model(eval: i32, ply: usize) -> (i32, i32, i32) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    const AS: [f64; 4] = [-0.482_975_16, 6.606_540_42, 5.860_087_77, 187.010_789_32];
-    const BS: [f64; 4] = [-5.963_499_01, 39.012_824_90, -78.131_169_94, 115.038_711_68];
-    let m = min!(240.0, ply as f64) / 64.0;
+    const AS: [f64; 4] = [6.871_558_62, -39.652_263_91, 90.684_603_52, 170.669_963_64];
+    const BS: [f64; 4] = [-7.198_907_10, 56.139_471_85, -139.910_911_83, 182.810_074_27];
     debug_assert_eq!(
         NORMALISE_TO_PAWN_VALUE,
         AS.iter().sum::<f64>().round() as i32,
         "AS sum should be {NORMALISE_TO_PAWN_VALUE} but is {:.2}",
         AS.iter().sum::<f64>()
     );
+
+    let m = std::cmp::min(240, ply) as f64 / 64.0;
+
     let a = AS[0].mul_add(m, AS[1]).mul_add(m, AS[2]).mul_add(m, AS[3]);
     let b = BS[0].mul_add(m, BS[1]).mul_add(m, BS[2]).mul_add(m, BS[3]);
 
-    // Transform the eval to centipawns with limited range
-    let x = f64::from(eval.clamp(-4000, 4000));
+    let x = f64::clamp(f64::from(100 * eval) / f64::from(NORMALISE_TO_PAWN_VALUE), -2000.0, 2000.0);
+    let win = 1.0 / (1.0 + f64::exp((a - x) / b));
+    let loss = 1.0 / (1.0 + f64::exp((a + x) / b));
+    let draw = 1.0 - win - loss;
 
-    // Return the win rate in per mille units rounded to the nearest value
-    let win = (0.5 + 1000.0 / (1.0 + f64::exp((a - x) / b))) as i32;
-    let loss = (0.5 + 1000.0 / (1.0 + f64::exp((a + x) / b))) as i32;
-
-    (win, loss)
+    // Round to the nearest integer
+    (
+        (1000.0 * win).round() as i32,
+        (1000.0 * draw).round() as i32,
+        (1000.0 * loss).round() as i32,
+    )
 }
 
 struct UciWdlFormat {
@@ -1036,8 +1042,7 @@ struct UciWdlFormat {
 }
 impl Display for UciWdlFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (wdl_w, wdl_l) = win_rate_model(self.eval, self.ply);
-        let wdl_d = 1000 - wdl_w - wdl_l;
+        let (wdl_w, wdl_d, wdl_l) = wdl_model(self.eval, self.ply);
         write!(f, "{wdl_w} {wdl_d} {wdl_l}")
     }
 }
@@ -1049,8 +1054,7 @@ struct PrettyUciWdlFormat {
 impl Display for PrettyUciWdlFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #![allow(clippy::cast_possible_truncation)]
-        let (wdl_w, wdl_l) = win_rate_model(self.eval, self.ply);
-        let wdl_d = 1000 - wdl_w - wdl_l;
+        let (wdl_w, wdl_d, wdl_l) = wdl_model(self.eval, self.ply);
         let wdl_w = (f64::from(wdl_w) / 10.0).round() as i32;
         let wdl_d = (f64::from(wdl_d) / 10.0).round() as i32;
         let wdl_l = (f64::from(wdl_l) / 10.0).round() as i32;
