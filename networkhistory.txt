@@ -1038,6 +1038,11 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
  foundation | broadside trained locally via viripacks, | fixed-nodes:
-            | 6gb mixing buffer, uniform sampling.     | TBD
+            | 6gb mixing buffer, uniform sampling.     | Elo   | -27.76 +- 7.91 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.34 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2972 W: 758 L: 995 D: 1219
+            |                                          | Penta | [96, 400, 669, 287, 34]
+            |                                          | https://chess.swehosting.se/test/10797/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
