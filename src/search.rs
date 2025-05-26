@@ -1298,18 +1298,17 @@ impl Board {
             }
 
             // futility pruning for bad noisy moves.
-            let margin = static_eval + 122 * depth + 371 * moves_made as i32 / 128;
+            let bnfp_margin = 128 * depth + 384 * moves_made as i32 / 128;
             if !NT::ROOT
                 && !NT::PV
                 && !in_check
-                && depth < 6
+                && lmr_depth < 6
                 && !is_quiet
-                && move_picker.stage > Stage::YieldGoodCaptures
-                && margin <= alpha
+                && move_picker.stage == Stage::YieldRemaining
+                && static_eval + bnfp_margin <= alpha
+                && !is_game_theoretic_score(best_score)
             {
-                if best_score > -MINIMUM_TB_WIN_SCORE && best_score <= margin {
-                    best_score = margin;
-                }
+                best_score = best_score.max(static_eval + bnfp_margin);
                 break;
             }
 
