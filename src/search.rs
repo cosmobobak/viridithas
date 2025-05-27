@@ -1297,21 +1297,6 @@ impl Board {
                 continue;
             }
 
-            // futility pruning for bad noisy moves.
-            let bnfp_margin = 128 * depth + 384 * moves_made as i32 / 128;
-            if !NT::ROOT
-                && !NT::PV
-                && !in_check
-                && lmr_depth < 6
-                && !is_quiet
-                && move_picker.stage == Stage::YieldRemaining
-                && static_eval + bnfp_margin <= alpha
-                && !is_game_theoretic_score(best_score)
-            {
-                best_score = best_score.max(static_eval + bnfp_margin);
-                break;
-            }
-
             // futility pruning
             // if the static eval is too low, we start skipping moves.
             let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
@@ -1320,10 +1305,11 @@ impl Board {
                 && !in_check
                 && best_score > -MINIMUM_TB_WIN_SCORE
                 && is_quiet
-                && lmr_depth < 6
+                && lmr_depth < 9
                 && static_eval + fp_margin <= alpha
             {
                 move_picker.skip_quiets = true;
+                continue;
             }
 
             // static exchange evaluation pruning
