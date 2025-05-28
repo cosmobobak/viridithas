@@ -366,6 +366,10 @@ impl Board {
                     break 'deepening;
                 }
             }
+
+            t.optimism[self.turn()] = 128 * average_value / (average_value.abs() + 212);
+            t.optimism[!self.turn()] = -t.optimism[self.turn()];
+
             // aspiration loop:
             // (depth can be dynamically modified in the aspiration loop,
             // so we return out the value of depth to the caller)
