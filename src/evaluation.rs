@@ -66,11 +66,11 @@ impl Board {
     fn material(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
         let b = &self.state.bbs;
-            (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
-                + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32
-                + info.conf.see_rook_value * b.pieces[PieceType::Rook].count() as i32
-                + info.conf.see_queen_value * b.pieces[PieceType::Queen].count() as i32)
-                / 32
+        (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
+            + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32
+            + info.conf.see_rook_value * b.pieces[PieceType::Rook].count() as i32
+            + info.conf.see_queen_value * b.pieces[PieceType::Queen].count() as i32)
+            / 32
     }
 
     pub fn evaluate_nnue(&self, t: &ThreadData, info: &SearchInfo) -> i32 {
@@ -83,7 +83,7 @@ impl Board {
         // on the board if we have winning chances, and trading
         // material off if the position is worse for us.
         let material = self.material(info);
-        let base=  info.conf.material_scale_base;
+        let base = info.conf.material_scale_base;
         let v = (v * (base + material) + t.optimism[self.turn()] * (2000 + material) / 32) / 1024;
 
         // clamp the value into the valid range.
