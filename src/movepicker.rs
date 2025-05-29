@@ -7,6 +7,8 @@ use crate::{
             Board,
         },
         chessmove::Move,
+        piece::PieceType,
+        squareset::SquareSet,
     },
     history,
     historytable::MAX_HISTORY,
@@ -182,9 +184,36 @@ impl MovePicker {
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
-        // zero-out the ordering scores
+        let threats = &pos.state.threats;
         for m in &mut *ms {
+            let from_sq = m.mov.from();
+            let to_sq = m.mov.to();
+            let moving = pos.piece_at(from_sq).unwrap().piece_type();
+            let from = from_sq.as_set();
+            let to = to_sq.as_set();
             m.score = 0;
+            if moving == PieceType::Queen {
+                if threats.rook & from != SquareSet::EMPTY {
+                    m.score += 32768;
+                }
+                if threats.rook & to != SquareSet::EMPTY {
+                    m.score -= 32768;
+                }
+            } else if moving == PieceType::Rook {
+                if threats.minor & from != SquareSet::EMPTY {
+                    m.score += 16384;
+                }
+                if threats.minor & to != SquareSet::EMPTY {
+                    m.score -= 16384;
+                }
+            } else if moving == PieceType::Knight || moving == PieceType::Bishop {
+                if threats.pawn & from != SquareSet::EMPTY {
+                    m.score += 16384;
+                }
+                if threats.pawn & to != SquareSet::EMPTY {
+                    m.score -= 16384;
+                }
+            }
         }
 
         t.get_history_scores(pos, ms);
