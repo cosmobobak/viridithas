@@ -39,6 +39,7 @@ pub struct ThreadData<'a> {
     pub depth: usize,
 
     pub stm_at_root: Colour,
+    pub optimism: [i32; 2],
 
     pub tt: TTView<'a>,
 }
@@ -76,6 +77,7 @@ impl<'a> ThreadData<'a> {
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
+            optimism: [0; 2],
             tt,
         };
 

@@ -393,7 +393,8 @@ impl MergedNetwork {
                 let len = std::mem::size_of_val(&$field) / std::mem::size_of::<f32>();
                 // SAFETY: lol
                 let slice = unsafe {
-                    std::slice::from_raw_parts($field.as_ptr().cast::<f32>(), len)
+                    let ptr = $field.as_ptr().cast::<f32>();
+                    std::slice::from_raw_parts(ptr, len)
                 };
                 writer.write_all(&usize::to_le_bytes(len))?;
                 for val in slice {
