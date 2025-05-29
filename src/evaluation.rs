@@ -63,7 +63,7 @@ pub const SEE_ROOK_VALUE: i32 = 721;
 pub const SEE_QUEEN_VALUE: i32 = 1348;
 
 impl Board {
-    fn material(&self, info: &SearchInfo) -> i32 {
+    pub fn material(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
         let b = &self.state.bbs;
         (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
@@ -73,18 +73,10 @@ impl Board {
             / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData, info: &SearchInfo) -> i32 {
+    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
         let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
-
-        // scale down the value estimate when there's not much
-        // material left - this will incentivize keeping material
-        // on the board if we have winning chances, and trading
-        // material off if the position is worse for us.
-        let material = self.material(info);
-        let base = info.conf.material_scale_base;
-        let v = (v * (base + material) + t.optimism[self.turn()] * (2000 + material) / 32) / 1024;
 
         // clamp the value into the valid range.
         // this basically never comes up, but the network will
@@ -93,7 +85,7 @@ impl Board {
         v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, info: &SearchInfo, nodes: u64) -> i32 {
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         // detect draw by insufficient material
         if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
             && self.state.bbs.is_material_draw()
@@ -108,7 +100,7 @@ impl Board {
         // neural network accumulator state.
         t.nnue.force(self, t.nnue_params);
         // run the neural network evaluation
-        self.evaluate_nnue(t, info)
+        self.evaluate_nnue(t)
     }
 
     pub fn zugzwang_unlikely(&self) -> bool {
