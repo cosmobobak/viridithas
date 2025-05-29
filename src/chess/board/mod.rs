@@ -225,34 +225,43 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        let mut threats = SquareSet::EMPTY;
-        let mut checkers = SquareSet::EMPTY;
+        let mut threats = Threats::default();
 
         let bbs = &self.state.bbs;
         let us = bbs.colours[side];
         let them = bbs.colours[!side];
         let their_pawns = bbs.pieces[PieceType::Pawn] & them;
         let their_knights = bbs.pieces[PieceType::Knight] & them;
-        let their_diags = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Bishop]) & them;
-        let their_orthos = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Rook]) & them;
+        let their_bishops = bbs.pieces[PieceType::Bishop] & them;
+        let their_rooks = bbs.pieces[PieceType::Rook] & them;
+        let their_queens = bbs.pieces[PieceType::Queen] & them;
+        let their_diags = their_bishops | their_queens;
+        let their_orthos = their_rooks | their_queens;
         let their_king = (bbs.pieces[PieceType::King] & them).first();
         let blockers = us | them;
 
         // compute threats
-        threats |= match side {
+        threats.pawn = match side {
             Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
             Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
         };
+        threats.minor = threats.pawn;
         for sq in their_knights {
-            threats |= knight_attacks(sq);
+            threats.minor |= knight_attacks(sq);
         }
-        for sq in their_diags {
-            threats |= bishop_attacks(sq, blockers);
+        for sq in their_bishops {
+            threats.minor |= bishop_attacks(sq, blockers);
         }
-        for sq in their_orthos {
-            threats |= rook_attacks(sq, blockers);
+        threats.rook = threats.minor;
+        for sq in their_rooks {
+            threats.rook |= rook_attacks(sq, blockers);
         }
-        threats |= king_attacks(their_king);
+        threats.all = threats.rook;
+        for sq in their_queens {
+            threats.all |= bishop_attacks(sq, blockers);
+            threats.all |= rook_attacks(sq, blockers);
+        }
+        threats.all |= king_attacks(their_king);
 
         // compute checkers
         let our_king_bb = us & bbs.pieces[PieceType::King];
@@ -261,18 +270,15 @@ impl Board {
             Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
             Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
         };
-        checkers |= backwards_from_king & their_pawns;
+        threats.checkers |= backwards_from_king & their_pawns;
         let knight_attacks = knight_attacks(our_king_sq);
-        checkers |= knight_attacks & their_knights;
+        threats.checkers |= knight_attacks & their_knights;
         let diag_attacks = bishop_attacks(our_king_sq, blockers);
-        checkers |= diag_attacks & their_diags;
+        threats.checkers |= diag_attacks & their_diags;
         let ortho_attacks = rook_attacks(our_king_sq, blockers);
-        checkers |= ortho_attacks & their_orthos;
+        threats.checkers |= ortho_attacks & their_orthos;
 
-        Threats {
-            all: threats,
-            /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers,
-        }
+        threats
     }
 
     pub fn reset(&mut self) {

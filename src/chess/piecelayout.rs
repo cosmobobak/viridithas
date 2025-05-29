@@ -186,10 +186,15 @@ impl PieceLayout {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Threats {
+    /// All threatened squares.
     pub all: SquareSet,
-    // pub pawn: SquareSet,
-    // pub minor: SquareSet,
-    // pub rook: SquareSet,
+    /// All squares threatened by pawns.
+    pub pawn: SquareSet,
+    /// All squares threatened by minors or pawns.
+    pub minor: SquareSet,
+    /// All squares threatened by rooks, minors, or pawns.
+    pub rook: SquareSet,
+    /// The set of pieces that are currently checking the king.
     pub checkers: SquareSet,
 }
 
