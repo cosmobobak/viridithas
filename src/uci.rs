@@ -39,7 +39,7 @@ use crate::{
         network::{self, NNUEParams},
     },
     perft,
-    search::{parameters::Config, LMTable},
+    search::{adj_shuffle, parameters::Config, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,
     threadlocal::ThreadData,
@@ -691,13 +691,11 @@ pub fn main_loop() -> anyhow::Result<()> {
                 let eval = if pos.in_check() {
                     0
                 } else {
-                    pos.evaluate(
-                        thread_data
-                            .first_mut()
-                            .with_context(|| "the thread headers are empty.")?,
-                        &info,
-                        0,
-                    )
+                    let t = thread_data
+                        .first_mut()
+                        .with_context(|| "the thread headers are empty.")?;
+                    let eval = pos.evaluate(t, 0);
+                    adj_shuffle(&pos, t, &info, eval, pos.fifty_move_counter())
                 };
                 println!("{eval}");
                 Ok(())
