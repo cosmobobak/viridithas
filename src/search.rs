@@ -634,7 +634,8 @@ impl Board {
                 // if the TT eval is not VALUE_NONE, use it.
                 raw_eval = v;
             }
-            let adj_eval = adj_shuffle(self, t, info, raw_eval, clock) + t.correction(&info.conf, self);
+            let adj_eval =
+                adj_shuffle(self, t, info, raw_eval, clock) + t.correction(&info.conf, self);
 
             // try correcting via search score from TT.
             // notably, this doesn't work for main search for ~reasons.
@@ -666,7 +667,8 @@ impl Board {
                 t.ss[height].ttpv,
             );
 
-            stand_pat = adj_shuffle(self, t, info, raw_eval, clock) + t.correction(&info.conf, self);
+            stand_pat =
+                adj_shuffle(self, t, info, raw_eval, clock) + t.correction(&info.conf, self);
         }
 
         if stand_pat >= beta {
@@ -1845,14 +1847,21 @@ impl Board {
     }
 }
 
-pub fn adj_shuffle(board: &Board, t: &ThreadData, info: &SearchInfo, raw_eval: i32, clock: u8) -> i32 {
+pub fn adj_shuffle(
+    board: &Board,
+    t: &ThreadData,
+    info: &SearchInfo,
+    raw_eval: i32,
+    clock: u8,
+) -> i32 {
     // scale down the value estimate when there's not much
     // material left - this will incentivize keeping material
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = board.material(info);
     let base = info.conf.material_scale_base;
-    let raw_eval = (raw_eval * (base + material) + t.optimism[board.turn()] * (2000 + material) / 32) / 1024;
+    let raw_eval =
+        (raw_eval * (base + material) + t.optimism[board.turn()] * (2000 + material) / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
