@@ -194,24 +194,24 @@ impl MovePicker {
             m.score = 0;
             if moving == PieceType::Queen {
                 if threats.rook & from != SquareSet::EMPTY {
-                    m.score += 32768;
+                    m.score += 16384;
                 }
                 if threats.rook & to != SquareSet::EMPTY {
-                    m.score -= 32768;
+                    m.score -= 16384;
                 }
             } else if moving == PieceType::Rook {
                 if threats.minor & from != SquareSet::EMPTY {
-                    m.score += 16384;
+                    m.score += 8192;
                 }
                 if threats.minor & to != SquareSet::EMPTY {
-                    m.score -= 16384;
+                    m.score -= 8192;
                 }
             } else if moving == PieceType::Knight || moving == PieceType::Bishop {
                 if threats.pawn & from != SquareSet::EMPTY {
-                    m.score += 16384;
+                    m.score += 8192;
                 }
                 if threats.pawn & to != SquareSet::EMPTY {
-                    m.score -= 16384;
+                    m.score -= 8192;
                 }
             }
         }
