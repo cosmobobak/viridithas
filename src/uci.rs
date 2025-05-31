@@ -39,7 +39,7 @@ use crate::{
         network::{self, NNUEParams},
     },
     perft,
-    search::{adj_shuffle, parameters::Config, LMTable},
+    search::{adj_shuffle, parameters::Config, search_position, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,
     threadlocal::ThreadData,
@@ -805,7 +805,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 if let Ok(search_limit) = res {
                     info.time_manager.set_limit(search_limit);
                     tt.increase_age();
-                    pos.search_position(&mut info, &mut thread_data, tt.view());
+                    search_position(&mut pos, &mut info, &mut thread_data, tt.view());
                     Ok(())
                 } else {
                     res.map(|_| ())
@@ -888,7 +888,7 @@ pub fn bench(
             }
         }
         tt.increase_age();
-        pos.search_position(&mut info, &mut thread_data, tt.view());
+        search_position(&mut pos, &mut info, &mut thread_data, tt.view());
         node_sum += info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());
@@ -945,7 +945,12 @@ pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
         )?;
         info.time_manager.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(pos.search_position(&mut info, &mut thread_data, tt.view()));
+        std::hint::black_box(search_position(
+            &mut pos,
+            &mut info,
+            &mut thread_data,
+            tt.view(),
+        ));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);
