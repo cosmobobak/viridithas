@@ -530,7 +530,7 @@ fn default_move(board: &mut Board, t: &ThreadData, info: &SearchInfo) -> Move {
     let tt_move =
         t.tt.probe_for_provisional_info(board.state.keys.zobrist)
             .and_then(|e| e.0);
-    let mut mp = MovePicker::new(tt_move, get_kil_ler(board.height(), t), 0);
+    let mut mp = MovePicker::new(tt_move, t.killer_move_table[board.height()], 0);
     let mut m = None;
     while let Some(mov) = mp.next(board, t, info) {
         if !board.make_move_simple(mov) {
@@ -762,11 +762,6 @@ pub fn quiescence<NT: NodeType>(
     );
 
     best_score
-}
-
-/// Get the two killer moves for this position.
-pub const fn get_kil_ler(ply: usize, t: &ThreadData) -> Option<Move> {
-    t.killer_move_table[ply]
 }
 
 /// Perform alpha-beta minimax search.
@@ -1240,7 +1235,7 @@ pub fn alpha_beta<NT: NodeType>(
     // number of quiet moves to try before we start pruning
     let lmp_threshold = info.lm_table.lmp_movecount(depth, improving);
 
-    let killer = get_kil_ler(board.height(), t).filter(|m| !board.is_tactical(*m));
+    let killer = t.killer_move_table[height].filter(|m| !board.is_tactical(*m));
     let mut move_picker = MovePicker::new(tt_move, killer, info.conf.main_see_bound);
 
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
