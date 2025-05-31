@@ -36,6 +36,7 @@ use crate::{
     datagen::dataformat::Game,
     evaluation::{is_game_theoretic_score, is_mate_score},
     nnue::network::NNUEParams,
+    search::{search_position, static_exchange_eval},
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
@@ -179,7 +180,7 @@ fn make_random_move(
     let legal_moves = board.legal_moves();
     for _ in 0..8 {
         let m = *legal_moves.choose(rng)?;
-        if board.static_exchange_eval(info, m, see_threshold) {
+        if static_exchange_eval(board, info, m, see_threshold) {
             assert!(board.make_move(m, t));
             return Some(m);
         }
@@ -516,8 +517,12 @@ fn generate_on_thread<'a>(
         // to make sure that it isn't silly.
         let temp_limit = info.time_manager.limit().clone();
         info.time_manager.set_limit(SearchLimit::Depth(10));
-        let (eval, _) =
-            board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+        let (eval, _) = search_position(
+            &mut board,
+            &mut info,
+            std::array::from_mut(&mut thread_data),
+            tt.view(),
+        );
         info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
@@ -543,8 +548,12 @@ fn generate_on_thread<'a>(
             }
             tt.increase_age();
 
-            let (score, best_move) =
-                board.search_position(&mut info, std::array::from_mut(&mut thread_data), tt.view());
+            let (score, best_move) = search_position(
+                &mut board,
+                &mut info,
+                std::array::from_mut(&mut thread_data),
+                tt.view(),
+            );
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
