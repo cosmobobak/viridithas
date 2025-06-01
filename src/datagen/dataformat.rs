@@ -388,7 +388,10 @@ mod tests {
                 "black square-sets {msg}"
             );
             for sq in Square::all() {
-                assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
+                assert_eq!(
+                    lhs.state.mailbox[sq], rhs.state.mailbox[sq],
+                    ".state.mailbox[{sq:?}] {msg}"
+                );
             }
             assert_eq!(lhs.turn(), rhs.turn(), "side {msg}");
             assert_eq!(lhs.ep_sq(), rhs.ep_sq(), "ep_sq {msg}");

@@ -113,9 +113,7 @@ impl Board {
 
     pub fn estimated_see(&self, info: &SearchInfo, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = self
-            .piece_at(m.to())
-            .map_or(0, |p| see_value(p.piece_type(), info));
+        let mut value = self.state.mailbox[m.to()].map_or(0, |p| see_value(p.piece_type(), info));
 
         if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type

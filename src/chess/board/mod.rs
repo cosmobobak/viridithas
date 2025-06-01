@@ -789,16 +789,15 @@ impl Board {
     /// Checks whether a move is pseudo-legal.
     /// This means that it is a legal move, except for the fact that it might leave the king in check.
     pub fn is_pseudo_legal(&self, m: Move) -> bool {
+        if m.is_castle() {
+            return self.is_pseudo_legal_castling(m);
+        }
+
         let from = m.from();
         let to = m.to();
 
-        let moved_piece = self.piece_at(from);
-        let captured_piece = if m.is_castle() {
-            return self.is_pseudo_legal_castling(m);
-        } else {
-            self.piece_at(to)
-        };
-        let is_pawn_double_push = self.is_double_pawn_push(m);
+        let moved_piece = self.state.mailbox[from];
+        let captured_piece = self.state.mailbox[to];
 
         let Some(moved_piece) = moved_piece else {
             return false;
@@ -814,17 +813,10 @@ impl Board {
             }
         }
 
-        if moved_piece.piece_type() != PieceType::Pawn
-            && (is_pawn_double_push || m.is_ep() || m.is_promo())
+        if captured_piece.is_some()
+            && moved_piece.piece_type() == PieceType::Pawn
+            && from.file() == to.file()
         {
-            return false;
-        }
-
-        if moved_piece.piece_type() != PieceType::King && m.is_castle() {
-            return false;
-        }
-
-        if captured_piece.is_some() && is_pawn_double_push {
             return false;
         }
 
@@ -835,14 +827,16 @@ impl Board {
             }
             if m.is_ep() {
                 return Some(to) == self.state.ep_square;
-            } else if is_pawn_double_push {
+            } else if (SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(to)
+                && (SquareSet::RANK_2 | SquareSet::RANK_7).contains_square(from)
+            {
                 if from.relative_to(self.side).rank() != Rank::Two {
                     return false;
                 }
                 let Some(one_forward) = from.pawn_push(self.side) else {
                     return false;
                 };
-                return self.piece_at(one_forward).is_none()
+                return self.state.mailbox[one_forward].is_none()
                     && Some(to) == one_forward.pawn_push(self.side);
             } else if captured_piece.is_none() {
                 return Some(to) == from.pawn_push(self.side);
@@ -852,6 +846,8 @@ impl Board {
                 Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
                 Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
             };
+        } else if m.is_ep() || m.is_promo() {
+            return false;
         }
 
         movegen::attacks_by_type(moved_piece.piece_type(), from, self.state.bbs.occupied())
@@ -867,7 +863,7 @@ impl Board {
         // - there are pieces between the king and the rook
         // - the king passes through a square that is attacked by the opponent
         // - the king ends up in check (not checked here)
-        let Some(moved) = self.piece_at(m.from()) else {
+        let Some(moved) = self.state.mailbox[m.from()] else {
             return false;
         };
         if moved.piece_type() != PieceType::King {
@@ -885,7 +881,7 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to().file()) != self.state.castle_perm.kingside(self.side) {
+            if self.state.castle_perm.kingside(self.side) != Some(m.to().file()) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -896,7 +892,7 @@ impl Board {
             )
         } else {
             // queenside castling.
-            if Some(m.to().file()) != self.state.castle_perm.queenside(self.side) {
+            if self.state.castle_perm.queenside(self.side) != Some(m.to().file()) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -934,7 +930,7 @@ impl Board {
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
         self.state.bbs.set_piece_at(sq, piece);
-        *self.piece_at_mut(sq) = Some(piece);
+        self.state.mailbox[sq] = Some(piece);
     }
 
     /// Gets the piece that will be captured by the given move.
@@ -953,8 +949,7 @@ impl Board {
 
     /// Determines whether this move would be a double pawn push in the current position.
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
-        let to = m.to();
-        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(to) {
+        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(m.to()) {
             return false;
         }
         let from = m.from();
@@ -970,16 +965,6 @@ impl Board {
     /// Determines whether this move would be tactical in the current position.
     pub fn is_tactical(&self, m: Move) -> bool {
         m.is_promo() || m.is_ep() || self.is_capture(m)
-    }
-
-    /// Gets the piece at the given square.
-    pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        self.state.mailbox[sq]
-    }
-
-    /// Gets a mutable reference to the piece at the given square.
-    pub fn piece_at_mut(&mut self, sq: Square) -> &mut Option<Piece> {
-        &mut self.state.mailbox[sq]
     }
 
     pub fn make_move_simple(&mut self, m: Move) -> bool {
@@ -1310,7 +1295,7 @@ impl Board {
         let tgt = m.to();
         // todo: could be a branchless lookup into a padded array
         let piece = self.state.mailbox[src].unwrap();
-        let captured = self.piece_at(tgt);
+        let captured = self.state.mailbox[tgt];
 
         let mut new_key = self.state.keys.zobrist;
         new_key ^= PIECE_KEYS[piece][src];
@@ -1416,7 +1401,7 @@ impl Board {
             }
         }
         let to_sq = m.to();
-        let moved_piece = self.piece_at(m.from())?;
+        let moved_piece = self.state.mailbox[m.from()]?;
         let is_capture = self.is_capture(m)
             || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.state.ep_square);
         let piece_prefix = match moved_piece.piece_type() {
@@ -1643,9 +1628,9 @@ impl Board {
                     return true;
                 }
 
-                let mut piece = self.piece_at(mv.from());
+                let mut piece = self.state.mailbox[mv.from()];
                 if piece.is_none() {
-                    piece = self.piece_at(mv.to());
+                    piece = self.state.mailbox[mv.to()];
                 }
 
                 return piece.unwrap().colour() == self.side;
@@ -1769,7 +1754,7 @@ impl Display for Board {
         for rank in Rank::all().rev() {
             for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
-                let piece = self.piece_at(sq);
+                let piece = self.state.mailbox[sq];
                 if let Some(piece) = piece {
                     if counter != 0 {
                         write!(f, "{counter}")?;
@@ -1828,7 +1813,7 @@ impl std::fmt::UpperHex for Board {
             write!(f, "{} ", rank as u8 + 1)?;
             for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
-                if let Some(piece) = self.piece_at(sq) {
+                if let Some(piece) = self.state.mailbox[sq] {
                     write!(f, "{piece} ")?;
                 } else {
                     write!(f, ". ")?;

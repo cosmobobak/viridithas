@@ -26,13 +26,11 @@ impl Board {
 
         // check square-set / piece array coherency
         for sq in Square::all() {
-            let piece = self.state.mailbox[sq];
-            if self.state.bbs.piece_at(sq) != piece {
+            let piece_ss = self.state.bbs.piece_at(sq);
+            let piece_mb = self.state.mailbox[sq];
+            if piece_ss != piece_mb {
                 return Err(format!(
-                    "square-set / piece array coherency corrupt: expected square {} to be '{:?}' but was '{:?}'",
-                    sq,
-                    piece,
-                    self.piece_at(sq)
+                    "square-set / piece array coherency corrupt: expected square {sq} to be '{piece_ss:?}' but was '{piece_mb:?}'",
                 ));
             }
         }
@@ -85,16 +83,16 @@ impl Board {
             ));
         }
 
-        if self.piece_at(self.state.bbs.king_sq(Colour::White)) != Some(Piece::WK) {
+        if self.state.mailbox[self.state.bbs.king_sq(Colour::White)] != Some(Piece::WK) {
             return Err(format!(
                 "white king square is corrupt: expected white king, got {:?}",
-                self.piece_at(self.state.bbs.king_sq(Colour::White))
+                self.state.mailbox[self.state.bbs.king_sq(Colour::White)]
             ));
         }
-        if self.piece_at(self.state.bbs.king_sq(Colour::Black)) != Some(Piece::BK) {
+        if self.state.mailbox[self.state.bbs.king_sq(Colour::Black)] != Some(Piece::BK) {
             return Err(format!(
                 "black king square is corrupt: expected black king, got {:?}",
-                self.piece_at(self.state.bbs.king_sq(Colour::Black))
+                self.state.mailbox[self.state.bbs.king_sq(Colour::Black)]
             ));
         }
 
