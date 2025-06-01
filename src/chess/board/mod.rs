@@ -9,7 +9,7 @@ use std::{
 use anyhow::{bail, Context};
 
 use arrayvec::ArrayVec;
-use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN};
+use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
@@ -913,6 +913,83 @@ impl Board {
         castle_occ & (king_path | rook_path | king_dst.as_set() | rook_dst.as_set())
             == SquareSet::EMPTY
             && !self.any_attacked(king_path | m.from().as_set(), self.side.flip())
+    }
+
+    /// Checks whether a given pseudo-legal move is legal in the current position.
+    pub fn is_legal(&self, m: Move) -> bool {
+        debug_assert!(self.is_pseudo_legal(m));
+
+        let turn = self.turn();
+        let bbs = &self.state.bbs;
+
+        let from = m.from();
+        let to = m.to();
+
+        let us = bbs.colours[turn];
+        let our_king_bb = bbs.pieces[PieceType::King] & us;
+        let king = our_king_bb.first();
+
+        let them = bbs.colours[!turn];
+        let their_queens = bbs.pieces[PieceType::Queen] & them;
+        let their_bishops = bbs.pieces[PieceType::Bishop] & them;
+        let their_rooks = bbs.pieces[PieceType::Rook] & them;
+
+        if m.is_castle() {
+            let king_to = m.history_to_square();
+            // TODO: determine necessity of first conditional component
+            return !(self.state.threats.all.contains_square(king_to)
+                || CHESS960.load(Ordering::Relaxed)
+                    && self.state.pinned[turn].contains_square(to));
+        } else if m.is_ep() {
+            let rank = to.rank();
+            let file = to.file();
+
+            let rank = if rank == Rank::Three {
+                Rank::Four
+            } else {
+                Rank::Five
+            };
+
+            let cap_sq = Square::from_rank_file(rank, file);
+
+            let occ_after = bbs.occupied() ^ to.as_set() ^ from.as_set() ^ cap_sq.as_set();
+
+            return bishop_attacks(king, occ_after) & (their_queens | their_bishops)
+                == SquareSet::EMPTY
+                && rook_attacks(king, occ_after) & (their_queens | their_rooks)
+                    == SquareSet::EMPTY;
+        }
+
+        let moving = self.state.mailbox[from].unwrap();
+
+        if moving.piece_type() == PieceType::King {
+            let without_king = bbs.occupied() ^ our_king_bb;
+
+            // TODO: determine necessity of first conditional component
+            return !self.state.threats.all.contains_square(to)
+                && bishop_attacks(to, without_king) & (their_queens | their_bishops)
+                    == SquareSet::EMPTY
+                && rook_attacks(to, without_king) & (their_queens | their_rooks)
+                    == SquareSet::EMPTY;
+        }
+
+        if self.state.threats.checkers.many() {
+            return false;
+        }
+
+        if self.state.pinned[turn].contains_square(from)
+            && !RAY_FULL[from][to].contains_square(king)
+        {
+            return false;
+        }
+
+        if self.state.threats.checkers == SquareSet::EMPTY {
+            return true;
+        }
+
+        let checker = self.state.threats.checkers.first();
+
+        (RAY_BETWEEN[king][checker] | self.state.threats.checkers).contains_square(to)
     }
 
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {

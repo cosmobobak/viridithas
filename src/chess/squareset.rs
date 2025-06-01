@@ -211,11 +211,15 @@ impl SquareSet {
     }
 
     pub fn without_lsb(self) -> Self {
-        self & (Self::from_inner(self.inner() - 1))
+        self & (Self::from_inner(self.inner().wrapping_sub(1)))
     }
 
     pub fn one(self) -> bool {
         self != Self::EMPTY && self.without_lsb() == Self::EMPTY
+    }
+
+    pub fn many(self) -> bool {
+        self.without_lsb() != Self::EMPTY
     }
 }
 

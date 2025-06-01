@@ -1185,7 +1185,6 @@ pub fn alpha_beta<NT: NodeType>(
                 square: m.history_to_square(),
             };
             if !board.make_move(m, t) {
-                // illegal move
                 continue;
             }
 
