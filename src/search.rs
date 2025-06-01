@@ -703,7 +703,7 @@ pub fn quiescence<NT: NodeType>(
         t.tt.prefetch(board.key_after(m));
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
-        let moved = board.piece_at(m.from()).unwrap();
+        let moved = board.state.mailbox[m.from()].unwrap();
         t.ss[height].conthist_index = ContHistIndex {
             piece: moved,
             square: m.history_to_square(),
@@ -857,7 +857,7 @@ pub fn alpha_beta<NT: NodeType>(
                     if hit.value >= beta && !board.is_tactical(mov) && board.is_pseudo_legal(mov) {
                         let from = mov.from();
                         let to = mov.history_to_square();
-                        let moved = board.piece_at(from).unwrap();
+                        let moved = board.state.mailbox[from].unwrap();
                         let threats = board.state.threats.all;
                         update_quiet_history_single::<false>(
                             board, t, info, from, to, moved, threats, depth, true,
@@ -997,9 +997,7 @@ pub fn alpha_beta<NT: NodeType>(
             {
                 let from = mov.from();
                 let to = mov.history_to_square();
-                let moved = board
-                    .piece_at(to)
-                    .expect("Cannot fail, move has been made.");
+                let moved = board.state.mailbox[to].expect("Cannot fail, move has been made.");
                 debug_assert_eq!(moved.colour(), !board.turn());
                 let threats = board.history().last().unwrap().threats.all;
                 let improvement = -(ss_prev.eval + static_eval) + info.conf.eval_policy_offset;
@@ -1181,7 +1179,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.tt.prefetch(board.key_after(m));
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
-            let moved = board.piece_at(m.from()).unwrap();
+            let moved = board.state.mailbox[m.from()].unwrap();
             t.ss[height].conthist_index = ContHistIndex {
                 piece: moved,
                 square: m.history_to_square(),
@@ -1309,7 +1307,7 @@ pub fn alpha_beta<NT: NodeType>(
         t.tt.prefetch(board.key_after(m));
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = !is_quiet;
-        let moved = board.piece_at(m.from()).unwrap();
+        let moved = board.state.mailbox[m.from()].unwrap();
         t.ss[height].conthist_index = ContHistIndex {
             piece: moved,
             square: m.history_to_square(),
@@ -1366,7 +1364,7 @@ pub fn alpha_beta<NT: NodeType>(
             // re-make the singular move.
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = !is_quiet;
-            let moved = board.piece_at(m.from()).unwrap();
+            let moved = board.state.mailbox[m.from()].unwrap();
             t.ss[height].conthist_index = ContHistIndex {
                 piece: moved,
                 square: m.history_to_square(),
@@ -1589,9 +1587,7 @@ pub fn alpha_beta<NT: NodeType>(
             if !ss_prev.searching_tactical {
                 let from = mov.from();
                 let to = mov.history_to_square();
-                let moved = board
-                    .piece_at(to)
-                    .expect("Cannot fail, move has been made.");
+                let moved = board.state.mailbox[to].expect("Cannot fail, move has been made.");
                 debug_assert_eq!(moved.colour(), !board.turn());
                 let threats = board.history().last().unwrap().threats.all;
                 let bonus = main_history_bonus(&info.conf, depth);
@@ -1743,9 +1739,10 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
     let to = m.to();
     let bbs = &board.state.bbs;
 
-    let mut next_victim = m
-        .promotion_type()
-        .map_or_else(|| board.piece_at(from).unwrap().piece_type(), |promo| promo);
+    let mut next_victim = m.promotion_type().map_or_else(
+        || board.state.mailbox[from].unwrap().piece_type(),
+        |promo| promo,
+    );
 
     let mut balance = board.estimated_see(info, m) - threshold;
 
