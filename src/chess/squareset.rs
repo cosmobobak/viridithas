@@ -368,3 +368,26 @@ impl Display for SquareSet {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::chess::{squareset::SquareSet, types::Square};
+
+    #[test]
+    fn counters() {
+        let empty = SquareSet::EMPTY;
+        assert_eq!(empty, SquareSet::EMPTY);
+        assert!(!empty.one());
+        assert!(!empty.many());
+
+        let one = Square::E4.as_set();
+        assert_ne!(one, SquareSet::EMPTY);
+        assert!(one.one());
+        assert!(!one.many());
+
+        let two = one.add_square(Square::E5);
+        assert_ne!(two, SquareSet::EMPTY);
+        assert!(!two.one());
+        assert!(two.many());
+    }
+}
