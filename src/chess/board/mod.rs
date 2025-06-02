@@ -1071,6 +1071,7 @@ impl Board {
         let side = self.side;
         let piece = self.state.mailbox[from].unwrap();
         let captured = if castle { None } else { self.state.mailbox[to] };
+        let mut castling_perm = self.state.castle_perm;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1097,10 +1098,10 @@ impl Board {
             self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
             let rook_from = to;
-            let rook_to = if to_file == self.state.castle_perm.kingside(side) {
+            let rook_to = if to_file == castling_perm.kingside(side) {
                 to = Square::G1.relative_to(side);
                 Square::F1.relative_to(side)
-            } else if to_file == self.state.castle_perm.queenside(side) {
+            } else if to_file == castling_perm.queenside(side) {
                 to = Square::C1.relative_to(side);
                 Square::D1.relative_to(side)
             } else {
@@ -1164,31 +1165,32 @@ impl Board {
         self.side = self.side.flip();
 
         // hash out the castling to insert it again after updating rights.
-        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
         // update castling rights
         if piece == Piece::WR && from.rank() == Rank::One {
-            if Some(from.file()) == self.state.castle_perm.kingside(Colour::White) {
-                self.state.castle_perm.clear_side::<true, White>();
-            } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::White) {
-                self.state.castle_perm.clear_side::<false, White>();
+            if Some(from.file()) == castling_perm.kingside(Colour::White) {
+                castling_perm.clear_side::<true, White>();
+            } else if Some(from.file()) == castling_perm.queenside(Colour::White) {
+                castling_perm.clear_side::<false, White>();
             }
         } else if piece == Piece::BR && from.rank() == Rank::Eight {
-            if Some(from.file()) == self.state.castle_perm.kingside(Colour::Black) {
-                self.state.castle_perm.clear_side::<true, Black>();
-            } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::Black) {
-                self.state.castle_perm.clear_side::<false, Black>();
+            if Some(from.file()) == castling_perm.kingside(Colour::Black) {
+                castling_perm.clear_side::<true, Black>();
+            } else if Some(from.file()) == castling_perm.queenside(Colour::Black) {
+                castling_perm.clear_side::<false, Black>();
             }
         } else if piece == Piece::WK {
-            self.state.castle_perm.clear::<White>();
+            castling_perm.clear::<White>();
         } else if piece == Piece::BK {
-            self.state.castle_perm.clear::<Black>();
+            castling_perm.clear::<Black>();
         }
         if to.rank() == Rank::One {
-            self.state.castle_perm.remove::<White>(to.file());
+            castling_perm.remove::<White>(to.file());
         } else if to.rank() == Rank::Eight {
-            self.state.castle_perm.remove::<Black>(to.file());
+            castling_perm.remove::<Black>(to.file());
         }
-        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
+        self.state.castle_perm = castling_perm;
 
         // apply all the updates to the zobrist hash
         self.state.keys.zobrist ^= SIDE_KEY;
