@@ -1071,7 +1071,10 @@ impl Board {
         let captured = if castle { None } else { self.state.mailbox[to] };
 
         self.history.push(self.state.clone());
-        let saved_ep_square = self.state.ep_square;
+
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
+        }
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1159,86 +1162,76 @@ impl Board {
 
         self.side = self.side.flip();
 
-        let mut keys = self.state.keys.clone();
-
-        // remove a previous en passant square from the hash
-        if let Some(ep_sq) = saved_ep_square {
-            keys.zobrist ^= EP_KEYS[ep_sq];
-        }
-
         // hash out the castling to insert it again after updating rights.
-        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
+        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         // update castling rights
-        let mut new_rights = self.state.castle_perm;
         if piece == Piece::WR && from.rank() == Rank::One {
             if Some(from.file()) == self.state.castle_perm.kingside(Colour::White) {
-                new_rights.clear_side::<true, White>();
+                self.state.castle_perm.clear_side::<true, White>();
             } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::White) {
-                new_rights.clear_side::<false, White>();
+                self.state.castle_perm.clear_side::<false, White>();
             }
         } else if piece == Piece::BR && from.rank() == Rank::Eight {
             if Some(from.file()) == self.state.castle_perm.kingside(Colour::Black) {
-                new_rights.clear_side::<true, Black>();
+                self.state.castle_perm.clear_side::<true, Black>();
             } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::Black) {
-                new_rights.clear_side::<false, Black>();
+                self.state.castle_perm.clear_side::<false, Black>();
             }
         } else if piece == Piece::WK {
-            new_rights.clear::<White>();
+            self.state.castle_perm.clear::<White>();
         } else if piece == Piece::BK {
-            new_rights.clear::<Black>();
+            self.state.castle_perm.clear::<Black>();
         }
         if to.rank() == Rank::One {
-            new_rights.remove::<White>(to.file());
+            self.state.castle_perm.remove::<White>(to.file());
         } else if to.rank() == Rank::Eight {
-            new_rights.remove::<Black>(to.file());
+            self.state.castle_perm.remove::<Black>(to.file());
         }
-        self.state.castle_perm = new_rights;
 
         // apply all the updates to the zobrist hash
         if let Some(ep_sq) = self.state.ep_square {
-            keys.zobrist ^= EP_KEYS[ep_sq];
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
         }
-        keys.zobrist ^= SIDE_KEY;
+        self.state.keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
             let piece_key = PIECE_KEYS[piece][sq];
-            keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= piece_key;
-                    keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
             let piece_key = PIECE_KEYS[piece][sq];
-            keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= piece_key;
-                    keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
         // reinsert the castling rights
-        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
-        self.state.keys = keys;
+        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         self.ply += 1;
         self.height += 1;
@@ -1520,6 +1513,7 @@ impl Board {
     pub fn gives(&mut self, m: Move) -> CheckState {
         debug_assert!(self.is_pseudo_legal(m));
         debug_assert!(self.is_legal(m));
+        self.make_move_simple(m);
         let gives_check = self.in_check();
         if gives_check {
             let mut ml = MoveList::new();
@@ -1529,7 +1523,6 @@ impl Board {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
-                self.unmake_move_base();
                 self.unmake_move_base();
                 return CheckState::Check;
             }
