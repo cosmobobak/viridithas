@@ -1295,7 +1295,6 @@ impl Board {
         self.height += 1;
 
         self.state.threats = self.generate_threats(self.side);
-        self.state.pinned.swap(0, 1);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();

@@ -1293,6 +1293,7 @@ pub fn alpha_beta<NT: NodeType>(
             && depth < 10
             && move_picker.stage > Stage::YieldGoodCaptures
             && board.state.threats.all.contains_square(m.to())
+            && t.ss[height - 1].searching.is_some()
             && !static_exchange_eval(
                 board,
                 info,
