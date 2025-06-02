@@ -455,10 +455,16 @@ mod tests {
         let mut check_board = Board::default();
         assert_eq!(boards[0].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[0].unpack().1, 3);
-        assert!(check_board.make_move_simple(Move::new(Square::E2, Square::E4)));
+        let e4 = Move::new(Square::E2, Square::E4);
+        assert!(check_board.is_pseudo_legal(e4));
+        assert!(check_board.is_legal(e4));
+        check_board.make_move_simple(e4);
         assert_eq!(boards[1].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[1].unpack().1, -314);
-        assert!(check_board.make_move_simple(Move::new(Square::E7, Square::E5)));
+        let e5 = Move::new(Square::E7, Square::E5);
+        assert!(check_board.is_pseudo_legal(e5));
+        assert!(check_board.is_legal(e5));
+        check_board.make_move_simple(e5);
         assert_eq!(boards[2].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[2].unpack().1, 200);
     }

@@ -181,12 +181,14 @@ fn make_random_move(
     for _ in 0..8 {
         let m = *legal_moves.choose(rng)?;
         if static_exchange_eval(board, info, m, see_threshold) {
-            assert!(board.make_move(m, t));
+            assert!(board.is_legal(m));
+            board.make_move(m, t);
             return Some(m);
         }
     }
     let m = *legal_moves.choose(rng)?;
-    assert!(board.make_move(m, t));
+    assert!(board.is_legal(m));
+    board.make_move(m, t);
     Some(m)
 }
 
