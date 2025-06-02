@@ -1063,18 +1063,14 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
+        self.history.push(self.state.clone());
+
         let from = m.from();
         let mut to = m.to();
         let castle = m.is_castle();
         let side = self.side;
         let piece = self.state.mailbox[from].unwrap();
         let captured = if castle { None } else { self.state.mailbox[to] };
-
-        self.history.push(self.state.clone());
-
-        if let Some(ep_sq) = self.state.ep_square {
-            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
-        }
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1120,8 +1116,6 @@ impl Board {
             }
         }
 
-        self.state.ep_square = None;
-
         self.state.fifty_move_counter += 1;
 
         if let Some(captured) = captured {
@@ -1130,6 +1124,10 @@ impl Board {
             update_buffer.clear_piece(to, captured);
         }
 
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
+        }
+        self.state.ep_square = None;
         if piece.piece_type() == PieceType::Pawn {
             self.state.fifty_move_counter = 0;
             if self.is_double_pawn_push(m)
@@ -1146,6 +1144,9 @@ impl Board {
                     debug_assert!(self.state.ep_square.unwrap().rank() == Rank::Six);
                 }
             }
+        }
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
         }
 
         if let Some(promo) = m.promotion_type() {
@@ -1164,7 +1165,6 @@ impl Board {
 
         // hash out the castling to insert it again after updating rights.
         self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
-
         // update castling rights
         if piece == Piece::WR && from.rank() == Rank::One {
             if Some(from.file()) == self.state.castle_perm.kingside(Colour::White) {
@@ -1188,11 +1188,9 @@ impl Board {
         } else if to.rank() == Rank::Eight {
             self.state.castle_perm.remove::<Black>(to.file());
         }
+        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         // apply all the updates to the zobrist hash
-        if let Some(ep_sq) = self.state.ep_square {
-            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
-        }
         self.state.keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
@@ -1230,8 +1228,6 @@ impl Board {
                 }
             }
         }
-        // reinsert the castling rights
-        self.state.keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
 
         self.ply += 1;
         self.height += 1;
