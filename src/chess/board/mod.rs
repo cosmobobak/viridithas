@@ -973,22 +973,29 @@ impl Board {
                     == SquareSet::EMPTY;
         }
 
+        // moving anything other than the king
+        // is illegal when in double-check.
         if self.state.threats.checkers.many() {
             return false;
         }
 
+        // if your piece is pinned, you can only
+        // move it along the direction that it is
+        // pinned in.
         if self.state.pinned[turn].contains_square(from)
             && !RAY_FULL[from][to].contains_square(king)
         {
             return false;
         }
 
+        // not in check and not moving the king? a-ok.
         if self.state.threats.checkers == SquareSet::EMPTY {
             return true;
         }
 
+        // single checker, you have to be
+        // capturing it or blocking the check.
         let checker = self.state.threats.checkers.first();
-
         (RAY_BETWEEN[king][checker] | self.state.threats.checkers).contains_square(to)
     }
 
