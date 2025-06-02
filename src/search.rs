@@ -533,9 +533,10 @@ fn default_move(board: &mut Board, t: &ThreadData, info: &SearchInfo) -> Move {
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[board.height()], 0);
     let mut m = None;
     while let Some(mov) = mp.next(board, t, info) {
-        if !board.make_move_simple(mov) {
+        if !board.is_legal(mov) {
             continue;
         }
+        board.make_move_simple(mov);
         // if we get here, it means the move is legal.
         m = Some(mov);
         board.unmake_move_base();
@@ -708,9 +709,10 @@ pub fn quiescence<NT: NodeType>(
             piece: moved,
             square: m.history_to_square(),
         };
-        if !board.make_move(m, t) {
+        if !board.is_legal(m) {
             continue;
         }
+        board.make_move(m, t);
         // move found, we can start skipping quiets again:
         move_picker.skip_quiets = true;
         info.nodes.increment();
@@ -1184,10 +1186,10 @@ pub fn alpha_beta<NT: NodeType>(
                 piece: moved,
                 square: m.history_to_square(),
             };
-            if !board.make_move(m, t) {
-                // illegal move
+            if !board.is_legal(m) {
                 continue;
             }
+            board.make_move(m, t);
 
             let mut value = -quiescence::<OffPV>(board, l_pv, info, t, -pc_beta, -pc_beta + 1);
 
@@ -1313,9 +1315,10 @@ pub fn alpha_beta<NT: NodeType>(
             piece: moved,
             square: m.history_to_square(),
         };
-        if !board.make_move(m, t) {
+        if !board.is_legal(m) {
             continue;
         }
+        board.make_move(m, t);
 
         if is_quiet {
             quiets_tried.push(m);

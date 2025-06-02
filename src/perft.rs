@@ -28,9 +28,10 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter_moves() {
-        if !pos.make_move_simple(m) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_simple(m);
         count += perft(pos, depth - 1);
         pos.unmake_move_base();
     }
@@ -53,9 +54,10 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter_moves() {
-        if !pos.make_move_nnue(m, t) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_nnue(m, t);
         count += nnue_perft(pos, t, depth - 1);
         pos.unmake_move_nnue(t);
     }
@@ -84,9 +86,10 @@ pub fn movepicker_perft(
 
     let mut count = 0;
     while let Some(m) = ml.next(pos, t, info) {
-        if !pos.make_move(m, t) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move(m, t);
         count += movepicker_perft(pos, t, info, depth - 1);
         pos.unmake_move(t);
     }
