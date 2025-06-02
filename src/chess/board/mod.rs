@@ -1044,12 +1044,15 @@ impl Board {
         m.is_promo() || m.is_ep() || self.is_capture(m)
     }
 
-    pub fn make_move_simple(&mut self, m: Move) -> bool {
-        self.make_move_base(m, &mut UpdateBuffer::default())
+    pub fn make_move_simple(&mut self, m: Move) {
+        self.make_move_base(m, &mut UpdateBuffer::default());
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) {
+        debug_assert!(self.is_pseudo_legal(m));
+        debug_assert!(self.is_legal(m));
+
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
@@ -1062,8 +1065,6 @@ impl Board {
 
         self.history.push(self.state.clone());
         let saved_ep_square = self.state.ep_square;
-        let saved_fifty_move_counter = self.state.fifty_move_counter;
-        let saved_piece_layout = self.state.bbs;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1150,16 +1151,6 @@ impl Board {
         }
 
         self.side = self.side.flip();
-
-        // reversed in_check fn, as we have now swapped sides
-        if self.sq_attacked(self.state.bbs.king_sq(self.side.flip()), self.side) {
-            self.side = self.side.flip();
-            self.state.ep_square = saved_ep_square;
-            self.state.fifty_move_counter = saved_fifty_move_counter;
-            self.state.bbs = saved_piece_layout;
-            self.history.pop();
-            return false;
-        }
 
         let mut keys = self.state.keys.clone();
 
@@ -1253,8 +1244,6 @@ impl Board {
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-
-        true
     }
 
     pub fn unmake_move_base(&mut self) {
@@ -1327,15 +1316,11 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
+    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) {
         let mut update_buffer = UpdateBuffer::default();
-        let Some(piece) = self.state.mailbox[m.from()] else {
-            return false;
-        };
-        let res = self.make_move_base(m, &mut update_buffer);
-        if !res {
-            return false;
-        }
+        let piece = self.state.mailbox[m.from()].unwrap();
+
+        self.make_move_base(m, &mut update_buffer);
 
         t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece {
             from: m.from(),
@@ -1343,12 +1328,8 @@ impl Board {
             piece,
         };
         t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
-
         t.nnue.current_acc += 1;
-
         t.nnue.accumulators[t.nnue.current_acc].correct = [false; 2];
-
-        true
     }
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
@@ -1356,8 +1337,8 @@ impl Board {
         t.nnue.current_acc -= 1;
     }
 
-    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) -> bool {
-        self.make_move_nnue(m, t)
+    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) {
+        self.make_move_nnue(m, t);
     }
 
     pub fn unmake_move(&mut self, t: &mut ThreadData) {
@@ -1530,15 +1511,14 @@ impl Board {
     }
 
     pub fn gives(&mut self, m: Move) -> CheckState {
-        if !self.make_move_simple(m) {
-            return CheckState::None;
-        }
+        debug_assert!(self.is_pseudo_legal(m));
+        debug_assert!(self.is_legal(m));
         let gives_check = self.in_check();
         if gives_check {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
             for &m in ml.iter_moves() {
-                if !self.make_move_simple(m) {
+                if !self.is_legal(m) {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
@@ -1604,13 +1584,12 @@ impl Board {
         Ok(out)
     }
 
-    pub fn legal_moves(&mut self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
+    pub fn legal_moves(&self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
         let mut legal_moves = ArrayVec::default();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &m in move_list.iter_moves() {
-            if self.make_move_simple(m) {
-                self.unmake_move_base();
+            if self.is_legal(m) {
                 legal_moves.push(m);
             }
         }
@@ -1722,7 +1701,7 @@ impl Board {
     }
 
     #[cfg(any(feature = "datagen", test))]
-    pub fn outcome(&mut self) -> GameOutcome {
+    pub fn outcome(&self) -> GameOutcome {
         if self.state.fifty_move_counter >= 100 {
             return GameOutcome::Draw(DrawType::FiftyMoves);
         }
@@ -1746,8 +1725,7 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
         for &m in move_list.iter_moves() {
-            if self.make_move_simple(m) {
-                self.unmake_move_base();
+            if self.is_legal(m) {
                 legal_moves = true;
                 break;
             }
@@ -1765,12 +1743,12 @@ impl Board {
     }
 
     #[cfg(debug_assertions)]
-    pub fn assert_mated(&mut self) {
+    pub fn assert_mated(&self) {
         assert!(self.in_check());
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &mv in move_list.iter_moves() {
-            assert!(!self.make_move_simple(mv));
+            assert!(!self.is_legal(mv));
         }
     }
 }
@@ -1928,7 +1906,7 @@ mod tests {
         use super::{DrawType, GameOutcome};
         use crate::{chess::chessmove::Move, chess::types::Square};
 
-        let mut fiftymove_draw =
+        let fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
                 .unwrap();
         assert_eq!(
@@ -1952,15 +1930,15 @@ mod tests {
             draw_repetition.outcome(),
             GameOutcome::Draw(DrawType::Repetition)
         );
-        let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
+        let stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
-        let mut insufficient_material_bare_kings =
+        let insufficient_material_bare_kings =
             Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_bare_kings.outcome(),
             GameOutcome::Draw(DrawType::InsufficientMaterial)
         );
-        let mut insufficient_material_knights =
+        let insufficient_material_knights =
             Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_knights.outcome(),
@@ -2116,8 +2094,10 @@ mod tests {
 
         ep_capturable_key ^= EP_KEYS[Square::D6];
 
-        assert!(not_ep_capturable.make_move_simple(d5));
-        assert!(ep_capturable.make_move_simple(d5));
+        assert!(not_ep_capturable.is_legal(d5));
+        not_ep_capturable.make_move_simple(d5);
+        assert!(ep_capturable.is_legal(d5));
+        ep_capturable.make_move_simple(d5);
 
         assert_eq!(not_ep_capturable.state.ep_square, None);
         assert_eq!(ep_capturable.state.ep_square, Some(Square::D6));
@@ -2133,7 +2113,8 @@ mod tests {
         use crate::chess::types::Square;
         let mut board =
             Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
-        assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
+        assert!(board.is_legal(Move::new(Square::B7, Square::B5)));
+        board.make_move_simple(Move::new(Square::B7, Square::B5));
         assert_eq!(board.state.ep_square, Some(Square::B6));
     }
 
@@ -2143,8 +2124,10 @@ mod tests {
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
         let mut board = Board::default();
-        assert!(board.make_move_simple(Move::new(Square::E2, Square::E4)));
-        assert!(board.make_move_simple(Move::new(Square::E7, Square::E5)));
+        assert!(board.is_legal(Move::new(Square::E2, Square::E4)));
+        board.make_move_simple(Move::new(Square::E2, Square::E4));
+        assert!(board.is_legal(Move::new(Square::E7, Square::E5)));
+        board.make_move_simple(Move::new(Square::E7, Square::E5));
         board.set_from_fen(Board::STARTING_FEN).unwrap();
         let board2 = Board::default();
         assert_eq!(board, board2);

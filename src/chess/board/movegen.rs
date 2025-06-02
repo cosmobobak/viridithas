@@ -1090,9 +1090,10 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter_moves() {
-        if !pos.make_move_simple(m) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_simple(m);
         count += synced_perft(pos, depth - 1);
         pos.unmake_move_base();
     }
