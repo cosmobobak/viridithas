@@ -996,6 +996,7 @@ pub fn alpha_beta<NT: NodeType>(
             if ss_prev.eval != VALUE_NONE
                 && static_eval != VALUE_NONE
                 && !ss_prev.searching_tactical
+                && !matches!(tt_hit, Some(TTHit { depth, .. }) if depth > 2)
             {
                 let from = mov.from();
                 let to = mov.history_to_square();
