@@ -1583,7 +1583,7 @@ pub fn alpha_beta<NT: NodeType>(
         );
     }
 
-    if !NT::ROOT && flag == Bound::Upper {
+    if !NT::ROOT && flag == Bound::Upper && (!quiets_tried.is_empty() || depth > 3) {
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
         let ss_prev = &t.ss[height - 1];
