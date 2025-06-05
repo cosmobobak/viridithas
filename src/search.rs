@@ -1318,7 +1318,6 @@ pub fn alpha_beta<NT: NodeType>(
         if !board.is_legal(m) {
             continue;
         }
-        board.make_move(m, t);
 
         if is_quiet {
             quiets_tried.push(m);
@@ -1346,8 +1345,6 @@ pub fn alpha_beta<NT: NodeType>(
             };
             let r_beta = singularity_margin(tt_value, depth);
             let r_depth = (depth - 1) / 2;
-            // undo the singular move so we can search the position that it exists in.
-            board.unmake_move(t);
             t.ss[board.height()].excluded = Some(m);
             let value = alpha_beta::<OffPV>(
                 board,
@@ -1373,7 +1370,6 @@ pub fn alpha_beta<NT: NodeType>(
                 piece: moved,
                 square: m.history_to_square(),
             };
-            board.make_move(m, t);
 
             if value < r_beta {
                 if !NT::PV
@@ -1403,6 +1399,8 @@ pub fn alpha_beta<NT: NodeType>(
         if extension >= 2 {
             t.ss[height].dextensions += 1;
         }
+
+        board.make_move(m, t);
 
         let mut score;
         if moves_made == 1 {
