@@ -1034,10 +1034,10 @@ pub fn alpha_beta<NT: NodeType>(
         t.ss[height - 1].dextensions
     };
 
-        // clear out the next killer move.
-        t.killer_move_table[height + 1] = None;
+    // clear out the next killer move.
+    t.killer_move_table[height + 1] = None;
 
-        t.ss[height + 2].cutoff_count = 0;
+    t.ss[height + 2].cutoff_count = 0;
 
     let tt_move = tt_hit.and_then(|hit| hit.mov);
     let tt_capture = matches!(tt_move, Some(mv) if board.is_capture(mv));
@@ -1428,10 +1428,10 @@ pub fn alpha_beta<NT: NodeType>(
                 r += i32::from(tt_capture) * info.conf.lmr_tt_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(board.in_check()) * info.conf.lmr_check_mul;
-                    // reduce more if we've cut a great deal already
-                    if t.ss[height + 1].cutoff_count > 2 {
-                        r += 1024;
-                    }
+                // reduce more if we've cut a great deal already
+                if t.ss[height + 1].cutoff_count > 2 {
+                    r += 1024;
+                }
                 t.ss[height].reduction = r;
                 r / 1024
             } else {
@@ -1524,9 +1524,9 @@ pub fn alpha_beta<NT: NodeType>(
             if alpha >= beta {
                 #[cfg(feature = "stats")]
                 info.log_fail_high::<false>(moves_made - 1, movepick_score);
-                    if excluded.is_none() && (NT::PV || extension < 2) {
-                        t.ss[height].cutoff_count += 1;
-                    }
+                if excluded.is_none() && (NT::PV || extension < 2) {
+                    t.ss[height].cutoff_count += 1;
+                }
                 break;
             }
         }
