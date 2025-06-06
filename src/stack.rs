@@ -9,7 +9,7 @@ pub struct StackEntry {
     pub searching: Option<Move>,
     pub searching_tactical: bool,
     pub dextensions: i32,
-    pub ttpv: bool,
+    pub tt_pv: bool,
     pub conthist_index: ContHistIndex,
     pub reduction: i32,
 }

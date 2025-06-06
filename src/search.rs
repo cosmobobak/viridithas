@@ -614,7 +614,8 @@ pub fn quiescence<NT: NodeType>(
         None
     };
 
-    t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+    let tt_pv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+    t.ss[height].tt_pv = tt_pv;
 
     let raw_eval;
     let stand_pat;
@@ -663,7 +664,7 @@ pub fn quiescence<NT: NodeType>(
             raw_eval,
             Bound::None,
             0,
-            t.ss[height].ttpv,
+            tt_pv,
         );
 
         stand_pat = adj_shuffle(board, t, info, raw_eval, clock) + t.correction(&info.conf, board);
@@ -760,7 +761,7 @@ pub fn quiescence<NT: NodeType>(
         raw_eval,
         flag,
         0,
-        t.ss[height].ttpv,
+        tt_pv,
     );
 
     best_score
@@ -878,8 +879,12 @@ pub fn alpha_beta<NT: NodeType>(
         None // do not probe the TT if we're in a singular-verification search.
     };
 
+    let mut tt_pv;
     if excluded.is_none() {
-        t.ss[height].ttpv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+        tt_pv = NT::PV || tt_hit.is_some_and(|hit| hit.was_pv);
+        t.ss[height].tt_pv = tt_pv;
+    } else {
+        tt_pv = t.ss[height].tt_pv;
     }
 
     // Probe the tablebases.
@@ -920,7 +925,7 @@ pub fn alpha_beta<NT: NodeType>(
                     VALUE_NONE,
                     tb_bound,
                     depth,
-                    t.ss[height].ttpv,
+                    tt_pv,
                 );
                 return tb_value;
             }
@@ -980,7 +985,7 @@ pub fn alpha_beta<NT: NodeType>(
             raw_eval,
             Bound::None,
             0,
-            t.ss[height].ttpv,
+            tt_pv,
         );
 
         correction = t.correction(&info.conf, board);
@@ -1070,7 +1075,7 @@ pub fn alpha_beta<NT: NodeType>(
         // reverse futility pruning, and child node futility pruning.
         // if the static eval is too high, we can prune the node.
         // this is a generalisation of stand_pat in quiescence search.
-        if !t.ss[height].ttpv
+        if !tt_pv
             && depth < 9
             && static_eval - rfp_margin(info, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture)
@@ -1218,7 +1223,7 @@ pub fn alpha_beta<NT: NodeType>(
                     raw_eval,
                     Bound::Lower,
                     depth - 3,
-                    t.ss[height].ttpv,
+                    tt_pv,
                 );
                 return value;
             }
@@ -1413,7 +1418,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let mut r = info.lm_table.lm_reduction(depth, moves_made);
                 // reduce more on non-PV nodes
                 r += i32::from(!NT::PV) * info.conf.lmr_non_pv_mul;
-                r -= i32::from(t.ss[height].ttpv) * info.conf.lmr_ttpv_mul;
+                r -= i32::from(tt_pv) * info.conf.lmr_ttpv_mul;
                 // reduce more on cut nodes
                 r += i32::from(cut_node) * info.conf.lmr_cut_node_mul;
                 // extend/reduce using the stat_score of the move
@@ -1582,6 +1587,7 @@ pub fn alpha_beta<NT: NodeType>(
     }
 
     if !NT::ROOT && flag == Bound::Upper && (!quiets_tried.is_empty() || depth > 3) {
+        tt_pv |= t.ss[height - 1].tt_pv;
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
         let ss_prev = &t.ss[height - 1];
@@ -1620,7 +1626,7 @@ pub fn alpha_beta<NT: NodeType>(
             raw_eval,
             flag,
             depth,
-            t.ss[height].ttpv,
+            tt_pv,
         );
     }
 
