@@ -158,6 +158,14 @@ mod avx512 {
     pub unsafe fn mul_high_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
         return VecI16::from_raw(_mm512_mulhi_epi16(vec0.inner(), vec1.inner()));
     }
+    #[inline(always)]
+    pub unsafe fn mul_low_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        return VecI16::from_raw(_mm512_mullo_epi16(vec0.inner(), vec1.inner()));
+    }
+    #[inline(always)]
+    pub unsafe fn mul_i16_widening(vec0: VecI16, vec1: VecI16) -> VecI32 {
+        return VecI32::from_raw(_mm512_madd_epi16(vec0.inner(), vec1.inner()));
+    }
     // stupid hack for the different intrinsics
     pub type S = u32;
     #[inline(always)]
@@ -388,6 +396,14 @@ mod avx2 {
     pub unsafe fn mul_high_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
         return VecI16::from_raw(_mm256_mulhi_epi16(vec0.inner(), vec1.inner()));
     }
+    #[inline(always)]
+    pub unsafe fn mul_low_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        return VecI16::from_raw(_mm256_mullo_epi16(vec0.inner(), vec1.inner()));
+    }
+    #[inline(always)]
+    pub unsafe fn mul_i16_widening(vec0: VecI16, vec1: VecI16) -> VecI32 {
+        return VecI32::from_raw(_mm256_madd_epi16(vec0.inner(), vec1.inner()));
+    }
     // stupid hack for the different intrinsics
     pub type S = i32;
     #[inline(always)]
@@ -494,6 +510,12 @@ mod avx2 {
         let sum_32 = _mm_add_ss(upper_32, sum_64);
 
         return _mm_cvtss_f32(sum_32);
+    }
+    #[inline(always)]
+    pub unsafe fn sum_i32(vec: VecI32) -> i32 {
+        let a = _mm256_hadd_epi32(vec.inner(), vec.inner());
+        let b = _mm256_hadd_epi32(a, a);
+        return _mm256_extract_epi32(b, 0) + _mm256_extract_epi32(b, 4);
     }
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 2]) -> f32 {
@@ -630,6 +652,14 @@ mod sse2 {
     pub unsafe fn mul_high_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
         return VecI16::from_raw(_mm_mulhi_epi16(vec0.inner(), vec1.inner()));
     }
+    #[inline(always)]
+    pub unsafe fn mul_low_i16(vec0: VecI16, vec1: VecI16) -> VecI16 {
+        return VecI16::from_raw(_mm_mullo_epi16(vec0.inner(), vec1.inner()));
+    }
+    #[inline(always)]
+    pub unsafe fn mul_i16_widening(vec0: VecI16, vec1: VecI16) -> VecI32 {
+        return VecI32::from_raw(_mm_madd_epi16(vec0.inner(), vec1.inner()));
+    }
     // stupid hack for the different intrinsics
     pub type S = i32;
     #[inline(always)]
@@ -727,6 +757,12 @@ mod sse2 {
         let sum_32 = _mm_add_ss(upper_32, sum_64);
 
         return _mm_cvtss_f32(sum_32);
+    }
+    #[inline(always)]
+    pub unsafe fn sum_i32(vec: VecI32) -> i32 {
+        let a = _mm_hadd_epi32(vec.inner(), vec.inner());
+        let b = _mm_hadd_epi32(a, a);
+        return _mm_cvtsi128_si32(b);
     }
     #[inline(always)]
     pub unsafe fn reduce_add_f32s(vec: &[VecF32; 4]) -> f32 {

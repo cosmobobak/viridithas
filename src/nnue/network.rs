@@ -22,7 +22,10 @@ use crate::{
         types::Square,
     },
     image::{self, Image},
-    nnue,
+    nnue::{
+        self,
+        simd::{self, I16_CHUNK_SIZE},
+    },
     util::{self, MAX_PLY},
 };
 
@@ -32,9 +35,9 @@ pub mod feature;
 pub mod layers;
 
 /// Whether to perform the king-plane merging optimisation.
-pub const MERGE_KING_PLANES: bool = true;
+pub const MERGE_KING_PLANES: bool = false;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = true;
+pub const UNQUANTISED_HAS_FACTORISER: bool = false;
 /// The size of the input layer of the network.
 pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
@@ -42,7 +45,7 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
-pub const L1_SIZE: usize = 2048;
+pub const L1_SIZE: usize = 1024;
 /// The size of the second layer of the network.
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
@@ -52,14 +55,14 @@ pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_o
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
-     0,  1,  2,  3,
-     4,  5,  6,  7,
-     8,  9, 10, 11,
-     8,  9, 10, 11,
-    12, 12, 13, 13,
-    12, 12, 13, 13,
-    14, 14, 15, 15,
-    14, 14, 15, 15,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
 ];
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
@@ -89,7 +92,7 @@ pub fn output_bucket(pos: &Board) -> usize {
     (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
 }
 
-const QA: i16 = 255;
+const QA: i16 = 384;
 const QB: i16 = 64;
 
 // read in the binary file containing the network parameters
@@ -157,15 +160,14 @@ struct QuantisedNetwork {
 #[rustfmt::skip]
 #[repr(C)]
 pub struct NNUEParams {
-    pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
-    pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
-    pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub feature_weights: Align64<[i16; INPUT * L1_SIZE]>,
+    pub feature_bias: Align64<[i16; L1_SIZE]>,
+    pub output_weights: Align64<[[i16; L1_SIZE]; 2]>,
+    pub output_bias: i16,
 }
+
+pub static NET: NNUEParams =
+    unsafe { std::mem::transmute(*include_bytes!("../../viridithas.nnue.zst")) };
 
 static REPERMUTE_INDICES: [u16; L1_SIZE / 2] = {
     let mut indices = [0; L1_SIZE / 2];
@@ -497,141 +499,141 @@ impl MergedNetwork {
 }
 
 impl QuantisedNetwork {
-    /// Convert the network parameters into a format optimal for inference.
-    #[allow(
-        clippy::cognitive_complexity,
-        clippy::needless_range_loop,
-        clippy::too_many_lines
-    )]
-    fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
-        let mut net = NNUEParams::zeroed();
-        // permute the feature transformer weights
-        let src_buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
-        let tgt_buckets = net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE);
-        for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
-            repermute_ft_bucket(tgt_bucket, src_bucket);
-        }
+    //     /// Convert the network parameters into a format optimal for inference.
+    //     #[allow(
+    //         clippy::cognitive_complexity,
+    //         clippy::needless_range_loop,
+    //         clippy::too_many_lines
+    //     )]
+    //     fn permute(&self, use_simd: bool) -> Box<NNUEParams> {
+    //         let mut net = NNUEParams::zeroed();
+    //         // permute the feature transformer weights
+    //         let src_buckets = self.ft_weights.chunks_exact(INPUT * L1_SIZE);
+    //         let tgt_buckets = net.feature_weights.chunks_exact_mut(INPUT * L1_SIZE);
+    //         for (src_bucket, tgt_bucket) in src_buckets.zip(tgt_buckets) {
+    //             repermute_ft_bucket(tgt_bucket, src_bucket);
+    //         }
 
-        // permute the feature transformer biases
-        repermute_ft_bias(&mut net.feature_bias, &self.ft_biases);
+    //         // permute the feature transformer biases
+    //         repermute_ft_bias(&mut net.feature_bias, &self.ft_biases);
 
-        // transpose FT weights and biases so that packus transposes it back to the intended order
-        if use_simd {
-            type PermChunk = [i16; 8];
-            // reinterpret as data of size __m128i
-            let mut weights: Vec<&mut PermChunk> = net
-                .feature_weights
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
-                .collect();
-            let mut biases: Vec<&mut PermChunk> = net
-                .feature_bias
-                .chunks_exact_mut(8)
-                .map(|a| a.try_into().unwrap())
-                .collect();
-            let num_chunks = std::mem::size_of::<PermChunk>() / std::mem::size_of::<i16>();
+    //         // transpose FT weights and biases so that packus transposes it back to the intended order
+    //         if use_simd {
+    //             type PermChunk = [i16; 8];
+    //             // reinterpret as data of size __m128i
+    //             let mut weights: Vec<&mut PermChunk> = net
+    //                 .feature_weights
+    //                 .chunks_exact_mut(8)
+    //                 .map(|a| a.try_into().unwrap())
+    //                 .collect();
+    //             let mut biases: Vec<&mut PermChunk> = net
+    //                 .feature_bias
+    //                 .chunks_exact_mut(8)
+    //                 .map(|a| a.try_into().unwrap())
+    //                 .collect();
+    //             let num_chunks = std::mem::size_of::<PermChunk>() / std::mem::size_of::<i16>();
 
-            #[cfg(target_feature = "avx512f")]
-            let num_regs = 8;
-            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-            let num_regs = 4;
-            #[cfg(all(
-                target_arch = "x86_64",
-                not(target_feature = "avx2"),
-                not(target_feature = "avx512f")
-            ))]
-            let num_regs = 2;
-            #[cfg(not(target_arch = "x86_64"))]
-            let num_regs = 1;
-            #[cfg(target_feature = "avx512f")]
-            let order = [0, 2, 4, 6, 1, 3, 5, 7];
-            #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
-            let order = [0, 2, 1, 3];
-            #[cfg(all(
-                target_arch = "x86_64",
-                not(target_feature = "avx2"),
-                not(target_feature = "avx512f")
-            ))]
-            let order = [0, 1];
-            #[cfg(not(target_arch = "x86_64"))]
-            let order = [0];
+    //             #[cfg(target_feature = "avx512f")]
+    //             let num_regs = 8;
+    //             #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+    //             let num_regs = 4;
+    //             #[cfg(all(
+    //                 target_arch = "x86_64",
+    //                 not(target_feature = "avx2"),
+    //                 not(target_feature = "avx512f")
+    //             ))]
+    //             let num_regs = 2;
+    //             #[cfg(not(target_arch = "x86_64"))]
+    //             let num_regs = 1;
+    //             #[cfg(target_feature = "avx512f")]
+    //             let order = [0, 2, 4, 6, 1, 3, 5, 7];
+    //             #[cfg(all(target_feature = "avx2", not(target_feature = "avx512f")))]
+    //             let order = [0, 2, 1, 3];
+    //             #[cfg(all(
+    //                 target_arch = "x86_64",
+    //                 not(target_feature = "avx2"),
+    //                 not(target_feature = "avx512f")
+    //             ))]
+    //             let order = [0, 1];
+    //             #[cfg(not(target_arch = "x86_64"))]
+    //             let order = [0];
 
-            let mut regs = vec![[0i16; 8]; num_regs];
+    //             let mut regs = vec![[0i16; 8]; num_regs];
 
-            // transpose weights
-            for i in (0..INPUT * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    regs[j] = *weights[i + j];
-                }
+    //             // transpose weights
+    //             for i in (0..INPUT * L1_SIZE * BUCKETS / num_chunks).step_by(num_regs) {
+    //                 for j in 0..num_regs {
+    //                     regs[j] = *weights[i + j];
+    //                 }
 
-                for j in 0..num_regs {
-                    *weights[i + j] = regs[order[j]];
-                }
-            }
+    //                 for j in 0..num_regs {
+    //                     *weights[i + j] = regs[order[j]];
+    //                 }
+    //             }
 
-            // transpose biases
-            for i in (0..L1_SIZE / num_chunks).step_by(num_regs) {
-                for j in 0..num_regs {
-                    regs[j] = *biases[i + j];
-                }
+    //             // transpose biases
+    //             for i in (0..L1_SIZE / num_chunks).step_by(num_regs) {
+    //                 for j in 0..num_regs {
+    //                     regs[j] = *biases[i + j];
+    //                 }
 
-                for j in 0..num_regs {
-                    *biases[i + j] = regs[order[j]];
-                }
-            }
-        }
+    //                 for j in 0..num_regs {
+    //                     *biases[i + j] = regs[order[j]];
+    //                 }
+    //             }
+    //         }
 
-        // transpose the L{1,2,3} weights and biases
-        let mut sorted = vec![[[0i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
-        repermute_l1_weights(&mut sorted, &self.l1_weights);
-        for bucket in 0..OUTPUT_BUCKETS {
-            // quant the L1 weights
-            if use_simd {
-                for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
-                    for j in 0..L2_SIZE {
-                        for k in 0..L1_CHUNK_PER_32 {
-                            net.l1_weights[bucket]
-                                [i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] =
-                                sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
-                        }
-                    }
-                }
-            } else {
-                for i in 0..L1_SIZE {
-                    for j in 0..L2_SIZE {
-                        net.l1_weights[bucket][j * L1_SIZE + i] = sorted[i][bucket][j];
-                    }
-                }
-            }
+    //         // transpose the L{1,2,3} weights and biases
+    //         let mut sorted = vec![[[0i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
+    //         repermute_l1_weights(&mut sorted, &self.l1_weights);
+    //         for bucket in 0..OUTPUT_BUCKETS {
+    //             // quant the L1 weights
+    //             if use_simd {
+    //                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
+    //                     for j in 0..L2_SIZE {
+    //                         for k in 0..L1_CHUNK_PER_32 {
+    //                             net.l1_weights[bucket]
+    //                                 [i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] =
+    //                                 sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
+    //                         }
+    //                     }
+    //                 }
+    //             } else {
+    //                 for i in 0..L1_SIZE {
+    //                     for j in 0..L2_SIZE {
+    //                         net.l1_weights[bucket][j * L1_SIZE + i] = sorted[i][bucket][j];
+    //                     }
+    //                 }
+    //             }
 
-            // transfer the L1 biases
-            for i in 0..L2_SIZE {
-                net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
-            }
+    //             // transfer the L1 biases
+    //             for i in 0..L2_SIZE {
+    //                 net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
+    //             }
 
-            // transpose the L2 weights
-            for i in 0..L2_SIZE {
-                for j in 0..L3_SIZE {
-                    net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
-                }
-            }
+    //             // transpose the L2 weights
+    //             for i in 0..L2_SIZE {
+    //                 for j in 0..L3_SIZE {
+    //                     net.l2_weights[bucket][i * L3_SIZE + j] = self.l2_weights[i][bucket][j];
+    //                 }
+    //             }
 
-            // transfer the L2 biases
-            for i in 0..L3_SIZE {
-                net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
-            }
+    //             // transfer the L2 biases
+    //             for i in 0..L3_SIZE {
+    //                 net.l2_bias[bucket][i] = self.l2_biases[bucket][i];
+    //             }
 
-            // transfer the L3 weights
-            for i in 0..L3_SIZE {
-                net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
-            }
+    //             // transfer the L3 weights
+    //             for i in 0..L3_SIZE {
+    //                 net.l3_weights[bucket][i] = self.l3_weights[i][bucket];
+    //             }
 
-            // transfer the L3 biases
-            net.l3_bias[bucket] = self.l3_biases[bucket];
-        }
+    //             // transfer the L3 biases
+    //             net.l3_bias[bucket] = self.l3_biases[bucket];
+    //         }
 
-        net
-    }
+    //         net
+    //     }
 
     fn zeroed() -> Box<Self> {
         // SAFETY: NNUEParams can be zeroed.
@@ -699,186 +701,188 @@ fn repermute_ft_bucket(tgt_bucket: &mut [i16], unsorted: &[i16]) {
 impl NNUEParams {
     #[allow(clippy::too_many_lines)]
     pub fn decompress_and_alloc() -> anyhow::Result<&'static Self> {
-        #[cfg(not(feature = "zstd"))]
-        type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
-        #[cfg(feature = "zstd")]
-        type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
-
-        // this function is not particularly happy about running in parallel.
-        static LOCK: Mutex<()> = Mutex::new(());
-        // additionally, we'd quite like to cache the results of this function.
-        static CACHED: OnceLock<Mmap> = OnceLock::new();
-        let _guard = LOCK.lock().unwrap();
-        // check if we've already loaded the weights
-        if let Some(cached) = CACHED.get() {
-            // cast the mmap to a NNUEParams
-            // SAFETY: We check that the mmap is the right size and alignment.
-            #[allow(clippy::cast_ptr_alignment)]
-            let params: &'static Self = unsafe { &*cached.as_ptr().cast::<Self>() };
-
-            return Ok(params);
-        }
-
-        let weights_file_name = format!(
-            "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
-            std::env::consts::ARCH,
-            std::env::consts::OS,
-            // target cpu
-            nnue::simd::ARCH,
-            // avoid clashing with other versions
-            nnue_checksum(),
-        );
-
-        let temp_dir = std::env::temp_dir();
-        let weights_path = temp_dir.join(&weights_file_name);
-
-        // Try to open existing weights file
-        let exists = weights_path
-            .try_exists()
-            .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
-
-        if exists {
-            let mmap = Self::map_weight_file(&weights_path).with_context(|| {
-                format!(
-                    "Failed while attempting to load pre-existing weight file at {}",
-                    weights_path.display()
-                )
-            })?;
-
-            // store the mmap in the cache
-            CACHED.set(mmap).unwrap();
-
-            // cast the mmap to a NNUEParams
-            // SAFETY: We check that the mmap is the right size and alignment.
-            #[allow(clippy::cast_ptr_alignment)]
-            let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
-
-            return Ok(params);
-        }
-
-        let mut net = QuantisedNetwork::zeroed();
-        // SAFETY: QN is POD and we only write to it.
-        let mut mem = unsafe {
-            std::slice::from_raw_parts_mut(
-                util::from_mut(net.as_mut()).cast::<u8>(),
-                std::mem::size_of::<QuantisedNetwork>(),
-            )
-        };
-        let expected_bytes = mem.len() as u64;
-        let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
-            .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
-        let bytes_written = std::io::copy(&mut decoder, &mut mem)
-            .with_context(|| "Failed to decompress NNUE weights.")?;
-        anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
-        let use_simd = cfg!(target_arch = "x86_64");
-        let net = net.permute(use_simd);
-
-        // create a temporary file to store the weights
-        // uses a path unique to our process to avoid
-        // a race condition where one process is quicker at
-        // writing the file than another.
-        let temp_path = weights_path.with_extension(format!("tmp.{}", std::process::id()));
-
-        // If we get here, we need to create and populate the weights file
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            // use a temporary path to avoid race conditions
-            .open(&temp_path)
-            .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
-
-        // Allocate the file to the right size
-        let size = std::mem::size_of::<Self>();
-        file.set_len(size as u64).with_context(|| {
-            format!(
-                "Failed to set length of file at {} to {size}",
-                temp_path.display()
-            )
-        })?;
-
-        // SAFETY: This file must not be modified while we have a reference to it.
-        // we avoid doing this ourselves, but we can't defend against other processes.
-        let mut mmap = unsafe {
-            memmap2::MmapOptions::new()
-                .map_mut(&file)
-                .with_context(|| format!("Failed to map temp file at {}", temp_path.display()))?
-        };
-
-        // Verify that the pointer is aligned to 64 bytes
-        anyhow::ensure!(
-            mmap.as_ptr().align_offset(64) == 0,
-            "Temporary file mmap pointer is not aligned to 64 bytes"
-        );
-
-        // write the NNUEParams to the mmap
-        #[allow(clippy::cast_ptr_alignment)]
-        let ptr = mmap.as_mut_ptr().cast::<Self>();
-        // SAFETY: We just allocated the mmap, and we know that the pointer is aligned to 64 bytes.
-        unsafe {
-            std::ptr::copy_nonoverlapping(net.as_ref(), ptr, 1);
-        }
-
-        // sync the file to disk
-        mmap.flush().with_context(|| {
-            format!(
-                "Failed to flush mmaped temporary file at {}",
-                temp_path.display()
-            )
-        })?;
-
-        // move the file to the correct path
-        let rename_result = std::fs::rename(&temp_path, &weights_path);
-
-        // if the file now exists, either we succeeded or got beaten to the punch:
-        let exists = weights_path
-            .try_exists()
-            .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
-
-        if !exists {
-            let tfile = temp_path.file_name().unwrap_or_else(|| "<empty>".as_ref());
-            let wfile = weights_path
-                .file_name()
-                .unwrap_or_else(|| "<empty>".as_ref());
-
-            rename_result.with_context(|| {
-                format!(
-                    "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
-                    temp_dir.display()
-                )
-            })?;
-
-            panic!("Somehow rename succeeded but the file doesn't exist!");
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            // log that we've created the file freshly
-            println!(
-                "Created NNUE weights file at {} from decompressed data",
-                weights_path.display()
-            );
-        }
-
-        // file created, return the mapped weights
-        let mmap = Self::map_weight_file(&weights_path).with_context(|| {
-            format!(
-                "Failed while attempting to load just-created weight file at {}",
-                weights_path.display()
-            )
-        })?;
-
-        // store the mmap in the cache
-        CACHED.set(mmap).unwrap();
-
-        // cast the mmap to a NNUEParams
-        // SAFETY: We check that the mmap is the right size and alignment.
-        #[allow(clippy::cast_ptr_alignment)]
-        let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
-
-        Ok(params)
+        Ok(&NET)
     }
+    //     #[cfg(not(feature = "zstd"))]
+    //     type ZstdDecoder<R, D> = ruzstd::StreamingDecoder<R, D>;
+    //     #[cfg(feature = "zstd")]
+    //     type ZstdDecoder<'a, R> = zstd::stream::Decoder<'a, R>;
+
+    //     // this function is not particularly happy about running in parallel.
+    //     static LOCK: Mutex<()> = Mutex::new(());
+    //     // additionally, we'd quite like to cache the results of this function.
+    //     static CACHED: OnceLock<Mmap> = OnceLock::new();
+    //     let _guard = LOCK.lock().unwrap();
+    //     // check if we've already loaded the weights
+    //     if let Some(cached) = CACHED.get() {
+    //         // cast the mmap to a NNUEParams
+    //         // SAFETY: We check that the mmap is the right size and alignment.
+    //         #[allow(clippy::cast_ptr_alignment)]
+    //         let params: &'static Self = unsafe { &*cached.as_ptr().cast::<Self>() };
+
+    //         return Ok(params);
+    //     }
+
+    //     let weights_file_name = format!(
+    //         "viridithas-shared-network-weights-{}-{}-{}-{:X}.bin",
+    //         std::env::consts::ARCH,
+    //         std::env::consts::OS,
+    //         // target cpu
+    //         nnue::simd::ARCH,
+    //         // avoid clashing with other versions
+    //         nnue_checksum(),
+    //     );
+
+    //     let temp_dir = std::env::temp_dir();
+    //     let weights_path = temp_dir.join(&weights_file_name);
+
+    //     // Try to open existing weights file
+    //     let exists = weights_path
+    //         .try_exists()
+    //         .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
+
+    //     if exists {
+    //         let mmap = Self::map_weight_file(&weights_path).with_context(|| {
+    //             format!(
+    //                 "Failed while attempting to load pre-existing weight file at {}",
+    //                 weights_path.display()
+    //             )
+    //         })?;
+
+    //         // store the mmap in the cache
+    //         CACHED.set(mmap).unwrap();
+
+    //         // cast the mmap to a NNUEParams
+    //         // SAFETY: We check that the mmap is the right size and alignment.
+    //         #[allow(clippy::cast_ptr_alignment)]
+    //         let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
+
+    //         return Ok(params);
+    //     }
+
+    //     let mut net = QuantisedNetwork::zeroed();
+    //     // SAFETY: QN is POD and we only write to it.
+    //     let mut mem = unsafe {
+    //         std::slice::from_raw_parts_mut(
+    //             util::from_mut(net.as_mut()).cast::<u8>(),
+    //             std::mem::size_of::<QuantisedNetwork>(),
+    //         )
+    //     };
+    //     let expected_bytes = mem.len() as u64;
+    //     let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
+    //         .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
+    //     let bytes_written = std::io::copy(&mut decoder, &mut mem)
+    //         .with_context(|| "Failed to decompress NNUE weights.")?;
+    //     anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+    //     let use_simd = cfg!(target_arch = "x86_64");
+    //     let net = net.permute(use_simd);
+
+    //     // create a temporary file to store the weights
+    //     // uses a path unique to our process to avoid
+    //     // a race condition where one process is quicker at
+    //     // writing the file than another.
+    //     let temp_path = weights_path.with_extension(format!("tmp.{}", std::process::id()));
+
+    //     // If we get here, we need to create and populate the weights file
+    //     let file = OpenOptions::new()
+    //         .read(true)
+    //         .write(true)
+    //         .create(true)
+    //         .truncate(true)
+    //         // use a temporary path to avoid race conditions
+    //         .open(&temp_path)
+    //         .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
+
+    //     // Allocate the file to the right size
+    //     let size = std::mem::size_of::<Self>();
+    //     file.set_len(size as u64).with_context(|| {
+    //         format!(
+    //             "Failed to set length of file at {} to {size}",
+    //             temp_path.display()
+    //         )
+    //     })?;
+
+    //     // SAFETY: This file must not be modified while we have a reference to it.
+    //     // we avoid doing this ourselves, but we can't defend against other processes.
+    //     let mut mmap = unsafe {
+    //         memmap2::MmapOptions::new()
+    //             .map_mut(&file)
+    //             .with_context(|| format!("Failed to map temp file at {}", temp_path.display()))?
+    //     };
+
+    //     // Verify that the pointer is aligned to 64 bytes
+    //     anyhow::ensure!(
+    //         mmap.as_ptr().align_offset(64) == 0,
+    //         "Temporary file mmap pointer is not aligned to 64 bytes"
+    //     );
+
+    //     // write the NNUEParams to the mmap
+    //     #[allow(clippy::cast_ptr_alignment)]
+    //     let ptr = mmap.as_mut_ptr().cast::<Self>();
+    //     // SAFETY: We just allocated the mmap, and we know that the pointer is aligned to 64 bytes.
+    //     unsafe {
+    //         std::ptr::copy_nonoverlapping(net.as_ref(), ptr, 1);
+    //     }
+
+    //     // sync the file to disk
+    //     mmap.flush().with_context(|| {
+    //         format!(
+    //             "Failed to flush mmaped temporary file at {}",
+    //             temp_path.display()
+    //         )
+    //     })?;
+
+    //     // move the file to the correct path
+    //     let rename_result = std::fs::rename(&temp_path, &weights_path);
+
+    //     // if the file now exists, either we succeeded or got beaten to the punch:
+    //     let exists = weights_path
+    //         .try_exists()
+    //         .with_context(|| format!("Could not check existence of {}", weights_path.display()))?;
+
+    //     if !exists {
+    //         let tfile = temp_path.file_name().unwrap_or_else(|| "<empty>".as_ref());
+    //         let wfile = weights_path
+    //             .file_name()
+    //             .unwrap_or_else(|| "<empty>".as_ref());
+
+    //         rename_result.with_context(|| {
+    //             format!(
+    //                 "Failed to rename temp file from {tfile:#?} to {wfile:#?} in {}",
+    //                 temp_dir.display()
+    //             )
+    //         })?;
+
+    //         panic!("Somehow rename succeeded but the file doesn't exist!");
+    //     }
+
+    //     #[cfg(debug_assertions)]
+    //     {
+    //         // log that we've created the file freshly
+    //         println!(
+    //             "Created NNUE weights file at {} from decompressed data",
+    //             weights_path.display()
+    //         );
+    //     }
+
+    //     // file created, return the mapped weights
+    //     let mmap = Self::map_weight_file(&weights_path).with_context(|| {
+    //         format!(
+    //             "Failed while attempting to load just-created weight file at {}",
+    //             weights_path.display()
+    //         )
+    //     })?;
+
+    //     // store the mmap in the cache
+    //     CACHED.set(mmap).unwrap();
+
+    //     // cast the mmap to a NNUEParams
+    //     // SAFETY: We check that the mmap is the right size and alignment.
+    //     #[allow(clippy::cast_ptr_alignment)]
+    //     let params: &'static Self = unsafe { &*CACHED.get().unwrap().as_ptr().cast::<Self>() };
+
+    //     Ok(params)
+    // }
 
     fn map_weight_file(weights_path: &Path) -> anyhow::Result<Mmap> {
         let without_full_ext = weights_path.with_extension("tmp");
@@ -1411,31 +1415,62 @@ impl NNUEState {
             (&acc.black, &acc.white)
         };
 
-        let mut l1_outputs = Align64([0.0; L2_SIZE]);
-        let mut l2_outputs = Align64([0.0; L3_SIZE]);
-        let mut l3_output = 0.0;
+        // let mut l1_outputs = Align64([0.0; L2_SIZE]);
+        // let mut l2_outputs = Align64([0.0; L3_SIZE]);
+        // let mut l3_output = 0.0;
 
-        layers::activate_ft_and_propagate_l1(
-            us,
-            them,
-            &nn.l1_weights[out],
-            &nn.l1_bias[out],
-            &mut l1_outputs,
-        );
-        layers::propagate_l2(
-            &l1_outputs,
-            &nn.l2_weights[out],
-            &nn.l2_bias[out],
-            &mut l2_outputs,
-        );
-        layers::propagate_l3(
-            &l2_outputs,
-            &nn.l3_weights[out],
-            nn.l3_bias[out],
-            &mut l3_output,
-        );
+        // layers::activate_ft_and_propagate_l1(
+        //     us,
+        //     them,
+        //     &nn.l1_weights[out],
+        //     &nn.l1_bias[out],
+        //     &mut l1_outputs,
+        // );
+        // layers::propagate_l2(
+        //     &l1_outputs,
+        //     &nn.l2_weights[out],
+        //     &nn.l2_bias[out],
+        //     &mut l2_outputs,
+        // );
+        // layers::propagate_l3(
+        //     &l2_outputs,
+        //     &nn.l3_weights[out],
+        //     nn.l3_bias[out],
+        //     &mut l3_output,
+        // );
 
-        (l3_output * SCALE as f32) as i32
+        // (l3_output * SCALE as f32) as i32
+
+        unsafe {
+            let min = simd::zero_i16();
+            let max = simd::splat_i16(QA);
+
+            let mut vector = simd::zero_i32();
+
+            for i in 0..L1_SIZE / I16_CHUNK_SIZE {
+                let input = simd::load_i16(us.get_unchecked(i * I16_CHUNK_SIZE));
+                let weights =
+                    simd::load_i16(nn.output_weights[0].get_unchecked(i * I16_CHUNK_SIZE));
+
+                let v = simd::min_i16(simd::max_i16(input, min), max);
+                let w = simd::mul_low_i16(v, weights);
+                vector = simd::add_i32(vector, simd::mul_i16_widening(w, v));
+            }
+
+            for i in 0..L1_SIZE / I16_CHUNK_SIZE {
+                let input = simd::load_i16(them.get_unchecked(i * I16_CHUNK_SIZE));
+                let weights =
+                    simd::load_i16(nn.output_weights[1].get_unchecked(i * I16_CHUNK_SIZE));
+
+                let v = simd::min_i16(simd::max_i16(input, min), max);
+                let w = simd::mul_low_i16(v, weights);
+                vector = simd::add_i32(vector, simd::mul_i16_widening(w, v));
+            }
+
+            let out = simd::sum_i32(vector) / i32::from(QA) + i32::from(NET.output_bias);
+
+            out * SCALE / (i32::from(QA) * i32::from(QB))
+        }
     }
 }
 
@@ -1457,15 +1492,15 @@ pub fn inference_benchmark(state: &NNUEState, nnue_params: &NNUEParams) {
 }
 
 pub fn visualise_nnue() -> anyhow::Result<()> {
-    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    // let nnue_params = NNUEParams::decompress_and_alloc()?;
     // create folder for the images
     let path = std::path::PathBuf::from("nnue-visualisations");
     std::fs::create_dir_all(&path)
         .with_context(|| "Failed to create NNUE visualisations folder.")?;
     for neuron in 0..crate::nnue::network::L1_SIZE {
-        nnue_params.visualise_neuron(neuron, &path);
+        NET.visualise_neuron(neuron, &path);
     }
-    let (min, max) = nnue_params.min_max_feature_weight();
+    let (min, max) = NET.min_max_feature_weight();
     println!("Min / Max FT values: {min} / {max}");
     Ok(())
 }
