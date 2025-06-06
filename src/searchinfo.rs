@@ -243,6 +243,7 @@ mod tests {
         chess::board::Board,
         evaluation::{mate_in, mated_in},
         nnue::network::NNUEParams,
+        search::search_position,
         searchinfo::SearchInfo,
         threadlocal::ThreadData,
         timemgmt::{SearchLimit, TimeManager},
@@ -270,7 +271,8 @@ mod tests {
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             position.san(mov.unwrap()).as_deref(),
@@ -298,7 +300,8 @@ mod tests {
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             position.san(mov.unwrap()).as_deref(),
@@ -326,7 +329,8 @@ mod tests {
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             position.san(mov.unwrap()).as_deref(),
@@ -354,7 +358,8 @@ mod tests {
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) = position.search_position(&mut info, array::from_mut(&mut t), tt.view());
+        let (value, mov) =
+            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             position.san(mov.unwrap()).as_deref(),

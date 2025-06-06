@@ -34,7 +34,7 @@ impl PackedBoard {
 
         let mut pieces = util::U4Array32::default();
         for (i, sq) in occupancy.iter().enumerate() {
-            let piece = board.piece_at(sq).unwrap();
+            let piece = board.state.mailbox[sq].unwrap();
             let piece_type = piece.piece_type();
             let colour = piece.colour();
 

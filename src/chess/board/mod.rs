@@ -9,7 +9,7 @@ use std::{
 use anyhow::{bail, Context};
 
 use arrayvec::ArrayVec;
-use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN};
+use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
@@ -789,16 +789,15 @@ impl Board {
     /// Checks whether a move is pseudo-legal.
     /// This means that it is a legal move, except for the fact that it might leave the king in check.
     pub fn is_pseudo_legal(&self, m: Move) -> bool {
+        if m.is_castle() {
+            return self.is_pseudo_legal_castling(m);
+        }
+
         let from = m.from();
         let to = m.to();
 
-        let moved_piece = self.piece_at(from);
-        let captured_piece = if m.is_castle() {
-            return self.is_pseudo_legal_castling(m);
-        } else {
-            self.piece_at(to)
-        };
-        let is_pawn_double_push = self.is_double_pawn_push(m);
+        let moved_piece = self.state.mailbox[from];
+        let captured_piece = self.state.mailbox[to];
 
         let Some(moved_piece) = moved_piece else {
             return false;
@@ -814,17 +813,10 @@ impl Board {
             }
         }
 
-        if moved_piece.piece_type() != PieceType::Pawn
-            && (is_pawn_double_push || m.is_ep() || m.is_promo())
+        if captured_piece.is_some()
+            && moved_piece.piece_type() == PieceType::Pawn
+            && from.file() == to.file()
         {
-            return false;
-        }
-
-        if moved_piece.piece_type() != PieceType::King && m.is_castle() {
-            return false;
-        }
-
-        if captured_piece.is_some() && is_pawn_double_push {
             return false;
         }
 
@@ -835,14 +827,16 @@ impl Board {
             }
             if m.is_ep() {
                 return Some(to) == self.state.ep_square;
-            } else if is_pawn_double_push {
+            } else if (SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(to)
+                && (SquareSet::RANK_2 | SquareSet::RANK_7).contains_square(from)
+            {
                 if from.relative_to(self.side).rank() != Rank::Two {
                     return false;
                 }
                 let Some(one_forward) = from.pawn_push(self.side) else {
                     return false;
                 };
-                return self.piece_at(one_forward).is_none()
+                return self.state.mailbox[one_forward].is_none()
                     && Some(to) == one_forward.pawn_push(self.side);
             } else if captured_piece.is_none() {
                 return Some(to) == from.pawn_push(self.side);
@@ -852,6 +846,8 @@ impl Board {
                 Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
                 Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
             };
+        } else if m.is_ep() || m.is_promo() {
+            return false;
         }
 
         movegen::attacks_by_type(moved_piece.piece_type(), from, self.state.bbs.occupied())
@@ -867,7 +863,7 @@ impl Board {
         // - there are pieces between the king and the rook
         // - the king passes through a square that is attacked by the opponent
         // - the king ends up in check (not checked here)
-        let Some(moved) = self.piece_at(m.from()) else {
+        let Some(moved) = self.state.mailbox[m.from()] else {
             return false;
         };
         if moved.piece_type() != PieceType::King {
@@ -885,7 +881,7 @@ impl Board {
         }
         let (king_dst, rook_dst) = if m.to() > m.from() {
             // kingside castling.
-            if Some(m.to().file()) != self.state.castle_perm.kingside(self.side) {
+            if self.state.castle_perm.kingside(self.side) != Some(m.to().file()) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -896,7 +892,7 @@ impl Board {
             )
         } else {
             // queenside castling.
-            if Some(m.to().file()) != self.state.castle_perm.queenside(self.side) {
+            if self.state.castle_perm.queenside(self.side) != Some(m.to().file()) {
                 // the to-square doesn't match the castling rights
                 // (it goes to the wrong place, or the rights don't exist)
                 return false;
@@ -919,6 +915,90 @@ impl Board {
             && !self.any_attacked(king_path | m.from().as_set(), self.side.flip())
     }
 
+    /// Checks whether a given pseudo-legal move is legal in the current position.
+    pub fn is_legal(&self, m: Move) -> bool {
+        debug_assert!(self.is_pseudo_legal(m));
+
+        let turn = self.turn();
+        let bbs = &self.state.bbs;
+
+        let from = m.from();
+        let to = m.to();
+
+        let us = bbs.colours[turn];
+        let our_king_bb = bbs.pieces[PieceType::King] & us;
+        let king = our_king_bb.first();
+
+        let them = bbs.colours[!turn];
+        let their_queens = bbs.pieces[PieceType::Queen] & them;
+        let their_bishops = bbs.pieces[PieceType::Bishop] & them;
+        let their_rooks = bbs.pieces[PieceType::Rook] & them;
+
+        if m.is_castle() {
+            let king_to = m.history_to_square();
+            // TODO: determine necessity of first conditional component
+            return !(self.state.threats.all.contains_square(king_to)
+                || CHESS960.load(Ordering::Relaxed)
+                    && self.state.pinned[turn].contains_square(to));
+        } else if m.is_ep() {
+            let rank = to.rank();
+            let file = to.file();
+
+            let rank = if rank == Rank::Three {
+                Rank::Four
+            } else {
+                Rank::Five
+            };
+
+            let cap_sq = Square::from_rank_file(rank, file);
+
+            let occ_after = bbs.occupied() ^ to.as_set() ^ from.as_set() ^ cap_sq.as_set();
+
+            return bishop_attacks(king, occ_after) & (their_queens | their_bishops)
+                == SquareSet::EMPTY
+                && rook_attacks(king, occ_after) & (their_queens | their_rooks)
+                    == SquareSet::EMPTY;
+        }
+
+        let moving = self.state.mailbox[from].unwrap();
+
+        if moving.piece_type() == PieceType::King {
+            let without_king = bbs.occupied() ^ our_king_bb;
+
+            // TODO: determine necessity of first conditional component
+            return !self.state.threats.all.contains_square(to)
+                && bishop_attacks(to, without_king) & (their_queens | their_bishops)
+                    == SquareSet::EMPTY
+                && rook_attacks(to, without_king) & (their_queens | their_rooks)
+                    == SquareSet::EMPTY;
+        }
+
+        // moving anything other than the king
+        // is illegal when in double-check.
+        if self.state.threats.checkers.many() {
+            return false;
+        }
+
+        // if your piece is pinned, you can only
+        // move it along the direction that it is
+        // pinned in.
+        if self.state.pinned[turn].contains_square(from)
+            && !RAY_FULL[from][to].contains_square(king)
+        {
+            return false;
+        }
+
+        // not in check and not moving the king? a-ok.
+        if self.state.threats.checkers == SquareSet::EMPTY {
+            return true;
+        }
+
+        // single checker, you have to be
+        // capturing it or blocking the check.
+        let checker = self.state.threats.checkers.first();
+        (RAY_BETWEEN[king][checker] | self.state.threats.checkers).contains_square(to)
+    }
+
     pub fn any_attacked(&self, squares: SquareSet, by: Colour) -> bool {
         if by == self.side.flip() {
             squares & self.state.threats.all != SquareSet::EMPTY
@@ -934,7 +1014,7 @@ impl Board {
 
     pub fn add_piece(&mut self, sq: Square, piece: Piece) {
         self.state.bbs.set_piece_at(sq, piece);
-        *self.piece_at_mut(sq) = Some(piece);
+        self.state.mailbox[sq] = Some(piece);
     }
 
     /// Gets the piece that will be captured by the given move.
@@ -953,8 +1033,7 @@ impl Board {
 
     /// Determines whether this move would be a double pawn push in the current position.
     pub fn is_double_pawn_push(&self, m: Move) -> bool {
-        let to = m.to();
-        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(to) {
+        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(m.to()) {
             return false;
         }
         let from = m.from();
@@ -972,24 +1051,19 @@ impl Board {
         m.is_promo() || m.is_ep() || self.is_capture(m)
     }
 
-    /// Gets the piece at the given square.
-    pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        self.state.mailbox[sq]
-    }
-
-    /// Gets a mutable reference to the piece at the given square.
-    pub fn piece_at_mut(&mut self, sq: Square) -> &mut Option<Piece> {
-        &mut self.state.mailbox[sq]
-    }
-
-    pub fn make_move_simple(&mut self, m: Move) -> bool {
-        self.make_move_base(m, &mut UpdateBuffer::default())
+    pub fn make_move_simple(&mut self, m: Move) {
+        self.make_move_base(m, &mut UpdateBuffer::default());
     }
 
     #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
-    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) -> bool {
+    pub fn make_move_base(&mut self, m: Move, update_buffer: &mut UpdateBuffer) {
+        debug_assert!(self.is_pseudo_legal(m));
+        debug_assert!(self.is_legal(m));
+
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
+
+        self.history.push(self.state.clone());
 
         let from = m.from();
         let mut to = m.to();
@@ -997,11 +1071,7 @@ impl Board {
         let side = self.side;
         let piece = self.state.mailbox[from].unwrap();
         let captured = if castle { None } else { self.state.mailbox[to] };
-
-        self.history.push(self.state.clone());
-        let saved_ep_square = self.state.ep_square;
-        let saved_fifty_move_counter = self.state.fifty_move_counter;
-        let saved_piece_layout = self.state.bbs;
+        let mut castling_perm = self.state.castle_perm;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -1028,10 +1098,10 @@ impl Board {
             self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
             let rook_from = to;
-            let rook_to = if to_file == self.state.castle_perm.kingside(side) {
+            let rook_to = if to_file == castling_perm.kingside(side) {
                 to = Square::G1.relative_to(side);
                 Square::F1.relative_to(side)
-            } else if to_file == self.state.castle_perm.queenside(side) {
+            } else if to_file == castling_perm.queenside(side) {
                 to = Square::C1.relative_to(side);
                 Square::D1.relative_to(side)
             } else {
@@ -1047,8 +1117,6 @@ impl Board {
             }
         }
 
-        self.state.ep_square = None;
-
         self.state.fifty_move_counter += 1;
 
         if let Some(captured) = captured {
@@ -1057,6 +1125,10 @@ impl Board {
             update_buffer.clear_piece(to, captured);
         }
 
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
+        }
+        self.state.ep_square = None;
         if piece.piece_type() == PieceType::Pawn {
             self.state.fifty_move_counter = 0;
             if self.is_double_pawn_push(m)
@@ -1074,6 +1146,9 @@ impl Board {
                 }
             }
         }
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
+        }
 
         if let Some(promo) = m.promotion_type() {
             let promo = Piece::new(side, promo);
@@ -1089,96 +1164,72 @@ impl Board {
 
         self.side = self.side.flip();
 
-        // reversed in_check fn, as we have now swapped sides
-        if self.sq_attacked(self.state.bbs.king_sq(self.side.flip()), self.side) {
-            self.side = self.side.flip();
-            self.state.ep_square = saved_ep_square;
-            self.state.fifty_move_counter = saved_fifty_move_counter;
-            self.state.bbs = saved_piece_layout;
-            self.history.pop();
-            return false;
-        }
-
-        let mut keys = self.state.keys.clone();
-
-        // remove a previous en passant square from the hash
-        if let Some(ep_sq) = saved_ep_square {
-            keys.zobrist ^= EP_KEYS[ep_sq];
-        }
-
         // hash out the castling to insert it again after updating rights.
-        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
-
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
         // update castling rights
-        let mut new_rights = self.state.castle_perm;
         if piece == Piece::WR && from.rank() == Rank::One {
-            if Some(from.file()) == self.state.castle_perm.kingside(Colour::White) {
-                new_rights.clear_side::<true, White>();
-            } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::White) {
-                new_rights.clear_side::<false, White>();
+            if Some(from.file()) == castling_perm.kingside(Colour::White) {
+                castling_perm.clear_side::<true, White>();
+            } else if Some(from.file()) == castling_perm.queenside(Colour::White) {
+                castling_perm.clear_side::<false, White>();
             }
         } else if piece == Piece::BR && from.rank() == Rank::Eight {
-            if Some(from.file()) == self.state.castle_perm.kingside(Colour::Black) {
-                new_rights.clear_side::<true, Black>();
-            } else if Some(from.file()) == self.state.castle_perm.queenside(Colour::Black) {
-                new_rights.clear_side::<false, Black>();
+            if Some(from.file()) == castling_perm.kingside(Colour::Black) {
+                castling_perm.clear_side::<true, Black>();
+            } else if Some(from.file()) == castling_perm.queenside(Colour::Black) {
+                castling_perm.clear_side::<false, Black>();
             }
         } else if piece == Piece::WK {
-            new_rights.clear::<White>();
+            castling_perm.clear::<White>();
         } else if piece == Piece::BK {
-            new_rights.clear::<Black>();
+            castling_perm.clear::<Black>();
         }
         if to.rank() == Rank::One {
-            new_rights.remove::<White>(to.file());
+            castling_perm.remove::<White>(to.file());
         } else if to.rank() == Rank::Eight {
-            new_rights.remove::<Black>(to.file());
+            castling_perm.remove::<Black>(to.file());
         }
-        self.state.castle_perm = new_rights;
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
+        self.state.castle_perm = castling_perm;
 
         // apply all the updates to the zobrist hash
-        if let Some(ep_sq) = self.state.ep_square {
-            keys.zobrist ^= EP_KEYS[ep_sq];
-        }
-        keys.zobrist ^= SIDE_KEY;
+        self.state.keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
             self.state.mailbox[sq] = None;
             let piece_key = PIECE_KEYS[piece][sq];
-            keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= piece_key;
-                    keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
             self.state.mailbox[sq] = Some(piece);
             let piece_key = PIECE_KEYS[piece][sq];
-            keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    keys.major ^= piece_key;
-                    keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
-        // reinsert the castling rights
-        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
-        self.state.keys = keys;
 
         self.ply += 1;
         self.height += 1;
@@ -1191,8 +1242,6 @@ impl Board {
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
-
-        true
     }
 
     pub fn unmake_move_base(&mut self) {
@@ -1233,7 +1282,6 @@ impl Board {
         self.height += 1;
 
         self.state.threats = self.generate_threats(self.side);
-        self.state.pinned.swap(0, 1);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1266,15 +1314,11 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) -> bool {
+    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) {
         let mut update_buffer = UpdateBuffer::default();
-        let Some(piece) = self.state.mailbox[m.from()] else {
-            return false;
-        };
-        let res = self.make_move_base(m, &mut update_buffer);
-        if !res {
-            return false;
-        }
+        let piece = self.state.mailbox[m.from()].unwrap();
+
+        self.make_move_base(m, &mut update_buffer);
 
         t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece {
             from: m.from(),
@@ -1282,12 +1326,8 @@ impl Board {
             piece,
         };
         t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
-
         t.nnue.current_acc += 1;
-
         t.nnue.accumulators[t.nnue.current_acc].correct = [false; 2];
-
-        true
     }
 
     pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
@@ -1295,8 +1335,8 @@ impl Board {
         t.nnue.current_acc -= 1;
     }
 
-    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) -> bool {
-        self.make_move_nnue(m, t)
+    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) {
+        self.make_move_nnue(m, t);
     }
 
     pub fn unmake_move(&mut self, t: &mut ThreadData) {
@@ -1310,7 +1350,7 @@ impl Board {
         let tgt = m.to();
         // todo: could be a branchless lookup into a padded array
         let piece = self.state.mailbox[src].unwrap();
-        let captured = self.piece_at(tgt);
+        let captured = self.state.mailbox[tgt];
 
         let mut new_key = self.state.keys.zobrist;
         new_key ^= PIECE_KEYS[piece][src];
@@ -1416,7 +1456,7 @@ impl Board {
             }
         }
         let to_sq = m.to();
-        let moved_piece = self.piece_at(m.from())?;
+        let moved_piece = self.state.mailbox[m.from()]?;
         let is_capture = self.is_capture(m)
             || (moved_piece.piece_type() == PieceType::Pawn && Some(to_sq) == self.state.ep_square);
         let piece_prefix = match moved_piece.piece_type() {
@@ -1469,19 +1509,18 @@ impl Board {
     }
 
     pub fn gives(&mut self, m: Move) -> CheckState {
-        if !self.make_move_simple(m) {
-            return CheckState::None;
-        }
+        debug_assert!(self.is_pseudo_legal(m));
+        debug_assert!(self.is_legal(m));
+        self.make_move_simple(m);
         let gives_check = self.in_check();
         if gives_check {
             let mut ml = MoveList::new();
             self.generate_moves(&mut ml);
             for &m in ml.iter_moves() {
-                if !self.make_move_simple(m) {
+                if !self.is_legal(m) {
                     continue;
                 }
                 // we found a legal move, so m does not give checkmate.
-                self.unmake_move_base();
                 self.unmake_move_base();
                 return CheckState::Check;
             }
@@ -1543,13 +1582,12 @@ impl Board {
         Ok(out)
     }
 
-    pub fn legal_moves(&mut self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
+    pub fn legal_moves(&self) -> ArrayVec<Move, MAX_POSITION_MOVES> {
         let mut legal_moves = ArrayVec::default();
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &m in move_list.iter_moves() {
-            if self.make_move_simple(m) {
-                self.unmake_move_base();
+            if self.is_legal(m) {
                 legal_moves.push(m);
             }
         }
@@ -1643,9 +1681,9 @@ impl Board {
                     return true;
                 }
 
-                let mut piece = self.piece_at(mv.from());
+                let mut piece = self.state.mailbox[mv.from()];
                 if piece.is_none() {
-                    piece = self.piece_at(mv.to());
+                    piece = self.state.mailbox[mv.to()];
                 }
 
                 return piece.unwrap().colour() == self.side;
@@ -1661,7 +1699,7 @@ impl Board {
     }
 
     #[cfg(any(feature = "datagen", test))]
-    pub fn outcome(&mut self) -> GameOutcome {
+    pub fn outcome(&self) -> GameOutcome {
         if self.state.fifty_move_counter >= 100 {
             return GameOutcome::Draw(DrawType::FiftyMoves);
         }
@@ -1685,8 +1723,7 @@ impl Board {
         self.generate_moves(&mut move_list);
         let mut legal_moves = false;
         for &m in move_list.iter_moves() {
-            if self.make_move_simple(m) {
-                self.unmake_move_base();
+            if self.is_legal(m) {
                 legal_moves = true;
                 break;
             }
@@ -1704,12 +1741,12 @@ impl Board {
     }
 
     #[cfg(debug_assertions)]
-    pub fn assert_mated(&mut self) {
+    pub fn assert_mated(&self) {
         assert!(self.in_check());
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
         for &mv in move_list.iter_moves() {
-            assert!(!self.make_move_simple(mv));
+            assert!(!self.is_legal(mv));
         }
     }
 }
@@ -1769,7 +1806,7 @@ impl Display for Board {
         for rank in Rank::all().rev() {
             for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
-                let piece = self.piece_at(sq);
+                let piece = self.state.mailbox[sq];
                 if let Some(piece) = piece {
                     if counter != 0 {
                         write!(f, "{counter}")?;
@@ -1828,7 +1865,7 @@ impl std::fmt::UpperHex for Board {
             write!(f, "{} ", rank as u8 + 1)?;
             for file in File::all() {
                 let sq = Square::from_rank_file(rank, file);
-                if let Some(piece) = self.piece_at(sq) {
+                if let Some(piece) = self.state.mailbox[sq] {
                     write!(f, "{piece} ")?;
                 } else {
                     write!(f, ". ")?;
@@ -1867,7 +1904,7 @@ mod tests {
         use super::{DrawType, GameOutcome};
         use crate::{chess::chessmove::Move, chess::types::Square};
 
-        let mut fiftymove_draw =
+        let fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
                 .unwrap();
         assert_eq!(
@@ -1891,15 +1928,15 @@ mod tests {
             draw_repetition.outcome(),
             GameOutcome::Draw(DrawType::Repetition)
         );
-        let mut stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
+        let stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
         assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
-        let mut insufficient_material_bare_kings =
+        let insufficient_material_bare_kings =
             Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_bare_kings.outcome(),
             GameOutcome::Draw(DrawType::InsufficientMaterial)
         );
-        let mut insufficient_material_knights =
+        let insufficient_material_knights =
             Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_knights.outcome(),
@@ -2055,8 +2092,10 @@ mod tests {
 
         ep_capturable_key ^= EP_KEYS[Square::D6];
 
-        assert!(not_ep_capturable.make_move_simple(d5));
-        assert!(ep_capturable.make_move_simple(d5));
+        assert!(not_ep_capturable.is_legal(d5));
+        not_ep_capturable.make_move_simple(d5);
+        assert!(ep_capturable.is_legal(d5));
+        ep_capturable.make_move_simple(d5);
 
         assert_eq!(not_ep_capturable.state.ep_square, None);
         assert_eq!(ep_capturable.state.ep_square, Some(Square::D6));
@@ -2072,7 +2111,8 @@ mod tests {
         use crate::chess::types::Square;
         let mut board =
             Board::from_fen("rnbqkbnr/1ppppppp/p7/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 2").unwrap();
-        assert!(board.make_move_simple(Move::new(Square::B7, Square::B5)));
+        assert!(board.is_legal(Move::new(Square::B7, Square::B5)));
+        board.make_move_simple(Move::new(Square::B7, Square::B5));
         assert_eq!(board.state.ep_square, Some(Square::B6));
     }
 
@@ -2082,8 +2122,10 @@ mod tests {
         use crate::chess::chessmove::Move;
         use crate::chess::types::Square;
         let mut board = Board::default();
-        assert!(board.make_move_simple(Move::new(Square::E2, Square::E4)));
-        assert!(board.make_move_simple(Move::new(Square::E7, Square::E5)));
+        assert!(board.is_legal(Move::new(Square::E2, Square::E4)));
+        board.make_move_simple(Move::new(Square::E2, Square::E4));
+        assert!(board.is_legal(Move::new(Square::E7, Square::E5)));
+        board.make_move_simple(Move::new(Square::E7, Square::E5));
         board.set_from_fen(Board::STARTING_FEN).unwrap();
         let board2 = Board::default();
         assert_eq!(board, board2);

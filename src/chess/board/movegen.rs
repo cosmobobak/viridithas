@@ -162,6 +162,58 @@ pub static RAY_INTERSECTING: [[SquareSet; 64]; 64] = {
     res
 };
 
+pub static RAY_FULL: [[SquareSet; 64]; 64] = {
+    // cache these to accelerate consteval
+    let mut rook_table = [SquareSet::EMPTY; 64];
+    let mut bishop_table = [SquareSet::EMPTY; 64];
+    let mut from = Square::A1;
+    loop {
+        rook_table[from as usize] = rook_attacks_on_the_fly(from, SquareSet::EMPTY);
+        bishop_table[from as usize] = bishop_attacks_on_the_fly(from, SquareSet::EMPTY);
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+
+    let mut res = [[SquareSet::EMPTY; 64]; 64];
+    let mut from = Square::A1;
+
+    loop {
+        let from_mask = from.as_set();
+        let rook_attacks = rook_table[from as usize];
+        let bishop_attacks = bishop_table[from as usize];
+
+        let mut to = Square::A1;
+        loop {
+            let to_mask = to.as_set();
+            if from as usize == to as usize {
+                // do nothing
+            } else if rook_attacks.contains_square(to) {
+                res[from as usize][to as usize] = SquareSet::intersection(
+                    rook_table[from as usize].union(from_mask),
+                    rook_table[to as usize].union(to_mask),
+                );
+            } else if bishop_attacks.contains_square(to) {
+                res[from as usize][to as usize] = SquareSet::intersection(
+                    bishop_table[from as usize].union(from_mask),
+                    bishop_table[to as usize].union(to_mask),
+                );
+            }
+
+            let Some(next) = to.add(1) else {
+                break;
+            };
+            to = next;
+        }
+        let Some(next) = from.add(1) else {
+            break;
+        };
+        from = next;
+    }
+    res
+};
+
 const fn init_jumping_attacks<const IS_KNIGHT: bool>() -> [SquareSet; 64] {
     let mut attacks = [SquareSet::EMPTY; 64];
     let deltas = if IS_KNIGHT {
@@ -1038,9 +1090,10 @@ pub fn synced_perft(pos: &mut Board, depth: usize) -> u64 {
 
     let mut count = 0;
     for &m in ml.iter_moves() {
-        if !pos.make_move_simple(m) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_simple(m);
         count += synced_perft(pos, depth - 1);
         pos.unmake_move_base();
     }

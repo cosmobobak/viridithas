@@ -10,6 +10,7 @@ use crate::{
     },
     history,
     historytable::MAX_HISTORY,
+    search::static_exchange_eval,
     searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };
@@ -150,7 +151,7 @@ impl MovePicker {
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if best.score >= MIN_WINNING_SEE_SCORE
-                && !pos.static_exchange_eval(info, best.mov, self.see_threshold)
+                && !static_exchange_eval(pos, info, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {
