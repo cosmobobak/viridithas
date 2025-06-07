@@ -1241,6 +1241,10 @@ pub fn alpha_beta<NT: NodeType>(
     let mut quiets_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
     let mut tacticals_tried = ArrayVec::<_, MAX_POSITION_MOVES>::new();
 
+    let maybe_singular = depth >= 5
+        && excluded.is_none()
+        && matches!(tt_hit, Some(TTHit { depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if tt_depth >= depth - 3);
+
     while let Some(m) = move_picker.next(board, t, info) {
         if excluded == Some(m) {
             continue;
@@ -1329,14 +1333,10 @@ pub fn alpha_beta<NT: NodeType>(
         info.nodes.increment();
         moves_made += 1;
 
-        let maybe_singular = depth >= 8
-            && excluded.is_none()
-            && matches!(tt_hit, Some(TTHit { mov, depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if mov == Some(m) && tt_depth >= depth - 3);
-
         let extension;
         if NT::ROOT {
             extension = 0;
-        } else if maybe_singular {
+        } else if maybe_singular && Some(m) == tt_move {
             let Some(TTHit {
                 value: tt_value, ..
             }) = tt_hit
