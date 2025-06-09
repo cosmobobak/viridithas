@@ -160,7 +160,7 @@ mod generic {
 #[cfg(target_arch = "x86_64")]
 mod x86simd {
     use super::{
-        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
+        super::{Align64, L1_OUTPUT_SIZE, L1_SIZE, L2_SIZE, L3_SIZE, QA},
         AVX512CHUNK, FT_SHIFT, L1_MUL,
     };
     use crate::nnue::{
@@ -230,8 +230,8 @@ mod x86simd {
     pub fn activate_ft_and_propagate_l1(
         us: &Align64<[i16; L1_SIZE]>,
         them: &Align64<[i16; L1_SIZE]>,
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE / 2]>,
-        biases: &Align64<[f32; L2_SIZE / 2]>,
+        weights: &Align64<[i8; L1_SIZE * L1_OUTPUT_SIZE]>,
+        biases: &Align64<[f32; L1_OUTPUT_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         const L1_PAIR_COUNT: usize = L1_SIZE / 2;
@@ -356,8 +356,8 @@ mod x86simd {
     fn propagate_l1(
         ft_outputs: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
         nnz_slice: &[u16],
-        weights: &Align64<[i8; L1_SIZE * L2_SIZE / 2]>,
-        biases: &Align64<[f32; L2_SIZE / 2]>,
+        weights: &Align64<[i8; L1_SIZE * L1_OUTPUT_SIZE]>,
+        biases: &Align64<[f32; L1_OUTPUT_SIZE]>,
         output: &mut Align64<[f32; L2_SIZE]>,
     ) {
         // SAFETY: Breaking it down by unsafe operations:
@@ -370,7 +370,7 @@ mod x86simd {
         unsafe {
             // &Align64<[MaybeUninit<u8>; L1_SIZE]>) -> &Align64<[i32; L1_SIZE / 4]>
             let input32 = reinterpret_as_i32s(ft_outputs);
-            let mut sums = Align64([0; L2_SIZE / 2]);
+            let mut sums = Align64([0; L1_OUTPUT_SIZE]);
             let nnz_count = nnz_slice.len();
 
             // affine transform
@@ -384,12 +384,12 @@ mod x86simd {
                 let input32_b =
                     simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_ib)));
                 // compute the indices into the weights matrix.
-                let w_offset_a = nnz_ia * L2_SIZE / 2 * L1_CHUNK_PER_32;
-                let w_offset_b = nnz_ib * L2_SIZE / 2 * L1_CHUNK_PER_32;
+                let w_offset_a = nnz_ia * L1_OUTPUT_SIZE * L1_CHUNK_PER_32;
+                let w_offset_b = nnz_ib * L1_OUTPUT_SIZE * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
-                for k in 0..L2_SIZE / 2 / F32_CHUNK_SIZE {
+                for k in 0..L1_OUTPUT_SIZE / F32_CHUNK_SIZE {
                     let sum = simd::load_i32(sums.get_unchecked(k * F32_CHUNK_SIZE));
                     let weight_a =
                         simd::load_i8(weights.get_unchecked(w_offset_a + k * U8_CHUNK_SIZE));
@@ -410,11 +410,11 @@ mod x86simd {
                 let input32 =
                     simd::reinterpret_i32s_as_i8s(simd::splat_i32(*input32.get_unchecked(nnz_i)));
                 // compute the index into the weights matrix.
-                let w_offset = nnz_i * L2_SIZE / 2 * L1_CHUNK_PER_32;
+                let w_offset = nnz_i * L1_OUTPUT_SIZE * L1_CHUNK_PER_32;
                 // for each SIMD-block in the row, compute the product
                 // of the non-zero activation with the corresponding
                 // weight, and add it to the accumulator.
-                for k in 0..L2_SIZE / F32_CHUNK_SIZE / 2 {
+                for k in 0..L1_OUTPUT_SIZE / F32_CHUNK_SIZE {
                     let sum = simd::load_i32(sums.get_unchecked(k * F32_CHUNK_SIZE));
                     let weight = simd::load_i8(weights.get_unchecked(w_offset + k * U8_CHUNK_SIZE));
                     simd::store_i32(
@@ -428,7 +428,7 @@ mod x86simd {
             let zero = simd::zero_f32();
             let one = simd::splat_f32(1.0);
             let sum_mul = simd::splat_f32(L1_MUL);
-            for i in 0..L2_SIZE / F32_CHUNK_SIZE / 2 {
+            for i in 0..L1_OUTPUT_SIZE / F32_CHUNK_SIZE {
                 // convert i32 to f32, multiplying by the quantisation constant
                 let bias = simd::load_f32(biases.get_unchecked(i * F32_CHUNK_SIZE));
                 let sum = simd::mul_add_f32(
@@ -440,7 +440,10 @@ mod x86simd {
                 let clipped1 = simd::min_f32(simd::max_f32(sum, zero), one);
                 let clipped2 = simd::min_f32(simd::mul_f32(sum, sum), one);
                 simd::store_f32(output.get_unchecked_mut(i * F32_CHUNK_SIZE), clipped1);
-                simd::store_f32(output.get_unchecked_mut(i * F32_CHUNK_SIZE + L2_SIZE / 2), clipped2);
+                simd::store_f32(
+                    output.get_unchecked_mut(i * F32_CHUNK_SIZE + L1_OUTPUT_SIZE),
+                    clipped2,
+                );
             }
         }
     }
