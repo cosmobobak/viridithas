@@ -1072,7 +1072,7 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && static_eval - rfp_margin(info, depth, improving, correction) >= beta
+            && static_eval - rfp_margin(info, depth, improving, correction, clock) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
@@ -1630,9 +1630,10 @@ pub fn alpha_beta<NT: NodeType>(
 }
 
 /// The margin for Reverse Futility Pruning.
-fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
+fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32, clock: u8) -> i32 {
     info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
         + correction.abs() / 2
+        + i32::from(clock == 0) * 20
 }
 
 /// Update the main and continuation history tables for a batch of moves.
