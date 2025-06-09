@@ -34,7 +34,7 @@ pub mod layers;
 /// Whether to perform the king-plane merging optimisation.
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
-pub const UNQUANTISED_HAS_FACTORISER: bool = true;
+pub const UNQUANTISED_HAS_FACTORISER: bool = false;
 /// The size of the input layer of the network.
 pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// The amount to scale the output of the network by.
@@ -44,7 +44,7 @@ const SCALE: i32 = 400;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
-pub const L2_SIZE: usize = 16;
+pub const L2_SIZE: usize = 32;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
 /// chunking constant for l1
@@ -109,10 +109,10 @@ struct UnquantisedNetwork {
     // extra bucket for the feature-factoriser.
     ft_weights:    [f32; 12 * 64 * L1_SIZE * (BUCKETS + UNQUANTISED_HAS_FACTORISER as usize)],
     ft_biases:     [f32; L1_SIZE],
-    l1x_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1f_weights:  [[f32; L2_SIZE]; L1_SIZE],
-    l1x_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
-    l1f_biases:    [f32; L2_SIZE],
+    l1x_weights: [[[f32; L2_SIZE / 2]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1f_weights:  [[f32; L2_SIZE / 2]; L1_SIZE],
+    l1x_biases:   [[f32; L2_SIZE / 2]; OUTPUT_BUCKETS],
+    l1f_biases:    [f32; L2_SIZE / 2],
     l2x_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2f_weights:  [[f32; L3_SIZE]; L2_SIZE],
     l2x_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
@@ -129,8 +129,8 @@ struct UnquantisedNetwork {
 struct MergedNetwork {
     ft_weights:   [f32; 12 * 64 * L1_SIZE * BUCKETS],
     ft_biases:    [f32; L1_SIZE],
-    l1_weights: [[[f32; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1_weights: [[[f32; L2_SIZE / 2]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:   [[f32; L2_SIZE / 2]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
@@ -144,8 +144,8 @@ struct MergedNetwork {
 struct QuantisedNetwork {
     ft_weights:   [i16; INPUT * L1_SIZE * BUCKETS],
     ft_biases:    [i16; L1_SIZE],
-    l1_weights: [[[ i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
-    l1_biases:   [[f32; L2_SIZE]; OUTPUT_BUCKETS],
+    l1_weights: [[[ i8; L2_SIZE / 2]; OUTPUT_BUCKETS]; L1_SIZE],
+    l1_biases:   [[f32; L2_SIZE / 2]; OUTPUT_BUCKETS],
     l2_weights: [[[f32; L3_SIZE]; OUTPUT_BUCKETS]; L2_SIZE],
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
@@ -159,8 +159,8 @@ struct QuantisedNetwork {
 pub struct NNUEParams {
     pub feature_weights: Align64<[i16; INPUT * L1_SIZE * BUCKETS]>,
     pub feature_bias:    Align64<[i16; L1_SIZE]>,
-    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE]>; OUTPUT_BUCKETS],
-    pub l1_bias:        [Align64<[f32; L2_SIZE]>; OUTPUT_BUCKETS],
+    pub l1_weights:     [Align64<[ i8; L1_SIZE * L2_SIZE / 2]>; OUTPUT_BUCKETS],
+    pub l1_bias:        [Align64<[f32; L2_SIZE / 2]>; OUTPUT_BUCKETS],
     pub l2_weights:     [Align64<[f32; L2_SIZE * L3_SIZE]>; OUTPUT_BUCKETS],
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
@@ -306,14 +306,14 @@ impl UnquantisedNetwork {
         // copy the L1 weights
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L2_SIZE {
+                for j in 0..L2_SIZE / 2 {
                     net.l1_weights[i][bucket][j] =
                         self.l1x_weights[i][bucket][j] + self.l1f_weights[i][j];
                 }
             }
         }
         // copy the L1 biases
-        for i in 0..L2_SIZE {
+        for i in 0..L2_SIZE / 2 {
             for bucket in 0..OUTPUT_BUCKETS {
                 net.l1_biases[bucket][i] = self.l1x_biases[bucket][i] + self.l1f_biases[i];
             }
@@ -474,7 +474,7 @@ impl MergedNetwork {
         // quantise the l1 weights
         for i in 0..L1_SIZE {
             for bucket in 0..OUTPUT_BUCKETS {
-                for j in 0..L2_SIZE {
+                for j in 0..L2_SIZE / 2 {
                     let v = self.l1_weights[i][bucket][j] * f32::from(QB);
                     if v.abs() > QB_BOUND {
                         eprintln!("L1 weight {v} is too large (max = {QB_BOUND})");
@@ -582,30 +582,30 @@ impl QuantisedNetwork {
         }
 
         // transpose the L{1,2,3} weights and biases
-        let mut sorted = vec![[[0i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE];
+        let mut sorted = vec![[[0i8; L2_SIZE / 2]; OUTPUT_BUCKETS]; L1_SIZE];
         repermute_l1_weights(&mut sorted, &self.l1_weights);
         for bucket in 0..OUTPUT_BUCKETS {
             // quant the L1 weights
             if use_simd {
                 for i in 0..L1_SIZE / L1_CHUNK_PER_32 {
-                    for j in 0..L2_SIZE {
+                    for j in 0..L2_SIZE / 2 {
                         for k in 0..L1_CHUNK_PER_32 {
                             net.l1_weights[bucket]
-                                [i * L1_CHUNK_PER_32 * L2_SIZE + j * L1_CHUNK_PER_32 + k] =
+                                [i * L1_CHUNK_PER_32 * L2_SIZE / 2 + j * L1_CHUNK_PER_32 + k] =
                                 sorted[i * L1_CHUNK_PER_32 + k][bucket][j];
                         }
                     }
                 }
             } else {
                 for i in 0..L1_SIZE {
-                    for j in 0..L2_SIZE {
+                    for j in 0..L2_SIZE / 2 {
                         net.l1_weights[bucket][j * L1_SIZE + i] = sorted[i][bucket][j];
                     }
                 }
             }
 
             // transfer the L1 biases
-            for i in 0..L2_SIZE {
+            for i in 0..L2_SIZE / 2 {
                 net.l1_bias[bucket][i] = self.l1_biases[bucket][i];
             }
 
@@ -655,8 +655,8 @@ impl QuantisedNetwork {
 }
 
 fn repermute_l1_weights(
-    sorted: &mut [[[i8; L2_SIZE]; OUTPUT_BUCKETS]],
-    l1_weights: &[[[i8; L2_SIZE]; OUTPUT_BUCKETS]; L1_SIZE],
+    sorted: &mut [[[i8; L2_SIZE / 2]; OUTPUT_BUCKETS]],
+    l1_weights: &[[[i8; L2_SIZE / 2]; OUTPUT_BUCKETS]; L1_SIZE],
 ) {
     for (tgt_index, src_index) in REPERMUTE_INDICES.iter().copied().enumerate() {
         sorted[tgt_index] = l1_weights[src_index as usize];
