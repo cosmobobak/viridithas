@@ -1065,4 +1065,20 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
   vengeance | same as retrochron, trained with ranger. | fixed-nodes:
+            |                                          | Elo   | 4.63 +- 3.67 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 13896 W: 4093 L: 3908 D: 5895
+            |                                          | Penta | [249, 1657, 3005, 1734, 303]
+            |                                          | https://chess.swehosting.se/test/10996/
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -9.87 +- 4.67 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5880 W: 1290 L: 1457 D: 3133
+            |                                          | Penta | [22, 815, 1429, 656, 18]
+            |                                          | https://chess.swehosting.se/test/10998/
+            |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
