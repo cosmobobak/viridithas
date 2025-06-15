@@ -1082,5 +1082,33 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/10998/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
-   basilisk | 200sb post-train on retrochron.          | fixed-nodes:
+   fixpoint | 200sb wdl 0.5 on retrochron with         | fixed-nodes:
+            | binpacks.                                | Elo   | -33.84 +- 9.37 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2348 W: 579 L: 807 D: 962
+            |                                          | Penta | [78, 374, 456, 230, 36]
+            |                                          | https://chess.swehosting.se/test/11002/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ inflection | 200sb wdl 0.4 on retrochron with         | fixed-nodes:
+            | binpacks.                                | 
             |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.4 | 200sb wdl 0.4 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | 1.32 +- 1.69 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 0.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 65428 W: 18640 L: 18391 D: 28397
+            |                                          | Penta | [1289, 7797, 14343, 7946, 1339]
+            |                                          | https://chess.swehosting.se/test/11037/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.5 | 200sb wdl 0.5 on retrochron.             | fixed-nodes:
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
