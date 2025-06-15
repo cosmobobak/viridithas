@@ -27,6 +27,11 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
+
+    if depth == 1 {
+        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+    }
+
     for &m in ml.iter_moves() {
         if !pos.is_legal(m) {
             continue;
@@ -53,6 +58,11 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
+
+    if depth == 1 {
+        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+    }
+
     for &m in ml.iter_moves() {
         if !pos.is_legal(m) {
             continue;
