@@ -1082,3 +1082,5 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/10998/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+   basilisk | 200sb post-train on retrochron.          | fixed-nodes:
+            |                                          | 
