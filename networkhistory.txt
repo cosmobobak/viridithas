@@ -1146,7 +1146,12 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | vs. delenda
             |                                          | 
             |                                          | LTC:
-            |                                          | 
+            |                                          | Elo   | -5.47 +- 3.55 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 9852 W: 2241 L: 2396 D: 5215
+            |                                          | Penta | [36, 1257, 2490, 1112, 31]
+            |                                          | https://chess.swehosting.se/test/11060/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
  basilisk.7 | 200sb wdl 0.7 on retrochron.             | fixed-nodes:
@@ -1159,7 +1164,12 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | vs. delenda
             |                                          | 
             |                                          | LTC:
-            |                                          | 
+            |                                          | Elo   | -5.77 +- 3.59 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 9338 W: 2122 L: 2277 D: 4939
+            |                                          | Penta | [30, 1182, 2390, 1047, 20]
+            |                                          | https://chess.swehosting.se/test/11062/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
  basilisk.8 | 200sb wdl 0.8 on retrochron.             | fixed-nodes:
