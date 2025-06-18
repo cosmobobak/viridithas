@@ -1182,6 +1182,24 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | vs. delenda
             |                                          | 
             |                                          | LTC:
+            |                                          | Elo   | -10.67 +- 4.86 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5504 W: 1203 L: 1372 D: 2929
+            |                                          | Penta | [31, 748, 1349, 607, 17]
+            |                                          | https://chess.swehosting.se/test/11063/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.9 | 200sb wdl 0.9 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -26.61 +- 8.26 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2760 W: 681 L: 892 D: 1187
+            |                                          | Penta | [82, 391, 598, 274, 35]
+            |                                          | https://chess.swehosting.se/test/11061/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
             |                                          | 
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
