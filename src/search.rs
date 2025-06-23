@@ -1337,12 +1337,11 @@ pub fn alpha_beta<NT: NodeType>(
         if NT::ROOT {
             extension = 0;
         } else if maybe_singular && Some(m) == tt_move {
-            let Some(TTHit {
-                value: tt_value, ..
-            }) = tt_hit
-            else {
-                unreachable!()
-            };
+            let TTHit {
+                value: tt_value,
+                bound,
+                ..
+            } = tt_hit.unwrap();
             let r_beta = singularity_margin(tt_value, depth);
             let r_depth = (depth - 1) / 2;
             t.ss[board.height()].excluded = Some(m);
@@ -1389,6 +1388,9 @@ pub fn alpha_beta<NT: NodeType>(
                 // the tt_value >= beta condition is a sort of "light multi-cut"
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
+            } else if depth < 8 && !in_check && static_eval < alpha - 25 && bound == Bound::Lower {
+                // low-depth singular extension.
+                extension = 1;
             } else {
                 // no extension.
                 extension = 0;
