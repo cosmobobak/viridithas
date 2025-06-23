@@ -69,22 +69,23 @@ pub fn get_wdl(board: &Board) -> Option<WDL> {
     const BLACK: bool = false;
 
     // guards for invalid positions
-    if board.castling_rights() != CastlingRights::NONE || board.fifty_move_counter() != 0 {
+    if board.castling_rights() != CastlingRights::default() || board.fifty_move_counter() != 0 {
         return None;
     }
 
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
+        let b = &board.state.bbs;
         let wdl = tb_probe_wdl(
-            board.pieces.occupied_co(Colour::White).inner(),
-            board.pieces.occupied_co(Colour::Black).inner(),
-            board.pieces.all_kings().inner(),
-            board.pieces.all_queens().inner(),
-            board.pieces.all_rooks().inner(),
-            board.pieces.all_bishops().inner(),
-            board.pieces.all_knights().inner(),
-            board.pieces.all_pawns().inner(),
+            b.colours[Colour::White].inner(),
+            b.colours[Colour::Black].inner(),
+            b.pieces[PieceType::King].inner(),
+            b.pieces[PieceType::Queen].inner(),
+            b.pieces[PieceType::Rook].inner(),
+            b.pieces[PieceType::Bishop].inner(),
+            b.pieces[PieceType::Knight].inner(),
+            b.pieces[PieceType::Pawn].inner(),
             0,
             0,
             0,
@@ -111,15 +112,16 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
     // SAFETY: Not much.
     #[cfg(feature = "syzygy")]
     unsafe {
+        let b = &board.state.bbs;
         let result = tb_probe_root(
-            board.pieces.occupied_co(Colour::White).inner(),
-            board.pieces.occupied_co(Colour::Black).inner(),
-            board.pieces.all_kings().inner(),
-            board.pieces.all_queens().inner(),
-            board.pieces.all_rooks().inner(),
-            board.pieces.all_bishops().inner(),
-            board.pieces.all_knights().inner(),
-            board.pieces.all_pawns().inner(),
+            b.colours[Colour::White].inner(),
+            b.colours[Colour::Black].inner(),
+            b.pieces[PieceType::King].inner(),
+            b.pieces[PieceType::Queen].inner(),
+            b.pieces[PieceType::Rook].inner(),
+            b.pieces[PieceType::Bishop].inner(),
+            b.pieces[PieceType::Knight].inner(),
+            b.pieces[PieceType::Pawn].inner(),
             u32::from(board.fifty_move_counter()),
             0,
             0,
@@ -176,7 +178,7 @@ pub fn get_root_wdl_dtz(board: &Board) -> Option<WdlDtzResult> {
 
 /// Checks if there's a tablebase move and returns it as [Some], otherwise [None].
 pub fn get_tablebase_move(board: &Board) -> Option<(Move, i32)> {
-    if board.n_men() > get_max_pieces_count() {
+    if board.state.bbs.occupied().count() > u32::from(get_max_pieces_count()) {
         return None;
     }
 

@@ -26,7 +26,7 @@ If you just want one of the official releases of Viridithas, check out the **Rel
 1. Clone this repository to your machine via `git clone https://github.com/cosmobobak/viridithas`.
 2. Enter the source directory via `cd viridithas`.
 3. (optional, likely unnecessary) select the branch you'd like to compile via `git checkout <BRANCH_NAME>`.
-4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
+4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue.zst`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
 
     **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue.zst`.
 

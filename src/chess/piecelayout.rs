@@ -2,127 +2,24 @@ use std::fmt::Display;
 
 use crate::chess::{
     board::movegen::{bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks},
-    piece::{Black, Col, Colour, Piece, PieceType, White},
+    piece::{Black, Colour, Piece, PieceType, White},
     squareset::SquareSet,
     types::{File, Rank, Square},
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct PieceLayout {
-    pieces: [SquareSet; 6],
-    colours: [SquareSet; 2],
+    pub pieces: [SquareSet; 6],
+    pub colours: [SquareSet; 2],
 }
 
 impl PieceLayout {
-    pub const NULL: Self = Self::new(
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-        SquareSet::EMPTY,
-    );
-
-    #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
-    pub const fn new(
-        p: SquareSet,
-        n: SquareSet,
-        b: SquareSet,
-        r: SquareSet,
-        q: SquareSet,
-        k: SquareSet,
-        white: SquareSet,
-        black: SquareSet,
-    ) -> Self {
-        Self {
-            pieces: [p, n, b, r, q, k],
-            colours: [white, black],
-        }
-    }
-
-    pub fn king<C: Col>(&self) -> SquareSet {
-        self.all_kings() & self.our_pieces::<C>()
-    }
-
-    pub fn pawns<C: Col>(&self) -> SquareSet {
-        self.all_pawns() & self.our_pieces::<C>()
-    }
-
-    pub fn occupied_co(&self, colour: Colour) -> SquareSet {
-        self.colours[colour]
-    }
-
-    pub fn their_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::Opposite::COLOUR]
-    }
-
-    pub fn our_pieces<C: Col>(&self) -> SquareSet {
-        self.colours[C::COLOUR]
-    }
-
-    pub fn orthos<C: Col>(&self) -> SquareSet {
-        (self.all_rooks() | self.all_queens()) & self.our_pieces::<C>()
-    }
-
-    pub fn diags<C: Col>(&self) -> SquareSet {
-        (self.all_bishops() | self.all_queens()) & self.our_pieces::<C>()
-    }
-
-    pub fn empty(&self) -> SquareSet {
-        !self.occupied()
-    }
-
     pub fn occupied(&self) -> SquareSet {
         self.colours[Colour::White] | self.colours[Colour::Black]
     }
 
-    pub fn knights<C: Col>(&self) -> SquareSet {
-        self.all_knights() & self.our_pieces::<C>()
-    }
-
-    #[cfg(any(feature = "datagen", test))]
-    pub fn rooks<C: Col>(&self) -> SquareSet {
-        self.all_rooks() & self.our_pieces::<C>()
-    }
-
-    #[cfg(any(feature = "datagen", test))]
-    pub fn bishops<C: Col>(&self) -> SquareSet {
-        self.all_bishops() & self.our_pieces::<C>()
-    }
-
-    #[cfg(any(feature = "datagen", test))]
-    pub fn queens<C: Col>(&self) -> SquareSet {
-        self.all_queens() & self.our_pieces::<C>()
-    }
-
-    pub fn all_pawns(&self) -> SquareSet {
-        self.pieces[PieceType::Pawn]
-    }
-
-    pub fn all_knights(&self) -> SquareSet {
-        self.pieces[PieceType::Knight]
-    }
-
-    pub fn all_bishops(&self) -> SquareSet {
-        self.pieces[PieceType::Bishop]
-    }
-
-    pub fn all_rooks(&self) -> SquareSet {
-        self.pieces[PieceType::Rook]
-    }
-
-    pub fn all_queens(&self) -> SquareSet {
-        self.pieces[PieceType::Queen]
-    }
-
-    pub fn all_kings(&self) -> SquareSet {
-        self.pieces[PieceType::King]
-    }
-
-    pub fn reset(&mut self) {
-        *self = Self::NULL;
+    pub fn empty(&self) -> SquareSet {
+        !self.occupied()
     }
 
     pub fn move_piece(&mut self, from: Square, to: Square, piece: Piece) {
@@ -143,10 +40,6 @@ impl PieceLayout {
         self.colours[piece.colour()] &= !sq_bb;
     }
 
-    pub fn any_pawns(&self) -> bool {
-        self.all_pawns().non_empty()
-    }
-
     pub fn piece_bb(&self, piece: Piece) -> SquareSet {
         SquareSet::intersection(
             self.pieces[piece.piece_type()],
@@ -154,19 +47,20 @@ impl PieceLayout {
         )
     }
 
-    pub fn of_type(&self, piece_type: PieceType) -> SquareSet {
-        self.pieces[piece_type]
-    }
-
     pub fn all_attackers_to_sq(&self, sq: Square, occupied: SquareSet) -> SquareSet {
         let sq_bb = sq.as_set();
-        let black_pawn_attackers = pawn_attacks::<White>(sq_bb) & self.pawns::<Black>();
-        let white_pawn_attackers = pawn_attacks::<Black>(sq_bb) & self.pawns::<White>();
-        let knight_attackers = knight_attacks(sq) & (self.all_knights());
-        let diag_attackers =
-            bishop_attacks(sq, occupied) & (self.all_bishops() | self.all_queens());
-        let orth_attackers = rook_attacks(sq, occupied) & (self.all_rooks() | self.all_queens());
-        let king_attackers = king_attacks(sq) & (self.all_kings());
+        let black_pawn_attackers = pawn_attacks::<White>(sq_bb)
+            & self.pieces[PieceType::Pawn]
+            & self.colours[Colour::Black];
+        let white_pawn_attackers = pawn_attacks::<Black>(sq_bb)
+            & self.pieces[PieceType::Pawn]
+            & self.colours[Colour::White];
+        let knight_attackers = knight_attacks(sq) & (self.pieces[PieceType::Knight]);
+        let diag_attackers = bishop_attacks(sq, occupied)
+            & (self.pieces[PieceType::Bishop] | self.pieces[PieceType::Queen]);
+        let orth_attackers = rook_attacks(sq, occupied)
+            & (self.pieces[PieceType::Rook] | self.pieces[PieceType::Queen]);
+        let king_attackers = king_attacks(sq) & (self.pieces[PieceType::King]);
         black_pawn_attackers
             | white_pawn_attackers
             | knight_attackers
@@ -177,15 +71,15 @@ impl PieceLayout {
 
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         let sq_bb = sq.as_set();
-        let colour = if (self.our_pieces::<White>() & sq_bb).non_empty() {
+        let colour = if (self.colours[Colour::White] & sq_bb) != SquareSet::EMPTY {
             Colour::White
-        } else if (self.our_pieces::<Black>() & sq_bb).non_empty() {
+        } else if (self.colours[Colour::Black] & sq_bb) != SquareSet::EMPTY {
             Colour::Black
         } else {
             return None;
         };
         for piece in PieceType::all() {
-            if (self.pieces[piece] & sq_bb).non_empty() {
+            if (self.pieces[piece] & sq_bb) != SquareSet::EMPTY {
                 return Some(Piece::new(colour, piece));
             }
         }
@@ -193,12 +87,12 @@ impl PieceLayout {
     }
 
     fn any_bbs_overlapping(&self) -> bool {
-        if (self.colours[0] & self.colours[1]).non_empty() {
+        if (self.colours[0] & self.colours[1]) != SquareSet::EMPTY {
             return true;
         }
         for i in 0..self.pieces.len() {
             for j in i + 1..self.pieces.len() {
-                if (self.pieces[i] & self.pieces[j]).non_empty() {
+                if (self.pieces[i] & self.pieces[j]) != SquareSet::EMPTY {
                     return true;
                 }
             }
@@ -240,54 +134,53 @@ impl PieceLayout {
     /// Returns true if the current position *would* be a draw by insufficient material,
     /// if there were no pawns on the board.
     pub fn is_material_draw(&self) -> bool {
-        if self.of_type(PieceType::Rook).is_empty() && self.of_type(PieceType::Queen).is_empty() {
-            if self.of_type(PieceType::Bishop).is_empty() {
-                if self.piece_bb(Piece::WN).count() < 3 && self.piece_bb(Piece::BN).count() < 3 {
+        let white = self.colours[Colour::White];
+        let black = self.colours[Colour::Black];
+        let bishops = self.pieces[PieceType::Bishop];
+        let knights = self.pieces[PieceType::Knight];
+        let rooks = self.pieces[PieceType::Rook];
+        let queens = self.pieces[PieceType::Queen];
+        let wb = bishops & white;
+        let bb = bishops & black;
+        let wn = knights & white;
+        let bn = knights & black;
+        let wr = rooks & white;
+        let br = rooks & black;
+        if queens != SquareSet::EMPTY {
+            return false;
+        }
+        if rooks == SquareSet::EMPTY {
+            if bishops == SquareSet::EMPTY {
+                if wn.count() < 3 && bn.count() < 3 {
                     return true;
                 }
-            } else if (self.of_type(PieceType::Knight).is_empty()
-                && self
-                    .piece_bb(Piece::WB)
-                    .count()
-                    .abs_diff(self.piece_bb(Piece::BB).count())
-                    < 2)
-                || SquareSet::union(self.piece_bb(Piece::WB), self.piece_bb(Piece::WN)).count() == 1
-                    && SquareSet::union(self.piece_bb(Piece::BB), self.piece_bb(Piece::BN)).count()
-                        == 1
+            } else if knights == SquareSet::EMPTY && wb.count().abs_diff(bb.count()) < 2
+                || (wb | wn).count() == 1 && (bb | bn).count() == 1
             {
                 return true;
             }
-        } else if self.of_type(PieceType::Queen).is_empty() {
-            if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).count() == 1 {
-                if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count() < 2
-                    && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).count()
-                        < 2
-                {
-                    return true;
-                }
-            } else if self.piece_bb(Piece::WR).count() == 1 && self.piece_bb(Piece::BR).is_empty() {
-                if SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).is_empty()
-                    && (SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
-                        .count()
-                        == 1
-                        || SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB))
-                            .count()
-                            == 2)
-                {
-                    return true;
-                }
-            } else if self.piece_bb(Piece::WR).is_empty()
-                && self.piece_bb(Piece::BR).count() == 1
-                && SquareSet::union(self.piece_bb(Piece::BN), self.piece_bb(Piece::BB)).is_empty()
-                && (SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
-                    == 1
-                    || SquareSet::union(self.piece_bb(Piece::WN), self.piece_bb(Piece::WB)).count()
-                        == 2)
-            {
+        } else if wr.count() == 1 && br.count() == 1 {
+            if (wn | wb).count() < 2 && (bn | bb).count() < 2 {
                 return true;
             }
+        } else if wr.count() == 1 && br == SquareSet::EMPTY {
+            if (wn | wb) == SquareSet::EMPTY && ((bn | bb).count() == 1 || (bn | bb).count() == 2) {
+                return true;
+            }
+        } else if wr == SquareSet::EMPTY
+            && br.count() == 1
+            && (bn | bb) == SquareSet::EMPTY
+            && ((wn | wb).count() == 1 || (wn | wb).count() == 2)
+        {
+            return true;
         }
         false
+    }
+
+    pub fn king_sq(&self, colour: Colour) -> Square {
+        let king_bb = self.pieces[PieceType::King] & self.colours[colour];
+        debug_assert_eq!(king_bb.count(), 1);
+        king_bb.first()
     }
 }
 

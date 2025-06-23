@@ -1,7 +1,7 @@
 use std::{
     fmt::{Debug, Display},
     mem::size_of,
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut, Not},
 };
 
 pub trait Col {
@@ -116,6 +116,14 @@ impl Colour {
     }
 }
 
+impl Not for Colour {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        self.flip()
+    }
+}
+
 impl PieceType {
     pub const fn new(v: u8) -> Option<Self> {
         if v < 6 {
@@ -164,11 +172,6 @@ impl PieceType {
             .iter()
             .position(|&x| x == c)
             .and_then(|x| Self::new(x.try_into().ok()?))
-    }
-
-    pub fn see_value(self) -> i32 {
-        const SEE_PIECE_VALUES: [i32; 6] = [161, 445, 463, 704, 1321, 0];
-        SEE_PIECE_VALUES[self]
     }
 }
 
@@ -221,25 +224,12 @@ impl Piece {
         }
     }
 
-    pub const fn byte_char(self) -> u8 {
-        match self {
-            Self::WP => b'P',
-            Self::WN => b'N',
-            Self::WB => b'B',
-            Self::WR => b'R',
-            Self::WQ => b'Q',
-            Self::WK => b'K',
-            Self::BP => b'p',
-            Self::BN => b'n',
-            Self::BB => b'b',
-            Self::BR => b'r',
-            Self::BQ => b'q',
-            Self::BK => b'k',
-        }
+    pub fn byte_char(self) -> u8 {
+        b"PNBRQKpnbrqk"[self]
     }
 
     pub fn all() -> impl DoubleEndedIterator<Item = Self> {
-        // SAFETY: all values are within `0..6`.
+        // SAFETY: all values are within `0..12`.
         (0..12u8).map(|i| unsafe { std::mem::transmute(i) })
     }
 

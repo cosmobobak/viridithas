@@ -5,8 +5,7 @@ use crate::{
     chess::chessmove::Move,
     chess::piece::Colour,
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, MoveTable,
-        ThreatsHistoryTable,
+        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -27,8 +26,7 @@ pub struct ThreadData<'a> {
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
     pub continuation_history: Box<DoubleHistoryTable>,
-    pub killer_move_table: [[Option<Move>; 2]; MAX_PLY + 1],
-    pub counter_move_table: MoveTable,
+    pub killer_move_table: [Option<Move>; MAX_PLY + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
@@ -41,6 +39,7 @@ pub struct ThreadData<'a> {
     pub depth: usize,
 
     pub stm_at_root: Colour,
+    pub optimism: [i32; 2],
 
     pub tt: TTView<'a>,
 }
@@ -64,8 +63,7 @@ impl<'a> ThreadData<'a> {
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
             continuation_history: DoubleHistoryTable::boxed(),
-            killer_move_table: [[None; 2]; MAX_PLY + 1],
-            counter_move_table: MoveTable::new(),
+            killer_move_table: [None; MAX_PLY + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
                 CorrectionHistoryTable::boxed(),
@@ -79,6 +77,7 @@ impl<'a> ThreadData<'a> {
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
+            optimism: [0; 2],
             tt,
         };
 
@@ -122,8 +121,7 @@ impl<'a> ThreadData<'a> {
         self.nonpawn_corrhist[Colour::Black].clear();
         self.major_corrhist.clear();
         self.minor_corrhist.clear();
-        self.killer_move_table.fill([None; 2]);
-        self.counter_move_table.clear();
+        self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
@@ -133,8 +131,7 @@ impl<'a> ThreadData<'a> {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
-        self.killer_move_table.fill([None; 2]);
-        self.counter_move_table.clear();
+        self.killer_move_table.fill(None);
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);

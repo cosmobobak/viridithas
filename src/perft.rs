@@ -8,12 +8,12 @@ use std::{
 
 use anyhow::{bail, Context};
 
-#[cfg(test)]
-use crate::threadlocal::ThreadData;
 use crate::{
     chess::board::{movegen::MoveList, Board},
     chess::CHESS960,
 };
+#[cfg(test)]
+use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -27,10 +27,16 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
+
+    if depth == 1 {
+        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+    }
+
     for &m in ml.iter_moves() {
-        if !pos.make_move_simple(m) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_simple(m);
         count += perft(pos, depth - 1);
         pos.unmake_move_base();
     }
@@ -52,10 +58,16 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
     pos.generate_moves(&mut ml);
 
     let mut count = 0;
+
+    if depth == 1 {
+        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+    }
+
     for &m in ml.iter_moves() {
-        if !pos.make_move_nnue(m, t) {
+        if !pos.is_legal(m) {
             continue;
         }
+        pos.make_move_nnue(m, t);
         count += nnue_perft(pos, t, depth - 1);
         pos.unmake_move_nnue(t);
     }
@@ -64,7 +76,12 @@ pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
 }
 
 #[cfg(test)]
-pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+pub fn movepicker_perft(
+    pos: &mut Board,
+    t: &mut ThreadData,
+    info: &SearchInfo,
+    depth: usize,
+) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
@@ -75,14 +92,15 @@ pub fn movepicker_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u6
         return 1;
     }
 
-    let mut ml = MovePicker::new(None, [None, None], None, 0);
+    let mut ml = MovePicker::new(None, None, 0);
 
     let mut count = 0;
-    while let Some(m) = ml.next(pos, t) {
-        if !pos.make_move(m.mov, t) {
+    while let Some(m) = ml.next(pos, t, info) {
+        if !pos.is_legal(m) {
             continue;
         }
-        count += movepicker_perft(pos, t, depth - 1);
+        pos.make_move(m, t);
+        count += movepicker_perft(pos, t, info, depth - 1);
         pos.unmake_move(t);
     }
 
@@ -212,7 +230,7 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
@@ -233,19 +251,27 @@ mod tests {
 
         let mut pos = Board::default();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves()
-                .into_iter()
-                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 400);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 8_902);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 197_281);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(
+            movepicker_perft(&mut pos, &mut t, &info, 1),
+            20,
+            "got {}",
+            {
+                pos.legal_moves()
+                    .into_iter()
+                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 400);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 8_902);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 197_281);
     }
 
     #[test]
@@ -258,19 +284,79 @@ mod tests {
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16);
+        tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 1), 48, "got {}", {
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(
+            movepicker_perft(&mut pos, &mut t, &info, 1),
+            48,
+            "got {}",
+            {
+                pos.legal_moves()
+                    .into_iter()
+                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 2_039);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 97_862);
+        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 4_085_603);
+    }
+
+    #[test]
+    fn perft_movepicker_forward_promo_evasion() {
+        use super::*;
+        const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
+
+        std::env::set_var("RUST_BACKTRACE", "1");
+        let mut pos = Board::new();
+        pos.set_from_fen(TEST_FEN).unwrap();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16, 1);
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 4, "got {}", {
             pos.legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, 2), 2_039);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 3), 97_862);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, 4), 4_085_603);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 62);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 1474);
+    }
+
+    #[test]
+    fn perft_movepicker_forward_promo_evasion_and_capture() {
+        use super::*;
+        const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
+
+        std::env::set_var("RUST_BACKTRACE", "1");
+        let mut pos = Board::new();
+        pos.set_from_fen(TEST_FEN).unwrap();
+        let mut tt = TT::new();
+        tt.resize(MEGABYTE * 16, 1);
+        let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
+        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let info = SearchInfo::new(&stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 8, "got {}", {
+            pos.legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 143);
+        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 3954);
     }
 
     #[test]
@@ -295,17 +381,17 @@ mod tests {
         let mut pos = Board::new();
         pos.set_startpos();
         let e4 = Move::new(Square::E2, Square::E4);
-        let piece_layout_before = pos.pieces;
+        let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");
-        let hashkey_before = pos.zobrist_key();
+        let hashkey_before = pos.state.keys.zobrist;
         pos.make_move_simple(e4);
-        assert_ne!(pos.pieces, piece_layout_before);
-        println!("{bb_after}", bb_after = pos.pieces);
-        assert_ne!(pos.zobrist_key(), hashkey_before);
+        assert_ne!(pos.state.bbs, piece_layout_before);
+        println!("{bb_after}", bb_after = pos.state.bbs);
+        assert_ne!(pos.state.keys.zobrist, hashkey_before);
         pos.unmake_move_base();
-        assert_eq!(pos.pieces, piece_layout_before);
-        println!("{bb_returned}", bb_returned = pos.pieces);
-        assert_eq!(pos.zobrist_key(), hashkey_before);
+        assert_eq!(pos.state.bbs, piece_layout_before);
+        println!("{bb_returned}", bb_returned = pos.state.bbs);
+        assert_eq!(pos.state.keys.zobrist, hashkey_before);
     }
 
     #[test]
@@ -316,16 +402,16 @@ mod tests {
         pos.set_from_fen("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
             .unwrap();
         let exd5 = Move::new(Square::E4, Square::D5);
-        let piece_layout_before = pos.pieces;
+        let piece_layout_before = pos.state.bbs;
         println!("{piece_layout_before}");
-        let hashkey_before = pos.zobrist_key();
+        let hashkey_before = pos.state.keys.zobrist;
         pos.make_move_simple(exd5);
-        assert_ne!(pos.pieces, piece_layout_before);
-        println!("{bb_after}", bb_after = pos.pieces);
-        assert_ne!(pos.zobrist_key(), hashkey_before);
+        assert_ne!(pos.state.bbs, piece_layout_before);
+        println!("{bb_after}", bb_after = pos.state.bbs);
+        assert_ne!(pos.state.keys.zobrist, hashkey_before);
         pos.unmake_move_base();
-        assert_eq!(pos.pieces, piece_layout_before);
-        println!("{bb_returned}", bb_returned = pos.pieces);
-        assert_eq!(pos.zobrist_key(), hashkey_before);
+        assert_eq!(pos.state.bbs, piece_layout_before);
+        println!("{bb_returned}", bb_returned = pos.state.bbs);
+        assert_eq!(pos.state.keys.zobrist, hashkey_before);
     }
 }

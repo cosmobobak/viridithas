@@ -1,11 +1,15 @@
 // The granularity of evaluation in this engine is in centipawns.
 
 use crate::{
-    chess::board::Board,
-    chess::chessmove::Move,
-    chess::piece::{Colour, Piece, PieceType},
+    chess::{
+        board::Board,
+        chessmove::Move,
+        piece::{Colour, PieceType},
+        squareset::SquareSet,
+    },
     nnue::network,
     search::draw_score,
+    searchinfo::SearchInfo,
     threadlocal::ThreadData,
     util::{MAX_DEPTH, MAX_PLY},
 };
@@ -51,13 +55,21 @@ pub const fn is_game_theoretic_score(score: i32) -> bool {
     score.abs() >= MINIMUM_TB_WIN_SCORE
 }
 
+pub const MATERIAL_SCALE_BASE: i32 = 805;
+pub const SEE_PAWN_VALUE: i32 = 211;
+pub const SEE_KNIGHT_VALUE: i32 = 446;
+pub const SEE_BISHOP_VALUE: i32 = 465;
+pub const SEE_ROOK_VALUE: i32 = 721;
+pub const SEE_QUEEN_VALUE: i32 = 1348;
+
 impl Board {
-    fn material_scale(&self) -> i32 {
+    pub fn material(&self, info: &SearchInfo) -> i32 {
         #![allow(clippy::cast_possible_wrap)]
-        700 + (PieceType::Knight.see_value() * self.pieces.all_knights().count() as i32
-            + PieceType::Bishop.see_value() * self.pieces.all_bishops().count() as i32
-            + PieceType::Rook.see_value() * self.pieces.all_rooks().count() as i32
-            + PieceType::Queen.see_value() * self.pieces.all_queens().count() as i32)
+        let b = &self.state.bbs;
+        (info.conf.see_knight_value * b.pieces[PieceType::Knight].count() as i32
+            + info.conf.see_bishop_value * b.pieces[PieceType::Bishop].count() as i32
+            + info.conf.see_rook_value * b.pieces[PieceType::Rook].count() as i32
+            + info.conf.see_queen_value * b.pieces[PieceType::Queen].count() as i32)
             / 32
     }
 
@@ -65,17 +77,6 @@ impl Board {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
         let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
-
-        // scale down the value estimate when there's not much
-        // material left - this will incentivize keeping material
-        // on the board if we have winning chances, and trading
-        // material off if the position is worse for us.
-        let v = v * self.material_scale() / 1024;
-
-        // scale down the value when the fifty-move counter is high.
-        // this goes some way toward making viri realise when he's not
-        // making progress in a position.
-        let v = v * (200 - i32::from(self.fifty_move_counter())) / 200;
 
         // clamp the value into the valid range.
         // this basically never comes up, but the network will
@@ -86,7 +87,9 @@ impl Board {
 
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
         // detect draw by insufficient material
-        if !self.pieces.any_pawns() && self.pieces.is_material_draw() {
+        if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
+            && self.state.bbs.is_material_draw()
+        {
             return if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
@@ -102,26 +105,35 @@ impl Board {
 
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
-        let us = self.pieces.occupied_co(stm);
-        let kings = self.pieces.all_kings();
-        let pawns = self.pieces.all_pawns();
+        let us = self.state.bbs.colours[stm];
+        let kings = self.state.bbs.pieces[PieceType::King];
+        let pawns = self.state.bbs.pieces[PieceType::Pawn];
         (us & (kings | pawns)) != us
     }
 
-    pub fn estimated_see(&self, m: Move) -> i32 {
+    pub fn estimated_see(&self, info: &SearchInfo, m: Move) -> i32 {
         // initially take the value of the thing on the target square
-        let mut value = self
-            .piece_at(m.to())
-            .map_or(0, |p| PieceType::see_value(Piece::piece_type(p)));
+        let mut value = self.state.mailbox[m.to()].map_or(0, |p| see_value(p.piece_type(), info));
 
         if let Some(promo) = m.promotion_type() {
             // if it's a promo, swap a pawn for the promoted piece type
-            value += promo.see_value() - PieceType::Pawn.see_value();
+            value += see_value(promo, info) - info.conf.see_pawn_value;
         } else if m.is_ep() {
             // for e.p. we will miss a pawn because the target square is empty
-            value = PieceType::Pawn.see_value();
+            value = info.conf.see_pawn_value;
         }
 
         value
+    }
+}
+
+pub const fn see_value(piece_type: PieceType, info: &SearchInfo) -> i32 {
+    match piece_type {
+        PieceType::Pawn => info.conf.see_pawn_value,
+        PieceType::Knight => info.conf.see_knight_value,
+        PieceType::Bishop => info.conf.see_bishop_value,
+        PieceType::Rook => info.conf.see_rook_value,
+        PieceType::Queen => info.conf.see_queen_value,
+        PieceType::King => 0,
     }
 }

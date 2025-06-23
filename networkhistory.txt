@@ -789,3 +789,422 @@ perseverance| 200 superbatches filtering data before   | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/9602/
             |                                          | vs. temperance
 ------------|------------------------------------------|-----------------------------------------------
+    kolibri | fresh run including some UHO Lichess     | fixed-nodes:
+            | data generated using perseverance.       | Elo   | 0.15 +- 1.41 (95%)
+            | linear lr schedule.                      | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
+            | merged for the DFRC performance.         | Games | N: 98426 W: 28680 L: 28637 D: 41109
+            |                                          | Penta | [2282, 11657, 21257, 11770, 2247]
+            |                                          | https://chess.swehosting.se/test/9891/
+            |                                          | vs. perseverance
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | 0.11 +- 3.38 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -0.42 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 12964 W: 3330 L: 3326 D: 6308
+            |                                          | Penta | [126, 1575, 3070, 1591, 120]
+            |                                          | https://chess.swehosting.se/test/9894/
+            |                                          | vs. perseverance
+            |                                          |
+            |                                          | fixed-nodes DFRC:
+            |                                          | Elo   | 6.54 +- 3.90 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 15946 W: 4805 L: 4505 D: 6636
+            |                                          | Penta | [523, 1872, 2944, 2050, 584]
+            |                                          | https://chess.swehosting.se/test/9897/
+            |                                          | vs. perseverance
+------------|------------------------------------------|-----------------------------------------------
+    requiem | Uses the farseer output bucket layout,   | fixed-nodes:
+            | small amount of extra DFRC book data,    | Elo   | -1.29 +- 2.36 (95%)
+            | less early-ply filtering, adds l4=32     | SPRT  | N=25000 Threads=1 Hash=16MB
+            | and uses skip connection (final layer    | LLR   | -3.02 (-2.94, 2.94) [0.00, 3.00]
+            | dotprod is on the concatentation of the  | Games | N: 34692 W: 10078 L: 10207 D: 14407
+            | previous two layers' output).            | Penta | [779, 4199, 7520, 4068, 780]
+            | final lr dropped by x0.3.                | https://chess.swehosting.se/test/9945/
+            |                                          | vs. kolibri
+            | less filtering probably ruined it.       |
+            |                                          | STC:
+            |                                          | Elo   | -10.62 +- 4.92 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5758 W: 1344 L: 1520 D: 2894
+            |                                          | Penta | [46, 776, 1408, 606, 43]
+            |                                          | https://chess.swehosting.se/test/9946/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+     sensei | 8192x2 -(pairwise)> 16 -> 64 -> 1 net.   | fixed-nodes:
+            | crelu/screlu/screlu activations.         | Elo   | 35.57 +- 9.22 (95%)
+            | no buckets, input or output.             | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 3.05 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2372 W: 820 L: 578 D: 974
+            |                                          | Penta | [32, 224, 485, 360, 85]
+            |                                          | https://chess.swehosting.se/test/9979/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+    alembic | normal hyperstition arch, distilled from | fixed-nodes:
+            | sensei. farseer buckets.                 | Elo   | -12.69 +- 5.77 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | very depressed about how bad this was.   | LLR   | -3.08 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5918 W: 1660 L: 1876 D: 2382
+            |                                          | Penta | [157, 778, 1267, 638, 119]
+            |                                          | https://chess.swehosting.se/test/9990/
+            |                                          | vs. kolibri
+            |                                          | 
+            |                                          | STC:
+            |                                          | Elo   | -25.95 +- 7.62 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2616 W: 553 L: 748 D: 1315
+            |                                          | Penta | [33, 418, 584, 257, 16]
+            |                                          | https://chess.swehosting.se/test/9991/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+     umwelt | very standard from-scratch net with      | fixed-nodes:
+            | farseer buckets and some more 25knodes   | Elo   | -2.18 +- 2.79 (95%)
+            | data.                                    | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 24186 W: 6764 L: 6916 D: 10506
+            |                                          | Penta | [498, 3027, 5167, 2931, 470]
+            |                                          | https://chess.swehosting.se/test/10275/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | STC:
+            |                                          | Elo   | -4.82 +- 3.47 (95%)
+            |                                          | SPRT  | 8.0+0.08s Threads=1 Hash=16MB
+            |                                          | LLR   | -2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11744 W: 2775 L: 2938 D: 6031
+            |                                          | Penta | [99, 1499, 2816, 1382, 76]
+            |                                          | https://chess.swehosting.se/test/10276/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -4.54 +- 3.27 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11548 W: 2546 L: 2697 D: 6305
+            |                                          | Penta | [35, 1478, 2899, 1327, 35]
+            |                                          | https://chess.swehosting.se/test/10279/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+      falke | fine-tune of kolibri with old data       | fixed-nodes:
+            | cleaned out and 25knode data upsampled.  | Elo   | 4.54 +- 2.96 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 20808 W: 5893 L: 5621 D: 9294
+            |                                          | Penta | [396, 2394, 4526, 2718, 370]
+            |                                          | https://chess.swehosting.se/test/10323/
+            |                                          | vs. kolibri
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | 13.86 +- 5.07 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4564 W: 1127 L: 945 D: 2492
+            |                                          | Penta | [8, 449, 1195, 613, 17]
+            |                                          | https://chess.swehosting.se/test/10324/
+            |                                          | vs. kolibri
+------------|------------------------------------------|-----------------------------------------------
+  synthesis | four-headed network (value, W, D, L)     | fixed-nodes (value head):
+            | trained on standard value-blend target   | Elo   | -14.70 +- 6.23 (95%)
+            | and a cross-entropy loss against WDL.    | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4966 W: 1316 L: 1526 D: 2124
+            |                                          | Penta | [131, 669, 1038, 569, 76]
+            |                                          | https://chess.swehosting.se/test/10427/
+            |                                          | vs. falke
+            |                                          | 
+            |                                          | fixed-nodes (WDL heads):
+            |                                          | Elo   | -17.25 +- 6.67 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4132 W: 1017 L: 1222 D: 1893
+            |                                          | Penta | [102, 572, 867, 479, 46]
+            |                                          | https://chess.swehosting.se/test/10431/
+            |                                          | vs. synthesis-value
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -33.72 +- 4.80 (95%)
+            |                                          | Conf  | 60.0+0.60s Threads=1 Hash=128MB
+            |                                          | Games | N: 5002 W: 959 L: 1443 D: 2600
+            |                                          | Penta | [21, 830, 1266, 380, 4]
+            |                                          | https://chess.swehosting.se/test/10657/
+            |                                          | vs. falke
+------------|------------------------------------------|-----------------------------------------------
+    delenda | fresh retrain with full network          | fixed-nodes:
+            | factorisation.                           | Elo   | 7.81 +- 4.08 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.99 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 11082 W: 3261 L: 3012 D: 4809
+            |                                          | Penta | [203, 1230, 2470, 1391, 247]
+            |                                          | https://chess.swehosting.se/test/10740/
+            |                                          | vs. falke
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | 2.06 +- 1.61 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | 2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 47132 W: 11259 L: 10979 D: 24894
+            |                                          | Penta | [115, 5554, 11997, 5736, 164]
+            |                                          | https://chess.swehosting.se/test/10741/
+            |                                          | vs. falke
+------------|------------------------------------------|-----------------------------------------------
+  wavefront | a variety of 50-superbatch retraining    | https://chess.swehosting.se/test/10601/
+            | experiments to test direct viripack data | https://chess.swehosting.se/test/10606/
+            |                                          | https://chess.swehosting.se/test/10611/
+            | all terrible.                            | https://chess.swehosting.se/test/10613/
+            |                                          | https://chess.swehosting.se/test/10617/
+------------|------------------------------------------|-----------------------------------------------
+    scorpio | factorised (apart from L1), training     | fixed-nodes:
+            | using the viribinpack dataloader.        | Elo   | -50.65 +- 11.13 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | because upsampling-via-dual-interleaving | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
+            | puts the duplicate records in the same   | Games | N: 1582 W: 353 L: 582 D: 647
+            | area of the data file, this probably had | Penta | [57, 275, 317, 124, 18]
+            | bugged data.                             | https://chess.swehosting.se/test/10761/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+     legion | delenda finetune on new data.            | fixed-nodes:
+            | loading from naively interleaved         | Elo   | -43.14 +- 10.05 (95%)
+            | viribinpacks.                            | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.30 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2032 W: 488 L: 739 D: 805
+            |                                          | Penta | [92, 288, 439, 173, 24]
+            |                                          | https://chess.swehosting.se/test/10763/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ iridescent | same as legion with 4gb mixing buffer.   | fixed-nodes:
+            |                                          | Elo   | -48.90 +- 11.15 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.06 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 1702 W: 382 L: 620 D: 700
+            |                                          | Penta | [78, 268, 338, 148, 19]
+            |                                          | https://chess.swehosting.se/test/10765/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+inquisition | same as legion/iridescent with standard  | fixed-nodes:
+            | full-shuffled bulletformat dataloading.  | Elo   | -33.65 +- 8.51 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.50 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2662 W: 665 L: 922 D: 1075
+            |                                          | Penta | [83, 411, 550, 254, 33]
+            |                                          | https://chess.swehosting.se/test/10768/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+   resonant | i actually cannot remember what the      | resonant fixed-nodes:
+      angel | difference between these nets is.        | Elo   | -14.89 +- 6.18 (95%)
+            | at least one of them upsampled the new   | SPRT  | N=25000 Threads=1 Hash=16MB
+            | data and cleaned out the old stuff.      | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            | probably only angel? not sure.           | Games | N: 4740 W: 1241 L: 1444 D: 2055
+            |                                          | Penta | [94, 674, 1017, 511, 74]
+            | i wish i wrote things down instead of    | https://chess.swehosting.se/test/10779/
+            | just YOLOing them into new runs.         | vs. delenda
+            |                                          | 
+            | the important part is that legion        | angel fixed-nodes:
+            | through angel are all on top of a merged | Elo   | -15.40 +- 6.26 (95%)
+            | delenda weight file, so they have been   | SPRT  | N=25000 Threads=1 Hash=16MB
+            | trained without a factoriser.            | LLR   | -3.09 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4900 W: 1290 L: 1507 D: 2103
+            |                                          | Penta | [112, 709, 993, 556, 80]
+            |                                          | https://chess.swehosting.se/test/10782/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+  broadside | direct finetune on top of the non-merged | fixed-nodes:
+            | delenda checkpoint, with new data.       | Elo   | -1.63 +- 2.50 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            | clearly, factorisation is massive, even  | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            | for fine-tuning runs. lesson learned.    | Games | N: 29188 W: 8132 L: 8269 D: 12787
+            |                                          | Penta | [558, 3611, 6366, 3528, 531]
+            |                                          | https://chess.swehosting.se/test/10787/
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -3.16 +- 2.79 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 15380 W: 3464 L: 3604 D: 8312
+            |                                          | Penta | [40, 1903, 3932, 1787, 28]
+            |                                          | https://chess.swehosting.se/test/10788/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+     spigot | same as broadside, but removing data     | fixed-nodes:
+            | before 2024-05-01, and 4x upsampling all | Elo   | -18.62 +- 6.63 (95%)
+            | 25knodes data.                           | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.24 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 4222 W: 1095 L: 1321 D: 1806
+            |                                          | Penta | [116, 548, 958, 424, 65]
+            |                                          | https://chess.swehosting.se/test/10790/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ foundation | broadside trained locally via viripacks, | fixed-nodes:
+            | 6gb mixing buffer, uniform sampling.     | Elo   | -27.76 +- 7.91 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.34 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2972 W: 758 L: 995 D: 1219
+            |                                          | Penta | [96, 400, 669, 287, 34]
+            |                                          | https://chess.swehosting.se/test/10797/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ retrochron | fresh retrain, cosine lr, uniform data   | fixed-nodes:
+            | initial_lr = 0.001                       | Elo   | 2.13 +- 3.51 (95%)
+            | final_lr = 0.001 * 0.3^3                 | SPRT  | N=25000 Threads=1 Hash=16MB
+            | sbs = 800, wdl = 0.4                     | LLR   | 0.70 (-2.94, 2.94) [0.00, 3.00]
+            | sf-style dual activation.                | Games | N: 14988 W: 4424 L: 4332 D: 6232
+            |                                          | Penta | [303, 1729, 3338, 1821, 303]
+            |                                          | https://chess.swehosting.se/test/10983/
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -4.92 +- 3.35 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 10600 W: 2384 L: 2534 D: 5682
+            |                                          | Penta | [26, 1333, 2730, 1187, 24]
+            |                                          | https://chess.swehosting.se/test/10985/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+  vengeance | same as retrochron, trained with ranger. | fixed-nodes:
+            |                                          | Elo   | 4.63 +- 3.67 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | 2.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 13896 W: 4093 L: 3908 D: 5895
+            |                                          | Penta | [249, 1657, 3005, 1734, 303]
+            |                                          | https://chess.swehosting.se/test/10996/
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | Elo   | -9.87 +- 4.67 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5880 W: 1290 L: 1457 D: 3133
+            |                                          | Penta | [22, 815, 1429, 656, 18]
+            |                                          | https://chess.swehosting.se/test/10998/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+   fixpoint | 200sb wdl 0.5 on retrochron with         | fixed-nodes:
+            | binpacks.                                | Elo   | -33.84 +- 9.37 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.00 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2348 W: 579 L: 807 D: 962
+            |                                          | Penta | [78, 374, 456, 230, 36]
+            |                                          | https://chess.swehosting.se/test/11002/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ inflection | 200sb wdl 0.4 on retrochron with         | fixed-nodes:
+            | binpacks.                                | 
+            |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | 
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.4 | 200sb wdl 0.4 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | 0.71 +- 0.75 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 334956 W: 95151 L: 94462 D: 145343
+            |                                          | Penta | [6382, 40832, 72896, 40451, 6917]
+            |                                          | https://chess.swehosting.se/test/11037/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -8.80 +- 4.35 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 6318 W: 1409 L: 1569 D: 3340
+            |                                          | Penta | [22, 818, 1628, 680, 11]
+            |                                          | https://chess.swehosting.se/test/11038/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.5 | 200sb wdl 0.5 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -0.31 +- 1.76 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 59884 W: 17047 L: 17101 D: 25736
+            |                                          | Penta | [1180, 7288, 13067, 7220, 1187]
+            |                                          | https://chess.swehosting.se/test/11039/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -7.40 +- 4.00 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.98 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 7470 W: 1689 L: 1848 D: 3933
+            |                                          | Penta | [27, 946, 1938, 807, 17]
+            |                                          | https://chess.swehosting.se/test/11040/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.6 | 200sb wdl 0.6 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -4.85 +- 3.74 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.08 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 13670 W: 3819 L: 4010 D: 5841
+            |                                          | Penta | [328, 1682, 2925, 1653, 247]
+            |                                          | https://chess.swehosting.se/test/11057/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -5.47 +- 3.55 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 9852 W: 2241 L: 2396 D: 5215
+            |                                          | Penta | [36, 1257, 2490, 1112, 31]
+            |                                          | https://chess.swehosting.se/test/11060/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.7 | 200sb wdl 0.7 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -13.95 +- 5.93 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.05 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5160 W: 1370 L: 1577 D: 2213
+            |                                          | Penta | [117, 682, 1153, 547, 81]
+            |                                          | https://chess.swehosting.se/test/11058/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -5.77 +- 3.59 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.97 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 9338 W: 2122 L: 2277 D: 4939
+            |                                          | Penta | [30, 1182, 2390, 1047, 20]
+            |                                          | https://chess.swehosting.se/test/11062/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.8 | 200sb wdl 0.8 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -19.27 +- 7.09 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.01 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 3898 W: 1004 L: 1220 D: 1674
+            |                                          | Penta | [108, 551, 800, 429, 61]
+            |                                          | https://chess.swehosting.se/test/11059/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -10.67 +- 4.86 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 5504 W: 1203 L: 1372 D: 2929
+            |                                          | Penta | [31, 748, 1349, 607, 17]
+            |                                          | https://chess.swehosting.se/test/11063/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ basilisk.9 | 200sb wdl 0.9 on retrochron.             | fixed-nodes:
+            |                                          | Elo   | -26.61 +- 8.26 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2760 W: 681 L: 892 D: 1187
+            |                                          | Penta | [82, 391, 598, 274, 35]
+            |                                          | https://chess.swehosting.se/test/11061/
+            |                                          | vs. delenda
+            |                                          | 
+            |                                          | LTC:
+            |                                          | Elo   | -22.81 +- 6.95 (95%)
+            |                                          | SPRT  | 40.0+0.40s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.95 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 2654 W: 532 L: 706 D: 1416
+            |                                          | Penta | [15, 413, 632, 265, 2]
+            |                                          | https://chess.swehosting.se/test/11074/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------

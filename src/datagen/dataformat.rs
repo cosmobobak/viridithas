@@ -12,8 +12,6 @@ use crate::{
 
 use self::marlinformat::{util::I16Le, PackedBoard};
 use anyhow::{anyhow, Context};
-use arrayvec::ArrayVec;
-use rand::prelude::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 mod marlinformat;
@@ -37,8 +35,6 @@ pub struct Filter {
     filter_castling: bool,
     /// Filter out positions where eval diverges from WDL by more than this value.
     max_eval_incorrectness: u32,
-    /// Take this many positions per game.
-    sample_size: u32,
 }
 
 impl Default for Filter {
@@ -51,7 +47,6 @@ impl Default for Filter {
             filter_check: true,
             filter_castling: false,
             max_eval_incorrectness: u32::MAX,
-            sample_size: u32::MAX,
         }
     }
 }
@@ -65,7 +60,6 @@ impl Filter {
         filter_check: false,
         filter_castling: false,
         max_eval_incorrectness: u32::MAX,
-        sample_size: u32::MAX,
     };
 
     pub fn should_filter(&self, mv: Move, eval: i32, board: &Board, wdl: WDL) -> bool {
@@ -75,7 +69,7 @@ impl Filter {
         if eval.unsigned_abs() >= self.max_eval {
             return true;
         }
-        if board.pieces.occupied().count() < self.min_pieces {
+        if board.state.bbs.occupied().count() < self.min_pieces {
             return true;
         }
         if self.filter_tactical && board.is_tactical(mv) {
@@ -111,10 +105,10 @@ impl Filter {
 
     pub fn from_path(path: &Path) -> Result<Self, anyhow::Error> {
         let text = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read filter config file at {path:?}"))?;
+            .with_context(|| format!("Failed to read filter config file at {}", path.display()))?;
         toml::from_str(&text).with_context(|| {
             let default = toml::to_string_pretty(&Self::default()).unwrap();
-            format!("Failed to parse filter config file at {path:?} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```")
+            format!("Failed to parse filter config file at {} \nNote: the config file must be in TOML format. The default config looks like this: \n```\n{default}```", path.display())
         })
     }
 }
@@ -276,15 +270,7 @@ impl Game {
         &self,
         mut callback: impl FnMut(marlinformat::PackedBoard) -> anyhow::Result<()>,
         filter: &Filter,
-        rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
-        // we don't allow buffers of more than this size.
-        if self.moves.len() > Self::MAX_SPLATTABLE_GAME_SIZE {
-            return Ok(());
-        }
-
-        let mut sample_buffer =
-            ArrayVec::<marlinformat::PackedBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
@@ -292,16 +278,9 @@ impl Game {
         for (mv, eval) in &self.moves {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
-                sample_buffer.push(board.pack(eval, wdl, 0));
+                callback(board.pack(eval, wdl, 0))?;
             }
             board.make_move_simple(*mv);
-        }
-
-        // sample down to the requested number of positions.
-        let samples_to_take = (filter.sample_size as usize).min(sample_buffer.len());
-        let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
-        for board in selected {
-            callback(*board)?;
         }
 
         Ok(())
@@ -312,15 +291,7 @@ impl Game {
         &self,
         mut callback: impl FnMut(bulletformat::ChessBoard) -> anyhow::Result<()>,
         filter: &Filter,
-        rng: &mut impl rand::Rng,
     ) -> anyhow::Result<()> {
-        // we don't allow buffers of more than this size.
-        if self.moves.len() > Self::MAX_SPLATTABLE_GAME_SIZE {
-            return Ok(());
-        }
-
-        let mut sample_buffer =
-            ArrayVec::<bulletformat::ChessBoard, { Self::MAX_SPLATTABLE_GAME_SIZE }>::new();
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
@@ -329,16 +300,16 @@ impl Game {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
                 let mut bbs = [0; 8];
-                let piece_layout = &board.pieces;
-                bbs[0] = piece_layout.occupied_co(Colour::White).inner();
-                bbs[1] = piece_layout.occupied_co(Colour::Black).inner();
-                bbs[2] = piece_layout.of_type(PieceType::Pawn).inner();
-                bbs[3] = piece_layout.of_type(PieceType::Knight).inner();
-                bbs[4] = piece_layout.of_type(PieceType::Bishop).inner();
-                bbs[5] = piece_layout.of_type(PieceType::Rook).inner();
-                bbs[6] = piece_layout.of_type(PieceType::Queen).inner();
-                bbs[7] = piece_layout.of_type(PieceType::King).inner();
-                sample_buffer.push(
+                let piece_layout = &board.state.bbs;
+                bbs[0] = piece_layout.colours[Colour::White].inner();
+                bbs[1] = piece_layout.colours[Colour::Black].inner();
+                bbs[2] = piece_layout.pieces[PieceType::Pawn].inner();
+                bbs[3] = piece_layout.pieces[PieceType::Knight].inner();
+                bbs[4] = piece_layout.pieces[PieceType::Bishop].inner();
+                bbs[5] = piece_layout.pieces[PieceType::Rook].inner();
+                bbs[6] = piece_layout.pieces[PieceType::Queen].inner();
+                bbs[7] = piece_layout.pieces[PieceType::King].inner();
+                callback(
                     bulletformat::ChessBoard::from_raw(
                         bbs,
                         (board.turn() != Colour::White).into(),
@@ -349,16 +320,9 @@ impl Game {
                     .with_context(|| {
                         "Failed to convert raw components into bulletformat::ChessBoard."
                     })?,
-                );
+                )?;
             }
             board.make_move_simple(*mv);
-        }
-
-        // sample down to the requested number of positions.
-        let samples_to_take = (filter.sample_size as usize).min(sample_buffer.len());
-        let (selected, _) = sample_buffer.partial_shuffle(rng, samples_to_take);
-        for board in selected {
-            callback(*board)?;
         }
 
         Ok(())
@@ -384,47 +348,50 @@ mod tests {
     fn roundtrip() {
         fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
             assert_eq!(
-                lhs.pieces.all_pawns(),
-                rhs.pieces.all_pawns(),
+                lhs.state.bbs.pieces[PieceType::Pawn],
+                rhs.state.bbs.pieces[PieceType::Pawn],
                 "pawn square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_knights(),
-                rhs.pieces.all_knights(),
+                lhs.state.bbs.pieces[PieceType::Knight],
+                rhs.state.bbs.pieces[PieceType::Knight],
                 "knight square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_bishops(),
-                rhs.pieces.all_bishops(),
+                lhs.state.bbs.pieces[PieceType::Bishop],
+                rhs.state.bbs.pieces[PieceType::Bishop],
                 "bishop square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_rooks(),
-                rhs.pieces.all_rooks(),
+                lhs.state.bbs.pieces[PieceType::Rook],
+                rhs.state.bbs.pieces[PieceType::Rook],
                 "rook square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_queens(),
-                rhs.pieces.all_queens(),
+                lhs.state.bbs.pieces[PieceType::Queen],
+                rhs.state.bbs.pieces[PieceType::Queen],
                 "queen square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.all_kings(),
-                rhs.pieces.all_kings(),
+                lhs.state.bbs.pieces[PieceType::King],
+                rhs.state.bbs.pieces[PieceType::King],
                 "king square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.occupied_co(Colour::White),
-                rhs.pieces.occupied_co(Colour::White),
+                lhs.state.bbs.colours[Colour::White],
+                rhs.state.bbs.colours[Colour::White],
                 "white square-sets {msg}"
             );
             assert_eq!(
-                lhs.pieces.occupied_co(Colour::Black),
-                rhs.pieces.occupied_co(Colour::Black),
+                lhs.state.bbs.colours[Colour::Black],
+                rhs.state.bbs.colours[Colour::Black],
                 "black square-sets {msg}"
             );
             for sq in Square::all() {
-                assert_eq!(lhs.piece_at(sq), rhs.piece_at(sq), "piece_at({sq:?}) {msg}");
+                assert_eq!(
+                    lhs.state.mailbox[sq], rhs.state.mailbox[sq],
+                    ".state.mailbox[{sq:?}] {msg}"
+                );
             }
             assert_eq!(lhs.turn(), rhs.turn(), "side {msg}");
             assert_eq!(lhs.ep_sq(), rhs.ep_sq(), "ep_sq {msg}");
@@ -439,8 +406,8 @@ mod tests {
                 "fifty_move_counter {msg}"
             );
             assert_eq!(lhs.ply(), rhs.ply(), "ply {msg}");
-            assert_eq!(lhs.all_keys(), rhs.all_keys(), "key {msg}");
-            assert_eq!(lhs.threats(), rhs.threats(), "threats {msg}");
+            assert_eq!(lhs.state.keys, rhs.state.keys, "key {msg}");
+            assert_eq!(lhs.state.threats, rhs.state.threats, "threats {msg}");
             assert_eq!(lhs.height(), rhs.height(), "height {msg}");
         }
         CHESS960.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -476,24 +443,28 @@ mod tests {
 
         let mut boards = Vec::new();
         let filter = Filter::UNRESTRICTED;
-        let mut rng = rand::thread_rng();
         game.splat_to_marlinformat(
             |board| {
                 boards.push(board);
                 Ok(())
             },
             &filter,
-            &mut rng,
         )
         .unwrap();
         assert_eq!(boards.len(), 3);
         let mut check_board = Board::default();
         assert_eq!(boards[0].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[0].unpack().1, 3);
-        assert!(check_board.make_move_simple(Move::new(Square::E2, Square::E4)));
+        let e4 = Move::new(Square::E2, Square::E4);
+        assert!(check_board.is_pseudo_legal(e4));
+        assert!(check_board.is_legal(e4));
+        check_board.make_move_simple(e4);
         assert_eq!(boards[1].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[1].unpack().1, -314);
-        assert!(check_board.make_move_simple(Move::new(Square::E7, Square::E5)));
+        let e5 = Move::new(Square::E7, Square::E5);
+        assert!(check_board.is_pseudo_legal(e5));
+        assert!(check_board.is_legal(e5));
+        check_board.make_move_simple(e5);
         assert_eq!(boards[2].unpack().0.to_string(), check_board.to_string());
         assert_eq!(boards[2].unpack().1, 200);
     }

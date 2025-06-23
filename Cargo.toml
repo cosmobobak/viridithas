@@ -1,6 +1,6 @@
 [package]
 name = "viridithas"
-version = "16.0.0"
+version = "18.0.0"
 edition = "2021"
 description = "A superhuman chess engine."
 license = "MIT"
@@ -9,6 +9,7 @@ keywords = ["chess", "treesearch"]
 categories = ["games"]
 repository = "https://github.com/cosmobobak/viridithas"
 authors = ["Cosmo Bobak (cosmobobak@gmail.com)"]
+rust-version = "1.75.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -1,24 +1,29 @@
+use std::cell::Cell;
+
 use crate::{
-    chess::board::Board, chess::chessmove::Move, history, historytable::MAX_HISTORY,
+    chess::{
+        board::{
+            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets},
+            Board,
+        },
+        chessmove::Move,
+    },
+    history,
+    historytable::MAX_HISTORY,
+    search::static_exchange_eval,
+    searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };
 
-use crate::chess::board::movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets};
-
-pub const TT_MOVE_SCORE: i32 = 20_000_000;
-pub const FIRST_KILLER_SCORE: i32 = 9_000_000;
-pub const SECOND_KILLER_SCORE: i32 = 8_000_000;
-pub const COUNTER_MOVE_SCORE: i32 = 2_000_000;
 pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
+pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_SCORE - MAX_HISTORY as i32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
     TTMove,
     GenerateCaptures,
     YieldGoodCaptures,
-    YieldKiller1,
-    YieldKiller2,
-    YieldCounterMove,
+    YieldKiller,
     GenerateQuiets,
     YieldRemaining,
     Done,
@@ -29,45 +34,27 @@ pub struct MovePicker {
     index: usize,
     pub stage: Stage,
     tt_move: Option<Move>,
-    killers: [Option<Move>; 2],
-    counter_move: Option<Move>,
+    killer: Option<Move>,
     pub skip_quiets: bool,
     see_threshold: i32,
 }
 
 impl MovePicker {
-    pub fn new(
-        tt_move: Option<Move>,
-        killers: [Option<Move>; 2],
-        counter_move: Option<Move>,
-        see_threshold: i32,
-    ) -> Self {
-        debug_assert!(
-            killers[0].is_none() || killers[0] != killers[1],
-            "Killers are both {:?}",
-            killers[0]
-        );
+    pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
             movelist: MoveList::new(),
             index: 0,
             stage: Stage::TTMove,
             tt_move,
-            killers,
-            counter_move,
+            killer,
             skip_quiets: false,
             see_threshold,
         }
     }
 
-    /// Returns true if a move was already yielded by the movepicker.
-    pub fn was_tried_lazily(&self, m: Move) -> bool {
-        let m = Some(m);
-        m == self.tt_move || m == self.killers[0] || m == self.killers[1] || m == self.counter_move
-    }
-
     /// Select the next move to try. Returns None if there are no more moves to try.
     #[allow(clippy::cognitive_complexity)]
-    pub fn next(&mut self, position: &Board, t: &ThreadData) -> Option<MoveListEntry> {
+    pub fn next(&mut self, position: &Board, t: &ThreadData, info: &SearchInfo) -> Option<Move> {
         if self.stage == Stage::Done {
             return None;
         }
@@ -75,10 +62,7 @@ impl MovePicker {
             self.stage = Stage::GenerateCaptures;
             if let Some(tt_move) = self.tt_move {
                 if position.is_pseudo_legal(tt_move) {
-                    return Some(MoveListEntry {
-                        mov: tt_move,
-                        score: TT_MOVE_SCORE,
-                    });
+                    return Some(tt_move);
                 }
             }
         }
@@ -98,9 +82,9 @@ impl MovePicker {
             Self::score_captures(t, position, &mut self.movelist);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once(position) {
+            if let Some(m) = self.yield_once(info, position) {
                 if m.score >= WINNING_CAPTURE_SCORE {
-                    return Some(m);
+                    return Some(m.mov);
                 }
                 // the move was not winning, so we're going to
                 // generate quiet moves next. As such, we decrement
@@ -110,48 +94,16 @@ impl MovePicker {
             self.stage = if self.skip_quiets {
                 Stage::Done
             } else {
-                Stage::YieldKiller1
+                Stage::YieldKiller
             };
         }
-        if self.stage == Stage::YieldKiller1 {
-            self.stage = Stage::YieldKiller2;
-            if !self.skip_quiets && self.killers[0] != self.tt_move {
-                if let Some(killer) = self.killers[0] {
-                    if position.is_pseudo_legal(killer) {
-                        return Some(MoveListEntry {
-                            mov: killer,
-                            score: FIRST_KILLER_SCORE,
-                        });
-                    }
-                }
-            }
-        }
-        if self.stage == Stage::YieldKiller2 {
-            self.stage = Stage::YieldCounterMove;
-            if !self.skip_quiets && self.killers[1] != self.tt_move {
-                if let Some(killer) = self.killers[1] {
-                    if position.is_pseudo_legal(killer) {
-                        return Some(MoveListEntry {
-                            mov: killer,
-                            score: SECOND_KILLER_SCORE,
-                        });
-                    }
-                }
-            }
-        }
-        if self.stage == Stage::YieldCounterMove {
+        if self.stage == Stage::YieldKiller {
             self.stage = Stage::GenerateQuiets;
-            if !self.skip_quiets
-                && self.counter_move != self.tt_move
-                && self.counter_move != self.killers[0]
-                && self.counter_move != self.killers[1]
-            {
-                if let Some(counter) = self.counter_move {
-                    if position.is_pseudo_legal(counter) {
-                        return Some(MoveListEntry {
-                            mov: counter,
-                            score: COUNTER_MOVE_SCORE,
-                        });
+            if !self.skip_quiets && self.killer != self.tt_move {
+                if let Some(killer) = self.killer {
+                    if position.is_pseudo_legal(killer) {
+                        debug_assert!(!position.is_tactical(killer));
+                        return Some(killer);
                     }
                 }
             }
@@ -166,8 +118,8 @@ impl MovePicker {
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once(position) {
-                return Some(m);
+            if let Some(m) = self.yield_once(info, position) {
+                return Some(m.mov);
             }
             self.stage = Stage::Done;
         }
@@ -181,57 +133,53 @@ impl MovePicker {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self, pos: &Board) -> Option<MoveListEntry> {
-        loop {
-            // If we have already tried all moves, return None.
-            if self.index == self.movelist.len() {
-                return None;
-            }
-
-            let mut best_score = self.movelist[self.index].score;
-            let mut best_num = self.index;
-
-            // find the best move in the unsorted portion of the movelist.
-            for index in self.index + 1..self.movelist.len() {
-                let score = self.movelist[index].score;
-                if score > best_score {
-                    best_score = score;
-                    best_num = index;
-                }
-            }
-
-            let m = &mut self.movelist[best_num];
-
+    fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
+        let mut remaining =
+            Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
+        while let Some(best_entry_ref) =
+            remaining
+                .iter()
+                .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
+        {
+            let best = best_entry_ref.get();
+            debug_assert!(
+                best.score < WINNING_CAPTURE_SCORE / 2 || best.score >= MIN_WINNING_SEE_SCORE,
+                "{}'s score is {}, lower bound is {}, this is too close.",
+                best.mov.display(false),
+                best.score,
+                MIN_WINNING_SEE_SCORE
+            );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
-            if m.score >= (WINNING_CAPTURE_SCORE - i32::from(MAX_HISTORY))
-                && !pos.static_exchange_eval(m.mov, self.see_threshold)
+            if best.score >= MIN_WINNING_SEE_SCORE
+                && !static_exchange_eval(pos, info, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
-                m.score -= WINNING_CAPTURE_SCORE;
+                best_entry_ref.set(MoveListEntry {
+                    score: best.score - WINNING_CAPTURE_SCORE,
+                    mov: best.mov,
+                });
                 continue;
             }
 
-            let m = *m;
-
             // swap the best move with the first unsorted move.
-            self.movelist.swap(best_num, self.index);
+            best_entry_ref.set(remaining[0].get());
+            remaining[0].set(best);
+            remaining = &remaining[1..];
 
             self.index += 1;
 
-            // as the scores of positive-SEE moves can be pushed below
-            // WINNING_CAPTURE_SCORE if their capture history is particularly
-            // bad, this implicitly filters out moves with bad history scores.
-            let not_winning = m.score < WINNING_CAPTURE_SCORE;
-
-            if self.skip_quiets && not_winning {
+            if self.skip_quiets && best.score < MIN_WINNING_SEE_SCORE {
                 // the best we could find wasn't winning,
                 // and we're skipping quiet moves, so we're done.
                 return None;
             }
-            if !self.was_tried_lazily(m.mov) {
-                return Some(m);
+            if !(Some(best.mov) == self.tt_move || Some(best.mov) == self.killer) {
+                return Some(best);
             }
         }
+
+        // If we have already tried all moves, return None.
+        None
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {

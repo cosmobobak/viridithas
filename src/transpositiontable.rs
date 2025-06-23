@@ -1,12 +1,12 @@
 use std::{
-    mem::size_of,
+    mem::{size_of, MaybeUninit},
     sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
 };
 
 use crate::{
     chess::chessmove::Move,
     evaluation::MINIMUM_TB_WIN_SCORE,
-    util::{self, depth::CompactDepthStorage},
+    util::{self, depth::CompactDepthStorage, MEGABYTE},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,9 +31,33 @@ macro_rules! impl_from_bound {
 impl_from_bound!(u8);
 impl_from_bound!(i32);
 
-fn divide_into_chunks<T>(slice: &[T], n_chunks: usize) -> impl Iterator<Item = &[T]> {
-    let chunk_size = slice.len() / n_chunks + 1; // +1 to avoid 0
+fn divide_into_chunks<T>(slice: &[T], chunks: usize) -> impl Iterator<Item = &[T]> {
+    let chunk_size = slice.len() / chunks + 1; // +1 to avoid 0
     slice.chunks(chunk_size)
+}
+
+unsafe fn threaded_memset_zero(ptr: *mut MaybeUninit<u8>, len: usize, threads: usize) {
+    #[allow(clippy::collection_is_never_read)]
+    std::thread::scope(|s| {
+        let chunk_size = len / threads + 64;
+        let mut handles = Vec::with_capacity(threads);
+        for thread in 0..threads {
+            let start = thread * chunk_size;
+            let end = ((thread + 1) * chunk_size).min(len);
+            if start > end {
+                // with many threads we can hit this
+                break;
+            }
+            let slice_ptr = ptr.add(start);
+            let slice_len = end.checked_sub(start).unwrap();
+            // launder address
+            let addr = slice_ptr as usize;
+            handles.push(s.spawn(move || {
+                let slice_ptr = addr as *mut u8;
+                std::ptr::write_bytes(slice_ptr, 0, slice_len);
+            }));
+        }
+    });
 }
 
 const MAX_AGE: i32 = 1 << 5; // must be power of 2
@@ -47,7 +71,7 @@ pub struct PackedInfo {
 impl PackedInfo {
     const fn new(age: u8, flag: Bound, pv: bool) -> Self {
         Self {
-            data: (age << 3) | (pv as u8) << 2 | flag as u8,
+            data: (age << 3) | ((pv as u8) << 2) | flag as u8,
         }
     }
 
@@ -128,20 +152,20 @@ impl TTClusterMemory {
                 let part1 = self.entry1_block1.load(Ordering::Relaxed);
                 let part2 = self.entry1_block2.load(Ordering::Relaxed);
                 // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 64
+                u128::from(part1) | (u128::from(part2) << 64)
             }
             2 => {
                 let part1 = self.entry2_block1.load(Ordering::Relaxed);
                 let part2 = self.entry2_block2.load(Ordering::Relaxed);
                 let part3 = self.entry2_block3.load(Ordering::Relaxed);
                 // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 16 | u128::from(part3) << 48
+                u128::from(part1) | (u128::from(part2) << 16) | (u128::from(part3) << 48)
             }
             1 => {
                 let part1 = self.entry3_block1.load(Ordering::Relaxed);
                 let part2 = self.entry3_block2.load(Ordering::Relaxed);
                 // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                u128::from(part1) | u128::from(part2) << 32
+                u128::from(part1) | (u128::from(part2) << 32)
             }
             _ => panic!("Index out of bounds!"),
         };
@@ -231,7 +255,8 @@ impl TT {
         }
     }
 
-    pub fn resize(&mut self, bytes: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: usize) {
+        let start = std::time::Instant::now();
         let new_len = bytes / size_of::<TTClusterMemory>();
         // dealloc the old table:
         self.table = Vec::new();
@@ -239,12 +264,18 @@ impl TT {
         // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
             let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
-            let ptr = std::alloc::alloc_zeroed(layout);
+            let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);
             }
+            threaded_memset_zero(ptr.cast(), new_len * size_of::<TTClusterMemory>(), threads);
             self.table = Vec::from_raw_parts(ptr.cast(), new_len, new_len);
         }
+        println!(
+            "info string hash initialisation of {}mb complete in {}us",
+            bytes / MEGABYTE,
+            start.elapsed().as_micros()
+        );
     }
 
     pub fn clear(&self, threads: usize) {
@@ -262,7 +293,7 @@ impl TT {
         });
     }
 
-    const fn pack_key(key: u64) -> u16 {
+    pub const fn pack_key(key: u64) -> u16 {
         #![allow(clippy::cast_possible_truncation)]
         key as u16
     }
@@ -307,13 +338,13 @@ impl TTView<'_> {
         pv: bool,
     ) {
         // get index into the table:
-        let index = self.wrap_key(key);
+        let cluster_index = self.wrap_key(key);
         // create a small key from the full key:
         let key = TT::pack_key(key);
         // get current table age:
         let tt_age = i32::from(self.age);
         // load the cluster:
-        let cluster = &self.table[index];
+        let cluster = &self.table[cluster_index];
         let mut tte = cluster.load(0);
         let mut idx = 0;
 
@@ -345,9 +376,6 @@ impl TTView<'_> {
             best_move = tte.m;
         }
 
-        // normalise mate / TB scores:
-        let score = normalise_gt_truth_score(score, ply);
-
         // give entries a bonus for type:
         // exact = 3, lower = 2, upper = 1
         let insert_flag_bonus = i32::from(flag);
@@ -374,7 +402,8 @@ impl TTView<'_> {
             let write = TTEntry {
                 key,
                 m: best_move,
-                score: score.try_into().expect(
+                // normalise mate / TB scores:
+                score: normalise_gt_truth_score(score, ply).try_into().expect(
                     "attempted to store a score with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
                 depth: depth.try_into().unwrap(),
@@ -383,7 +412,7 @@ impl TTView<'_> {
                     "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
             };
-            self.table[index].store(idx, write);
+            cluster.store(idx, write);
         }
     }
 
@@ -391,7 +420,6 @@ impl TTView<'_> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
-        // load the entry:
         let cluster = &self.table[index];
 
         for i in 0..CLUSTER_SIZE {
@@ -401,19 +429,11 @@ impl TTView<'_> {
                 continue;
             }
 
-            let tt_move = entry.m;
-            let tt_depth = entry.depth.into();
-            let tt_bound = entry.info.flag();
-
-            // we can't store the score in a tagged union,
-            // because we need to do mate score preprocessing.
-            let tt_value = reconstruct_gt_truth_score(entry.score.into(), ply);
-
             return Some(TTHit {
-                mov: tt_move,
-                depth: tt_depth,
-                bound: tt_bound,
-                value: tt_value,
+                mov: entry.m,
+                depth: entry.depth.into(),
+                bound: entry.info.flag(),
+                value: reconstruct_gt_truth_score(entry.score.into(), ply),
                 eval: entry.evaluation.into(),
                 was_pv: entry.info.pv(),
             });
@@ -457,7 +477,7 @@ impl TTView<'_> {
                 }
             }
         }
-        hit / 2 * CLUSTER_SIZE
+        hit / (2 * CLUSTER_SIZE)
     }
 }
 
@@ -518,6 +538,50 @@ mod tests {
                 loaded.to_ne_bytes(),
                 "Assertion failed for slot {i}!"
             );
+        }
+    }
+
+    #[test]
+    fn memset_correct() {
+        #![allow(clippy::undocumented_unsafe_blocks)]
+        let mut x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 2);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 7);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1337);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
+        }
+
+        x = vec![1u8; 2048];
+        unsafe {
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 5555);
+        }
+        for (i, v) in x.iter().enumerate() {
+            assert_eq!(*v, 0, "unset at index {i}");
         }
     }
 }

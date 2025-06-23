@@ -1,5 +1,9 @@
-use std::ops::{
-    BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub, SubAssign,
+use std::{
+    fmt::Display,
+    ops::{
+        BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub,
+        SubAssign,
+    },
 };
 
 use crate::chess::types::Square;
@@ -105,18 +109,6 @@ impl SquareSet {
         self.inner.count_ones()
     }
 
-    pub const fn is_empty(self) -> bool {
-        self.inner == 0
-    }
-
-    pub const fn is_full(self) -> bool {
-        self.inner == !0
-    }
-
-    pub const fn non_empty(self) -> bool {
-        self.inner != 0
-    }
-
     pub const fn intersection(self, other: Self) -> Self {
         Self {
             inner: self.inner & other.inner,
@@ -212,6 +204,22 @@ impl SquareSet {
     }
     pub fn south_one(self) -> Self {
         self >> 8
+    }
+
+    pub fn isolate_lsb(self) -> Self {
+        self & (Self::from_inner(0u64.wrapping_sub(self.inner())))
+    }
+
+    pub fn without_lsb(self) -> Self {
+        self & (Self::from_inner(self.inner().wrapping_sub(1)))
+    }
+
+    pub fn one(self) -> bool {
+        self != Self::EMPTY && self.without_lsb() == Self::EMPTY
+    }
+
+    pub fn many(self) -> bool {
+        self.without_lsb() != Self::EMPTY
     }
 }
 
@@ -343,5 +351,43 @@ impl Shl<u8> for SquareSet {
         Self {
             inner: self.inner << rhs,
         }
+    }
+}
+
+impl Display for SquareSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for rank in (0..8).rev() {
+            for file in 0..8 {
+                let bit = 1u64 << (rank * 8 + file);
+                write!(f, "{}", if self.inner & bit != 0 { '1' } else { '0' })?;
+            }
+            if rank > 0 {
+                writeln!(f)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chess::{squareset::SquareSet, types::Square};
+
+    #[test]
+    fn counters() {
+        let empty = SquareSet::EMPTY;
+        assert_eq!(empty, SquareSet::EMPTY);
+        assert!(!empty.one());
+        assert!(!empty.many());
+
+        let one = Square::E4.as_set();
+        assert_ne!(one, SquareSet::EMPTY);
+        assert!(one.one());
+        assert!(!one.many());
+
+        let two = one.add_square(Square::E5);
+        assert_ne!(two, SquareSet::EMPTY);
+        assert!(!two.one());
+        assert!(two.many());
     }
 }

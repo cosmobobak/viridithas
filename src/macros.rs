@@ -1,16 +1,3 @@
-macro_rules! inconceivable {
-    () => {{
-        #[cfg(debug_assertions)]
-        {
-            panic!("That word you use - I do not think it means what you think it means.");
-        }
-        #[allow(unreachable_code)]
-        {
-            std::hint::unreachable_unchecked();
-        }
-    }};
-}
-
 macro_rules! max {
     ($a:expr) => {{
         let mut idx = 0;
@@ -47,4 +34,31 @@ macro_rules! min {
             $b
         }
     };
+}
+
+/// Collect statistics on the average value of a variable.
+#[allow(unused_macros)]
+macro_rules! track {
+    ($v:expr) => {{
+        {
+            #![allow(
+                clippy::cast_lossless,
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_possible_wrap
+            )]
+            static TOTAL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+            static COUNT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+            TOTAL.fetch_add($v as i64, std::sync::atomic::Ordering::Relaxed);
+            let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count % 2048 == 0 {
+                let total = TOTAL.load(std::sync::atomic::Ordering::Relaxed);
+                let avg = total as f64 / count as f64;
+                println!("average value of {}: {}", stringify!($v), avg);
+            }
+            // pass-through
+            $v
+        }
+    }};
 }
