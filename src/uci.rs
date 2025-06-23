@@ -49,6 +49,9 @@ use crate::{
     NAME, VERSION,
 };
 
+#[cfg(feature = "nnz-counts")]
+use crate::nnue::network::layers::{NNZ_COUNT, NNZ_DENOM};
+
 const UCI_DEFAULT_HASH_MEGABYTES: usize = 16;
 const UCI_MAX_HASH_MEGABYTES: usize = 1_048_576;
 const UCI_MAX_THREADS: usize = 512;
@@ -921,7 +924,16 @@ pub fn bench(
                     .collect::<Vec<u64>>())
                 .collect::<Vec<Vec<u64>>>()
         ),
-    );
+    ).unwrap();
+    #[cfg(feature = "nnz-counts")]
+    {
+        let count = NNZ_COUNT.load(Ordering::Relaxed);
+        let denom = NNZ_DENOM.load(Ordering::Relaxed);
+        let ratio = count as f64 / denom as f64 * 100.0;
+        println!("NNZ COUNT: {count}");
+        println!("NNZ DENOM: {denom}");
+        println!("NNZ RATIO: {ratio:.2}%");
+    }
 
     Ok(())
 }
