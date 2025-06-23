@@ -599,11 +599,6 @@ impl QuantisedNetwork {
             net.l3_bias[bucket] = self.l3_biases[bucket];
         }
 
-        println!(
-            "hash of l1 weights: {:X}",
-            fxhash::hash64(&net.l1_weights[0][..])
-        );
-
         net
     }
 

@@ -352,21 +352,21 @@ mod x86simd {
             let nnz_slice = std::slice::from_raw_parts(nnz.as_ptr().cast::<u16>(), nnz_count);
 
             // logging for permutation
-            // #[cfg(feature = "nnz-counts")]
-            // for (i, elem) in ft_outputs.iter().enumerate() {
-            //     let elem = elem.assume_init();
-            //     let nnz = elem != 0;
-            //     if nnz {
-            //         for (j, elem) in ft_outputs.iter().enumerate() {
-            //             let elem = elem.assume_init();
-            //             let nnz = elem != 0;
-            //             if nnz {
-            //                 super::NNZ_COUNTS[i % 1024][j % 1024]
-            //                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            //             }
-            //         }
-            //     }
-            // }
+            #[cfg(feature = "nnz-counts")]
+            for (i, elem) in ft_outputs.iter().enumerate() {
+                let elem = elem.assume_init();
+                let nnz = elem != 0;
+                if nnz {
+                    for (j, elem) in ft_outputs.iter().enumerate() {
+                        let elem = elem.assume_init();
+                        let nnz = elem != 0;
+                        if nnz {
+                            super::NNZ_COUNTS[i % 1024][j % 1024]
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                }
+            }
 
             propagate_l1(&ft_outputs, nnz_slice, weights, biases, output);
         }
