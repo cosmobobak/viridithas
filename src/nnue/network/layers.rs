@@ -3,6 +3,11 @@ const FT_SHIFT: u32 = 10;
 #[allow(clippy::cast_precision_loss)]
 const L1_MUL: f32 = (1 << FT_SHIFT) as f32 / (QA as i32 * QA as i32 * QB as i32) as f32;
 
+#[cfg(feature = "nnz-counts")]
+pub static NNZ_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[cfg(feature = "nnz-counts")]
+pub static NNZ_DENOM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 #[cfg(not(target_arch = "x86_64"))]
 mod generic {
     use super::{
@@ -159,21 +164,29 @@ mod generic {
 
 #[cfg(target_arch = "x86_64")]
 mod x86simd {
-    use super::{
-        super::{Align64, L1_SIZE, L2_SIZE, L3_SIZE, QA},
-        AVX512CHUNK, FT_SHIFT, L1_MUL,
+    use crate::{
+        nnue::{
+            network::{
+                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
+                Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+            },
+            simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
+        },
+        util::{from_mut, from_ref},
     };
-    use crate::nnue::{
-        network::L1_CHUNK_PER_32,
-        simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
+    use std::{
+        arch::x86_64::{
+            _mm_add_epi16 as vec128_add, _mm_load_si128 as vec128_load,
+            _mm_set1_epi16 as vec128_set_16, _mm_setzero_si128 as vec128_zero,
+            _mm_storeu_si128 as vec128_storeu,
+        },
+        mem::MaybeUninit,
     };
-    use crate::util::{from_mut, from_ref};
-    use std::arch::x86_64::_mm_add_epi16 as vec128_add;
-    use std::arch::x86_64::_mm_load_si128 as vec128_load;
-    use std::arch::x86_64::_mm_set1_epi16 as vec128_set_16;
-    use std::arch::x86_64::_mm_setzero_si128 as vec128_zero;
-    use std::arch::x86_64::_mm_storeu_si128 as vec128_storeu;
-    use std::mem::MaybeUninit;
+
+    #[cfg(feature = "nnz-counts")]
+    use crate::nnue::network::layers::{NNZ_COUNT, NNZ_DENOM};
+    #[cfg(feature = "nnz-counts")]
+    use std::sync::atomic::Ordering;
 
     #[derive(Debug, Clone, Copy)]
     #[repr(C, align(16))]
@@ -344,7 +357,14 @@ mod x86simd {
                 let elem = elem.assume_init();
                 let nnz = elem != 0;
                 if nnz {
-                    super::NNZ_COUNTS[i].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    for (j, elem) in ft_outputs.iter().enumerate() {
+                        let elem = elem.assume_init();
+                        let nnz = elem != 0;
+                        if nnz {
+                            super::NNZ_COUNTS[i % 1024][j % 1024]
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
                 }
             }
 
@@ -372,6 +392,13 @@ mod x86simd {
             let input32 = reinterpret_as_i32s(ft_outputs);
             let mut sums = Align64([0; L2_SIZE]);
             let nnz_count = nnz_slice.len();
+
+            #[cfg(feature = "nnz-counts")]
+            {
+                NNZ_COUNT.fetch_add(nnz_count, Ordering::Relaxed);
+                // each active block is four activations, so we divide by 4.
+                NNZ_DENOM.fetch_add(L1_SIZE / 4, Ordering::Relaxed);
+            }
 
             // affine transform
             for i in (0..nnz_count - 1).step_by(2) {
@@ -535,5 +562,5 @@ use super::{QA, QB};
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
-pub static NNZ_COUNTS: [std::sync::atomic::AtomicU64; super::L1_SIZE] =
-    { unsafe { std::mem::transmute([0u64; super::L1_SIZE]) } };
+pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_SIZE / 2]; super::L1_SIZE / 2] =
+    const { unsafe { std::mem::transmute([[0u64; super::L1_SIZE / 2]; super::L1_SIZE / 2]) } };
