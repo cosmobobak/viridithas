@@ -12,7 +12,7 @@ use crate::{
         CONT2_HISTORY_BONUS_OFFSET, CONT2_HISTORY_MALUS_MAX, CONT2_HISTORY_MALUS_MUL,
         CONT2_HISTORY_MALUS_OFFSET, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN,
         DO_DEEPER_DEPTH_MARGIN, EVAL_POLICY_IMPROVEMENT_SCALE, EVAL_POLICY_OFFSET,
-        EVAL_POLICY_UPDATE_MAX, EVAL_POLICY_UPDATE_MIN, FUTILITY_COEFF_0, FUTILITY_COEFF_1,
+        EVAL_POLICY_UPDATE_MAX, FUTILITY_COEFF_0, FUTILITY_COEFF_1,
         HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CHECK_MUL, LMR_CUT_NODE_MUL,
         LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL,
         LMR_TT_CAPTURE_MUL, MAIN_HISTORY_BONUS_MAX, MAIN_HISTORY_BONUS_MUL,
@@ -112,7 +112,6 @@ pub struct Config {
     pub eval_policy_improvement_scale: i32,
     pub eval_policy_offset: i32,
     pub eval_policy_update_max: i32,
-    pub eval_policy_update_min: i32,
 }
 
 impl Config {
@@ -196,7 +195,6 @@ impl Config {
             eval_policy_improvement_scale: EVAL_POLICY_IMPROVEMENT_SCALE,
             eval_policy_offset: EVAL_POLICY_OFFSET,
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
-            eval_policy_update_min: EVAL_POLICY_UPDATE_MIN,
         }
     }
 }
@@ -318,8 +316,7 @@ impl Config {
             MATERIAL_SCALE_BASE = [self.material_scale_base],
             EVAL_POLICY_IMPROVEMENT_SCALE = [self.eval_policy_improvement_scale],
             EVAL_POLICY_OFFSET = [self.eval_policy_offset],
-            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
-            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min]
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max]
         ]
     }
 
@@ -410,9 +407,8 @@ impl Config {
             SEE_QUEEN_VALUE = [self.see_queen_value, 1, 4096, 16],
             MATERIAL_SCALE_BASE = [self.material_scale_base, 1, 4096, 32],
             EVAL_POLICY_IMPROVEMENT_SCALE = [self.eval_policy_improvement_scale, 1, 512, 16],
-            EVAL_POLICY_OFFSET = [self.eval_policy_offset, -1536, 1536, 96],
-            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 144],
-            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min, 1, 4096, 144]
+            EVAL_POLICY_OFFSET = [self.eval_policy_offset, -1536, 1536, 8],
+            EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 8]
         ]
     }
 
