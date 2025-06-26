@@ -135,6 +135,13 @@ const EVAL_POLICY_UPDATE_MIN: i32 = 42;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
+const HINDSIGHT_EXT_DEPTH: i32 = 4096;
+const HINDSIGHT_RED_DEPTH: i32 = 2048;
+const HINDSIGHT_RED_EVAL: i32 = 96;
+
+const OPTIMISM_OFFSET: i32 = 212;
+const OPTIMISM_MATERIAL_BASE: i32 = 2000;
+
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
 pub trait NodeType {
@@ -366,7 +373,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(
             }
         }
 
-        t.optimism[board.turn()] = 128 * average_value / (average_value.abs() + 212);
+        t.optimism[board.turn()] =
+            128 * average_value / (average_value.abs() + info.conf.optimism_offset);
         t.optimism[!board.turn()] = -t.optimism[board.turn()];
 
         // aspiration loop:
@@ -1042,14 +1050,16 @@ pub fn alpha_beta<NT: NodeType>(
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
-        if t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
+        if t.ss[height - 1].reduction >= info.conf.hindsight_ext_depth
+            && static_eval + t.ss[height - 1].eval < 0
+        {
             depth += 1;
         }
 
         if depth >= 2
-            && t.ss[height - 1].reduction >= 2048
+            && t.ss[height - 1].reduction >= info.conf.hindsight_red_depth
             && t.ss[height - 1].eval != VALUE_NONE
-            && static_eval + t.ss[height - 1].eval > 96
+            && static_eval + t.ss[height - 1].eval > info.conf.hindsight_red_eval
         {
             depth -= 1;
         }
@@ -1856,9 +1866,9 @@ pub fn adj_shuffle(
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = board.material(info);
-    let base = info.conf.material_scale_base;
-    let raw_eval =
-        (raw_eval * (base + material) + t.optimism[board.turn()] * (2000 + material) / 32) / 1024;
+    let material_mul = info.conf.material_scale_base + material;
+    let optimism_mul = info.conf.optimism_mat_base + material;
+    let raw_eval = (raw_eval * material_mul + t.optimism[board.turn()] * optimism_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
