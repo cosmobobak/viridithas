@@ -128,10 +128,9 @@ const MAJOR_CORRHIST_WEIGHT: i32 = 1518;
 const MINOR_CORRHIST_WEIGHT: i32 = 1454;
 const NONPAWN_CORRHIST_WEIGHT: i32 = 1611;
 
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 207;
-const EVAL_POLICY_OFFSET: i32 = 9;
-const EVAL_POLICY_UPDATE_MAX: i32 = 5;
-const EVAL_POLICY_UPDATE_MIN: i32 = 42;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 200;
+const EVAL_POLICY_OFFSET: i32 = 30;
+const EVAL_POLICY_UPDATE_MAX: i32 = 100;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
@@ -1013,7 +1012,7 @@ pub fn alpha_beta<NT: NodeType>(
                 let improvement = -(ss_prev.eval + static_eval) + info.conf.eval_policy_offset;
                 let delta = i32::clamp(
                     improvement * info.conf.eval_policy_improvement_scale / 32,
-                    -info.conf.eval_policy_update_min,
+                    -info.conf.eval_policy_update_max,
                     info.conf.eval_policy_update_max,
                 );
                 t.update_history_single(from, to, moved, threats, delta);
