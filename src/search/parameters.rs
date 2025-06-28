@@ -13,17 +13,19 @@ use crate::{
         CONT2_HISTORY_MALUS_OFFSET, DOUBLE_EXTENSION_MARGIN, DO_DEEPER_BASE_MARGIN,
         DO_DEEPER_DEPTH_MARGIN, EVAL_POLICY_IMPROVEMENT_SCALE, EVAL_POLICY_OFFSET,
         EVAL_POLICY_UPDATE_MAX, EVAL_POLICY_UPDATE_MIN, FUTILITY_COEFF_0, FUTILITY_COEFF_1,
-        HISTORY_LMR_DIVISOR, HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CHECK_MUL, LMR_CUT_NODE_MUL,
-        LMR_DIVISION, LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL,
+        HINDSIGHT_EXT_DEPTH, HINDSIGHT_RED_DEPTH, HINDSIGHT_RED_EVAL, HISTORY_LMR_DIVISOR,
+        HISTORY_PRUNING_MARGIN, LMR_BASE, LMR_CHECK_MUL, LMR_CUT_NODE_MUL, LMR_DIVISION,
+        LMR_NON_IMPROVING_MUL, LMR_NON_PV_MUL, LMR_REFUTATION_MUL, LMR_TTPV_MUL,
         LMR_TT_CAPTURE_MUL, MAIN_HISTORY_BONUS_MAX, MAIN_HISTORY_BONUS_MUL,
         MAIN_HISTORY_BONUS_OFFSET, MAIN_HISTORY_MALUS_MAX, MAIN_HISTORY_MALUS_MUL,
         MAIN_HISTORY_MALUS_OFFSET, MAIN_SEE_BOUND, MAJOR_CORRHIST_WEIGHT, MINOR_CORRHIST_WEIGHT,
         NMP_DEPTH_MUL, NMP_IMPROVING_MARGIN, NMP_REDUCTION_EVAL_DIVISOR, NONPAWN_CORRHIST_WEIGHT,
-        PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN, PROBCUT_MARGIN, QS_FUTILITY, QS_SEE_BOUND,
-        RAZORING_COEFF_0, RAZORING_COEFF_1, RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN,
-        SEE_STAT_SCORE_MUL, SEE_TACTICAL_MARGIN, TACTICAL_HISTORY_BONUS_MAX,
-        TACTICAL_HISTORY_BONUS_MUL, TACTICAL_HISTORY_BONUS_OFFSET, TACTICAL_HISTORY_MALUS_MAX,
-        TACTICAL_HISTORY_MALUS_MUL, TACTICAL_HISTORY_MALUS_OFFSET, TRIPLE_EXTENSION_MARGIN,
+        OPTIMISM_MATERIAL_BASE, OPTIMISM_OFFSET, PAWN_CORRHIST_WEIGHT, PROBCUT_IMPROVING_MARGIN,
+        PROBCUT_MARGIN, QS_FUTILITY, QS_SEE_BOUND, RAZORING_COEFF_0, RAZORING_COEFF_1,
+        RFP_IMPROVING_MARGIN, RFP_MARGIN, SEE_QUIET_MARGIN, SEE_STAT_SCORE_MUL,
+        SEE_TACTICAL_MARGIN, TACTICAL_HISTORY_BONUS_MAX, TACTICAL_HISTORY_BONUS_MUL,
+        TACTICAL_HISTORY_BONUS_OFFSET, TACTICAL_HISTORY_MALUS_MAX, TACTICAL_HISTORY_MALUS_MUL,
+        TACTICAL_HISTORY_MALUS_OFFSET, TRIPLE_EXTENSION_MARGIN,
     },
     timemgmt::{
         DEFAULT_MOVES_TO_GO, FAIL_LOW_TM_BONUS, HARD_WINDOW_FRAC, INCREMENT_FRAC,
@@ -113,6 +115,11 @@ pub struct Config {
     pub eval_policy_offset: i32,
     pub eval_policy_update_max: i32,
     pub eval_policy_update_min: i32,
+    pub hindsight_ext_depth: i32,
+    pub hindsight_red_depth: i32,
+    pub hindsight_red_eval: i32,
+    pub optimism_offset: i32,
+    pub optimism_mat_base: i32,
 }
 
 impl Config {
@@ -197,6 +204,11 @@ impl Config {
             eval_policy_offset: EVAL_POLICY_OFFSET,
             eval_policy_update_max: EVAL_POLICY_UPDATE_MAX,
             eval_policy_update_min: EVAL_POLICY_UPDATE_MIN,
+            hindsight_ext_depth: HINDSIGHT_EXT_DEPTH,
+            hindsight_red_depth: HINDSIGHT_RED_DEPTH,
+            hindsight_red_eval: HINDSIGHT_RED_EVAL,
+            optimism_offset: OPTIMISM_OFFSET,
+            optimism_mat_base: OPTIMISM_MATERIAL_BASE,
         }
     }
 }
@@ -319,7 +331,12 @@ impl Config {
             EVAL_POLICY_IMPROVEMENT_SCALE = [self.eval_policy_improvement_scale],
             EVAL_POLICY_OFFSET = [self.eval_policy_offset],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max],
-            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min]
+            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min],
+            HINDSIGHT_EXT_DEPTH = [self.hindsight_ext_depth],
+            HINDSIGHT_RED_DEPTH = [self.hindsight_red_depth],
+            HINDSIGHT_RED_EVAL = [self.hindsight_red_eval],
+            OPTIMISM_OFFSET = [self.optimism_offset],
+            OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base]
         ]
     }
 
@@ -412,7 +429,12 @@ impl Config {
             EVAL_POLICY_IMPROVEMENT_SCALE = [self.eval_policy_improvement_scale, 1, 512, 16],
             EVAL_POLICY_OFFSET = [self.eval_policy_offset, -1536, 1536, 96],
             EVAL_POLICY_UPDATE_MAX = [self.eval_policy_update_max, 1, 4096, 144],
-            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min, 1, 4096, 144]
+            EVAL_POLICY_UPDATE_MIN = [self.eval_policy_update_min, 1, 4096, 144],
+            HINDSIGHT_EXT_DEPTH = [self.hindsight_ext_depth, 1, 8192, 256],
+            HINDSIGHT_RED_DEPTH = [self.hindsight_ext_depth, 1, 8192, 128],
+            HINDSIGHT_RED_EVAL = [self.hindsight_red_eval, -4096, 4096, 8],
+            OPTIMISM_OFFSET = [self.optimism_offset, -4096, 4096, 16],
+            OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256]
         ]
     }
 
