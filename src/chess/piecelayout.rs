@@ -180,7 +180,7 @@ impl PieceLayout {
     pub fn king_sq(&self, colour: Colour) -> Square {
         let king_bb = self.pieces[PieceType::King] & self.colours[colour];
         debug_assert_eq!(king_bb.count(), 1);
-        king_bb.first()
+        king_bb.first().unwrap()
     }
 }
 
