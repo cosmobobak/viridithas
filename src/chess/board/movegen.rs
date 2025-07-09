@@ -473,12 +473,10 @@ impl Board {
             ep_bb.north_west_one() & our_pawns
         };
 
-        if attacks_west != SquareSet::EMPTY {
-            let from_sq = attacks_west.first();
+        for from_sq in attacks_west {
             move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
         }
-        if attacks_east != SquareSet::EMPTY {
-            let from_sq = attacks_east.first();
+        for from_sq in attacks_east {
             move_list.push::<true>(Move::new_with_flags(from_sq, ep_sq, MoveFlags::EnPassant));
         }
     }
@@ -621,7 +619,7 @@ impl Board {
         let freespace = !(our_pieces | their_pieces);
         let our_king = bbs.pieces[King] & our_pieces;
         debug_assert_eq!(our_king.count(), 1);
-        let our_king_sq = our_king.first();
+        let our_king_sq = our_king.first().unwrap();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -636,7 +634,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first().unwrap()]
         } else {
             SquareSet::FULL
         };
@@ -716,7 +714,7 @@ impl Board {
         let their_pieces = bbs.colours[!C::COLOUR];
         let our_king = bbs.pieces[King] & our_pieces;
         debug_assert_eq!(our_king.count(), 1);
-        let our_king_sq = our_king.first();
+        let our_king_sq = our_king.first().unwrap();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -728,7 +726,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first()]
+            RAY_INTERSECTING[our_king_sq][self.state.threats.checkers.first().unwrap()]
         } else {
             SquareSet::FULL
         };
@@ -971,7 +969,7 @@ impl Board {
         let freespace = !blockers;
         let our_king = bbs.pieces[PieceType::King] & our_pieces;
         debug_assert_eq!(our_king.count(), 1);
-        let our_king_sq = our_king.first();
+        let our_king_sq = our_king.first().unwrap();
 
         if self.state.threats.checkers.count() > 1 {
             // we're in double-check, so we can only move the king.
@@ -983,7 +981,7 @@ impl Board {
         }
 
         let valid_target_squares = if self.in_check() {
-            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first()]
+            RAY_BETWEEN[our_king_sq][self.state.threats.checkers.first().unwrap()]
         } else {
             SquareSet::FULL
         };

@@ -37,7 +37,7 @@ pub const fn set_occupancy(
 
     let mut count = 0;
     while count < bits_in_mask {
-        let square = attack_mask.first();
+        let square = attack_mask.first().unwrap();
         attack_mask = attack_mask.remove_square(square);
         // this bitwise AND seems really weird
         if index & (1 << count) != 0 {

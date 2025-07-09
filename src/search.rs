@@ -1781,8 +1781,8 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
     let white_king = kings & bbs.colours[Colour::White];
     let black_king = kings & bbs.colours[Colour::Black];
 
-    let white_king_ray = RAY_FULL[to][white_king.first()];
-    let black_king_ray = RAY_FULL[to][black_king.first()];
+    let white_king_ray = RAY_FULL[to][white_king.first().unwrap()];
+    let black_king_ray = RAY_FULL[to][black_king.first().unwrap()];
 
     let allowed = !(white_pinned | black_pinned)
         | (white_pinned & white_king_ray)

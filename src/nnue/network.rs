@@ -18,7 +18,6 @@ use crate::{
         board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
-        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
@@ -1039,8 +1038,9 @@ impl BucketAccumulatorCache {
         colour: Colour,
         acc: &mut Accumulator,
     ) {
-        let king =
-            SquareSet::first(board_state.pieces[PieceType::King] & board_state.colours[colour]);
+        let king = (board_state.pieces[PieceType::King] & board_state.colours[colour])
+            .first()
+            .unwrap();
         let bucket = BUCKET_MAP[king.relative_to(colour)];
         let cache_acc = self.accs[bucket].select_mut(colour);
 
