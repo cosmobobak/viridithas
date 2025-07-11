@@ -9,6 +9,7 @@ use crate::chess::{
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct Move {
     data: NonZeroU16,
 }
