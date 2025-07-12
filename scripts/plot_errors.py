@@ -11,75 +11,85 @@
 import matplotlib.pyplot as plt
 import numpy as np
 # from qbstyles import mpl_style
+
 # mpl_style(dark=True)
 
-def load_error_values(filename):
-    """Load error values from file, extracting numeric values."""
+
+def load_values(filename, prefix):
+    """Load values from file with given prefix."""
     values = []
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         for line in f:
-            if line.startswith('ERROR: '):
+            if line.startswith(f"{prefix}: "):
                 try:
-                    value = float(line.split(': ')[1].strip())
+                    value = float(line.split(": ")[1].strip())
                     values.append(value)
                 except (ValueError, IndexError):
                     continue
     return np.array(values)
 
+
+def remap(values, scale):
+    """Pass values through the sigmoid function, then scale them."""
+    return 1 / (1 + np.exp(-values)) * scale
+
+
+show_eval = False
+
+
 def main():
     # Load data
-    error_values = load_error_values('error_values.txt')
-    
+    error_values = load_values("error_values.txt", "ERROR")
+    eval_values = load_values("eval_values.txt", "EVAL")
+
+    error_values = np.sqrt(remap(error_values, 0.25))
+    eval_values = remap(eval_values, 1.0)
+
     print(f"Loaded {len(error_values)} error values")
-    print(f"Range: {error_values.min():.6f} to {error_values.max():.6f}")
-    print(f"Mean: {error_values.mean():.6f}")
-    print(f"Std: {error_values.std():.6f}")
-    
-    # Create visualization
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle('Distribution of Benchmark Error Values', fontsize=16)
-    # turn off grid for all axes
-    # for ax in axes.flat:
-    #     ax.grid(False)
-    
-    # Histogram
-    axes[0, 0].hist(error_values, bins=100, alpha=0.7, edgecolor='black')
-    axes[0, 0].set_title('Histogram of Error Values')
-    axes[0, 0].set_xlabel('Error Value')
-    axes[0, 0].set_ylabel('Frequency')
-    # axes[0, 0].grid(False)
-    
-    # Box plot
-    axes[0, 1].boxplot(error_values)
-    axes[0, 1].set_title('Box Plot of Error Values')
-    axes[0, 1].set_ylabel('Error Value')
-    # axes[0, 1].grid(False)
-    
-    # Density plot
-    axes[1, 0].hist(error_values, bins=100, density=True, alpha=0.7, edgecolor='black')
-    axes[1, 0].set_title('Density Distribution')
-    axes[1, 0].set_xlabel('Error Value')
-    axes[1, 0].set_ylabel('Density')
-    # axes[1, 0].grid(False)
-    
-    # Time series (sample)
-    sample_size = min(10000, len(error_values))
-    sample_indices = np.linspace(0, len(error_values)-1, sample_size, dtype=int)
-    axes[1, 1].plot(error_values[sample_indices], alpha=0.6, linewidth=0.5)
-    axes[1, 1].set_title(f'Error Values Over Time (Sample of {sample_size})')
-    axes[1, 1].set_xlabel('Sample Index')
-    axes[1, 1].set_ylabel('Error Value')
-    axes[1, 1].grid(False)
-    
+    print(f"Loaded {len(eval_values)} evaluation values")
+
+    # Create visualization - just density plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Density plots for both datasets
+    ax.hist(
+        error_values,
+        bins=500,
+        range=(0, 1 if show_eval else np.max(error_values)),
+        density=True,
+        alpha=0.6,
+        label="Errors",
+        # edgecolor="black",
+    )
+    if show_eval:
+        ax.hist(
+            eval_values,
+            bins=500,
+            range=(0, 1),
+            density=True,
+            alpha=0.6,
+            label="Evaluations",
+            # edgecolor="black",
+        )
+    ax.set_title("density plot of errors and evaluations")
+    ax.set_xlabel("value (0 to 1 in sigmoid space)")
+    ax.set_ylabel("density")
+    ax.legend()
+
     plt.tight_layout()
-    plt.savefig('error_distribution.png', dpi=300, bbox_inches='tight')
-    print("Visualization saved as 'error_distribution.png'")
-    
-    # Additional statistics
-    percentiles = [1, 5, 25, 50, 75, 95, 99]
-    print("\nPercentiles:")
-    for p in percentiles:
-        print(f"{p}th: {np.percentile(error_values, p):.6f}")
+    plt.savefig("density_plot.png", dpi=300, bbox_inches="tight")
+    print("Visualization saved as 'density_plot.png'")
+
+    # Statistics for both datasets
+    for name, values in [("Error", error_values), ("Evaluation", eval_values)]:
+        if len(values) > 0:
+            print(f"\n{name} Statistics:")
+            print(f"  Range: {values.min():.6f} to {values.max():.6f}")
+            print(f"  Mean: {values.mean():.6f}")
+            print(f"  Std: {values.std():.6f}")
+        else:
+            print(f"\n{name} Statistics: No data found")
+
 
 if __name__ == "__main__":
     main()

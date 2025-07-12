@@ -27,6 +27,10 @@ ANNUEP:
 - quantisation
 - training run length
 - optimiser
+- variance head
+  - in positions with high variance, weight corrhist higher
+  - lmr adjustment with error
+  - eval adjustment for contempt
 
 How do to adversarial datagen?
 Run 5k nodes for your side AND their side, recording your evaluations
