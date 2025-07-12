@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -21,16 +23,21 @@ pub enum Subcommands {
     /// Quantise a network parameter file.
     Quantise {
         /// Path to input network parameter file.
-        input: std::path::PathBuf,
+        input: PathBuf,
         /// Path to output network parameter file.
-        output: std::path::PathBuf,
+        output: PathBuf,
     },
     /// Merge the factorisers in a network parameter file.
     Merge {
         /// Path to input network parameter file.
-        input: std::path::PathBuf,
+        input: PathBuf,
         /// Path to output network parameter file.
-        output: std::path::PathBuf,
+        output: PathBuf,
+    },
+    /// Dump the verbatim network to a file.
+    Verbatim {
+        /// Path to output verbatim network file.
+        output: PathBuf,
     },
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
@@ -38,13 +45,13 @@ pub enum Subcommands {
     #[cfg(feature = "datagen")]
     CountPositions {
         /// Path to input packed game record, or directory containing only packed game records.
-        input: std::path::PathBuf,
+        input: PathBuf,
     },
     /// Analyse a packed game record
     #[cfg(feature = "datagen")]
     Analyse {
         /// Path to input packed game record.
-        input: std::path::PathBuf,
+        input: PathBuf,
     },
     /// Emit configuration for SPSA
     Spsa {
@@ -55,9 +62,9 @@ pub enum Subcommands {
     #[cfg(feature = "datagen")]
     Splat {
         /// Path to input packed game record.
-        input: std::path::PathBuf,
+        input: PathBuf,
         /// Output path.
-        output: std::path::PathBuf,
+        output: PathBuf,
         /// Splat into marlinformat instead of bulletformat.
         #[clap(long)]
         marlinformat: bool,
@@ -69,7 +76,7 @@ pub enum Subcommands {
         limit: Option<usize>,
         /// Override the filter settings.
         #[clap(long)]
-        cfg_path: Option<std::path::PathBuf>,
+        cfg_path: Option<PathBuf>,
     },
     /// Generate self-play data
     #[cfg(feature = "datagen")]
@@ -82,10 +89,10 @@ pub enum Subcommands {
         threads: usize,
         /// Path to a tablebases folder
         #[clap(long, value_name = "PATH")]
-        tbs: Option<std::path::PathBuf>,
+        tbs: Option<PathBuf>,
         /// Path to a book file to use for starting positions
         #[clap(long, value_name = "PATH")]
-        book: Option<std::path::PathBuf>,
+        book: Option<PathBuf>,
         /// Limit by depth instead of nodes
         #[clap(long)]
         depth_limit: bool,

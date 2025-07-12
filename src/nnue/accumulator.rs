@@ -1,6 +1,8 @@
-use crate::chess::piece::Colour;
-
-use super::network::{feature::FeatureIndex, Align64, MovedPiece, UpdateBuffer, INPUT, L1_SIZE};
+use crate::{
+    chess::piece::Colour,
+    nnue::network::{feature::FeatureIndex, MovedPiece, UpdateBuffer, INPUT, L1_SIZE},
+    util::Align64,
+};
 
 /// Activations of the hidden layer.
 pub struct Accumulator {
