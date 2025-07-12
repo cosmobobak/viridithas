@@ -48,6 +48,8 @@ pub const INPUT: usize = (12 - MERGE_KING_PLANES as usize) * 64;
 /// This is to allow for the sigmoid activation to differentiate positions with
 /// a small difference in evaluation.
 const SCALE: i32 = 400;
+/// The amount to scale the error by.
+pub const ERROR_MAX: i32 = 1024;
 /// The size of one-half of the hidden layer of the network.
 pub const L1_SIZE: usize = 2048;
 /// The size of the second layer of the network.
@@ -1433,7 +1435,7 @@ impl NNUEState {
 
     /// Evaluate the final layer on the partial activations.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> i32 {
+    pub fn evaluate(&self, nn: &NNUEParams, stm: Colour, out: usize) -> (i32, i32) {
         let acc = &self.accumulators[self.current_acc];
 
         debug_assert!(acc.correct[0] && acc.correct[1]);
@@ -1475,7 +1477,13 @@ impl NNUEState {
             &mut error_output,
         );
 
-        (l3_output * SCALE as f32) as i32
+        let sigmoided_error = 1.0 / (1.0 + (-error_output).exp());
+        let scaled_error = (sigmoided_error * 4.0).min(1.0);
+
+        let v = (l3_output * SCALE as f32) as i32;
+        let err = (scaled_error * ERROR_MAX as f32) as i32;
+
+        (v, err)
     }
 }
 

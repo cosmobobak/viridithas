@@ -76,13 +76,25 @@ impl Board {
     pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
-        let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
+        let (v, err) = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
 
         // clamp the value into the valid range.
         // this basically never comes up, but the network will
         // occasionally output OOB values in crazy positions with
         // massive material imbalances.
-        v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
+        let v = v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
+
+        // if the value is far from the TB range, we scale it upwards if error is high.
+        if v.abs() < MINIMUM_TB_WIN_SCORE / 2 {
+            let bonus = err / 32;
+            v + if self.turn() == Colour::White {
+                bonus
+            } else {
+                -bonus
+            }
+        } else {
+            v
+        }
     }
 
     pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
@@ -90,11 +102,13 @@ impl Board {
         if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
             && self.state.bbs.is_material_draw()
         {
-            return if self.turn() == Colour::White {
+            let v = if self.turn() == Colour::White {
                 draw_score(t, nodes, self.turn())
             } else {
                 -draw_score(t, nodes, self.turn())
             };
+
+            return v;
         }
         // apply all in-waiting updates to generate a valid
         // neural network accumulator state.

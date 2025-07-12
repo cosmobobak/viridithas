@@ -712,6 +712,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                         .with_context(|| "the thread headers are empty.")?;
                     t1.nnue
                         .evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
+                        .0
                 };
                 println!("{eval}");
                 Ok(())
