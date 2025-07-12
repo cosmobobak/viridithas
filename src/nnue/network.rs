@@ -127,6 +127,10 @@ struct UnquantisedNetwork {
     l3f_weights:   [f32; L3_SIZE],
     l3x_biases:    [f32; OUTPUT_BUCKETS],
     l3f_biases:    [f32; 1],
+    e3x_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    e3f_weights:   [f32; L3_SIZE],
+    e3x_biases:    [f32; OUTPUT_BUCKETS],
+    e3f_biases:    [f32; 1],
 }
 
 /// The floating-point parameters of the network, after de-factorisation.
@@ -141,6 +145,8 @@ struct MergedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
+    e3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    e3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
 /// A quantised network file, for compressed embedding.
@@ -156,6 +162,8 @@ struct QuantisedNetwork {
     l2_biases:   [[f32; L3_SIZE]; OUTPUT_BUCKETS],
     l3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
     l3_biases:    [f32; OUTPUT_BUCKETS],
+    e3_weights:  [[f32; OUTPUT_BUCKETS]; L3_SIZE],
+    e3_biases:    [f32; OUTPUT_BUCKETS],
 }
 
 /// The parameters of viri's neural network, quantised and permuted
@@ -171,6 +179,8 @@ pub struct NNUEParams {
     pub l2_bias:        [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
     pub l3_bias:        [f32; OUTPUT_BUCKETS],
+    pub e3_weights:     [Align64<[f32; L3_SIZE]>; OUTPUT_BUCKETS],
+    pub e3_bias:        [f32; OUTPUT_BUCKETS],
 }
 
 // const REPERMUTE_INDICES: [usize; L1_SIZE / 2] = {
