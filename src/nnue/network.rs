@@ -21,11 +21,12 @@ use crate::{
         types::Square,
     },
     image::{self, Image},
-    nnue,
+    nnue::{
+        self,
+        accumulator::{self, Accumulator},
+    },
     util::{self, Align64, MAX_PLY},
 };
-
-use super::accumulator::{self, Accumulator};
 
 pub mod feature;
 pub mod layers;
