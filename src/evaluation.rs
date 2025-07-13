@@ -87,7 +87,11 @@ impl Board {
         // if the value is far from the TB range, we scale it upwards if error is high.
         if v.abs() < MINIMUM_TB_WIN_SCORE / 2 {
             let bonus = err / 32;
-            v + bonus
+            v + if self.turn() == Colour::White {
+                bonus
+            } else {
+                -bonus
+            }
         } else {
             v
         }
