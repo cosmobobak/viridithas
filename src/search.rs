@@ -34,6 +34,7 @@ use crate::{
     },
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
+    nnue::network::ERROR_MAX,
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -583,7 +584,7 @@ pub fn quiescence<NT: NodeType>(
         return if in_check {
             0
         } else {
-            board.evaluate(t, info.nodes.get_local())
+            board.evaluate(t, info.nodes.get_local()).0
         };
     }
 
@@ -627,7 +628,7 @@ pub fn quiescence<NT: NodeType>(
         let v = *tt_eval;
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
-            raw_eval = board.evaluate(t, info.nodes.get_local());
+            raw_eval = board.evaluate(t, info.nodes.get_local()).0;
         } else {
             // if the TT eval is not VALUE_NONE, use it.
             raw_eval = v;
@@ -650,7 +651,7 @@ pub fn quiescence<NT: NodeType>(
         }
     } else {
         // otherwise, use the static evaluation.
-        raw_eval = board.evaluate(t, info.nodes.get_local());
+        raw_eval = board.evaluate(t, info.nodes.get_local()).0;
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
@@ -821,7 +822,7 @@ pub fn alpha_beta<NT: NodeType>(
             return if in_check {
                 0
             } else {
-                board.evaluate(t, info.nodes.get_local())
+                board.evaluate(t, info.nodes.get_local()).0
             };
         }
 
@@ -938,27 +939,32 @@ pub fn alpha_beta<NT: NodeType>(
     let raw_eval;
     let static_eval;
     let correction;
+    let error;
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
         correction = 0;
+        error = ERROR_MAX;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
         static_eval = t.ss[height].eval;
         correction = 0;
+        error = t.ss[height].error;
         t.nnue.hint_common_access(board, t.nnue_params);
     } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
         let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
-            raw_eval = board.evaluate(t, info.nodes.get_local());
+            (raw_eval, error) = board.evaluate(t, info.nodes.get_local());
         } else {
             // if the TT eval is not VALUE_NONE, use it.
             raw_eval = v;
+            // TODO: properly roundtrip the error. For now we're just guessing the middle.
+            error = ERROR_MAX / 2;
             if NT::PV {
                 t.nnue.hint_common_access(board, t.nnue_params);
             }
@@ -967,7 +973,7 @@ pub fn alpha_beta<NT: NodeType>(
         static_eval = adj_shuffle(board, t, info, raw_eval, clock) + correction;
     } else {
         // otherwise, use the static evaluation.
-        raw_eval = board.evaluate(t, info.nodes.get_local());
+        (raw_eval, error) = board.evaluate(t, info.nodes.get_local());
 
         // store the eval into the TT. We know that we won't overwrite anything,
         // because this branch is one where there wasn't a TT-hit.
@@ -987,6 +993,7 @@ pub fn alpha_beta<NT: NodeType>(
     }
 
     t.ss[height].eval = static_eval;
+    t.ss[height].error = error;
 
     // value-difference based policy update.
     if !NT::ROOT {
@@ -1071,7 +1078,7 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && static_eval - rfp_margin(info, depth, improving, correction) >= beta
+            && static_eval - rfp_margin(info, depth, improving, correction, error) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
@@ -1631,9 +1638,10 @@ pub fn alpha_beta<NT: NodeType>(
 }
 
 /// The margin for Reverse Futility Pruning.
-fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
+fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32, error: i32) -> i32 {
     info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
         + correction.abs() / 2
+        + (error / 32 - 16)
 }
 
 /// Update the main and continuation history tables for a batch of moves.

@@ -73,7 +73,7 @@ impl Board {
             / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
+    pub fn evaluate_nnue(&self, t: &ThreadData) -> (i32, i32) {
         // get the raw network output
         let output_bucket = network::output_bucket(self);
         let (v, err) = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
@@ -85,20 +85,10 @@ impl Board {
         let v = v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1);
 
         // if the value is far from the TB range, we scale it upwards if error is high.
-        if v.abs() < MINIMUM_TB_WIN_SCORE / 2 {
-            let bonus = err / 32;
-            let pov_bonus = if self.turn() == t.stm_at_root {
-                bonus
-            } else {
-                -bonus
-            };
-            v + pov_bonus
-        } else {
-            v
-        }
+        (v, err)
     }
 
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
+    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> (i32, i32) {
         // detect draw by insufficient material
         if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
             && self.state.bbs.is_material_draw()
@@ -109,7 +99,7 @@ impl Board {
                 -draw_score(t, nodes, self.turn())
             };
 
-            return v;
+            return (v, 0);
         }
         // apply all in-waiting updates to generate a valid
         // neural network accumulator state.

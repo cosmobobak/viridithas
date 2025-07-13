@@ -4,6 +4,7 @@ use crate::chess::{chessmove::Move, types::ContHistIndex};
 #[allow(clippy::module_name_repetitions)]
 pub struct StackEntry {
     pub eval: i32,
+    pub error: i32,
     pub excluded: Option<Move>,
     pub best_move: Option<Move>,
     pub searching: Option<Move>,

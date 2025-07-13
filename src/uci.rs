@@ -697,7 +697,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                     let t = thread_data
                         .first_mut()
                         .with_context(|| "the thread headers are empty.")?;
-                    let eval = pos.evaluate(t, 0);
+                    let eval = pos.evaluate(t, 0).0;
                     adj_shuffle(&pos, t, &info, eval, pos.fifty_move_counter())
                 };
                 println!("{eval}");
