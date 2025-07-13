@@ -1641,7 +1641,7 @@ pub fn alpha_beta<NT: NodeType>(
 fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32, error: i32) -> i32 {
     info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
         + correction.abs() / 2
-        + (error / 32 - 16)
+        + (error / 16 - 32)
 }
 
 /// Update the main and continuation history tables for a batch of moves.
