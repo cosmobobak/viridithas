@@ -533,23 +533,14 @@ fn aspiration<ThTy: SmpThreadType>(
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
-fn default_move(board: &mut Board, t: &ThreadData, info: &SearchInfo) -> Move {
-    let tt_move =
-        t.tt.probe_for_provisional_info(board.state.keys.zobrist)
-            .and_then(|e| e.0);
+fn default_move(board: &Board, t: &ThreadData, info: &SearchInfo) -> Move {
+    let tt_move = t.tt.probe_move(board.state.keys.zobrist).and_then(|e| e.0);
+
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[board.height()], 0);
-    let mut m = None;
-    while let Some(mov) = mp.next(board, t, info) {
-        if !board.is_legal(mov) {
-            continue;
-        }
-        board.make_move_simple(mov);
-        // if we get here, it means the move is legal.
-        m = Some(mov);
-        board.unmake_move_base();
-        break;
-    }
-    m.expect("Board::default_move called on a position with no legal moves")
+
+    std::iter::from_fn(|| mp.next(board, t, info))
+        .find(|&m| board.is_legal(m))
+        .expect("Board::default_move called on a position with no legal moves")
 }
 
 /// Perform a tactical resolution search, searching only captures and promotions.
