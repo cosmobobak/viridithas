@@ -425,7 +425,7 @@ impl Config {
             MATERIAL_SCALE_BASE = [self.material_scale_base, 1, 4096, 32],
             EVAL_POLICY_IMPROVEMENT_SCALE = [self.eval_policy_improvement_scale, 1, 512, 16],
             HINDSIGHT_EXT_DEPTH = [self.hindsight_ext_depth, 1, 8192, 256],
-            HINDSIGHT_RED_DEPTH = [self.hindsight_ext_depth, 1, 8192, 128],
+            HINDSIGHT_RED_DEPTH = [self.hindsight_red_depth, 1, 8192, 128],
             HINDSIGHT_RED_EVAL = [self.hindsight_red_eval, -4096, 4096, 8],
             OPTIMISM_OFFSET = [self.optimism_offset, -4096, 4096, 16],
             OPTIMISM_MATERIAL_BASE = [self.optimism_mat_base, 1, 8192, 256],
