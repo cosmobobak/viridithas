@@ -25,7 +25,7 @@ V3NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v3$(EXT)
 V4NAME := $(LXE)-$(VERSION)-$(INF)-x86_64-v4$(EXT)
 
 openbench:
-	cargo rustc --release --features tuning -- -C target-cpu=native --emit link=$(NAME)
+	cargo rustc --release -- -C target-cpu=native --emit link=$(NAME)
 
 final-release:
 	cargo rustc --release --features final-release -- -C target-feature=+crt-static -C target-cpu=x86-64 --emit link=$(V1NAME)
