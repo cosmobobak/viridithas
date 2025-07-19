@@ -2,8 +2,8 @@ use std::{
     fmt::{Debug, Display},
     fs::{File, OpenOptions},
     hash::Hasher,
-    io::{BufReader, BufWriter},
-    ops::{Deref, DerefMut},
+    io::{BufReader, BufWriter, Write},
+    mem::size_of,
     path::Path,
     sync::{Mutex, OnceLock},
     time::Duration,
@@ -18,12 +18,11 @@ use crate::{
         board::Board,
         piece::{Black, Col, Colour, Piece, PieceType, White},
         piecelayout::PieceLayout,
-        squareset::SquareSet,
         types::Square,
     },
     image::{self, Image},
     nnue,
-    util::{self, MAX_PLY},
+    util::{self, Align64, MAX_PLY},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -31,6 +30,13 @@ use super::accumulator::{self, Accumulator};
 pub mod feature;
 pub mod layers;
 
+/// The embedded neural network parameters.
+pub static EMBEDDED_NNUE: &[u8] = include_bytes_aligned!("../../viridithas.nnue.zst");
+
+/// Whether the embedded network can be used verbatim.
+pub const EMBEDDED_NNUE_VERBATIM: bool = false;
+// Assertion for correctness of the embedded network:
+const _: () = assert!(!EMBEDDED_NNUE_VERBATIM || EMBEDDED_NNUE.len() == size_of::<NNUEParams>());
 /// Whether to perform the king-plane merging optimisation.
 pub const MERGE_KING_PLANES: bool = true;
 /// Whether the unquantised network has a feature factoriser.
@@ -47,8 +53,12 @@ pub const L1_SIZE: usize = 2048;
 pub const L2_SIZE: usize = 16;
 /// The size of the third layer of the network.
 pub const L3_SIZE: usize = 32;
-/// chunking constant for l1
-pub const L1_CHUNK_PER_32: usize = std::mem::size_of::<i32>() / std::mem::size_of::<i8>();
+/// The quantisation factor for the feature transformer weights.
+const QA: i16 = 255;
+/// The quantisation factor for the L1 weights.
+const QB: i16 = 64;
+/// Chunking constant for l1
+pub const L1_CHUNK_PER_32: usize = size_of::<i32>() / size_of::<i8>();
 /// The structure of the king-buckets.
 #[rustfmt::skip]
 const HALF_BUCKET_MAP: [usize; 32] = [
@@ -63,6 +73,8 @@ const HALF_BUCKET_MAP: [usize; 32] = [
 ];
 /// The number of buckets in the feature transformer.
 pub const BUCKETS: usize = max!(HALF_BUCKET_MAP) + 1;
+/// The number of output buckets
+pub const OUTPUT_BUCKETS: usize = 8;
 /// The mapping from square to bucket.
 const BUCKET_MAP: [usize; 64] = {
     let mut map = [0; 64];
@@ -80,8 +92,6 @@ const BUCKET_MAP: [usize; 64] = {
     map
 };
 
-/// The number of output buckets
-pub const OUTPUT_BUCKETS: usize = 8;
 /// Get index into the output layer given a board state.
 pub fn output_bucket(pos: &Board) -> usize {
     #![allow(clippy::cast_possible_truncation)]
@@ -89,16 +99,9 @@ pub fn output_bucket(pos: &Board) -> usize {
     (pos.state.bbs.occupied().count() as usize - 2) / DIVISOR
 }
 
-const QA: i16 = 255;
-const QB: i16 = 64;
-
-// read in the binary file containing the network parameters
-// have to do some path manipulation to get relative paths to work
-pub static COMPRESSED_NNUE: &[u8] = include_bytes!("../../viridithas.nnue.zst");
-
 pub fn nnue_checksum() -> u64 {
     let mut hasher = fxhash::FxHasher::default();
-    hasher.write(COMPRESSED_NNUE);
+    hasher.write(EMBEDDED_NNUE);
     for index in REPERMUTE_INDICES {
         hasher.write_usize(index);
     }
@@ -334,7 +337,7 @@ impl UnquantisedNetwork {
             let mut net = Self::zeroed();
             let mem = std::slice::from_raw_parts_mut(
                 util::from_mut(net.as_mut()).cast::<u8>(),
-                std::mem::size_of::<Self>(),
+                size_of::<Self>(),
             );
             reader.read_exact(mem)?;
             Ok(net)
@@ -359,7 +362,7 @@ impl MergedNetwork {
         macro_rules! dump_layer {
             ($name:expr, $field:expr) => {
                 writeln!(writer, $name)?;
-                let len = std::mem::size_of_val(&$field) / std::mem::size_of::<f32>();
+                let len = size_of_val(&$field) / size_of::<f32>();
                 // SAFETY: lol
                 let slice = unsafe {
                     let ptr = $field.as_ptr().cast::<f32>();
@@ -498,7 +501,7 @@ impl QuantisedNetwork {
                 .chunks_exact_mut(8)
                 .map(|a| a.try_into().unwrap())
                 .collect();
-            let num_chunks = std::mem::size_of::<PermChunk>() / std::mem::size_of::<i16>();
+            let num_chunks = size_of::<PermChunk>() / size_of::<i16>();
 
             #[cfg(target_feature = "avx512f")]
             let num_regs = 8;
@@ -616,7 +619,7 @@ impl QuantisedNetwork {
 
     fn write(&self, writer: &mut impl std::io::Write) -> anyhow::Result<()> {
         let ptr = util::from_ref::<Self>(self).cast::<u8>();
-        let len = std::mem::size_of::<Self>();
+        let len = size_of::<Self>();
         // SAFETY: We're writing a slice of bytes, and we know that the slice is valid.
         writer.write_all(unsafe { std::slice::from_raw_parts(ptr, len) })?;
         Ok(())
@@ -677,6 +680,32 @@ impl NNUEParams {
         static LOCK: Mutex<()> = Mutex::new(());
         // additionally, we'd quite like to cache the results of this function.
         static CACHED: OnceLock<Mmap> = OnceLock::new();
+
+        if EMBEDDED_NNUE_VERBATIM {
+            // if we're using the verbatim network, we don't need to decompress anything.
+            // just return a reference to the static network.
+            // SAFETY: The static network is valid for the lifetime of the program,
+            // and is the same size as the NNUEParams struct.
+            #[allow(clippy::cast_ptr_alignment)]
+            unsafe {
+                let ptr = EMBEDDED_NNUE.as_ptr();
+                assert_eq!(
+                    size_of::<Self>(),
+                    EMBEDDED_NNUE.len(),
+                    "Verbatim NNUE is not the right size, expected {} bytes, got {} bytes",
+                    size_of::<Self>(),
+                    EMBEDDED_NNUE.len()
+                );
+                assert_eq!(
+                    ptr.align_offset(64),
+                    0,
+                    "Embedded NNUE is not aligned to 64 bytes, ptr is {ptr:p}"
+                );
+                // SAFETY: We know that the pointer is valid and aligned.
+                return Ok(&*ptr.cast::<Self>());
+            }
+        }
+
         let _guard = LOCK.lock().unwrap();
         // check if we've already loaded the weights
         if let Some(cached) = CACHED.get() {
@@ -730,11 +759,11 @@ impl NNUEParams {
         let mut mem = unsafe {
             std::slice::from_raw_parts_mut(
                 util::from_mut(net.as_mut()).cast::<u8>(),
-                std::mem::size_of::<QuantisedNetwork>(),
+                size_of::<QuantisedNetwork>(),
             )
         };
         let expected_bytes = mem.len() as u64;
-        let mut decoder = ZstdDecoder::new(COMPRESSED_NNUE)
+        let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
@@ -759,7 +788,7 @@ impl NNUEParams {
             .with_context(|| format!("Failed to open temporary file at {}", temp_path.display()))?;
 
         // Allocate the file to the right size
-        let size = std::mem::size_of::<Self>();
+        let size = size_of::<Self>();
         file.set_len(size as u64).with_context(|| {
             format!(
                 "Failed to set length of file at {} to {size}",
@@ -893,9 +922,9 @@ impl NNUEParams {
         };
 
         anyhow::ensure!(
-            mmap.len() == std::mem::size_of::<Self>(),
+            mmap.len() == size_of::<Self>(),
             "Wrong number of bytes: expected {}, got {}",
-            std::mem::size_of::<Self>(),
+            size_of::<Self>(),
             mmap.len()
         );
 
@@ -975,6 +1004,23 @@ pub fn merge(input: &std::path::Path, output: &std::path::Path) -> anyhow::Resul
     Ok(())
 }
 
+pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
+    let output_file = File::create(output)
+        .with_context(|| format!("Failed to create file at {}", output.display()))?;
+    let mut writer = BufWriter::new(output_file);
+    let network = NNUEParams::decompress_and_alloc()
+        .with_context(|| "Failed to decompress and allocate NNUEParams")?;
+    // SAFETY: look,
+    let slice = unsafe {
+        std::slice::from_raw_parts(
+            util::from_ref::<NNUEParams>(network).cast::<u8>(),
+            size_of::<NNUEParams>(),
+        )
+    };
+    writer.write_all(slice)?;
+    Ok(())
+}
+
 /// The size of the stack used to store the activations of the hidden layer.
 const ACC_STACK_SIZE: usize = MAX_PLY + 1;
 
@@ -1039,8 +1085,9 @@ impl BucketAccumulatorCache {
         colour: Colour,
         acc: &mut Accumulator,
     ) {
-        let king =
-            SquareSet::first(board_state.pieces[PieceType::King] & board_state.colours[colour]);
+        let king = (board_state.pieces[PieceType::King] & board_state.colours[colour])
+            .first()
+            .unwrap();
         let bucket = BUCKET_MAP[king.relative_to(colour)];
         let cache_acc = self.accs[bucket].select_mut(colour);
 
@@ -1063,22 +1110,6 @@ impl BucketAccumulatorCache {
         acc.correct[colour] = true;
 
         self.board_states[colour][bucket] = board_state;
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[repr(C, align(64))]
-pub struct Align64<T>(pub T);
-
-impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
-    type Target = [T; SIZE];
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 

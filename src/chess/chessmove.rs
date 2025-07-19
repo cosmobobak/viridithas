@@ -85,15 +85,15 @@ impl Move {
     }
 
     pub const fn from(self) -> Square {
+        let index = (self.data.get() & Self::SQ_MASK) as u8;
         // SAFETY: SQ_MASK guarantees that this is in bounds.
-        unsafe { Square::new_unchecked((self.data.get() & Self::SQ_MASK) as u8) }
+        unsafe { Square::new_unchecked(index) }
     }
 
     pub const fn to(self) -> Square {
+        let index = ((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8;
         // SAFETY: SQ_MASK guarantees that this is in bounds.
-        unsafe {
-            Square::new_unchecked(((self.data.get() >> Self::TO_SHIFT) & Self::SQ_MASK) as u8)
-        }
+        unsafe { Square::new_unchecked(index) }
     }
 
     pub fn promotion_type(self) -> Option<PieceType> {
