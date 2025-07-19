@@ -41,6 +41,8 @@ pub enum Subcommands {
     },
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
+    /// Dry-run the NNUE inference.
+    NNUEDryRun,
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
     CountPositions {
