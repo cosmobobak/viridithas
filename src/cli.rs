@@ -56,6 +56,7 @@ pub enum Subcommands {
     /// Emit configuration for SPSA
     Spsa {
         /// Emit configuration in JSON format instead of openbench format
+        #[clap(long)]
         json: bool,
     },
     /// Splat a packed game record into bulletformat records (or other format)
