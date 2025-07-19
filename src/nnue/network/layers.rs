@@ -317,14 +317,9 @@ mod x86simd {
                     let product_two = simd::pack_i16_to_u8(productc, productd);
 
                     // store to the ft output buffer
-                    simd::store_u8(ft_outputs.as_mut_ptr().add(offset + i).cast(), product_one);
-                    simd::store_u8(
-                        ft_outputs
-                            .as_mut_ptr()
-                            .add(offset + i + U8_CHUNK_SIZE)
-                            .cast(),
-                        product_two,
-                    );
+                    let ft_o_ptr = ft_outputs.as_mut_ptr();
+                    simd::store_u8(ft_o_ptr.add(offset + i).cast(), product_one);
+                    simd::store_u8(ft_o_ptr.add(offset + i + U8_CHUNK_SIZE).cast(), product_two);
 
                     // determine which parts of the result are non-zero, to allow l1 propagation to happen sparsely
                     let mut nnz_mask = 0;

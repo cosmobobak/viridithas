@@ -41,6 +41,8 @@ pub enum Subcommands {
     },
     /// Generate graphical visualisations of the NNUE weights.
     VisNNUE,
+    /// Dry-run the NNUE inference.
+    NNUEDryRun,
     /// Count the number of positions contained within one or more packed game records.
     #[cfg(feature = "datagen")]
     CountPositions {
@@ -56,6 +58,7 @@ pub enum Subcommands {
     /// Emit configuration for SPSA
     Spsa {
         /// Emit configuration in JSON format instead of openbench format
+        #[clap(long)]
         json: bool,
     },
     /// Splat a packed game record into bulletformat records (or other format)

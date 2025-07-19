@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{ensure, Context};
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
@@ -1018,6 +1018,23 @@ pub fn dump_verbatim(output: &std::path::Path) -> anyhow::Result<()> {
         )
     };
     writer.write_all(slice)?;
+    Ok(())
+}
+
+pub fn dry_run() -> anyhow::Result<()> {
+    ensure!(
+        EMBEDDED_NNUE_VERBATIM,
+        "We can only efficiently dry-run under MIRI if we skip net decompression."
+    );
+    println!("[#] Constructing Board");
+    let start_pos = Board::default();
+    println!("[#] Generating network parameters");
+    let nnue_params = NNUEParams::decompress_and_alloc()?;
+    println!("[#] Generating network state");
+    let state = NNUEState::new(&start_pos, nnue_params);
+    println!("[#] Running forward pass");
+    let eval = state.evaluate(nnue_params, start_pos.turn(), output_bucket(&start_pos));
+    std::hint::black_box(eval);
     Ok(())
 }
 
