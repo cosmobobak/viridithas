@@ -81,23 +81,29 @@ mod x86simd {
             for i in 0..L1_SIZE / UNROLL {
                 let unroll_offset = i * UNROLL;
                 for (r_idx, reg) in registers.iter_mut().enumerate() {
-                    let src = input.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                    let src = input.as_ptr().add(unroll_offset + r_idx * I16_CHUNK_SIZE);
                     *reg = simd::load_i16(src);
                 }
                 for &sub_block in &sub_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let src = sub_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                        let src = sub_block
+                            .as_ptr()
+                            .add(unroll_offset + r_idx * I16_CHUNK_SIZE);
                         *reg = simd::sub_i16(*reg, simd::load_i16(src));
                     }
                 }
                 for &add_block in &add_blocks {
                     for (r_idx, reg) in registers.iter_mut().enumerate() {
-                        let src = add_block.get_unchecked(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                        let src = add_block
+                            .as_ptr()
+                            .add(unroll_offset + r_idx * I16_CHUNK_SIZE);
                         *reg = simd::add_i16(*reg, simd::load_i16(src));
                     }
                 }
                 for (r_idx, reg) in registers.iter().enumerate() {
-                    let dst = input.get_unchecked_mut(unroll_offset + r_idx * I16_CHUNK_SIZE);
+                    let dst = input
+                        .as_mut_ptr()
+                        .add(unroll_offset + r_idx * I16_CHUNK_SIZE);
                     simd::store_i16(dst, *reg);
                 }
             }
@@ -126,12 +132,12 @@ mod x86simd {
         for i in 0..L1_SIZE / I16_CHUNK_SIZE {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
-                let x = simd::load_i16(input.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_sub = simd::load_i16(s_block.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_add = simd::load_i16(a_block.get_unchecked(i * I16_CHUNK_SIZE));
+                let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_sub = simd::load_i16(s_block.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_add = simd::load_i16(a_block.as_ptr().add(i * I16_CHUNK_SIZE));
                 let t = simd::sub_i16(x, w_sub);
                 let t = simd::add_i16(t, w_add);
-                simd::store_i16(output.get_unchecked_mut(i * I16_CHUNK_SIZE), t);
+                simd::store_i16(output.as_mut_ptr().add(i * I16_CHUNK_SIZE), t);
             }
         }
     }
@@ -162,14 +168,14 @@ mod x86simd {
         for i in 0..L1_SIZE / I16_CHUNK_SIZE {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
-                let x = simd::load_i16(input.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_sub1 = simd::load_i16(s_block1.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_sub2 = simd::load_i16(s_block2.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_add = simd::load_i16(a_block.get_unchecked(i * I16_CHUNK_SIZE));
+                let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_sub1 = simd::load_i16(s_block1.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_sub2 = simd::load_i16(s_block2.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_add = simd::load_i16(a_block.as_ptr().add(i * I16_CHUNK_SIZE));
                 let t = simd::sub_i16(x, w_sub1);
                 let t = simd::sub_i16(t, w_sub2);
                 let t = simd::add_i16(t, w_add);
-                simd::store_i16(output.get_unchecked_mut(i * I16_CHUNK_SIZE), t);
+                simd::store_i16(output.as_mut_ptr().add(i * I16_CHUNK_SIZE), t);
             }
         }
     }
@@ -204,16 +210,16 @@ mod x86simd {
         for i in 0..L1_SIZE / I16_CHUNK_SIZE {
             // SAFETY: we never hold multiple mutable references, we never mutate immutable memory, etc.
             unsafe {
-                let x = simd::load_i16(input.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_sub1 = simd::load_i16(s_block1.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_sub2 = simd::load_i16(s_block2.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_add1 = simd::load_i16(a_block1.get_unchecked(i * I16_CHUNK_SIZE));
-                let w_add2 = simd::load_i16(a_block2.get_unchecked(i * I16_CHUNK_SIZE));
+                let x = simd::load_i16(input.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_sub1 = simd::load_i16(s_block1.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_sub2 = simd::load_i16(s_block2.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_add1 = simd::load_i16(a_block1.as_ptr().add(i * I16_CHUNK_SIZE));
+                let w_add2 = simd::load_i16(a_block2.as_ptr().add(i * I16_CHUNK_SIZE));
                 let t = simd::sub_i16(x, w_sub1);
                 let t = simd::sub_i16(t, w_sub2);
                 let t = simd::add_i16(t, w_add1);
                 let t = simd::add_i16(t, w_add2);
-                simd::store_i16(output.get_unchecked_mut(i * I16_CHUNK_SIZE), t);
+                simd::store_i16(output.as_mut_ptr().add(i * I16_CHUNK_SIZE), t);
             }
         }
     }

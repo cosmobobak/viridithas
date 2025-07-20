@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn prep_net() {
-    let net_path = env::var("EVALFILE").unwrap_or("viridithas.nnue.zst".into());
+    let net_path = env::var("EVALFILE").unwrap_or_else(|_| "viridithas.nnue.zst".into());
     if net_path == "viridithas.nnue.zst" {
         // check if net exists
         if let Err(e) = std::fs::metadata(net_path) {
