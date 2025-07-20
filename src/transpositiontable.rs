@@ -461,7 +461,7 @@ impl TTView<'_> {
         }
     }
 
-    pub fn probe_for_provisional_info(&self, key: u64) -> Option<(Option<Move>, i32)> {
+    pub fn probe_move(&self, key: u64) -> Option<(Option<Move>, i32)> {
         self.probe(key, 0)
             .map(|TTHit { mov, value, .. }| (mov, value))
     }
