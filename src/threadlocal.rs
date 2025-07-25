@@ -15,13 +15,13 @@ use crate::{
 };
 
 #[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
-pub struct ThreadData<'a> {
+pub struct ThreadData {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
     pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
-    pub nnue_params: &'a NNUEParams,
+    pub nnue_params: &'static NNUEParams,
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,

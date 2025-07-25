@@ -35,6 +35,7 @@ mod timemgmt;
 mod transpositiontable;
 mod uci;
 mod util;
+mod threadpool;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
