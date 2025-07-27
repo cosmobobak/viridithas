@@ -97,6 +97,12 @@ const MAIN_HISTORY_BONUS_MAX: i32 = 2707;
 const MAIN_HISTORY_MALUS_MUL: i32 = 236;
 const MAIN_HISTORY_MALUS_OFFSET: i32 = 424;
 const MAIN_HISTORY_MALUS_MAX: i32 = 1392;
+const LOW_PLY_HISTORY_BONUS_MUL: i32 = 364;
+const LOW_PLY_HISTORY_BONUS_OFFSET: i32 = 152;
+const LOW_PLY_HISTORY_BONUS_MAX: i32 = 2707;
+const LOW_PLY_HISTORY_MALUS_MUL: i32 = 236;
+const LOW_PLY_HISTORY_MALUS_OFFSET: i32 = 424;
+const LOW_PLY_HISTORY_MALUS_MAX: i32 = 1392;
 const CONT1_HISTORY_BONUS_MUL: i32 = 298;
 const CONT1_HISTORY_BONUS_OFFSET: i32 = 186;
 const CONT1_HISTORY_BONUS_MAX: i32 = 2901;
@@ -1559,6 +1565,7 @@ pub fn alpha_beta<NT: NodeType>(
                 quiets_tried.as_slice(),
                 best_move,
                 depth + history_depth_boost,
+                height,
             );
         }
 
@@ -1638,8 +1645,10 @@ fn update_quiet_history(
     moves_to_adjust: &[Move],
     best_move: Move,
     depth: i32,
+    ply: usize,
 ) {
     t.update_history(conf, board, moves_to_adjust, best_move, depth);
+    t.update_low_ply_history(conf, board, moves_to_adjust, best_move, depth, ply);
     t.update_continuation_history(conf, board, moves_to_adjust, best_move, depth, 0);
     t.update_continuation_history(conf, board, moves_to_adjust, best_move, depth, 1);
     // t.update_continuation_history(board, moves_to_adjust, best_move, depth, 3);

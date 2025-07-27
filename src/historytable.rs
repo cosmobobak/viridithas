@@ -21,6 +21,18 @@ pub fn main_history_malus(conf: &Config, depth: i32) -> i32 {
         conf.main_history_malus_max,
     )
 }
+pub fn low_ply_history_bonus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.low_ply_history_bonus_mul * depth + conf.low_ply_history_bonus_offset,
+        conf.low_ply_history_bonus_max,
+    )
+}
+pub fn low_ply_history_malus(conf: &Config, depth: i32) -> i32 {
+    i32::min(
+        conf.low_ply_history_malus_mul * depth + conf.low_ply_history_malus_offset,
+        conf.low_ply_history_malus_max,
+    )
+}
 pub fn cont1_history_bonus(conf: &Config, depth: i32) -> i32 {
     i32::min(
         conf.cont1_history_bonus_mul * depth + conf.cont1_history_bonus_offset,
@@ -73,6 +85,7 @@ pub fn cont_history_malus(conf: &Config, depth: i32, index: usize) -> i32 {
     }
 }
 
+pub const LOW_PLY_HISTORY_DEPTH: usize = 5;
 pub const MAX_HISTORY: i16 = i16::MAX / 2;
 pub const CORRECTION_HISTORY_SIZE: usize = 16_384;
 pub const CORRECTION_HISTORY_GRAIN: i32 = 256;
@@ -95,6 +108,21 @@ impl HistoryTable {
     pub const fn new() -> Self {
         Self {
             table: [[0; BOARD_N_SQUARES]; 12],
+        }
+    }
+
+    pub fn boxed() -> Box<Self> {
+        #![allow(clippy::cast_ptr_alignment)]
+        // SAFETY: we're allocating a zeroed block of memory, and then casting it to a Box<Self>
+        // this is fine! because [[HistoryTable; BOARD_N_SQUARES]; 12] is just a bunch of i16s
+        // at base, which are fine to zero-out.
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
         }
     }
 

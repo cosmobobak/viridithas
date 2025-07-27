@@ -34,6 +34,11 @@ use crate::{
     },
 };
 
+use super::{
+    LOW_PLY_HISTORY_BONUS_MAX, LOW_PLY_HISTORY_BONUS_MUL, LOW_PLY_HISTORY_BONUS_OFFSET,
+    LOW_PLY_HISTORY_MALUS_MAX, LOW_PLY_HISTORY_MALUS_MUL, LOW_PLY_HISTORY_MALUS_OFFSET,
+};
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub aspiration_window: i32,
@@ -83,6 +88,12 @@ pub struct Config {
     pub main_history_malus_mul: i32,
     pub main_history_malus_offset: i32,
     pub main_history_malus_max: i32,
+    pub low_ply_history_bonus_mul: i32,
+    pub low_ply_history_bonus_offset: i32,
+    pub low_ply_history_bonus_max: i32,
+    pub low_ply_history_malus_mul: i32,
+    pub low_ply_history_malus_offset: i32,
+    pub low_ply_history_malus_max: i32,
     pub cont1_history_bonus_mul: i32,
     pub cont1_history_bonus_offset: i32,
     pub cont1_history_bonus_max: i32,
@@ -171,6 +182,12 @@ impl Config {
             main_history_malus_mul: MAIN_HISTORY_MALUS_MUL,
             main_history_malus_offset: MAIN_HISTORY_MALUS_OFFSET,
             main_history_malus_max: MAIN_HISTORY_MALUS_MAX,
+            low_ply_history_bonus_mul: LOW_PLY_HISTORY_BONUS_MUL,
+            low_ply_history_bonus_offset: LOW_PLY_HISTORY_BONUS_OFFSET,
+            low_ply_history_bonus_max: LOW_PLY_HISTORY_BONUS_MAX,
+            low_ply_history_malus_mul: LOW_PLY_HISTORY_MALUS_MUL,
+            low_ply_history_malus_offset: LOW_PLY_HISTORY_MALUS_OFFSET,
+            low_ply_history_malus_max: LOW_PLY_HISTORY_MALUS_MAX,
             cont1_history_bonus_mul: CONT1_HISTORY_BONUS_MUL,
             cont1_history_bonus_offset: CONT1_HISTORY_BONUS_OFFSET,
             cont1_history_bonus_max: CONT1_HISTORY_BONUS_MAX,
@@ -298,6 +315,12 @@ impl Config {
             MAIN_HISTORY_MALUS_MUL = [self.main_history_malus_mul],
             MAIN_HISTORY_MALUS_OFFSET = [self.main_history_malus_offset],
             MAIN_HISTORY_MALUS_MAX = [self.main_history_malus_max],
+            LOW_PLY_HISTORY_BONUS_MUL = [self.low_ply_history_bonus_mul],
+            LOW_PLY_HISTORY_BONUS_OFFSET = [self.low_ply_history_bonus_offset],
+            LOW_PLY_HISTORY_BONUS_MAX = [self.low_ply_history_bonus_max],
+            LOW_PLY_HISTORY_MALUS_MUL = [self.low_ply_history_malus_mul],
+            LOW_PLY_HISTORY_MALUS_OFFSET = [self.low_ply_history_malus_offset],
+            LOW_PLY_HISTORY_MALUS_MAX = [self.low_ply_history_malus_max],
             CONT1_HISTORY_BONUS_MUL = [self.cont1_history_bonus_mul],
             CONT1_HISTORY_BONUS_OFFSET = [self.cont1_history_bonus_offset],
             CONT1_HISTORY_BONUS_MAX = [self.cont1_history_bonus_max],
@@ -395,6 +418,12 @@ impl Config {
             MAIN_HISTORY_MALUS_MUL = [self.main_history_malus_mul, 1, 1500, 32],
             MAIN_HISTORY_MALUS_OFFSET = [self.main_history_malus_offset, -1024, 1024, 64],
             MAIN_HISTORY_MALUS_MAX = [self.main_history_malus_max, 1, 4096, 256],
+            LOW_PLY_HISTORY_BONUS_MUL = [self.low_ply_history_bonus_mul, 1, 1500, 32],
+            LOW_PLY_HISTORY_BONUS_OFFSET = [self.low_ply_history_bonus_offset, -1024, 1024, 64],
+            LOW_PLY_HISTORY_BONUS_MAX = [self.low_ply_history_bonus_max, 1, 4096, 256],
+            LOW_PLY_HISTORY_MALUS_MUL = [self.low_ply_history_malus_mul, 1, 1500, 32],
+            LOW_PLY_HISTORY_MALUS_OFFSET = [self.low_ply_history_malus_offset, -1024, 1024, 64],
+            LOW_PLY_HISTORY_MALUS_MAX = [self.low_ply_history_malus_max, 1, 4096, 256],
             CONT1_HISTORY_BONUS_MUL = [self.cont1_history_bonus_mul, 1, 1500, 32],
             CONT1_HISTORY_BONUS_OFFSET = [self.cont1_history_bonus_offset, -1024, 1024, 64],
             CONT1_HISTORY_BONUS_MAX = [self.cont1_history_bonus_max, 1, 4096, 256],

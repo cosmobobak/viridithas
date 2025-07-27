@@ -188,7 +188,10 @@ impl MovePicker {
             m.score = 0;
         }
 
+        let height = pos.height();
+
         t.get_history_scores(pos, ms);
+        t.get_low_ply_history_scores(pos, ms, height);
         t.get_continuation_history_scores(pos, ms, 0);
         t.get_continuation_history_scores(pos, ms, 1);
         // t.get_continuation_history_scores(pos, ms, 3);

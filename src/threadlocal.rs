@@ -1,11 +1,10 @@
 use std::array;
 
 use crate::{
-    chess::board::Board,
-    chess::chessmove::Move,
-    chess::piece::Colour,
+    chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
-        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
+        CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, HistoryTable,
+        ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
@@ -24,6 +23,7 @@ pub struct ThreadData<'a> {
     pub nnue_params: &'a NNUEParams,
 
     pub main_history: ThreatsHistoryTable,
+    pub low_ply_history: Box<HistoryTable>,
     pub tactical_history: Box<CaptureHistoryTable>,
     pub continuation_history: Box<DoubleHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_PLY + 1],
@@ -61,6 +61,7 @@ impl<'a> ThreadData<'a> {
             nnue: nnue::network::NNUEState::new(board, nnue_params),
             nnue_params,
             main_history: ThreatsHistoryTable::new(),
+            low_ply_history: HistoryTable::boxed(),
             tactical_history: CaptureHistoryTable::boxed(),
             continuation_history: DoubleHistoryTable::boxed(),
             killer_move_table: [None; MAX_PLY + 1],

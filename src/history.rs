@@ -9,9 +9,10 @@ use crate::{
         CHESS960,
     },
     historytable::{
-        cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
-        tactical_history_bonus, tactical_history_malus, update_history, CORRECTION_HISTORY_GRAIN,
-        CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
+        cont_history_bonus, cont_history_malus, low_ply_history_bonus, low_ply_history_malus,
+        main_history_bonus, main_history_malus, tactical_history_bonus, tactical_history_malus,
+        update_history, CORRECTION_HISTORY_GRAIN, CORRECTION_HISTORY_MAX,
+        CORRECTION_HISTORY_WEIGHT_SCALE, LOW_PLY_HISTORY_DEPTH,
     },
     search::parameters::Config,
     threadlocal::ThreadData,
@@ -96,6 +97,79 @@ impl ThreadData<'_> {
             threats.contains_square(from),
             threats.contains_square(to),
         ))
+    }
+    /// Update the history counters of a batch of moves.
+    pub fn update_low_ply_history(
+        &mut self,
+        conf: &Config,
+        pos: &Board,
+        moves_to_adjust: &[Move],
+        best_move: Move,
+        depth: i32,
+        ply: usize,
+    ) {
+        if ply > LOW_PLY_HISTORY_DEPTH {
+            return;
+        }
+        for &m in moves_to_adjust {
+            let from = m.from();
+            let piece_moved = pos.state.mailbox[from];
+            let to = m.history_to_square();
+            let val = self.low_ply_history.get_mut(piece_moved.unwrap(), to);
+            let delta = if m == best_move {
+                low_ply_history_bonus(conf, depth)
+            } else {
+                -low_ply_history_malus(conf, depth)
+            };
+            update_history(val, delta);
+        }
+    }
+
+    /// Update the history counters for a single move.
+    #[allow(dead_code)]
+    pub fn update_low_ply_history_single(
+        &mut self,
+        to: Square,
+        moved: Piece,
+        delta: i32,
+        ply: usize,
+    ) {
+        if ply > LOW_PLY_HISTORY_DEPTH {
+            return;
+        }
+        let val = self.low_ply_history.get_mut(moved, to);
+        update_history(val, delta);
+    }
+
+    /// Get the history scores for a batch of moves.
+    pub(super) fn get_low_ply_history_scores(
+        &self,
+        pos: &Board,
+        ms: &mut [MoveListEntry],
+        ply: usize,
+    ) {
+        if ply > LOW_PLY_HISTORY_DEPTH {
+            return;
+        }
+        for m in ms {
+            let from = m.mov.from();
+            let piece_moved = pos.state.mailbox[from];
+            let to = m.mov.history_to_square();
+            m.score += 8 * i32::from(self.low_ply_history.get(piece_moved.unwrap(), to))
+                / (1 + ply as i32);
+        }
+    }
+
+    /// Get the history score for a single move.
+    #[allow(dead_code)]
+    pub fn get_low_ply_history_score(&self, pos: &Board, m: Move, ply: usize) -> i32 {
+        if ply > LOW_PLY_HISTORY_DEPTH {
+            return 0;
+        }
+        let from = m.from();
+        let piece_moved = pos.state.mailbox[from];
+        let to = m.history_to_square();
+        8 * i32::from(self.low_ply_history.get(piece_moved.unwrap(), to)) / (1 + ply as i32)
     }
 
     /// Update the tactical history counters of a batch of moves.
