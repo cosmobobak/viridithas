@@ -38,7 +38,7 @@ mod util;
 
 #[cfg(feature = "datagen")]
 use cli::Subcommands::{Analyse, CountPositions, Datagen, Splat};
-use cli::Subcommands::{Bench, Merge, Perft, Quantise, Spsa, VisNNUE};
+use cli::Subcommands::{Bench, Merge, NNUEDryRun, Perft, Quantise, Spsa, Verbatim, VisNNUE};
 
 /// The name of the engine.
 pub static NAME: &str = "Viridithas";
@@ -59,8 +59,10 @@ fn main() -> anyhow::Result<()> {
     match cli.subcommand {
         Some(Perft) => perft::gamut(),
         Some(VisNNUE) => nnue::network::visualise_nnue(),
+        Some(NNUEDryRun) => nnue::network::dry_run(),
         Some(Quantise { input, output }) => nnue::network::quantise(&input, &output),
         Some(Merge { input, output }) => nnue::network::merge(&input, &output),
+        Some(Verbatim { output }) => nnue::network::dump_verbatim(&output),
         #[cfg(feature = "datagen")]
         Some(Analyse { input }) => datagen::dataset_stats(&input),
         #[cfg(feature = "datagen")]

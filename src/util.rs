@@ -1,6 +1,9 @@
 pub mod depth;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use crate::evaluation::MATE_SCORE;
 
@@ -77,4 +80,22 @@ where
     T: ?Sized,
 {
     r
+}
+
+/// A 64-byte aligned wrapper type for data that needs to be aligned to 64 bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C, align(64))]
+pub struct Align64<T: ?Sized>(pub T);
+
+impl<T, const SIZE: usize> Deref for Align64<[T; SIZE]> {
+    type Target = [T; SIZE];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T, const SIZE: usize> DerefMut for Align64<[T; SIZE]> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }

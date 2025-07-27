@@ -57,82 +57,82 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_WINDOW: i32 = 6;
-const RFP_MARGIN: i32 = 67;
-const RFP_IMPROVING_MARGIN: i32 = 47;
-const NMP_IMPROVING_MARGIN: i32 = 74;
-const NMP_DEPTH_MUL: i32 = -4;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 171;
-const SEE_QUIET_MARGIN: i32 = -77;
-const SEE_TACTICAL_MARGIN: i32 = -27;
-const FUTILITY_COEFF_0: i32 = 107;
-const FUTILITY_COEFF_1: i32 = 80;
-const RAZORING_COEFF_0: i32 = -30;
-const RAZORING_COEFF_1: i32 = 255;
-const PROBCUT_MARGIN: i32 = 271;
-const PROBCUT_IMPROVING_MARGIN: i32 = 65;
-const DOUBLE_EXTENSION_MARGIN: i32 = 13;
-const TRIPLE_EXTENSION_MARGIN: i32 = 125;
-const LMR_BASE: f64 = 89.0;
-const LMR_DIVISION: f64 = 245.0;
-const QS_SEE_BOUND: i32 = -199;
-const MAIN_SEE_BOUND: i32 = -102;
-const DO_DEEPER_BASE_MARGIN: i32 = 50;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 10;
-const HISTORY_PRUNING_MARGIN: i32 = -4322;
-const QS_FUTILITY: i32 = 220;
+const RFP_MARGIN: i32 = 77;
+const RFP_IMPROVING_MARGIN: i32 = 67;
+const NMP_IMPROVING_MARGIN: i32 = 83;
+const NMP_DEPTH_MUL: i32 = -8;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 191;
+const SEE_QUIET_MARGIN: i32 = -73;
+const SEE_TACTICAL_MARGIN: i32 = -25;
+const FUTILITY_COEFF_0: i32 = 113;
+const FUTILITY_COEFF_1: i32 = 75;
+const RAZORING_COEFF_0: i32 = -28;
+const RAZORING_COEFF_1: i32 = 268;
+const PROBCUT_MARGIN: i32 = 306;
+const PROBCUT_IMPROVING_MARGIN: i32 = 69;
+const DOUBLE_EXTENSION_MARGIN: i32 = 14;
+const TRIPLE_EXTENSION_MARGIN: i32 = 119;
+const LMR_BASE: f64 = 91.0;
+const LMR_DIVISION: f64 = 264.0;
+const QS_SEE_BOUND: i32 = -159;
+const MAIN_SEE_BOUND: i32 = -134;
+const DO_DEEPER_BASE_MARGIN: i32 = 53;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 12;
+const HISTORY_PRUNING_MARGIN: i32 = -3746;
+const QS_FUTILITY: i32 = 261;
 const SEE_STAT_SCORE_MUL: i32 = 26;
 
-const HISTORY_LMR_DIVISOR: i32 = 16962;
-const LMR_REFUTATION_MUL: i32 = 931;
-const LMR_NON_PV_MUL: i32 = 1034;
-const LMR_TTPV_MUL: i32 = 1380;
-const LMR_CUT_NODE_MUL: i32 = 1444;
-const LMR_NON_IMPROVING_MUL: i32 = 688;
-const LMR_TT_CAPTURE_MUL: i32 = 1104;
-const LMR_CHECK_MUL: i32 = 1192;
+const HISTORY_LMR_DIVISOR: i32 = 17103;
+const LMR_REFUTATION_MUL: i32 = 906;
+const LMR_NON_PV_MUL: i32 = 1053;
+const LMR_TTPV_MUL: i32 = 1403;
+const LMR_CUT_NODE_MUL: i32 = 1472;
+const LMR_NON_IMPROVING_MUL: i32 = 683;
+const LMR_TT_CAPTURE_MUL: i32 = 1131;
+const LMR_CHECK_MUL: i32 = 1176;
 
-const MAIN_HISTORY_BONUS_MUL: i32 = 303;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 149;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2846;
+const MAIN_HISTORY_BONUS_MUL: i32 = 364;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 152;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2707;
+const MAIN_HISTORY_MALUS_MUL: i32 = 236;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 424;
+const MAIN_HISTORY_MALUS_MAX: i32 = 1392;
+const CONT1_HISTORY_BONUS_MUL: i32 = 298;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 186;
+const CONT1_HISTORY_BONUS_MAX: i32 = 2901;
+const CONT1_HISTORY_MALUS_MUL: i32 = 236;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 306;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1391;
+const CONT2_HISTORY_BONUS_MUL: i32 = 257;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 129;
+const CONT2_HISTORY_BONUS_MAX: i32 = 2414;
+const CONT2_HISTORY_MALUS_MUL: i32 = 276;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 317;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1533;
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 236;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 278;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2196;
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 125;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 360;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1073;
 
-const MAIN_HISTORY_MALUS_MUL: i32 = 199;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 388;
-const MAIN_HISTORY_MALUS_MAX: i32 = 1327;
+const PAWN_CORRHIST_WEIGHT: i32 = 1511;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1568;
+const MINOR_CORRHIST_WEIGHT: i32 = 1518;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1708;
 
-const CONT1_HISTORY_BONUS_MUL: i32 = 319;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 234;
-const CONT1_HISTORY_BONUS_MAX: i32 = 2790;
-
-const CONT1_HISTORY_MALUS_MUL: i32 = 220;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 263;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1072;
-
-const CONT2_HISTORY_BONUS_MUL: i32 = 264;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 243;
-const CONT2_HISTORY_BONUS_MAX: i32 = 2466;
-
-const CONT2_HISTORY_MALUS_MUL: i32 = 275;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 275;
-const CONT2_HISTORY_MALUS_MAX: i32 = 1335;
-
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 228;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 265;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 2411;
-
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 140;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 349;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1015;
-
-const PAWN_CORRHIST_WEIGHT: i32 = 1333;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1518;
-const MINOR_CORRHIST_WEIGHT: i32 = 1454;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1611;
-
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 200;
-const EVAL_POLICY_OFFSET: i32 = 30;
-const EVAL_POLICY_UPDATE_MAX: i32 = 100;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 209;
+const EVAL_POLICY_OFFSET: i32 = 8;
+const EVAL_POLICY_UPDATE_MAX: i32 = 110;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
+
+const HINDSIGHT_EXT_DEPTH: i32 = 3646;
+const HINDSIGHT_RED_DEPTH: i32 = 2048;
+const HINDSIGHT_RED_EVAL: i32 = 100;
+
+const OPTIMISM_OFFSET: i32 = 227;
+const OPTIMISM_MATERIAL_BASE: i32 = 2249;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
@@ -365,7 +365,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(
             }
         }
 
-        t.optimism[board.turn()] = 128 * average_value / (average_value.abs() + 212);
+        t.optimism[board.turn()] =
+            128 * average_value / (average_value.abs() + info.conf.optimism_offset);
         t.optimism[!board.turn()] = -t.optimism[board.turn()];
 
         // aspiration loop:
@@ -525,23 +526,14 @@ fn aspiration<ThTy: SmpThreadType>(
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
-fn default_move(board: &mut Board, t: &ThreadData, info: &SearchInfo) -> Move {
-    let tt_move =
-        t.tt.probe_for_provisional_info(board.state.keys.zobrist)
-            .and_then(|e| e.0);
+fn default_move(board: &Board, t: &ThreadData, info: &SearchInfo) -> Move {
+    let tt_move = t.tt.probe_move(board.state.keys.zobrist).and_then(|e| e.0);
+
     let mut mp = MovePicker::new(tt_move, t.killer_move_table[board.height()], 0);
-    let mut m = None;
-    while let Some(mov) = mp.next(board, t, info) {
-        if !board.is_legal(mov) {
-            continue;
-        }
-        board.make_move_simple(mov);
-        // if we get here, it means the move is legal.
-        m = Some(mov);
-        board.unmake_move_base();
-        break;
-    }
-    m.expect("Board::default_move called on a position with no legal moves")
+
+    std::iter::from_fn(|| mp.next(board, t, info))
+        .find(|&m| board.is_legal(m))
+        .expect("Board::default_move called on a position with no legal moves")
 }
 
 /// Perform a tactical resolution search, searching only captures and promotions.
@@ -1041,14 +1033,16 @@ pub fn alpha_beta<NT: NodeType>(
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
-        if t.ss[height - 1].reduction >= 4096 && static_eval + t.ss[height - 1].eval < 0 {
+        if t.ss[height - 1].reduction >= info.conf.hindsight_ext_depth
+            && static_eval + t.ss[height - 1].eval < 0
+        {
             depth += 1;
         }
 
         if depth >= 2
-            && t.ss[height - 1].reduction >= 2048
+            && t.ss[height - 1].reduction >= info.conf.hindsight_red_depth
             && t.ss[height - 1].eval != VALUE_NONE
-            && static_eval + t.ss[height - 1].eval > 96
+            && static_eval + t.ss[height - 1].eval > info.conf.hindsight_red_eval
         {
             depth -= 1;
         }
@@ -1781,8 +1775,8 @@ pub fn static_exchange_eval(board: &Board, info: &SearchInfo, m: Move, threshold
     let white_king = kings & bbs.colours[Colour::White];
     let black_king = kings & bbs.colours[Colour::Black];
 
-    let white_king_ray = RAY_FULL[to][white_king.first()];
-    let black_king_ray = RAY_FULL[to][black_king.first()];
+    let white_king_ray = RAY_FULL[to][white_king.first().unwrap()];
+    let black_king_ray = RAY_FULL[to][black_king.first().unwrap()];
 
     let allowed = !(white_pinned | black_pinned)
         | (white_pinned & white_king_ray)
@@ -1855,9 +1849,9 @@ pub fn adj_shuffle(
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = board.material(info);
-    let base = info.conf.material_scale_base;
-    let raw_eval =
-        (raw_eval * (base + material) + t.optimism[board.turn()] * (2000 + material) / 32) / 1024;
+    let material_mul = info.conf.material_scale_base + material;
+    let optimism_mul = info.conf.optimism_mat_base + material;
+    let raw_eval = (raw_eval * material_mul + t.optimism[board.turn()] * optimism_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not

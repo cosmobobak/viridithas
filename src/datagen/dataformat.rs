@@ -334,7 +334,6 @@ impl Game {
     }
 }
 
-#[allow(clippy::unwrap_used)]
 #[cfg(test)]
 mod tests {
     use crate::chess::CHESS960;
@@ -344,7 +343,7 @@ mod tests {
     use crate::chess::types::Square;
 
     #[test]
-    #[ignore]
+    #[ignore = "this test is slow, it checks all valid SFENs for roundtrip correctness"]
     fn roundtrip() {
         fn check_eq(lhs: &Board, rhs: &Board, msg: &str) {
             assert_eq!(

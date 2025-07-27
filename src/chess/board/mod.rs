@@ -235,7 +235,7 @@ impl Board {
         let their_knights = bbs.pieces[PieceType::Knight] & them;
         let their_diags = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Bishop]) & them;
         let their_orthos = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Rook]) & them;
-        let their_king = (bbs.pieces[PieceType::King] & them).first();
+        let their_king = (bbs.pieces[PieceType::King] & them).first().unwrap();
         let blockers = us | them;
 
         // compute threats
@@ -256,7 +256,7 @@ impl Board {
 
         // compute checkers
         let our_king_bb = us & bbs.pieces[PieceType::King];
-        let our_king_sq = our_king_bb.first();
+        let our_king_sq = our_king_bb.first().unwrap();
         let backwards_from_king = match side {
             Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
             Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
@@ -607,8 +607,12 @@ impl Board {
             Some(shredder_castling) => {
                 // valid shredder castling strings are of the form "AHah", "Bd"
                 let kings = self.state.bbs.pieces[PieceType::King];
-                let white_king = (kings & self.state.bbs.colours[Colour::White]).first();
-                let black_king = (kings & self.state.bbs.colours[Colour::Black]).first();
+                let white_king = (kings & self.state.bbs.colours[Colour::White])
+                    .first()
+                    .unwrap();
+                let black_king = (kings & self.state.bbs.colours[Colour::Black])
+                    .first()
+                    .unwrap();
                 if white_king.rank() != Rank::One
                     && shredder_castling.iter().any(u8::is_ascii_uppercase)
                 {
@@ -927,7 +931,7 @@ impl Board {
 
         let us = bbs.colours[turn];
         let our_king_bb = bbs.pieces[PieceType::King] & us;
-        let king = our_king_bb.first();
+        let king = our_king_bb.first().unwrap();
 
         let them = bbs.colours[!turn];
         let their_queens = bbs.pieces[PieceType::Queen] & them;
@@ -995,7 +999,7 @@ impl Board {
 
         // single checker, you have to be
         // capturing it or blocking the check.
-        let checker = self.state.threats.checkers.first();
+        let checker = self.state.threats.checkers.first().unwrap();
         (RAY_BETWEEN[king][checker] | self.state.threats.checkers).contains_square(to)
     }
 
