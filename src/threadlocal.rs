@@ -115,6 +115,7 @@ impl<'a> ThreadData<'a> {
 
     pub fn clear_tables(&mut self) {
         self.main_history.clear();
+        self.low_ply_history.clear();
         self.tactical_history.clear();
         self.continuation_history.clear();
         self.pawn_corrhist.clear();
@@ -130,6 +131,7 @@ impl<'a> ThreadData<'a> {
 
     pub fn set_up_for_search(&mut self, board: &Board) {
         self.main_history.age_entries();
+        self.low_ply_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
         self.killer_move_table.fill(None);
