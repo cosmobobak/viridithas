@@ -137,6 +137,7 @@ struct TTClusterMemory {
     inner: UnsafeCell<TTCluster>,
 }
 
+// Safety: Currently UB.
 unsafe impl Sync for TTClusterMemory {}
 
 impl TTClusterMemory {
