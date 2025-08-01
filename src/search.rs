@@ -1160,12 +1160,12 @@ pub fn alpha_beta<NT: NodeType>(
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
     if !NT::PV
-            && !in_check
-            && excluded.is_none()
-            && depth >= 5
-            && !is_game_theoretic_score(beta)
-            // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-            && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
+        && !in_check
+        && excluded.is_none()
+        && depth >= 5
+        && !is_game_theoretic_score(beta)
+        // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
+        && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
         let tt_move_if_capture = tt_move.filter(|m| board.is_tactical(*m));
         let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
@@ -1259,7 +1259,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // lmp & fp.
-        if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
+        if !NT::ROOT && !NT::PV && best_score > -MINIMUM_TB_WIN_SCORE && board.zugzwang_unlikely() {
             // late move pruning
             // if we have made too many moves, we start skipping moves.
             if lmr_depth < 9 && moves_made >= lmp_threshold {
@@ -1280,7 +1280,7 @@ pub fn alpha_beta<NT: NodeType>(
             // futility pruning
             // if the static eval is too low, we start skipping moves.
             let fp_margin = lmr_depth * info.conf.futility_coeff_1 + info.conf.futility_coeff_0;
-            if is_quiet && lmr_depth < 6 && static_eval + fp_margin <= alpha {
+            if is_quiet && !in_check && lmr_depth < 6 && static_eval + fp_margin <= alpha {
                 move_picker.skip_quiets = true;
             }
         }
