@@ -27,6 +27,8 @@ pub struct Filter {
     min_pieces: u32,
     /// Filter out positions that have an absolute evaluation above this value.
     max_eval: u32,
+    /// Filter out games that have an absolute evaluation above this value in the starting position.
+    max_opening_eval: u32,
     /// Filter out positions where a tactical move was made.
     filter_tactical: bool,
     /// Filter out positions that are in check.
@@ -43,6 +45,7 @@ impl Default for Filter {
             min_ply: 16,
             min_pieces: 4,
             max_eval: MINIMUM_TB_WIN_SCORE.try_into().unwrap(),
+            max_opening_eval: 400,
             filter_tactical: true,
             filter_check: true,
             filter_castling: false,
@@ -56,6 +59,7 @@ impl Filter {
         min_ply: 0,
         min_pieces: 0,
         max_eval: u32::MAX,
+        max_opening_eval: u32::MAX,
         filter_tactical: false,
         filter_check: false,
         filter_castling: false,
@@ -254,6 +258,11 @@ impl Game {
         let mut cnt = 0;
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
+        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
+                return 0;
+            }
+        }
         for (mv, eval) in &self.moves {
             let eval = eval.get();
             if !filter.should_filter(*mv, i32::from(eval), &board, outcome) {
@@ -274,6 +283,11 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
+        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
+                return Ok(());
+            }
+        }
         // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
             let eval = eval.get();
@@ -295,6 +309,11 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
+        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
+                return Ok(());
+            }
+        }
         // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
             let eval = eval.get();
