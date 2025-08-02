@@ -1064,6 +1064,7 @@ impl From<&Board> for MaterialConfiguration {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct DataSetStats {
     games: usize,
+    opening_eval_counts: HashMap<i32, usize>,
     length_counts: HashMap<usize, usize>,
     eval_counts: HashMap<i32, usize>,
     piece_counts: HashMap<u8, usize>,
@@ -1104,7 +1105,12 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     {
         stats.games += 1;
         *stats.length_counts.entry(game.len()).or_default() += 1;
+        let mut idx = 0;
         game.visit_positions(|position, evaluation| {
+            if idx == 0 {
+                *stats.opening_eval_counts.entry(evaluation).or_default() += 1;
+            }
+            idx += 1;
             *stats.eval_counts.entry(evaluation).or_default() += 1;
             *stats
                 .piece_counts
@@ -1154,6 +1160,15 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mut eval_counts = stats.eval_counts.into_iter().collect::<Vec<_>>();
     eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv")?);
+    writeln!(eval_counts_file, "eval,count")?;
+    for (eval, count) in eval_counts {
+        writeln!(eval_counts_file, "{eval},{count}")?;
+    }
+    eval_counts_file.flush()?;
+    println!("Writing opening eval counts to opening_eval_counts.csv");
+    let mut eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
+    eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
+    let mut eval_counts_file = BufWriter::new(File::create("opening_eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
     for (eval, count) in eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;
