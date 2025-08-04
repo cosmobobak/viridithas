@@ -15,8 +15,8 @@ use crate::{
     threadlocal::ThreadData,
 };
 
-pub const WINNING_CAPTURE_SCORE: i32 = 10_000_000;
-pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_SCORE - MAX_HISTORY as i32;
+pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
+pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY as i32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -83,7 +83,7 @@ impl MovePicker {
         }
         if self.stage == Stage::YieldGoodCaptures {
             if let Some(m) = self.yield_once(info, position) {
-                if m.score >= WINNING_CAPTURE_SCORE {
+                if m.score >= WINNING_CAPTURE_BONUS {
                     return Some(m.mov);
                 }
                 // the move was not winning, so we're going to
@@ -143,7 +143,7 @@ impl MovePicker {
         {
             let best = best_entry_ref.get();
             debug_assert!(
-                best.score < WINNING_CAPTURE_SCORE / 2 || best.score >= MIN_WINNING_SEE_SCORE,
+                best.score < WINNING_CAPTURE_BONUS / 2 || best.score >= MIN_WINNING_SEE_SCORE,
                 "{}'s score is {}, lower bound is {}, this is too close.",
                 best.mov.display(false),
                 best.score,
@@ -155,7 +155,7 @@ impl MovePicker {
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {
-                    score: best.score - WINNING_CAPTURE_SCORE,
+                    score: best.score - WINNING_CAPTURE_BONUS,
                     mov: best.mov,
                 });
                 continue;
@@ -183,28 +183,55 @@ impl MovePicker {
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
-        // zero-out the ordering scores
-        for m in &mut *ms {
-            m.score = 0;
-        }
+        let cont_block_0 =
+            t.ss.get(pos.height() - 1)
+                .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+        let cont_block_1 =
+            t.ss.get(pos.height() - 2)
+                .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
-        t.get_history_scores(pos, ms);
-        t.get_continuation_history_scores(pos, ms, 0);
-        t.get_continuation_history_scores(pos, ms, 1);
-        // t.get_continuation_history_scores(pos, ms, 3);
+        let threats = pos.state.threats.all;
+        for m in ms {
+            let from = m.mov.from();
+            let piece = pos.state.mailbox[from].unwrap();
+            let to = m.mov.history_to_square();
+
+            let mut score = 0;
+
+            score += i32::from(t.main_history.get(
+                piece,
+                to,
+                threats.contains_square(from),
+                threats.contains_square(to),
+            ));
+            if let Some(cmh_block) = cont_block_0 {
+                score += i32::from(cmh_block.get(piece, to));
+            }
+            if let Some(cmh_block) = cont_block_1 {
+                score += i32::from(cmh_block.get(piece, to));
+            }
+
+            m.score = score;
+        }
     }
 
     pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
-        // provisionally set the WINNING_CAPTURE offset, for lazily SEE-guarding stuff later.
-        for m in &mut *moves {
-            m.score = WINNING_CAPTURE_SCORE;
-        }
+        for m in moves {
+            let from = m.mov.from();
+            let to = m.mov.to();
+            let piece = pos.state.mailbox[from].unwrap();
+            let capture = history::caphist_piece_type(pos, m.mov);
 
-        t.get_tactical_history_scores(pos, moves);
-        for MoveListEntry { mov, score } in moves {
-            *score += MVV_SCORE[history::caphist_piece_type(pos, *mov)];
+            // optimistically initialised with the winning-SEE score.
+            // lazily checked during yield_once.
+            let mut score = WINNING_CAPTURE_BONUS;
+
+            score += MVV_SCORE[capture];
+            score += i32::from(t.tactical_history.get(piece, to, capture));
+
+            m.score = score;
         }
     }
 }
