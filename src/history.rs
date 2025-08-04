@@ -18,7 +18,7 @@ use crate::{
     util::MAX_PLY,
 };
 
-use crate::chess::board::{movegen::MoveListEntry, Board};
+use crate::chess::board::Board;
 
 impl ThreadData<'_> {
     /// Update the history counters of a batch of moves.
@@ -68,34 +68,15 @@ impl ThreadData<'_> {
         update_history(val, delta);
     }
 
-    /// Get the history scores for a batch of moves.
-    pub(super) fn get_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        let threats = pos.state.threats.all;
-        for m in ms {
-            let from = m.mov.from();
-            let piece_moved = pos.state.mailbox[from];
-            let to = m.mov.history_to_square();
-            m.score += i32::from(self.main_history.get(
-                piece_moved.unwrap(),
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            ));
-        }
-    }
-
     /// Get the history score for a single move.
     pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
         let from = m.from();
-        let piece_moved = pos.state.mailbox[from];
+        let piece = pos.state.mailbox[from].unwrap();
         let to = m.history_to_square();
         let threats = pos.state.threats.all;
-        i32::from(self.main_history.get(
-            piece_moved.unwrap(),
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        ))
+        let from_threat = usize::from(threats.contains_square(from));
+        let to_threat = usize::from(threats.contains_square(to));
+        i32::from(self.main_history[from_threat][to_threat][piece][to])
     }
 
     /// Update the tactical history counters of a batch of moves.
@@ -128,22 +109,12 @@ impl ThreadData<'_> {
         }
     }
 
-    /// Get the tactical history scores for a batch of moves.
-    pub(super) fn get_tactical_history_scores(&self, pos: &Board, ms: &mut [MoveListEntry]) {
-        for m in ms {
-            let piece_moved = pos.state.mailbox[m.mov.from()];
-            let capture = caphist_piece_type(pos, m.mov);
-            let to = m.mov.to();
-            m.score += i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture));
-        }
-    }
-
     /// Get the tactical history score for a single move.
     pub fn get_tactical_history_score(&self, pos: &Board, m: Move) -> i32 {
         let piece_moved = pos.state.mailbox[m.from()];
         let capture = caphist_piece_type(pos, m);
         let to = m.to();
-        i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture))
+        i32::from(self.tactical_history[capture][piece_moved.unwrap()][to])
     }
 
     /// Update the continuation history counters of a batch of moves.
@@ -197,28 +168,6 @@ impl ThreadData<'_> {
         update_history(cmh_block.get_mut(moved, to), delta);
     }
 
-    /// Get the continuation history scores for a batch of moves.
-    pub(super) fn get_continuation_history_scores(
-        &self,
-        pos: &Board,
-        ms: &mut [MoveListEntry],
-        index: usize,
-    ) {
-        let height = pos.height();
-        if height <= index {
-            return;
-        }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.continuation_history.get_index(ss.conthist_index);
-        for m in ms {
-            let to = m.mov.history_to_square();
-            let piece = pos.state.mailbox[m.mov.from()].unwrap();
-            m.score += i32::from(cmh_block.get(piece, to));
-        }
-    }
-
     /// Get the continuation history score for a single move.
     pub fn get_continuation_history_score(&self, pos: &Board, m: Move, index: usize) -> i32 {
         let height = pos.height();
@@ -231,7 +180,7 @@ impl ThreadData<'_> {
         let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         let to = m.history_to_square();
         let piece = pos.state.mailbox[m.from()].unwrap();
-        i32::from(cmh_block.get(piece, to))
+        i32::from(cmh_block[piece][to])
     }
 
     /// Add a killer move.
