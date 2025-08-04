@@ -185,12 +185,16 @@ impl MovePicker {
     }
 
     pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
-        let cont_block_0 =
-            t.ss.get(pos.height() - 1)
-                .map(|ss| t.continuation_history.get_index(ss.conthist_index));
-        let cont_block_1 =
-            t.ss.get(pos.height() - 2)
-                .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+        let cont_block_0 = pos
+            .height()
+            .checked_sub(1)
+            .and_then(|i| t.ss.get(i))
+            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+        let cont_block_1 = pos
+            .height()
+            .checked_sub(2)
+            .and_then(|i| t.ss.get(i))
+            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
         let threats = pos.state.threats.all;
         for m in ms {
