@@ -340,6 +340,13 @@ pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
         bb.south_east_one() | bb.south_west_one()
     }
 }
+pub fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
+    if colour == Colour::White {
+        bb.north_east_one() | bb.north_west_one()
+    } else {
+        bb.south_east_one() | bb.south_west_one()
+    }
+}
 
 pub fn attacks_by_type(pt: PieceType, sq: Square, blockers: SquareSet) -> SquareSet {
     match pt {

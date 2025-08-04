@@ -3,10 +3,12 @@ use std::cell::Cell;
 use crate::{
     chess::{
         board::{
-            movegen::{AllMoves, MoveList, MoveListEntry, SkipQuiets},
+            movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
             Board,
         },
         chessmove::Move,
+        piece::PieceType,
+        squareset::SquareSet,
     },
     history,
     historytable::MAX_HISTORY,
@@ -206,6 +208,44 @@ impl MovePicker {
             }
             if let Some(cmh_block) = cont_block_1 {
                 score += i32::from(cmh_block[piece][to]);
+            }
+
+            match piece.piece_type() {
+                PieceType::Pawn => {
+                    let turn = pos.turn();
+                    let us = pos.state.bbs.colours[turn];
+                    let them = pos.state.bbs.colours[!turn];
+
+                    let our_pawns = pos.state.bbs.pieces[PieceType::Pawn] & us;
+                    let their_king = pos.state.bbs.pieces[PieceType::King] & them;
+                    let their_queens = pos.state.bbs.pieces[PieceType::Queen] & them;
+                    let their_rooks = pos.state.bbs.pieces[PieceType::Rook] & them;
+                    let their_minors = (pos.state.bbs.pieces[PieceType::Bishop]
+                        | pos.state.bbs.pieces[PieceType::Knight])
+                        & them;
+                    let their_pawns = pos.state.bbs.pieces[PieceType::Pawn] & them;
+
+                    if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
+                        // bonus for creating threats
+                        let pawn_attacks = pawn_attacks_by(to.as_set(), turn);
+                        if pawn_attacks & their_king != SquareSet::EMPTY {
+                            score += 10_000;
+                        } else if pawn_attacks & their_queens != SquareSet::EMPTY {
+                            score += 8_000;
+                        } else if pawn_attacks & their_rooks != SquareSet::EMPTY {
+                            score += 6_000;
+                        } else if pawn_attacks & their_minors != SquareSet::EMPTY {
+                            score += 4_000;
+                        } else if pawn_attacks & their_pawns != SquareSet::EMPTY {
+                            score += 1_000;
+                        }
+                    }
+                }
+                PieceType::Knight
+                | PieceType::Bishop
+                | PieceType::Rook
+                | PieceType::Queen
+                | PieceType::King => {}
             }
 
             m.score = score;
