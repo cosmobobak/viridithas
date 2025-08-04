@@ -71,15 +71,12 @@ impl ThreadData<'_> {
     /// Get the history score for a single move.
     pub fn get_history_score(&self, pos: &Board, m: Move) -> i32 {
         let from = m.from();
-        let piece_moved = pos.state.mailbox[from];
+        let piece = pos.state.mailbox[from].unwrap();
         let to = m.history_to_square();
         let threats = pos.state.threats.all;
-        i32::from(self.main_history.get(
-            piece_moved.unwrap(),
-            to,
-            threats.contains_square(from),
-            threats.contains_square(to),
-        ))
+        let from_threat = usize::from(threats.contains_square(from));
+        let to_threat = usize::from(threats.contains_square(to));
+        i32::from(self.main_history[from_threat][to_threat][piece][to])
     }
 
     /// Update the tactical history counters of a batch of moves.
@@ -117,7 +114,7 @@ impl ThreadData<'_> {
         let piece_moved = pos.state.mailbox[m.from()];
         let capture = caphist_piece_type(pos, m);
         let to = m.to();
-        i32::from(self.tactical_history.get(piece_moved.unwrap(), to, capture))
+        i32::from(self.tactical_history[capture][piece_moved.unwrap()][to])
     }
 
     /// Update the continuation history counters of a batch of moves.
@@ -183,7 +180,7 @@ impl ThreadData<'_> {
         let cmh_block = self.continuation_history.get_index(ss.conthist_index);
         let to = m.history_to_square();
         let piece = pos.state.mailbox[m.from()].unwrap();
-        i32::from(cmh_block.get(piece, to))
+        i32::from(cmh_block[piece][to])
     }
 
     /// Add a killer move.

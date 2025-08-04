@@ -195,20 +195,17 @@ impl MovePicker {
             let from = m.mov.from();
             let piece = pos.state.mailbox[from].unwrap();
             let to = m.mov.history_to_square();
+            let from_threat = usize::from(threats.contains_square(from));
+            let to_threat = usize::from(threats.contains_square(to));
 
             let mut score = 0;
 
-            score += i32::from(t.main_history.get(
-                piece,
-                to,
-                threats.contains_square(from),
-                threats.contains_square(to),
-            ));
+            score += i32::from(t.main_history[from_threat][to_threat][piece][to]);
             if let Some(cmh_block) = cont_block_0 {
-                score += i32::from(cmh_block.get(piece, to));
+                score += i32::from(cmh_block[piece][to]);
             }
             if let Some(cmh_block) = cont_block_1 {
-                score += i32::from(cmh_block.get(piece, to));
+                score += i32::from(cmh_block[piece][to]);
             }
 
             m.score = score;
@@ -229,7 +226,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_history.get(piece, to, capture));
+            score += i32::from(t.tactical_history[capture][piece][to]);
 
             m.score = score;
         }
