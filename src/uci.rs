@@ -924,12 +924,12 @@ pub fn bench(
                     .collect::<Vec<u64>>())
                 .collect::<Vec<Vec<u64>>>()
         ),
-    )
-    .unwrap();
+    )?;
     #[cfg(feature = "nnz-counts")]
     {
         let count = NNZ_COUNT.load(Ordering::Relaxed);
         let denom = NNZ_DENOM.load(Ordering::Relaxed);
+        #[allow(clippy::cast_precision_loss)]
         let ratio = count as f64 / denom as f64 * 100.0;
         println!("NNZ COUNT: {count}");
         println!("NNZ DENOM: {denom}");
