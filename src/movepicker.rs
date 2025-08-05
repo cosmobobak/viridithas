@@ -245,11 +245,31 @@ impl MovePicker {
                         }
                     }
                 }
-                PieceType::Knight
-                | PieceType::Bishop
-                | PieceType::Rook
-                | PieceType::Queen
-                | PieceType::King => {}
+                PieceType::Knight | PieceType::Bishop => {
+                    if pos.state.threats.leq_pawn.contains_square(from) {
+                        score += 4000;
+                    }
+                    if pos.state.threats.leq_pawn.contains_square(to) {
+                        score -= 4000;
+                    }
+                }
+                PieceType::Rook => {
+                    if pos.state.threats.leq_minor.contains_square(from) {
+                        score += 8000;
+                    }
+                    if pos.state.threats.leq_minor.contains_square(to) {
+                        score -= 8000;
+                    }
+                }
+                PieceType::Queen => {
+                    if pos.state.threats.leq_rook.contains_square(from) {
+                        score += 12000;
+                    }
+                    if pos.state.threats.leq_rook.contains_square(to) {
+                        score -= 12000;
+                    }
+                }
+                PieceType::King => {}
             }
 
             m.score = score;
