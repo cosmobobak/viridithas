@@ -258,7 +258,7 @@ impl Game {
         let mut cnt = 0;
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
-        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
             if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
                 return 0;
             }
@@ -283,7 +283,7 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
-        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
             if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
                 return Ok(());
             }
@@ -309,7 +309,7 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
-        if let Some(opening_eval) = self.moves.get(0).map(|(_, e)| e.get()) {
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
             if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
                 return Ok(());
             }

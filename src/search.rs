@@ -296,12 +296,13 @@ pub fn search_position(
             best_move.display(CHESS960.load(Ordering::Relaxed))
         );
         #[cfg(feature = "stats")]
-        info.print_stats();
-        #[cfg(feature = "stats")]
-        println!(
-            "branching factor: {}",
-            (info.nodes.get_global() as f64).powf(1.0 / thread_headers[0].completed as f64)
-        );
+        {
+            info.print_stats();
+            #[allow(clippy::cast_precision_loss)]
+            let branching_factor =
+                (info.nodes.get_global() as f64).powf(1.0 / thread_headers[0].completed as f64);
+            println!("branching factor: {branching_factor}");
+        }
     }
 
     assert!(
@@ -723,7 +724,7 @@ pub fn quiescence<NT: NodeType>(
             }
             if alpha >= beta {
                 #[cfg(feature = "stats")]
-                info.log_fail_high::<true>(moves_made - 1, 0);
+                info.log_fail_high::<true>(moves_made - 1);
                 break; // fail-high
             }
         }
@@ -1065,7 +1066,7 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && static_eval - rfp_margin(info, depth, improving, correction) >= beta
+            && static_eval - rfp_margin(board, info, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
@@ -1512,7 +1513,7 @@ pub fn alpha_beta<NT: NodeType>(
             }
             if alpha >= beta {
                 #[cfg(feature = "stats")]
-                info.log_fail_high::<false>(moves_made - 1, movepick_score);
+                info.log_fail_high::<false>(moves_made - 1);
                 break;
             }
         }
@@ -1625,8 +1626,9 @@ pub fn alpha_beta<NT: NodeType>(
 }
 
 /// The margin for Reverse Futility Pruning.
-fn rfp_margin(info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
-    info.conf.rfp_margin * depth - i32::from(improving) * info.conf.rfp_improving_margin
+fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
+    info.conf.rfp_margin * depth
+        - i32::from(improving && !can_win_material(pos)) * info.conf.rfp_improving_margin
         + correction.abs() / 2
 }
 
@@ -1724,6 +1726,20 @@ pub fn is_forced(
     info.print_to_stdout = pts_prev;
     t.ss[board.height()].excluded = None;
     value < r_beta
+}
+
+/// Cheaply estimate whether there's an obvious winning capture to be made
+/// somewhere in the position.
+pub fn can_win_material(pos: &Board) -> bool {
+    let us = pos.state.bbs.colours[pos.turn()];
+    let queens = pos.state.bbs.pieces[PieceType::Queen] & us;
+    let rooks = pos.state.bbs.pieces[PieceType::Rook] & us;
+    let bishops = pos.state.bbs.pieces[PieceType::Bishop] & us;
+    let knights = pos.state.bbs.pieces[PieceType::Knight] & us;
+
+    (pos.state.threats.leq_rook & queens) != SquareSet::EMPTY
+        || (pos.state.threats.leq_minor & (queens | rooks)) != SquareSet::EMPTY
+        || (pos.state.threats.leq_pawn) & (queens | rooks | bishops | knights) != SquareSet::EMPTY
 }
 
 /// See if a move looks like it would initiate a winning exchange.

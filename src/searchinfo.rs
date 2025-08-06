@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "stats")]
-use crate::board::movegen::MAX_POSITION_MOVES;
+use crate::chess::board::movegen::MAX_POSITION_MOVES;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
@@ -152,34 +152,13 @@ impl<'a> SearchInfo<'a> {
     }
 
     #[cfg(feature = "stats")]
-    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize, ordering_score: i32) {
-        use crate::board::movegen::movepicker::{
-            COUNTER_MOVE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, TT_MOVE_SCORE,
-            WINNING_CAPTURE_SCORE,
-        };
-
+    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize) {
         if QSEARCH {
             self.qfailhigh += 1;
             self.qfailhigh_index[move_index] += 1;
         } else {
             self.failhigh += 1;
             self.failhigh_index[move_index] += 1;
-            let fail_type = if ordering_score == TT_MOVE_SCORE {
-                FailHighType::TTMove
-            } else if ordering_score >= WINNING_CAPTURE_SCORE {
-                FailHighType::GoodTactical
-            } else if ordering_score == FIRST_KILLER_SCORE {
-                FailHighType::Killer1
-            } else if ordering_score == SECOND_KILLER_SCORE {
-                FailHighType::Killer2
-            } else if ordering_score == COUNTER_MOVE_SCORE {
-                FailHighType::CounterMove
-            } else if ordering_score > 0 {
-                FailHighType::GoodQuiet
-            } else {
-                FailHighType::BadQuiet
-            };
-            self.failhigh_types[fail_type as usize] += 1;
         }
     }
 
@@ -206,6 +185,7 @@ impl<'a> SearchInfo<'a> {
         {
             println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
         }
+        #[allow(clippy::cast_precision_loss)]
         let type_percentages = self
             .failhigh_types
             .iter()
@@ -219,17 +199,6 @@ impl<'a> SearchInfo<'a> {
         println!("failhigh good quiet    {:5.2}%", type_percentages[5]);
         println!("failhigh bad quiet     {:5.2}%", type_percentages[6]);
     }
-}
-
-#[cfg(feature = "stats")]
-enum FailHighType {
-    TTMove,
-    GoodTactical,
-    Killer1,
-    Killer2,
-    CounterMove,
-    GoodQuiet,
-    BadQuiet,
 }
 
 mod tests {
