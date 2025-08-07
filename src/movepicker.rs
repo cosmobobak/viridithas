@@ -198,6 +198,8 @@ impl MovePicker {
 
         let threats = pos.state.threats.all;
         for m in ms {
+            debug_assert!(!m.mov.is_promo());
+
             let from = m.mov.from();
             let piece = pos.state.mailbox[from].unwrap();
             let to = m.mov.history_to_square();
@@ -290,6 +292,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
+            score += i32::from(m.mov.promotion_type() == Some(PieceType::Queen)) * 16384;
             score += i32::from(t.tactical_history[capture][piece][to]);
 
             m.score = score;
