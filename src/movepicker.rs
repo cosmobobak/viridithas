@@ -247,7 +247,8 @@ impl MovePicker {
                 }
                 minor @ (PieceType::Knight | PieceType::Bishop) => {
                     if minor == PieceType::Knight {
-                        let threats_made = knight_attacks(to) & (their_queens | their_rooks);
+                        let threats_made =
+                            knight_attacks(to) & (their_queens | their_rooks | their_king);
                         match threats_made.count() {
                             0 => {}
                             1 => score += 2000,
