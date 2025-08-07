@@ -861,7 +861,15 @@ impl Board {
                 Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
                 Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
             };
-        } else if m.is_ep() || m.is_promo() {
+        }
+
+        // not a pawn move, but is somehow ep/promo?
+        if m.is_ep() || m.is_promo() {
+            return false;
+        }
+
+        if moved_piece.piece_type() == PieceType::King && self.state.threats.all.contains_square(to)
+        {
             return false;
         }
 
@@ -980,12 +988,11 @@ impl Board {
         if moving.piece_type() == PieceType::King {
             let without_king = bbs.occupied() ^ our_king_bb;
 
-            // TODO: determine necessity of first conditional component
-            return !self.state.threats.all.contains_square(to)
-                && bishop_attacks(to, without_king) & (their_queens | their_bishops)
-                    == SquareSet::EMPTY
-                && rook_attacks(to, without_king) & (their_queens | their_rooks)
-                    == SquareSet::EMPTY;
+            let diags = their_queens | their_bishops;
+            let orthos = their_queens | their_rooks;
+            let moving_into_check = bishop_attacks(to, without_king) & diags != SquareSet::EMPTY
+                || rook_attacks(to, without_king) & orthos != SquareSet::EMPTY;
+            return !moving_into_check;
         }
 
         // moving anything other than the king
