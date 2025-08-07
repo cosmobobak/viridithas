@@ -3,7 +3,9 @@ use std::cell::Cell;
 use crate::{
     chess::{
         board::{
-            movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
+            movegen::{
+                knight_attacks, pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets,
+            },
             Board,
         },
         chessmove::Move,
@@ -196,13 +198,24 @@ impl MovePicker {
             .and_then(|i| t.ss.get(i))
             .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
-        let threats = pos.state.threats.all;
+        let turn = pos.turn();
+        let us = pos.state.bbs.colours[turn];
+        let them = pos.state.bbs.colours[!turn];
+        let their_queens = pos.state.bbs.pieces[PieceType::Queen] & them;
+        let their_rooks = pos.state.bbs.pieces[PieceType::Rook] & them;
+        let their_bishops = pos.state.bbs.pieces[PieceType::Bishop] & them;
+        let their_knights = pos.state.bbs.pieces[PieceType::Knight] & them;
+        let their_minors = their_knights | their_bishops;
+        let our_pawns = pos.state.bbs.pieces[PieceType::Pawn] & us;
+        let their_king = pos.state.bbs.pieces[PieceType::King] & them;
+        let their_pawns = pos.state.bbs.pieces[PieceType::Pawn] & them;
+
         for m in ms {
             let from = m.mov.from();
             let piece = pos.state.mailbox[from].unwrap();
             let to = m.mov.history_to_square();
-            let from_threat = usize::from(threats.contains_square(from));
-            let to_threat = usize::from(threats.contains_square(to));
+            let from_threat = usize::from(pos.state.threats.all.contains_square(from));
+            let to_threat = usize::from(pos.state.threats.all.contains_square(to));
 
             let mut score = 0;
 
@@ -216,19 +229,6 @@ impl MovePicker {
 
             match piece.piece_type() {
                 PieceType::Pawn => {
-                    let turn = pos.turn();
-                    let us = pos.state.bbs.colours[turn];
-                    let them = pos.state.bbs.colours[!turn];
-
-                    let our_pawns = pos.state.bbs.pieces[PieceType::Pawn] & us;
-                    let their_king = pos.state.bbs.pieces[PieceType::King] & them;
-                    let their_queens = pos.state.bbs.pieces[PieceType::Queen] & them;
-                    let their_rooks = pos.state.bbs.pieces[PieceType::Rook] & them;
-                    let their_minors = (pos.state.bbs.pieces[PieceType::Bishop]
-                        | pos.state.bbs.pieces[PieceType::Knight])
-                        & them;
-                    let their_pawns = pos.state.bbs.pieces[PieceType::Pawn] & them;
-
                     if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
                         // bonus for creating threats
                         let pawn_attacks = pawn_attacks_by(to.as_set(), turn);
@@ -245,7 +245,15 @@ impl MovePicker {
                         }
                     }
                 }
-                PieceType::Knight | PieceType::Bishop => {
+                minor @ (PieceType::Knight | PieceType::Bishop) => {
+                    if minor == PieceType::Knight {
+                        let threats_made = knight_attacks(to) & (their_queens | their_rooks);
+                        match threats_made.count() {
+                            0 => {}
+                            1 => score += 2000,
+                            _ => score += 8000,
+                        }
+                    }
                     if pos.state.threats.leq_pawn.contains_square(from) {
                         score += 4000;
                     }
