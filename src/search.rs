@@ -248,6 +248,8 @@ pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, O
 
     // start search threads:
     let (t1, rest) = thread_headers.split_first_mut().unwrap();
+    let splat_board = t1.board.clone();
+    let splat_info = t1.info.clone();
     thread::scope(|s| {
         s.spawn(|| {
             // copy data into thread
@@ -257,6 +259,8 @@ pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, O
         });
         for t in rest.iter_mut() {
             s.spawn(|| {
+                t.board = splat_board.clone();
+                t.info = splat_info.clone();
                 t.set_up_for_search();
                 iterative_deepening::<HelperThread>(t);
             });
@@ -312,6 +316,12 @@ pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, O
         legal_moves.contains(&best_move),
         "search returned an illegal move."
     );
+
+    thread_headers[0]
+        .info
+        .stopped
+        .store(false, Ordering::Relaxed);
+
     (
         if thread_headers[0].board.turn() == Colour::White {
             pv.score

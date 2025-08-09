@@ -82,16 +82,6 @@ impl<'a> SearchInfo<'a> {
         out
     }
 
-    pub fn with_search_params(
-        stopped: &'a AtomicBool,
-        nodes: &'a AtomicU64,
-        search_params: &Config,
-    ) -> Self {
-        let mut out = Self::new(stopped, nodes);
-        out.conf = search_params.clone();
-        out
-    }
-
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
