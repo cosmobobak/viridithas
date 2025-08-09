@@ -8,12 +8,12 @@ use std::{
 
 use anyhow::{bail, Context};
 
+#[cfg(test)]
+use crate::threadlocal::ThreadData;
 use crate::{
     chess::board::{movegen::MoveList, Board},
     chess::CHESS960,
 };
-#[cfg(test)]
-use crate::{searchinfo::SearchInfo, threadlocal::ThreadData};
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
@@ -45,48 +45,43 @@ pub fn perft(pos: &mut Board, depth: usize) -> u64 {
 }
 
 #[cfg(test)]
-pub fn nnue_perft(pos: &mut Board, t: &mut ThreadData, depth: usize) -> u64 {
+pub fn nnue_perft(t: &mut ThreadData, depth: usize) -> u64 {
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
+    t.board.check_validity().unwrap();
+    // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
         return 1;
     }
 
     let mut ml = MoveList::new();
-    pos.generate_moves(&mut ml);
+    t.board.generate_moves(&mut ml);
 
     let mut count = 0;
 
     if depth == 1 {
-        return ml.iter_moves().filter(|&m| pos.is_legal(*m)).count() as u64;
+        return ml.iter_moves().filter(|&m| t.board.is_legal(*m)).count() as u64;
     }
 
     for &m in ml.iter_moves() {
-        if !pos.is_legal(m) {
+        if !t.board.is_legal(m) {
             continue;
         }
-        pos.make_move_nnue(m, t);
-        count += nnue_perft(pos, t, depth - 1);
-        pos.unmake_move_nnue(t);
+        t.board.make_move_nnue(m, &mut t.nnue);
+        count += nnue_perft(t, depth - 1);
+        t.board.unmake_move_nnue(&mut t.nnue);
     }
 
     count
 }
 
 #[cfg(test)]
-pub fn movepicker_perft(
-    pos: &mut Board,
-    t: &mut ThreadData,
-    info: &SearchInfo,
-    depth: usize,
-) -> u64 {
+pub fn movepicker_perft(t: &mut ThreadData, depth: usize) -> u64 {
     use crate::movepicker::MovePicker;
 
     #[cfg(debug_assertions)]
-    pos.check_validity().unwrap();
-    // debug_assert!(pos.check_nnue_coherency(&t.nnue));
+    t.board.check_validity().unwrap();
+    // debug_assert!(t.board.check_nnue_coherency(&t.nnue));
 
     if depth == 0 {
         return 1;
@@ -95,13 +90,13 @@ pub fn movepicker_perft(
     let mut ml = MovePicker::new(None, None, 0);
 
     let mut count = 0;
-    while let Some(m) = ml.next(pos, t, info) {
-        if !pos.is_legal(m) {
+    while let Some(m) = ml.next(t) {
+        if !t.board.is_legal(m) {
             continue;
         }
-        pos.make_move(m, t);
-        count += movepicker_perft(pos, t, info, depth - 1);
-        pos.unmake_move(t);
+        t.board.make_move(m, &mut t.nnue);
+        count += movepicker_perft(t, depth - 1);
+        t.board.unmake_move(&mut t.nnue);
     }
 
     count
@@ -228,20 +223,29 @@ mod tests {
     fn perft_nnue_start_position() {
         use super::*;
 
-        let mut pos = Board::default();
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
-        assert_eq!(nnue_perft(&mut pos, &mut t, 1), 20, "got {}", {
-            pos.legal_moves()
+        let stopped = AtomicBool::new(false);
+        let nodes = AtomicU64::new(0);
+        let mut t = ThreadData::new(
+            0,
+            Board::default(),
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        );
+        assert_eq!(nnue_perft(&mut t, 1), 20, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(nnue_perft(&mut pos, &mut t, 2), 400);
-        assert_eq!(nnue_perft(&mut pos, &mut t, 3), 8_902);
+        assert_eq!(nnue_perft(&mut t, 2), 400);
+        assert_eq!(nnue_perft(&mut t, 3), 8_902);
         // assert_eq!(nnue_perft(&mut pos, &mut t, 4), 197_281);
     }
 
@@ -249,29 +253,24 @@ mod tests {
     fn perft_movepicker_start_position() {
         use super::*;
 
-        let mut pos = Board::default();
+        let pos = Board::default();
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(
-            movepicker_perft(&mut pos, &mut t, &info, 1),
-            20,
-            "got {}",
-            {
-                pos.legal_moves()
-                    .into_iter()
-                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        );
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 400);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 8_902);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 197_281);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut t, 1), 20, "got {}", {
+            t.board
+                .legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut t, 2), 400);
+        assert_eq!(movepicker_perft(&mut t, 3), 8_902);
+        // assert_eq!(movepicker_perft(&mut t, &info, 4), 197_281);
     }
 
     #[test]
@@ -286,25 +285,20 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(
-            movepicker_perft(&mut pos, &mut t, &info, 1),
-            48,
-            "got {}",
-            {
-                pos.legal_moves()
-                    .into_iter()
-                    .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        );
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 2_039);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 97_862);
-        // assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 4), 4_085_603);
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut t, 1), 48, "got {}", {
+            t.board
+                .legal_moves()
+                .into_iter()
+                .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        assert_eq!(movepicker_perft(&mut t, 2), 2_039);
+        // assert_eq!(movepicker_perft(&mut t, 3), 97_862);
+        // assert_eq!(movepicker_perft(&mut t, 4), 4_085_603);
     }
 
     #[test]
@@ -318,19 +312,19 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 4, "got {}", {
-            pos.legal_moves()
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut t, 1), 4, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 62);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 1474);
+        assert_eq!(movepicker_perft(&mut t, 2), 62);
+        assert_eq!(movepicker_perft(&mut t, 3), 1474);
     }
 
     #[test]
@@ -344,19 +338,19 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE * 16, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &pos, tt.view(), nnue_params);
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
-        let info = SearchInfo::new(&stopped, &nodes);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 1), 8, "got {}", {
-            pos.legal_moves()
+        let mut t = ThreadData::new(0, pos, tt.view(), nnue_params, &stopped, &nodes);
+        assert_eq!(movepicker_perft(&mut t, 1), 8, "got {}", {
+            t.board
+                .legal_moves()
                 .into_iter()
                 .map(|m| m.display(CHESS960.load(Ordering::Relaxed)).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 2), 143);
-        assert_eq!(movepicker_perft(&mut pos, &mut t, &info, 3), 3954);
+        assert_eq!(movepicker_perft(&mut t, 2), 143);
+        assert_eq!(movepicker_perft(&mut t, 3), 3954);
     }
 
     #[test]

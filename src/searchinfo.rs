@@ -227,24 +227,19 @@ mod tests {
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
+            t.board.san(mov.unwrap()).as_deref(),
             Some("Bxd5+")
         ));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -256,26 +251,18 @@ mod tests {
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
-            Some("Qxd5")
-        ));
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
 
         drop(guard);
@@ -285,26 +272,18 @@ mod tests {
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
-        assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
-            Some("Qxd4")
-        ));
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
 
         drop(guard);
@@ -314,24 +293,19 @@ mod tests {
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
+            t.board.san(mov.unwrap()).as_deref(),
             Some("Bxd4+")
         ));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.

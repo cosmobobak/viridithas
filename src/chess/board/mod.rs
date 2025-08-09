@@ -25,9 +25,8 @@ use crate::{
     },
     cuckoo,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
-    nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
+    nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
     search::pv::PVariation,
-    threadlocal::ThreadData,
 };
 
 use super::types::Keys;
@@ -1336,33 +1335,33 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) {
+    pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
         let mut update_buffer = UpdateBuffer::default();
         let piece = self.state.mailbox[m.from()].unwrap();
 
         self.make_move_base(m, &mut update_buffer);
 
-        t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece {
+        nnue.accumulators[nnue.current_acc].mv = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
         };
-        t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
-        t.nnue.current_acc += 1;
-        t.nnue.accumulators[t.nnue.current_acc].correct = [false; 2];
+        nnue.accumulators[nnue.current_acc].update_buffer = update_buffer;
+        nnue.current_acc += 1;
+        nnue.accumulators[nnue.current_acc].correct = [false; 2];
     }
 
-    pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
+    pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {
         self.unmake_move_base();
-        t.nnue.current_acc -= 1;
+        nnue.current_acc -= 1;
     }
 
-    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) {
-        self.make_move_nnue(m, t);
+    pub fn make_move(&mut self, m: Move, nnue: &mut NNUEState) {
+        self.make_move_nnue(m, nnue);
     }
 
-    pub fn unmake_move(&mut self, t: &mut ThreadData) {
-        self.unmake_move_nnue(t);
+    pub fn unmake_move(&mut self, nnue: &mut NNUEState) {
+        self.unmake_move_nnue(nnue);
     }
 
     /// Makes a guess about the new position key after a move.
@@ -1590,16 +1589,16 @@ impl Board {
         (self.state.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub fn pv_san(&mut self, pv: &PVariation) -> Result<String, fmt::Error> {
+    pub fn pv_san(&self, pv: &PVariation) -> Result<String, fmt::Error> {
+        let mut playout = self.clone();
         let mut out = String::new();
-        let mut moves_made = 0;
         for &m in pv.moves() {
-            write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string()))?;
-            self.make_move_simple(m);
-            moves_made += 1;
-        }
-        for _ in 0..moves_made {
-            self.unmake_move_base();
+            write!(
+                out,
+                "{} ",
+                playout.san(m).unwrap_or_else(|| "???".to_string())
+            )?;
+            playout.make_move_simple(m);
         }
         Ok(out)
     }
