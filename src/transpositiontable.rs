@@ -298,7 +298,7 @@ impl TT {
         key as u16
     }
 
-    pub fn view(&self) -> TTView {
+    pub fn view(&self) -> TTView<'_> {
         TTView {
             table: &self.table,
             age: self.age.load(Ordering::Relaxed),

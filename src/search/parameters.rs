@@ -249,7 +249,7 @@ macro_rules! id_value_gen {
 type LazyFieldParser<'a> = Box<dyn FnMut(&str) -> Result<(), Box<dyn std::error::Error>> + 'a>;
 
 impl Config {
-    pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser)> {
+    pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser<'_>)> {
         id_parser_gen![
             ASPIRATION_WINDOW = [self.aspiration_window],
             RFP_MARGIN = [self.rfp_margin],
