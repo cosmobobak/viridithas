@@ -2,10 +2,7 @@ use std::cell::Cell;
 
 use crate::{
     chess::{
-        board::{
-            movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
-            Board,
-        },
+        board::movegen::{pawn_attacks_by, AllMoves, MoveList, MoveListEntry, SkipQuiets},
         chessmove::Move,
         piece::PieceType,
         squareset::SquareSet,
@@ -13,7 +10,6 @@ use crate::{
     history,
     historytable::MAX_HISTORY,
     search::static_exchange_eval,
-    searchinfo::SearchInfo,
     threadlocal::ThreadData,
 };
 
@@ -56,14 +52,14 @@ impl MovePicker {
 
     /// Select the next move to try. Returns None if there are no more moves to try.
     #[allow(clippy::cognitive_complexity)]
-    pub fn next(&mut self, position: &Board, t: &ThreadData, info: &SearchInfo) -> Option<Move> {
+    pub fn next(&mut self, t: &ThreadData) -> Option<Move> {
         if self.stage == Stage::Done {
             return None;
         }
         if self.stage == Stage::TTMove {
             self.stage = Stage::GenerateCaptures;
             if let Some(tt_move) = self.tt_move {
-                if position.is_pseudo_legal(tt_move) {
+                if t.board.is_pseudo_legal(tt_move) {
                     return Some(tt_move);
                 }
             }
@@ -77,14 +73,14 @@ impl MovePicker {
             );
             // when we're in check, we want to generate enough moves to prove we're not mated.
             if self.skip_quiets {
-                position.generate_captures::<SkipQuiets>(&mut self.movelist);
+                t.board.generate_captures::<SkipQuiets>(&mut self.movelist);
             } else {
-                position.generate_captures::<AllMoves>(&mut self.movelist);
+                t.board.generate_captures::<AllMoves>(&mut self.movelist);
             }
-            Self::score_captures(t, position, &mut self.movelist);
+            Self::score_captures(t, &mut self.movelist);
         }
         if self.stage == Stage::YieldGoodCaptures {
-            if let Some(m) = self.yield_once(info, position) {
+            if let Some(m) = self.yield_once(t) {
                 if m.score >= WINNING_CAPTURE_BONUS {
                     return Some(m.mov);
                 }
@@ -103,8 +99,8 @@ impl MovePicker {
             self.stage = Stage::GenerateQuiets;
             if !self.skip_quiets && self.killer != self.tt_move {
                 if let Some(killer) = self.killer {
-                    if position.is_pseudo_legal(killer) {
-                        debug_assert!(!position.is_tactical(killer));
+                    if t.board.is_pseudo_legal(killer) {
+                        debug_assert!(!t.board.is_tactical(killer));
                         return Some(killer);
                     }
                 }
@@ -114,13 +110,13 @@ impl MovePicker {
             self.stage = Stage::YieldRemaining;
             if !self.skip_quiets {
                 let start = self.movelist.len();
-                position.generate_quiets(&mut self.movelist);
+                t.board.generate_quiets(&mut self.movelist);
                 let quiets = &mut self.movelist[start..];
-                Self::score_quiets(t, position, quiets);
+                Self::score_quiets(t, quiets);
             }
         }
         if self.stage == Stage::YieldRemaining {
-            if let Some(m) = self.yield_once(info, position) {
+            if let Some(m) = self.yield_once(t) {
                 return Some(m.mov);
             }
             self.stage = Stage::Done;
@@ -135,7 +131,7 @@ impl MovePicker {
     /// Usually only one iteration is performed, but in the case where
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
-    fn yield_once(&mut self, info: &SearchInfo, pos: &Board) -> Option<MoveListEntry> {
+    fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
         let mut remaining =
             Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
         while let Some(best_entry_ref) =
@@ -153,7 +149,7 @@ impl MovePicker {
             );
             // test if this is a potentially-winning capture that's yet to be SEE-ed:
             if best.score >= MIN_WINNING_SEE_SCORE
-                && !static_exchange_eval(pos, info, best.mov, self.see_threshold)
+                && !static_exchange_eval(&t.board, &t.info, best.mov, self.see_threshold)
             {
                 // if it fails SEE, then we want to try the next best move, and de-mark this one.
                 best_entry_ref.set(MoveListEntry {
@@ -184,22 +180,24 @@ impl MovePicker {
         None
     }
 
-    pub fn score_quiets(t: &ThreadData, pos: &Board, ms: &mut [MoveListEntry]) {
-        let cont_block_0 = pos
+    pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
+        let cont_block_0 = t
+            .board
             .height()
             .checked_sub(1)
             .and_then(|i| t.ss.get(i))
             .map(|ss| t.continuation_history.get_index(ss.conthist_index));
-        let cont_block_1 = pos
+        let cont_block_1 = t
+            .board
             .height()
             .checked_sub(2)
             .and_then(|i| t.ss.get(i))
             .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
-        let threats = pos.state.threats.all;
+        let threats = t.board.state.threats.all;
         for m in ms {
             let from = m.mov.from();
-            let piece = pos.state.mailbox[from].unwrap();
+            let piece = t.board.state.mailbox[from].unwrap();
             let to = m.mov.history_to_square();
             let from_threat = usize::from(threats.contains_square(from));
             let to_threat = usize::from(threats.contains_square(to));
@@ -216,18 +214,18 @@ impl MovePicker {
 
             match piece.piece_type() {
                 PieceType::Pawn => {
-                    let turn = pos.turn();
-                    let us = pos.state.bbs.colours[turn];
-                    let them = pos.state.bbs.colours[!turn];
+                    let turn = t.board.turn();
+                    let us = t.board.state.bbs.colours[turn];
+                    let them = t.board.state.bbs.colours[!turn];
 
-                    let our_pawns = pos.state.bbs.pieces[PieceType::Pawn] & us;
-                    let their_king = pos.state.bbs.pieces[PieceType::King] & them;
-                    let their_queens = pos.state.bbs.pieces[PieceType::Queen] & them;
-                    let their_rooks = pos.state.bbs.pieces[PieceType::Rook] & them;
-                    let their_minors = (pos.state.bbs.pieces[PieceType::Bishop]
-                        | pos.state.bbs.pieces[PieceType::Knight])
+                    let our_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & us;
+                    let their_king = t.board.state.bbs.pieces[PieceType::King] & them;
+                    let their_queens = t.board.state.bbs.pieces[PieceType::Queen] & them;
+                    let their_rooks = t.board.state.bbs.pieces[PieceType::Rook] & them;
+                    let their_minors = (t.board.state.bbs.pieces[PieceType::Bishop]
+                        | t.board.state.bbs.pieces[PieceType::Knight])
                         & them;
-                    let their_pawns = pos.state.bbs.pieces[PieceType::Pawn] & them;
+                    let their_pawns = t.board.state.bbs.pieces[PieceType::Pawn] & them;
 
                     if pawn_attacks_by(to.as_set(), !turn) & our_pawns != SquareSet::EMPTY {
                         // bonus for creating threats
@@ -246,26 +244,26 @@ impl MovePicker {
                     }
                 }
                 PieceType::Knight | PieceType::Bishop => {
-                    if pos.state.threats.leq_pawn.contains_square(from) {
+                    if t.board.state.threats.leq_pawn.contains_square(from) {
                         score += 4000;
                     }
-                    if pos.state.threats.leq_pawn.contains_square(to) {
+                    if t.board.state.threats.leq_pawn.contains_square(to) {
                         score -= 4000;
                     }
                 }
                 PieceType::Rook => {
-                    if pos.state.threats.leq_minor.contains_square(from) {
+                    if t.board.state.threats.leq_minor.contains_square(from) {
                         score += 8000;
                     }
-                    if pos.state.threats.leq_minor.contains_square(to) {
+                    if t.board.state.threats.leq_minor.contains_square(to) {
                         score -= 8000;
                     }
                 }
                 PieceType::Queen => {
-                    if pos.state.threats.leq_rook.contains_square(from) {
+                    if t.board.state.threats.leq_rook.contains_square(from) {
                         score += 12000;
                     }
-                    if pos.state.threats.leq_rook.contains_square(to) {
+                    if t.board.state.threats.leq_rook.contains_square(to) {
                         score -= 12000;
                     }
                 }
@@ -276,14 +274,14 @@ impl MovePicker {
         }
     }
 
-    pub fn score_captures(t: &ThreadData, pos: &Board, moves: &mut [MoveListEntry]) {
+    pub fn score_captures(t: &ThreadData, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
         for m in moves {
             let from = m.mov.from();
             let to = m.mov.to();
-            let piece = pos.state.mailbox[from].unwrap();
-            let capture = history::caphist_piece_type(pos, m.mov);
+            let piece = t.board.state.mailbox[from].unwrap();
+            let capture = history::caphist_piece_type(&t.board, m.mov);
 
             // optimistically initialised with the winning-SEE score.
             // lazily checked during yield_once.

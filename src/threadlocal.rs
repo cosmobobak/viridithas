@@ -1,14 +1,16 @@
-use std::array;
+use std::{
+    array,
+    sync::atomic::{AtomicBool, AtomicU64},
+};
 
 use crate::{
-    chess::board::Board,
-    chess::chessmove::Move,
-    chess::piece::Colour,
+    chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
         CaptureHistoryTable, CorrectionHistoryTable, DoubleHistoryTable, ThreatsHistoryTable,
     },
     nnue::{self, network::NNUEParams},
     search::pv::PVariation,
+    searchinfo::SearchInfo,
     stack::StackEntry,
     transpositiontable::TTView,
     util::MAX_PLY,
@@ -21,7 +23,7 @@ pub struct ThreadData<'a> {
     pub ss: [StackEntry; MAX_PLY + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
-    pub nnue_params: &'a NNUEParams,
+    pub nnue_params: &'static NNUEParams,
 
     pub main_history: ThreatsHistoryTable,
     pub tactical_history: Box<CaptureHistoryTable>,
@@ -42,6 +44,9 @@ pub struct ThreadData<'a> {
     pub optimism: [i32; 2],
 
     pub tt: TTView<'a>,
+
+    pub board: Board,
+    pub info: SearchInfo<'a>,
 }
 
 impl<'a> ThreadData<'a> {
@@ -51,14 +56,16 @@ impl<'a> ThreadData<'a> {
 
     pub fn new(
         thread_id: usize,
-        board: &Board,
+        board: Board,
         tt: TTView<'a>,
-        nnue_params: &'a NNUEParams,
+        nnue_params: &'static NNUEParams,
+        stopped: &'a AtomicBool,
+        nodes: &'a AtomicU64,
     ) -> Self {
         let mut td = Self {
             ss: array::from_fn(|_| StackEntry::default()),
             banned_nmp: 0,
-            nnue: nnue::network::NNUEState::new(board, nnue_params),
+            nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
             main_history: ThreatsHistoryTable::new(),
             tactical_history: CaptureHistoryTable::boxed(),
@@ -79,6 +86,8 @@ impl<'a> ThreadData<'a> {
             stm_at_root: board.turn(),
             optimism: [0; 2],
             tt,
+            board,
+            info: SearchInfo::new(stopped, nodes),
         };
 
         td.clear_tables();
@@ -127,7 +136,7 @@ impl<'a> ThreadData<'a> {
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
     }
 
-    pub fn set_up_for_search(&mut self, board: &Board) {
+    pub fn set_up_for_search(&mut self) {
         self.main_history.age_entries();
         self.tactical_history.age_entries();
         self.continuation_history.age_entries();
@@ -135,8 +144,8 @@ impl<'a> ThreadData<'a> {
         self.depth = 0;
         self.completed = 0;
         self.pvs.fill(Self::ARRAY_REPEAT_VALUE);
-        self.nnue.reinit_from(board, self.nnue_params);
-        self.stm_at_root = board.turn();
+        self.nnue.reinit_from(&self.board, self.nnue_params);
+        self.stm_at_root = self.board.turn();
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {

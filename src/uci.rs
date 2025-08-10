@@ -33,7 +33,7 @@ use crate::{
     },
     cuckoo,
     errors::{FenParseError, MoveParseError},
-    evaluation::{is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
+    evaluation::{evaluate, is_game_theoretic_score, is_mate_score, MATE_SCORE, TB_WIN_SCORE},
     nnue::{
         self,
         network::{self, NNUEParams},
@@ -194,7 +194,7 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
+fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
     #![allow(clippy::too_many_lines)]
 
     let mut depth: Option<i32> = None;
@@ -224,10 +224,10 @@ fn parse_go(text: &str, pos: &Board) -> anyhow::Result<SearchLimit> {
             }
             "movestogo" => moves_to_go = Some(part_parse("movestogo", parts.next())?),
             "movetime" => movetime = Some(part_parse("movetime", parts.next())?),
-            "wtime" => clocks[pos.turn()] = Some(part_parse("wtime", parts.next())?),
-            "btime" => clocks[pos.turn().flip()] = Some(part_parse("btime", parts.next())?),
-            "winc" => incs[pos.turn()] = Some(part_parse("winc", parts.next())?),
-            "binc" => incs[pos.turn().flip()] = Some(part_parse("binc", parts.next())?),
+            "wtime" => clocks[stm] = Some(part_parse("wtime", parts.next())?),
+            "btime" => clocks[stm.flip()] = Some(part_parse("btime", parts.next())?),
+            "winc" => incs[stm] = Some(part_parse("winc", parts.next())?),
+            "binc" => incs[stm.flip()] = Some(part_parse("binc", parts.next())?),
             "infinite" => limit = SearchLimit::Infinite,
             "mate" => {
                 let mate_distance: usize = part_parse("mate", parts.next())?;
@@ -610,21 +610,24 @@ pub fn main_loop() -> anyhow::Result<()> {
     };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
-    let mut pos = Board::default();
-
     let mut tt = TT::new();
     tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
 
     let nnue_params = NNUEParams::decompress_and_alloc()?;
 
-    let stopped = AtomicBool::new(false);
     let (stdin, stdin_reader_handle) = stdin_reader()?;
     let stdin = Mutex::new(stdin);
+    let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo::new(&stopped, &nodes);
-    info.set_stdin(&stdin);
-
-    let mut thread_data = vec![ThreadData::new(0, &pos, tt.view(), nnue_params)];
+    let mut thread_data = vec![ThreadData::new(
+        0,
+        Board::default(),
+        tt.view(),
+        nnue_params,
+        &stopped,
+        &nodes,
+    )];
+    thread_data[0].info.set_stdin(&stdin);
 
     loop {
         std::io::stdout()
@@ -643,14 +646,14 @@ pub fn main_loop() -> anyhow::Result<()> {
             "\n" => continue,
             "uci" => {
                 #[cfg(feature = "tuning")]
-                print_uci_response(&info, true);
+                print_uci_response(&thread_data[0].info, true);
                 #[cfg(not(feature = "tuning"))]
-                print_uci_response(&info, false);
+                print_uci_response(&thread_data[0].info, false);
                 PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
             "ucifull" => {
-                print_uci_response(&info, true);
+                print_uci_response(&thread_data[0].info, true);
                 PRETTY_PRINT.store(false, Ordering::SeqCst);
                 Ok(())
             }
@@ -689,35 +692,41 @@ pub fn main_loop() -> anyhow::Result<()> {
                 QUIT.store(true, Ordering::SeqCst);
                 break;
             }
-            "ucinewgame" => do_newgame(&mut pos, &tt, &mut thread_data),
+            "ucinewgame" => do_newgame(&tt, &mut thread_data),
             "eval" => {
-                let eval = if pos.in_check() {
+                let t = thread_data
+                    .first_mut()
+                    .with_context(|| "the thread headers are empty.")?;
+                let eval = if t.board.in_check() {
                     0
                 } else {
-                    let t = thread_data
-                        .first_mut()
-                        .with_context(|| "the thread headers are empty.")?;
-                    let eval = pos.evaluate(t, 0);
-                    adj_shuffle(&pos, t, &info, eval, pos.fifty_move_counter())
+                    let eval = evaluate(t, 0);
+                    adj_shuffle(t, eval, t.board.fifty_move_counter())
                 };
                 println!("{eval}");
                 Ok(())
             }
             "raweval" => {
-                let eval = if pos.in_check() {
+                let t = thread_data
+                    .first_mut()
+                    .with_context(|| "the thread headers are empty.")?;
+                let eval = if t.board.in_check() {
                     0
                 } else {
-                    let t1 = thread_data
-                        .first_mut()
-                        .with_context(|| "the thread headers are empty.")?;
-                    t1.nnue
-                        .evaluate(t1.nnue_params, pos.turn(), network::output_bucket(&pos))
+                    t.nnue.evaluate(
+                        t.nnue_params,
+                        t.board.turn(),
+                        network::output_bucket(&t.board),
+                    )
                 };
                 println!("{eval}");
                 Ok(())
             }
             "show" => {
-                println!("{pos:X}");
+                let t = thread_data
+                    .first_mut()
+                    .with_context(|| "the thread headers are empty.")?;
+                println!("{:X}", t.board);
                 Ok(())
             }
             "nnuebench" => {
@@ -732,39 +741,50 @@ pub fn main_loop() -> anyhow::Result<()> {
             "initattacks" => movegen::init_sliders_attacks(),
             input if input.starts_with("setoption") => {
                 let pre_config = SetOptions {
-                    search_config: info.conf.clone(),
+                    search_config: thread_data[0].info.conf.clone(),
                     hash_mb: tt.size() / MEGABYTE,
                     threads: thread_data.len(),
                 };
                 let res = parse_setoption(input, pre_config);
                 match res {
                     Ok(conf) => {
-                        info.conf = conf.search_config;
-                        info.lm_table = LMTable::new(&info.conf);
+                        thread_data[0].info.conf = conf.search_config;
+                        thread_data[0].info.lm_table = LMTable::new(&thread_data[0].info.conf);
                         let new_size = conf.hash_mb * MEGABYTE;
+                        let pos = thread_data[0].board.clone();
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
                         tt.resize(new_size, conf.threads);
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
                             .zip(std::iter::repeat(&pos))
-                            .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
+                            .map(|(i, p)| {
+                                ThreadData::new(
+                                    i,
+                                    p.clone(),
+                                    tt.view(),
+                                    nnue_params,
+                                    &stopped,
+                                    &nodes,
+                                )
+                            })
                             .collect();
                         Ok(())
                     }
                     Err(err) => Err(err),
                 }
             }
-            input if input.starts_with("position") => {
-                let res = parse_position(input, &mut pos);
-                if res.is_ok() {
-                    for t in &mut thread_data {
-                        t.nnue.reinit_from(&pos, t.nnue_params);
-                    }
+            input if input.starts_with("position") => (|| {
+                for t in &mut thread_data {
+                    parse_position(input, &mut t.board)?;
+                    t.nnue.reinit_from(&t.board, t.nnue_params);
                 }
-                res
-            }
+                Ok(())
+            })(),
             input if input.starts_with("go perft") || input.starts_with("perft") => {
+                let t = thread_data
+                    .first_mut()
+                    .with_context(|| "the thread headers are empty.")?;
                 let tail = input
                     .trim_start_matches("go perft ")
                     .trim_start_matches("perft ");
@@ -780,14 +800,14 @@ pub fn main_loop() -> anyhow::Result<()> {
                                     "cannot parse \"{depth}\" as usize"
                                 ))
                             })
-                            .map(|depth| divide_perft(depth, &mut pos))
+                            .map(|depth| divide_perft(depth, &mut t.board))
                     }
                     Some(depth) => depth
                         .parse::<usize>()
                         .with_context(|| {
                             UciError::InvalidFormat(format!("cannot parse \"{depth}\" as usize"))
                         })
-                        .map(|depth| block_perft(depth, &mut pos)),
+                        .map(|depth| block_perft(depth, &mut t.board)),
                     None => Err(anyhow!(UciError::InvalidFormat(
                         "expected a depth after 'go perft'".to_string()
                     ))),
@@ -795,7 +815,7 @@ pub fn main_loop() -> anyhow::Result<()> {
             }
             input if input.starts_with("go") => {
                 // start the clock *immediately*
-                info.time_manager.start();
+                thread_data[0].info.time_manager.start();
 
                 // if we're in pretty-printing mode, set the terminal properly:
                 if PRETTY_PRINT.load(Ordering::SeqCst) {
@@ -804,26 +824,28 @@ pub fn main_loop() -> anyhow::Result<()> {
                     });
                 }
 
-                let res = parse_go(input, &pos);
+                let res = parse_go(input, thread_data[0].board.turn());
                 if let Ok(search_limit) = res {
-                    info.time_manager.set_limit(search_limit);
+                    thread_data[0].info.time_manager.set_limit(search_limit);
                     tt.increase_age();
-                    search_position(&mut pos, &mut info, &mut thread_data, tt.view());
+                    search_position(&mut thread_data, tt.view());
                     Ok(())
                 } else {
                     res.map(|_| ())
                 }
             }
             "ponderhit" => {
-                println!("info error ponderhit given while not searching.");
+                println!("thread_data[0].info error ponderhit given while not searching.");
                 Ok(())
             }
-            benchcmd @ ("bench" | "benchfull") => bench(benchcmd, &info.conf, nnue_params, None),
+            benchcmd @ ("bench" | "benchfull") => {
+                bench(benchcmd, &thread_data[0].info.conf, nnue_params, None)
+            }
             _ => Err(anyhow!(UciError::UnknownCommand(input.to_string()))),
         };
 
         if let Err(e) = res {
-            eprintln!("info string {e}");
+            eprintln!("thread_data[0].info string {e}");
         }
 
         if QUIT.load(Ordering::SeqCst) {
@@ -845,21 +867,28 @@ const BENCH_THREADS: usize = 1;
 pub fn bench(
     benchcmd: &str,
     search_params: &Config,
-    nnue_params: &NNUEParams,
+    nnue_params: &'static NNUEParams,
     depth: Option<usize>,
 ) -> anyhow::Result<()> {
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo::with_search_params(&stopped, &nodes, search_params);
-    info.print_to_stdout = false;
-    let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..BENCH_THREADS)
-        .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
+        .map(|i| {
+            ThreadData::new(
+                i,
+                Board::default(),
+                tt.view(),
+                nnue_params,
+                &stopped,
+                &nodes,
+            )
+        })
         .collect::<Vec<_>>();
+    thread_data[0].info.conf = search_params.clone();
+    thread_data[0].info.print_to_stdout = false;
     let mut node_sum = 0u64;
     let start = Instant::now();
     let max_fen_len = BENCH_POSITIONS
@@ -868,33 +897,36 @@ pub fn bench(
         .max()
         .with_context(|| "this array is nonempty.")?;
     for fen in BENCH_POSITIONS {
-        let res = do_newgame(&mut pos, &tt, &mut thread_data);
+        let res = do_newgame(&tt, &mut thread_data);
         if let Err(e) = res {
-            info.print_to_stdout = true;
-            return Err(e);
-        }
-        let res = parse_position(&format!("position fen {fen}\n"), &mut pos);
-        if let Err(e) = res {
-            info.print_to_stdout = true;
+            thread_data[0].info.print_to_stdout = true;
             return Err(e);
         }
         for t in &mut thread_data {
-            t.nnue.reinit_from(&pos, nnue_params);
+            let res = parse_position(&format!("position fen {fen}\n"), &mut t.board);
+            if let Err(e) = res {
+                thread_data[0].info.print_to_stdout = true;
+                return Err(e);
+            }
+            t.nnue.reinit_from(&t.board, nnue_params);
         }
-        info.time_manager.start();
-        let res = parse_go(&bench_string, &pos);
+        thread_data[0].info.time_manager.start();
+        let res = parse_go(&bench_string, thread_data[0].board.turn());
         match res {
-            Ok(limit) => info.time_manager.set_limit(limit),
+            Ok(limit) => thread_data[0].info.time_manager.set_limit(limit),
             Err(e) => {
-                info.print_to_stdout = true;
+                thread_data[0].info.print_to_stdout = true;
                 return Err(e);
             }
         }
         tt.increase_age();
-        search_position(&mut pos, &mut info, &mut thread_data, tt.view());
-        node_sum += info.nodes.get_global();
+        search_position(&mut thread_data, tt.view());
+        node_sum += thread_data[0].info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
-            println!("{fen:<max_fen_len$} | {:>7} nodes", info.nodes.get_global());
+            println!(
+                "{fen:<max_fen_len$} | {:>7} nodes",
+                thread_data[0].info.nodes.get_global()
+            );
         }
     }
     let time = start.elapsed();
@@ -908,7 +940,7 @@ pub fn bench(
             time = time.as_secs_f64()
         );
     }
-    info.print_to_stdout = true;
+    thread_data[0].info.print_to_stdout = true;
 
     // logging for permutation
     #[cfg(feature = "nnz-counts")]
@@ -940,36 +972,37 @@ pub fn bench(
 }
 
 /// Benchmark the go UCI command.
-pub fn go_benchmark(nnue_params: &NNUEParams) -> anyhow::Result<()> {
+pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     #![allow(clippy::cast_precision_loss)]
     const COUNT: usize = 1000;
     const THREADS: usize = 250;
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo::new(&stopped, &nodes);
-    info.print_to_stdout = false;
-    let mut pos = Board::default();
     let mut tt = TT::new();
     tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..THREADS)
-        .zip(std::iter::repeat(&pos))
-        .map(|(i, p)| ThreadData::new(i, p, tt.view(), nnue_params))
+        .map(|i| {
+            ThreadData::new(
+                i,
+                Board::default(),
+                tt.view(),
+                nnue_params,
+                &stopped,
+                &nodes,
+            )
+        })
         .collect::<Vec<_>>();
+    thread_data[0].info.print_to_stdout = false;
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
-        info.time_manager.start();
+        thread_data[0].info.time_manager.start();
         let limit = parse_go(
             std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
-            &pos,
+            thread_data[0].board.turn(),
         )?;
-        info.time_manager.set_limit(limit);
+        thread_data[0].info.time_manager.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(search_position(
-            &mut pos,
-            &mut info,
-            &mut thread_data,
-            tt.view(),
-        ));
+        std::hint::black_box(search_position(&mut thread_data, tt.view()));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);
@@ -1016,10 +1049,13 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     );
 }
 
-fn do_newgame(pos: &mut Board, tt: &TT, thread_data: &mut [ThreadData]) -> anyhow::Result<()> {
-    parse_position("position startpos\n", pos).with_context(|| "Failed to set startpos")?;
+fn do_newgame(tt: &TT, thread_data: &mut [ThreadData]) -> anyhow::Result<()> {
     tt.clear(thread_data.len());
-    thread_data.iter_mut().for_each(ThreadData::clear_tables);
+    for t in thread_data {
+        parse_position("position startpos\n", &mut t.board)
+            .with_context(|| "Failed to set startpos")?;
+        t.clear_tables();
+    }
     Ok(())
 }
 
