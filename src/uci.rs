@@ -42,7 +42,8 @@ use crate::{
     search::{adj_shuffle, parameters::Config, search_position, LMTable},
     searchinfo::SearchInfo,
     tablebases, term,
-    threadlocal::ThreadData,
+    threadlocal::{make_thread_data, ThreadData},
+    threadpool,
     timemgmt::SearchLimit,
     transpositiontable::TT,
     util::{MAX_PLY, MEGABYTE},
@@ -610,8 +611,10 @@ pub fn main_loop() -> anyhow::Result<()> {
     };
     println!("{NAME} {VERSION}{version_extension} by Cosmo");
 
+    let mut worker_threads = threadpool::make_worker_threads(1);
+
     let mut tt = TT::new();
-    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, 1); // default hash size
+    tt.resize(UCI_DEFAULT_HASH_MEGABYTES * MEGABYTE, &worker_threads); // default hash size
 
     let nnue_params = NNUEParams::decompress_and_alloc()?;
 
@@ -619,14 +622,14 @@ pub fn main_loop() -> anyhow::Result<()> {
     let stdin = Mutex::new(stdin);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut thread_data = vec![Box::new(ThreadData::new(
-        0,
-        Board::default(),
+    let mut thread_data = make_thread_data(
+        &Board::default(),
         tt.view(),
         nnue_params,
         &stopped,
         &nodes,
-    ))];
+        &worker_threads,
+    )?;
     thread_data[0].info.set_stdin(&stdin);
 
     loop {
@@ -745,29 +748,38 @@ pub fn main_loop() -> anyhow::Result<()> {
                     hash_mb: tt.size() / MEGABYTE,
                     threads: thread_data.len(),
                 };
+                let threads_before = thread_data.len();
                 let res = parse_setoption(input, pre_config);
                 match res {
                     Ok(conf) => {
+                        if threads_before != conf.threads {
+                            println!(
+                                "info string changing threads from {threads_before} to {}",
+                                conf.threads
+                            );
+                            worker_threads
+                                .into_iter()
+                                .for_each(threadpool::WorkerThread::join);
+                            worker_threads = threadpool::make_worker_threads(conf.threads);
+                        }
+
                         thread_data[0].info.conf = conf.search_config;
                         thread_data[0].info.lm_table = LMTable::new(&thread_data[0].info.conf);
                         let new_size = conf.hash_mb * MEGABYTE;
                         let pos = thread_data[0].board.clone();
                         // drop all the thread_data, as they are borrowing the old tt
                         std::mem::drop(thread_data);
-                        tt.resize(new_size, conf.threads);
+                        tt.resize(new_size, &worker_threads);
                         // recreate the thread_data with the new tt
-                        thread_data = (0..conf.threads)
-                            .map(|i| {
-                                Box::new(ThreadData::new(
-                                    i,
-                                    pos.clone(),
-                                    tt.view(),
-                                    nnue_params,
-                                    &stopped,
-                                    &nodes,
-                                ))
-                            })
-                            .collect();
+                        thread_data = make_thread_data(
+                            &pos,
+                            tt.view(),
+                            nnue_params,
+                            &stopped,
+                            &nodes,
+                            &worker_threads,
+                        )?;
+
                         Ok(())
                     }
                     Err(err) => Err(err),
@@ -872,20 +884,17 @@ pub fn bench(
     let bench_string = format!("go depth {}\n", depth.unwrap_or(BENCH_DEPTH));
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let pool = threadpool::make_worker_threads(BENCH_THREADS);
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, 1);
-    let mut thread_data = (0..BENCH_THREADS)
-        .map(|i| {
-            Box::new(ThreadData::new(
-                i,
-                Board::default(),
-                tt.view(),
-                nnue_params,
-                &stopped,
-                &nodes,
-            ))
-        })
-        .collect::<Vec<_>>();
+    tt.resize(16 * MEGABYTE, &pool);
+    let mut thread_data = make_thread_data(
+        &Board::default(),
+        tt.view(),
+        nnue_params,
+        &stopped,
+        &nodes,
+        &pool,
+    )?;
     thread_data[0].info.conf = search_params.clone();
     thread_data[0].info.print_to_stdout = false;
     let mut node_sum = 0u64;
@@ -977,20 +986,17 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     const THREADS: usize = 250;
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
+    let pool = threadpool::make_worker_threads(THREADS);
     let mut tt = TT::new();
-    tt.resize(16 * MEGABYTE, 1);
-    let mut thread_data = (0..THREADS)
-        .map(|i| {
-            Box::new(ThreadData::new(
-                i,
-                Board::default(),
-                tt.view(),
-                nnue_params,
-                &stopped,
-                &nodes,
-            ))
-        })
-        .collect::<Vec<_>>();
+    tt.resize(16 * MEGABYTE, &pool);
+    let mut thread_data = make_thread_data(
+        &Board::default(),
+        tt.view(),
+        nnue_params,
+        &stopped,
+        &nodes,
+        &pool,
+    )?;
     thread_data[0].info.print_to_stdout = false;
     let start = std::time::Instant::now();
     for _ in 0..COUNT {

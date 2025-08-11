@@ -6,6 +6,7 @@ use std::{
 use crate::{
     chess::chessmove::Move,
     evaluation::MINIMUM_TB_WIN_SCORE,
+    threadpool::{self, ScopeExt},
     util::{self, depth::CompactDepthStorage, MEGABYTE},
 };
 
@@ -36,14 +37,19 @@ fn divide_into_chunks<T>(slice: &[T], chunks: usize) -> impl Iterator<Item = &[T
     slice.chunks(chunk_size)
 }
 
-unsafe fn threaded_memset_zero(ptr: *mut MaybeUninit<u8>, len: usize, threads: usize) {
+unsafe fn threaded_memset_zero(
+    ptr: *mut MaybeUninit<u8>,
+    len: usize,
+    threads: &[threadpool::WorkerThread],
+) {
     #[allow(clippy::collection_is_never_read)]
     std::thread::scope(|s| {
-        let chunk_size = len / threads + 64;
-        let mut handles = Vec::with_capacity(threads);
-        for thread in 0..threads {
-            let start = thread * chunk_size;
-            let end = ((thread + 1) * chunk_size).min(len);
+        let thread_count = threads.len();
+        let chunk_size = len / thread_count + 64;
+        let mut handles = Vec::with_capacity(thread_count);
+        for (thread_idx, thread) in threads.iter().enumerate() {
+            let start = thread_idx * chunk_size;
+            let end = ((thread_idx + 1) * chunk_size).min(len);
             if start > end {
                 // with many threads we can hit this
                 break;
@@ -52,10 +58,16 @@ unsafe fn threaded_memset_zero(ptr: *mut MaybeUninit<u8>, len: usize, threads: u
             let slice_len = end.checked_sub(start).unwrap();
             // launder address
             let addr = slice_ptr as usize;
-            handles.push(s.spawn(move || {
-                let slice_ptr = addr as *mut u8;
-                std::ptr::write_bytes(slice_ptr, 0, slice_len);
-            }));
+            handles.push(s.spawn_into(
+                move || {
+                    let slice_ptr = addr as *mut u8;
+                    std::ptr::write_bytes(slice_ptr, 0, slice_len);
+                },
+                thread,
+            ));
+        }
+        for handle in handles {
+            handle.receive();
         }
     });
 }
@@ -255,7 +267,7 @@ impl TT {
         }
     }
 
-    pub fn resize(&mut self, bytes: usize, threads: usize) {
+    pub fn resize(&mut self, bytes: usize, threads: &[threadpool::WorkerThread]) {
         let start = std::time::Instant::now();
         let new_len = bytes / size_of::<TTClusterMemory>();
         // dealloc the old table:
@@ -545,40 +557,45 @@ mod tests {
     fn memset_correct() {
         #![allow(clippy::undocumented_unsafe_blocks)]
         let mut x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(1);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(2);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 2);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(7);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 7);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(1337);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 1337);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
         }
 
         x = vec![1u8; 2048];
+        let pool = threadpool::make_worker_threads(5555);
         unsafe {
-            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), 5555);
+            threaded_memset_zero(x.as_mut_ptr().cast(), x.len(), &pool);
         }
         for (i, v) in x.iter().enumerate() {
             assert_eq!(*v, 0, "unset at index {i}");
