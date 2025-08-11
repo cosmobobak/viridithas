@@ -619,14 +619,14 @@ pub fn main_loop() -> anyhow::Result<()> {
     let stdin = Mutex::new(stdin);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut thread_data = vec![ThreadData::new(
+    let mut thread_data = vec![Box::new(ThreadData::new(
         0,
         Board::default(),
         tt.view(),
         nnue_params,
         &stopped,
         &nodes,
-    )];
+    ))];
     thread_data[0].info.set_stdin(&stdin);
 
     loop {
@@ -757,16 +757,15 @@ pub fn main_loop() -> anyhow::Result<()> {
                         tt.resize(new_size, conf.threads);
                         // recreate the thread_data with the new tt
                         thread_data = (0..conf.threads)
-                            .zip(std::iter::repeat(&pos))
-                            .map(|(i, p)| {
-                                ThreadData::new(
+                            .map(|i| {
+                                Box::new(ThreadData::new(
                                     i,
-                                    p.clone(),
+                                    pos.clone(),
                                     tt.view(),
                                     nnue_params,
                                     &stopped,
                                     &nodes,
-                                )
+                                ))
                             })
                             .collect();
                         Ok(())
@@ -877,14 +876,14 @@ pub fn bench(
     tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..BENCH_THREADS)
         .map(|i| {
-            ThreadData::new(
+            Box::new(ThreadData::new(
                 i,
                 Board::default(),
                 tt.view(),
                 nnue_params,
                 &stopped,
                 &nodes,
-            )
+            ))
         })
         .collect::<Vec<_>>();
     thread_data[0].info.conf = search_params.clone();
@@ -982,14 +981,14 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     tt.resize(16 * MEGABYTE, 1);
     let mut thread_data = (0..THREADS)
         .map(|i| {
-            ThreadData::new(
+            Box::new(ThreadData::new(
                 i,
                 Board::default(),
                 tt.view(),
                 nnue_params,
                 &stopped,
                 &nodes,
-            )
+            ))
         })
         .collect::<Vec<_>>();
     thread_data[0].info.print_to_stdout = false;
@@ -1049,7 +1048,7 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     );
 }
 
-fn do_newgame(tt: &TT, thread_data: &mut [ThreadData]) -> anyhow::Result<()> {
+fn do_newgame(tt: &TT, thread_data: &mut [Box<ThreadData>]) -> anyhow::Result<()> {
     tt.clear(thread_data.len());
     for t in thread_data {
         parse_position("position startpos\n", &mut t.board)

@@ -189,7 +189,7 @@ impl SmpThreadType for HelperThread {
 
 /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
 #[allow(clippy::too_many_lines)]
-pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, Option<Move>) {
+pub fn search_position(thread_headers: &mut [Box<ThreadData>], tt: TTView) -> (i32, Option<Move>) {
     for t in &mut *thread_headers {
         t.board.zero_height();
         t.info.set_up_for_search();
@@ -1823,7 +1823,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     raw_eval * (200 - i32::from(clock)) / 200
 }
 
-pub fn select_best<'a>(thread_headers: &'a [ThreadData]) -> &'a ThreadData<'a> {
+pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData>]) -> &'a ThreadData<'a> {
     let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
     let tt = thread_headers[0].tt;

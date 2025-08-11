@@ -224,7 +224,14 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
@@ -248,7 +255,14 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
@@ -269,7 +283,14 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 
@@ -290,7 +311,14 @@ mod tests {
         let mut tt = TT::new();
         tt.resize(MEGABYTE, 1);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, position, tt.view(), nnue_params, &stopped, &nodes);
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
 

@@ -16,7 +16,7 @@ use crate::{
     util::MAX_PLY,
 };
 
-#[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
+#[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.

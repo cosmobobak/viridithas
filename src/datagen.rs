@@ -417,14 +417,14 @@ fn generate_on_thread<'a>(
     tt.resize(MEGABYTE, 1);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut thread_data = ThreadData::new(
+    let mut thread_data = Box::new(ThreadData::new(
         0,
         Board::default(),
         tt.view(),
         nnue_params,
         &stopped,
         &nodes,
-    );
+    ));
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(depth),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
