@@ -290,17 +290,25 @@ impl TT {
         );
     }
 
-    pub fn clear(&self, threads: usize) {
+    pub fn clear(&self, threads: &[threadpool::WorkerThread]) {
         #[allow(clippy::collection_is_never_read)]
         std::thread::scope(|s| {
-            let mut handles = Vec::with_capacity(threads);
-            for chunk in divide_into_chunks(&self.table, threads) {
-                let handle = s.spawn(move || {
-                    for entry in chunk {
-                        entry.clear();
-                    }
-                });
+            let mut handles = Vec::with_capacity(threads.len());
+            for (chunk, worker) in
+                divide_into_chunks(&self.table, threads.len()).zip(threads.iter().cycle())
+            {
+                let handle = s.spawn_into(
+                    move || {
+                        for entry in chunk {
+                            entry.clear();
+                        }
+                    },
+                    worker,
+                );
                 handles.push(handle);
+            }
+            for handle in handles {
+                handle.receive();
             }
         });
     }

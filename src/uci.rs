@@ -695,7 +695,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 QUIT.store(true, Ordering::SeqCst);
                 break;
             }
-            "ucinewgame" => do_newgame(&tt, &mut thread_data),
+            "ucinewgame" => do_newgame(&tt, &mut thread_data, &worker_threads),
             "eval" => {
                 let t = thread_data
                     .first_mut()
@@ -842,7 +842,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 if let Ok(search_limit) = res {
                     thread_data[0].info.time_manager.set_limit(search_limit);
                     tt.increase_age();
-                    search_position(&mut thread_data, tt.view());
+                    search_position(&worker_threads, &mut thread_data, tt.view());
                     Ok(())
                 } else {
                     res.map(|_| ())
@@ -908,7 +908,7 @@ pub fn bench(
         .max()
         .with_context(|| "this array is nonempty.")?;
     for fen in BENCH_POSITIONS {
-        let res = do_newgame(&tt, &mut thread_data);
+        let res = do_newgame(&tt, &mut thread_data, &pool);
         if let Err(e) = res {
             thread_data[0].info.print_to_stdout = true;
             return Err(e);
@@ -931,7 +931,7 @@ pub fn bench(
             }
         }
         tt.increase_age();
-        search_position(&mut thread_data, tt.view());
+        search_position(&pool, &mut thread_data, tt.view());
         node_sum += thread_data[0].info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!(
@@ -1010,7 +1010,7 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
         )?;
         thread_data[0].info.time_manager.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(search_position(&mut thread_data, tt.view()));
+        std::hint::black_box(search_position(&pool, &mut thread_data, tt.view()));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);
@@ -1057,8 +1057,12 @@ fn divide_perft(depth: usize, pos: &mut Board) {
     );
 }
 
-fn do_newgame(tt: &TT, thread_data: &mut [Box<ThreadData>]) -> anyhow::Result<()> {
-    tt.clear(thread_data.len());
+fn do_newgame(
+    tt: &TT,
+    thread_data: &mut [Box<ThreadData>],
+    pool: &[threadpool::WorkerThread],
+) -> anyhow::Result<()> {
+    tt.clear(pool);
     for t in thread_data {
         parse_position("position startpos\n", &mut t.board)
             .with_context(|| "Failed to set startpos")?;

@@ -235,7 +235,7 @@ mod tests {
             &nodes,
         ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             t.board.san(mov.unwrap()).as_deref(),
@@ -267,7 +267,7 @@ mod tests {
             &nodes,
         ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
@@ -296,7 +296,7 @@ mod tests {
             &nodes,
         ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
@@ -325,7 +325,7 @@ mod tests {
             &nodes,
         ));
         t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
-        let (value, mov) = search_position(array::from_mut(&mut t), tt.view());
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
             t.board.san(mov.unwrap()).as_deref(),

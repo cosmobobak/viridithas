@@ -493,7 +493,7 @@ fn generate_on_thread<'a>(
             }
         }
         // reset everything: board, thread data, tt, search info
-        tt.clear(1);
+        tt.clear(&pool);
         thread_data[0].info.set_up_for_search();
         // generate game
         // STEP 1: get the next starting position from the callback
@@ -509,7 +509,7 @@ fn generate_on_thread<'a>(
             .info
             .time_manager
             .set_limit(SearchLimit::Depth(10));
-        let (eval, _) = search_position(&mut thread_data, tt.view());
+        let (eval, _) = search_position(&pool, &mut thread_data, tt.view());
         thread_data[0].info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
@@ -535,7 +535,7 @@ fn generate_on_thread<'a>(
             }
             tt.increase_age();
 
-            let (score, best_move) = search_position(&mut thread_data, tt.view());
+            let (score, best_move) = search_position(&pool, &mut thread_data, tt.view());
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
