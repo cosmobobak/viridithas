@@ -762,9 +762,6 @@ pub fn main_loop() -> anyhow::Result<()> {
                                 .for_each(threadpool::WorkerThread::join);
                             worker_threads = threadpool::make_worker_threads(conf.threads);
                         }
-
-                        thread_data[0].info.conf = conf.search_config;
-                        thread_data[0].info.lm_table = LMTable::new(&thread_data[0].info.conf);
                         let new_size = conf.hash_mb * MEGABYTE;
                         let pos = thread_data[0].board.clone();
                         // drop all the thread_data, as they are borrowing the old tt
@@ -779,6 +776,12 @@ pub fn main_loop() -> anyhow::Result<()> {
                             &nodes,
                             &worker_threads,
                         )?;
+
+                        for t in &mut thread_data {
+                            t.info.conf = conf.search_config.clone();
+                            t.info.lm_table = LMTable::new(&t.info.conf);
+                            t.info.set_stdin(&stdin);
+                        }
 
                         Ok(())
                     }
@@ -846,7 +849,7 @@ pub fn main_loop() -> anyhow::Result<()> {
                 }
             }
             "ponderhit" => {
-                println!("thread_data[0].info error ponderhit given while not searching.");
+                println!("info error ponderhit given while not searching.");
                 Ok(())
             }
             benchcmd @ ("bench" | "benchfull") => {
@@ -856,7 +859,7 @@ pub fn main_loop() -> anyhow::Result<()> {
         };
 
         if let Err(e) = res {
-            eprintln!("thread_data[0].info string {e}");
+            eprintln!("info string {e}");
         }
 
         if QUIT.load(Ordering::SeqCst) {
