@@ -204,7 +204,7 @@ pub fn make_thread_data<'a>(
                 .recv()
                 .with_context(|| "Failed to receive thread data from worker thread")?;
             thread_data.push(td);
-            handle.receive();
+            handle.join();
         }
 
         Ok(thread_data)

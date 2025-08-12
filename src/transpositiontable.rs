@@ -67,7 +67,7 @@ unsafe fn threaded_memset_zero(
             ));
         }
         for handle in handles {
-            handle.receive();
+            handle.join();
         }
     });
 }
@@ -308,7 +308,7 @@ impl TT {
                 handles.push(handle);
             }
             for handle in handles {
-                handle.receive();
+                handle.join();
             }
         });
     }

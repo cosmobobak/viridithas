@@ -273,7 +273,7 @@ pub fn search_position(
             ));
         }
         for handle in handles {
-            handle.receive();
+            handle.join();
         }
     });
 

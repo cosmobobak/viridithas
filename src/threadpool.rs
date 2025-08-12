@@ -1,4 +1,5 @@
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::Scope;
 
 // Handle for communicating with a worker thread.
@@ -7,44 +8,45 @@ use std::thread::Scope;
 pub struct WorkSender {
     // INVARIANT: Each send must be matched by a receive.
     sender: Sender<Box<dyn FnOnce() + Send>>,
-    receiver: Receiver<()>,
+    completion_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
 /// Handle for the receiver side of a worker thread.
 struct WorkReceiver {
     receiver: Receiver<Box<dyn FnOnce() + Send>>,
-    sender: Sender<()>,
+    completion_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
 fn make_work_channel() -> (WorkSender, WorkReceiver) {
     let (sender, receiver) = std::sync::mpsc::channel();
-    let (result_sender, result_receiver) = std::sync::mpsc::channel();
+    let completion_signal = Arc::new((Mutex::new(false), Condvar::new()));
 
     (
         WorkSender {
             sender,
-            receiver: result_receiver,
+            completion_signal: Arc::clone(&completion_signal),
         },
         WorkReceiver {
             receiver,
-            sender: result_sender,
+            completion_signal,
         },
     )
 }
 
 pub struct ReceiverHandle<'scope> {
-    receiver: &'scope Receiver<()>,
+    completion_signal: &'scope Arc<(Mutex<bool>, Condvar)>,
     received: bool,
 }
 
 impl ReceiverHandle<'_> {
-    // Receives a value from the worker thread.
-    // This will block until a value is available.
-    pub fn receive(mut self) {
-        self.receiver
-            .recv()
-            .expect("Failed to receive value from worker thread");
-        self.received = true; // Mark that we have received a value
+    pub fn join(mut self) {
+        let (lock, cvar) = &**self.completion_signal;
+        let mut completed = lock.lock().unwrap();
+        while !*completed {
+            completed = cvar.wait(completed).unwrap();
+        }
+        drop(completed);
+        self.received = true;
     }
 }
 
@@ -81,6 +83,13 @@ impl<'scope, 'env> ScopeExt<'scope, 'env> for Scope<'scope, 'env> {
             >(Box::new(f))
         };
 
+        // Reset the completion flag before sending the task
+        {
+            let (lock, _) = &*thread.comms.completion_signal;
+            let mut completed = lock.lock().unwrap();
+            *completed = false;
+        }
+
         thread
             .comms
             .sender
@@ -88,7 +97,7 @@ impl<'scope, 'env> ScopeExt<'scope, 'env> for Scope<'scope, 'env> {
             .expect("Failed to send function to worker thread");
 
         ReceiverHandle {
-            receiver: &thread.comms.receiver,
+            completion_signal: &thread.comms.completion_signal,
             // Important: We start with `received` as false.
             received: false,
         }
@@ -101,7 +110,11 @@ fn make_worker_thread() -> WorkerThread {
     let handle = std::thread::spawn(move || {
         while let Ok(work) = receiver.receiver.recv() {
             work();
-            receiver.sender.send(()).expect("Failed to send result");
+            let (lock, cvar) = &*receiver.completion_signal;
+            let mut completed = lock.lock().unwrap();
+            *completed = true;
+            drop(completed); // Release the lock before notifying
+            cvar.notify_one();
         }
     });
 
@@ -159,7 +172,7 @@ mod tests {
                 },
                 &thread,
             );
-            receiver_handle.receive(); // Ensure we receive the value
+            receiver_handle.join(); // Ensure we receive the value
         });
 
         thread.join();
