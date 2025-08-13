@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::Scope;
 
@@ -7,7 +7,7 @@ use std::thread::Scope;
 // and a receiver for receiving messages from the worker thread.
 pub struct WorkSender {
     // INVARIANT: Each send must be matched by a receive.
-    sender: Sender<Box<dyn FnOnce() + Send>>,
+    sender: SyncSender<Box<dyn FnOnce() + Send>>,
     completion_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
@@ -18,7 +18,7 @@ struct WorkReceiver {
 }
 
 fn make_work_channel() -> (WorkSender, WorkReceiver) {
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(0);
     let completion_signal = Arc::new((Mutex::new(false), Condvar::new()));
 
     (
