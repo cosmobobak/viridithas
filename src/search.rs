@@ -1387,8 +1387,10 @@ pub fn alpha_beta<NT: NodeType>(
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
-            } else if tt_value >= beta || tt_value <= alpha {
+            } else if tt_value >= beta {
                 // the tt_value >= beta condition is a sort of "light multi-cut"
+                extension = -2 + i32::from(NT::PV);
+            } else if tt_value <= alpha {
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
             } else if depth < 8 && !in_check && static_eval < alpha - 25 && bound == Bound::Lower {
