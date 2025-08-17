@@ -1389,7 +1389,7 @@ pub fn alpha_beta<NT: NodeType>(
                 extension = -2;
             } else if tt_value >= beta {
                 // the tt_value >= beta condition is a sort of "light multi-cut"
-                extension = -2 + i32::from(NT::PV);
+                extension = -3 + i32::from(NT::PV);
             } else if tt_value <= alpha {
                 // the tt_value <= alpha condition is from Weiss (https://github.com/TerjeKir/weiss/compare/2a7b4ed0...effa8349/).
                 extension = -1;
