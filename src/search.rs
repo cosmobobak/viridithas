@@ -708,8 +708,8 @@ pub fn quiescence<NT: NodeType>(
 
     let mut moves_made = 0;
     let tt_move = tt_hit.and_then(|e| e.mov);
-    // use VALUE_NONE to disable SEE ordering.
-    let mut move_picker = MovePicker::new(tt_move, None, VALUE_NONE);
+    // disable SEE ordering.
+    let mut move_picker = MovePicker::new(tt_move, None, -INFINITY);
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
