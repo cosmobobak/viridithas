@@ -707,24 +707,30 @@ pub fn quiescence<NT: NodeType>(
     let mut best_score = stand_pat;
 
     let mut moves_made = 0;
-    let mut move_picker =
-        MovePicker::new(tt_hit.and_then(|e| e.mov), None, t.info.conf.qs_see_bound);
+    let tt_move = tt_hit.and_then(|e| e.mov);
+    // use VALUE_NONE to disable SEE ordering.
+    let mut move_picker = MovePicker::new(tt_move, None, VALUE_NONE);
     move_picker.skip_quiets = !in_check;
 
     let futility = stand_pat + t.info.conf.qs_futility;
 
     while let Some(m) = move_picker.next(t) {
         let is_tactical = t.board.is_tactical(m);
-        if best_score > -MINIMUM_TB_WIN_SCORE
-            && is_tactical
-            && !in_check
-            && futility <= alpha
-            && !static_exchange_eval(&t.board, &t.info, m, 1)
-        {
-            if best_score < futility {
-                best_score = futility;
+        if best_score > -MINIMUM_TB_WIN_SCORE {
+            if is_tactical
+                && !in_check
+                && futility <= alpha
+                && !static_exchange_eval(&t.board, &t.info, m, 1)
+            {
+                if best_score < futility {
+                    best_score = futility;
+                }
+                continue;
             }
-            continue;
+
+            if !static_exchange_eval(&t.board, &t.info, m, t.info.conf.qs_see_bound) {
+                continue;
+            }
         }
         t.tt.prefetch(t.board.key_after(m));
         t.ss[height].searching = Some(m);
