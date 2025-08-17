@@ -821,6 +821,8 @@ pub fn alpha_beta<NT: NodeType>(
 
     let height = t.board.height();
 
+    t.ss[height].tried = 0;
+
     debug_assert_eq!(height == 0, NT::ROOT);
     debug_assert!(!(NT::PV && cut_node));
     debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
@@ -890,6 +892,22 @@ pub fn alpha_beta<NT: NodeType>(
                         update_quiet_history_single::<false>(
                             t, from, to, moved, threats, depth, true,
                         );
+                    }
+                }
+
+                if let Some(inbound) = t.ss[height - 1].searching {
+                    let prev_sq = inbound.history_to_square();
+                    if hit.value >= beta
+                        && !t.ss[height - 1].searching_tactical
+                        && t.ss[height - 1].tried >= 3
+                    {
+                        let moved = t.board.state.mailbox[prev_sq].unwrap();
+                        let (cont1, cont2) = (
+                            -cont1_history_malus(&t.info.conf, depth),
+                            -cont2_history_malus(&t.info.conf, depth),
+                        );
+                        t.update_continuation_history_single(prev_sq, moved, cont1, 0);
+                        t.update_continuation_history_single(prev_sq, moved, cont2, 1);
                     }
                 }
 
@@ -1353,6 +1371,7 @@ pub fn alpha_beta<NT: NodeType>(
         let nodes_before_search = t.info.nodes.get_local();
         t.info.nodes.increment();
         moves_made += 1;
+        t.ss[height].tried = moves_made;
 
         let extension;
         if NT::ROOT {

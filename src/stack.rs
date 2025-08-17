@@ -12,4 +12,5 @@ pub struct StackEntry {
     pub ttpv: bool,
     pub conthist_index: ContHistIndex,
     pub reduction: i32,
+    pub tried: usize,
 }
