@@ -38,7 +38,8 @@ use crate::{
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
-    threadlocal::ThreadData,
+    threadlocal::{make_thread_data, ThreadData},
+    threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{SYZYGY_ENABLED, SYZYGY_PATH},
@@ -413,18 +414,19 @@ fn generate_on_thread<'a>(
     nnue_params: &'static NNUEParams,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
+    let pool = threadpool::make_worker_threads(1);
     let mut tt = TT::new();
-    tt.resize(MEGABYTE, 1);
+    tt.resize(MEGABYTE, &pool);
     let stopped = AtomicBool::new(false);
     let nodes = AtomicU64::new(0);
-    let mut thread_data = ThreadData::new(
-        0,
-        Board::default(),
+    let mut thread_data = make_thread_data(
+        &Board::default(),
         tt.view(),
         nnue_params,
         &stopped,
         &nodes,
-    );
+        &pool,
+    )?;
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(depth),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
@@ -432,8 +434,8 @@ fn generate_on_thread<'a>(
             hard_limit: nodes * 8,
         },
     });
-    thread_data.info.time_manager = time_manager;
-    thread_data.info.print_to_stdout = false;
+    thread_data[0].info.time_manager = time_manager;
+    thread_data[0].info.print_to_stdout = false;
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -491,39 +493,39 @@ fn generate_on_thread<'a>(
             }
         }
         // reset everything: board, thread data, tt, search info
-        tt.clear(1);
-        thread_data.info.set_up_for_search();
+        tt.clear(&pool);
+        thread_data[0].info.set_up_for_search();
         // generate game
         // STEP 1: get the next starting position from the callback
-        match startpos_src.generate(&mut thread_data) {
+        match startpos_src.generate(&mut thread_data[0]) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
         }
 
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
-        let temp_limit = thread_data.info.time_manager.limit().clone();
-        thread_data
+        let temp_limit = thread_data[0].info.time_manager.limit().clone();
+        thread_data[0]
             .info
             .time_manager
             .set_limit(SearchLimit::Depth(10));
-        let (eval, _) = search_position(std::array::from_mut(&mut thread_data), tt.view());
-        thread_data.info.time_manager.set_limit(temp_limit);
+        let (eval, _) = search_position(&pool, &mut thread_data, tt.view());
+        thread_data[0].info.time_manager.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        let mut game = Game::new(&thread_data.board);
+        let mut game = Game::new(&thread_data[0].board);
         // STEP 3: play out to the end of the game
         let mut win_adj_counter = 0;
         let mut draw_adj_counter = 0;
         let outcome = loop {
-            let outcome = thread_data.board.outcome();
+            let outcome = thread_data[0].board.outcome();
             if outcome != GameOutcome::Ongoing {
                 break outcome;
             }
             if options.tablebases_path.is_some() {
-                if let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data.board) {
+                if let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data[0].board) {
                     break match wdl {
                         WDL::Win => GameOutcome::WhiteWin(WinType::TB),
                         WDL::Loss => GameOutcome::BlackWin(WinType::TB),
@@ -533,12 +535,14 @@ fn generate_on_thread<'a>(
             }
             tt.increase_age();
 
-            let (score, best_move) =
-                search_position(std::array::from_mut(&mut thread_data), tt.view());
+            let (score, best_move) = search_position(&pool, &mut thread_data, tt.view());
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
-                println!("[WARNING!] this occurred in position {}", thread_data.board);
+                println!(
+                    "[WARNING!] this occurred in position {}",
+                    thread_data[0].board
+                );
                 continue 'generation_main_loop;
             };
 
@@ -584,9 +588,8 @@ fn generate_on_thread<'a>(
                 };
             }
 
-            thread_data
-                .board
-                .make_move(best_move, &mut thread_data.nnue);
+            let td = &mut thread_data[0];
+            td.board.make_move(best_move, &mut td.nnue);
         };
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
         // STEP 4: write the game to the output file

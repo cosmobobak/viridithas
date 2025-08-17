@@ -31,6 +31,7 @@ mod stack;
 mod tablebases;
 mod term;
 mod threadlocal;
+mod threadpool;
 mod timemgmt;
 mod transpositiontable;
 mod uci;

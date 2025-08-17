@@ -175,6 +175,7 @@ mod tests {
     use crate::{
         chess::{chessmove::Move, piece::PieceType, types::Square, CHESS960},
         nnue::network::NNUEParams,
+        threadpool,
         transpositiontable::TT,
         util::MEGABYTE,
     };
@@ -223,8 +224,9 @@ mod tests {
     fn perft_nnue_start_position() {
         use super::*;
 
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -254,8 +256,9 @@ mod tests {
         use super::*;
 
         let pos = Board::default();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -282,8 +285,9 @@ mod tests {
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -309,8 +313,9 @@ mod tests {
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
@@ -335,8 +340,9 @@ mod tests {
         std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE * 16, 1);
+        tt.resize(MEGABYTE * 16, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
         let stopped = AtomicBool::new(false);
         let nodes = AtomicU64::new(0);
