@@ -899,7 +899,7 @@ pub fn alpha_beta<NT: NodeType>(
                     let prev_sq = inbound.history_to_square();
                     if hit.value >= beta
                         && !t.ss[height - 1].searching_tactical
-                        && t.ss[height - 1].tried >= 3
+                        && t.ss[height - 1].tried <= 3
                     {
                         let moved = t.board.state.mailbox[prev_sq].unwrap();
                         let (cont1, cont2) = (
