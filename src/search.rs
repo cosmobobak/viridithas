@@ -1449,7 +1449,7 @@ pub fn alpha_beta<NT: NodeType>(
             };
             // perform a zero-window search
             let mut new_depth = depth + extension;
-            let reduced_depth = (new_depth - r).clamp(0, new_depth);
+            let reduced_depth = (new_depth - r).clamp(0, new_depth + 1);
             score = -alpha_beta::<OffPV>(l_pv, t, reduced_depth, -alpha - 1, -alpha, true);
             // simple reduction for any future searches
             t.ss[height].reduction = 1024;
