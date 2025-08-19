@@ -1849,7 +1849,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     raw_eval * (200 - i32::from(clock)) / 200
 }
 
-pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData>]) -> &'a ThreadData<'a> {
+pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
     let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
     let tt = thread_headers[0].tt;
