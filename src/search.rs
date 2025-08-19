@@ -1111,7 +1111,8 @@ pub fn alpha_beta<NT: NodeType>(
         // null-move pruning.
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
-        if t.ss[height - 1].searching.is_some()
+        if cut_node
+            && t.ss[height - 1].searching.is_some()
             && depth > 2
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
@@ -1137,8 +1138,7 @@ pub fn alpha_beta<NT: NodeType>(
                 square: Square::A1,
             };
             t.board.make_nullmove();
-            let mut null_score =
-                -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, !cut_node);
+            let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
             t.board.unmake_nullmove();
             if t.info.stopped() {
                 return 0;
