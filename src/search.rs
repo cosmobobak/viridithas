@@ -1469,6 +1469,23 @@ pub fn alpha_beta<NT: NodeType>(
                     score =
                         -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
                 }
+
+                if is_quiet && (score <= alpha || score >= beta) {
+                    let (c1, c2) = if score <= alpha {
+                        (
+                            -cont1_history_malus(&t.info.conf, new_depth),
+                            -cont2_history_malus(&t.info.conf, new_depth),
+                        )
+                    } else {
+                        (
+                            cont1_history_bonus(&t.info.conf, new_depth),
+                            cont2_history_bonus(&t.info.conf, new_depth),
+                        )
+                    };
+                    let to = m.to();
+                    t.update_continuation_history_single(to, moved, c1, 1);
+                    t.update_continuation_history_single(to, moved, c2, 2);
+                }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
             }
@@ -1832,7 +1849,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     raw_eval * (200 - i32::from(clock)) / 200
 }
 
-pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData>]) -> &'a ThreadData<'a> {
+pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
     let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
     let tt = thread_headers[0].tt;
