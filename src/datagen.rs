@@ -34,7 +34,7 @@ use crate::{
         CHESS960,
     },
     datagen::dataformat::Game,
-    evaluation::{is_game_theoretic_score, is_mate_score},
+    evaluation::{is_game_theoretic_score, is_mate_score, MINIMUM_TB_WIN_SCORE},
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
     tablebases::{self, probe::WDL},
@@ -1054,6 +1054,8 @@ struct DataSetStats {
     piece_counts: HashMap<u8, usize>,
     material_counts: HashMap<MaterialConfiguration, usize>,
     pov_king_positions: HashMap<Square, usize>,
+    total_eval_sum: i128,
+    total_eval_count: u64,
 }
 
 /// Scans a variable-length game format file and prints statistics about it.
@@ -1096,6 +1098,10 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
             }
             idx += 1;
             *stats.eval_counts.entry(evaluation).or_default() += 1;
+            if evaluation.abs() < MINIMUM_TB_WIN_SCORE {
+                stats.total_eval_sum += i128::from(evaluation.unsigned_abs());
+                stats.total_eval_count += 1;
+            }
             *stats
                 .piece_counts
                 .entry(u8::try_from(position.state.bbs.occupied().count()).unwrap_or(u8::MAX))
@@ -1193,6 +1199,18 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mean_game_len = ((total_position_count * 1000) / stats.games as u128) as f64 / 1000.0;
     println!("Mean game length: {mean_game_len}");
     println!("Total position count: {total_position_count}");
+
+    if stats.total_eval_count > 0 {
+        #[allow(clippy::cast_precision_loss)]
+        let mean_eval = stats.total_eval_sum as f64 / stats.total_eval_count as f64;
+        println!("Mean evaluation (excluding TB/mate scores): {mean_eval:.2}");
+        println!(
+            "Positions used for mean calculation: {}",
+            stats.total_eval_count
+        );
+    } else {
+        println!("No non-TB/mate evaluations found for mean calculation");
+    }
 
     Ok(())
 }
