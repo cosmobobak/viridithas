@@ -873,6 +873,7 @@ pub fn alpha_beta<NT: NodeType>(
             if !NT::PV
                 && hit.depth >= depth
                 && clock < 80
+                && cut_node == (hit.value >= beta)
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
