@@ -1420,7 +1420,8 @@ pub fn alpha_beta<NT: NodeType>(
         if moves_made == 1 {
             // first move (presumably the PV-move)
             let new_depth = depth + extension - 1;
-            score = -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, false);
+            score =
+                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
