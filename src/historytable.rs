@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     chess::{
-        piece::{Colour, Piece, PieceType},
+        piece::{Colour, Piece},
         types::{ContHistIndex, Square},
     },
     search::parameters::Config,
@@ -190,7 +190,7 @@ impl DerefMut for ThreatsHistoryTable {
 
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
-    table: [HistoryTable; 6],
+    table: [[HistoryTable; 6]; 2],
 }
 
 impl CaptureHistoryTable {
@@ -210,21 +210,23 @@ impl CaptureHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().for_each(HistoryTable::age_entries);
-    }
-
-    pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
-        &mut self.table[capture][piece][sq]
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
 }
 
 impl Deref for CaptureHistoryTable {
-    type Target = [HistoryTable; 6];
+    type Target = [[HistoryTable; 6]; 2];
 
     fn deref(&self) -> &Self::Target {
         &self.table
