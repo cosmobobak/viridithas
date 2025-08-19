@@ -714,6 +714,10 @@ pub fn quiescence<NT: NodeType>(
     let futility = stand_pat + t.info.conf.qs_futility;
 
     while let Some(m) = move_picker.next(t) {
+        t.tt.prefetch(t.board.key_after(m));
+        if !t.board.is_legal(m) {
+            continue;
+        }
         let is_tactical = t.board.is_tactical(m);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
@@ -726,7 +730,6 @@ pub fn quiescence<NT: NodeType>(
             }
             continue;
         }
-        t.tt.prefetch(t.board.key_after(m));
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
         let moved = t.board.state.mailbox[m.from()].unwrap();
@@ -734,9 +737,6 @@ pub fn quiescence<NT: NodeType>(
             piece: moved,
             square: m.history_to_square(),
         };
-        if !t.board.is_legal(m) {
-            continue;
-        }
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
         move_picker.skip_quiets = true;
@@ -1196,18 +1196,21 @@ pub fn alpha_beta<NT: NodeType>(
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
     if !NT::PV
-            && !in_check
-            && excluded.is_none()
-            && depth >= 5
-            && !is_game_theoretic_score(beta)
-            // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-            && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
+        && !in_check
+        && excluded.is_none()
+        && depth >= 5
+        && !is_game_theoretic_score(beta)
+        // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
+        && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
         let tt_move_if_capture = tt_move.filter(|m| t.board.is_tactical(*m));
         let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
+            if !t.board.is_legal(m) {
+                continue;
+            }
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
             let moved = t.board.state.mailbox[m.from()].unwrap();
@@ -1215,9 +1218,6 @@ pub fn alpha_beta<NT: NodeType>(
                 piece: moved,
                 square: m.history_to_square(),
             };
-            if !t.board.is_legal(m) {
-                continue;
-            }
             t.board.make_move(m, &mut t.nnue);
 
             let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
@@ -1267,6 +1267,11 @@ pub fn alpha_beta<NT: NodeType>(
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
+            continue;
+        }
+
+        t.tt.prefetch(t.board.key_after(m));
+        if !t.board.is_legal(m) {
             continue;
         }
 
@@ -1332,18 +1337,6 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        t.tt.prefetch(t.board.key_after(m));
-        t.ss[height].searching = Some(m);
-        t.ss[height].searching_tactical = !is_quiet;
-        let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
-            piece: moved,
-            square: m.history_to_square(),
-        };
-        if !t.board.is_legal(m) {
-            continue;
-        }
-
         if is_quiet {
             quiets_tried.push(m);
         } else {
@@ -1380,14 +1373,6 @@ pub fn alpha_beta<NT: NodeType>(
                 // then we can cut with relatively high confidence.
                 return singularity_margin(tt_value, depth);
             }
-            // re-make the singular move.
-            t.ss[height].searching = Some(m);
-            t.ss[height].searching_tactical = !is_quiet;
-            let moved = t.board.state.mailbox[m.from()].unwrap();
-            t.ss[height].conthist_index = ContHistIndex {
-                piece: moved,
-                square: m.history_to_square(),
-            };
 
             if value < r_beta {
                 if !NT::PV
@@ -1420,6 +1405,14 @@ pub fn alpha_beta<NT: NodeType>(
         if extension >= 2 {
             t.ss[height].dextensions += 1;
         }
+
+        t.ss[height].searching = Some(m);
+        t.ss[height].searching_tactical = !is_quiet;
+        let moved = t.board.state.mailbox[m.from()].unwrap();
+        t.ss[height].conthist_index = ContHistIndex {
+            piece: moved,
+            square: m.history_to_square(),
+        };
 
         t.board.make_move(m, &mut t.nnue);
 
