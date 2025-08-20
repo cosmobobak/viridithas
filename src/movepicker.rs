@@ -277,9 +277,11 @@ impl MovePicker {
     pub fn score_captures(t: &ThreadData, moves: &mut [MoveListEntry]) {
         const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
+        let threats = t.board.state.threats.all;
         for m in moves {
             let from = m.mov.from();
             let to = m.mov.to();
+            let threat_to = threats.contains_square(to);
             let piece = t.board.state.mailbox[from].unwrap();
             let capture = history::caphist_piece_type(&t.board, m.mov);
 
@@ -288,7 +290,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_history[capture][piece][to]);
+            score += i32::from(t.tactical_history[usize::from(threat_to)][capture][piece][to]);
 
             m.score = score;
         }
