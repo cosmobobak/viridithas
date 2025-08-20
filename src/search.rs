@@ -1607,7 +1607,8 @@ pub fn alpha_beta<NT: NodeType>(
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
-            t.update_correction_history(depth, best_score - static_eval);
+            let fresh_static_eval = adj_shuffle(t, raw_eval, clock) + t.correction();
+            t.update_correction_history(depth, best_score - fresh_static_eval);
         }
         t.tt.store(
             key,
