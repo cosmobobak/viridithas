@@ -174,14 +174,15 @@ impl ThreadData<'_> {
     /// Update the correction history for a pawn pattern.
     pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
         use Colour::{Black, White};
-        fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
-            let update =
-                *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
+        fn update(entry: &mut i16, new_weight: i32, scaled_diff: i32) {
+            #![allow(clippy::cast_possible_truncation)]
+            let update = i32::from(*entry) * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight)
+                + scaled_diff * new_weight;
             *entry = i32::clamp(
                 update / CORRECTION_HISTORY_WEIGHT_SCALE,
                 -CORRECTION_HISTORY_MAX,
                 CORRECTION_HISTORY_MAX,
-            );
+            ) as i16;
         }
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth);
