@@ -1541,6 +1541,13 @@ pub fn alpha_beta<NT: NodeType>(
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
     }
 
+    if best_score >= beta
+        && best_score.abs() < MINIMUM_TB_WIN_SCORE
+        && alpha.abs() < MINIMUM_TB_WIN_SCORE
+    {
+        best_score = (best_score * depth + beta) / (depth + 1);
+    }
+
     best_score = best_score.clamp(syzygy_min, syzygy_max);
 
     let flag = if best_score >= beta {
