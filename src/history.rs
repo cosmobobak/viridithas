@@ -222,15 +222,31 @@ impl ThreadData<'_> {
     pub fn correction(&self) -> i32 {
         let keys = &self.board.state.keys;
         let turn = self.board.turn();
+        let height = self.board.height();
+
         let pawn = self.pawn_corrhist.get(turn, keys.pawn);
         let white = self.nonpawn_corrhist[Colour::White].get(turn, keys.non_pawn[Colour::White]);
         let black = self.nonpawn_corrhist[Colour::Black].get(turn, keys.non_pawn[Colour::Black]);
         let minor = self.minor_corrhist.get(turn, keys.minor);
         let major = self.major_corrhist.get(turn, keys.major);
+
+        let cont = if height > 2 {
+            let ch1 = self.ss[height - 1].conthist_index;
+            let ch2 = self.ss[height - 2].conthist_index;
+            let sq1 = ch1.square;
+            let sq2 = ch2.square;
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            i64::from(self.continuation_corrhist[sq1][pt1][sq2][pt2][turn])
+        } else {
+            0
+        };
+
         let adjustment = pawn * i64::from(self.info.conf.pawn_corrhist_weight)
             + major * i64::from(self.info.conf.major_corrhist_weight)
             + minor * i64::from(self.info.conf.minor_corrhist_weight)
-            + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight);
+            + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight)
+            + cont * i64::from(self.info.conf.continuation_corrhist_weight);
         (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
     }
 }
