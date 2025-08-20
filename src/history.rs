@@ -188,6 +188,7 @@ impl ThreadData<'_> {
         let new_weight = 16.min(1 + depth);
         debug_assert!(new_weight <= CORRECTION_HISTORY_WEIGHT_SCALE);
         let us = self.board.turn();
+        let height = self.board.height();
 
         let keys = &self.board.state.keys;
 
@@ -216,6 +217,19 @@ impl ThreadData<'_> {
             new_weight,
             scaled_diff,
         );
+        if height > 2 {
+            let ch1 = self.ss[height - 1].conthist_index;
+            let ch2 = self.ss[height - 2].conthist_index;
+            let sq1 = ch1.square;
+            let sq2 = ch2.square;
+            let pt1 = ch1.piece.piece_type();
+            let pt2 = ch2.piece.piece_type();
+            update(
+                &mut self.continuation_corrhist[sq1][pt1][sq2][pt2][us],
+                new_weight,
+                scaled_diff,
+            );
+        }
     }
 
     /// Adjust a raw evaluation using statistics from the correction history.

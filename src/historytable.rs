@@ -350,7 +350,7 @@ impl DerefMut for CorrectionHistoryTable {
 
 #[repr(transparent)]
 pub struct ContinuationCorrectionHistoryTable {
-    table: [[[[[i32; 2]; 6]; 64]; 6]; 64],
+    table: [[[[[i16; 2]; 6]; 64]; 6]; 64],
 }
 
 impl ContinuationCorrectionHistoryTable {
@@ -380,7 +380,7 @@ impl ContinuationCorrectionHistoryTable {
 }
 
 impl Deref for ContinuationCorrectionHistoryTable {
-    type Target = [[[[[i32; 2]; 6]; 64]; 6]; 64];
+    type Target = [[[[[i16; 2]; 6]; 64]; 6]; 64];
 
     fn deref(&self) -> &Self::Target {
         &self.table
