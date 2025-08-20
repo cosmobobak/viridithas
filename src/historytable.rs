@@ -300,7 +300,7 @@ impl DerefMut for DoubleHistoryTable {
 
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
-    table: [[i32; 2]; CORRECTION_HISTORY_SIZE],
+    table: [[i16; 2]; CORRECTION_HISTORY_SIZE],
 }
 
 impl CorrectionHistoryTable {
@@ -329,13 +329,13 @@ impl CorrectionHistoryTable {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
+    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i16 {
         &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
     }
 }
 
 impl Deref for CorrectionHistoryTable {
-    type Target = [[i32; 2]; CORRECTION_HISTORY_SIZE];
+    type Target = [[i16; 2]; CORRECTION_HISTORY_SIZE];
 
     fn deref(&self) -> &Self::Target {
         &self.table
