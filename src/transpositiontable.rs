@@ -276,6 +276,8 @@ impl TT {
         // SAFETY: zeroed memory is a legal bitpattern for AtomicUXX.
         unsafe {
             let layout = std::alloc::Layout::array::<TTClusterMemory>(new_len).unwrap();
+            // align to THP sizes:
+            let layout = layout.align_to(1024 * 1024 * 2).unwrap();
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
                 std::alloc::handle_alloc_error(layout);

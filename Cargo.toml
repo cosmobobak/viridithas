@@ -19,7 +19,15 @@ bindgen = ["dep:bindgen"]
 tuning = []
 stats = []
 nnz-counts = []
-datagen = ["dep:serde", "dep:toml", "dep:rand", "dep:num_cpus", "dep:chrono", "dep:ctrlc", "dep:bulletformat"]
+datagen = [
+    "dep:serde",
+    "dep:toml",
+    "dep:rand",
+    "dep:num_cpus",
+    "dep:chrono",
+    "dep:ctrlc",
+    "dep:bulletformat",
+]
 zstd = ["dep:zstd"]
 final-release = ["zstd", "bindgen", "syzygy"]
 
@@ -51,9 +59,6 @@ memmap2 = "0.9.5"
 
 # for deconflicting shared weights
 fxhash = "0.2.1"
-
-# for mmap / madvise
-libc = "0.2.175"
 
 # for coloured terminal output
 [dependencies.windows-sys]
