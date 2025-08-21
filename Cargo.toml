@@ -52,6 +52,9 @@ memmap2 = "0.9.5"
 # for deconflicting shared weights
 fxhash = "0.2.1"
 
+# for mmap / madvise
+libc = "0.2.175"
+
 # for coloured terminal output
 [dependencies.windows-sys]
 version = "0.59"
