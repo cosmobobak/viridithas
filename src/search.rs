@@ -875,7 +875,7 @@ pub fn alpha_beta<NT: NodeType>(
                 && clock < 80
                 && ((!cut_node && hit.value < beta)
                     || (cut_node
-                        && hit.value >= beta + std::cmp::min(0, 15 - (hit.depth - depth) * 5)))
+                        && hit.value >= beta + std::cmp::max(0, 15 - (hit.depth - depth) * 5)))
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
                     || (hit.bound == Bound::Upper && hit.value <= alpha))
