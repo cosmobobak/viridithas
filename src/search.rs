@@ -1112,7 +1112,8 @@ pub fn alpha_beta<NT: NodeType>(
         // null-move pruning.
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
-        if t.ss[height - 1].searching.is_some()
+        if cut_node
+            && t.ss[height - 1].searching.is_some()
             && depth > 2
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
@@ -1138,8 +1139,7 @@ pub fn alpha_beta<NT: NodeType>(
                 square: Square::A1,
             };
             t.board.make_nullmove();
-            let mut null_score =
-                -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, !cut_node);
+            let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
             t.board.unmake_nullmove();
             if t.info.stopped() {
                 return 0;
@@ -1421,7 +1421,8 @@ pub fn alpha_beta<NT: NodeType>(
         if moves_made == 1 {
             // first move (presumably the PV-move)
             let new_depth = depth + extension - 1;
-            score = -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, false);
+            score =
+                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
@@ -1539,6 +1540,13 @@ pub fn alpha_beta<NT: NodeType>(
             return mated_in(height);
         }
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
+    }
+
+    if best_score >= beta
+        && best_score.abs() < MINIMUM_TB_WIN_SCORE
+        && alpha.abs() < MINIMUM_TB_WIN_SCORE
+    {
+        best_score = (best_score * depth + beta) / (depth + 1);
     }
 
     best_score = best_score.clamp(syzygy_min, syzygy_max);
