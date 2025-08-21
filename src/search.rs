@@ -1275,12 +1275,9 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        let lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
-        let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
 
         let mut stat_score = 0;
-
         if is_quiet {
             stat_score += t.get_history_score(m);
             stat_score += t.get_continuation_history_score(m, 0);
@@ -1289,6 +1286,10 @@ pub fn alpha_beta<NT: NodeType>(
         } else {
             stat_score += t.get_tactical_history_score(m);
         }
+
+        let lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made + 1)
+            + i32::from(!improving) * t.info.conf.lmr_non_improving_mul;
+        let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
 
         // lmp & fp.
         if !NT::ROOT && !NT::PV && !in_check && best_score > -MINIMUM_TB_WIN_SCORE {
