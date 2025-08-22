@@ -876,7 +876,7 @@ pub fn main_loop() -> anyhow::Result<()> {
     Ok(())
 }
 
-const BENCH_DEPTH: usize = 14;
+const BENCH_DEPTH: usize = 11;
 const BENCH_THREADS: usize = 1;
 pub fn bench(
     benchcmd: &str,

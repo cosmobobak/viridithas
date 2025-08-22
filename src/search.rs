@@ -1385,6 +1385,7 @@ pub fn alpha_beta<NT: NodeType>(
                     // normal singular extension
                     extension = 1;
                 }
+                depth += 1;
             } else if cut_node {
                 // produce a strong negative extension if we didn't fail low on a cut-node.
                 extension = -2;
