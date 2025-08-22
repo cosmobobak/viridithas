@@ -3,6 +3,8 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64},
 };
 
+use anyhow::Context;
+
 use crate::{
     chess::{board::Board, chessmove::Move, piece::Colour},
     historytable::{
@@ -12,11 +14,12 @@ use crate::{
     search::pv::PVariation,
     searchinfo::SearchInfo,
     stack::StackEntry,
+    threadpool::{self, ScopeExt},
     transpositiontable::TTView,
     util::MAX_PLY,
 };
 
-#[repr(align(64))] // these get stuck in a vec and each thread accesses its own index
+#[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
@@ -160,4 +163,50 @@ impl<'a> ThreadData<'a> {
     pub const fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
     }
+}
+
+pub fn make_thread_data<'a>(
+    pos: &Board,
+    tt: TTView<'a>,
+    nnue_params: &'static NNUEParams,
+    stopped: &'a AtomicBool,
+    nodes: &'a AtomicU64,
+    worker_threads: &[threadpool::WorkerThread],
+) -> anyhow::Result<Vec<Box<ThreadData<'a>>>> {
+    std::thread::scope(|s| -> anyhow::Result<Vec<Box<ThreadData>>> {
+        let handles = worker_threads
+            .iter()
+            .enumerate()
+            .map(|(thread_id, worker)| {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let join_handle = s.spawn_into(
+                    move || {
+                        #[allow(clippy::unwrap_used)]
+                        tx.send(Box::new(ThreadData::new(
+                            thread_id,
+                            pos.clone(),
+                            tt,
+                            nnue_params,
+                            stopped,
+                            nodes,
+                        )))
+                        .unwrap();
+                    },
+                    worker,
+                );
+                (rx, join_handle)
+            })
+            .collect::<Vec<_>>();
+
+        let mut thread_data: Vec<Box<ThreadData>> = Vec::with_capacity(handles.len());
+        for (rx, handle) in handles {
+            let td = rx
+                .recv()
+                .with_context(|| "Failed to receive thread data from worker thread")?;
+            thread_data.push(td);
+            handle.join();
+        }
+
+        Ok(thread_data)
+    })
 }

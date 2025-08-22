@@ -38,6 +38,7 @@ use crate::{
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
+    threadpool::{self, ScopeExt},
     transpositiontable::{Bound, TTHit, TTView},
     uci,
     util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
@@ -189,7 +190,11 @@ impl SmpThreadType for HelperThread {
 
 /// Performs the root search. Returns the score of the position, from white's perspective, and the best move.
 #[allow(clippy::too_many_lines)]
-pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, Option<Move>) {
+pub fn search_position(
+    pool: &[threadpool::WorkerThread],
+    thread_headers: &mut [Box<ThreadData>],
+    tt: TTView,
+) -> (i32, Option<Move>) {
     for t in &mut *thread_headers {
         t.board.zero_height();
         t.info.set_up_for_search();
@@ -249,15 +254,26 @@ pub fn search_position(thread_headers: &mut [ThreadData], tt: TTView) -> (i32, O
 
     // start search threads:
     let (t1, rest) = thread_headers.split_first_mut().unwrap();
+    let (w1, rest_workers) = pool.split_first().unwrap();
     thread::scope(|s| {
-        s.spawn(|| {
-            iterative_deepening::<MainThread>(t1);
-            global_stopped.store(true, Ordering::SeqCst);
-        });
-        for t in rest.iter_mut() {
-            s.spawn(|| {
-                iterative_deepening::<HelperThread>(t);
-            });
+        let mut handles = Vec::with_capacity(pool.len());
+        handles.push(s.spawn_into(
+            || {
+                iterative_deepening::<MainThread>(t1);
+                global_stopped.store(true, Ordering::SeqCst);
+            },
+            w1,
+        ));
+        for (t, w) in rest.iter_mut().zip(rest_workers) {
+            handles.push(s.spawn_into(
+                || {
+                    iterative_deepening::<HelperThread>(t);
+                },
+                w,
+            ));
+        }
+        for handle in handles {
+            handle.join();
         }
     });
 
@@ -698,6 +714,10 @@ pub fn quiescence<NT: NodeType>(
     let futility = stand_pat + t.info.conf.qs_futility;
 
     while let Some(m) = move_picker.next(t) {
+        t.tt.prefetch(t.board.key_after(m));
+        if !t.board.is_legal(m) {
+            continue;
+        }
         let is_tactical = t.board.is_tactical(m);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
@@ -710,7 +730,6 @@ pub fn quiescence<NT: NodeType>(
             }
             continue;
         }
-        t.tt.prefetch(t.board.key_after(m));
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
         let moved = t.board.state.mailbox[m.from()].unwrap();
@@ -718,9 +737,6 @@ pub fn quiescence<NT: NodeType>(
             piece: moved,
             square: m.history_to_square(),
         };
-        if !t.board.is_legal(m) {
-            continue;
-        }
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
         move_picker.skip_quiets = true;
@@ -1095,7 +1111,8 @@ pub fn alpha_beta<NT: NodeType>(
         // null-move pruning.
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
-        if t.ss[height - 1].searching.is_some()
+        if cut_node
+            && t.ss[height - 1].searching.is_some()
             && depth > 2
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
@@ -1121,8 +1138,7 @@ pub fn alpha_beta<NT: NodeType>(
                 square: Square::A1,
             };
             t.board.make_nullmove();
-            let mut null_score =
-                -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, !cut_node);
+            let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
             t.board.unmake_nullmove();
             if t.info.stopped() {
                 return 0;
@@ -1180,18 +1196,21 @@ pub fn alpha_beta<NT: NodeType>(
     // additionally, if we have a TT hit that's sufficiently deep, we skip trying probcut if the TT value indicates
     // that it's not going to be helpful.
     if !NT::PV
-            && !in_check
-            && excluded.is_none()
-            && depth >= 5
-            && !is_game_theoretic_score(beta)
-            // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
-            && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
+        && !in_check
+        && excluded.is_none()
+        && depth >= 5
+        && !is_game_theoretic_score(beta)
+        // don't probcut if we have a tthit with value < pcbeta and depth >= depth - 3:
+        && !matches!(tt_hit, Some(TTHit { value: v, depth: d, .. }) if v < pc_beta && d >= depth - 3)
     {
         let tt_move_if_capture = tt_move.filter(|m| t.board.is_tactical(*m));
         let mut move_picker = MovePicker::new(tt_move_if_capture, None, 0);
         move_picker.skip_quiets = true;
         while let Some(m) = move_picker.next(t) {
             t.tt.prefetch(t.board.key_after(m));
+            if !t.board.is_legal(m) {
+                continue;
+            }
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
             let moved = t.board.state.mailbox[m.from()].unwrap();
@@ -1199,9 +1218,6 @@ pub fn alpha_beta<NT: NodeType>(
                 piece: moved,
                 square: m.history_to_square(),
             };
-            if !t.board.is_legal(m) {
-                continue;
-            }
             t.board.make_move(m, &mut t.nnue);
 
             let mut value = -quiescence::<OffPV>(l_pv, t, -pc_beta, -pc_beta + 1);
@@ -1251,6 +1267,11 @@ pub fn alpha_beta<NT: NodeType>(
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
+            continue;
+        }
+
+        t.tt.prefetch(t.board.key_after(m));
+        if !t.board.is_legal(m) {
             continue;
         }
 
@@ -1316,18 +1337,6 @@ pub fn alpha_beta<NT: NodeType>(
             continue;
         }
 
-        t.tt.prefetch(t.board.key_after(m));
-        t.ss[height].searching = Some(m);
-        t.ss[height].searching_tactical = !is_quiet;
-        let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
-            piece: moved,
-            square: m.history_to_square(),
-        };
-        if !t.board.is_legal(m) {
-            continue;
-        }
-
         if is_quiet {
             quiets_tried.push(m);
         } else {
@@ -1364,14 +1373,6 @@ pub fn alpha_beta<NT: NodeType>(
                 // then we can cut with relatively high confidence.
                 return singularity_margin(tt_value, depth);
             }
-            // re-make the singular move.
-            t.ss[height].searching = Some(m);
-            t.ss[height].searching_tactical = !is_quiet;
-            let moved = t.board.state.mailbox[m.from()].unwrap();
-            t.ss[height].conthist_index = ContHistIndex {
-                piece: moved,
-                square: m.history_to_square(),
-            };
 
             if value < r_beta {
                 if !NT::PV
@@ -1407,13 +1408,22 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].dextensions += 1;
         }
 
+        t.ss[height].searching = Some(m);
+        t.ss[height].searching_tactical = !is_quiet;
+        let moved = t.board.state.mailbox[m.from()].unwrap();
+        t.ss[height].conthist_index = ContHistIndex {
+            piece: moved,
+            square: m.history_to_square(),
+        };
+
         t.board.make_move(m, &mut t.nnue);
 
         let mut score;
         if moves_made == 1 {
             // first move (presumably the PV-move)
             let new_depth = depth + extension - 1;
-            score = -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, false);
+            score =
+                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
@@ -1461,6 +1471,23 @@ pub fn alpha_beta<NT: NodeType>(
                 if new_depth - 1 > reduced_depth {
                     score =
                         -alpha_beta::<OffPV>(l_pv, t, new_depth - 1, -alpha - 1, -alpha, !cut_node);
+                }
+
+                if is_quiet && (score <= alpha || score >= beta) {
+                    let (c1, c2) = if score <= alpha {
+                        (
+                            -cont1_history_malus(&t.info.conf, new_depth),
+                            -cont2_history_malus(&t.info.conf, new_depth),
+                        )
+                    } else {
+                        (
+                            cont1_history_bonus(&t.info.conf, new_depth),
+                            cont2_history_bonus(&t.info.conf, new_depth),
+                        )
+                    };
+                    let to = m.to();
+                    t.update_continuation_history_single(to, moved, c1, 1);
+                    t.update_continuation_history_single(to, moved, c2, 2);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1514,6 +1541,13 @@ pub fn alpha_beta<NT: NodeType>(
             return mated_in(height);
         }
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
+    }
+
+    if best_score >= beta
+        && best_score.abs() < MINIMUM_TB_WIN_SCORE
+        && alpha.abs() < MINIMUM_TB_WIN_SCORE
+    {
+        best_score = (best_score * depth + beta) / (depth + 1);
     }
 
     best_score = best_score.clamp(syzygy_min, syzygy_max);
@@ -1825,7 +1859,7 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     raw_eval * (200 - i32::from(clock)) / 200
 }
 
-pub fn select_best<'a>(thread_headers: &'a [ThreadData]) -> &'a ThreadData<'a> {
+pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
     let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
     let tt = thread_headers[0].tt;

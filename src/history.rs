@@ -1,12 +1,9 @@
-use std::sync::atomic::Ordering;
-
 use crate::{
     chess::{
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::Square,
-        CHESS960,
     },
     historytable::{
         cont_history_bonus, cont_history_malus, main_history_bonus, main_history_malus,
@@ -78,19 +75,13 @@ impl ThreadData<'_> {
         best_move: Move,
         depth: i32,
     ) {
+        let threats = self.board.state.threats.all;
         for &m in moves_to_adjust {
-            let piece_moved = self.board.state.mailbox[m.from()];
+            let piece_moved = self.board.state.mailbox[m.from()].unwrap();
             let capture = caphist_piece_type(&self.board, m);
-            debug_assert!(
-                piece_moved.is_some(),
-                "Invalid piece moved by move {} in position \n{:X}",
-                m.display(CHESS960.load(Ordering::Relaxed)),
-                self.board
-            );
             let to = m.to();
-            let val = self
-                .tactical_history
-                .get_mut(piece_moved.unwrap(), to, capture);
+            let to_threat = threats.contains_square(to);
+            let val = &mut self.tactical_history[usize::from(to_threat)][capture][piece_moved][to];
             let delta = if m == best_move {
                 tactical_history_bonus(&self.info.conf, depth)
             } else {
@@ -102,10 +93,12 @@ impl ThreadData<'_> {
 
     /// Get the tactical history score for a single move.
     pub fn get_tactical_history_score(&self, m: Move) -> i32 {
-        let piece_moved = self.board.state.mailbox[m.from()];
+        let threats = self.board.state.threats.all;
+        let piece_moved = self.board.state.mailbox[m.from()].unwrap();
         let capture = caphist_piece_type(&self.board, m);
         let to = m.to();
-        i32::from(self.tactical_history[capture][piece_moved.unwrap()][to])
+        let to_threat = threats.contains_square(to);
+        i32::from(self.tactical_history[usize::from(to_threat)][capture][piece_moved][to])
     }
 
     /// Update the continuation history counters of a batch of moves.
@@ -181,14 +174,15 @@ impl ThreadData<'_> {
     /// Update the correction history for a pawn pattern.
     pub fn update_correction_history(&mut self, depth: i32, diff: i32) {
         use Colour::{Black, White};
-        fn update(entry: &mut i32, new_weight: i32, scaled_diff: i32) {
-            let update =
-                *entry * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight) + scaled_diff * new_weight;
+        fn update(entry: &mut i16, new_weight: i32, scaled_diff: i32) {
+            #![allow(clippy::cast_possible_truncation)]
+            let update = i32::from(*entry) * (CORRECTION_HISTORY_WEIGHT_SCALE - new_weight)
+                + scaled_diff * new_weight;
             *entry = i32::clamp(
                 update / CORRECTION_HISTORY_WEIGHT_SCALE,
                 -CORRECTION_HISTORY_MAX,
                 CORRECTION_HISTORY_MAX,
-            );
+            ) as i16;
         }
         let scaled_diff = diff * CORRECTION_HISTORY_GRAIN;
         let new_weight = 16.min(1 + depth);
