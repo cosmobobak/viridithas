@@ -1056,6 +1056,8 @@ pub fn alpha_beta<NT: NodeType>(
         true
     };
 
+    let opponent_worsening = !NT::ROOT && static_eval > -t.ss[height - 1].eval;
+
     t.ss[height].dextensions = if NT::ROOT {
         0
     } else {
@@ -1103,7 +1105,16 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
-            && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
+            && static_eval
+                - rfp_margin(
+                    &t.board,
+                    &t.info,
+                    depth,
+                    improving,
+                    opponent_worsening,
+                    correction,
+                )
+                >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
@@ -1636,9 +1647,17 @@ pub fn alpha_beta<NT: NodeType>(
 }
 
 /// The margin for Reverse Futility Pruning.
-fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
+fn rfp_margin(
+    pos: &Board,
+    info: &SearchInfo,
+    depth: i32,
+    improving: bool,
+    opponent_worsening: bool,
+    correction: i32,
+) -> i32 {
     info.conf.rfp_margin * depth
         - i32::from(improving && !can_win_material(pos)) * info.conf.rfp_improving_margin
+        - i32::from(opponent_worsening) * 10
         + correction.abs() / 2
 }
 
