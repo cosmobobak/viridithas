@@ -193,6 +193,12 @@ impl MovePicker {
             .checked_sub(2)
             .and_then(|i| t.ss.get(i))
             .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+        let cont_block_4 = t
+            .board
+            .height()
+            .checked_sub(4)
+            .and_then(|i| t.ss.get(i))
+            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
         let threats = t.board.state.threats.all;
         for m in ms {
@@ -209,6 +215,9 @@ impl MovePicker {
                 score += i32::from(cmh_block[piece][to]);
             }
             if let Some(cmh_block) = cont_block_1 {
+                score += i32::from(cmh_block[piece][to]);
+            }
+            if let Some(cmh_block) = cont_block_4 {
                 score += i32::from(cmh_block[piece][to]);
             }
 

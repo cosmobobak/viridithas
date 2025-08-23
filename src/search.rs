@@ -1293,7 +1293,6 @@ pub fn alpha_beta<NT: NodeType>(
             stat_score += t.get_history_score(m);
             stat_score += t.get_continuation_history_score(m, 0);
             stat_score += t.get_continuation_history_score(m, 1);
-            stat_score += t.get_continuation_history_score(m, 3);
         } else {
             stat_score += t.get_tactical_history_score(m);
         }
