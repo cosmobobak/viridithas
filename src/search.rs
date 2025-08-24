@@ -873,7 +873,7 @@ pub fn alpha_beta<NT: NodeType>(
     let tt_hit = if excluded.is_none() {
         if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && hit.depth >= depth
+                && hit.depth >= depth + i32::from(hit.value >= beta)
                 && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
