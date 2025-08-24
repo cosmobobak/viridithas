@@ -124,6 +124,28 @@ impl MovePicker {
         None
     }
 
+    #[inline(never)]
+    fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
+        #![allow(clippy::cast_possible_truncation)]
+        fn to_u64(e: MoveListEntry) -> u64 {
+            #![allow(clippy::cast_sign_loss)]
+            let widened = i64::from(e.score);
+            let offset = widened - i64::from(i32::MIN);
+            (offset as u64) << 32
+        }
+        let best = entries.first()?.get();
+        let mut best = to_u64(best) | 256;
+        for i in 1..entries.len() {
+            let curr = entries[i].get();
+            let curr = to_u64(curr) | (256 - i as u64);
+            best = std::cmp::max(best, curr);
+        }
+        let best_idx = 256 - (best & 0xFFFF_FFFF);
+        let best_idx = best_idx as usize;
+        // SAFETY: best_idx is guaranteed to be in-bounds.
+        unsafe { Some(entries.get_unchecked(best_idx)) }
+    }
+
     /// Perform iterations of partial insertion sort.
     /// Extracts the best move from the unsorted portion of the movelist,
     /// or returns None if there are no more moves to try.
@@ -134,11 +156,7 @@ impl MovePicker {
     fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
         let mut remaining =
             Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
-        while let Some(best_entry_ref) =
-            remaining
-                .iter()
-                .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
-        {
+        while let Some(best_entry_ref) = Self::fast_select(remaining) {
             let best = best_entry_ref.get();
             debug_assert!(
                 best.score < WINNING_CAPTURE_BONUS / 2 || best.score >= MIN_WINNING_SEE_SCORE,
