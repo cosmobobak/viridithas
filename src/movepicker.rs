@@ -133,13 +133,11 @@ impl MovePicker {
             let offset = widened - i64::from(i32::MIN);
             (offset as u64) << 32
         }
-        let best = entries.first()?.get();
-        let mut best = to_u64(best) | 256;
-        for i in 1..entries.len() {
-            let curr = entries[i].get();
-            let curr = to_u64(curr) | (256 - i as u64);
-            best = std::cmp::max(best, curr);
-        }
+        let best = entries
+            .iter()
+            .enumerate()
+            .map(|(i, e)| to_u64(e.get()) | (256 - i as u64))
+            .max()?;
         let best_idx = 256 - (best & 0xFFFF_FFFF);
         let best_idx = best_idx as usize;
         // SAFETY: best_idx is guaranteed to be in-bounds.
