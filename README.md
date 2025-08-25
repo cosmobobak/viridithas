@@ -1,5 +1,3 @@
-# Viridithas, a UCI chess engine written in Rust
-
 <div align="center">
 
   ![Logo](images/logo.png)
@@ -11,26 +9,31 @@
   
 </div>
 
-Viridithas is a free and open source chess engine, that as of 2024-08-22 is the strongest chess program written in Rust, and the strongest chess program by a UK author.
-These claims are based on my own personal tests and aggregate results from multiple public rating lists. If these claims are no longer true, it's likely due to the hard work of some of my friends in the chess-programming community, most likely the authors of [Stormphrax](https://github.com/Ciekce/Stormphrax) & [Black Marlin](https://github.com/jnlt3/blackmarlin). The Viridithas project prides itself on using original training data for its neural networks.
+Viridithas is a very strong chess playing program, developed in his current form since 2022-04-10.
 
-Viridithas is a command-line program that can be used from the terminal or can communicate with a graphical user interface over the UCI protocol.
+Viridithas is enormously fond of the [Stormphrax](https://github.com/Ciekce/Stormphrax) chess engine.
+The Viridithas project prides itself on using original training data for its neural networks.
 
-For an overview of the features of Viridithas, see the [viri-wiki](https://cosmo.tardis.ac/files/2023-02-20-viri-wiki.html).
+Viridithas is a command-line program that can be used from the terminal or that can communicate with a graphical user interface over the Universal Chess Interface.
+
+Some writing on the internals and development of Viridithas can be found on [his author's website](https://cosmo.tardis.ac).
 
 ## Building Viridithas
 
-If you just want one of the official releases of Viridithas, check out the **Releases** tab on the right. If you want to build a specific version of Viridithas from source (say, the latest and greatest master commit) then follow these instructions:
+If you just want one of the official releases of Viridithas, check out the **Releases** tab on the right.
+If you want to build a specific version of Viridithas from source (say, the latest and greatest master commit) then follow these instructions:
 
-0. Before following any of these instructions, make sure you have [Rust](https://www.rust-lang.org/tools/install) installed. You may also need to install the `clang` C compiler for tablebase probing support.
-1. Clone this repository to your machine via `git clone https://github.com/cosmobobak/viridithas`.
+0. Before following any of these instructions, make sure you have [Rust](https://www.rust-lang.org/tools/install) installed.
+   You may also need to install the `clang` C compiler, as Viridithas relies on [Fathom](https://github.com/jdart1/Fathom) for tablebase probing support.
+1. Clone this repository to your machine via `git clone git@github.com:cosmobobak/viridithas.git`.
 2. Enter the source directory via `cd viridithas`.
-3. (optional, likely unnecessary) select the branch you'd like to compile via `git checkout <BRANCH_NAME>`.
-4. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue.zst`. All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo. Networks are stored seperately from this repo due to file-size considerations.
+3. Download the corresponding neural network for the version of Viridithas that you are compiling and save it in the source root as `viridithas.nnue.zst`.
+   All of Viridithas's neural networks can be found in the releases of the [viridithas-networks](https://github.com/cosmobobak/viridithas-networks) repo.
+   Networks are stored seperately from this repo due to their considerable size.
 
     **If you just want the latest neural net**, you can download it with the command `curl -s "https://api.github.com/repos/cosmobobak/viridithas-networks/releases/latest" | grep -o '"browser_download_url": "[^"]*' | awk -F'"' '{print $4}' | xargs -L 1 wget -O viridithas.nnue.zst`.
 
-5. Build Viridithas.
+4. Build Viridithas.
    
    **On Windows**, run 
    ```
