@@ -48,9 +48,9 @@ fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> 
     let best = entries
         .iter()
         .enumerate()
-        .map(|(i, e)| to_u64(e.get()) | (256 - i as u64))
+        .map(|(i, e)| to_u64(e.get()) | i as u64)
         .max()?;
-    let best_idx = 256 - (best & 0xFFFF_FFFF);
+    let best_idx = best & 0xFFFF_FFFF;
     // SAFETY: best_idx is guaranteed to be in-bounds.
     unsafe { Some(entries.get_unchecked(best_idx as usize)) }
 }
