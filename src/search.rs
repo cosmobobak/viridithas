@@ -1311,6 +1311,19 @@ pub fn alpha_beta<NT: NodeType>(
                 continue;
             }
 
+            // futility pruning for bad noisy moves.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            let bnfp_eval = static_eval + 128 * lmr_depth + 384 * moves_made as i32 / 128;
+            if lmr_depth < 6
+                && !is_quiet
+                && move_picker.stage == Stage::YieldRemaining
+                && bnfp_eval <= alpha
+                && !is_game_theoretic_score(best_score)
+            {
+                best_score = best_score.max(bnfp_eval);
+                break;
+            }
+
             // futility pruning
             // if the static eval is too low, we start skipping moves.
             let fp_margin = lmr_depth * t.info.conf.futility_coeff_1 + t.info.conf.futility_coeff_0;
