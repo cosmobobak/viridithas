@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "stats")]
-use crate::board::movegen::MAX_POSITION_MOVES;
+use crate::chess::board::movegen::MAX_POSITION_MOVES;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug)]
@@ -82,16 +82,6 @@ impl<'a> SearchInfo<'a> {
         out
     }
 
-    pub fn with_search_params(
-        stopped: &'a AtomicBool,
-        nodes: &'a AtomicU64,
-        search_params: &Config,
-    ) -> Self {
-        let mut out = Self::new(stopped, nodes);
-        out.conf = search_params.clone();
-        out
-    }
-
     pub fn set_up_for_search(&mut self) {
         self.stopped.store(false, Ordering::SeqCst);
         self.nodes.reset();
@@ -152,34 +142,13 @@ impl<'a> SearchInfo<'a> {
     }
 
     #[cfg(feature = "stats")]
-    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize, ordering_score: i32) {
-        use crate::board::movegen::movepicker::{
-            COUNTER_MOVE_SCORE, FIRST_KILLER_SCORE, SECOND_KILLER_SCORE, TT_MOVE_SCORE,
-            WINNING_CAPTURE_SCORE,
-        };
-
+    pub fn log_fail_high<const QSEARCH: bool>(&mut self, move_index: usize) {
         if QSEARCH {
             self.qfailhigh += 1;
             self.qfailhigh_index[move_index] += 1;
         } else {
             self.failhigh += 1;
             self.failhigh_index[move_index] += 1;
-            let fail_type = if ordering_score == TT_MOVE_SCORE {
-                FailHighType::TTMove
-            } else if ordering_score >= WINNING_CAPTURE_SCORE {
-                FailHighType::GoodTactical
-            } else if ordering_score == FIRST_KILLER_SCORE {
-                FailHighType::Killer1
-            } else if ordering_score == SECOND_KILLER_SCORE {
-                FailHighType::Killer2
-            } else if ordering_score == COUNTER_MOVE_SCORE {
-                FailHighType::CounterMove
-            } else if ordering_score > 0 {
-                FailHighType::GoodQuiet
-            } else {
-                FailHighType::BadQuiet
-            };
-            self.failhigh_types[fail_type as usize] += 1;
         }
     }
 
@@ -206,6 +175,7 @@ impl<'a> SearchInfo<'a> {
         {
             println!("failhigh {x1:5.2}% at move {i1}     qfailhigh {x2:5.2}% at move {i2}");
         }
+        #[allow(clippy::cast_precision_loss)]
         let type_percentages = self
             .failhigh_types
             .iter()
@@ -219,17 +189,6 @@ impl<'a> SearchInfo<'a> {
         println!("failhigh good quiet    {:5.2}%", type_percentages[5]);
         println!("failhigh bad quiet     {:5.2}%", type_percentages[6]);
     }
-}
-
-#[cfg(feature = "stats")]
-enum FailHighType {
-    TTMove,
-    GoodTactical,
-    Killer1,
-    Killer2,
-    CounterMove,
-    GoodQuiet,
-    BadQuiet,
 }
 
 mod tests {
@@ -246,6 +205,7 @@ mod tests {
         search::search_position,
         searchinfo::SearchInfo,
         threadlocal::ThreadData,
+        threadpool,
         timemgmt::{SearchLimit, TimeManager},
         transpositiontable::TT,
         util::MEGABYTE,
@@ -258,24 +218,27 @@ mod tests {
     fn go_mate_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("r1b2bkr/ppp3pp/2n5/3qp3/2B5/8/PPPP1PPP/RNB1K2R w KQ - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE, 1);
+        tt.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
+            t.board.san(mov.unwrap()).as_deref(),
             Some("Bxd5+")
         ));
         assert_eq!(value, mate_in(3)); // 3 ply because we're mating.
@@ -287,26 +250,26 @@ mod tests {
     fn go_mated_in_2_white() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("r1bq1bkr/ppp3pp/2n5/3Qp3/2B5/8/PPPP1PPP/RNB1K2R b KQ - 0 8").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE, 1);
+        tt.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
-
-        assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
-            Some("Qxd5")
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
         ));
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd5")));
         assert_eq!(value, mate_in(4)); // 4 ply (and positive) because white mates but it's black's turn.
 
         drop(guard);
@@ -316,26 +279,26 @@ mod tests {
     fn go_mated_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3qP3/P1N5/1PP3PP/R1BQ1BKR w kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE, 1);
+        tt.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
-
-        assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
-            Some("Qxd4")
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
         ));
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
+
+        assert!(matches!(t.board.san(mov.unwrap()).as_deref(), Some("Qxd4")));
         assert_eq!(value, -mate_in(4)); // 4 ply (and negative) because black mates but it's white's turn.
 
         drop(guard);
@@ -345,24 +308,27 @@ mod tests {
     fn go_mate_in_2_black() {
         let guard = TEST_LOCK.lock().unwrap();
 
-        let mut position =
+        let position =
             Board::from_fen("rnb1k2r/pppp1ppp/8/2b5/3QP3/P1N5/1PP3PP/R1B2BKR b kq - 0 9").unwrap();
         let stopped = AtomicBool::new(false);
-        let time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
         let nodes = AtomicU64::new(0);
-        let mut info = SearchInfo {
-            time_manager,
-            ..SearchInfo::new(&stopped, &nodes)
-        };
+        let pool = threadpool::make_worker_threads(1);
         let mut tt = TT::new();
-        tt.resize(MEGABYTE, 1);
+        tt.resize(MEGABYTE, &pool);
         let nnue_params = NNUEParams::decompress_and_alloc().unwrap();
-        let mut t = ThreadData::new(0, &position, tt.view(), nnue_params);
-        let (value, mov) =
-            search_position(&mut position, &mut info, array::from_mut(&mut t), tt.view());
+        let mut t = Box::new(ThreadData::new(
+            0,
+            position,
+            tt.view(),
+            nnue_params,
+            &stopped,
+            &nodes,
+        ));
+        t.info.time_manager = TimeManager::default_with_limit(SearchLimit::mate_in(2));
+        let (value, mov) = search_position(&pool, array::from_mut(&mut t), tt.view());
 
         assert!(matches!(
-            position.san(mov.unwrap()).as_deref(),
+            t.board.san(mov.unwrap()).as_deref(),
             Some("Bxd4+")
         ));
         assert_eq!(value, -mate_in(3)); // 3 ply because we're mating.

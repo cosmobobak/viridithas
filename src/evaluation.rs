@@ -73,36 +73,6 @@ impl Board {
             / 32
     }
 
-    pub fn evaluate_nnue(&self, t: &ThreadData) -> i32 {
-        // get the raw network output
-        let output_bucket = network::output_bucket(self);
-        let v = t.nnue.evaluate(t.nnue_params, self.turn(), output_bucket);
-
-        // clamp the value into the valid range.
-        // this basically never comes up, but the network will
-        // occasionally output OOB values in crazy positions with
-        // massive material imbalances.
-        v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
-    }
-
-    pub fn evaluate(&self, t: &mut ThreadData, nodes: u64) -> i32 {
-        // detect draw by insufficient material
-        if self.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
-            && self.state.bbs.is_material_draw()
-        {
-            return if self.turn() == Colour::White {
-                draw_score(t, nodes, self.turn())
-            } else {
-                -draw_score(t, nodes, self.turn())
-            };
-        }
-        // apply all in-waiting updates to generate a valid
-        // neural network accumulator state.
-        t.nnue.force(self, t.nnue_params);
-        // run the neural network evaluation
-        self.evaluate_nnue(t)
-    }
-
     pub fn zugzwang_unlikely(&self) -> bool {
         let stm = self.turn();
         let us = self.state.bbs.colours[stm];
@@ -125,6 +95,38 @@ impl Board {
 
         value
     }
+}
+
+pub fn evaluate_nnue(t: &ThreadData) -> i32 {
+    // get the raw network output
+    let output_bucket = network::output_bucket(&t.board);
+    let v = t
+        .nnue
+        .evaluate(t.nnue_params, t.board.turn(), output_bucket);
+
+    // clamp the value into the valid range.
+    // this basically never comes up, but the network will
+    // occasionally output OOB values in crazy positions with
+    // massive material imbalances.
+    v.clamp(-MINIMUM_TB_WIN_SCORE + 1, MINIMUM_TB_WIN_SCORE - 1)
+}
+
+pub fn evaluate(t: &mut ThreadData, nodes: u64) -> i32 {
+    // detect draw by insufficient material
+    if t.board.state.bbs.pieces[PieceType::Pawn] == SquareSet::EMPTY
+        && t.board.state.bbs.is_material_draw()
+    {
+        return if t.board.turn() == Colour::White {
+            draw_score(t, nodes, t.board.turn())
+        } else {
+            -draw_score(t, nodes, t.board.turn())
+        };
+    }
+    // apply all in-waiting updates to generate a valid
+    // neural network accumulator state.
+    t.nnue.force(&t.board, t.nnue_params);
+    // run the neural network evaluation
+    evaluate_nnue(t)
 }
 
 pub const fn see_value(piece_type: PieceType, info: &SearchInfo) -> i32 {

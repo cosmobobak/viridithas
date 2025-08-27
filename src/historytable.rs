@@ -1,6 +1,8 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     chess::{
-        piece::{Colour, Piece, PieceType},
+        piece::{Colour, Piece},
         types::{ContHistIndex, Square},
     },
     search::parameters::Config,
@@ -142,12 +144,22 @@ impl HistoryTable {
             .for_each(|x| *x /= AGEING_DIVISOR);
     }
 
-    pub fn get(&self, piece: Piece, sq: Square) -> i16 {
-        self.table[piece][sq]
-    }
-
     pub fn get_mut(&mut self, piece: Piece, sq: Square) -> &mut i16 {
-        &mut self.table[piece][sq]
+        &mut self[piece][sq]
+    }
+}
+
+impl Deref for HistoryTable {
+    type Target = [[i16; BOARD_N_SQUARES]; 12];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for HistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
@@ -179,10 +191,6 @@ impl ThreatsHistoryTable {
             .for_each(HistoryTable::age_entries);
     }
 
-    pub fn get(&self, piece: Piece, sq: Square, threat_from: bool, threat_to: bool) -> i16 {
-        self.table[usize::from(threat_from)][usize::from(threat_to)].get(piece, sq)
-    }
-
     pub fn get_mut(
         &mut self,
         piece: Piece,
@@ -190,13 +198,27 @@ impl ThreatsHistoryTable {
         threat_from: bool,
         threat_to: bool,
     ) -> &mut i16 {
-        self.table[usize::from(threat_from)][usize::from(threat_to)].get_mut(piece, sq)
+        &mut self.table[usize::from(threat_from)][usize::from(threat_to)][piece][sq]
+    }
+}
+
+impl Deref for ThreatsHistoryTable {
+    type Target = [[HistoryTable; 2]; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for ThreatsHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
 #[repr(transparent)]
 pub struct CaptureHistoryTable {
-    table: [HistoryTable; 6],
+    table: [[HistoryTable; 6]; 2],
 }
 
 impl CaptureHistoryTable {
@@ -216,20 +238,32 @@ impl CaptureHistoryTable {
     }
 
     pub fn clear(&mut self) {
-        self.table.iter_mut().for_each(HistoryTable::clear);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::clear);
     }
 
     pub fn age_entries(&mut self) {
         debug_assert!(!self.table.is_empty());
-        self.table.iter_mut().for_each(HistoryTable::age_entries);
+        self.table
+            .iter_mut()
+            .flatten()
+            .for_each(HistoryTable::age_entries);
     }
+}
 
-    pub fn get(&self, piece: Piece, sq: Square, capture: PieceType) -> i16 {
-        self.table[capture].get(piece, sq)
+impl Deref for CaptureHistoryTable {
+    type Target = [[HistoryTable; 6]; 2];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
     }
+}
 
-    pub fn get_mut(&mut self, piece: Piece, sq: Square, capture: PieceType) -> &mut i16 {
-        self.table[capture].get_mut(piece, sq)
+impl DerefMut for CaptureHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }
 
@@ -278,9 +312,23 @@ impl DoubleHistoryTable {
     }
 }
 
+impl Deref for DoubleHistoryTable {
+    type Target = [[HistoryTable; BOARD_N_SQUARES]; 12];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for DoubleHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
+    }
+}
+
 #[repr(transparent)]
 pub struct CorrectionHistoryTable {
-    table: [[i32; 2]; CORRECTION_HISTORY_SIZE],
+    table: [[i16; 2]; CORRECTION_HISTORY_SIZE],
 }
 
 impl CorrectionHistoryTable {
@@ -309,7 +357,21 @@ impl CorrectionHistoryTable {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i32 {
+    pub fn get_mut(&mut self, side: Colour, key: u64) -> &mut i16 {
         &mut self.table[(key % CORRECTION_HISTORY_SIZE as u64) as usize][side]
+    }
+}
+
+impl Deref for CorrectionHistoryTable {
+    type Target = [[i16; 2]; CORRECTION_HISTORY_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.table
+    }
+}
+
+impl DerefMut for CorrectionHistoryTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.table
     }
 }

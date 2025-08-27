@@ -77,8 +77,18 @@ pub enum Subcommands {
         /// Limit the number of games to convert.
         #[clap(long, value_name = "N")]
         limit: Option<usize>,
-        /// Override the filter settings.
-        #[clap(long)]
+        /// Override the filter settings with a TOML configuration file.
+        /// Example file format:
+        /// ```toml
+        /// min_ply = 16
+        /// min_pieces = 4
+        /// max_eval = 10000
+        /// filter_tactical = true
+        /// filter_check = true
+        /// filter_castling = false
+        /// max_eval_incorrectness = 4294967295
+        /// ```
+        #[clap(long, verbatim_doc_comment)]
         cfg_path: Option<PathBuf>,
     },
     /// Generate self-play data

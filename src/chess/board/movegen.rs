@@ -25,10 +25,11 @@ use crate::{
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
-    pub mov: Move,
     pub score: i32,
+    pub mov: Move,
 }
 
 impl MoveListEntry {
@@ -335,6 +336,13 @@ pub fn king_attacks(sq: Square) -> SquareSet {
 }
 pub fn pawn_attacks<C: Col>(bb: SquareSet) -> SquareSet {
     if C::WHITE {
+        bb.north_east_one() | bb.north_west_one()
+    } else {
+        bb.south_east_one() | bb.south_west_one()
+    }
+}
+pub fn pawn_attacks_by(bb: SquareSet, colour: Colour) -> SquareSet {
+    if colour == Colour::White {
         bb.north_east_one() | bb.north_west_one()
     } else {
         bb.south_east_one() | bb.south_west_one()
@@ -1107,6 +1115,7 @@ mod tests {
         chess::{
             board::movegen::{king_attacks, knight_attacks},
             magic::{bishop_attacks_on_the_fly, rook_attacks_on_the_fly},
+            piece::Piece,
             squareset::SquareSet,
             types::Square,
         },
@@ -1116,9 +1125,39 @@ mod tests {
     fn staged_matches_full() {
         let mut pos = Board::default();
 
-        for fen in bench::BENCH_POSITIONS {
+        let positions = bench::BENCH_POSITIONS
+            .into_iter()
+            .chain(["r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17"]);
+
+        for fen in positions {
             pos.set_from_fen(fen).unwrap();
             synced_perft(&mut pos, 2);
+        }
+    }
+
+    #[test]
+    fn no_king_into_check() {
+        let pos = Board::from_fen("r4rk1/2pb1ppQ/2pp1q2/p1n5/2P1B3/PP2P3/3N1PPP/R4RK1 b - - 0 17")
+            .unwrap();
+
+        assert_eq!(
+            pos.state.threats.checkers,
+            SquareSet::from_square(Square::H7)
+        );
+
+        assert!(pos.state.threats.all.contains_square(Square::H8));
+        assert!(pos.state.threats.all.contains_square(Square::H5));
+
+        let mut ml = MoveList::new();
+
+        pos.generate_captures::<AllMoves>(&mut ml);
+        pos.generate_quiets(&mut ml);
+
+        for m in ml.iter_moves() {
+            let Some(Piece::WK) = pos.state.mailbox[m.from()] else {
+                continue;
+            };
+            assert!(!pos.state.threats.all.contains_square(m.to()));
         }
     }
 

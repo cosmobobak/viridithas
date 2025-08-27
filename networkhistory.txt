@@ -1208,3 +1208,12 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/11074/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
+   division | full data, linear lr decay, .4->.65      | VLTC:
+            | wdl schedule.                            | Elo   | -3.63 +- 2.92 (95%)
+            |                                          | SPRT  | 120.0+1.20s Threads=1 Hash=128MB
+            |                                          | LLR   | -2.96 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 13590 W: 3066 L: 3208 D: 7316
+            |                                          | Penta | [24, 1679, 3530, 1539, 23]
+            |                                          | https://chess.swehosting.se/test/11276/
+			|                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------

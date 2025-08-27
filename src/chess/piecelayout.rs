@@ -187,9 +187,9 @@ impl PieceLayout {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct Threats {
     pub all: SquareSet,
-    // pub pawn: SquareSet,
-    // pub minor: SquareSet,
-    // pub rook: SquareSet,
+    pub leq_pawn: SquareSet,
+    pub leq_minor: SquareSet,
+    pub leq_rook: SquareSet,
     pub checkers: SquareSet,
 }
 
