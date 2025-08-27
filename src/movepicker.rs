@@ -8,7 +8,7 @@ use crate::{
         squareset::SquareSet,
     },
     history,
-    historytable::MAX_HISTORY,
+    historytable::{LOW_PLY_HISTORY_DEPTH, MAX_HISTORY},
     search::static_exchange_eval,
     threadlocal::ThreadData,
 };
@@ -195,6 +195,8 @@ impl MovePicker {
     }
 
     pub fn score_quiets(t: &ThreadData, ms: &mut [MoveListEntry]) {
+        #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+
         let cont_block_0 = t
             .board
             .height()
@@ -208,8 +210,8 @@ impl MovePicker {
             .and_then(|i| t.ss.get(i))
             .map(|ss| t.continuation_history.get_index(ss.conthist_index));
 
-        t.get_low_ply_history_scores(pos, ms, height);
         let threats = t.board.state.threats.all;
+        let height = t.board.height();
         for m in ms {
             let from = m.mov.from();
             let piece = t.board.state.mailbox[from].unwrap();
@@ -220,6 +222,12 @@ impl MovePicker {
             let mut score = 0;
 
             score += i32::from(t.main_history[from_threat][to_threat][piece][to]);
+            score += if height <= LOW_PLY_HISTORY_DEPTH {
+                let piece_moved = t.board.state.mailbox[from].unwrap();
+                8 * i32::from(t.low_ply_history[piece_moved][to]) / (1 + height as i32)
+            } else {
+                0
+            };
             if let Some(cmh_block) = cont_block_0 {
                 score += i32::from(cmh_block[piece][to]);
             }

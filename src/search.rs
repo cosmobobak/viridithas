@@ -30,7 +30,7 @@ use crate::{
     },
     historytable::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
-        main_history_bonus, main_history_malus,
+        low_ply_history_bonus, low_ply_history_malus, main_history_bonus, main_history_malus,
     },
     lookups::HM_CLOCK_KEYS,
     movepicker::{MovePicker, Stage},
@@ -1583,7 +1583,6 @@ pub fn alpha_beta<NT: NodeType>(
                 quiets_tried.as_slice(),
                 best_move,
                 depth + history_depth_boost,
-                height,
             );
         }
 
@@ -1652,7 +1651,7 @@ fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, corre
 /// Update the main and continuation history tables for a batch of moves.
 fn update_quiet_history(t: &mut ThreadData, moves_to_adjust: &[Move], best_move: Move, depth: i32) {
     t.update_history(moves_to_adjust, best_move, depth);
-    t.update_low_ply_history(conf, board, moves_to_adjust, best_move, depth, ply);
+    t.update_low_ply_history(moves_to_adjust, best_move, depth);
     t.update_continuation_history(moves_to_adjust, best_move, depth, 0);
     t.update_continuation_history(moves_to_adjust, best_move, depth, 1);
     // t.update_continuation_history(moves_to_adjust, best_move, depth, 3);
@@ -1669,20 +1668,23 @@ fn update_quiet_history_single<const MADE: bool>(
     depth: i32,
     good: bool,
 ) {
-    let (main, cont1, cont2) = if good {
+    let (main, lowply, cont1, cont2) = if good {
         (
             main_history_bonus(&t.info.conf, depth),
+            low_ply_history_bonus(&t.info.conf, depth),
             cont1_history_bonus(&t.info.conf, depth),
             cont2_history_bonus(&t.info.conf, depth),
         )
     } else {
         (
             -main_history_malus(&t.info.conf, depth),
+            -low_ply_history_malus(&t.info.conf, depth),
             -cont1_history_malus(&t.info.conf, depth),
             -cont2_history_malus(&t.info.conf, depth),
         )
     };
     t.update_history_single(from, to, moved, threats, main);
+    t.update_low_ply_history_single(to, moved, lowply);
     t.update_continuation_history_single(to, moved, cont1, 0 + usize::from(MADE));
     t.update_continuation_history_single(to, moved, cont2, 1 + usize::from(MADE));
     // t.update_continuation_history_single(to, moved, delta, 3 + usize::from(MADE));

@@ -68,78 +68,38 @@ impl ThreadData<'_> {
         let to_threat = usize::from(threats.contains_square(to));
         i32::from(self.main_history[from_threat][to_threat][piece][to])
     }
+
     /// Update the history counters of a batch of moves.
     pub fn update_low_ply_history(
         &mut self,
-        conf: &Config,
-        pos: &Board,
         moves_to_adjust: &[Move],
         best_move: Move,
         depth: i32,
-        ply: usize,
     ) {
-        if ply > LOW_PLY_HISTORY_DEPTH {
+        if self.board.height() > LOW_PLY_HISTORY_DEPTH {
             return;
         }
         for &m in moves_to_adjust {
             let from = m.from();
-            let piece_moved = pos.state.mailbox[from];
+            let piece_moved = self.board.state.mailbox[from];
             let to = m.history_to_square();
             let val = self.low_ply_history.get_mut(piece_moved.unwrap(), to);
             let delta = if m == best_move {
-                low_ply_history_bonus(conf, depth)
+                low_ply_history_bonus(&self.info.conf, depth)
             } else {
-                -low_ply_history_malus(conf, depth)
+                -low_ply_history_malus(&self.info.conf, depth)
             };
             update_history(val, delta);
         }
     }
 
     /// Update the history counters for a single move.
-    #[allow(dead_code)]
-    pub fn update_low_ply_history_single(
-        &mut self,
-        to: Square,
-        moved: Piece,
-        delta: i32,
-        ply: usize,
-    ) {
-        if ply > LOW_PLY_HISTORY_DEPTH {
+    pub fn update_low_ply_history_single(&mut self, to: Square, moved: Piece, delta: i32) {
+        if self.board.height() > LOW_PLY_HISTORY_DEPTH {
             return;
         }
         let val = self.low_ply_history.get_mut(moved, to);
         update_history(val, delta);
-    }
-
-    /// Get the history scores for a batch of moves.
-    pub(super) fn get_low_ply_history_scores(
-        &self,
-        pos: &Board,
-        ms: &mut [MoveListEntry],
-        ply: usize,
-    ) {
-        if ply > LOW_PLY_HISTORY_DEPTH {
-            return;
-        }
-        for m in ms {
-            let from = m.mov.from();
-            let piece_moved = pos.state.mailbox[from];
-            let to = m.mov.history_to_square();
-            m.score += 8 * i32::from(self.low_ply_history.get(piece_moved.unwrap(), to))
-                / (1 + ply as i32);
-        }
-    }
-
-    /// Get the history score for a single move.
-    #[allow(dead_code)]
-    pub fn get_low_ply_history_score(&self, pos: &Board, m: Move, ply: usize) -> i32 {
-        if ply > LOW_PLY_HISTORY_DEPTH {
-            return 0;
-        }
-        let from = m.from();
-        let piece_moved = pos.state.mailbox[from];
-        let to = m.history_to_square();
-        8 * i32::from(self.low_ply_history.get(piece_moved.unwrap(), to)) / (1 + ply as i32)
     }
 
     /// Update the tactical history counters of a batch of moves.
