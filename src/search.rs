@@ -1096,13 +1096,17 @@ pub fn alpha_beta<NT: NodeType>(
         // && (hit.bound == Bound::Exact
         //     || (hit.bound == Bound::Lower && hit.value >= beta)
         //     || (hit.bound == Bound::Upper && hit.value <= alpha))
+        let tt_pc_beta = beta + 420;
         if let Some(tte) = tt_hit {
-            if tte.value.abs() < MINIMUM_TB_WIN_SCORE
-                && tte.value >= beta + 300
-                && tte.depth >= depth - 3
+            if !t.ss[height].ttpv
+                && tte.value.abs() < MINIMUM_TB_WIN_SCORE
+                && beta.abs() < MINIMUM_TB_WIN_SCORE
+                && matches!(tte.bound, Bound::Lower | Bound::Exact)
+                && tte.value >= tt_pc_beta
+                && tte.depth >= depth - 4
                 && tte.mov.filter(|&m| t.board.is_pseudo_legal(m)).is_some()
             {
-                return tte.value;
+                return tt_pc_beta;
             }
         }
 
