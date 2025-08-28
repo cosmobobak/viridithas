@@ -1084,6 +1084,28 @@ pub fn alpha_beta<NT: NodeType>(
             depth -= 1;
         }
 
+        // tt-probcut:
+        // IMPL 1:
+        // if (ttHit && !ttPv && !pos.isInCheck() && !curr.excluded && std::abs(ttEntry.score) < kScoreMaxMate
+        //     && ttEntry.score >= beta + 300 && ttEntry.depth >= depth - 4 && pos.isPseudolegal(ttEntry.move))
+        //     return ttEntry.score;
+        // CANONICAL:
+        // if !NT::PV
+        // && hit.depth >= depth + i32::from(hit.value >= beta)
+        // && clock < 80
+        // && (hit.bound == Bound::Exact
+        //     || (hit.bound == Bound::Lower && hit.value >= beta)
+        //     || (hit.bound == Bound::Upper && hit.value <= alpha))
+        if let Some(tte) = tt_hit {
+            if tte.value.abs() < MINIMUM_TB_WIN_SCORE
+                && tte.value >= beta + 300
+                && tte.depth >= depth - 3
+                && tte.mov.filter(|&m| t.board.is_pseudo_legal(m)).is_some()
+            {
+                return tte.value;
+            }
+        }
+
         // razoring.
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
