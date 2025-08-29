@@ -1084,32 +1084,6 @@ pub fn alpha_beta<NT: NodeType>(
             depth -= 1;
         }
 
-        // tt-probcut:
-        // IMPL 1:
-        // if (ttHit && !ttPv && !pos.isInCheck() && !curr.excluded && std::abs(ttEntry.score) < kScoreMaxMate
-        //     && ttEntry.score >= beta + 300 && ttEntry.depth >= depth - 4 && pos.isPseudolegal(ttEntry.move))
-        //     return ttEntry.score;
-        // CANONICAL:
-        // if !NT::PV
-        // && hit.depth >= depth + i32::from(hit.value >= beta)
-        // && clock < 80
-        // && (hit.bound == Bound::Exact
-        //     || (hit.bound == Bound::Lower && hit.value >= beta)
-        //     || (hit.bound == Bound::Upper && hit.value <= alpha))
-        let tt_pc_beta = beta + 420;
-        if let Some(tte) = tt_hit {
-            if !t.ss[height].ttpv
-                && tte.value.abs() < MINIMUM_TB_WIN_SCORE
-                && beta.abs() < MINIMUM_TB_WIN_SCORE
-                && matches!(tte.bound, Bound::Lower | Bound::Exact)
-                && tte.value >= tt_pc_beta
-                && tte.depth >= depth - 4
-                && tte.mov.filter(|&m| t.board.is_pseudo_legal(m)).is_some()
-            {
-                return tt_pc_beta;
-            }
-        }
-
         // razoring.
         // if the static eval is too low, check if qsearch can beat alpha.
         // if it can't, we can prune the node.
@@ -1273,6 +1247,40 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         t.nnue.hint_common_access(&t.board, t.nnue_params);
+    }
+
+    // tt-probcut:
+    // IMPL 1:
+    // if (ttHit && !ttPv && !pos.isInCheck() && !curr.excluded && std::abs(ttEntry.score) < kScoreMaxMate
+    //     && ttEntry.score >= beta + 300 && ttEntry.depth >= depth - 4 && pos.isPseudolegal(ttEntry.move))
+    //     return ttEntry.score;
+    // CANONICAL:
+    // if !NT::PV
+    // && hit.depth >= depth + i32::from(hit.value >= beta)
+    // && clock < 80
+    // && (hit.bound == Bound::Exact
+    //     || (hit.bound == Bound::Lower && hit.value >= beta)
+    //     || (hit.bound == Bound::Upper && hit.value <= alpha))
+    // SF:
+    // // Step 12. A small Probcut idea
+    // probCutBeta = beta + 418;
+    // if ((ttData.bound & BOUND_LOWER) && ttData.depth >= depth - 4 && ttData.value >= probCutBeta
+    //     && !is_decisive(beta) && is_valid(ttData.value) && !is_decisive(ttData.value))
+    //     return probCutBeta;
+
+    let tt_pc_beta = beta + 420;
+    if let Some(tte) = tt_hit {
+        if excluded.is_none()
+            && !t.ss[height].ttpv
+            && matches!(tte.bound, Bound::Lower | Bound::Exact)
+            && tte.depth >= depth - 4
+            && tte.value >= tt_pc_beta
+            && beta.abs() < MINIMUM_TB_WIN_SCORE
+            && tte.value != VALUE_NONE
+            && tte.value.abs() < MINIMUM_TB_WIN_SCORE
+        {
+            return tt_pc_beta;
+        }
     }
 
     let original_alpha = alpha;
