@@ -1208,15 +1208,6 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | https://chess.swehosting.se/test/11074/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
-  timepiece | god knows what. must be a finetune.      | fixed-nodes:
-            |                                          | Elo   | -9.23 +- 4.89 (95%)
-            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
-            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
-            |                                          | Games | N: 7794 W: 2136 L: 2343 D: 3315
-            |                                          | Penta | [166, 1028, 1696, 861, 146]
-            |                                          | https://chess.swehosting.se/test/11710/
-            |                                          | vs. delenda
-------------|------------------------------------------|-----------------------------------------------
    division | full data, linear lr decay, .4->.65      | VLTC:
             | wdl schedule.                            | Elo   | -3.63 +- 2.92 (95%)
             |                                          | SPRT  | 120.0+1.20s Threads=1 Hash=128MB
@@ -1224,6 +1215,15 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | Games | N: 13590 W: 3066 L: 3208 D: 7316
             |                                          | Penta | [24, 1679, 3530, 1539, 23]
             |                                          | https://chess.swehosting.se/test/11276/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+  timepiece | fine-tune of division at WDL .65, 200 SB | fixed-nodes:
+            |                                          | Elo   | -9.23 +- 4.89 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 7794 W: 2136 L: 2343 D: 3315
+            |                                          | Penta | [166, 1028, 1696, 861, 146]
+            |                                          | https://chess.swehosting.se/test/11710/
             |                                          | vs. delenda
 ------------|------------------------------------------|-----------------------------------------------
     oculist | rebase on latest bullet w/ ValueTrainer. | fixed-nodes:
