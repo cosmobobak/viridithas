@@ -898,6 +898,18 @@ pub fn alpha_beta<NT: NodeType>(
                 return hit.value;
             }
 
+            // Trick from Ethereal:
+            // An entry that upper-bounds the score much below the current alpha
+            // is almost like getting told that all the moves here will fail low.
+            if !NT::PV
+                && hit.depth >= depth - 1
+                && matches!(hit.bound, Bound::Upper | Bound::Exact)
+                && (cut_node || hit.value <= alpha)
+                && hit.value + 150 <= alpha
+            {
+                return alpha;
+            }
+
             Some(hit)
         } else {
             None
