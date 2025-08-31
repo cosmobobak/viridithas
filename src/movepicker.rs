@@ -37,6 +37,24 @@ pub struct MovePicker {
     see_threshold: i32,
 }
 
+fn fast_select(entries: &[Cell<MoveListEntry>]) -> Option<&Cell<MoveListEntry>> {
+    #![allow(clippy::cast_possible_truncation)]
+    fn to_u64(e: MoveListEntry) -> u64 {
+        #![allow(clippy::cast_sign_loss)]
+        let widened = i64::from(e.score);
+        let offset = widened - i64::from(i32::MIN);
+        (offset as u64) << 32
+    }
+    let best = entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| to_u64(e.get()) | i as u64)
+        .max()?;
+    let best_idx = best & 0xFFFF_FFFF;
+    // SAFETY: best_idx is guaranteed to be in-bounds.
+    unsafe { Some(entries.get_unchecked(best_idx as usize)) }
+}
+
 impl MovePicker {
     pub fn new(tt_move: Option<Move>, killer: Option<Move>, see_threshold: i32) -> Self {
         Self {
@@ -132,13 +150,9 @@ impl MovePicker {
     /// the best move has already been tried or doesn't meet SEE requirements,
     /// we will continue to iterate until we find a move that is valid.
     fn yield_once(&mut self, t: &ThreadData) -> Option<MoveListEntry> {
-        let mut remaining =
-            Cell::as_slice_of_cells(Cell::from_mut(&mut self.movelist[self.index..]));
-        while let Some(best_entry_ref) =
-            remaining
-                .iter()
-                .reduce(|a, b| if a.get().score >= b.get().score { a } else { b })
-        {
+        let remaining = &mut self.movelist[self.index..];
+        let mut remaining = Cell::as_slice_of_cells(Cell::from_mut(remaining));
+        while let Some(best_entry_ref) = fast_select(remaining) {
             let best = best_entry_ref.get();
             debug_assert!(
                 best.score < WINNING_CAPTURE_BONUS / 2 || best.score >= MIN_WINNING_SEE_SCORE,

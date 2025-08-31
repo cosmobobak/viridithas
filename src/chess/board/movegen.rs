@@ -25,10 +25,11 @@ use crate::{
 
 pub const MAX_POSITION_MOVES: usize = 218;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveListEntry {
-    pub mov: Move,
     pub score: i32,
+    pub mov: Move,
 }
 
 impl MoveListEntry {
