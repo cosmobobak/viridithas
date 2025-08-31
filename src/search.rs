@@ -1173,7 +1173,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     // TT-reduction (IIR).
     if !NT::ROOT
-        && all_node
+        && !all_node
         && depth >= 6
         && tt_move.is_none()
         && t.ss[height - 1].reduction <= 3 * 1024
