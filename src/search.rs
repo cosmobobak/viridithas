@@ -1170,16 +1170,8 @@ pub fn alpha_beta<NT: NodeType>(
     }
 
     // TT-reduction (IIR).
-    if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
-        depth -= i32::from(depth >= 4);
-    }
-
-    // cutnode-based TT reduction.
-    if cut_node
-        && excluded.is_none()
-        && (tt_move.is_none() || !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth))
-    {
-        depth -= i32::from(depth >= 8);
+    if (NT::PV || cut_node) && depth >= 2 + 2 * i32::from(cut_node) && tt_move.is_none() {
+        depth -= 1;
     }
 
     // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
