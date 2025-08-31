@@ -904,7 +904,6 @@ pub fn alpha_beta<NT: NodeType>(
             if !NT::PV
                 && hit.depth >= depth - 1
                 && matches!(hit.bound, Bound::Upper | Bound::Exact)
-                && (cut_node || hit.value <= alpha)
                 && hit.value + 150 <= alpha
             {
                 return alpha;
