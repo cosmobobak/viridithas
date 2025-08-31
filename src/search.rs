@@ -898,6 +898,22 @@ pub fn alpha_beta<NT: NodeType>(
                 return hit.value;
             }
 
+            // probcut-esque:
+            if !NT::PV
+                && cut_node
+                && hit.depth >= depth - 1
+                // clock condition unnecessary, as tt-move must be tactical,
+                // and so will reset the clock.
+                // && clock < 80
+                && matches!(hit.bound, Bound::Lower | Bound::Exact)
+                && hit.value + 150 >= beta
+                && hit.mov.is_some_and(|m| {
+                    t.board.is_tactical(m) && t.board.is_pseudo_legal(m) && t.board.is_legal(m)
+                })
+            {
+                return beta;
+            }
+
             Some(hit)
         } else {
             None
