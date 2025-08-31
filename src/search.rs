@@ -911,7 +911,7 @@ pub fn alpha_beta<NT: NodeType>(
                     t.board.is_tactical(m) && t.board.is_pseudo_legal(m) && t.board.is_legal(m)
                 })
             {
-                return beta;
+                depth -= 1;
             }
 
             Some(hit)
