@@ -827,6 +827,8 @@ pub fn alpha_beta<NT: NodeType>(
     debug_assert!(!(NT::PV && cut_node));
     debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
 
+    let all_node = !NT::PV && !cut_node;
+
     t.info.seldepth = if NT::ROOT {
         0
     } else {
@@ -1170,16 +1172,8 @@ pub fn alpha_beta<NT: NodeType>(
     }
 
     // TT-reduction (IIR).
-    if NT::PV && !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth) {
-        depth -= i32::from(depth >= 4);
-    }
-
-    // cutnode-based TT reduction.
-    if cut_node
-        && excluded.is_none()
-        && (tt_move.is_none() || !matches!(tt_hit, Some(tte) if tte.depth + 4 > depth))
-    {
-        depth -= i32::from(depth >= 8);
+    if all_node && depth >= 6 && tt_move.is_none() && t.ss[height - 1].reduction <= 3 * 1024 {
+        depth -= 1;
     }
 
     // the margins for static-exchange-evaluation pruning for tactical and quiet moves.
@@ -1422,8 +1416,7 @@ pub fn alpha_beta<NT: NodeType>(
         if moves_made == 1 {
             // first move (presumably the PV-move)
             let new_depth = depth + extension - 1;
-            score =
-                -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, !NT::PV && !cut_node);
+            score = -alpha_beta::<NT::Next>(l_pv, t, new_depth, -beta, -alpha, all_node);
         } else {
             // calculation of LMR stuff
             let r = if depth > 2 && moves_made > (1 + usize::from(NT::PV)) {
