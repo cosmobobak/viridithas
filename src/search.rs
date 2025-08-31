@@ -906,7 +906,7 @@ pub fn alpha_beta<NT: NodeType>(
                 // and so will reset the clock.
                 // && clock < 80
                 && matches!(hit.bound, Bound::Lower | Bound::Exact)
-                && hit.value + 150 >= beta
+                && hit.value - 150 >= beta
                 && hit.mov.is_some_and(|m| {
                     t.board.is_tactical(m) && t.board.is_pseudo_legal(m) && t.board.is_legal(m)
                 })
