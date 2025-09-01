@@ -234,17 +234,6 @@ impl ThreadData<'_> {
             + (white + black) * i64::from(self.info.conf.nonpawn_corrhist_weight);
         (adjustment / 1024) as i32 / CORRECTION_HISTORY_GRAIN
     }
-
-    pub fn correction_terms_squared(&self) -> i64 {
-        let keys = &self.board.state.keys;
-        let turn = self.board.turn();
-        let pawn = self.pawn_corrhist.get(turn, keys.pawn);
-        let white = self.nonpawn_corrhist[Colour::White].get(turn, keys.non_pawn[Colour::White]);
-        let black = self.nonpawn_corrhist[Colour::Black].get(turn, keys.non_pawn[Colour::Black]);
-        let minor = self.minor_corrhist.get(turn, keys.minor);
-        let major = self.major_corrhist.get(turn, keys.major);
-        pawn * pawn + white * white + black * black + minor * minor + major * major
-    }
 }
 
 pub fn caphist_piece_type(pos: &Board, mv: Move) -> PieceType {

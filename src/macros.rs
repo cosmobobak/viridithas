@@ -49,13 +49,22 @@ macro_rules! track {
                 clippy::cast_possible_wrap
             )]
             static TOTAL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+            static SQUARES_TOTAL: std::sync::atomic::AtomicI64 =
+                std::sync::atomic::AtomicI64::new(0);
             static COUNT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
             TOTAL.fetch_add($v as i64, std::sync::atomic::Ordering::Relaxed);
+            SQUARES_TOTAL.fetch_add(
+                ($v as i64) * ($v as i64),
+                std::sync::atomic::Ordering::Relaxed,
+            );
             let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if count % 2048 == 0 {
                 let total = TOTAL.load(std::sync::atomic::Ordering::Relaxed);
+                let squares_total = SQUARES_TOTAL.load(std::sync::atomic::Ordering::Relaxed);
                 let avg = total as f64 / count as f64;
-                println!("average value of {}: {}", stringify!($v), avg);
+                let var =
+                    (count as f64 * avg).mul_add(-avg, squares_total as f64) / (count as f64 - 1.0);
+                println!("[{}: m: {} v: {}]", stringify!($v), avg, var)
             }
             // pass-through
             $v
