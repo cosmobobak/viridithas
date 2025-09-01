@@ -91,7 +91,7 @@ const LMR_CUT_NODE_MUL: i32 = 1472;
 const LMR_NON_IMPROVING_MUL: i32 = 683;
 const LMR_TT_CAPTURE_MUL: i32 = 1131;
 const LMR_CHECK_MUL: i32 = 1176;
-const LMR_COMPLEXITY_DIVISOR: i32 = 120;
+const LMR_COMPLEXITY_MUL: i32 = 5000;
 
 const MAIN_HISTORY_BONUS_MUL: i32 = 364;
 const MAIN_HISTORY_BONUS_OFFSET: i32 = 152;
@@ -1445,7 +1445,8 @@ pub fn alpha_beta<NT: NodeType>(
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
                 // reduce less when the static eval is way off-base
-                r -= ((t.correction_terms_squared() * 5000) >> 32) as i32;
+                r -= ((t.correction_terms_squared() * i64::from(t.info.conf.lmr_complexity_mul))
+                    >> 32) as i32;
 
                 t.ss[height].reduction = r;
                 r / 1024
