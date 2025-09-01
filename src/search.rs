@@ -720,10 +720,12 @@ pub fn quiescence<NT: NodeType>(
             continue;
         }
         let is_tactical = t.board.is_tactical(m);
+        let is_recapture = Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
         if best_score > -MINIMUM_TB_WIN_SCORE
             && is_tactical
             && !in_check
             && futility <= alpha
+            && !is_recapture
             && !static_exchange_eval(&t.board, &t.info, m, 1)
         {
             if best_score < futility {
@@ -872,7 +874,7 @@ pub fn alpha_beta<NT: NodeType>(
     let tt_hit = if excluded.is_none() {
         if let Some(hit) = t.tt.probe(key, height) {
             if !NT::PV
-                && hit.depth >= depth
+                && hit.depth >= depth + i32::from(hit.value >= beta)
                 && clock < 80
                 && (hit.bound == Bound::Exact
                     || (hit.bound == Bound::Lower && hit.value >= beta)
@@ -1543,6 +1545,13 @@ pub fn alpha_beta<NT: NodeType>(
             return mated_in(height);
         }
         return draw_score(t, t.info.nodes.get_local(), t.board.turn());
+    }
+
+    if best_score >= beta
+        && best_score.abs() < MINIMUM_TB_WIN_SCORE
+        && alpha.abs() < MINIMUM_TB_WIN_SCORE
+    {
+        best_score = (best_score * depth + beta) / (depth + 1);
     }
 
     best_score = best_score.clamp(syzygy_min, syzygy_max);
