@@ -200,13 +200,13 @@ impl MovePicker {
             .height()
             .checked_sub(1)
             .and_then(|i| t.ss.get(i))
-            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+            .map(|ss| t.cont_hist.get_index(ss.ch_idx));
         let cont_block_1 = t
             .board
             .height()
             .checked_sub(2)
             .and_then(|i| t.ss.get(i))
-            .map(|ss| t.continuation_history.get_index(ss.conthist_index));
+            .map(|ss| t.cont_hist.get_index(ss.ch_idx));
 
         let threats = t.board.state.threats.all;
         for m in ms {
@@ -218,7 +218,7 @@ impl MovePicker {
 
             let mut score = 0;
 
-            score += i32::from(t.main_history[from_threat][to_threat][piece][to]);
+            score += i32::from(t.main_hist[from_threat][to_threat][piece][to]);
             if let Some(cmh_block) = cont_block_0 {
                 score += i32::from(cmh_block[piece][to]);
             }
@@ -304,7 +304,7 @@ impl MovePicker {
             let mut score = WINNING_CAPTURE_BONUS;
 
             score += MVV_SCORE[capture];
-            score += i32::from(t.tactical_history[usize::from(threat_to)][capture][piece][to]);
+            score += i32::from(t.tactical_hist[usize::from(threat_to)][capture][piece][to]);
 
             m.score = score;
         }

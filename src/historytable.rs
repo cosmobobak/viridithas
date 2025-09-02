@@ -242,11 +242,11 @@ impl DoubleHistoryTable {
     }
 
     pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        &mut self.table[index.piece][index.square]
+        &mut self.table[index.piece][index.to]
     }
 
     pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        &self.table[index.piece][index.square]
+        &self.table[index.piece][index.to]
     }
 }
 

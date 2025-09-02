@@ -28,9 +28,9 @@ pub struct ThreadData<'a> {
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
 
-    pub main_history: ThreatsHistoryTable,
-    pub tactical_history: Box<CaptureHistoryTable>,
-    pub continuation_history: Box<DoubleHistoryTable>,
+    pub main_hist: ThreatsHistoryTable,
+    pub tactical_hist: Box<CaptureHistoryTable>,
+    pub cont_hist: Box<DoubleHistoryTable>,
     pub killer_move_table: [Option<Move>; MAX_PLY + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
@@ -70,9 +70,9 @@ impl<'a> ThreadData<'a> {
             banned_nmp: 0,
             nnue: nnue::network::NNUEState::new(&board, nnue_params),
             nnue_params,
-            main_history: ThreatsHistoryTable::new(),
-            tactical_history: CaptureHistoryTable::boxed(),
-            continuation_history: DoubleHistoryTable::boxed(),
+            main_hist: ThreatsHistoryTable::new(),
+            tactical_hist: CaptureHistoryTable::boxed(),
+            cont_hist: DoubleHistoryTable::boxed(),
             killer_move_table: [None; MAX_PLY + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
@@ -125,9 +125,9 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn clear_tables(&mut self) {
-        self.main_history.clear();
-        self.tactical_history.clear();
-        self.continuation_history.clear();
+        self.main_hist.clear();
+        self.tactical_hist.clear();
+        self.cont_hist.clear();
         self.pawn_corrhist.clear();
         self.nonpawn_corrhist[Colour::White].clear();
         self.nonpawn_corrhist[Colour::Black].clear();
