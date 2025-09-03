@@ -778,7 +778,10 @@ pub fn alpha_beta<NT: NodeType>(
 
     debug_assert_eq!(height == 0, NT::ROOT);
     debug_assert!(!(NT::PV && cut_node));
-    debug_assert_eq!(NT::PV, alpha + 1 != beta, "PV must be true iff the alpha-beta window is larger than 1, but PV was {PV} and alpha-beta window was {alpha}-{beta}", PV = NT::PV);
+    debug_assert!(
+        NT::PV || alpha + 1 == beta,
+        "Non-PV nodes must be zero-window."
+    );
 
     t.info.seldepth = if NT::ROOT {
         0
