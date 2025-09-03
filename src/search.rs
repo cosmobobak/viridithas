@@ -4,7 +4,6 @@ pub mod parameters;
 pub mod pv;
 
 use std::{
-    ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
     thread,
 };
@@ -283,17 +282,14 @@ pub fn search_position(
         .copied()
         .unwrap_or_else(|| default_move(&thread_headers[0]));
 
-    if thread_headers[0].info.print_to_stdout {
-        // always give a final info log before ending search
-        let nodes = thread_headers[0].info.nodes.get_global();
-        readout_info(
-            best_thread,
-            &thread_headers[0].info,
-            Bound::Exact,
-            nodes,
-            true,
-        );
-    }
+    // always give a final info log before ending search
+    readout_info(
+        best_thread,
+        &thread_headers[0].info,
+        Bound::Exact,
+        thread_headers[0].info.nodes.get_global(),
+        true,
+    );
 
     if thread_headers[0].info.print_to_stdout {
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
@@ -372,10 +368,10 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         }
 
         // aspiration loop:
-        let ControlFlow::Continue(()) = aspiration::<ThTy>(&mut pv, t, &mut aw, &mut average_value)
-        else {
+        aspiration::<ThTy>(&mut pv, t, &mut aw, &mut average_value);
+        if t.info.stopped() {
             break 'deepening;
-        };
+        }
 
         if ThTy::MAIN_THREAD && t.depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
             let bm_frac = if t.depth > 8 {
@@ -412,19 +408,18 @@ fn aspiration<ThTy: SmpThreadType>(
     t: &mut ThreadData,
     aw: &mut AspirationWindow,
     average_value: &mut i32,
-) -> ControlFlow<(), ()> {
+) {
     let min_depth = (t.depth / 2).max(1);
     loop {
         pv.score = alpha_beta::<Root>(pv, t, t.depth, aw.alpha, aw.beta, false);
         if t.info.check_up() {
-            return ControlFlow::Break(()); // we've been told to stop searching.
+            return; // we've been told to stop searching.
         }
 
         if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
+            if ThTy::MAIN_THREAD {
                 t.pv_mut().score = pv.score;
-                readout_info(t, &t.info, Bound::Upper, nodes, false);
+                readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
             }
             aw.widen_down(pv.score, t.depth);
             if ThTy::MAIN_THREAD {
@@ -440,9 +435,8 @@ fn aspiration<ThTy: SmpThreadType>(
         // search is either exact or fail-high, so we can update the best line.
         t.update_best_line(pv);
         if aw.beta != INFINITY && pv.score >= aw.beta {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
-                readout_info(t, &t.info, Bound::Lower, nodes, false);
+            if ThTy::MAIN_THREAD {
+                readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
             }
             aw.widen_up(pv.score, t.depth);
             if ThTy::MAIN_THREAD {
@@ -455,60 +449,39 @@ fn aspiration<ThTy: SmpThreadType>(
                 t.depth = (t.depth - 1).max(min_depth);
             }
 
-            if t.info.clock.solved_breaker::<ThTy>(0, t.depth) == ControlFlow::Break(()) {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                return ControlFlow::Break(()); // we've been told to stop searching.
-            }
-
             continue;
         }
 
-        // if we've made it here, it means we got an exact score.
-        let score = pv.score;
-        let bestmove = t
-            .pv()
-            .moves()
-            .first()
-            .copied()
-            .unwrap_or_else(|| default_move(t));
-        *average_value = if *average_value == VALUE_NONE {
-            score
-        } else {
-            (2 * score + *average_value) / 3
-        };
+        break;
+    }
 
-        if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-            let total_nodes = t.info.nodes.get_global();
-            readout_info(t, &t.info, Bound::Exact, total_nodes, false);
-        }
+    // if we've made it here, it means we got an exact score.
+    let score = pv.score;
+    let bestmove = t
+        .pv()
+        .moves()
+        .first()
+        .copied()
+        .unwrap_or_else(|| default_move(t));
 
-        if t.info.clock.solved_breaker::<ThTy>(pv.score, t.depth) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
+    *average_value = if *average_value == VALUE_NONE {
+        score
+    } else {
+        (2 * score + *average_value) / 3
+    };
 
-        if t.info.clock.mate_found_breaker::<ThTy>(pv, t.depth) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
+    if ThTy::MAIN_THREAD {
+        readout_info(t, &t.info, Bound::Exact, t.info.nodes.get_global(), false);
 
-        if ThTy::MAIN_THREAD {
-            if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
-                let saved_seldepth = t.info.seldepth;
-                let forced = is_forced(margin, t, bestmove, score, (t.depth - 1) / 2);
-                t.info.seldepth = saved_seldepth;
+        if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
+            let saved_seldepth = t.info.seldepth;
+            let forced = is_forced(margin, t, bestmove, score, (t.depth - 1) / 2);
+            t.info.seldepth = saved_seldepth;
 
-                if forced {
-                    t.info.clock.report_forced_move(t.depth, &t.info.conf);
-                }
+            if forced {
+                t.info.clock.report_forced_move(t.depth, &t.info.conf);
             }
         }
-
-        if t.info.stopped() {
-            return ControlFlow::Break(());
-        }
-
-        break ControlFlow::Continue(()); // we got an exact score, so we can stop the aspiration loop.
     }
 }
 
@@ -1826,7 +1799,6 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
 
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
@@ -1849,7 +1821,7 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 && print_to_stdout {
+    if best_thread.thread_id != 0 {
         readout_info(
             best_thread,
             &thread_headers[0].info,
@@ -1875,6 +1847,9 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
+    if !info.print_to_stdout {
+        return;
+    }
     let ThreadData {
         board,
         iteration,
