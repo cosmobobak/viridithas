@@ -28,6 +28,7 @@ use crate::{
         evaluate, is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in,
         MATE_SCORE, MINIMUM_TB_WIN_SCORE,
     },
+    history::caphist_piece_type,
     historytable::{
         cont1_history_bonus, cont1_history_malus, cont2_history_bonus, cont2_history_malus,
         main_history_bonus, main_history_malus,
@@ -735,9 +736,9 @@ pub fn quiescence<NT: NodeType>(
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
         let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
+        t.ss[height].ch_idx = ContHistIndex {
             piece: moved,
-            square: m.history_to_square(),
+            to: m.history_to_square(),
         };
         t.board.make_move(m, &mut t.nnue);
         // move found, we can start skipping quiets again:
@@ -1135,9 +1136,9 @@ pub fn alpha_beta<NT: NodeType>(
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
-            t.ss[height].conthist_index = ContHistIndex {
+            t.ss[height].ch_idx = ContHistIndex {
                 piece: Piece::new(t.board.turn(), PieceType::Pawn),
-                square: Square::A1,
+                to: Square::A1,
             };
             t.board.make_nullmove();
             let mut null_score = -alpha_beta::<OffPV>(l_pv, t, nm_depth, -beta, -beta + 1, false);
@@ -1216,9 +1217,9 @@ pub fn alpha_beta<NT: NodeType>(
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
             let moved = t.board.state.mailbox[m.from()].unwrap();
-            t.ss[height].conthist_index = ContHistIndex {
+            t.ss[height].ch_idx = ContHistIndex {
                 piece: moved,
-                square: m.history_to_square(),
+                to: m.history_to_square(),
             };
             t.board.make_move(m, &mut t.nnue);
 
@@ -1283,13 +1284,25 @@ pub fn alpha_beta<NT: NodeType>(
 
         let mut stat_score = 0;
 
+        let from = m.from();
+        let hist_to = m.history_to_square();
+        let moved = t.board.state.mailbox[from].unwrap();
+        let threats = t.board.state.threats.all;
+        let from_threat = usize::from(threats.contains_square(from));
+        let to_threat = usize::from(threats.contains_square(hist_to));
         if is_quiet {
-            stat_score += t.get_history_score(m);
-            stat_score += t.get_continuation_history_score(m, 0);
-            stat_score += t.get_continuation_history_score(m, 1);
-            // stat_score += t.get_continuation_history_score(t.board, m, 3);
+            stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
+            if height >= 1 {
+                let prev = t.ss[height - 1].ch_idx;
+                stat_score += i32::from(t.cont_hist[prev.piece][prev.to][moved][hist_to]);
+            }
+            if height >= 2 {
+                let prev = t.ss[height - 2].ch_idx;
+                stat_score += i32::from(t.cont_hist[prev.piece][prev.to][moved][hist_to]);
+            }
         } else {
-            stat_score += t.get_tactical_history_score(m);
+            let capture = caphist_piece_type(&t.board, m);
+            stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to]);
         }
 
         // lmp & fp.
@@ -1410,10 +1423,9 @@ pub fn alpha_beta<NT: NodeType>(
 
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = !is_quiet;
-        let moved = t.board.state.mailbox[m.from()].unwrap();
-        t.ss[height].conthist_index = ContHistIndex {
+        t.ss[height].ch_idx = ContHistIndex {
             piece: moved,
-            square: m.history_to_square(),
+            to: m.history_to_square(),
         };
 
         t.board.make_move(m, &mut t.nnue);
@@ -1485,9 +1497,8 @@ pub fn alpha_beta<NT: NodeType>(
                             cont2_history_bonus(&t.info.conf, new_depth),
                         )
                     };
-                    let to = m.to();
-                    t.update_continuation_history_single(to, moved, c1, 1);
-                    t.update_continuation_history_single(to, moved, c2, 2);
+                    t.update_continuation_history_single(hist_to, moved, c1, 1);
+                    t.update_continuation_history_single(hist_to, moved, c2, 2);
                 }
             } else if score > alpha && score < best_score + 16 {
                 new_depth -= 1;
@@ -1503,7 +1514,7 @@ pub fn alpha_beta<NT: NodeType>(
         // record subtree size for TimeManager
         if NT::ROOT && t.thread_id == 0 {
             let subtree_size = t.info.nodes.get_local() - nodes_before_search;
-            t.info.root_move_nodes[m.from()][m.to()] += subtree_size;
+            t.info.root_move_nodes[from][hist_to] += subtree_size;
         }
 
         if extension >= 2 {
