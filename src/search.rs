@@ -381,7 +381,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             let bm_frac = if t.depth > 8 {
                 let best_move = pv.moves[0];
                 let best_move_subtree_size =
-                    t.info.root_move_nodes[best_move.from()][best_move.to()];
+                    t.info.root_move_nodes[best_move.from()][best_move.history_to_square()];
                 let tree_size = t.info.nodes.get_local();
                 #[allow(clippy::cast_precision_loss)]
                 Some(best_move_subtree_size as f64 / tree_size as f64)
