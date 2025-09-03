@@ -11,7 +11,7 @@ use crate::{
         CORRECTION_HISTORY_MAX, CORRECTION_HISTORY_WEIGHT_SCALE,
     },
     threadlocal::ThreadData,
-    util::MAX_PLY,
+    util::MAX_DEPTH,
 };
 
 use crate::chess::board::Board;
@@ -89,13 +89,14 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         let height = self.board.height();
+
         if height <= index {
             return;
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.cont_hist.get_index_mut(ss.ch_idx);
+        let cmh_block = self
+            .cont_hist
+            .get_index_mut(self.ss[height - index - 1].ch_idx);
+
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = self.board.state.mailbox[m.from()].unwrap();
@@ -118,19 +119,20 @@ impl ThreadData<'_> {
         index: usize,
     ) {
         let height = self.board.height();
+
         if height <= index {
             return;
         }
-        let Some(ss) = self.ss.get(height - index - 1) else {
-            return;
-        };
-        let cmh_block = self.cont_hist.get_index_mut(ss.ch_idx);
+        let cmh_block = self
+            .cont_hist
+            .get_index_mut(self.ss[height - index - 1].ch_idx);
+
         update_history(cmh_block.get_mut(moved, to), delta);
     }
 
     /// Add a killer move.
     pub fn insert_killer(&mut self, m: Move) {
-        debug_assert!(self.board.height() < MAX_PLY);
+        debug_assert!(self.board.height() < MAX_DEPTH);
         let idx = self.board.height();
         self.killer_move_table[idx] = Some(m);
     }

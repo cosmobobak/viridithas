@@ -22,7 +22,7 @@ use crate::{
     },
     image::{self, Image},
     nnue,
-    util::{self, Align64, MAX_PLY},
+    util::{self, Align64, MAX_DEPTH},
 };
 
 use super::accumulator::{self, Accumulator};
@@ -1039,7 +1039,7 @@ pub fn dry_run() -> anyhow::Result<()> {
 }
 
 /// The size of the stack used to store the activations of the hidden layer.
-const ACC_STACK_SIZE: usize = MAX_PLY + 1;
+const ACC_STACK_SIZE: usize = MAX_DEPTH + 1;
 
 /// Struct representing some unmaterialised feature update made as part of a move.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

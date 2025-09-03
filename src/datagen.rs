@@ -55,7 +55,7 @@ static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 /// Whether to limit searches by depth or by nodes.
 #[derive(Clone, Debug, Hash)]
 enum DataGenLimit {
-    Depth(i32),
+    Depth(usize),
     Nodes(u64),
 }
 
@@ -434,7 +434,7 @@ fn generate_on_thread<'a>(
             hard_limit: nodes * 8,
         },
     });
-    thread_data[0].info.time_manager = time_manager;
+    thread_data[0].info.clock = time_manager;
     thread_data[0].info.print_to_stdout = false;
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
@@ -504,13 +504,10 @@ fn generate_on_thread<'a>(
 
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
-        let temp_limit = thread_data[0].info.time_manager.limit().clone();
-        thread_data[0]
-            .info
-            .time_manager
-            .set_limit(SearchLimit::Depth(10));
-        let (eval, _) = search_position(&pool, &mut thread_data, tt.view());
-        thread_data[0].info.time_manager.set_limit(temp_limit);
+        let temp_limit = thread_data[0].info.clock.limit().clone();
+        thread_data[0].info.clock.set_limit(SearchLimit::Depth(10));
+        let (eval, _) = search_position(&pool, &mut thread_data);
+        thread_data[0].info.clock.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
@@ -535,7 +532,7 @@ fn generate_on_thread<'a>(
             }
             tt.increase_age();
 
-            let (score, best_move) = search_position(&pool, &mut thread_data, tt.view());
+            let (score, best_move) = search_position(&pool, &mut thread_data);
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
@@ -792,7 +789,7 @@ impl FromStr for DataGenLimit {
                 if limit_value > i32::MAX as u64 {
                     return Err(format!("Depth limit too large: {limit_value}"));
                 }
-                Ok(Self::Depth(limit_value as i32))
+                Ok(Self::Depth(limit_value as usize))
             }
             "nodes" => Ok(Self::Nodes(limit_value)),
             _ => Err(format!("Invalid limit type: {limit_type}")),

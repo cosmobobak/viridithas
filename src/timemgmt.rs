@@ -44,7 +44,7 @@ impl ForcedMoveType {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
-    Depth(i32),
+    Depth(usize),
     Time(u64),
     Nodes(u64),
     Mate {
@@ -89,7 +89,7 @@ impl SearchLimit {
         }
     }
 
-    pub const fn depth(&self) -> Option<i32> {
+    pub const fn depth(&self) -> Option<usize> {
         match self {
             Self::Depth(d) => Some(*d),
             _ => None,
@@ -316,7 +316,7 @@ impl TimeManager {
     pub const fn solved_breaker<ThTy: SmpThreadType>(
         &self,
         value: i32,
-        depth: usize,
+        depth: i32,
     ) -> ControlFlow<()> {
         if !ThTy::MAIN_THREAD || depth < 8 {
             return ControlFlow::Continue(());
@@ -325,7 +325,7 @@ impl TimeManager {
             let expected_score = mate_in(ply);
             let is_good_enough = value.abs() >= expected_score;
             #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= ply {
+            if is_good_enough && depth >= ply as i32 {
                 ControlFlow::Break(())
             } else {
                 ControlFlow::Continue(())

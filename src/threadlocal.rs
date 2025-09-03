@@ -16,14 +16,14 @@ use crate::{
     stack::StackEntry,
     threadpool::{self, ScopeExt},
     transpositiontable::TTView,
-    util::MAX_PLY,
+    util::MAX_DEPTH,
 };
 
 #[repr(align(64))]
 pub struct ThreadData<'a> {
     // stack array is right-padded by one because singular verification
     // will try to access the next ply in an edge case.
-    pub ss: [StackEntry; MAX_PLY + 1],
+    pub ss: [StackEntry; MAX_DEPTH + 1],
     pub banned_nmp: u8,
     pub nnue: Box<nnue::network::NNUEState>,
     pub nnue_params: &'static NNUEParams,
@@ -31,7 +31,7 @@ pub struct ThreadData<'a> {
     pub main_hist: ThreatsHistoryTable,
     pub tactical_hist: Box<CaptureHistoryTable>,
     pub cont_hist: Box<DoubleHistoryTable>,
-    pub killer_move_table: [Option<Move>; MAX_PLY + 1],
+    pub killer_move_table: [Option<Move>; MAX_DEPTH + 1],
     pub pawn_corrhist: Box<CorrectionHistoryTable>,
     pub nonpawn_corrhist: [Box<CorrectionHistoryTable>; 2],
     pub major_corrhist: Box<CorrectionHistoryTable>,
@@ -39,9 +39,13 @@ pub struct ThreadData<'a> {
 
     pub thread_id: usize,
 
-    pub pvs: [PVariation; MAX_PLY],
+    pub pvs: [PVariation; MAX_DEPTH],
+    /// the iterative deepening loop counter
+    pub iteration: usize,
+    /// the highest finished ID iteration
     pub completed: usize,
-    pub depth: usize,
+    /// the draft we're actually kicking off searches at
+    pub depth: i32,
 
     pub stm_at_root: Colour,
     pub optimism: [i32; 2],
@@ -73,7 +77,7 @@ impl<'a> ThreadData<'a> {
             main_hist: ThreatsHistoryTable::new(),
             tactical_hist: CaptureHistoryTable::boxed(),
             cont_hist: DoubleHistoryTable::boxed(),
-            killer_move_table: [None; MAX_PLY + 1],
+            killer_move_table: [None; MAX_DEPTH + 1],
             pawn_corrhist: CorrectionHistoryTable::boxed(),
             nonpawn_corrhist: [
                 CorrectionHistoryTable::boxed(),
@@ -83,7 +87,8 @@ impl<'a> ThreadData<'a> {
             minor_corrhist: CorrectionHistoryTable::boxed(),
             thread_id,
             #[allow(clippy::large_stack_arrays)]
-            pvs: [Self::ARRAY_REPEAT_VALUE; MAX_PLY],
+            pvs: [Self::ARRAY_REPEAT_VALUE; MAX_DEPTH],
+            iteration: 0,
             completed: 0,
             depth: 0,
             stm_at_root: board.turn(),
@@ -149,16 +154,20 @@ impl<'a> ThreadData<'a> {
     }
 
     pub fn update_best_line(&mut self, pv: &PVariation) {
-        self.completed = self.depth;
-        self.pvs[self.depth] = pv.clone();
+        self.completed = self.iteration;
+        self.pvs[self.iteration] = pv.clone();
     }
 
     pub fn revert_best_line(&mut self) {
-        self.completed = self.depth - 1;
+        self.completed = self.iteration - 1;
     }
 
     pub const fn pv(&self) -> &PVariation {
         &self.pvs[self.completed]
+    }
+
+    pub const fn pv_mut(&mut self) -> &mut PVariation {
+        &mut self.pvs[self.completed]
     }
 }
 
