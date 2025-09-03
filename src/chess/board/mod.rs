@@ -47,8 +47,8 @@ pub struct Board {
 // manual impl so that i can detect if i'm doing anything stupid.
 impl Clone for Board {
     fn clone(&self) -> Self {
-        #[cfg(debug_assertions)]
-        eprintln!("info string copying board");
+        // #[cfg(debug_assertions)]
+        // eprintln!("info string copying board");
         Self {
             state: self.state.clone(),
             side: self.side,

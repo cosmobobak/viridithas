@@ -46,7 +46,7 @@ use crate::{
     threadpool,
     timemgmt::SearchLimit,
     transpositiontable::TT,
-    util::{MAX_PLY, MEGABYTE},
+    util::{MAX_DEPTH, MEGABYTE},
     NAME, VERSION,
 };
 
@@ -59,7 +59,7 @@ const UCI_MAX_THREADS: usize = 512;
 
 static STDIN_READER_THREAD_KEEP_RUNNING: AtomicBool = AtomicBool::new(true);
 pub static QUIT: AtomicBool = AtomicBool::new(false);
-pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_PLY);
+pub static GO_MATE_MAX_DEPTH: AtomicUsize = AtomicUsize::new(MAX_DEPTH);
 pub static PRETTY_PRINT: AtomicBool = AtomicBool::new(true);
 pub static SYZYGY_PROBE_LIMIT: AtomicU8 = AtomicU8::new(6);
 pub static SYZYGY_PROBE_DEPTH: AtomicI32 = AtomicI32::new(1);
@@ -198,7 +198,7 @@ fn parse_position(text: &str, pos: &mut Board) -> anyhow::Result<()> {
 fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
     #![allow(clippy::too_many_lines)]
 
-    let mut depth: Option<i32> = None;
+    let mut depth: Option<usize> = None;
     let mut moves_to_go: Option<u64> = None;
     let mut movetime: Option<u64> = None;
     let mut clocks: [Option<i64>; 2] = [None, None];
@@ -242,7 +242,7 @@ fn parse_go(text: &str, stm: Colour) -> anyhow::Result<SearchLimit> {
         }
     }
     if !matches!(limit, SearchLimit::Mate { .. }) {
-        GO_MATE_MAX_DEPTH.store(MAX_PLY, Ordering::SeqCst);
+        GO_MATE_MAX_DEPTH.store(MAX_DEPTH, Ordering::SeqCst);
     }
 
     if let Some(movetime) = movetime {
@@ -829,7 +829,7 @@ pub fn main_loop() -> anyhow::Result<()> {
             }
             input if input.starts_with("go") => {
                 // start the clock *immediately*
-                thread_data[0].info.time_manager.start();
+                thread_data[0].info.clock.start();
 
                 // if we're in pretty-printing mode, set the terminal properly:
                 if PRETTY_PRINT.load(Ordering::SeqCst) {
@@ -840,9 +840,9 @@ pub fn main_loop() -> anyhow::Result<()> {
 
                 let res = parse_go(input, thread_data[0].board.turn());
                 if let Ok(search_limit) = res {
-                    thread_data[0].info.time_manager.set_limit(search_limit);
+                    thread_data[0].info.clock.set_limit(search_limit);
                     tt.increase_age();
-                    search_position(&worker_threads, &mut thread_data, tt.view());
+                    search_position(&worker_threads, &mut thread_data);
                     Ok(())
                 } else {
                     res.map(|_| ())
@@ -921,17 +921,17 @@ pub fn bench(
             }
             t.nnue.reinit_from(&t.board, nnue_params);
         }
-        thread_data[0].info.time_manager.start();
+        thread_data[0].info.clock.start();
         let res = parse_go(&bench_string, thread_data[0].board.turn());
         match res {
-            Ok(limit) => thread_data[0].info.time_manager.set_limit(limit),
+            Ok(limit) => thread_data[0].info.clock.set_limit(limit),
             Err(e) => {
                 thread_data[0].info.print_to_stdout = true;
                 return Err(e);
             }
         }
         tt.increase_age();
-        search_position(&pool, &mut thread_data, tt.view());
+        search_position(&pool, &mut thread_data);
         node_sum += thread_data[0].info.nodes.get_global();
         if matches!(benchcmd, "benchfull" | "openbench") {
             println!(
@@ -1003,14 +1003,14 @@ pub fn go_benchmark(nnue_params: &'static NNUEParams) -> anyhow::Result<()> {
     thread_data[0].info.print_to_stdout = false;
     let start = std::time::Instant::now();
     for _ in 0..COUNT {
-        thread_data[0].info.time_manager.start();
+        thread_data[0].info.clock.start();
         let limit = parse_go(
             std::hint::black_box("go wtime 0 btime 0 winc 0 binc 0"),
             thread_data[0].board.turn(),
         )?;
-        thread_data[0].info.time_manager.set_limit(limit);
+        thread_data[0].info.clock.set_limit(limit);
         tt.increase_age();
-        std::hint::black_box(search_position(&pool, &mut thread_data, tt.view()));
+        std::hint::black_box(search_position(&pool, &mut thread_data));
     }
     let elapsed = start.elapsed();
     let micros = elapsed.as_secs_f64() * (1_000_000.0 / COUNT as f64);

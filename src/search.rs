@@ -40,9 +40,9 @@ use crate::{
     tablebases::{self, probe::WDL},
     threadlocal::ThreadData,
     threadpool::{self, ScopeExt},
-    transpositiontable::{Bound, TTHit, TTView},
+    transpositiontable::{Bound, TTHit},
     uci,
-    util::{INFINITY, MAX_DEPTH, MAX_PLY, VALUE_NONE},
+    util::{INFINITY, MAX_DEPTH, VALUE_NONE},
 };
 
 use self::parameters::Config;
@@ -194,7 +194,6 @@ impl SmpThreadType for HelperThread {
 pub fn search_position(
     pool: &[threadpool::WorkerThread],
     thread_headers: &mut [Box<ThreadData>],
-    tt: TTView,
 ) -> (i32, Option<Move>) {
     for t in &mut *thread_headers {
         t.board.zero_height();
@@ -215,25 +214,23 @@ pub fn search_position(
         return (0, None);
     }
     if legal_moves.len() == 1 {
-        thread_headers[0].info.time_manager.notify_one_legal_move();
+        thread_headers[0].info.clock.notify_one_legal_move();
     }
 
     // Probe the tablebases if we're in a TB position and in a game.
-    if thread_headers[0].info.time_manager.is_dynamic() {
+    if thread_headers[0].info.clock.is_dynamic() {
         if let Some((best_move, score)) =
             tablebases::probe::get_tablebase_move(&thread_headers[0].board)
         {
-            let mut pv = PVariation::default();
+            let pv = &mut thread_headers[0].pvs[1];
             pv.load_from(best_move, &PVariation::default());
             pv.score = score;
             TB_HITS.store(1, Ordering::SeqCst);
+            thread_headers[0].completed = 1;
             readout_info(
-                &thread_headers[0].board,
-                Bound::Exact,
-                &pv,
-                0,
+                &thread_headers[0],
                 &thread_headers[0].info,
-                tt,
+                Bound::Exact,
                 1,
                 true,
             );
@@ -279,7 +276,6 @@ pub fn search_position(
     });
 
     let best_thread = select_best(thread_headers);
-    let depth_achieved = best_thread.completed;
     let pv = best_thread.pv();
     let best_move = pv
         .moves()
@@ -291,12 +287,9 @@ pub fn search_position(
         // always give a final info log before ending search
         let nodes = thread_headers[0].info.nodes.get_global();
         readout_info(
-            &thread_headers[0].board,
-            Bound::Exact,
-            pv,
-            depth_achieved,
+            best_thread,
             &thread_headers[0].info,
-            tt,
+            Bound::Exact,
             nodes,
             true,
         );
@@ -352,65 +345,40 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut aw = AspirationWindow::infinite();
+    let mut aw;
     let mut pv = PVariation::default();
-    let max_depth = t
-        .info
-        .time_manager
-        .limit()
-        .depth()
-        .unwrap_or(MAX_DEPTH - 1)
-        .try_into()
-        .unwrap_or_default();
+    let max_depth = dyn_max_depth(t);
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
-    'deepening: for d in starting_depth..=max_depth {
-        t.depth = d;
-        if ThTy::MAIN_THREAD {
-            // consider stopping early if we've neatly completed a depth:
-            if (t.info.time_manager.is_dynamic() || t.info.time_manager.is_soft_nodes())
-                && t.info
-                    .time_manager
-                    .is_past_opt_time(t.info.nodes.get_global())
-            {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                break 'deepening;
-            }
-            if d > t
-                .info
-                .time_manager
-                .limit()
-                .depth()
-                .unwrap_or(MAX_DEPTH - 1)
-                .try_into()
-                .unwrap_or_default()
-            {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                break 'deepening;
-            }
+    'deepening: for iteration in starting_depth..=max_depth {
+        t.iteration = iteration;
+        // consider stopping early if we've neatly completed a depth:
+        if ThTy::MAIN_THREAD
+            && (t.info.clock.is_dynamic() || t.info.clock.is_soft_nodes())
+            && t.info.clock.is_past_opt_time(t.info.nodes.get_global())
+        {
+            t.info.stopped.store(true, Ordering::SeqCst);
+            break 'deepening;
         }
 
+        t.depth = i32::try_from(iteration).unwrap();
         t.optimism[t.board.turn()] =
             128 * average_value / (average_value.abs() + t.info.conf.optimism_offset);
         t.optimism[!t.board.turn()] = -t.optimism[t.board.turn()];
-
-        // aspiration loop:
-        // (depth can be dynamically modified in the aspiration loop,
-        // so we return out the value of depth to the caller)
-        let ControlFlow::Continue(depth) =
-            aspiration::<ThTy>(&mut pv, t, &mut aw, d, &mut average_value)
-        else {
-            break 'deepening;
-        };
-
-        if depth > 5 {
-            aw = AspirationWindow::around_value(average_value, depth);
+        if t.depth > 1 {
+            aw = AspirationWindow::around_value(average_value, t.depth);
         } else {
             aw = AspirationWindow::infinite();
         }
 
-        if ThTy::MAIN_THREAD && depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
-            let bm_frac = if d > 8 {
+        // aspiration loop:
+        let ControlFlow::Continue(()) = aspiration::<ThTy>(&mut pv, t, &mut aw, &mut average_value)
+        else {
+            break 'deepening;
+        };
+
+        if ThTy::MAIN_THREAD && t.depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+            let bm_frac = if t.depth > 8 {
                 let best_move = pv.moves[0];
                 let best_move_subtree_size =
                     t.info.root_move_nodes[best_move.from()][best_move.to()];
@@ -420,8 +388,8 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             } else {
                 None
             };
-            t.info.time_manager.report_completed_depth(
-                depth,
+            t.info.clock.report_completed_depth(
+                t.depth,
                 pv.score,
                 pv.moves[0],
                 bm_frac,
@@ -435,17 +403,19 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     }
 }
 
+fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
+    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
+}
+
 fn aspiration<ThTy: SmpThreadType>(
     pv: &mut PVariation,
     t: &mut ThreadData,
     aw: &mut AspirationWindow,
-    d: usize,
     average_value: &mut i32,
-) -> ControlFlow<(), i32> {
-    let mut depth = i32::try_from(d).unwrap();
-    let min_depth = (depth / 2).max(1);
+) -> ControlFlow<(), ()> {
+    let min_depth = (t.depth / 2).max(1);
     loop {
-        pv.score = alpha_beta::<Root>(pv, t, depth, aw.alpha, aw.beta, false);
+        pv.score = alpha_beta::<Root>(pv, t, t.depth, aw.alpha, aw.beta, false);
         if t.info.check_up() {
             return ControlFlow::Break(()); // we've been told to stop searching.
         }
@@ -453,15 +423,14 @@ fn aspiration<ThTy: SmpThreadType>(
         if aw.alpha != -INFINITY && pv.score <= aw.alpha {
             if ThTy::MAIN_THREAD && t.info.print_to_stdout {
                 let nodes = t.info.nodes.get_global();
-                let mut apv = t.pv().clone();
-                apv.score = pv.score;
-                readout_info(&t.board, Bound::Upper, &apv, d, &t.info, t.tt, nodes, false);
+                t.pv_mut().score = pv.score;
+                readout_info(t, &t.info, Bound::Upper, nodes, false);
             }
-            aw.widen_down(pv.score, depth);
+            aw.widen_down(pv.score, t.depth);
             if ThTy::MAIN_THREAD {
                 t.info
-                    .time_manager
-                    .report_aspiration_fail(depth, Bound::Upper, &t.info.conf);
+                    .clock
+                    .report_aspiration_fail(t.depth, Bound::Upper, &t.info.conf);
             }
             // search failed low, so we might have to
             // revert a fail-high pv update
@@ -473,29 +442,20 @@ fn aspiration<ThTy: SmpThreadType>(
         if aw.beta != INFINITY && pv.score >= aw.beta {
             if ThTy::MAIN_THREAD && t.info.print_to_stdout {
                 let nodes = t.info.nodes.get_global();
-                readout_info(
-                    &t.board,
-                    Bound::Lower,
-                    t.pv(),
-                    d,
-                    &t.info,
-                    t.tt,
-                    nodes,
-                    false,
-                );
+                readout_info(t, &t.info, Bound::Lower, nodes, false);
             }
-            aw.widen_up(pv.score, depth);
+            aw.widen_up(pv.score, t.depth);
             if ThTy::MAIN_THREAD {
                 t.info
-                    .time_manager
-                    .report_aspiration_fail(depth, Bound::Lower, &t.info.conf);
+                    .clock
+                    .report_aspiration_fail(t.depth, Bound::Lower, &t.info.conf);
             }
             // decrement depth:
             if !is_game_theoretic_score(pv.score) {
-                depth = (depth - 1).max(min_depth);
+                t.depth = (t.depth - 1).max(min_depth);
             }
 
-            if t.info.time_manager.solved_breaker::<ThTy>(0, d) == ControlFlow::Break(()) {
+            if t.info.clock.solved_breaker::<ThTy>(0, t.depth) == ControlFlow::Break(()) {
                 t.info.stopped.store(true, Ordering::SeqCst);
                 return ControlFlow::Break(()); // we've been told to stop searching.
             }
@@ -505,7 +465,8 @@ fn aspiration<ThTy: SmpThreadType>(
 
         // if we've made it here, it means we got an exact score.
         let score = pv.score;
-        let bestmove = t.pvs[t.completed]
+        let bestmove = t
+            .pv()
             .moves()
             .first()
             .copied()
@@ -518,36 +479,27 @@ fn aspiration<ThTy: SmpThreadType>(
 
         if ThTy::MAIN_THREAD && t.info.print_to_stdout {
             let total_nodes = t.info.nodes.get_global();
-            readout_info(
-                &t.board,
-                Bound::Exact,
-                t.pv(),
-                d,
-                &t.info,
-                t.tt,
-                total_nodes,
-                false,
-            );
+            readout_info(t, &t.info, Bound::Exact, total_nodes, false);
         }
 
-        if t.info.time_manager.solved_breaker::<ThTy>(pv.score, d) == ControlFlow::Break(()) {
+        if t.info.clock.solved_breaker::<ThTy>(pv.score, t.depth) == ControlFlow::Break(()) {
             t.info.stopped.store(true, Ordering::SeqCst);
             return ControlFlow::Break(());
         }
 
-        if t.info.time_manager.mate_found_breaker::<ThTy>(pv, depth) == ControlFlow::Break(()) {
+        if t.info.clock.mate_found_breaker::<ThTy>(pv, t.depth) == ControlFlow::Break(()) {
             t.info.stopped.store(true, Ordering::SeqCst);
             return ControlFlow::Break(());
         }
 
         if ThTy::MAIN_THREAD {
-            if let Some(margin) = t.info.time_manager.check_for_forced_move(depth) {
+            if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
                 let saved_seldepth = t.info.seldepth;
-                let forced = is_forced(margin, t, bestmove, score, (depth - 1) / 2);
+                let forced = is_forced(margin, t, bestmove, score, (t.depth - 1) / 2);
                 t.info.seldepth = saved_seldepth;
 
                 if forced {
-                    t.info.time_manager.report_forced_move(depth, &t.info.conf);
+                    t.info.clock.report_forced_move(t.depth, &t.info.conf);
                 }
             }
         }
@@ -556,7 +508,7 @@ fn aspiration<ThTy: SmpThreadType>(
             return ControlFlow::Break(());
         }
 
-        break ControlFlow::Continue(depth); // we got an exact score, so we can stop the aspiration loop.
+        break ControlFlow::Continue(()); // we got an exact score, so we can stop the aspiration loop.
     }
 }
 
@@ -606,7 +558,7 @@ pub fn quiescence<NT: NodeType>(
     let in_check = t.board.in_check();
 
     // are we too deep?
-    if height > MAX_PLY - 1 {
+    if height > MAX_DEPTH - 1 {
         return if in_check {
             0
         } else {
@@ -843,7 +795,7 @@ pub fn alpha_beta<NT: NodeType>(
         }
 
         // are we too deep?
-        let max_height = MAX_PLY.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
+        let max_height = MAX_DEPTH.min(uci::GO_MATE_MAX_DEPTH.load(Ordering::SeqCst));
         if height >= max_height {
             return if in_check {
                 0
@@ -1873,7 +1825,6 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
     let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
-    let tt = thread_headers[0].tt;
 
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
 
@@ -1896,15 +1847,10 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
     if best_thread.thread_id != 0 && print_to_stdout {
-        let pv = &best_thread.pvs[best_thread.completed];
-        let depth = best_thread.completed;
         readout_info(
-            &best_thread.board,
-            Bound::Exact,
-            pv,
-            depth,
+            best_thread,
             &thread_headers[0].info,
-            tt,
+            Bound::Exact,
             total_nodes,
             false,
         );
@@ -1915,12 +1861,9 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
 
 /// Print the info about an iteration of the search.
 fn readout_info(
-    board: &Board,
-    mut bound: Bound,
-    pv: &PVariation,
-    depth: usize,
+    t: &ThreadData,
     info: &SearchInfo,
-    tt: TTView,
+    mut bound: Bound,
     nodes: u64,
     force_print: bool,
 ) {
@@ -1929,14 +1872,22 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
+    let ThreadData {
+        board,
+        iteration,
+        tt,
+        ..
+    } = t;
+    let depth = iteration;
+    let pv = t.pv();
     // don't print anything if we are in the first 50ms of the search and we are in a game,
     // this helps in ultra-fast time controls where we only have a few ms to think.
-    if info.time_manager.is_dynamic() && info.skip_print() && !force_print {
+    if info.clock.is_dynamic() && info.skip_print() && !force_print {
         return;
     }
     let sstr = uci::format_score(pv.score);
     let normal_uci_output = !uci::PRETTY_PRINT.load(Ordering::SeqCst);
-    let nps = (nodes as f64 / info.time_manager.elapsed().as_secs_f64()) as u64;
+    let nps = (nodes as f64 / info.clock.elapsed().as_secs_f64()) as u64;
     if board.turn() == Colour::Black {
         bound = match bound {
             Bound::Upper => Bound::Lower,
@@ -1951,9 +1902,9 @@ fn readout_info(
     };
     if normal_uci_output {
         println!(
-            "info score {sstr}{bound_string} wdl {wdl} depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} {pv}",
+            "info depth {depth} seldepth {} nodes {nodes} time {} nps {nps} hashfull {hashfull} tbhits {tbhits} score {sstr}{bound_string} wdl {wdl} {pv}",
             info.seldepth as usize,
-            info.time_manager.elapsed().as_millis(),
+            info.clock.elapsed().as_millis(),
             hashfull = tt.hashfull(),
             tbhits = TB_HITS.load(Ordering::SeqCst),
             wdl = uci::format_wdl(pv.score, board.ply()),
@@ -1979,7 +1930,7 @@ fn readout_info(
         eprint!(
             " {depth:2}/{:<2} \u{001b}[38;5;243m{t} {knodes:8}kn\u{001b}[0m {value} ({wdl}) \u{001b}[38;5;243m{knps:5}kn/s\u{001b}[0m {pv_string}{endchr}",
             info.seldepth as usize,
-            t = uci::format_time(info.time_manager.elapsed().as_millis()),
+            t = uci::format_time(info.clock.elapsed().as_millis()),
             knps = nps / 1_000,
             knodes = nodes / 1_000,
             wdl = uci::pretty_format_wdl(pv.score, board.ply()),
