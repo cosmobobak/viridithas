@@ -6,7 +6,7 @@ use crate::{
         SEE_ROOK_VALUE,
     },
     search::{
-        ASPIRATION_WINDOW, CONT1_HISTORY_BONUS_MAX, CONT1_HISTORY_BONUS_MUL,
+        ASPIRATION_EVAL_DIVISOR, CONT1_HISTORY_BONUS_MAX, CONT1_HISTORY_BONUS_MUL,
         CONT1_HISTORY_BONUS_OFFSET, CONT1_HISTORY_MALUS_MAX, CONT1_HISTORY_MALUS_MUL,
         CONT1_HISTORY_MALUS_OFFSET, CONT2_HISTORY_BONUS_MAX, CONT2_HISTORY_BONUS_MUL,
         CONT2_HISTORY_BONUS_OFFSET, CONT2_HISTORY_MALUS_MAX, CONT2_HISTORY_MALUS_MUL,
@@ -36,7 +36,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub aspiration_window: i32,
+    pub aspiration_eval_divisor: i32,
     pub rfp_margin: i32,
     pub rfp_improving_margin: i32,
     pub nmp_improving_margin: i32,
@@ -124,7 +124,7 @@ pub struct Config {
 impl Config {
     pub const fn default() -> Self {
         Self {
-            aspiration_window: ASPIRATION_WINDOW,
+            aspiration_eval_divisor: ASPIRATION_EVAL_DIVISOR,
             rfp_margin: RFP_MARGIN,
             rfp_improving_margin: RFP_IMPROVING_MARGIN,
             nmp_improving_margin: NMP_IMPROVING_MARGIN,
@@ -251,7 +251,7 @@ type LazyFieldParser<'a> = Box<dyn FnMut(&str) -> Result<(), Box<dyn std::error:
 impl Config {
     pub fn ids_with_parsers(&mut self) -> Vec<(&str, LazyFieldParser<'_>)> {
         id_parser_gen![
-            ASPIRATION_WINDOW = [self.aspiration_window],
+            ASPIRATION_EVAL_DIVISOR = [self.aspiration_eval_divisor],
             RFP_MARGIN = [self.rfp_margin],
             RFP_IMPROVING_MARGIN = [self.rfp_improving_margin],
             NMP_IMPROVING_MARGIN = [self.nmp_improving_margin],
@@ -348,7 +348,7 @@ impl Config {
     pub fn base_config(&self) -> Vec<(&str, f64, f64, f64, f64)> {
         #![allow(clippy::cast_precision_loss)]
         id_value_gen![
-            ASPIRATION_WINDOW = [self.aspiration_window, 1, 50, 3],
+            ASPIRATION_EVAL_DIVISOR = [self.aspiration_eval_divisor, 1024, 65536, 1024],
             RFP_MARGIN = [self.rfp_margin, 40, 200, 10],
             RFP_IMPROVING_MARGIN = [self.rfp_improving_margin, 30, 150, 10],
             NMP_IMPROVING_MARGIN = [self.nmp_improving_margin, 30, 200, 10],

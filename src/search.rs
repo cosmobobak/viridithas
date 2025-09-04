@@ -57,7 +57,7 @@ use self::parameters::Config;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 6;
+const ASPIRATION_EVAL_DIVISOR: i32 = 26614;
 const RFP_MARGIN: i32 = 77;
 const RFP_IMPROVING_MARGIN: i32 = 67;
 const NMP_IMPROVING_MARGIN: i32 = 83;
@@ -364,7 +364,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             t.optimism[us] = 128 * average_value / (average_value.abs() + offset);
             t.optimism[!us] = -t.optimism[us];
 
-            delta += average_value * average_value / 26614;
+            delta += average_value * average_value / t.info.conf.aspiration_eval_divisor;
 
             alpha = (average_value - delta).max(-INFINITY);
             beta = (average_value + delta).min(INFINITY);
