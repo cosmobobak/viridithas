@@ -37,9 +37,9 @@ use crate::{
     evaluation::{is_game_theoretic_score, is_mate_score},
     nnue::network::NNUEParams,
     search::{search_position, static_exchange_eval},
-    searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
-    threadlocal::ThreadData,
+    threadlocal::{make_thread_data, ThreadData},
+    threadpool,
     timemgmt::{SearchLimit, TimeManager},
     transpositiontable::TT,
     uci::{SYZYGY_ENABLED, SYZYGY_PATH},
@@ -55,7 +55,7 @@ static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 /// Whether to limit searches by depth or by nodes.
 #[derive(Clone, Debug, Hash)]
 enum DataGenLimit {
-    Depth(i32),
+    Depth(usize),
     Nodes(u64),
 }
 
@@ -158,37 +158,26 @@ impl DataGenOptions {
 }
 
 trait StartposGenerator {
-    fn generate(
-        &mut self,
-        board: &mut Board,
-        info: &SearchInfo,
-        thread_data: &mut ThreadData,
-    ) -> ControlFlow<(), ()>;
+    fn generate(&mut self, thread_data: &mut ThreadData) -> ControlFlow<(), ()>;
 }
 
 /// Make a random move on the board, attempting to pick only
 /// moves with a static exchange evaluation above the given threshold.
 /// If no such move is found, a random legal move is made.
 /// If there are no legal moves, None is returned.
-fn make_random_move(
-    board: &mut Board,
-    info: &SearchInfo,
-    rng: &mut ThreadRng,
-    t: &mut ThreadData,
-    see_threshold: i32,
-) -> Option<Move> {
-    let legal_moves = board.legal_moves();
+fn make_random_move(rng: &mut ThreadRng, t: &mut ThreadData, see_threshold: i32) -> Option<Move> {
+    let legal_moves = t.board.legal_moves();
     for _ in 0..8 {
         let m = *legal_moves.choose(rng)?;
-        if static_exchange_eval(board, info, m, see_threshold) {
-            assert!(board.is_legal(m));
-            board.make_move(m, t);
+        if static_exchange_eval(&t.board, &t.info, m, see_threshold) {
+            assert!(t.board.is_legal(m));
+            t.board.make_move(m, &mut t.nnue);
             return Some(m);
         }
     }
     let m = *legal_moves.choose(rng)?;
-    assert!(board.is_legal(m));
-    board.make_move(m, t);
+    assert!(t.board.is_legal(m));
+    t.board.make_move(m, &mut t.nnue);
     Some(m)
 }
 
@@ -206,21 +195,18 @@ struct BookStartposGenerator<'a> {
 }
 
 impl StartposGenerator for ClassicalStartposGenerator {
-    fn generate(
-        &mut self,
-        board: &mut Board,
-        info: &SearchInfo,
-        thread_data: &mut ThreadData,
-    ) -> ControlFlow<(), ()> {
-        board.set_startpos();
-        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+    fn generate(&mut self, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+        thread_data.board.set_startpos();
+        thread_data
+            .nnue
+            .reinit_from(&thread_data.board, thread_data.nnue_params);
         let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = make_random_move(board, info, &mut self.rng, thread_data, 0);
+            let res = make_random_move(&mut self.rng, thread_data, 0);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
-            if board.outcome() != GameOutcome::Ongoing {
+            if thread_data.board.outcome() != GameOutcome::Ongoing {
                 return ControlFlow::Break(());
             }
         }
@@ -230,21 +216,20 @@ impl StartposGenerator for ClassicalStartposGenerator {
 }
 
 impl StartposGenerator for DFRCStartposGenerator {
-    fn generate(
-        &mut self,
-        board: &mut Board,
-        info: &SearchInfo,
-        thread_data: &mut ThreadData,
-    ) -> ControlFlow<(), ()> {
-        board.set_dfrc_idx(rand::Rng::gen_range(&mut self.rng, 0..960 * 960));
-        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+    fn generate(&mut self, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
+        thread_data
+            .board
+            .set_dfrc_idx(rand::Rng::gen_range(&mut self.rng, 0..960 * 960));
+        thread_data
+            .nnue
+            .reinit_from(&thread_data.board, thread_data.nnue_params);
         let max = if self.rng.gen_bool(0.5) { 8 } else { 9 };
         for _ in 0..max {
-            let res = make_random_move(board, info, &mut self.rng, thread_data, 0);
+            let res = make_random_move(&mut self.rng, thread_data, 0);
             if res.is_none() {
                 return ControlFlow::Break(());
             }
-            if board.outcome() != GameOutcome::Ongoing {
+            if thread_data.board.outcome() != GameOutcome::Ongoing {
                 return ControlFlow::Break(());
             }
         }
@@ -254,12 +239,7 @@ impl StartposGenerator for DFRCStartposGenerator {
 }
 
 impl StartposGenerator for BookStartposGenerator<'_> {
-    fn generate(
-        &mut self,
-        board: &mut Board,
-        _info: &SearchInfo,
-        thread_data: &mut ThreadData,
-    ) -> ControlFlow<(), ()> {
+    fn generate(&mut self, thread_data: &mut ThreadData) -> ControlFlow<(), ()> {
         let idx = self.cursor.fetch_add(1, Ordering::Relaxed);
         if idx >= self.source.len() {
             println!("Book exhausted!");
@@ -267,11 +247,14 @@ impl StartposGenerator for BookStartposGenerator<'_> {
             return ControlFlow::Break(());
         }
         let fen = self.source[idx];
-        board
+        thread_data
+            .board
             .set_from_fen(fen)
             .with_context(|| format!("Failed to set board from FEN {fen} at index {idx} in book."))
             .unwrap();
-        thread_data.nnue.reinit_from(board, thread_data.nnue_params);
+        thread_data
+            .nnue
+            .reinit_from(&thread_data.board, thread_data.nnue_params);
         ControlFlow::Continue(())
     }
 }
@@ -428,14 +411,22 @@ fn generate_on_thread<'a>(
     id: usize,
     options: &DataGenOptions,
     data_dir: &Path,
-    nnue_params: &NNUEParams,
+    nnue_params: &'static NNUEParams,
     mut startpos_src: Box<dyn StartposGenerator + 'a>,
 ) -> anyhow::Result<HashMap<GameOutcome, u64>> {
-    let mut board = Board::default();
+    let pool = threadpool::make_worker_threads(1);
     let mut tt = TT::new();
-    tt.resize(MEGABYTE, 1);
-    let mut thread_data = ThreadData::new(0, &board, tt.view(), nnue_params);
+    tt.resize(MEGABYTE, &pool);
     let stopped = AtomicBool::new(false);
+    let nodes = AtomicU64::new(0);
+    let mut thread_data = make_thread_data(
+        &Board::default(),
+        tt.view(),
+        nnue_params,
+        &stopped,
+        &nodes,
+        &pool,
+    )?;
     let time_manager = TimeManager::default_with_limit(match options.limit {
         DataGenLimit::Depth(depth) => SearchLimit::Depth(depth),
         DataGenLimit::Nodes(nodes) => SearchLimit::SoftNodes {
@@ -443,12 +434,8 @@ fn generate_on_thread<'a>(
             hard_limit: nodes * 8,
         },
     });
-    let nodes = AtomicU64::new(0);
-    let mut info = SearchInfo {
-        time_manager,
-        print_to_stdout: false,
-        ..SearchInfo::new(&stopped, &nodes)
-    };
+    thread_data[0].info.clock = time_manager;
+    thread_data[0].info.print_to_stdout = false;
 
     let n_games_to_run = std::cmp::max(options.num_games / options.num_threads, 1);
 
@@ -506,41 +493,36 @@ fn generate_on_thread<'a>(
             }
         }
         // reset everything: board, thread data, tt, search info
-        tt.clear(1);
-        info.set_up_for_search();
+        tt.clear(&pool);
+        thread_data[0].info.set_up_for_search();
         // generate game
         // STEP 1: get the next starting position from the callback
-        match startpos_src.generate(&mut board, &info, &mut thread_data) {
+        match startpos_src.generate(&mut thread_data[0]) {
             ControlFlow::Break(()) => continue 'generation_main_loop,
             ControlFlow::Continue(()) => {}
         }
 
         // STEP 2: evaluate the exit position with reasonable depth
         // to make sure that it isn't silly.
-        let temp_limit = info.time_manager.limit().clone();
-        info.time_manager.set_limit(SearchLimit::Depth(10));
-        let (eval, _) = search_position(
-            &mut board,
-            &mut info,
-            std::array::from_mut(&mut thread_data),
-            tt.view(),
-        );
-        info.time_manager.set_limit(temp_limit);
+        let temp_limit = thread_data[0].info.clock.limit().clone();
+        thread_data[0].info.clock.set_limit(SearchLimit::Depth(10));
+        let (eval, _) = search_position(&pool, &mut thread_data);
+        thread_data[0].info.clock.set_limit(temp_limit);
         if eval.abs() > 1000 {
             // if the position is too good or too bad, we don't want it
             continue 'generation_main_loop;
         }
-        let mut game = Game::new(&board);
+        let mut game = Game::new(&thread_data[0].board);
         // STEP 3: play out to the end of the game
         let mut win_adj_counter = 0;
         let mut draw_adj_counter = 0;
         let outcome = loop {
-            let outcome = board.outcome();
+            let outcome = thread_data[0].board.outcome();
             if outcome != GameOutcome::Ongoing {
                 break outcome;
             }
             if options.tablebases_path.is_some() {
-                if let Some(wdl) = tablebases::probe::get_wdl_white(&board) {
+                if let Some(wdl) = tablebases::probe::get_wdl_white(&thread_data[0].board) {
                     break match wdl {
                         WDL::Win => GameOutcome::WhiteWin(WinType::TB),
                         WDL::Loss => GameOutcome::BlackWin(WinType::TB),
@@ -550,16 +532,14 @@ fn generate_on_thread<'a>(
             }
             tt.increase_age();
 
-            let (score, best_move) = search_position(
-                &mut board,
-                &mut info,
-                std::array::from_mut(&mut thread_data),
-                tt.view(),
-            );
+            let (score, best_move) = search_position(&pool, &mut thread_data);
 
             let Some(best_move) = best_move else {
                 println!("[WARNING!] search returned a null move as the best move!");
-                println!("[WARNING!] this occurred in position {board}");
+                println!(
+                    "[WARNING!] this occurred in position {}",
+                    thread_data[0].board
+                );
                 continue 'generation_main_loop;
             };
 
@@ -605,7 +585,8 @@ fn generate_on_thread<'a>(
                 };
             }
 
-            board.make_move(best_move, &mut thread_data);
+            let td = &mut thread_data[0];
+            td.board.make_move(best_move, &mut td.nnue);
         };
         assert_ne!(outcome, GameOutcome::Ongoing, "Game should be over by now.");
         // STEP 4: write the game to the output file
@@ -808,7 +789,7 @@ impl FromStr for DataGenLimit {
                 if limit_value > i32::MAX as u64 {
                     return Err(format!("Depth limit too large: {limit_value}"));
                 }
-                Ok(Self::Depth(limit_value as i32))
+                Ok(Self::Depth(limit_value as usize))
             }
             "nodes" => Ok(Self::Nodes(limit_value)),
             _ => Err(format!("Invalid limit type: {limit_type}")),
@@ -1064,6 +1045,7 @@ impl From<&Board> for MaterialConfiguration {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct DataSetStats {
     games: usize,
+    opening_eval_counts: HashMap<i32, usize>,
     length_counts: HashMap<usize, usize>,
     eval_counts: HashMap<i32, usize>,
     piece_counts: HashMap<u8, usize>,
@@ -1104,7 +1086,12 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     {
         stats.games += 1;
         *stats.length_counts.entry(game.len()).or_default() += 1;
+        let mut idx = 0;
         game.visit_positions(|position, evaluation| {
+            if idx == 0 {
+                *stats.opening_eval_counts.entry(evaluation).or_default() += 1;
+            }
+            idx += 1;
             *stats.eval_counts.entry(evaluation).or_default() += 1;
             *stats
                 .piece_counts
@@ -1154,6 +1141,15 @@ pub fn dataset_stats(dataset_path: &Path) -> anyhow::Result<()> {
     let mut eval_counts = stats.eval_counts.into_iter().collect::<Vec<_>>();
     eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
     let mut eval_counts_file = BufWriter::new(File::create("eval_counts.csv")?);
+    writeln!(eval_counts_file, "eval,count")?;
+    for (eval, count) in eval_counts {
+        writeln!(eval_counts_file, "{eval},{count}")?;
+    }
+    eval_counts_file.flush()?;
+    println!("Writing opening eval counts to opening_eval_counts.csv");
+    let mut eval_counts = stats.opening_eval_counts.into_iter().collect::<Vec<_>>();
+    eval_counts.sort_unstable_by_key(|(eval, _)| *eval);
+    let mut eval_counts_file = BufWriter::new(File::create("opening_eval_counts.csv")?);
     writeln!(eval_counts_file, "eval,count")?;
     for (eval, count) in eval_counts {
         writeln!(eval_counts_file, "{eval},{count}")?;

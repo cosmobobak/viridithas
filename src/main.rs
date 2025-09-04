@@ -1,4 +1,3 @@
-// #![feature(stdarch_x86_avx512)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::missing_const_for_fn)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -31,6 +30,7 @@ mod stack;
 mod tablebases;
 mod term;
 mod threadlocal;
+mod threadpool;
 mod timemgmt;
 mod transpositiontable;
 mod uci;

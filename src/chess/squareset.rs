@@ -8,6 +8,8 @@ use std::{
 
 use crate::chess::types::Square;
 
+use super::piece::Colour;
+
 /// A set of squares, with support for very fast set operations and in-order iteration.
 /// Most chess engines call this type `Bitboard`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -214,6 +216,16 @@ impl SquareSet {
 
     pub fn many(self) -> bool {
         self.without_lsb() != Self::EMPTY
+    }
+
+    pub fn relative_to(self, colour: Colour) -> Self {
+        if colour == Colour::White {
+            self
+        } else {
+            Self {
+                inner: self.inner.swap_bytes(),
+            }
+        }
     }
 }
 

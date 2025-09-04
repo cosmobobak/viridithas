@@ -559,5 +559,7 @@ use super::{QA, QB};
 
 // logging for permutation
 #[cfg(feature = "nnz-counts")]
-pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_SIZE / 2]; super::L1_SIZE / 2] =
-    const { unsafe { std::mem::transmute([[0u64; super::L1_SIZE / 2]; super::L1_SIZE / 2]) } };
+pub static NNZ_COUNTS: [[std::sync::atomic::AtomicU64; super::L1_SIZE / 2]; super::L1_SIZE / 2] = const {
+    // Safety: AtomicU64 is repr-compatible with u64.
+    unsafe { std::mem::transmute([[0u64; super::L1_SIZE / 2]; super::L1_SIZE / 2]) }
+};

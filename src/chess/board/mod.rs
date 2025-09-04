@@ -25,9 +25,8 @@ use crate::{
     },
     cuckoo,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
-    nnue::network::{FeatureUpdate, MovedPiece, UpdateBuffer},
+    nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
     search::pv::PVariation,
-    threadlocal::ThreadData,
 };
 
 use super::types::Keys;
@@ -225,7 +224,6 @@ impl Board {
     }
 
     pub fn generate_threats(&self, side: Colour) -> Threats {
-        let mut threats = SquareSet::EMPTY;
         let mut checkers = SquareSet::EMPTY;
 
         let bbs = &self.state.bbs;
@@ -233,26 +231,35 @@ impl Board {
         let them = bbs.colours[!side];
         let their_pawns = bbs.pieces[PieceType::Pawn] & them;
         let their_knights = bbs.pieces[PieceType::Knight] & them;
-        let their_diags = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Bishop]) & them;
-        let their_orthos = (bbs.pieces[PieceType::Queen] | bbs.pieces[PieceType::Rook]) & them;
+        let their_bishops = bbs.pieces[PieceType::Bishop] & them;
+        let their_rooks = bbs.pieces[PieceType::Rook] & them;
+        let their_queens = bbs.pieces[PieceType::Queen] & them;
         let their_king = (bbs.pieces[PieceType::King] & them).first().unwrap();
         let blockers = us | them;
 
         // compute threats
-        threats |= match side {
+        let leq_pawn = match side {
             Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
             Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
         };
+
+        let mut leq_minor = leq_pawn;
         for sq in their_knights {
-            threats |= knight_attacks(sq);
+            leq_minor |= knight_attacks(sq);
         }
-        for sq in their_diags {
-            threats |= bishop_attacks(sq, blockers);
+        for sq in their_bishops {
+            leq_minor |= bishop_attacks(sq, blockers);
         }
-        for sq in their_orthos {
-            threats |= rook_attacks(sq, blockers);
+        let mut leq_rook = leq_minor;
+        for sq in their_rooks {
+            leq_rook |= rook_attacks(sq, blockers);
         }
-        threats |= king_attacks(their_king);
+        let mut all_threats = leq_rook;
+        for sq in their_queens {
+            all_threats |= bishop_attacks(sq, blockers);
+            all_threats |= rook_attacks(sq, blockers);
+        }
+        all_threats |= king_attacks(their_king);
 
         // compute checkers
         let our_king_bb = us & bbs.pieces[PieceType::King];
@@ -265,13 +272,16 @@ impl Board {
         let knight_attacks = knight_attacks(our_king_sq);
         checkers |= knight_attacks & their_knights;
         let diag_attacks = bishop_attacks(our_king_sq, blockers);
-        checkers |= diag_attacks & their_diags;
+        checkers |= diag_attacks & (their_bishops | their_queens);
         let ortho_attacks = rook_attacks(our_king_sq, blockers);
-        checkers |= ortho_attacks & their_orthos;
+        checkers |= ortho_attacks & (their_rooks | their_queens);
 
         Threats {
-            all: threats,
-            /* pawn: pawn_threats, minor: minor_threats, rook: rook_threats, */ checkers,
+            all: all_threats,
+            leq_pawn,
+            leq_minor,
+            leq_rook,
+            checkers,
         }
     }
 
@@ -850,7 +860,15 @@ impl Board {
                 Colour::White => pawn_attacks::<White>(from.as_set()).contains_square(to),
                 Colour::Black => pawn_attacks::<Black>(from.as_set()).contains_square(to),
             };
-        } else if m.is_ep() || m.is_promo() {
+        }
+
+        // not a pawn move, but is somehow ep/promo?
+        if m.is_ep() || m.is_promo() {
+            return false;
+        }
+
+        if moved_piece.piece_type() == PieceType::King && self.state.threats.all.contains_square(to)
+        {
             return false;
         }
 
@@ -969,12 +987,11 @@ impl Board {
         if moving.piece_type() == PieceType::King {
             let without_king = bbs.occupied() ^ our_king_bb;
 
-            // TODO: determine necessity of first conditional component
-            return !self.state.threats.all.contains_square(to)
-                && bishop_attacks(to, without_king) & (their_queens | their_bishops)
-                    == SquareSet::EMPTY
-                && rook_attacks(to, without_king) & (their_queens | their_rooks)
-                    == SquareSet::EMPTY;
+            let diags = their_queens | their_bishops;
+            let orthos = their_queens | their_rooks;
+            let moving_into_check = bishop_attacks(to, without_king) & diags != SquareSet::EMPTY
+                || rook_attacks(to, without_king) & orthos != SquareSet::EMPTY;
+            return !moving_into_check;
         }
 
         // moving anything other than the king
@@ -1318,33 +1335,33 @@ impl Board {
         self.check_validity().unwrap();
     }
 
-    pub fn make_move_nnue(&mut self, m: Move, t: &mut ThreadData) {
+    pub fn make_move_nnue(&mut self, m: Move, nnue: &mut NNUEState) {
         let mut update_buffer = UpdateBuffer::default();
         let piece = self.state.mailbox[m.from()].unwrap();
 
         self.make_move_base(m, &mut update_buffer);
 
-        t.nnue.accumulators[t.nnue.current_acc].mv = MovedPiece {
+        nnue.accumulators[nnue.current_acc].mv = MovedPiece {
             from: m.from(),
             to: m.to(),
             piece,
         };
-        t.nnue.accumulators[t.nnue.current_acc].update_buffer = update_buffer;
-        t.nnue.current_acc += 1;
-        t.nnue.accumulators[t.nnue.current_acc].correct = [false; 2];
+        nnue.accumulators[nnue.current_acc].update_buffer = update_buffer;
+        nnue.current_acc += 1;
+        nnue.accumulators[nnue.current_acc].correct = [false; 2];
     }
 
-    pub fn unmake_move_nnue(&mut self, t: &mut ThreadData) {
+    pub fn unmake_move_nnue(&mut self, nnue: &mut NNUEState) {
         self.unmake_move_base();
-        t.nnue.current_acc -= 1;
+        nnue.current_acc -= 1;
     }
 
-    pub fn make_move(&mut self, m: Move, t: &mut ThreadData) {
-        self.make_move_nnue(m, t);
+    pub fn make_move(&mut self, m: Move, nnue: &mut NNUEState) {
+        self.make_move_nnue(m, nnue);
     }
 
-    pub fn unmake_move(&mut self, t: &mut ThreadData) {
-        self.unmake_move_nnue(t);
+    pub fn unmake_move(&mut self, nnue: &mut NNUEState) {
+        self.unmake_move_nnue(nnue);
     }
 
     /// Makes a guess about the new position key after a move.
@@ -1572,16 +1589,16 @@ impl Board {
         (self.state.fifty_move_counter >= 100 || self.is_repetition()) && self.height != 0
     }
 
-    pub fn pv_san(&mut self, pv: &PVariation) -> Result<String, fmt::Error> {
+    pub fn pv_san(&self, pv: &PVariation) -> Result<String, fmt::Error> {
+        let mut playout = self.clone();
         let mut out = String::new();
-        let mut moves_made = 0;
         for &m in pv.moves() {
-            write!(out, "{} ", self.san(m).unwrap_or_else(|| "???".to_string()))?;
-            self.make_move_simple(m);
-            moves_made += 1;
-        }
-        for _ in 0..moves_made {
-            self.unmake_move_base();
+            write!(
+                out,
+                "{} ",
+                playout.san(m).unwrap_or_else(|| "???".to_string())
+            )?;
+            playout.make_move_simple(m);
         }
         Ok(out)
     }

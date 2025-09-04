@@ -1,5 +1,4 @@
 use std::{
-    ops::ControlFlow,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
@@ -7,7 +6,7 @@ use std::{
 use crate::{
     chess::chessmove::Move,
     evaluation::{is_mate_score, mate_in},
-    search::{parameters::Config, pv::PVariation, SmpThreadType},
+    search::parameters::Config,
     transpositiontable::Bound,
 };
 
@@ -44,7 +43,7 @@ impl ForcedMoveType {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum SearchLimit {
     Infinite,
-    Depth(i32),
+    Depth(usize),
     Time(u64),
     Nodes(u64),
     Mate {
@@ -89,7 +88,7 @@ impl SearchLimit {
         }
     }
 
-    pub const fn depth(&self) -> Option<i32> {
+    pub const fn depth(&self) -> Option<usize> {
         match self {
             Self::Depth(d) => Some(*d),
             _ => None,
@@ -303,57 +302,24 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
-    #[allow(clippy::unused_self)]
-    pub const fn is_soft_nodes(&self) -> bool {
-        #[cfg(feature = "datagen")]
-        {
-            matches!(self.limit, SearchLimit::SoftNodes { .. })
-        }
-        #[cfg(not(feature = "datagen"))]
-        false
-    }
-
-    pub const fn solved_breaker<ThTy: SmpThreadType>(
-        &self,
-        value: i32,
-        depth: usize,
-    ) -> ControlFlow<()> {
-        if !ThTy::MAIN_THREAD || depth < 8 {
-            return ControlFlow::Continue(());
-        }
-        if let &SearchLimit::Mate { ply } = &self.limit {
-            let expected_score = mate_in(ply);
-            let is_good_enough = value.abs() >= expected_score;
-            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-            if is_good_enough && depth >= ply {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
+    pub const fn solved_breaker(&self, value: i32) -> bool {
+        if let SearchLimit::Mate { ply } = self.limit {
+            value.abs() >= mate_in(ply)
         } else {
-            ControlFlow::Continue(())
+            false
         }
     }
 
-    pub fn mate_found_breaker<ThTy: SmpThreadType>(
-        &mut self,
-        pv: &PVariation,
-        depth: i32,
-    ) -> ControlFlow<()> {
-        const MINIMUM_MATE_BREAK_DEPTH: i32 = 10;
-        if ThTy::MAIN_THREAD
-            && self.is_dynamic()
-            && is_mate_score(pv.score())
-            && depth > MINIMUM_MATE_BREAK_DEPTH
-        {
+    pub fn mate_found_breaker(&mut self, value: i32) -> bool {
+        if matches!(self.limit, SearchLimit::Dynamic { .. }) && is_mate_score(value) {
             self.mate_counter += 1;
             if self.mate_counter >= 3 {
-                return ControlFlow::Break(());
+                return true;
             }
-        } else if ThTy::MAIN_THREAD {
+        } else {
             self.mate_counter = 0;
         }
-        ControlFlow::Continue(())
+        false
     }
 
     const SLIGHTLY_FORCED: i32 = 12;
