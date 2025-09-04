@@ -4,7 +4,6 @@ pub mod parameters;
 pub mod pv;
 
 use std::{
-    ops::ControlFlow,
     sync::atomic::{AtomicU64, Ordering},
     thread,
 };
@@ -283,17 +282,14 @@ pub fn search_position(
         .copied()
         .unwrap_or_else(|| default_move(&thread_headers[0]));
 
-    if thread_headers[0].info.print_to_stdout {
-        // always give a final info log before ending search
-        let nodes = thread_headers[0].info.nodes.get_global();
-        readout_info(
-            best_thread,
-            &thread_headers[0].info,
-            Bound::Exact,
-            nodes,
-            true,
-        );
-    }
+    // always give a final info log before ending search
+    readout_info(
+        best_thread,
+        &thread_headers[0].info,
+        Bound::Exact,
+        thread_headers[0].info.nodes.get_global(),
+        true,
+    );
 
     if thread_headers[0].info.print_to_stdout {
         let maybe_ponder = pv.moves().get(1).map_or_else(String::new, |ponder_move| {
@@ -345,171 +341,148 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         !ThTy::MAIN_THREAD || t.thread_id == 0,
         "main thread must have thread_id 0"
     );
-    let mut aw;
     let mut pv = PVariation::default();
     let max_depth = dyn_max_depth(t);
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in starting_depth..=max_depth {
         t.iteration = iteration;
-        // consider stopping early if we've neatly completed a depth:
-        if ThTy::MAIN_THREAD
-            && (t.info.clock.is_dynamic() || t.info.clock.is_soft_nodes())
-            && t.info.clock.is_past_opt_time(t.info.nodes.get_global())
-        {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            break 'deepening;
-        }
-
         t.depth = i32::try_from(iteration).unwrap();
-        t.optimism[t.board.turn()] =
-            128 * average_value / (average_value.abs() + t.info.conf.optimism_offset);
-        t.optimism[!t.board.turn()] = -t.optimism[t.board.turn()];
+        t.optimism = [0; 2];
+
+        let min_depth = (t.depth / 2).max(1);
+
+        let mut alpha = -INFINITY;
+        let mut beta = INFINITY;
+
+        let mut delta = 12;
+        let mut reduction = 0;
+
         if t.depth > 1 {
-            aw = AspirationWindow::around_value(average_value, t.depth);
-        } else {
-            aw = AspirationWindow::infinite();
+            let us = t.board.turn();
+            let offset = t.info.conf.optimism_offset;
+            t.optimism[us] = 128 * average_value / (average_value.abs() + offset);
+            t.optimism[!us] = -t.optimism[us];
+
+            delta += average_value * average_value / 26614;
+
+            alpha = (average_value - delta).max(-INFINITY);
+            beta = (average_value + delta).min(INFINITY);
         }
 
         // aspiration loop:
-        let ControlFlow::Continue(()) = aspiration::<ThTy>(&mut pv, t, &mut aw, &mut average_value)
-        else {
-            break 'deepening;
-        };
+        loop {
+            let root_draft = (t.depth - reduction).max(min_depth);
+            pv.score = alpha_beta::<Root>(&mut pv, t, root_draft, alpha, beta, false);
+            if t.info.check_up() {
+                break 'deepening; // we've been told to stop searching.
+            }
 
-        if ThTy::MAIN_THREAD && t.depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
-            let bm_frac = if t.depth > 8 {
-                let best_move = pv.moves[0];
-                let best_move_subtree_size =
-                    t.info.root_move_nodes[best_move.from()][best_move.history_to_square()];
-                let tree_size = t.info.nodes.get_local();
-                #[allow(clippy::cast_precision_loss)]
-                Some(best_move_subtree_size as f64 / tree_size as f64)
+            if pv.score <= alpha {
+                if ThTy::MAIN_THREAD {
+                    t.pv_mut().score = pv.score;
+                    readout_info(t, &t.info, Bound::Upper, t.info.nodes.get_global(), false);
+                    t.info
+                        .clock
+                        .report_aspiration_fail(t.depth, Bound::Upper, &t.info.conf);
+                }
+                beta = (alpha + beta) / 2;
+                alpha = (pv.score - delta).max(-INFINITY);
+                reduction = 0;
+                // search failed low, so we might have to
+                // revert a fail-high pv update
+                t.revert_best_line();
+            } else if pv.score >= beta {
+                t.update_best_line(&pv);
+                if ThTy::MAIN_THREAD {
+                    readout_info(t, &t.info, Bound::Lower, t.info.nodes.get_global(), false);
+                    t.info
+                        .clock
+                        .report_aspiration_fail(t.depth, Bound::Lower, &t.info.conf);
+                }
+                beta = (pv.score + delta).min(INFINITY);
+                reduction += 1;
+                // decrement depth:
+                if !is_game_theoretic_score(pv.score) {
+                    t.depth = (t.depth - 1).max(min_depth);
+                }
             } else {
-                None
-            };
-            t.info.clock.report_completed_depth(
-                t.depth,
-                pv.score,
-                pv.moves[0],
-                bm_frac,
-                &t.info.conf,
-            );
-        }
-
-        if t.info.check_up() {
-            break 'deepening;
-        }
-    }
-}
-
-fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
-    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
-}
-
-fn aspiration<ThTy: SmpThreadType>(
-    pv: &mut PVariation,
-    t: &mut ThreadData,
-    aw: &mut AspirationWindow,
-    average_value: &mut i32,
-) -> ControlFlow<(), ()> {
-    let min_depth = (t.depth / 2).max(1);
-    loop {
-        pv.score = alpha_beta::<Root>(pv, t, t.depth, aw.alpha, aw.beta, false);
-        if t.info.check_up() {
-            return ControlFlow::Break(()); // we've been told to stop searching.
-        }
-
-        if aw.alpha != -INFINITY && pv.score <= aw.alpha {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
-                t.pv_mut().score = pv.score;
-                readout_info(t, &t.info, Bound::Upper, nodes, false);
-            }
-            aw.widen_down(pv.score, t.depth);
-            if ThTy::MAIN_THREAD {
-                t.info
-                    .clock
-                    .report_aspiration_fail(t.depth, Bound::Upper, &t.info.conf);
-            }
-            // search failed low, so we might have to
-            // revert a fail-high pv update
-            t.revert_best_line();
-            continue;
-        }
-        // search is either exact or fail-high, so we can update the best line.
-        t.update_best_line(pv);
-        if aw.beta != INFINITY && pv.score >= aw.beta {
-            if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-                let nodes = t.info.nodes.get_global();
-                readout_info(t, &t.info, Bound::Lower, nodes, false);
-            }
-            aw.widen_up(pv.score, t.depth);
-            if ThTy::MAIN_THREAD {
-                t.info
-                    .clock
-                    .report_aspiration_fail(t.depth, Bound::Lower, &t.info.conf);
-            }
-            // decrement depth:
-            if !is_game_theoretic_score(pv.score) {
-                t.depth = (t.depth - 1).max(min_depth);
+                t.update_best_line(&pv);
+                break;
             }
 
-            if t.info.clock.solved_breaker::<ThTy>(0, t.depth) == ControlFlow::Break(()) {
-                t.info.stopped.store(true, Ordering::SeqCst);
-                return ControlFlow::Break(()); // we've been told to stop searching.
-            }
-
-            continue;
+            delta += delta * (40 + 15 * reduction) / 128;
         }
 
         // if we've made it here, it means we got an exact score.
         let score = pv.score;
-        let bestmove = t
-            .pv()
+        let best_move = pv
             .moves()
             .first()
             .copied()
             .unwrap_or_else(|| default_move(t));
-        *average_value = if *average_value == VALUE_NONE {
+
+        average_value = if average_value == VALUE_NONE {
             score
         } else {
-            (2 * score + *average_value) / 3
+            (2 * score + average_value) / 3
         };
 
-        if ThTy::MAIN_THREAD && t.info.print_to_stdout {
-            let total_nodes = t.info.nodes.get_global();
-            readout_info(t, &t.info, Bound::Exact, total_nodes, false);
-        }
-
-        if t.info.clock.solved_breaker::<ThTy>(pv.score, t.depth) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
-
-        if t.info.clock.mate_found_breaker::<ThTy>(pv, t.depth) == ControlFlow::Break(()) {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            return ControlFlow::Break(());
-        }
-
         if ThTy::MAIN_THREAD {
+            readout_info(t, &t.info, Bound::Exact, t.info.nodes.get_global(), false);
+
             if let Some(margin) = t.info.clock.check_for_forced_move(t.depth) {
                 let saved_seldepth = t.info.seldepth;
-                let forced = is_forced(margin, t, bestmove, score, (t.depth - 1) / 2);
+                let forced = is_forced(margin, t, best_move, score, (t.depth - 1) / 2);
                 t.info.seldepth = saved_seldepth;
 
                 if forced {
                     t.info.clock.report_forced_move(t.depth, &t.info.conf);
                 }
             }
+
+            if t.depth > TIME_MANAGER_UPDATE_MIN_DEPTH {
+                let bm_frac = if t.depth > 8 {
+                    let best_move_subtree_size =
+                        t.info.root_move_nodes[best_move.from()][best_move.history_to_square()];
+                    let tree_size = t.info.nodes.get_local();
+                    #[allow(clippy::cast_precision_loss)]
+                    Some(best_move_subtree_size as f64 / tree_size as f64)
+                } else {
+                    None
+                };
+                t.info.clock.report_completed_depth(
+                    t.depth,
+                    pv.score,
+                    pv.moves[0],
+                    bm_frac,
+                    &t.info.conf,
+                );
+            }
         }
 
-        if t.info.stopped() {
-            return ControlFlow::Break(());
+        if t.info.check_up() {
+            break 'deepening;
         }
 
-        break ControlFlow::Continue(()); // we got an exact score, so we can stop the aspiration loop.
+        if ThTy::MAIN_THREAD {
+            // consider stopping early if we've neatly completed a depth,
+            // or if we were told to find a mate and we found one,
+            // or if we're on the clock and we've solved a mate.
+            if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
+                || (iteration > 10
+                    && (t.info.clock.solved_breaker(pv.score)
+                        || t.info.clock.mate_found_breaker(pv.score)))
+            {
+                t.info.stopped.store(true, Ordering::SeqCst);
+                break 'deepening;
+            }
+        }
     }
+}
+
+fn dyn_max_depth(t: &ThreadData<'_>) -> usize {
+    t.info.clock.limit().depth().unwrap_or(MAX_DEPTH - 1)
 }
 
 /// Give a legal default move in the case where we don't have enough time to search.
@@ -1814,10 +1787,9 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = t.board.material(&t.info);
-    let material_mul = t.info.conf.material_scale_base + material;
-    let optimism_mul = t.info.conf.optimism_mat_base + material;
-    let raw_eval =
-        (raw_eval * material_mul + t.optimism[t.board.turn()] * optimism_mul / 32) / 1024;
+    let mat_mul = t.info.conf.material_scale_base + material;
+    let opt_mul = t.info.conf.optimism_mat_base + material;
+    let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
@@ -1826,7 +1798,6 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
 }
 
 pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadData<'a> {
-    let print_to_stdout = thread_headers[0].info.print_to_stdout;
     let total_nodes = thread_headers[0].info.nodes.get_global();
 
     let (mut best_thread, rest) = thread_headers.split_first().unwrap();
@@ -1849,7 +1820,7 @@ pub fn select_best<'a>(thread_headers: &'a [Box<ThreadData<'a>>]) -> &'a ThreadD
 
     // if we aren't using the main thread (thread 0) then we need to do
     // an extra uci info line to show the best move/score/pv
-    if best_thread.thread_id != 0 && print_to_stdout {
+    if best_thread.thread_id != 0 {
         readout_info(
             best_thread,
             &thread_headers[0].info,
@@ -1875,6 +1846,9 @@ fn readout_info(
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
+    if !info.print_to_stdout {
+        return;
+    }
     let ThreadData {
         board,
         iteration,
@@ -2011,74 +1985,5 @@ impl LMTable {
 impl Default for LMTable {
     fn default() -> Self {
         Self::new(&Config::default())
-    }
-}
-
-pub struct AspirationWindow {
-    pub midpoint: i32,
-    pub alpha: i32,
-    pub beta: i32,
-    pub alpha_fails: i32,
-    pub beta_fails: i32,
-}
-
-pub fn asp_window(depth: i32) -> i32 {
-    (ASPIRATION_WINDOW + (50 / depth - 3)).max(10)
-}
-
-impl AspirationWindow {
-    pub const fn infinite() -> Self {
-        Self {
-            alpha: -INFINITY,
-            beta: INFINITY,
-            midpoint: 0,
-            alpha_fails: 0,
-            beta_fails: 0,
-        }
-    }
-
-    pub fn around_value(value: i32, depth: i32) -> Self {
-        if is_game_theoretic_score(value) {
-            // for mates / tbwins we expect a lot of fluctuation, so aspiration
-            // windows are not useful.
-            Self {
-                midpoint: value,
-                alpha: -INFINITY,
-                beta: INFINITY,
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        } else {
-            Self {
-                midpoint: value,
-                alpha: value - asp_window(depth),
-                beta: value + asp_window(depth),
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        }
-    }
-
-    pub fn widen_down(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.alpha_fails + 1);
-        if margin > 1369 {
-            self.alpha = -INFINITY;
-            return;
-        }
-        self.beta = (self.alpha + self.beta) / 2;
-        self.alpha = self.midpoint - margin;
-        self.alpha_fails += 1;
-    }
-
-    pub fn widen_up(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.beta_fails + 1);
-        if margin > 1369 {
-            self.beta = INFINITY;
-            return;
-        }
-        self.beta = self.midpoint + margin;
-        self.beta_fails += 1;
     }
 }
