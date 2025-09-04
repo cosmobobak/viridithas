@@ -346,15 +346,6 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
     let starting_depth = 1 + t.thread_id % 10;
     let mut average_value = VALUE_NONE;
     'deepening: for iteration in starting_depth..=max_depth {
-        // consider stopping early if we've neatly completed a depth:
-        if ThTy::MAIN_THREAD
-            && (t.info.clock.is_dynamic() || t.info.clock.is_soft_nodes())
-            && t.info.clock.is_past_opt_time(t.info.nodes.get_global())
-        {
-            t.info.stopped.store(true, Ordering::SeqCst);
-            break 'deepening;
-        }
-
         t.iteration = iteration;
         t.depth = i32::try_from(iteration).unwrap();
         t.optimism = [0; 2];
@@ -472,6 +463,20 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
 
         if t.info.check_up() {
             break 'deepening;
+        }
+
+        if ThTy::MAIN_THREAD {
+            // consider stopping early if we've neatly completed a depth,
+            // or if we were told to find a mate and we found one,
+            // or if we're on the clock and we've solved a mate.
+            if t.info.clock.is_past_opt_time(t.info.nodes.get_global())
+                || (iteration > 10
+                    && (t.info.clock.solved_breaker(pv.score)
+                        || t.info.clock.mate_found_breaker(pv.score)))
+            {
+                t.info.stopped.store(true, Ordering::SeqCst);
+                break 'deepening;
+            }
         }
     }
 }

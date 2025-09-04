@@ -3,7 +3,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{chess::chessmove::Move, search::parameters::Config, transpositiontable::Bound};
+use crate::{
+    chess::chessmove::Move,
+    evaluation::{is_mate_score, mate_in},
+    search::parameters::Config,
+    transpositiontable::Bound,
+};
 
 const MOVE_OVERHEAD: u64 = 30;
 
@@ -297,13 +302,23 @@ impl TimeManager {
         matches!(self.limit, SearchLimit::Dynamic { .. })
     }
 
-    #[allow(clippy::unused_self)]
-    pub const fn is_soft_nodes(&self) -> bool {
-        #[cfg(feature = "datagen")]
-        {
-            matches!(self.limit, SearchLimit::SoftNodes { .. })
+    pub const fn solved_breaker(&self, value: i32) -> bool {
+        if let SearchLimit::Mate { ply } = self.limit {
+            value.abs() >= mate_in(ply)
+        } else {
+            false
         }
-        #[cfg(not(feature = "datagen"))]
+    }
+
+    pub fn mate_found_breaker(&mut self, value: i32) -> bool {
+        if matches!(self.limit, SearchLimit::Dynamic { .. }) && is_mate_score(value) {
+            self.mate_counter += 1;
+            if self.mate_counter >= 3 {
+                return true;
+            }
+        } else {
+            self.mate_counter = 0;
+        }
         false
     }
 
