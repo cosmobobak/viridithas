@@ -1782,10 +1782,9 @@ pub fn adj_shuffle(t: &ThreadData, raw_eval: i32, clock: u8) -> i32 {
     // on the board if we have winning chances, and trading
     // material off if the position is worse for us.
     let material = t.board.material(&t.info);
-    let material_mul = t.info.conf.material_scale_base + material;
-    let optimism_mul = t.info.conf.optimism_mat_base + material;
-    let raw_eval =
-        (raw_eval * material_mul + t.optimism[t.board.turn()] * optimism_mul / 32) / 1024;
+    let mat_mul = t.info.conf.material_scale_base + material;
+    let opt_mul = t.info.conf.optimism_mat_base + material;
+    let raw_eval = (raw_eval * mat_mul + t.optimism[t.board.turn()] * opt_mul / 32) / 1024;
 
     // scale down the value when the fifty-move counter is high.
     // this goes some way toward making viri realise when he's not
@@ -1981,74 +1980,5 @@ impl LMTable {
 impl Default for LMTable {
     fn default() -> Self {
         Self::new(&Config::default())
-    }
-}
-
-pub struct AspirationWindow {
-    pub midpoint: i32,
-    pub alpha: i32,
-    pub beta: i32,
-    pub alpha_fails: i32,
-    pub beta_fails: i32,
-}
-
-pub fn asp_window(depth: i32) -> i32 {
-    (ASPIRATION_WINDOW + (50 / depth - 3)).max(10)
-}
-
-impl AspirationWindow {
-    pub const fn infinite() -> Self {
-        Self {
-            alpha: -INFINITY,
-            beta: INFINITY,
-            midpoint: 0,
-            alpha_fails: 0,
-            beta_fails: 0,
-        }
-    }
-
-    pub fn around_value(value: i32, depth: i32) -> Self {
-        if is_game_theoretic_score(value) {
-            // for mates / tbwins we expect a lot of fluctuation, so aspiration
-            // windows are not useful.
-            Self {
-                midpoint: value,
-                alpha: -INFINITY,
-                beta: INFINITY,
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        } else {
-            Self {
-                midpoint: value,
-                alpha: value - asp_window(depth),
-                beta: value + asp_window(depth),
-                alpha_fails: 0,
-                beta_fails: 0,
-            }
-        }
-    }
-
-    pub fn widen_down(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.alpha_fails + 1);
-        if margin > 1369 {
-            self.alpha = -INFINITY;
-            return;
-        }
-        self.beta = (self.alpha + self.beta) / 2;
-        self.alpha = self.midpoint - margin;
-        self.alpha_fails += 1;
-    }
-
-    pub fn widen_up(&mut self, value: i32, depth: i32) {
-        self.midpoint = value;
-        let margin = asp_window(depth) << (self.beta_fails + 1);
-        if margin > 1369 {
-            self.beta = INFINITY;
-            return;
-        }
-        self.beta = self.midpoint + margin;
-        self.beta_fails += 1;
     }
 }
