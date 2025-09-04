@@ -58,6 +58,9 @@ use self::parameters::Config;
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
 const ASPIRATION_EVAL_DIVISOR: i32 = 26614;
+const DELTA_INITIAL: i32 = 12;
+const DELTA_BASE_MUL: i32 = 40;
+const DELTA_REDUCTION_MUL: i32 = 15;
 const RFP_MARGIN: i32 = 77;
 const RFP_IMPROVING_MARGIN: i32 = 67;
 const NMP_IMPROVING_MARGIN: i32 = 83;
@@ -355,7 +358,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         let mut alpha = -INFINITY;
         let mut beta = INFINITY;
 
-        let mut delta = 12;
+        let mut delta = t.info.conf.delta_initial;
         let mut reduction = 0;
 
         if t.depth > 1 {
@@ -411,7 +414,9 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 break;
             }
 
-            delta += delta * (40 + 15 * reduction) / 128;
+            delta += delta
+                * (t.info.conf.delta_base_mul + t.info.conf.delta_reduction_mul * reduction)
+                / 128;
         }
 
         // if we've made it here, it means we got an exact score.
