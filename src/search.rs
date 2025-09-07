@@ -57,83 +57,86 @@ use self::parameters::Config;
 // in alpha-beta, a call to alpha_beta(ALLNODE, alpha, beta) returns a score <= alpha.
 // Every move at an All-node is searched, and the score returned is an upper bound, so the exact score might be lower.
 
-const ASPIRATION_WINDOW: i32 = 6;
-const RFP_MARGIN: i32 = 77;
-const RFP_IMPROVING_MARGIN: i32 = 67;
-const NMP_IMPROVING_MARGIN: i32 = 83;
+const ASPIRATION_EVAL_DIVISOR: i32 = 29614;
+const DELTA_INITIAL: i32 = 12;
+const DELTA_BASE_MUL: i32 = 40;
+const DELTA_REDUCTION_MUL: i32 = 15;
+const RFP_MARGIN: i32 = 84;
+const RFP_IMPROVING_MARGIN: i32 = 75;
+const NMP_IMPROVING_MARGIN: i32 = 106;
 const NMP_DEPTH_MUL: i32 = -8;
-const NMP_REDUCTION_EVAL_DIVISOR: i32 = 191;
-const SEE_QUIET_MARGIN: i32 = -73;
+const NMP_REDUCTION_EVAL_DIVISOR: i32 = 150;
+const SEE_QUIET_MARGIN: i32 = -70;
 const SEE_TACTICAL_MARGIN: i32 = -25;
-const FUTILITY_COEFF_0: i32 = 113;
-const FUTILITY_COEFF_1: i32 = 75;
-const RAZORING_COEFF_0: i32 = -28;
-const RAZORING_COEFF_1: i32 = 268;
-const PROBCUT_MARGIN: i32 = 306;
+const FUTILITY_COEFF_0: i32 = 110;
+const FUTILITY_COEFF_1: i32 = 61;
+const RAZORING_COEFF_0: i32 = 63;
+const RAZORING_COEFF_1: i32 = 270;
+const PROBCUT_MARGIN: i32 = 184;
 const PROBCUT_IMPROVING_MARGIN: i32 = 69;
-const DOUBLE_EXTENSION_MARGIN: i32 = 14;
-const TRIPLE_EXTENSION_MARGIN: i32 = 119;
-const LMR_BASE: f64 = 91.0;
-const LMR_DIVISION: f64 = 264.0;
-const QS_SEE_BOUND: i32 = -159;
-const MAIN_SEE_BOUND: i32 = -134;
-const DO_DEEPER_BASE_MARGIN: i32 = 53;
-const DO_DEEPER_DEPTH_MARGIN: i32 = 12;
-const HISTORY_PRUNING_MARGIN: i32 = -3746;
-const QS_FUTILITY: i32 = 261;
-const SEE_STAT_SCORE_MUL: i32 = 26;
+const DOUBLE_EXTENSION_MARGIN: i32 = 12;
+const TRIPLE_EXTENSION_MARGIN: i32 = 166;
+const LMR_BASE: f64 = 95.0;
+const LMR_DIVISION: f64 = 260.0;
+const QS_SEE_BOUND: i32 = -50;
+const MAIN_SEE_BOUND: i32 = -86;
+const DO_DEEPER_BASE_MARGIN: i32 = 45;
+const DO_DEEPER_DEPTH_MARGIN: i32 = 14;
+const HISTORY_PRUNING_MARGIN: i32 = -4942;
+const QS_FUTILITY: i32 = 341;
+const SEE_STAT_SCORE_MUL: i32 = 20;
 
-const HISTORY_LMR_DIVISOR: i32 = 17103;
-const LMR_REFUTATION_MUL: i32 = 906;
-const LMR_NON_PV_MUL: i32 = 1053;
-const LMR_TTPV_MUL: i32 = 1403;
-const LMR_CUT_NODE_MUL: i32 = 1472;
-const LMR_NON_IMPROVING_MUL: i32 = 683;
-const LMR_TT_CAPTURE_MUL: i32 = 1131;
-const LMR_CHECK_MUL: i32 = 1176;
+const HISTORY_LMR_DIVISOR: i32 = 17205;
+const LMR_REFUTATION_MUL: i32 = 860;
+const LMR_NON_PV_MUL: i32 = 1148;
+const LMR_TTPV_MUL: i32 = 1432;
+const LMR_CUT_NODE_MUL: i32 = 1412;
+const LMR_NON_IMPROVING_MUL: i32 = 456;
+const LMR_TT_CAPTURE_MUL: i32 = 1301;
+const LMR_CHECK_MUL: i32 = 1217;
 
-const MAIN_HISTORY_BONUS_MUL: i32 = 364;
-const MAIN_HISTORY_BONUS_OFFSET: i32 = 152;
-const MAIN_HISTORY_BONUS_MAX: i32 = 2707;
-const MAIN_HISTORY_MALUS_MUL: i32 = 236;
-const MAIN_HISTORY_MALUS_OFFSET: i32 = 424;
-const MAIN_HISTORY_MALUS_MAX: i32 = 1392;
-const CONT1_HISTORY_BONUS_MUL: i32 = 298;
-const CONT1_HISTORY_BONUS_OFFSET: i32 = 186;
-const CONT1_HISTORY_BONUS_MAX: i32 = 2901;
-const CONT1_HISTORY_MALUS_MUL: i32 = 236;
-const CONT1_HISTORY_MALUS_OFFSET: i32 = 306;
-const CONT1_HISTORY_MALUS_MAX: i32 = 1391;
-const CONT2_HISTORY_BONUS_MUL: i32 = 257;
-const CONT2_HISTORY_BONUS_OFFSET: i32 = 129;
-const CONT2_HISTORY_BONUS_MAX: i32 = 2414;
-const CONT2_HISTORY_MALUS_MUL: i32 = 276;
-const CONT2_HISTORY_MALUS_OFFSET: i32 = 317;
-const CONT2_HISTORY_MALUS_MAX: i32 = 1533;
-const TACTICAL_HISTORY_BONUS_MUL: i32 = 236;
-const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 278;
-const TACTICAL_HISTORY_BONUS_MAX: i32 = 2196;
-const TACTICAL_HISTORY_MALUS_MUL: i32 = 125;
-const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 360;
-const TACTICAL_HISTORY_MALUS_MAX: i32 = 1073;
+const MAIN_HISTORY_BONUS_MUL: i32 = 341;
+const MAIN_HISTORY_BONUS_OFFSET: i32 = 178;
+const MAIN_HISTORY_BONUS_MAX: i32 = 2298;
+const MAIN_HISTORY_MALUS_MUL: i32 = 172;
+const MAIN_HISTORY_MALUS_OFFSET: i32 = 407;
+const MAIN_HISTORY_MALUS_MAX: i32 = 835;
+const CONT1_HISTORY_BONUS_MUL: i32 = 187;
+const CONT1_HISTORY_BONUS_OFFSET: i32 = 234;
+const CONT1_HISTORY_BONUS_MAX: i32 = 3217;
+const CONT1_HISTORY_MALUS_MUL: i32 = 323;
+const CONT1_HISTORY_MALUS_OFFSET: i32 = 436;
+const CONT1_HISTORY_MALUS_MAX: i32 = 1442;
+const CONT2_HISTORY_BONUS_MUL: i32 = 177;
+const CONT2_HISTORY_BONUS_OFFSET: i32 = 139;
+const CONT2_HISTORY_BONUS_MAX: i32 = 1473;
+const CONT2_HISTORY_MALUS_MUL: i32 = 218;
+const CONT2_HISTORY_MALUS_OFFSET: i32 = 66;
+const CONT2_HISTORY_MALUS_MAX: i32 = 1248;
+const TACTICAL_HISTORY_BONUS_MUL: i32 = 136;
+const TACTICAL_HISTORY_BONUS_OFFSET: i32 = 458;
+const TACTICAL_HISTORY_BONUS_MAX: i32 = 2007;
+const TACTICAL_HISTORY_MALUS_MUL: i32 = 49;
+const TACTICAL_HISTORY_MALUS_OFFSET: i32 = 401;
+const TACTICAL_HISTORY_MALUS_MAX: i32 = 1464;
 
-const PAWN_CORRHIST_WEIGHT: i32 = 1511;
-const MAJOR_CORRHIST_WEIGHT: i32 = 1568;
-const MINOR_CORRHIST_WEIGHT: i32 = 1518;
-const NONPAWN_CORRHIST_WEIGHT: i32 = 1708;
+const PAWN_CORRHIST_WEIGHT: i32 = 1583;
+const MAJOR_CORRHIST_WEIGHT: i32 = 1495;
+const MINOR_CORRHIST_WEIGHT: i32 = 1304;
+const NONPAWN_CORRHIST_WEIGHT: i32 = 1813;
 
-const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 209;
-const EVAL_POLICY_OFFSET: i32 = 8;
-const EVAL_POLICY_UPDATE_MAX: i32 = 110;
+const EVAL_POLICY_IMPROVEMENT_SCALE: i32 = 214;
+const EVAL_POLICY_OFFSET: i32 = -4;
+const EVAL_POLICY_UPDATE_MAX: i32 = 95;
 
 const TIME_MANAGER_UPDATE_MIN_DEPTH: i32 = 4;
 
-const HINDSIGHT_EXT_DEPTH: i32 = 3646;
-const HINDSIGHT_RED_DEPTH: i32 = 2048;
-const HINDSIGHT_RED_EVAL: i32 = 100;
+const HINDSIGHT_EXT_DEPTH: i32 = 2097;
+const HINDSIGHT_RED_DEPTH: i32 = 2421;
+const HINDSIGHT_RED_EVAL: i32 = 141;
 
-const OPTIMISM_OFFSET: i32 = 227;
-const OPTIMISM_MATERIAL_BASE: i32 = 2249;
+const OPTIMISM_OFFSET: i32 = 189;
+const OPTIMISM_MATERIAL_BASE: i32 = 2320;
 
 static TB_HITS: AtomicU64 = AtomicU64::new(0);
 
@@ -355,7 +358,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
         let mut alpha = -INFINITY;
         let mut beta = INFINITY;
 
-        let mut delta = 12;
+        let mut delta = t.info.conf.delta_initial;
         let mut reduction = 0;
 
         if t.depth > 1 {
@@ -364,7 +367,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
             t.optimism[us] = 128 * average_value / (average_value.abs() + offset);
             t.optimism[!us] = -t.optimism[us];
 
-            delta += average_value * average_value / 26614;
+            delta += average_value * average_value / t.info.conf.aspiration_eval_divisor;
 
             alpha = (average_value - delta).max(-INFINITY);
             beta = (average_value + delta).min(INFINITY);
@@ -411,7 +414,9 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                 break;
             }
 
-            delta += delta * (40 + 15 * reduction) / 128;
+            delta += delta
+                * (t.info.conf.delta_base_mul + t.info.conf.delta_reduction_mul * reduction)
+                / 128;
         }
 
         // if we've made it here, it means we got an exact score.
