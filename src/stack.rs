@@ -10,6 +10,6 @@ pub struct StackEntry {
     pub searching_tactical: bool,
     pub dextensions: i32,
     pub ttpv: bool,
-    pub conthist_index: ContHistIndex,
+    pub ch_idx: ContHistIndex,
     pub reduction: i32,
 }

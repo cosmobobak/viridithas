@@ -1215,5 +1215,59 @@ inquisition | same as legion/iridescent with standard  | fixed-nodes:
             |                                          | Games | N: 13590 W: 3066 L: 3208 D: 7316
             |                                          | Penta | [24, 1679, 3530, 1539, 23]
             |                                          | https://chess.swehosting.se/test/11276/
-			|                                          | vs. delenda
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+  timepiece | fine-tune of division at WDL .65, 200 SB | fixed-nodes:
+            |                                          | Elo   | -9.23 +- 4.89 (95%)
+            |                                          | SPRT  | N=25000 Threads=1 Hash=16MB
+            |                                          | LLR   | -3.10 (-2.94, 2.94) [0.00, 3.00]
+            |                                          | Games | N: 7794 W: 2136 L: 2343 D: 3315
+            |                                          | Penta | [166, 1028, 1696, 861, 146]
+            |                                          | https://chess.swehosting.se/test/11710/
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+    oculist | rebase on latest bullet w/ ValueTrainer. | fixed-nodes:
+            |                                          | https://ob.expositor.dev/test/15/
+            | trained on full data. (might have been   |  PERF −11.33 ± 5.31 ELO (−16.64 LO −6.03 HI ELO)
+            | opening-filtered data from prev, my test |  CONF 25000 NODES (1 THREAD 16 MB CACHE)
+            | hygiene is absymal)                      |   LLR −3.19 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          | GAMES 6654 (1797 W 2843 D 2014 L = 27.0% W 42.7% D 30.3% L)
+            |                                          | PENTA 126⁺² 710⁺¹ 1462⁰ 879⁻¹ 150⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | STC:
+            |                                          | https://ob.expositor.dev/test/16/
+            |                                          |  PERF −18.28 ± 6.31 ELO (−24.60 LO −11.98 HI ELO)
+            |                                          |  CONF 8.0+0.08 SEC (1 THREAD 16 MB CACHE)
+            |                                          |   LLR −2.97 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          | GAMES 3424 (757 W 1730 D 937 L = 22.1% W 50.5% D 27.4% L)
+            |                                          | PENTA 17⁺² 343⁺¹ 820⁰ 507⁻¹ 25⁻²
+            |                                          | vs. delenda
+            |                                          |
+            |                                          | LTC:
+            |                                          | https://ob.expositor.dev/test/17/
+            |                                          |  PERF −10.79 ± 4.64 ELO (−15.44 LO −6.16 HI ELO)
+            |                                          |  CONF 40.0+0.40 SEC (1 THREAD 128 MB CACHE)
+            |                                          |   LLR −3.04 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          | GAMES 5248 (1131 W 2823 D 1294 L = 21.6% W 53.8% D 24.7% L)
+            |                                          | PENTA 5⁺² 536⁺¹ 1384⁰ 689⁻¹ 10⁻²
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+     modern | removing new data; using 400cp filtered  | STC: 
+            | openings.                                | https://ob.expositor.dev/test/19/
+            |                                          |  PERF −10.34 ± 4.80 ELO (−15.14 LO −5.54 HI ELO)
+            |                                          |  CONF 8.0+0.08 SEC (1 THREAD 16 MB CACHE)
+            |                                          |   LLR −2.96 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          | GAMES 5714 (1330 W 2884 D 1500 L = 23.3% W 50.5% D 26.3% L)
+            |                                          | PENTA 25⁺² 623⁺¹ 1396⁰ 783⁻¹ 30⁻²
+            |                                          | vs. delenda
+------------|------------------------------------------|-----------------------------------------------
+ ins.m.able | removing new data.                       | STC:
+            |                                          | https://ob.expositor.dev/test/25/
+            |                                          |  PERF −16.71 ± 6.01 ELO (−22.72 LO −10.71 HI ELO)
+            |                                          |  CONF 8.0+0.08 SEC (1 THREAD 16 MB CACHE)
+            |                                          |   LLR −2.95 (−2.94 LO +2.94 HI BND for +0.00 LO +3.00 HI ELO)
+            |                                          | GAMES 3662 (830 W 1826 D 1006 L = 22.7% W 49.9% D 27.5% L)
+            |                                          | PENTA 18⁺² 364⁺¹ 894⁰ 534⁻¹ 21⁻²
+            |                                          | vs. delenda 
 ------------|------------------------------------------|-----------------------------------------------

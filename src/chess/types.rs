@@ -400,7 +400,7 @@ impl From<Square> for u16 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ContHistIndex {
     pub piece: Piece,
-    pub square: Square,
+    pub to: Square,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]

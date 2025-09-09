@@ -4,14 +4,14 @@ use std::sync::atomic::Ordering;
 use arrayvec::ArrayVec;
 
 use crate::chess::CHESS960;
-use crate::util::MAX_PLY;
 
 use crate::chess::chessmove::Move;
+use crate::util::MAX_DEPTH;
 
 #[derive(Clone, Debug)]
 pub struct PVariation {
     pub(crate) score: i32,
-    pub(crate) moves: ArrayVec<Move, MAX_PLY>,
+    pub(crate) moves: ArrayVec<Move, MAX_DEPTH>,
 }
 
 impl Default for PVariation {
