@@ -1,6 +1,6 @@
 use std::{
     mem::{size_of, MaybeUninit},
-    sync::atomic::{AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering},
+    sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 
 use crate::{
@@ -107,7 +107,7 @@ impl PackedInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C, align(8))]
+#[repr(C)]
 pub struct TTEntry {
     pub key: u16,                   // 2 bytes
     pub m: Option<Move>,            // 2 bytes
@@ -115,6 +115,12 @@ pub struct TTEntry {
     pub depth: CompactDepthStorage, // 1 byte, wrapper around a u8
     pub info: PackedInfo,           // 1 byte (5 + 1 + 2 bits), wrapper around a u8
     pub evaluation: i16,            // 2 bytes
+}
+
+#[repr(C)]
+union TTEntryReadTarget {
+    bytes: u128,
+    entry: TTEntry,
 }
 
 impl TTEntry {
@@ -135,100 +141,39 @@ const CLUSTER_SIZE: usize = 3;
 #[derive(Debug, Default)]
 #[repr(C, align(32))]
 struct TTClusterMemory {
-    entry1_block1: AtomicU64,
-    entry1_block2: AtomicU16,
-    entry2_block1: AtomicU16,
-    entry2_block2: AtomicU32,
-    entry2_block3: AtomicU32,
-    entry3_block1: AtomicU32,
-    entry3_block2: AtomicU64,
+    memory: [AtomicU64; 4],
 }
 
-#[repr(C)]
-union TTEntryReadTarget {
-    bytes: u128,
-    entry: TTEntry,
+#[repr(C, align(32))]
+struct TTCluster {
+    entries: [TTEntry; 3],
+    padding: [u8; 2],
 }
 
 impl TTClusterMemory {
-    pub fn load(&self, idx: usize) -> TTEntry {
-        let bytes = match idx {
-            // INTERNAL IMPLEMENTATION DETAIL:
-            // We swap the access pattern of the second and third entries, accessing the entry that is third
-            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
-            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
-            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-            // As such, we save the costliest access for last.
-            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
-            0 => {
-                let part1 = self.entry1_block1.load(Ordering::Relaxed);
-                let part2 = self.entry1_block2.load(Ordering::Relaxed);
-                // [ 01, 23, 45, 67 ] + [ 89 ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 64)
-            }
-            2 => {
-                let part1 = self.entry2_block1.load(Ordering::Relaxed);
-                let part2 = self.entry2_block2.load(Ordering::Relaxed);
-                let part3 = self.entry2_block3.load(Ordering::Relaxed);
-                // [ 01 ] + [ 23, 45 ] + [ 67, 89 ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 16) | (u128::from(part3) << 48)
-            }
-            1 => {
-                let part1 = self.entry3_block1.load(Ordering::Relaxed);
-                let part2 = self.entry3_block2.load(Ordering::Relaxed);
-                // [ 01, 23 ] + [ 45, 67, 89, __ ] => 10 byte struct.
-                u128::from(part1) | (u128::from(part2) << 32)
-            }
-            _ => panic!("Index out of bounds!"),
-        };
-        // SAFETY: All bitpatterns of TTEntry are valid.
-        unsafe { TTEntryReadTarget { bytes }.entry }
+    pub fn load(&self) -> TTCluster {
+        let a = self.memory[0].load(Ordering::Relaxed);
+        let b = self.memory[1].load(Ordering::Relaxed);
+        let c = self.memory[2].load(Ordering::Relaxed);
+        let d = self.memory[3].load(Ordering::Relaxed);
+        // Safety: TTCluster is POD.
+        unsafe { std::mem::transmute::<[u64; 4], TTCluster>([a, b, c, d]) }
     }
 
-    pub fn store(&self, idx: usize, entry: TTEntry) {
-        #![allow(clippy::cast_possible_truncation)]
-        let mut memory = TTEntryReadTarget { bytes: 0 };
-        memory.entry = entry;
-        // SAFETY: TTEntry can be safely reinterpreted as bytes, and the
-        // whole u128 is initialised.
-        let bytes = unsafe { memory.bytes };
-        match idx {
-            // INTERNAL IMPLEMENTATION DETAIL:
-            // We swap the access pattern of the second and third entries, accessing the entry that is third
-            // in terms of memory layout when index = 1 is passed, and accessing the entry that is second
-            // w.r.t. memory layout when index = 2 is passed. This is because we will often be looping
-            // through indexes 0..3, and have a chance to short-circuit before reaching index 2.
-            // As such, we save the costliest access for last.
-            // (the memory-layout-second entry requires three atomic operations, because of address alignment)
-            0 => {
-                self.entry1_block1.store(bytes as u64, Ordering::Relaxed);
-                self.entry1_block2
-                    .store((bytes >> 64) as u16, Ordering::Relaxed);
-            }
-            2 => {
-                self.entry2_block1.store(bytes as u16, Ordering::Relaxed);
-                self.entry2_block2
-                    .store((bytes >> 16) as u32, Ordering::Relaxed);
-                self.entry2_block3
-                    .store((bytes >> 48) as u32, Ordering::Relaxed);
-            }
-            1 => {
-                self.entry3_block1.store(bytes as u32, Ordering::Relaxed);
-                self.entry3_block2
-                    .store((bytes >> 32) as u64, Ordering::Relaxed);
-            }
-            _ => panic!("Index out of bounds!"),
-        }
+    pub fn store(&self, cluster: TTCluster) {
+        // Safety: [u64; 4] is POD.
+        let memory = unsafe { std::mem::transmute::<TTCluster, [u64; 4]>(cluster) };
+        self.memory[0].store(memory[0], Ordering::Relaxed);
+        self.memory[1].store(memory[1], Ordering::Relaxed);
+        self.memory[2].store(memory[2], Ordering::Relaxed);
+        self.memory[3].store(memory[3], Ordering::Relaxed);
     }
 
     pub fn clear(&self) {
-        self.entry1_block1.store(0, Ordering::Relaxed);
-        self.entry1_block2.store(0, Ordering::Relaxed);
-        self.entry2_block1.store(0, Ordering::Relaxed);
-        self.entry2_block2.store(0, Ordering::Relaxed);
-        self.entry2_block3.store(0, Ordering::Relaxed);
-        self.entry3_block1.store(0, Ordering::Relaxed);
-        self.entry3_block2.store(0, Ordering::Relaxed);
+        self.memory[0].store(0, Ordering::Relaxed);
+        self.memory[1].store(0, Ordering::Relaxed);
+        self.memory[2].store(0, Ordering::Relaxed);
+        self.memory[3].store(0, Ordering::Relaxed);
     }
 }
 
@@ -364,14 +309,14 @@ impl TTView<'_> {
         // get current table age:
         let tt_age = i32::from(self.age);
         // load the cluster:
-        let cluster = &self.table[cluster_index];
-        let mut tte = cluster.load(0);
+        let mut cluster = self.table[cluster_index].load();
+        let mut tte = cluster.entries[0];
         let mut idx = 0;
 
         // select the entry:
         if !(tte.key == 0 || tte.key == key) {
             for i in 1..CLUSTER_SIZE {
-                let entry = cluster.load(i);
+                let entry = cluster.entries[i];
 
                 if entry.key == 0 || entry.key == key {
                     tte = entry;
@@ -432,7 +377,8 @@ impl TTView<'_> {
                     "attempted to store an eval with value outwith [i16::MIN, i16::MAX] in the transposition table",
                 ),
             };
-            cluster.store(idx, write);
+            cluster.entries[idx] = write;
+            self.table[cluster_index].store(cluster);
         }
     }
 
@@ -440,10 +386,10 @@ impl TTView<'_> {
         let index = self.wrap_key(key);
         let key = TT::pack_key(key);
 
-        let cluster = &self.table[index];
+        let cluster = self.table[index].load();
 
         for i in 0..CLUSTER_SIZE {
-            let entry = cluster.load(i);
+            let entry = cluster.entries[i];
 
             if entry.key != key {
                 continue;
@@ -489,9 +435,9 @@ impl TTView<'_> {
     pub fn hashfull(&self) -> usize {
         let mut hit = 0;
         for i in 0..2000 {
-            let cluster = &self.table[i];
+            let cluster = self.table[i].load();
             for i in 0..CLUSTER_SIZE {
-                let entry = cluster.load(i);
+                let entry = cluster.entries[i];
                 if entry.key != 0 && entry.info.age() == self.age {
                     hit += 1;
                 }
@@ -548,8 +494,10 @@ mod tests {
         };
         let cluster_memory = TTClusterMemory::default();
         for i in 0..3 {
-            cluster_memory.store(i, entry);
-            let loaded = cluster_memory.load(i);
+            let mut cluster = cluster_memory.load();
+            cluster.entries[i] = entry;
+            cluster_memory.store(cluster);
+            let loaded = cluster_memory.load().entries[i];
             println!("Slot {i}");
             println!(" Stored: {}", format_slice_hex(&entry.to_ne_bytes()));
             println!(" Loaded: {}", format_slice_hex(&loaded.to_ne_bytes()));
