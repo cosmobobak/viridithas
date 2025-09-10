@@ -1070,6 +1070,7 @@ pub fn alpha_beta<NT: NodeType>(
         if cut_node
             && t.ss[height - 1].searching.is_some()
             && depth > 2
+            && eval >= beta
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
@@ -1081,10 +1082,7 @@ pub fn alpha_beta<NT: NodeType>(
             t.tt.prefetch(t.board.key_after_null_move());
             let r = 4
                 + depth / 3
-                + std::cmp::min(
-                    (static_eval - beta) / t.info.conf.nmp_reduction_eval_divisor,
-                    4,
-                )
+                + std::cmp::min((eval - beta) / t.info.conf.nmp_reduction_eval_divisor, 4)
                 + i32::from(tt_capture);
             let nm_depth = depth - r;
             t.ss[height].searching = None;
