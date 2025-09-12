@@ -135,50 +135,50 @@ impl TTEntry {
     }
 }
 
-const CLUSTER_SIZE: usize = 3;
+const CLUSTER_SIZE: usize = 6;
 
 /// Object representing the backing memory used to store tt entries.
 #[derive(Debug, Default)]
-#[repr(C, align(32))]
+#[repr(C, align(64))]
 struct TTClusterMemory {
-    memory: [AtomicU64; 4],
+    memory: [AtomicU64; 8],
 }
 
-#[repr(C, align(32))]
+#[repr(C, align(64))]
 struct TTCluster {
-    entries: [TTEntry; 3],
-    padding: [u8; 2],
+    entries: [TTEntry; CLUSTER_SIZE],
+    padding: [u8; 4],
 }
 
 impl TTClusterMemory {
+    #[inline(never)]
     pub fn load(&self) -> TTCluster {
-        let a = self.memory[0].load(Ordering::Relaxed);
-        let b = self.memory[1].load(Ordering::Relaxed);
-        let c = self.memory[2].load(Ordering::Relaxed);
-        let d = self.memory[3].load(Ordering::Relaxed);
+        let mut memory = [0; _];
+        for (src, dst) in self.memory.iter().zip(&mut memory) {
+            *dst = src.load(Ordering::Relaxed);
+        }
         // Safety: TTCluster is POD.
-        unsafe { std::mem::transmute::<[u64; 4], TTCluster>([a, b, c, d]) }
+        unsafe { std::mem::transmute::<[u64; 8], TTCluster>(memory) }
     }
 
+    #[inline(never)]
     pub fn store(&self, cluster: TTCluster) {
-        // Safety: [u64; 4] is POD.
-        let memory = unsafe { std::mem::transmute::<TTCluster, [u64; 4]>(cluster) };
-        self.memory[0].store(memory[0], Ordering::Relaxed);
-        self.memory[1].store(memory[1], Ordering::Relaxed);
-        self.memory[2].store(memory[2], Ordering::Relaxed);
-        self.memory[3].store(memory[3], Ordering::Relaxed);
+        // Safety: [u64; 8] is POD.
+        let memory = unsafe { std::mem::transmute::<TTCluster, [u64; 8]>(cluster) };
+        for (src, dst) in memory.into_iter().zip(&self.memory) {
+            dst.store(src, Ordering::Relaxed);
+        }
     }
 
     pub fn clear(&self) {
-        self.memory[0].store(0, Ordering::Relaxed);
-        self.memory[1].store(0, Ordering::Relaxed);
-        self.memory[2].store(0, Ordering::Relaxed);
-        self.memory[3].store(0, Ordering::Relaxed);
+        for dst in &self.memory {
+            dst.store(0, Ordering::Relaxed);
+        }
     }
 }
 
 const _CLUSTER_SIZE: () = assert!(
-    size_of::<TTClusterMemory>() == 32,
+    size_of::<TTClusterMemory>() == 64,
     "TT Cluster size is suboptimal."
 );
 
