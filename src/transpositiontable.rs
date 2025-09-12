@@ -151,9 +151,8 @@ struct TTCluster {
 }
 
 impl TTClusterMemory {
-    #[inline(never)]
     pub fn load(&self) -> TTCluster {
-        let mut memory = [0; _];
+        let mut memory = [0; 8];
         for (src, dst) in self.memory.iter().zip(&mut memory) {
             *dst = src.load(Ordering::Relaxed);
         }
@@ -161,7 +160,6 @@ impl TTClusterMemory {
         unsafe { std::mem::transmute::<[u64; 8], TTCluster>(memory) }
     }
 
-    #[inline(never)]
     pub fn store(&self, cluster: TTCluster) {
         // Safety: [u64; 8] is POD.
         let memory = unsafe { std::mem::transmute::<TTCluster, [u64; 8]>(cluster) };
