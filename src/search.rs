@@ -1576,6 +1576,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
         if !(in_check
+            || is_game_theoretic_score(best_score)
             || matches!(best_move, Some(m) if t.board.is_tactical(m))
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
