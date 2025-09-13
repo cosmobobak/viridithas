@@ -1577,6 +1577,7 @@ pub fn alpha_beta<NT: NodeType>(
         // and the static eval needs moving in a direction, then update corrhist.
         if !(in_check
             || matches!(best_move, Some(m) if t.board.is_tactical(m))
+            || flag == Bound::Exact
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
