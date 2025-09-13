@@ -1019,7 +1019,7 @@ pub fn alpha_beta<NT: NodeType>(
     t.killer_move_table[height + 1] = None;
 
     let tt_move = tt_hit.and_then(|hit| hit.mov);
-    let tt_capture = matches!(tt_move, Some(mv) if t.board.is_capture(mv));
+    let tt_capture = tt_move.is_some_and(|m| t.board.is_capture(m));
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
@@ -1219,7 +1219,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     let maybe_singular = depth >= 5
         && excluded.is_none()
-        && matches!(tt_hit, Some(TTHit { depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if tt_depth >= depth - 3);
+        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
@@ -1576,7 +1576,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
         if !(in_check
-            || matches!(best_move, Some(m) if t.board.is_tactical(m))
+            || best_move.is_some_and(|m| t.board.is_tactical(m))
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {

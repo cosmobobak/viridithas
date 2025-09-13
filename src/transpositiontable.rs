@@ -19,6 +19,16 @@ pub enum Bound {
     Exact = 3,
 }
 
+impl Bound {
+    pub fn is_lower(self) -> bool {
+        self as u8 & 0b10 != 0
+    }
+
+    pub fn is_upper(self) -> bool {
+        self as u8 & 0b01 != 0
+    }
+}
+
 macro_rules! impl_from_bound {
     ($t:ty) => {
         impl From<Bound> for $t {
