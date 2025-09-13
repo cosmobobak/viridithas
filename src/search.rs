@@ -1061,7 +1061,7 @@ pub fn alpha_beta<NT: NodeType>(
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
-            return beta + (static_eval - beta) / 3;
+            return beta + (eval - beta) / 3;
         }
 
         // null-move pruning.
