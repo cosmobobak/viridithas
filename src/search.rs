@@ -1068,24 +1068,16 @@ pub fn alpha_beta<NT: NodeType>(
         // if we can give the opponent a free move while retaining
         // a score above beta, we can prune the node.
         if cut_node
-            && t.ss[height - 1].searching.is_some()
-            && depth > 2
             && static_eval
                 + i32::from(improving) * t.info.conf.nmp_improving_margin
                 + depth * t.info.conf.nmp_depth_mul
                 >= beta
-            && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
-            && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
+            && beta > -MINIMUM_TB_WIN_SCORE
+            && !t.nmp_banned_for(t.board.turn())
         {
             t.tt.prefetch(t.board.key_after_null_move());
-            let r = 4
-                + depth / 3
-                + std::cmp::min(
-                    (static_eval - beta) / t.info.conf.nmp_reduction_eval_divisor,
-                    4,
-                )
-                + i32::from(tt_capture);
+            let r = 6 + depth / 3;
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
