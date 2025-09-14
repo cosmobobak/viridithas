@@ -3,6 +3,7 @@ use crate::chess::{chessmove::Move, types::ContHistIndex};
 #[derive(Default, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct StackEntry {
+    pub static_eval: i32,
     pub eval: i32,
     pub excluded: Option<Move>,
     pub best_move: Option<Move>,

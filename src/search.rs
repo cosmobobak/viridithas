@@ -900,22 +900,25 @@ pub fn alpha_beta<NT: NodeType>(
 
     let raw_eval;
     let static_eval;
+    let eval;
     let correction;
 
     if in_check {
         // when we're in check, it could be checkmate, so it's unsound to use evaluate().
         raw_eval = VALUE_NONE;
         static_eval = VALUE_NONE;
+        eval = VALUE_NONE;
         correction = 0;
     } else if excluded.is_some() {
         // if we're in a singular-verification search, we already have the static eval.
         // we can set raw_eval to whatever we like, because we're not going to be saving it.
         raw_eval = VALUE_NONE;
-        static_eval = t.ss[height].eval;
+        static_eval = t.ss[height].static_eval;
+        eval = t.ss[height].eval;
         correction = 0;
         t.nnue.hint_common_access(&t.board, t.nnue_params);
-    } else if let Some(TTHit { eval: tt_eval, .. }) = &tt_hit {
-        let v = *tt_eval; // if we have a TT hit, check the cached TT eval.
+    } else if let Some(tte) = &tt_hit {
+        let v = tte.eval; // if we have a TT hit, check the cached TT eval.
         if v == VALUE_NONE {
             // regenerate the static eval if it's VALUE_NONE.
             raw_eval = evaluate(t, t.info.nodes.get_local());
@@ -928,6 +931,19 @@ pub fn alpha_beta<NT: NodeType>(
         }
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        if tte.value != VALUE_NONE
+            && !is_game_theoretic_score(tte.value)
+            && match tte.bound {
+                Bound::Upper => tte.value < static_eval,
+                Bound::Lower => tte.value > static_eval,
+                Bound::Exact => true,
+                Bound::None => false,
+            }
+        {
+            eval = tte.value;
+        } else {
+            eval = static_eval;
+        }
     } else {
         // otherwise, use the static evaluation.
         raw_eval = evaluate(t, t.info.nodes.get_local());
@@ -947,15 +963,17 @@ pub fn alpha_beta<NT: NodeType>(
 
         correction = t.correction();
         static_eval = adj_shuffle(t, raw_eval, clock) + correction;
+        eval = static_eval;
     }
 
-    t.ss[height].eval = static_eval;
+    t.ss[height].static_eval = static_eval;
+    t.ss[height].eval = eval;
 
     // value-difference based policy update.
     if !NT::ROOT {
         let ss_prev = &t.ss[height - 1];
         if let Some(mov) = ss_prev.searching {
-            if ss_prev.eval != VALUE_NONE
+            if ss_prev.static_eval != VALUE_NONE
                 && static_eval != VALUE_NONE
                 && !ss_prev.searching_tactical
             {
@@ -964,7 +982,8 @@ pub fn alpha_beta<NT: NodeType>(
                 let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
                 debug_assert_eq!(moved.colour(), !t.board.turn());
                 let threats = t.board.history().last().unwrap().threats.all;
-                let improvement = -(ss_prev.eval + static_eval) + t.info.conf.eval_policy_offset;
+                let improvement =
+                    -(ss_prev.static_eval + static_eval) + t.info.conf.eval_policy_offset;
                 let delta = i32::clamp(
                     improvement * t.info.conf.eval_policy_improvement_scale / 32,
                     -t.info.conf.eval_policy_update_max,
@@ -982,10 +1001,10 @@ pub fn alpha_beta<NT: NodeType>(
     // neutral with regards to the evaluation.
     let improving = if in_check {
         false
-    } else if height >= 2 && t.ss[height - 2].eval != VALUE_NONE {
-        static_eval > t.ss[height - 2].eval
-    } else if height >= 4 && t.ss[height - 4].eval != VALUE_NONE {
-        static_eval > t.ss[height - 4].eval
+    } else if height >= 2 && t.ss[height - 2].static_eval != VALUE_NONE {
+        static_eval > t.ss[height - 2].static_eval
+    } else if height >= 4 && t.ss[height - 4].static_eval != VALUE_NONE {
+        static_eval > t.ss[height - 4].static_eval
     } else {
         true
     };
@@ -1002,20 +1021,20 @@ pub fn alpha_beta<NT: NodeType>(
     t.killer_move_table[height + 1] = None;
 
     let tt_move = tt_hit.and_then(|hit| hit.mov);
-    let tt_capture = matches!(tt_move, Some(mv) if t.board.is_capture(mv));
+    let tt_capture = tt_move.is_some_and(|m| t.board.is_capture(m));
 
     // whole-node techniques:
     if !NT::ROOT && !NT::PV && !in_check && excluded.is_none() {
         if t.ss[height - 1].reduction >= t.info.conf.hindsight_ext_depth
-            && static_eval + t.ss[height - 1].eval < 0
+            && static_eval + t.ss[height - 1].static_eval < 0
         {
             depth += 1;
         }
 
         if depth >= 2
             && t.ss[height - 1].reduction >= t.info.conf.hindsight_red_depth
-            && t.ss[height - 1].eval != VALUE_NONE
-            && static_eval + t.ss[height - 1].eval > t.info.conf.hindsight_red_eval
+            && t.ss[height - 1].static_eval != VALUE_NONE
+            && static_eval + t.ss[height - 1].static_eval > t.info.conf.hindsight_red_eval
         {
             depth -= 1;
         }
@@ -1039,6 +1058,7 @@ pub fn alpha_beta<NT: NodeType>(
         // this is a generalisation of stand_pat in quiescence search.
         if !t.ss[height].ttpv
             && depth < 9
+            && eval >= beta
             && static_eval
                 - rfp_margin(
                     &t.board,
@@ -1210,7 +1230,7 @@ pub fn alpha_beta<NT: NodeType>(
 
     let maybe_singular = depth >= 5
         && excluded.is_none()
-        && matches!(tt_hit, Some(TTHit { depth: tt_depth, bound: Bound::Lower | Bound::Exact, .. }) if tt_depth >= depth - 3);
+        && tt_hit.is_some_and(|tte| tte.depth >= depth - 3 && tte.bound.is_lower());
 
     while let Some(m) = move_picker.next(t) {
         if excluded == Some(m) {
@@ -1569,7 +1589,7 @@ pub fn alpha_beta<NT: NodeType>(
         // if we're not in check, and we don't have a tactical best-move,
         // and the static eval needs moving in a direction, then update corrhist.
         if !(in_check
-            || matches!(best_move, Some(m) if t.board.is_tactical(m))
+            || best_move.is_some_and(|m| t.board.is_tactical(m))
             || flag == Bound::Lower && best_score <= static_eval
             || flag == Bound::Upper && best_score >= static_eval)
         {
