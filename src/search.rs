@@ -64,7 +64,7 @@ const DELTA_REDUCTION_MUL: i32 = 15;
 const RFP_MARGIN: i32 = 84;
 const RFP_IMPROVING_MARGIN: i32 = 75;
 const NMP_IMPROVING_MARGIN: i32 = 106;
-const NMP_DEPTH_MUL: i32 = -8;
+const NMP_DEPTH_MUL: i32 = 15;
 const NMP_REDUCTION_EVAL_DIVISOR: i32 = 150;
 const SEE_QUIET_MARGIN: i32 = -70;
 const SEE_TACTICAL_MARGIN: i32 = -25;
@@ -1071,9 +1071,9 @@ pub fn alpha_beta<NT: NodeType>(
             && t.ss[height - 1].searching.is_some()
             && depth > 2
             && static_eval
-                + i32::from(improving) * t.info.conf.nmp_improving_margin
-                + depth * t.info.conf.nmp_depth_mul
-                >= beta
+                >= beta - t.info.conf.nmp_depth_mul * depth
+                    + 150 * i32::from(t.ss[height].ttpv)
+                    + 200
             && !t.nmp_banned_for(t.board.turn())
             && t.board.zugzwang_unlikely()
             && !matches!(tt_hit, Some(TTHit { value: v, bound: Bound::Upper, .. }) if v < beta)
