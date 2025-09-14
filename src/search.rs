@@ -1077,7 +1077,7 @@ pub fn alpha_beta<NT: NodeType>(
             && !t.nmp_banned_for(t.board.turn())
         {
             t.tt.prefetch(t.board.key_after_null_move());
-            let r = 6 + depth / 3;
+            let r = 5 + depth / 3;
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
