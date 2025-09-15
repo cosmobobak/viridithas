@@ -1207,6 +1207,7 @@ pub fn alpha_beta<NT: NodeType>(
     let mut best_move = None;
     let mut best_score = -INFINITY;
     let mut moves_made = 0;
+    let mut alpha_raises = 0;
 
     // number of quiet moves to try before we start pruning
     let lmp_threshold = t.info.lm_table.lmp_movecount(depth, improving);
@@ -1408,6 +1409,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r += i32::from(tt_capture) * t.info.conf.lmr_tt_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
+                // reduce more if we've raised alpha
+                r += alpha_raises * 512;
                 t.ss[height].reduction = r;
                 r / 1024
             } else {
@@ -1484,6 +1487,7 @@ pub fn alpha_beta<NT: NodeType>(
                 best_move = Some(m);
                 alpha = score;
                 if NT::PV {
+                    alpha_raises += 1;
                     pv.load_from(m, l_pv);
                 }
             }
