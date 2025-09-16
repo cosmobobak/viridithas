@@ -665,9 +665,9 @@ pub fn quiescence<NT: NodeType>(
         }
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = is_tactical;
-        let moved = t.board.state.mailbox[m.from()].unwrap();
+        t.ss[height].stat_score = 0; // no history loaded
         t.ss[height].ch_idx = ContHistIndex {
-            piece: moved,
+            piece: t.board.state.mailbox[m.from()].unwrap(),
             to: m.history_to_square(),
         };
         t.board.make_move(m, &mut t.nnue);
@@ -1057,7 +1057,7 @@ pub fn alpha_beta<NT: NodeType>(
         if !t.ss[height].ttpv
             && depth < 9
             && eval >= beta
-            && static_eval - rfp_margin(&t.board, &t.info, depth, improving, correction) >= beta
+            && static_eval - rfp_margin(t, height, depth, improving, correction) >= beta
             && (tt_move.is_none() || tt_capture)
             && beta > -MINIMUM_TB_WIN_SCORE
         {
@@ -1089,6 +1089,7 @@ pub fn alpha_beta<NT: NodeType>(
             let nm_depth = depth - r;
             t.ss[height].searching = None;
             t.ss[height].searching_tactical = false;
+            t.ss[height].stat_score = 0; // no history loaded
             t.ss[height].ch_idx = ContHistIndex {
                 piece: Piece::new(t.board.turn(), PieceType::Pawn),
                 to: Square::A1,
@@ -1169,6 +1170,7 @@ pub fn alpha_beta<NT: NodeType>(
             }
             t.ss[height].searching = Some(m);
             t.ss[height].searching_tactical = true;
+            t.ss[height].stat_score = 0; // no history loaded
             let moved = t.board.state.mailbox[m.from()].unwrap();
             t.ss[height].ch_idx = ContHistIndex {
                 piece: moved,
@@ -1376,6 +1378,7 @@ pub fn alpha_beta<NT: NodeType>(
 
         t.ss[height].searching = Some(m);
         t.ss[height].searching_tactical = !is_quiet;
+        t.ss[height].stat_score = stat_score;
         t.ss[height].ch_idx = ContHistIndex {
             piece: moved,
             to: m.history_to_square(),
@@ -1600,9 +1603,10 @@ pub fn alpha_beta<NT: NodeType>(
 }
 
 /// The margin for Reverse Futility Pruning.
-fn rfp_margin(pos: &Board, info: &SearchInfo, depth: i32, improving: bool, correction: i32) -> i32 {
-    info.conf.rfp_margin * depth
-        - i32::from(improving && !can_win_material(pos)) * info.conf.rfp_improving_margin
+fn rfp_margin(t: &ThreadData, height: usize, depth: i32, improving: bool, correction: i32) -> i32 {
+    t.info.conf.rfp_margin * depth
+        - i32::from(improving && !can_win_material(&t.board)) * t.info.conf.rfp_improving_margin
+        + t.ss[height - 1].stat_score / 400
         + correction.abs() / 2
 }
 
