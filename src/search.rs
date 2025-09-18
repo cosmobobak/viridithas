@@ -1246,12 +1246,10 @@ pub fn alpha_beta<NT: NodeType>(
         if is_quiet {
             stat_score += i32::from(t.main_hist[from_threat][to_threat][moved][hist_to]);
             if height >= 1 {
-                let prev = t.ss[height - 1].ch_idx;
-                stat_score += i32::from(t.cont_hist[prev.piece][prev.to][moved][hist_to]);
+                stat_score += i32::from(t.cont_hist[t.ss[height - 1].ch_idx][moved][hist_to]);
             }
             if height >= 2 {
-                let prev = t.ss[height - 2].ch_idx;
-                stat_score += i32::from(t.cont_hist[prev.piece][prev.to][moved][hist_to]);
+                stat_score += i32::from(t.cont_hist[t.ss[height - 2].ch_idx][moved][hist_to]);
             }
         } else {
             let capture = caphist_piece_type(&t.board, m);

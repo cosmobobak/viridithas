@@ -200,10 +200,10 @@ impl MovePicker {
         let mut cont_block_0 = None;
         let mut cont_block_1 = None;
         if height > 1 {
-            cont_block_0 = Some(t.cont_hist.get_index(t.ss[height - 1].ch_idx));
+            cont_block_0 = Some(&t.cont_hist[t.ss[height - 1].ch_idx]);
         }
         if height > 2 {
-            cont_block_1 = Some(t.cont_hist.get_index(t.ss[height - 2].ch_idx));
+            cont_block_1 = Some(&t.cont_hist[t.ss[height - 2].ch_idx]);
         }
 
         let threats = t.board.state.threats.all;

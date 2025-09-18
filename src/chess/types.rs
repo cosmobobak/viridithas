@@ -403,6 +403,20 @@ pub struct ContHistIndex {
     pub to: Square,
 }
 
+impl<T> Index<ContHistIndex> for [[T; 64]; 12] {
+    type Output = T;
+
+    fn index(&self, index: ContHistIndex) -> &Self::Output {
+        &self[index.piece][index.to]
+    }
+}
+
+impl<T> IndexMut<ContHistIndex> for [[T; 64]; 12] {
+    fn index_mut(&mut self, index: ContHistIndex) -> &mut Self::Output {
+        &mut self[index.piece][index.to]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 /// Zobrist keys for a position.

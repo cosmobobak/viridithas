@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     chess::{
         piece::{Colour, Piece},
-        types::{ContHistIndex, Square},
+        types::Square,
     },
     search::parameters::Config,
     util::BOARD_N_SQUARES,
@@ -239,14 +239,6 @@ impl DoubleHistoryTable {
             .iter_mut()
             .flatten()
             .for_each(HistoryTable::clear);
-    }
-
-    pub fn get_index_mut(&mut self, index: ContHistIndex) -> &mut HistoryTable {
-        &mut self.table[index.piece][index.to]
-    }
-
-    pub fn get_index(&self, index: ContHistIndex) -> &HistoryTable {
-        &self.table[index.piece][index.to]
     }
 }
 

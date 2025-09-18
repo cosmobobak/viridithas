@@ -93,10 +93,8 @@ impl ThreadData<'_> {
         if height <= index {
             return;
         }
-        let cmh_block = self
-            .cont_hist
-            .get_index_mut(self.ss[height - index - 1].ch_idx);
 
+        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
         for &m in moves_to_adjust {
             let to = m.history_to_square();
             let piece = self.board.state.mailbox[m.from()].unwrap();
@@ -123,10 +121,8 @@ impl ThreadData<'_> {
         if height <= index {
             return;
         }
-        let cmh_block = self
-            .cont_hist
-            .get_index_mut(self.ss[height - index - 1].ch_idx);
 
+        let cmh_block = &mut self.cont_hist[self.ss[height - index - 1].ch_idx];
         update_history(cmh_block.get_mut(moved, to), delta);
     }
 
