@@ -1234,6 +1234,7 @@ pub fn alpha_beta<NT: NodeType>(
         let lmr_reduction = t.info.lm_table.lm_reduction(depth, moves_made);
         let lmr_depth = std::cmp::max(depth - lmr_reduction / 1024, 0);
         let is_quiet = !t.board.is_tactical(m);
+        let is_recapture = !NT::ROOT && Some(m.to()) == t.ss[height - 1].searching.map(Move::to);
 
         let mut stat_score = 0;
 
@@ -1406,6 +1407,8 @@ pub fn alpha_beta<NT: NodeType>(
                 r += i32::from(tt_capture) * t.info.conf.lmr_tt_capture_mul;
                 // reduce less if the move gives check
                 r -= i32::from(t.board.in_check()) * t.info.conf.lmr_check_mul;
+                // reduce less if the move is a recapture
+                r -= i32::from(is_recapture) * 512;
                 t.ss[height].reduction = r;
                 r / 1024
             } else {
