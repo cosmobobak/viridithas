@@ -33,7 +33,7 @@ use crate::{
         main_history_bonus, main_history_malus,
     },
     lookups::HM_CLOCK_KEYS,
-    movepicker::{MovePicker, Stage},
+    movepicker::{MovePicker, Stage, MVV_SCORE},
     search::pv::PVariation,
     searchinfo::SearchInfo,
     tablebases::{self, probe::WDL},
@@ -1253,6 +1253,7 @@ pub fn alpha_beta<NT: NodeType>(
             }
         } else {
             let capture = caphist_piece_type(&t.board, m);
+            stat_score += 200 * MVV_SCORE[capture] / 128;
             stat_score += i32::from(t.tactical_hist[to_threat][capture][moved][hist_to]);
         }
 

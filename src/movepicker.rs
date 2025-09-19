@@ -15,6 +15,7 @@ use crate::{
 
 pub const WINNING_CAPTURE_BONUS: i32 = 10_000_000;
 pub const MIN_WINNING_SEE_SCORE: i32 = WINNING_CAPTURE_BONUS - MAX_HISTORY as i32;
+pub const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
@@ -287,8 +288,6 @@ impl MovePicker {
     }
 
     pub fn score_captures(t: &ThreadData, moves: &mut [MoveListEntry]) {
-        const MVV_SCORE: [i32; 6] = [0, 2400, 2400, 4800, 9600, 0];
-
         let threats = t.board.state.threats.all;
         for m in moves {
             let from = m.mov.from();
