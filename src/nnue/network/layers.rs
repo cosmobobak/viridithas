@@ -222,9 +222,9 @@ mod x86simd {
         ptr: &Align64<[MaybeUninit<u8>; L1_SIZE]>,
     ) -> &Align64<[i32; L1_SIZE / 4]> {
         let ptr = from_ref(ptr);
-        // check that the reference is aligned to the register alignment
-        debug_assert!((ptr as usize) % std::mem::align_of::<i32>() == 0);
-        debug_assert!((ptr as usize) % std::mem::align_of::<Align64<[i32; L1_SIZE / 4]>>() == 0);
+        // check that the reference is aligned:
+        debug_assert!(ptr.cast::<i32>().is_aligned());
+        debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
         // cast:
         &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>()
     }

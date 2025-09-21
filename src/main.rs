@@ -102,14 +102,14 @@ fn main() -> anyhow::Result<()> {
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }) => datagen::gen_data_main(datagen::DataGenOptionsBuilder {
             games,
             threads,
             tbs,
             book,
-            depth_limit,
+            nodes,
             dfrc,
         }),
         Some(Bench { depth }) => {

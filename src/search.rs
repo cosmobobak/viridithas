@@ -389,7 +389,7 @@ fn iterative_deepening<ThTy: SmpThreadType>(t: &mut ThreadData) {
                         .clock
                         .report_aspiration_fail(t.depth, Bound::Upper, &t.info.conf);
                 }
-                beta = (alpha + beta) / 2;
+                beta = i32::midpoint(alpha, beta);
                 alpha = (pv.score - delta).max(-INFINITY);
                 reduction = 0;
                 // search failed low, so we might have to

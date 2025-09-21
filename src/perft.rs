@@ -186,7 +186,6 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         assert_eq!(perft(&mut pos, 1), 48, "got {}", {
@@ -206,7 +205,6 @@ mod tests {
         use super::*;
 
         let mut pos = Board::new();
-        std::env::set_var("RUST_BACKTRACE", "1");
         pos.set_startpos();
         assert_eq!(perft(&mut pos, 1), 20, "got {}", {
             pos.legal_moves()
@@ -282,7 +280,6 @@ mod tests {
         const TEST_FEN: &str =
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
@@ -310,7 +307,6 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/R5k1 b - - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
@@ -337,7 +333,6 @@ mod tests {
         use super::*;
         const TEST_FEN: &str = "r7/P2r4/7R/8/5p2/5K2/3p2P1/2R3k1 b - - 0 1";
 
-        std::env::set_var("RUST_BACKTRACE", "1");
         let mut pos = Board::new();
         pos.set_from_fen(TEST_FEN).unwrap();
         let pool = threadpool::make_worker_threads(1);
