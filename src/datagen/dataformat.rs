@@ -10,8 +10,8 @@ use crate::{
     tablebases::probe::WDL,
 };
 
-use self::marlinformat::{util::I16Le, PackedBoard};
-use anyhow::{anyhow, Context};
+use self::marlinformat::{PackedBoard, util::I16Le};
+use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
 
 mod marlinformat;
@@ -258,10 +258,10 @@ impl Game {
         let mut cnt = 0;
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
-        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
-            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
-                return 0;
-            }
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get())
+            && u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval
+        {
+            return 0;
         }
         for (mv, eval) in &self.moves {
             let eval = eval.get();
@@ -283,10 +283,10 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
-        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
-            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
-                return Ok(());
-            }
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get())
+            && u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval
+        {
+            return Ok(());
         }
         // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
@@ -309,10 +309,10 @@ impl Game {
         let (mut board, _, wdl, _) = self.initial_position.unpack();
         let outcome = WDL::from_packed(wdl);
 
-        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get()) {
-            if u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval {
-                return Ok(());
-            }
+        if let Some(opening_eval) = self.moves.first().map(|(_, e)| e.get())
+            && u32::from(opening_eval.unsigned_abs()) > filter.max_opening_eval
+        {
+            return Ok(());
         }
         // record all the positions that pass the filter.
         for (mv, eval) in &self.moves {
@@ -336,9 +336,9 @@ impl Game {
                         f32::from(wdl) / 2.0,
                     )
                     .map_err(|e| anyhow!(e))
-                    .with_context(|| {
-                        "Failed to convert raw components into bulletformat::ChessBoard."
-                    })?,
+                    .with_context(
+                        || "Failed to convert raw components into bulletformat::ChessBoard.",
+                    )?,
                 )?;
             }
             board.make_move_simple(*mv);

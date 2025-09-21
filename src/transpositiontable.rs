@@ -1,13 +1,13 @@
 use std::{
-    mem::{size_of, MaybeUninit},
-    sync::atomic::{AtomicU64, AtomicU8, Ordering},
+    mem::{MaybeUninit, size_of},
+    sync::atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
 use crate::{
     chess::chessmove::Move,
     evaluation::MINIMUM_TB_WIN_SCORE,
     threadpool::{self, ScopeExt},
-    util::{self, depth::CompactDepthStorage, MEGABYTE},
+    util::{self, MEGABYTE, depth::CompactDepthStorage},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,14 +64,17 @@ unsafe fn threaded_memset_zero(
                 // with many threads we can hit this
                 break;
             }
-            let slice_ptr = ptr.add(start);
+            // Safety: Resultant pointer is in-bounds.
+            let slice_ptr = unsafe { ptr.add(start) };
             let slice_len = end.checked_sub(start).unwrap();
             // launder address
             let addr = slice_ptr as usize;
             handles.push(s.spawn_into(
                 move || {
                     let slice_ptr = addr as *mut u8;
-                    std::ptr::write_bytes(slice_ptr, 0, slice_len);
+                    // Safety: Slice is in-bounds and is disjoint with the other
+                    // threads' slices.
+                    unsafe { std::ptr::write_bytes(slice_ptr, 0, slice_len) };
                 },
                 thread,
             ));
@@ -423,7 +426,7 @@ impl TTView<'_> {
         // doesn't really do anything particularly dangerous anyway.
         #[cfg(target_arch = "x86_64")]
         unsafe {
-            use std::arch::x86_64::{_mm_prefetch, _MM_HINT_T0};
+            use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
 
             // get a reference to the entry in the table:
             let index = self.wrap_key(key);

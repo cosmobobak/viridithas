@@ -5,6 +5,7 @@ use std::{
 
 use crate::chess::{
     piece::PieceType,
+    squareset::SquareSet,
     types::{File, Square},
 };
 
@@ -160,6 +161,13 @@ impl Move {
 
     pub const fn display(self, chess960: bool) -> MoveDisplay {
         MoveDisplay { m: self, chess960 }
+    }
+
+    pub fn is_double_pawn_push_ranks(self) -> bool {
+        let to = self.to().as_set();
+        let from = self.from().as_set();
+        (SquareSet::RANK_4 | SquareSet::RANK_5) & to != SquareSet::EMPTY
+            && (SquareSet::RANK_2 | SquareSet::RANK_7) & from != SquareSet::EMPTY
     }
 }
 

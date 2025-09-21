@@ -1,6 +1,6 @@
 use crate::{
     chess::piece::Colour,
-    nnue::network::{feature::FeatureIndex, MovedPiece, UpdateBuffer, INPUT, L1_SIZE},
+    nnue::network::{INPUT, L1_SIZE, MovedPiece, UpdateBuffer, feature::FeatureIndex},
     util::Align64,
 };
 
@@ -39,16 +39,18 @@ unsafe fn slice_to_aligned(slice: &[i16]) -> &Align64<[i16; L1_SIZE]> {
     // don't immediately cast to Align64, as we want to check the alignment first.
     let ptr = slice.as_ptr();
     debug_assert_eq!(ptr.align_offset(64), 0);
-    // alignments are sensible, so we can safely cast.
+    // Safety: alignments are sensible, so we can safely cast.
     #[allow(clippy::cast_ptr_alignment)]
-    &*ptr.cast()
+    unsafe {
+        &*ptr.cast()
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
 mod x86simd {
     use arrayvec::ArrayVec;
 
-    use super::{slice_to_aligned, Align64, FeatureIndex, INPUT, L1_SIZE};
+    use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
     use crate::nnue::simd::{self, I16_CHUNK_SIZE};
 
     /// Apply add/subtract updates in place.
@@ -229,7 +231,7 @@ mod x86simd {
 mod generic {
     use arrayvec::ArrayVec;
 
-    use super::{slice_to_aligned, Align64, FeatureIndex, INPUT, L1_SIZE};
+    use super::{Align64, FeatureIndex, INPUT, L1_SIZE, slice_to_aligned};
 
     /// Apply add/subtract updates in place.
     pub fn vector_update_inplace(

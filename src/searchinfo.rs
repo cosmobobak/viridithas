@@ -1,10 +1,11 @@
 use std::sync::{
+    Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
-    mpsc, Mutex,
+    mpsc,
 };
 
 use crate::{
-    search::{parameters::Config, LMTable},
+    search::{LMTable, parameters::Config},
     timemgmt::TimeManager,
     uci,
     util::BatchedAtomicCounter,

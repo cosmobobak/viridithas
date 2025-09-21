@@ -6,30 +6,25 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 
 use arrayvec::ArrayVec;
 use movegen::{MAX_POSITION_MOVES, RAY_BETWEEN, RAY_FULL};
 
 use crate::{
     chess::{
-        board::movegen::{
-            bishop_attacks, king_attacks, knight_attacks, pawn_attacks, rook_attacks, MoveList,
-        },
+        CHESS960,
+        board::movegen::{MoveList, bishop_attacks, pawn_attacks, rook_attacks},
         chessmove::Move,
         piece::{Black, Col, Colour, Piece, PieceType, White},
-        piecelayout::Threats,
         squareset::SquareSet,
         types::{CastlingRights, CheckState, File, Rank, Square, State},
-        CHESS960,
     },
     cuckoo,
     lookups::{CASTLE_KEYS, EP_KEYS, HM_CLOCK_KEYS, PIECE_KEYS, SIDE_KEY},
     nnue::network::{FeatureUpdate, MovedPiece, NNUEState, UpdateBuffer},
     search::pv::PVariation,
 };
-
-use super::types::Keys;
 
 #[derive(PartialEq, Eq)]
 pub struct Board {
@@ -150,139 +145,14 @@ impl Board {
         &mut self.state.castle_perm
     }
 
-    pub fn generate_pos_keys(&self) -> Keys {
-        let mut keys = Keys::default();
-        self.state.bbs.visit_pieces(|sq, piece| {
-            let piece_key = PIECE_KEYS[piece][sq];
-            keys.zobrist ^= piece_key;
-            if piece.piece_type() == PieceType::Pawn {
-                keys.pawn ^= piece_key;
-            } else {
-                keys.non_pawn[piece.colour()] ^= piece_key;
-                if piece.piece_type() == PieceType::King {
-                    keys.major ^= piece_key;
-                    keys.minor ^= piece_key;
-                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    keys.major ^= piece_key;
-                } else {
-                    keys.minor ^= piece_key;
-                }
-            }
-        });
-
-        if self.side == Colour::White {
-            keys.zobrist ^= SIDE_KEY;
-        }
-
-        if let Some(ep_sq) = self.state.ep_square {
-            keys.zobrist ^= EP_KEYS[ep_sq];
-        }
-
-        keys.zobrist ^= CASTLE_KEYS[self.state.castle_perm.hashkey_index()];
-
-        debug_assert!(self.state.fifty_move_counter <= 100);
-
-        keys
-    }
-
     #[cfg(feature = "datagen")]
     pub fn regenerate_zobrist(&mut self) {
-        self.state.keys = self.generate_pos_keys();
+        self.state.keys = self.state.generate_pos_keys(self.side);
     }
 
     #[cfg(feature = "datagen")]
     pub fn regenerate_threats(&mut self) {
-        self.state.threats = self.generate_threats(self.side);
-    }
-
-    pub fn generate_pinned(&self, side: Colour) -> SquareSet {
-        use PieceType::{Bishop, Queen, Rook};
-
-        let mut pinned = SquareSet::EMPTY;
-
-        let bbs = &self.state.bbs;
-
-        let king = bbs.king_sq(side);
-
-        let us = bbs.colours[side];
-        let them = bbs.colours[!side];
-
-        let their_diags = (bbs.pieces[Queen] | bbs.pieces[Bishop]) & them;
-        let their_orthos = (bbs.pieces[Queen] | bbs.pieces[Rook]) & them;
-
-        let potential_attackers =
-            bishop_attacks(king, them) & their_diags | rook_attacks(king, them) & their_orthos;
-
-        for potential_attacker in potential_attackers {
-            let maybe_pinned = us & RAY_BETWEEN[king][potential_attacker];
-            if maybe_pinned.one() {
-                pinned |= maybe_pinned;
-            }
-        }
-
-        pinned
-    }
-
-    pub fn generate_threats(&self, side: Colour) -> Threats {
-        let mut checkers = SquareSet::EMPTY;
-
-        let bbs = &self.state.bbs;
-        let us = bbs.colours[side];
-        let them = bbs.colours[!side];
-        let their_pawns = bbs.pieces[PieceType::Pawn] & them;
-        let their_knights = bbs.pieces[PieceType::Knight] & them;
-        let their_bishops = bbs.pieces[PieceType::Bishop] & them;
-        let their_rooks = bbs.pieces[PieceType::Rook] & them;
-        let their_queens = bbs.pieces[PieceType::Queen] & them;
-        let their_king = (bbs.pieces[PieceType::King] & them).first().unwrap();
-        let blockers = us | them;
-
-        // compute threats
-        let leq_pawn = match side {
-            Colour::White => their_pawns.south_east_one() | their_pawns.south_west_one(),
-            Colour::Black => their_pawns.north_east_one() | their_pawns.north_west_one(),
-        };
-
-        let mut leq_minor = leq_pawn;
-        for sq in their_knights {
-            leq_minor |= knight_attacks(sq);
-        }
-        for sq in their_bishops {
-            leq_minor |= bishop_attacks(sq, blockers);
-        }
-        let mut leq_rook = leq_minor;
-        for sq in their_rooks {
-            leq_rook |= rook_attacks(sq, blockers);
-        }
-        let mut all_threats = leq_rook;
-        for sq in their_queens {
-            all_threats |= bishop_attacks(sq, blockers);
-            all_threats |= rook_attacks(sq, blockers);
-        }
-        all_threats |= king_attacks(their_king);
-
-        // compute checkers
-        let our_king_bb = us & bbs.pieces[PieceType::King];
-        let our_king_sq = our_king_bb.first().unwrap();
-        let backwards_from_king = match side {
-            Colour::White => our_king_bb.north_east_one() | our_king_bb.north_west_one(),
-            Colour::Black => our_king_bb.south_east_one() | our_king_bb.south_west_one(),
-        };
-        checkers |= backwards_from_king & their_pawns;
-        let knight_attacks = knight_attacks(our_king_sq);
-        checkers |= knight_attacks & their_knights;
-        let diag_attacks = bishop_attacks(our_king_sq, blockers);
-        checkers |= diag_attacks & (their_bishops | their_queens);
-        let ortho_attacks = rook_attacks(our_king_sq, blockers);
-        checkers |= ortho_attacks & (their_rooks | their_queens);
-
-        Threats {
-            all: all_threats,
-            leq_pawn,
-            leq_minor,
-            leq_rook,
-            checkers,
-        }
+        self.state.threats = self.state.bbs.generate_threats(self.side);
     }
 
     pub fn reset(&mut self) {
@@ -331,11 +201,11 @@ impl Board {
             Some(File::from_index(kingside_file as u8).unwrap()),
             Some(File::from_index(queenside_file as u8).unwrap()),
         );
-        self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side);
+        self.state.keys = self.state.generate_pos_keys(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
         self.state.pinned = [
-            self.generate_pinned(Colour::White),
-            self.generate_pinned(Colour::Black),
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
         ];
     }
 
@@ -387,11 +257,11 @@ impl Board {
             Some(File::from_index(black_kingside_file as u8).unwrap()),
             Some(File::from_index(black_queenside_file as u8).unwrap()),
         );
-        self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side);
+        self.state.keys = self.state.generate_pos_keys(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
         self.state.pinned = [
-            self.generate_pinned(Colour::White),
-            self.generate_pinned(Colour::Black),
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
         ];
     }
 
@@ -538,11 +408,11 @@ impl Board {
         self.set_halfmove(info_parts.next())?;
         self.set_fullmove(info_parts.next())?;
 
-        self.state.keys = self.generate_pos_keys();
-        self.state.threats = self.generate_threats(self.side);
+        self.state.keys = self.state.generate_pos_keys(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
         self.state.pinned = [
-            self.generate_pinned(Colour::White),
-            self.generate_pinned(Colour::Black),
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
         ];
 
         Ok(())
@@ -626,12 +496,18 @@ impl Board {
                 if white_king.rank() != Rank::One
                     && shredder_castling.iter().any(u8::is_ascii_uppercase)
                 {
-                    bail!(format!("FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                    bail!(format!(
+                        "FEN string is invalid, white king is not on the back rank, but got uppercase castling characters, implying present castling rights, got \"{}\"",
+                        std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
+                    ));
                 }
                 if black_king.rank() != Rank::Eight
                     && shredder_castling.iter().any(u8::is_ascii_lowercase)
                 {
-                    bail!(format!("FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                    bail!(format!(
+                        "FEN string is invalid, black king is not on the back rank, but got lowercase castling characters, implying present castling rights, got \"{}\"",
+                        std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
+                    ));
                 }
                 for &c in shredder_castling {
                     match c {
@@ -639,7 +515,12 @@ impl Board {
                             let file = File::from_index(c - b'A').unwrap();
                             let king_file = white_king.file();
                             if file == king_file {
-                                bail!(format!("FEN string is invalid, white king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                                bail!(format!(
+                                    "FEN string is invalid, white king is on file {:?}, but got castling rights on that file - got \"{}\"",
+                                    king_file,
+                                    std::str::from_utf8(shredder_castling)
+                                        .unwrap_or("<invalid utf8>")
+                                ));
                             }
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
@@ -653,7 +534,12 @@ impl Board {
                             let file = File::from_index(c - b'a').unwrap();
                             let king_file = black_king.file();
                             if file == king_file {
-                                bail!(format!("FEN string is invalid, black king is on file {:?}, but got castling rights on that file - got \"{}\"", king_file, std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                                bail!(format!(
+                                    "FEN string is invalid, black king is on file {:?}, but got castling rights on that file - got \"{}\"",
+                                    king_file,
+                                    std::str::from_utf8(shredder_castling)
+                                        .unwrap_or("<invalid utf8>")
+                                ));
                             }
                             if file > king_file {
                                 // castling rights are to the right of the king, so it's "kingside" castling rights.
@@ -664,7 +550,10 @@ impl Board {
                             }
                         }
                         _ => {
-                            bail!(format!("FEN string is invalid, expected castling part to be of the form 'AHah', 'Bd', or '-', got \"{}\"", std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")));
+                            bail!(format!(
+                                "FEN string is invalid, expected castling part to be of the form 'AHah', 'Bd', or '-', got \"{}\"",
+                                std::str::from_utf8(shredder_castling).unwrap_or("<invalid utf8>")
+                            ));
                         }
                     }
                 }
@@ -726,13 +615,13 @@ impl Board {
             None => bail!("FEN string is invalid, expected fullmove number part.".to_string()),
             Some(fullmove_number) => {
                 let fullmove_number = std::str::from_utf8(fullmove_number)
-                    .with_context(|| {
-                        "FEN string is invalid, expected fullmove number part to be valid UTF-8"
-                    })?
+                    .with_context(
+                        || "FEN string is invalid, expected fullmove number part to be valid UTF-8",
+                    )?
                     .parse::<usize>()
-                    .with_context(|| {
-                        "FEN string is invalid, expected fullmove number part to be a number"
-                    })?;
+                    .with_context(
+                        || "FEN string is invalid, expected fullmove number part to be a number",
+                    )?;
                 self.ply = (fullmove_number - 1) * 2;
                 if self.side == Colour::Black {
                     self.ply += 1;
@@ -821,10 +710,8 @@ impl Board {
             return false;
         }
 
-        if let Some(captured_piece) = captured_piece {
-            if captured_piece.colour() == self.side {
-                return false;
-            }
+        if captured_piece.is_some_and(|piece| piece.colour() == self.side) {
+            return false;
         }
 
         if captured_piece.is_some()
@@ -1052,21 +939,6 @@ impl Board {
         self.captured_piece(m).is_some()
     }
 
-    /// Determines whether this move would be a double pawn push in the current position.
-    pub fn is_double_pawn_push(&self, m: Move) -> bool {
-        if !(SquareSet::RANK_4 | SquareSet::RANK_5).contains_square(m.to()) {
-            return false;
-        }
-        let from = m.from();
-        if !(SquareSet::RANK_2 | SquareSet::RANK_7).contains_square(from) {
-            return false;
-        }
-        let Some(piece_moved) = self.state.mailbox[from] else {
-            return false;
-        };
-        piece_moved.piece_type() == PieceType::Pawn
-    }
-
     /// Determines whether this move would be tactical in the current position.
     pub fn is_tactical(&self, m: Move) -> bool {
         m.is_promo() || m.is_ep() || self.is_capture(m)
@@ -1152,7 +1024,7 @@ impl Board {
         self.state.ep_square = None;
         if piece.piece_type() == PieceType::Pawn {
             self.state.fifty_move_counter = 0;
-            if self.is_double_pawn_push(m)
+            if m.is_double_pawn_push_ranks()
                 && (m.to().as_set().west_one() | m.to().as_set().east_one())
                     & self.state.bbs.pieces[PieceType::Pawn]
                     & self.state.bbs.colours[side.flip()]
@@ -1255,10 +1127,10 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
         self.state.pinned = [
-            self.generate_pinned(Colour::White),
-            self.generate_pinned(Colour::Black),
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
         ];
 
         #[cfg(debug_assertions)]
@@ -1302,7 +1174,7 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        self.state.threats = self.generate_threats(self.side);
+        self.state.threats = self.state.bbs.generate_threats(self.side);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1435,8 +1307,8 @@ impl Board {
         self.generate_moves(&mut list);
 
         let frc_cleanup = !CHESS960.load(Ordering::Relaxed);
-        let res = list
-            .iter_moves()
+
+        list.iter_moves()
             .copied()
             .find(|&m| {
                 let m_to = if frc_cleanup && m.is_castle() {
@@ -1458,9 +1330,7 @@ impl Board {
                         || m.promotion_type().and_then(PieceType::promo_char).unwrap()
                             == san_bytes[4] as char)
             })
-            .with_context(|| IllegalMove(uci.to_string()));
-
-        res
+            .with_context(|| IllegalMove(uci.to_string()))
     }
 
     pub fn san(&mut self, m: Move) -> Option<String> {
@@ -1524,8 +1394,9 @@ impl Board {
             None => "",
             _ => unreachable!(),
         };
-        let san =
-            format!("{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}");
+        let san = format!(
+            "{piece_prefix}{disambiguator1}{disambiguator2}{capture_sigil}{to_sq}{promo_str}{check_char}"
+        );
         Some(san)
     }
 
@@ -1720,16 +1591,18 @@ impl Board {
     }
 
     #[cfg(any(feature = "datagen", test))]
-    pub fn outcome(&self) -> GameOutcome {
+    pub fn outcome(&self) -> Option<GameOutcome> {
+        use DrawType::{FiftyMoves, InsufficientMaterial, Repetition, Stalemate};
+        use GameOutcome::{BlackWin, Draw, WhiteWin};
         if self.state.fifty_move_counter >= 100 {
-            return GameOutcome::Draw(DrawType::FiftyMoves);
+            return Some(Draw(FiftyMoves));
         }
         let mut reps = 1;
         for undo in self.history.iter().rev().skip(1).step_by(2) {
             if undo.keys.zobrist == self.state.keys.zobrist {
                 reps += 1;
                 if reps == 3 {
-                    return GameOutcome::Draw(DrawType::Repetition);
+                    return Some(Draw(Repetition));
                 }
             }
             // optimisation: if the fifty move counter was zeroed, then any prior positions will not be repetitions.
@@ -1738,7 +1611,7 @@ impl Board {
             }
         }
         if self.is_insufficient_material() {
-            return GameOutcome::Draw(DrawType::InsufficientMaterial);
+            return Some(Draw(InsufficientMaterial));
         }
         let mut move_list = MoveList::new();
         self.generate_moves(&mut move_list);
@@ -1750,14 +1623,14 @@ impl Board {
             }
         }
         if legal_moves {
-            GameOutcome::Ongoing
+            None
         } else if self.in_check() {
             match self.side {
-                Colour::White => GameOutcome::BlackWin(WinType::Mate),
-                Colour::Black => GameOutcome::WhiteWin(WinType::Mate),
+                Colour::White => Some(BlackWin(WinType::Mate)),
+                Colour::Black => Some(WhiteWin(WinType::Mate)),
             }
         } else {
-            GameOutcome::Draw(DrawType::Stalemate)
+            Some(Draw(Stalemate))
         }
     }
 
@@ -1775,10 +1648,9 @@ impl Board {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameOutcome {
-    WhiteWin(WinType),
     BlackWin(WinType),
     Draw(DrawType),
-    Ongoing,
+    WhiteWin(WinType),
 }
 
 #[allow(dead_code)]
@@ -1805,10 +1677,9 @@ impl GameOutcome {
     pub const fn as_packed_u8(self) -> u8 {
         // 0 for black win, 1 for draw, 2 for white win
         match self {
-            Self::WhiteWin(_) => 2,
             Self::BlackWin(_) => 0,
             Self::Draw(_) => 1,
-            Self::Ongoing => panic!("Game is not over!"),
+            Self::WhiteWin(_) => 2,
         }
     }
 }
@@ -1924,46 +1795,39 @@ mod tests {
         use super::Board;
         use super::{DrawType, GameOutcome};
         use crate::{chess::chessmove::Move, chess::types::Square};
+        use DrawType::{FiftyMoves, InsufficientMaterial, Repetition, Stalemate};
+        use GameOutcome::Draw;
 
         let fiftymove_draw =
             Board::from_fen("rnbqkb1r/pppppppp/5n2/8/3N4/8/PPPPPPPP/RNBQKB1R b KQkq - 100 2")
                 .unwrap();
-        assert_eq!(
-            fiftymove_draw.outcome(),
-            GameOutcome::Draw(DrawType::FiftyMoves)
-        );
+        assert_eq!(fiftymove_draw.outcome(), Some(Draw(FiftyMoves)));
         let mut draw_repetition = Board::default();
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::G1, Square::F3));
         draw_repetition.make_move_simple(Move::new(Square::B8, Square::C6));
-        assert_eq!(draw_repetition.outcome(), GameOutcome::Ongoing);
+        assert_eq!(draw_repetition.outcome(), None);
         draw_repetition.make_move_simple(Move::new(Square::F3, Square::G1));
         draw_repetition.make_move_simple(Move::new(Square::C6, Square::B8));
-        assert_eq!(
-            draw_repetition.outcome(),
-            GameOutcome::Draw(DrawType::Repetition)
-        );
+        assert_eq!(draw_repetition.outcome(), Some(Draw(Repetition)));
         let stalemate = Board::from_fen("7k/8/6Q1/8/8/8/8/K7 b - - 0 1").unwrap();
-        assert_eq!(stalemate.outcome(), GameOutcome::Draw(DrawType::Stalemate));
+        assert_eq!(stalemate.outcome(), Some(Draw(Stalemate)));
         let insufficient_material_bare_kings =
             Board::from_fen("8/8/5k2/8/8/2K5/8/8 b - - 0 1").unwrap();
         assert_eq!(
             insufficient_material_bare_kings.outcome(),
-            GameOutcome::Draw(DrawType::InsufficientMaterial)
+            Some(Draw(InsufficientMaterial))
         );
         let insufficient_material_knights =
             Board::from_fen("8/8/5k2/8/2N5/2K2N2/8/8 b - - 0 1").unwrap();
-        assert_eq!(
-            insufficient_material_knights.outcome(),
-            GameOutcome::Ongoing
-        );
         // using FIDE rules.
+        assert_eq!(insufficient_material_knights.outcome(), None);
     }
 
     #[test]
