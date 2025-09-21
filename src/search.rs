@@ -968,7 +968,7 @@ pub fn alpha_beta<NT: NodeType>(
     t.ss[height].eval = eval;
 
     // value-difference based policy update.
-    if let Some(ss_prev) = t.ss.get(height - 1)
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && let Some(mov) = ss_prev.searching
         && ss_prev.static_eval != VALUE_NONE
         && static_eval != VALUE_NONE
@@ -1543,7 +1543,7 @@ pub fn alpha_beta<NT: NodeType>(
         update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
     }
 
-    if let Some(ss_prev) = t.ss.get(height - 1)
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
         && flag == Bound::Upper
         && (!quiets_tried.is_empty() || depth > 3)
         && let Some(mov) = ss_prev.searching

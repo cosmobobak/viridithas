@@ -5,10 +5,13 @@ use std::{
     str::FromStr,
 };
 
-use crate::chess::{
-    piece::{Colour, Piece},
-    piecelayout::{PieceLayout, Threats},
-    squareset::SquareSet,
+use crate::{
+    chess::{
+        piece::{Colour, Piece, PieceType},
+        piecelayout::{PieceLayout, Threats},
+        squareset::SquareSet,
+    },
+    lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
 };
 
 use super::piece::Col;
@@ -420,7 +423,7 @@ impl<T> IndexMut<ContHistIndex> for [[T; 64]; 12] {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 /// Zobrist keys for a position.
 ///
@@ -439,7 +442,7 @@ pub struct Keys {
 }
 
 /// Full state for a chess position.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct State {
     /// Which rooks can castle.
     pub castle_perm: CastlingRights,
@@ -472,6 +475,43 @@ impl Default for State {
             pinned: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
+    }
+}
+
+impl State {
+    pub fn generate_pos_keys(&self, side: Colour) -> Keys {
+        let mut keys = Keys::default();
+        self.bbs.visit_pieces(|sq, piece| {
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
+            if piece.piece_type() == PieceType::Pawn {
+                keys.pawn ^= piece_key;
+            } else {
+                keys.non_pawn[piece.colour()] ^= piece_key;
+                if piece.piece_type() == PieceType::King {
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    keys.major ^= piece_key;
+                } else {
+                    keys.minor ^= piece_key;
+                }
+            }
+        });
+
+        if side == Colour::White {
+            keys.zobrist ^= SIDE_KEY;
+        }
+
+        if let Some(ep_sq) = self.ep_square {
+            keys.zobrist ^= EP_KEYS[ep_sq];
+        }
+
+        keys.zobrist ^= CASTLE_KEYS[self.castle_perm.hashkey_index()];
+
+        debug_assert!(self.fifty_move_counter <= 100);
+
+        keys
     }
 }
 
