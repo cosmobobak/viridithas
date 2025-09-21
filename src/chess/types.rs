@@ -423,7 +423,7 @@ impl<T> IndexMut<ContHistIndex> for [[T; 64]; 12] {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 #[repr(C)]
 /// Zobrist keys for a position.
 ///
@@ -442,7 +442,7 @@ pub struct Keys {
 }
 
 /// Full state for a chess position.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     /// Which rooks can castle.
     pub castle_perm: CastlingRights,

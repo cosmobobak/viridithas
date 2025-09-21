@@ -45,7 +45,7 @@ impl Clone for Board {
         #[cfg(debug_assertions)]
         eprintln!("info string copying board");
         Self {
-            state: self.state,
+            state: self.state.clone(),
             side: self.side,
             ply: self.ply,
             height: self.height,
@@ -956,17 +956,15 @@ impl Board {
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
 
-        let mut state = self.state;
-
-        self.history.push(state);
+        self.history.push(self.state.clone());
 
         let from = m.from();
         let mut to = m.to();
         let castle = m.is_castle();
         let side = self.side;
-        let piece = state.mailbox[from].unwrap();
-        let captured = if castle { None } else { state.mailbox[to] };
-        let mut castling_perm = state.castle_perm;
+        let piece = self.state.mailbox[from].unwrap();
+        let captured = if castle { None } else { self.state.mailbox[to] };
+        let mut castling_perm = self.state.castle_perm;
 
         // from, to, and piece are valid unless this is a castling move,
         // as castling is encoded as king-captures-rook.
@@ -987,10 +985,10 @@ impl Board {
             }
             .unwrap();
             let to_clear = Piece::new(side.flip(), PieceType::Pawn);
-            state.bbs.clear_piece_at(clear_at, to_clear);
+            self.state.bbs.clear_piece_at(clear_at, to_clear);
             update_buffer.clear_piece(clear_at, to_clear);
         } else if castle {
-            state.bbs.clear_piece_at(from, piece);
+            self.state.bbs.clear_piece_at(from, piece);
             let to_file = Some(to.file());
             let rook_from = to;
             let rook_to = if to_file == castling_perm.kingside(side) {
@@ -1007,60 +1005,60 @@ impl Board {
             }
             if rook_from != rook_to {
                 let rook = Piece::new(side, PieceType::Rook);
-                state.bbs.move_piece(rook_from, rook_to, rook);
+                self.state.bbs.move_piece(rook_from, rook_to, rook);
                 update_buffer.move_piece(rook_from, rook_to, rook);
             }
         }
 
-        state.fifty_move_counter += 1;
+        self.state.fifty_move_counter += 1;
 
         if let Some(captured) = captured {
-            state.fifty_move_counter = 0;
-            state.bbs.clear_piece_at(to, captured);
+            self.state.fifty_move_counter = 0;
+            self.state.bbs.clear_piece_at(to, captured);
             update_buffer.clear_piece(to, captured);
         }
 
-        if let Some(ep_sq) = state.ep_square {
-            state.keys.zobrist ^= EP_KEYS[ep_sq];
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
         }
-        state.ep_square = None;
+        self.state.ep_square = None;
         if piece.piece_type() == PieceType::Pawn {
-            state.fifty_move_counter = 0;
+            self.state.fifty_move_counter = 0;
             if m.is_double_pawn_push_ranks()
                 && (m.to().as_set().west_one() | m.to().as_set().east_one())
-                    & state.bbs.pieces[PieceType::Pawn]
-                    & state.bbs.colours[side.flip()]
+                    & self.state.bbs.pieces[PieceType::Pawn]
+                    & self.state.bbs.colours[side.flip()]
                     != SquareSet::EMPTY
             {
                 if side == Colour::White {
-                    state.ep_square = from.add(8);
-                    debug_assert!(state.ep_square.unwrap().rank() == Rank::Three);
+                    self.state.ep_square = from.add(8);
+                    debug_assert!(self.state.ep_square.unwrap().rank() == Rank::Three);
                 } else {
-                    state.ep_square = from.sub(8);
-                    debug_assert!(state.ep_square.unwrap().rank() == Rank::Six);
+                    self.state.ep_square = from.sub(8);
+                    debug_assert!(self.state.ep_square.unwrap().rank() == Rank::Six);
                 }
             }
         }
-        if let Some(ep_sq) = state.ep_square {
-            state.keys.zobrist ^= EP_KEYS[ep_sq];
+        if let Some(ep_sq) = self.state.ep_square {
+            self.state.keys.zobrist ^= EP_KEYS[ep_sq];
         }
 
         if let Some(promo) = m.promotion_type() {
             let promo = Piece::new(side, promo);
             debug_assert!(promo.piece_type().legal_promo());
-            state.bbs.clear_piece_at(from, piece);
-            state.bbs.set_piece_at(to, promo);
+            self.state.bbs.clear_piece_at(from, piece);
+            self.state.bbs.set_piece_at(to, promo);
             update_buffer.add_piece(to, promo);
         } else if castle {
-            state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
+            self.state.bbs.set_piece_at(to, piece); // stupid hack for piece-swapping
         } else {
-            state.bbs.move_piece(from, to, piece);
+            self.state.bbs.move_piece(from, to, piece);
         }
 
         self.side = self.side.flip();
 
         // hash out the castling to insert it again after updating rights.
-        state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
         // update castling rights
         if piece == Piece::WR && from.rank() == Rank::One {
             if Some(from.file()) == castling_perm.kingside(Colour::White) {
@@ -1084,44 +1082,44 @@ impl Board {
         } else if to.rank() == Rank::Eight {
             castling_perm.remove::<Black>(to.file());
         }
-        state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
-        state.castle_perm = castling_perm;
+        self.state.keys.zobrist ^= CASTLE_KEYS[castling_perm.hashkey_index()];
+        self.state.castle_perm = castling_perm;
 
         // apply all the updates to the zobrist hash
-        state.keys.zobrist ^= SIDE_KEY;
+        self.state.keys.zobrist ^= SIDE_KEY;
         for &FeatureUpdate { sq, piece } in update_buffer.subs() {
-            state.mailbox[sq] = None;
+            self.state.mailbox[sq] = None;
             let piece_key = PIECE_KEYS[piece][sq];
-            state.keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                state.keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                state.keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    state.keys.major ^= piece_key;
-                    state.keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    state.keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    state.keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
         for &FeatureUpdate { sq, piece } in update_buffer.adds() {
-            state.mailbox[sq] = Some(piece);
+            self.state.mailbox[sq] = Some(piece);
             let piece_key = PIECE_KEYS[piece][sq];
-            state.keys.zobrist ^= piece_key;
+            self.state.keys.zobrist ^= piece_key;
             if piece.piece_type() == PieceType::Pawn {
-                state.keys.pawn ^= piece_key;
+                self.state.keys.pawn ^= piece_key;
             } else {
-                state.keys.non_pawn[piece.colour()] ^= piece_key;
+                self.state.keys.non_pawn[piece.colour()] ^= piece_key;
                 if piece.piece_type() == PieceType::King {
-                    state.keys.major ^= piece_key;
-                    state.keys.minor ^= piece_key;
+                    self.state.keys.major ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
-                    state.keys.major ^= piece_key;
+                    self.state.keys.major ^= piece_key;
                 } else {
-                    state.keys.minor ^= piece_key;
+                    self.state.keys.minor ^= piece_key;
                 }
             }
         }
@@ -1129,13 +1127,11 @@ impl Board {
         self.ply += 1;
         self.height += 1;
 
-        state.threats = state.bbs.generate_threats(self.side);
-        state.pinned = [
-            state.bbs.generate_pinned(Colour::White),
-            state.bbs.generate_pinned(Colour::Black),
+        self.state.threats = self.state.bbs.generate_threats(self.side);
+        self.state.pinned = [
+            self.state.bbs.generate_pinned(Colour::White),
+            self.state.bbs.generate_pinned(Colour::Black),
         ];
-
-        self.state = state;
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
@@ -1164,25 +1160,21 @@ impl Board {
         self.check_validity().unwrap();
         debug_assert!(!self.in_check());
 
-        let mut state = self.state;
+        self.history.push(self.state.clone());
 
-        self.history.push(state);
-
-        let mut key = state.keys.zobrist;
-        if let Some(ep_sq) = state.ep_square {
+        let mut key = self.state.keys.zobrist;
+        if let Some(ep_sq) = self.state.ep_square {
             key ^= EP_KEYS[ep_sq];
         }
         key ^= SIDE_KEY;
-        state.keys.zobrist = key;
+        self.state.keys.zobrist = key;
 
-        state.ep_square = None;
+        self.state.ep_square = None;
         self.side = self.side.flip();
         self.ply += 1;
         self.height += 1;
 
-        state.threats = state.bbs.generate_threats(self.side);
-
-        self.state = state;
+        self.state.threats = self.state.bbs.generate_threats(self.side);
 
         #[cfg(debug_assertions)]
         self.check_validity().unwrap();
