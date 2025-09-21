@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use arrayvec::ArrayVec;
 use memmap2::Mmap;
 
@@ -763,11 +763,20 @@ impl NNUEParams {
             )
         };
         let expected_bytes = mem.len() as u64;
+        let decoding_start = std::time::Instant::now();
         let mut decoder = ZstdDecoder::new(EMBEDDED_NNUE)
             .with_context(|| "Failed to construct zstd decoder for NNUE weights.")?;
         let bytes_written = std::io::copy(&mut decoder, &mut mem)
             .with_context(|| "Failed to decompress NNUE weights.")?;
-        anyhow::ensure!(bytes_written == expected_bytes, "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}");
+        let decoding_time = decoding_start.elapsed();
+        println!(
+            "info string decompressed NNUE weights in {}us",
+            decoding_time.as_micros()
+        );
+        anyhow::ensure!(
+            bytes_written == expected_bytes,
+            "encountered issue while decompressing NNUE weights, expected {expected_bytes} bytes, but got {bytes_written}"
+        );
         let use_simd = cfg!(target_arch = "x86_64");
         let net = net.permute(use_simd);
 

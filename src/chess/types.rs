@@ -5,10 +5,13 @@ use std::{
     str::FromStr,
 };
 
-use crate::chess::{
-    piece::{Colour, Piece},
-    piecelayout::{PieceLayout, Threats},
-    squareset::SquareSet,
+use crate::{
+    chess::{
+        piece::{Colour, Piece, PieceType},
+        piecelayout::{PieceLayout, Threats},
+        squareset::SquareSet,
+    },
+    lookups::{CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY},
 };
 
 use super::piece::Col;
@@ -211,7 +214,8 @@ impl Square {
     /// SAFETY: you may only call this function with value of `inner` less than 64.
     pub const unsafe fn new_unchecked(inner: u8) -> Self {
         debug_assert!(inner < 64);
-        std::mem::transmute(inner)
+        // Safety: Caller's precondition.
+        unsafe { std::mem::transmute(inner) }
     }
 
     pub const fn flip_rank(self) -> Self {
@@ -300,7 +304,8 @@ impl Square {
             clippy::cast_sign_loss
         )]
         let res = self as u8 + offset;
-        Self::new_unchecked(res)
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res) }
     }
 
     /// SAFETY: You may not call this function with a square and offset such that
@@ -312,7 +317,8 @@ impl Square {
             clippy::cast_sign_loss
         )]
         let res = self as u8 - offset;
-        Self::new_unchecked(res)
+        // Safety: caller's precondition.
+        unsafe { Self::new_unchecked(res) }
     }
 
     pub const fn sub(self, offset: u8) -> Option<Self> {
@@ -469,6 +475,43 @@ impl Default for State {
             pinned: <[SquareSet; 2]>::default(),
             keys: Keys::default(),
         }
+    }
+}
+
+impl State {
+    pub fn generate_pos_keys(&self, side: Colour) -> Keys {
+        let mut keys = Keys::default();
+        self.bbs.visit_pieces(|sq, piece| {
+            let piece_key = PIECE_KEYS[piece][sq];
+            keys.zobrist ^= piece_key;
+            if piece.piece_type() == PieceType::Pawn {
+                keys.pawn ^= piece_key;
+            } else {
+                keys.non_pawn[piece.colour()] ^= piece_key;
+                if piece.piece_type() == PieceType::King {
+                    keys.major ^= piece_key;
+                    keys.minor ^= piece_key;
+                } else if matches!(piece.piece_type(), PieceType::Queen | PieceType::Rook) {
+                    keys.major ^= piece_key;
+                } else {
+                    keys.minor ^= piece_key;
+                }
+            }
+        });
+
+        if side == Colour::White {
+            keys.zobrist ^= SIDE_KEY;
+        }
+
+        if let Some(ep_sq) = self.ep_square {
+            keys.zobrist ^= EP_KEYS[ep_sq];
+        }
+
+        keys.zobrist ^= CASTLE_KEYS[self.castle_perm.hashkey_index()];
+
+        debug_assert!(self.fifty_move_counter <= 100);
+
+        keys
     }
 }
 

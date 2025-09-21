@@ -6,13 +6,13 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 
 #[cfg(test)]
 use crate::threadlocal::ThreadData;
 use crate::{
-    chess::board::{movegen::MoveList, Board},
     chess::CHESS960,
+    chess::board::{Board, movegen::MoveList},
 };
 
 pub fn perft(pos: &mut Board, depth: usize) -> u64 {
@@ -173,7 +173,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64};
 
     use crate::{
-        chess::{chessmove::Move, piece::PieceType, types::Square, CHESS960},
+        chess::{CHESS960, chessmove::Move, piece::PieceType, types::Square},
         nnue::network::NNUEParams,
         threadpool,
         transpositiontable::TT,

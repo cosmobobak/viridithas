@@ -106,7 +106,7 @@ pub enum Subcommands {
         /// Path to a book file to use for starting positions
         #[clap(long, value_name = "PATH")]
         book: Option<PathBuf>,
-        /// Maximum number of search nodes to use per move
+        /// Number of nodes to search per position.
         #[clap(long)]
         nodes: u64,
         // Whether to generate DFRC data.

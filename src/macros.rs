@@ -9,11 +9,7 @@ macro_rules! max {
         max
     }};
     ($a:expr, $b:expr) => {
-        if $a > $b {
-            $a
-        } else {
-            $b
-        }
+        if $a > $b { $a } else { $b }
     };
 }
 
@@ -28,11 +24,7 @@ macro_rules! min {
         min
     }};
     ($a:expr, $b:expr) => {
-        if $a < $b {
-            $a
-        } else {
-            $b
-        }
+        if $a < $b { $a } else { $b }
     };
 }
 

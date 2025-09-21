@@ -13,6 +13,7 @@ perf script | inferno-collapse-perf | sed \
   -e 's/;search::alpha_beta/;search::absearch/' \
   -e 's/;search::quiescence//g' \
   -e 's/;search::alpha_beta//g' \
+  -e 's/;\[unknown\]//g' \
   -e 's/<impl chess::board::Board>/Board/g' > stacks.folded
 
 # create the flamegraph

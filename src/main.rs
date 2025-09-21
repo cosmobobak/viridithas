@@ -46,9 +46,6 @@ pub static NAME: &str = "Viridithas";
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_BACKTRACE", "1");
-
     if std::env::args_os().len() == 1 {
         // fast path to UCI:
         return uci::main_loop();

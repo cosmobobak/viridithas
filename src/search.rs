@@ -13,19 +13,19 @@ use arrayvec::ArrayVec;
 use crate::{
     cfor,
     chess::{
+        CHESS960,
         board::{
-            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
             Board,
+            movegen::{self, MAX_POSITION_MOVES, RAY_FULL},
         },
         chessmove::Move,
         piece::{Colour, Piece, PieceType},
         squareset::SquareSet,
         types::{ContHistIndex, Square},
-        CHESS960,
     },
     evaluation::{
-        evaluate, is_game_theoretic_score, mate_in, mated_in, see_value, tb_loss_in, tb_win_in,
-        MATE_SCORE, MINIMUM_TB_WIN_SCORE,
+        MATE_SCORE, MINIMUM_TB_WIN_SCORE, evaluate, is_game_theoretic_score, mate_in, mated_in,
+        see_value, tb_loss_in, tb_win_in,
     },
     history::caphist_piece_type,
     historytable::{
@@ -220,30 +220,29 @@ pub fn search_position(
     }
 
     // Probe the tablebases if we're in a TB position and in a game.
-    if thread_headers[0].info.clock.is_dynamic() {
-        if let Some((best_move, score)) =
+    if thread_headers[0].info.clock.is_dynamic()
+        && let Some((best_move, score)) =
             tablebases::probe::get_tablebase_move(&thread_headers[0].board)
-        {
-            let pv = &mut thread_headers[0].pvs[1];
-            pv.load_from(best_move, &PVariation::default());
-            pv.score = score;
-            TB_HITS.store(1, Ordering::SeqCst);
-            thread_headers[0].completed = 1;
-            readout_info(
-                &thread_headers[0],
-                &thread_headers[0].info,
-                Bound::Exact,
-                1,
-                true,
+    {
+        let pv = &mut thread_headers[0].pvs[1];
+        pv.load_from(best_move, &PVariation::default());
+        pv.score = score;
+        TB_HITS.store(1, Ordering::SeqCst);
+        thread_headers[0].completed = 1;
+        readout_info(
+            &thread_headers[0],
+            &thread_headers[0].info,
+            Bound::Exact,
+            1,
+            true,
+        );
+        if thread_headers[0].info.print_to_stdout {
+            println!(
+                "bestmove {}",
+                best_move.display(CHESS960.load(Ordering::Relaxed))
             );
-            if thread_headers[0].info.print_to_stdout {
-                println!(
-                    "bestmove {}",
-                    best_move.display(CHESS960.load(Ordering::Relaxed))
-                );
-            }
-            return (score, Some(best_move));
         }
+        return (score, Some(best_move));
     }
 
     let global_stopped = thread_headers[0].info.stopped;
@@ -854,47 +853,46 @@ pub fn alpha_beta<NT: NodeType>(
             && (depth >= uci::SYZYGY_PROBE_DEPTH.load(Ordering::SeqCst)
                 || n_men < cardinality)
             && n_men <= cardinality
+        && let Some(wdl) = tablebases::probe::get_wdl(&t.board)
     {
-        if let Some(wdl) = tablebases::probe::get_wdl(&t.board) {
-            TB_HITS.fetch_add(1, Ordering::Relaxed);
+        TB_HITS.fetch_add(1, Ordering::Relaxed);
 
-            let tb_value = match wdl {
-                WDL::Win => tb_win_in(height),
-                WDL::Loss => tb_loss_in(height),
-                WDL::Draw => draw_score(t, t.info.nodes.get_buffer(), t.board.turn()),
-            };
+        let tb_value = match wdl {
+            WDL::Win => tb_win_in(height),
+            WDL::Loss => tb_loss_in(height),
+            WDL::Draw => draw_score(t, t.info.nodes.get_buffer(), t.board.turn()),
+        };
 
-            let tb_bound = match wdl {
-                WDL::Win => Bound::Lower,
-                WDL::Loss => Bound::Upper,
-                WDL::Draw => Bound::Exact,
-            };
+        let tb_bound = match wdl {
+            WDL::Win => Bound::Lower,
+            WDL::Loss => Bound::Upper,
+            WDL::Draw => Bound::Exact,
+        };
 
-            if tb_bound == Bound::Exact
-                || (tb_bound == Bound::Lower && tb_value >= beta)
-                || (tb_bound == Bound::Upper && tb_value <= alpha)
-            {
-                t.tt.store(
-                    key,
-                    height,
-                    None,
-                    tb_value,
-                    VALUE_NONE,
-                    tb_bound,
-                    depth,
-                    t.ss[height].ttpv,
-                );
-                return tb_value;
-            }
+        if tb_bound == Bound::Exact
+            || (tb_bound == Bound::Lower && tb_value >= beta)
+            || (tb_bound == Bound::Upper && tb_value <= alpha)
+        {
+            t.tt.store(
+                key,
+                height,
+                None,
+                tb_value,
+                VALUE_NONE,
+                tb_bound,
+                depth,
+                t.ss[height].ttpv,
+            );
+            return tb_value;
+        }
 
-            if NT::PV && tb_bound == Bound::Lower {
-                alpha = alpha.max(tb_value);
-                syzygy_min = tb_value;
-            }
+        if NT::PV && tb_bound == Bound::Lower {
+            alpha = alpha.max(tb_value);
+            syzygy_min = tb_value;
+        }
 
-            if NT::PV && tb_bound == Bound::Upper {
-                syzygy_max = tb_value;
-            }
+        if NT::PV && tb_bound == Bound::Upper {
+            syzygy_max = tb_value;
         }
     }
 
@@ -970,28 +968,24 @@ pub fn alpha_beta<NT: NodeType>(
     t.ss[height].eval = eval;
 
     // value-difference based policy update.
-    if !NT::ROOT {
-        let ss_prev = &t.ss[height - 1];
-        if let Some(mov) = ss_prev.searching {
-            if ss_prev.static_eval != VALUE_NONE
-                && static_eval != VALUE_NONE
-                && !ss_prev.searching_tactical
-            {
-                let from = mov.from();
-                let to = mov.history_to_square();
-                let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-                debug_assert_eq!(moved.colour(), !t.board.turn());
-                let threats = t.board.history().last().unwrap().threats.all;
-                let improvement =
-                    -(ss_prev.static_eval + static_eval) + t.info.conf.eval_policy_offset;
-                let delta = i32::clamp(
-                    improvement * t.info.conf.eval_policy_improvement_scale / 32,
-                    -t.info.conf.eval_policy_update_max,
-                    t.info.conf.eval_policy_update_max,
-                );
-                t.update_history_single(from, to, moved, threats, delta);
-            }
-        }
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+        && let Some(mov) = ss_prev.searching
+        && ss_prev.static_eval != VALUE_NONE
+        && static_eval != VALUE_NONE
+        && !ss_prev.searching_tactical
+    {
+        let from = mov.from();
+        let to = mov.history_to_square();
+        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
+        debug_assert_eq!(moved.colour(), !t.board.turn());
+        let threats = t.board.history().last().unwrap().threats.all;
+        let improvement = -(ss_prev.static_eval + static_eval) + t.info.conf.eval_policy_offset;
+        let delta = i32::clamp(
+            improvement * t.info.conf.eval_policy_improvement_scale / 32,
+            -t.info.conf.eval_policy_update_max,
+            t.info.conf.eval_policy_update_max,
+        );
+        t.update_history_single(from, to, moved, threats, delta);
     }
 
     // "improving" is true when the current position has a better static evaluation than the one from a fullmove ago.
@@ -1549,21 +1543,21 @@ pub fn alpha_beta<NT: NodeType>(
         update_tactical_history(t, tacticals_tried.as_slice(), best_move, depth);
     }
 
-    if !NT::ROOT && flag == Bound::Upper && (!quiets_tried.is_empty() || depth > 3) {
+    if let Some(ss_prev) = t.ss.get(height.wrapping_sub(1))
+        && flag == Bound::Upper
+        && (!quiets_tried.is_empty() || depth > 3)
+        && let Some(mov) = ss_prev.searching
+        && !ss_prev.searching_tactical
+    {
         // the current node has failed low. this means that the inbound edge to this node
         // will fail high, so we can give a bonus to that edge.
-        let ss_prev = &t.ss[height - 1];
-        if let Some(mov) = ss_prev.searching {
-            if !ss_prev.searching_tactical {
-                let from = mov.from();
-                let to = mov.history_to_square();
-                let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
-                debug_assert_eq!(moved.colour(), !t.board.turn());
-                let threats = t.board.history().last().unwrap().threats.all;
-                let bonus = main_history_bonus(&t.info.conf, depth);
-                t.update_history_single(from, to, moved, threats, bonus);
-            }
-        }
+        let from = mov.from();
+        let to = mov.history_to_square();
+        let moved = t.board.state.mailbox[to].expect("Cannot fail, move has been made.");
+        debug_assert_eq!(moved.colour(), !t.board.turn());
+        let threats = t.board.history().last().unwrap().threats.all;
+        let bonus = main_history_bonus(&t.info.conf, depth);
+        t.update_history_single(from, to, moved, threats, bonus);
     }
 
     if excluded.is_none() {

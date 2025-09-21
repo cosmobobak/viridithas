@@ -167,10 +167,10 @@ mod x86simd {
     use crate::{
         nnue::{
             network::{
-                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
                 Align64, L1_CHUNK_PER_32, L1_SIZE, L2_SIZE, L3_SIZE, QA,
+                layers::{AVX512CHUNK, FT_SHIFT, L1_MUL},
             },
-            simd::{self, VecI32, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE},
+            simd::{self, F32_CHUNK_SIZE, I16_CHUNK_SIZE, S, U8_CHUNK_SIZE, VecI32},
         },
         util::from_ref,
     };
@@ -226,7 +226,8 @@ mod x86simd {
         debug_assert!(ptr.cast::<i32>().is_aligned());
         debug_assert!(ptr.cast::<Align64<[i32; L1_SIZE / 4]>>().is_aligned());
         // cast:
-        &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>()
+        // Safety: pointer is known to be aligned.
+        unsafe { &*ptr.cast::<Align64<[i32; L1_SIZE / 4]>>() }
     }
 
     #[allow(
